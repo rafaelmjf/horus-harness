@@ -1,0 +1,3 @@
+sessions/*.md
+!sessions/.gitkeep
+
