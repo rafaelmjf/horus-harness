@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from datetime import date
 from pathlib import Path
 
-from horus import __version__, config, dashboard, initialize, templates
+from horus import __version__, config, dashboard, infer, initialize, templates
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
 from horus.instructions import check_drift, reconcile
 
@@ -28,7 +29,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     print(f"Initializing Horus continuity in {root}")
     actions = initialize.init_project(
-        root, assume_yes=args.yes, no_input=args.no_input
+        root, assume_yes=args.yes, no_input=args.no_input, infer_sources=not args.no_infer
     )
     for a in actions:
         print(f"  [{a.status}] {a.message}")
@@ -142,6 +143,52 @@ def cmd_close(args: argparse.Namespace) -> int:
     return 0 if healthy else 1
 
 
+def cmd_infer(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    inf = infer.infer(root)
+    print(f"Inferred for {root.name}:")
+    print(f"  sources:     {', '.join(inf.sources) or '(none found)'}")
+    print(f"  status:      {inf.status}")
+    print(f"  focus:       {inf.current_focus or '(none)'}")
+    desc = inf.description if len(inf.description) <= 120 else inf.description[:117] + "..."
+    print(f"  description: {desc or '(none)'}")
+    print(f"  tasks:       {len(inf.tasks)} found")
+
+    if not args.write:
+        print("\n(preview only; rerun with --write to populate .horus/)")
+        return 0
+
+    hdir = root / HORUS_DIR
+    if not hdir.is_dir():
+        print(f"\nNo {HORUS_DIR}/ here (run `horus init` first).")
+        return 1
+    if not inf.has_content():
+        print("\nNothing inferable found; leaving .horus/ unchanged.")
+        return 1
+
+    today = date.today().isoformat()
+    targets = {
+        "project.md": templates.project_md(
+            root.name, today, description=inf.description, status=inf.status,
+            current_focus=inf.current_focus, sources=inf.sources,
+        ),
+        "roadmap.md": templates.roadmap_md(
+            today, current_focus=inf.current_focus,
+            tasks=[(t.state, t.text, t.section) for t in inf.tasks] if inf.tasks else None,
+        ),
+    }
+    wrote = []
+    for fname, content in targets.items():
+        path = hdir / fname
+        if path.exists() and not infer.is_placeholder(path) and not args.force:
+            print(f"  skip {fname}: looks customized (use --force to overwrite)")
+            continue
+        path.write_text(content, encoding="utf-8")
+        wrote.append(fname)
+    print(f"  wrote: {', '.join(wrote) or '(nothing)'}")
+    return 0
+
+
 def cmd_reconcile(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
@@ -179,6 +226,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("path", nargs="?", default=".", help="project root (default: cwd)")
     p_init.add_argument("--yes", "-y", action="store_true", help="auto-confirm block injection")
     p_init.add_argument("--no-input", action="store_true", help="never prompt; skip injection")
+    p_init.add_argument("--no-infer", action="store_true", help="use blank templates; do not mine existing files")
     p_init.set_defaults(func=cmd_init)
 
     p_doctor = sub.add_parser("doctor", help="check continuity and instruction health")
@@ -218,6 +266,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_close.add_argument("--path", default=".", help="project root (default: cwd)")
     p_close.set_defaults(func=cmd_close)
 
+    p_infer = sub.add_parser("infer", help="infer project state from existing files (README, roadmap, CLAUDE.md, ...)")
+    p_infer.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_infer.add_argument("--write", action="store_true", help="populate .horus/ from the inference")
+    p_infer.add_argument("--force", action="store_true", help="overwrite even non-placeholder .horus/ files")
+    p_infer.set_defaults(func=cmd_infer)
+
     p_recon = sub.add_parser("reconcile", help="sync the managed instruction block across files")
     p_recon.add_argument("target", nargs="?", choices=("instructions",), default="instructions")
     p_recon.add_argument("--path", default=".", help="project root (default: cwd)")
@@ -231,6 +285,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Output may include emoji from inferred content; avoid crashing on consoles
+    # with a narrow encoding (e.g. Windows cp1252).
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
     parser = build_parser()
     args = parser.parse_args(argv)
     return args.func(args)

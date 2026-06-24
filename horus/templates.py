@@ -50,17 +50,53 @@ def instruction_file(title: str, other_file: str, agent_notes_heading: str) -> s
     )
 
 
-def project_md(project_name: str, date: str) -> str:
+def _scalar(value: str) -> str:
+    """Make a string safe as a double-quoted YAML scalar."""
+    return value.replace("\n", " ").replace('"', "'").strip()
+
+
+_TASK_SYMBOL = {"todo": "[ ]", "done": "[x]", "partial": "[~]"}
+
+
+def _render_tasks(tasks: list) -> str:
+    """Render (state, text, section) triples as a grouped Markdown checklist."""
+    out: list[str] = []
+    current = object()
+    for state, text, section in tasks:
+        sec = section or "Backlog"
+        if sec != current:
+            out.append(f"\n## {sec}\n")
+            current = sec
+        out.append(f"- {_TASK_SYMBOL.get(state, '[ ]')} {text}")
+    return "\n".join(out).strip() + "\n"
+
+
+def project_md(
+    project_name: str,
+    date: str,
+    *,
+    description: str = "",
+    status: str = "planning",
+    current_focus: str = "",
+    sources: list | None = None,
+) -> str:
+    desc = description.strip() or "One-paragraph description of what this project is."
+    focus = _scalar(current_focus) or "Describe the immediate focus here."
+    provenance = (
+        f"\n\n_Seeded by Horus from: {', '.join(f'`{s}`' for s in sources)}._\n"
+        if sources
+        else "\n"
+    )
     return f"""---
 project: {project_name}
-status: planning
-current_focus: "Describe the immediate focus here."
+status: {status}
+current_focus: "{focus}"
 last_updated: {date}
 ---
 
 # {project_name}
 
-One-paragraph description of what this project is.
+{desc}
 
 ## Current Shape
 
@@ -68,27 +104,27 @@ What the project looks like right now.
 
 ## Boundaries
 
-What is intentionally out of scope.
-"""
+What is intentionally out of scope.{provenance}"""
 
 
-def roadmap_md(date: str) -> str:
+def roadmap_md(
+    date: str,
+    *,
+    status: str = "active",
+    current_focus: str = "",
+    tasks: list | None = None,
+) -> str:
+    focus = _scalar(current_focus) or "Describe the current focus here."
+    body = _render_tasks(tasks) if tasks else "## Now\n\n- [ ] First task.\n\n## Later\n\n- [ ] Deferred task.\n"
     return f"""---
-status: active
-current_focus: "Describe the current focus here."
+status: {status}
+current_focus: "{focus}"
 last_updated: {date}
 ---
 
 # Roadmap
 
-## Now
-
-- [ ] First task.
-
-## Later
-
-- [ ] Deferred task.
-"""
+{body}"""
 
 
 def decisions_md() -> str:

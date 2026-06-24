@@ -24,6 +24,7 @@ last_updated: 2026-06-24
 - [x] Render a local read-only dashboard listing projects.
 - [x] Show project summary, current focus, roadmap, decisions, and recent local sessions.
 - [x] Surface latest change, roadmap progress, and a highlighted next step on the dashboard.
+- [x] Infer project state from existing files on init (+ `horus infer`); deterministic.
 - [x] Add a simple `horus doctor project` check.
 - [x] Add a simple `horus doctor instructions` drift check for `AGENTS.md` / `CLAUDE.md`.
 - [x] Add `horus forget` / prune for stale registered projects.
@@ -59,3 +60,5 @@ last_updated: 2026-06-24
 - [ ] Optional `rulesync` integration.
 - [ ] Optional `horus reconcile instructions --ai`.
 - [ ] Optional private session sync outside git.
+- [ ] Agent-assisted `horus infer` (richer roadmap/next-step extraction via the official CLI).
+- [ ] Multi-line bullet joining in inference (currently truncates at the first line).

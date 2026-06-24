@@ -181,3 +181,18 @@ Reasoning:
 - To preserve relicensing freedom if outside contributions arrive, require a DCO/CLA or stay sole author.
 - Repo made public (was private) so GitHub Environments are available for the `pypi` trusted-publishing environment.
 
+## 2026-06-24 - Infer Project State From Existing Files (Deterministic)
+
+`horus init` seeds `.horus/` from existing files instead of blank templates; `horus infer` exposes/re-runs it.
+
+Approach:
+
+- Mine README, ROADMAP/TODO/PLAN, PROJECT_STATUS.md (glob-discovered), and CLAUDE.md/AGENTS.md (managed block stripped) for title, description, status, current focus, and roadmap tasks.
+- Tasks come from `[ ]` checkboxes AND from leading status emoji (✅/⬜/🚧 -> done/todo/partial), which many hand-written status docs use as checkboxes; plus plain bullets under roadmap/TODO-like headings.
+- Deterministic, no model calls (matches the deterministic-first stance, like reconcile). `--no-infer` forces blank templates; `horus infer --write [--force]` re-populates placeholder `.horus/` files.
+
+Reasoning:
+
+- Most repos already encode their state; starting from zero discards it.
+- Known limitation: rich prose/emoji status docs extract partially (multi-line bullets truncate at the first line). The high-quality version is a future agent-assisted `horus infer` driving the official CLI (no API keys) - fits the deferred execution layer.
+
