@@ -206,6 +206,19 @@ Reasoning:
 - Deterministic inference was made strong enough to cover the common cases: explicit `NEXT STEP:` / `Next:` banners (highest priority for current_focus), status emoji as checkboxes, `[ ]` checkboxes, and bullets under roadmap/TODO headings.
 - An agent-assisted `horus infer --agent` remains a logged future enhancement for unstructured prose, to land with the execution layer.
 
+## 2026-06-24 - Defer the SQLite Session Registry; Keep Session Continuity File-First
+
+Do not build the SQLite session/event registry or persisted session states yet.
+
+Reasoning:
+
+- Session `.md` files are local, gitignored, ephemeral context that distills into the durable files (project/roadmap/decisions); they are not a long-lived entity to manage in a DB.
+- At solo scale (a few projects, dozens of sessions) re-parsing markdown is instant, so a DB index adds no real performance value.
+- Session states (`closing`/`needs_closure`/`closed_stale`) presuppose Horus orchestrating sessions — that is the deferred execution layer. Until then they are heuristics computable on the fly from file metadata.
+- A machine-local SQLite store cuts against the file-first, git-synced, lightweight ethos.
+
+Instead (still file-first, no DB): staleness/context-rollover signals derived from mtime/age/git, surfaced in doctor + dashboard; and `horus close --commit` to close the multi-machine sync seam. Revisit the registry only when scale hurts perf or the execution layer lands.
+
 ## 2026-06-24 - Dashboard: Explicit Next-Step Banner + Clickable Roadmap Breakdown
 
 - The dashboard NEXT callout lists up to 3 suggested directions (not a strict order): the explicit `current_focus` banner first, then in-progress tasks, then open tasks. Goal is "a few ideas of where to go next," not just the single next action.
