@@ -110,3 +110,46 @@ Reasoning:
 - Quota windows can make closure-before-refresh useful.
 - A fresh session should be able to continue from `.horus/` state instead of carrying old context.
 
+## 2026-06-24 - First Version Scope: Continuity + Dashboard, Execution Deferred
+
+The first shippable Horus is: the `.horus/` convention, `horus init`, doctor checks, closure routines, and a read-only multi-project dashboard. Agent execution / multi-session is deferred.
+
+Reasoning:
+
+- The `.horus/` convention + managed instruction blocks already deliver most continuity value with zero code; the first code must add value beyond the convention (enforcement, checks, cross-project aggregation), not just render files.
+- The dashboard is built early despite being thin before execution, because the user can clone several existing projects to populate it and wants it working in v1.
+- Multi-session execution is the hardest layer and the least urgent: Claude Code and Codex apps already let the user run both from the same project folder by hand, so its absence is not blocking.
+
+## 2026-06-24 - Closure Is Hybrid, Phased To Avoid Pulling In Execution
+
+Closure verifies first; it generates a summary only when one is missing/stale.
+
+Phasing:
+
+- v1: Horus verifies continuity (no agent spawned). If a summary is missing/stale, Horus emits a closure prompt that the already-running in-loop agent executes.
+- Later (once the execution layer exists): Horus autonomously spawns a summarizer subprocess for the missing summary.
+
+Reasoning:
+
+- The "spawn a summarizer" path needs an agent runner (the deferred execution layer); the verify path does not.
+- Delegating to the in-loop agent keeps the hybrid UX while keeping v1 free of the execution build.
+
+## 2026-06-24 - Instruction Drift Check Must Normalize Cross-References
+
+`horus doctor instructions` cannot use naive byte-equality on the shared managed blocks.
+
+Reasoning:
+
+- The `HORUS:BEGIN/END shared-instructions` blocks in `AGENTS.md` and `CLAUDE.md` are intentionally not identical: each ends with a line pointing at the other file ("keep aligned with the matching block in CLAUDE.md" vs "...AGENTS.md").
+- The drift checker must normalize/ignore that cross-reference line, or it will report false drift on every run.
+
+## 2026-06-24 - Defer rulesync Integration To Post-MVP
+
+Do not integrate `rulesync` (or build instruction/skill projection) until after the first MVP.
+
+Reasoning:
+
+- It adds an external dependency to prove a convenience that is not the core thesis (continuity is).
+- `rulesync` already does conversion well, so the eventual choice is "embed/shell out," not "build" - nothing to prove early.
+- Adding it now risks being a feature that ends up unused before the core is validated.
+

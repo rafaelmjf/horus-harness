@@ -258,6 +258,8 @@ CLAUDE.md
 
 Closure mode should not continue editing source code after the user has walked away.
 
+Closure is **hybrid, phased** (see `.horus/decisions.md`): v1 *verifies* continuity and, if a summary is missing/stale, emits a closure prompt the already-running in-loop agent executes; the autonomous summarizer subprocess arrives with the execution layer (Step 5).
+
 ---
 
 ## 6. Stale Closure And Context Rollover
@@ -429,6 +431,8 @@ Non-negotiables:
 - [ ] Add context rollover heuristics.
 
 ### Step 5 - Add Agent Execution
+
+> Deferred for v1: Claude Code / Codex apps already allow running both from the same project folder by hand, so multi-session execution is not blocking. This step also unlocks the autonomous closure summarizer.
 
 - [ ] Configure accounts and environments.
 - [ ] Add Codex adapter.

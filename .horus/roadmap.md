@@ -14,28 +14,32 @@ last_updated: 2026-06-24
 - [x] Choose initial `.horus/` structure: `project.md`, `roadmap.md`, `decisions.md`, `sessions/`.
 - [x] Decide sessions should be local/ignored by default.
 - [x] Add `AGENTS.md` and `CLAUDE.md` shared Horus-managed instruction blocks.
-- [ ] Define `horus init` behavior for creating `.horus/`.
+- [x] Define `horus init` behavior for creating `.horus/`.
 - [ ] Define session summary and closure templates.
 
 ## MVP 1 - Local Dashboard
 
-- [ ] Create Python package skeleton.
-- [ ] Build project registry that can discover configured projects and `.horus/` files.
+- [x] Create Python package skeleton.
+- [~] Build project registry that can discover configured projects and `.horus/` files. (user config read/write + register done; discovery for dashboard pending)
 - [ ] Render a local read-only dashboard listing projects.
 - [ ] Show project summary, current focus, roadmap, decisions, and recent local sessions.
-- [ ] Add a simple `horus doctor project` check.
-- [ ] Add a simple `horus doctor instructions` drift check for `AGENTS.md` / `CLAUDE.md`.
+- [x] Add a simple `horus doctor project` check.
+- [x] Add a simple `horus doctor instructions` drift check for `AGENTS.md` / `CLAUDE.md`.
 
 ## MVP 2 - Session Continuity
 
 - [ ] Add SQLite registry for sessions and events.
 - [ ] Define session states including `closing`, `needs_closure`, and `closed_stale`.
 - [ ] Add session summary creation/checking.
-- [ ] Add closure ritual prompt and verification.
+- [ ] Add closure verification (no agent spawned).
+- [ ] Add agent-delegated closure prompt when a summary is missing/stale (hybrid v1 path).
 - [ ] Add stale-session closure thresholds.
 - [ ] Add context rollover heuristics.
 
 ## MVP 3 - Agent Execution
+
+> Deferred: Claude Code / Codex apps already allow running both from the same project folder by hand, so multi-session execution is not blocking. This phase also unlocks the autonomous (non-delegated) closure summarizer.
+
 
 - [ ] Add concrete account config for Codex.
 - [ ] Implement Codex adapter command building.
