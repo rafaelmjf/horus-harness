@@ -1,0 +1,46 @@
+"""Tests for dashboard data gathering and HTML rendering (no socket)."""
+
+from horus import dashboard, initialize
+
+
+def _init(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def test_load_project_reads_frontmatter_and_health(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["exists"] is True
+    assert data["status"] == "planning"
+    assert isinstance(data["findings"], list) and data["findings"]
+
+
+def test_gather_and_index_render(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+
+    projects = dashboard.gather_projects()
+    assert len(projects) == 1
+    html_out = dashboard.render_index(projects)
+    assert "demo" in html_out
+    assert "/project?i=0" in html_out
+
+
+def test_index_empty_state(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    html_out = dashboard.render_index([])
+    assert "No projects registered" in html_out
+
+
+def test_project_detail_renders_sections(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    data = dashboard.load_project(str(tmp_path))
+    html_out = dashboard.render_project(data)
+    assert "Continuity health" in html_out
+    assert "Roadmap" in html_out

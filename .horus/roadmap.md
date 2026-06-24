@@ -20,11 +20,12 @@ last_updated: 2026-06-24
 ## MVP 1 - Local Dashboard
 
 - [x] Create Python package skeleton.
-- [~] Build project registry that can discover configured projects and `.horus/` files. (user config read/write + register done; discovery for dashboard pending)
-- [ ] Render a local read-only dashboard listing projects.
-- [ ] Show project summary, current focus, roadmap, decisions, and recent local sessions.
+- [x] Build project registry that can discover configured projects and `.horus/` files.
+- [x] Render a local read-only dashboard listing projects.
+- [x] Show project summary, current focus, roadmap, decisions, and recent local sessions.
 - [x] Add a simple `horus doctor project` check.
 - [x] Add a simple `horus doctor instructions` drift check for `AGENTS.md` / `CLAUDE.md`.
+- [ ] Add `horus forget` / prune for stale registered projects (follow-up).
 
 ## MVP 2 - Session Continuity
 

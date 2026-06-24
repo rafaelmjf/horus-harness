@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from horus import __version__, initialize
+from horus import __version__, dashboard, initialize
 from horus.continuity import check_project
 from horus.instructions import check_drift
 
@@ -74,6 +74,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return rc
 
 
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    dashboard.serve(host=args.host, port=args.port)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="horus", description=__doc__)
     parser.add_argument("--version", action="version", version=f"horus {__version__}")
@@ -95,6 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_doctor.add_argument("--path", default=".", help="project root (default: cwd)")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_dash = sub.add_parser("dashboard", help="serve the read-only multi-project dashboard")
+    p_dash.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
+    p_dash.add_argument("--port", type=int, default=8765, help="bind port (default: 8765)")
+    p_dash.set_defaults(func=cmd_dashboard)
 
     return parser
 
