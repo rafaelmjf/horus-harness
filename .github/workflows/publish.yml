@@ -1,0 +1,31 @@
+name: Publish to PyPI
+
+# Publishes on a published GitHub Release. Uses PyPI Trusted Publishing
+# (OIDC) - no API token or secret is stored anywhere.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  pypi-publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/horus-harness/
+    permissions:
+      id-token: write # required for trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Publish to PyPI (trusted publishing)
+        run: uv publish --trusted-publishing always

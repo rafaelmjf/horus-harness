@@ -153,3 +153,20 @@ Reasoning:
 - `rulesync` already does conversion well, so the eventual choice is "embed/shell out," not "build" - nothing to prove early.
 - Adding it now risks being a feature that ends up unused before the core is validated.
 
+## 2026-06-24 - Distribute on PyPI via Trusted Publishing; uv for build
+
+Publish `horus-harness` to PyPI; do not pursue npm (the project is Python, not TypeScript).
+
+Decisions:
+
+- Release via GitHub Actions **Trusted Publishing** (OIDC) on a published Release - no long-lived PyPI token stored anywhere (`.github/workflows/publish.yml`, environment `pypi`).
+- Build with `uv` (`uv build`); publish with `uv publish --trusted-publishing always`.
+- Real working code is published rather than a name-holding stub, which is a stronger, anti-squatting-safe claim.
+- Package author is name-only (no email) to avoid publishing a personal address on PyPI.
+- Consumers install via `uv tool install horus-harness` / `uvx --from horus-harness horus`, or pip.
+
+Reasoning:
+
+- Subscription-auth / lightweight constraints are unaffected by packaging; this is pure distribution.
+- Trusted publishing avoids secret management and matches the project's security posture.
+

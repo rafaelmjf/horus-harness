@@ -9,7 +9,7 @@ description = "Project-centric continuity and control panel for official coding-
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Rafael Figueiredo" }]
+authors = [{ name = "Rafael M. J. Figueiredo" }]
 keywords = ["claude-code", "codex", "coding-agents", "continuity", "cli", "dashboard"]
 classifiers = [
     "Development Status :: 3 - Alpha",
