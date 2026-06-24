@@ -208,6 +208,6 @@ Reasoning:
 
 ## 2026-06-24 - Dashboard: Explicit Next-Step Banner + Clickable Roadmap Breakdown
 
-- The dashboard NEXT callout prefers the project's `current_focus` (e.g. an inferred "NEXT STEP:" banner) over the first open roadmap task.
+- The dashboard NEXT callout lists up to 3 suggested directions (not a strict order): the explicit `current_focus` banner first, then in-progress tasks, then open tasks. Goal is "a few ideas of where to go next," not just the single next action.
 - The roadmap progress count (e.g. 21/39) links through to an anchored, state-grouped breakdown (Open & in progress / Completed) so the items behind the number are one click away.
 

@@ -72,6 +72,23 @@ def test_next_step_and_latest_surface(tmp_path, monkeypatch):
     assert "Newer change" in html_out
 
 
+def test_next_steps_lists_up_to_three(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True, infer_sources=False)
+    (tmp_path / ".horus" / "roadmap.md").write_text(
+        "---\nstatus: active\ncurrent_focus: \"x\"\n---\n# Roadmap\n\n## Now\n\n"
+        "- [~] doing alpha\n- [ ] open beta\n- [ ] open gamma\n- [ ] open delta\n- [x] done eps\n",
+        encoding="utf-8",
+    )
+    data = dashboard.load_project(str(tmp_path))
+    steps = dashboard.next_steps(data)
+    assert len(steps) == 3
+    assert steps[0] == "doing alpha"  # in-progress first
+    assert "done eps" not in steps  # completed excluded
+    html_out = dashboard.render_index([data])
+    assert html_out.count("<li>") >= 3
+
+
 def test_progress_links_to_roadmap_breakdown(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True, infer_sources=False)

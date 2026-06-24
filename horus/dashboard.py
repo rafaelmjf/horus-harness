@@ -9,6 +9,7 @@ their index in the config list, never by a path from the request).
 from __future__ import annotations
 
 import html
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -119,9 +120,11 @@ main { padding: 24px 28px; max-width: 980px; }
 .health-fail { color: #f08a8a; }
 .next { background: #15281d; border: 1px solid #1f5138; border-left: 3px solid #57d39a;
         border-radius: 8px; padding: 9px 12px; margin: 10px 0; }
-.next .lbl { color: #57d39a; font-weight: 600; font-size: 12px; letter-spacing: .5px; }
+.next .lbl { color: #57d39a; font-weight: 600; font-size: 12px; letter-spacing: .5px; display: block; }
+.next ul.steps { margin: 6px 0 0; padding-left: 20px; }
+.next ul.steps li { margin: 3px 0; }
 .next.done { border-left-color: #6db3f2; }
-.next.done .lbl { color: #6db3f2; }
+.next.done .lbl { color: #6db3f2; display: inline; }
 .latest { color: #b9c2d0; font-size: 13px; margin: 8px 0; }
 .latest .date { color: #8a93a6; }
 .bar { height: 6px; background: #232733; border-radius: 999px; overflow: hidden; margin: 10px 0 4px; }
@@ -168,19 +171,44 @@ def _health_summary(findings: list[dict[str, Any]]) -> str:
     return "<span class='health-ok'>&#9679; healthy</span>"
 
 
-def _next_html(p: dict[str, Any]) -> str:
-    # Prefer an explicit current_focus (e.g. inferred from a "NEXT STEP:" banner);
-    # fall back to the first open roadmap task.
+def _plain(text: str) -> str:
+    """Strip Markdown emphasis/code ticks for one-line display."""
+    return re.sub(r"\*\*|__|`", "", text).strip()
+
+
+def next_steps(p: dict[str, Any], limit: int = 3) -> list[str]:
+    """A few suggested directions (not a strict order): the explicit focus banner
+    first, then in-progress tasks, then open tasks."""
+    steps: list[str] = []
+    seen: set[str] = set()
+
+    def add(text: str) -> None:
+        t = _plain(text)
+        key = t.lower()
+        if t and key not in seen:
+            seen.add(key)
+            steps.append(t)
+
     focus = p["current_focus"].strip()
     if focus and not focus.lower().startswith("describe "):
-        return f"<div class='next'><span class='lbl'>NEXT &rarr;</span> {html.escape(focus)}</div>"
-    ns = p["next_step"]
-    if ns is None:
-        if p["progress"]["total"]:
-            return "<div class='next done'><span class='lbl'>NEXT</span> &#10003; roadmap complete</div>"
-        return ""
-    section = f" <span class='muted'>({html.escape(ns['section'])})</span>" if ns["section"] else ""
-    return f"<div class='next'><span class='lbl'>NEXT &rarr;</span> {html.escape(ns['text'])}{section}</div>"
+        add(focus)
+    for state in ("partial", "todo"):
+        for t in p["tasks"]:
+            if len(steps) >= limit:
+                break
+            if t["state"] == state:
+                add(t["text"])
+    return steps[:limit]
+
+
+def _next_html(p: dict[str, Any]) -> str:
+    steps = next_steps(p)
+    if steps:
+        items = "".join(f"<li>{html.escape(s)}</li>" for s in steps)
+        return f"<div class='next'><span class='lbl'>NEXT</span><ul class='steps'>{items}</ul></div>"
+    if p["progress"]["total"]:
+        return "<div class='next done'><span class='lbl'>NEXT</span> &#10003; roadmap complete</div>"
+    return ""
 
 
 def _latest_html(p: dict[str, Any]) -> str:
