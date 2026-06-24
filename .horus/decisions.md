@@ -196,3 +196,18 @@ Reasoning:
 - Most repos already encode their state; starting from zero discards it.
 - Known limitation: rich prose/emoji status docs extract partially (multi-line bullets truncate at the first line). The high-quality version is a future agent-assisted `horus infer` driving the official CLI (no API keys) - fits the deferred execution layer.
 
+## 2026-06-24 - Deterministic Inference Stays Default; LLM Path Deferred
+
+Keep inference deterministic by default; add an opt-in agent-assisted path later (not now).
+
+Reasoning:
+
+- The user is open to an LLM check "if it genuinely gives better results," but neither `claude` nor `codex` CLI is on PATH in this environment, and an LLM path is the deferred execution-layer work (Horus must drive the official CLI, not call an API).
+- Deterministic inference was made strong enough to cover the common cases: explicit `NEXT STEP:` / `Next:` banners (highest priority for current_focus), status emoji as checkboxes, `[ ]` checkboxes, and bullets under roadmap/TODO headings.
+- An agent-assisted `horus infer --agent` remains a logged future enhancement for unstructured prose, to land with the execution layer.
+
+## 2026-06-24 - Dashboard: Explicit Next-Step Banner + Clickable Roadmap Breakdown
+
+- The dashboard NEXT callout prefers the project's `current_focus` (e.g. an inferred "NEXT STEP:" banner) over the first open roadmap task.
+- The roadmap progress count (e.g. 21/39) links through to an anchored, state-grouped breakdown (Open & in progress / Completed) so the items behind the number are one click away.
+

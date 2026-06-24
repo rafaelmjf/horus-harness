@@ -72,6 +72,29 @@ def test_next_step_and_latest_surface(tmp_path, monkeypatch):
     assert "Newer change" in html_out
 
 
+def test_progress_links_to_roadmap_breakdown(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True, infer_sources=False)
+    roadmap_md = tmp_path / ".horus" / "roadmap.md"
+    roadmap_md.write_text(
+        "---\nstatus: active\ncurrent_focus: \"x\"\n---\n# Roadmap\n\n"
+        "## Now\n\n- [x] shipped\n- [ ] todo one\n- [~] doing two\n",
+        encoding="utf-8",
+    )
+    data = dashboard.load_project(str(tmp_path))
+
+    # Index card: progress count links through to the detail roadmap anchor.
+    idx = dashboard.render_index([data])
+    assert "/project?i=0#roadmap" in idx
+
+    # Detail: anchored roadmap with grouped open/completed breakdown.
+    det = dashboard.render_project(data)
+    assert "id='roadmap'" in det
+    assert "Open &amp; in progress (2)" in det
+    assert "Completed (1)" in det
+    assert "todo one" in det and "doing two" in det and "shipped" in det
+
+
 def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)

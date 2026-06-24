@@ -37,6 +37,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         "next_step": None,
         "latest": None,
         "progress": {"done": 0, "total": 0, "pct": 0},
+        "tasks": [],
     }
     if not hdir.is_dir():
         return data
@@ -82,6 +83,7 @@ def load_project(path_str: str) -> dict[str, Any]:
     data["next_step"] = {"text": ns.text, "section": ns.section} if ns else None
     prog = roadmap.progress(tasks)
     data["progress"] = {"done": prog.done, "total": prog.total, "pct": prog.pct}
+    data["tasks"] = [{"state": t.state, "text": t.text, "section": t.section} for t in tasks]
 
     data["findings"] = [
         {"level": f.level, "message": f.message} for f in check_project(root)
@@ -125,6 +127,14 @@ main { padding: 24px 28px; max-width: 980px; }
 .bar { height: 6px; background: #232733; border-radius: 999px; overflow: hidden; margin: 10px 0 4px; }
 .bar > span { display: block; height: 100%; background: #57d39a; }
 .progress-label { font-size: 12px; color: #8a93a6; }
+.progress-label a { color: #8a93a6; text-decoration: underline dotted; }
+details.tasks { margin: 8px 0; border: 1px solid #232733; border-radius: 8px; padding: 6px 12px; background: #12141b; }
+details.tasks summary { cursor: pointer; font-size: 13px; color: #b9c2d0; }
+details.tasks ul { margin: 8px 0 4px; }
+details.tasks li { list-style: none; margin-left: -16px; }
+.t-done { color: #8a93a6; } .t-done .mk { color: #57d39a; }
+.t-todo .mk { color: #6db3f2; } .t-partial { color: #e6c35c; }
+.t-sec { color: #8a93a6; font-size: 12px; }
 ul { padding-left: 22px; } li.task { list-style: none; margin-left: -16px; }
 li.done { color: #8a93a6; } li.partial { color: #e6c35c; }
 pre { background: #0b0d12; padding: 12px; border-radius: 8px; overflow-x: auto; }
@@ -159,6 +169,11 @@ def _health_summary(findings: list[dict[str, Any]]) -> str:
 
 
 def _next_html(p: dict[str, Any]) -> str:
+    # Prefer an explicit current_focus (e.g. inferred from a "NEXT STEP:" banner);
+    # fall back to the first open roadmap task.
+    focus = p["current_focus"].strip()
+    if focus and not focus.lower().startswith("describe "):
+        return f"<div class='next'><span class='lbl'>NEXT &rarr;</span> {html.escape(focus)}</div>"
     ns = p["next_step"]
     if ns is None:
         if p["progress"]["total"]:
@@ -179,14 +194,51 @@ def _latest_html(p: dict[str, Any]) -> str:
     )
 
 
-def _progress_html(p: dict[str, Any]) -> str:
+def _progress_html(p: dict[str, Any], href: str | None = None) -> str:
     pr = p["progress"]
     if not pr["total"]:
         return ""
+    label = f"roadmap: {pr['done']}/{pr['total']} done ({pr['pct']}%)"
+    if href:
+        label = f"<a href='{href}'>{label}</a>"
     return (
         f"<div class='bar'><span style='width:{pr['pct']}%'></span></div>"
-        f"<div class='progress-label'>roadmap: {pr['done']}/{pr['total']} done ({pr['pct']}%)</div>"
+        f"<div class='progress-label'>{label}</div>"
     )
+
+
+_TASK_MARK = {"done": "&#9745;", "todo": "&#9744;", "partial": "&#9682;"}
+
+
+def _task_li(t: dict[str, Any]) -> str:
+    sec = f" <span class='t-sec'>({html.escape(t['section'])})</span>" if t["section"] else ""
+    return (
+        f"<li class='t-{t['state']}'><span class='mk'>{_TASK_MARK.get(t['state'], '')}</span> "
+        f"{html.escape(t['text'])}{sec}</li>"
+    )
+
+
+def _breakdown_html(p: dict[str, Any]) -> str:
+    """The items behind the progress count: open/in-progress and completed, grouped."""
+    tasks = p["tasks"]
+    if not tasks:
+        return markdown.render(p["roadmap_body"]) if p["roadmap_body"] else ""
+    open_tasks = [t for t in tasks if t["state"] in ("todo", "partial")]
+    done_tasks = [t for t in tasks if t["state"] == "done"]
+    out = []
+    if open_tasks:
+        items = "".join(_task_li(t) for t in open_tasks)
+        out.append(
+            f"<details class='tasks' open><summary>Open &amp; in progress ({len(open_tasks)})</summary>"
+            f"<ul>{items}</ul></details>"
+        )
+    if done_tasks:
+        items = "".join(_task_li(t) for t in done_tasks)
+        out.append(
+            f"<details class='tasks'><summary>Completed ({len(done_tasks)})</summary>"
+            f"<ul>{items}</ul></details>"
+        )
+    return "".join(out)
 
 
 def render_index(projects: list[dict[str, Any]]) -> str:
@@ -209,7 +261,7 @@ def render_index(projects: list[dict[str, Any]]) -> str:
             f"<span>{len(p['sessions'])} session(s)</span> {_health_summary(p['findings'])}</div>"
             f"{_next_html(p)}"
             f"{_latest_html(p)}"
-            f"{_progress_html(p)}"
+            f"{_progress_html(p, href=f'/project?i={i}#roadmap')}"
             f"<p class='muted' style='font-size:12px'>{html.escape(p['path'])}</p></div>"
         )
     return _page("Horus", "".join(cards))
@@ -223,7 +275,7 @@ def render_project(p: dict[str, Any]) -> str:
         f"{_health_summary(p['findings'])}</div>",
         _next_html(p),
         _latest_html(p),
-        _progress_html(p),
+        _progress_html(p, href="#roadmap"),
     ]
 
     if p["current_focus"]:
@@ -242,9 +294,13 @@ def render_project(p: dict[str, Any]) -> str:
         f"<div class='section'><h2>Continuity health</h2><table>{rows}</table></div>"
     )
 
-    if p["roadmap_body"]:
+    if p["tasks"] or p["roadmap_body"]:
+        pr = p["progress"]
+        heading = "Roadmap"
+        if pr["total"]:
+            heading += f" <span class='muted' style='font-size:13px'>({pr['done']}/{pr['total']} done)</span>"
         parts.append(
-            f"<div class='section'><h2>Roadmap</h2>{markdown.render(p['roadmap_body'])}</div>"
+            f"<div class='section' id='roadmap'><h2>{heading}</h2>{_breakdown_html(p)}</div>"
         )
 
     if p["sessions"]:

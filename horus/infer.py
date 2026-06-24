@@ -201,13 +201,32 @@ def _infer_status(sources: dict[str, str]) -> str:
     return "active" if sources else "planning"
 
 
+# Explicit next-step / focus banners, in priority order. Many status docs put a
+# "NEXT STEP:" line near the top; that beats guessing from the task list.
+_FOCUS_BANNERS = [
+    re.compile(r"next\s*step\s*[:\-]\s*(.+)", re.I),
+    re.compile(r"^[>*\s▶►\-]*next\s*[:\-]\s*(.+)$", re.I | re.M),
+    re.compile(r"current[_ ]focus[\"']?\s*[:=]\s*(.+)", re.I),
+]
+
+
+def _clean_focus(text: str) -> str:
+    text = re.sub(r"\*\*|__|`", "", text)  # strip markdown emphasis / code ticks
+    # Keep just the leading clause (cut at em/en dash or sentence end).
+    text = re.split(r"\s+[—–]\s+|\.\s|\s+--\s+", text)[0]
+    return text.strip().strip("\"'.:;—– ").strip()[:200]
+
+
 def _infer_focus(sources: dict[str, str], tasks: list) -> str:
-    for text in sources.values():
-        m = re.search(r"current[_ ]focus[\"']?\s*[:=]\s*(.+)", text, re.I)
-        if m:
-            return m.group(1).strip().strip("\"'").splitlines()[0][:200]
+    for rx in _FOCUS_BANNERS:
+        for text in sources.values():
+            m = rx.search(text)
+            if m:
+                cleaned = _clean_focus(m.group(1))
+                if cleaned:
+                    return cleaned
     ns = roadmap.next_step(tasks)
-    return ns.text if ns else ""
+    return _clean_focus(ns.text) if ns else ""
 
 
 def infer(root: Path) -> Inference:
