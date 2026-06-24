@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import re
+from datetime import date
 from pathlib import Path
 
-from horus import __version__, dashboard, initialize
-from horus.continuity import check_project
-from horus.instructions import check_drift
+from horus import __version__, config, dashboard, initialize, templates
+from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
+from horus.instructions import check_drift, reconcile
 
 _LEVEL_TAG = {"ok": "[ ok ]", "warn": "[warn]", "fail": "[fail]"}
 
@@ -79,6 +81,95 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_forget(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    if config.unregister_project(root):
+        print(f"Removed from registry: {root}")
+        return 0
+    print(f"Not in registry: {root}")
+    return 1
+
+
+def cmd_prune(args: argparse.Namespace) -> int:
+    removed = config.prune_projects()
+    if not removed:
+        print("Nothing to prune; all registered projects still have a .horus/ directory.")
+        return 0
+    print(f"Pruned {len(removed)} stale project(s):")
+    for p in removed:
+        print(f"  - {p}")
+    return 0
+
+
+def _slugify(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return slug or "session"
+
+
+def cmd_session(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    sessions = root / HORUS_DIR / SESSIONS_DIR
+    if not (root / HORUS_DIR).is_dir():
+        print(f"No {HORUS_DIR}/ here (run `horus init` first).")
+        return 1
+    sessions.mkdir(parents=True, exist_ok=True)
+
+    today = date.today().isoformat()
+    path = sessions / f"{today}-{_slugify(args.title)}.md"
+    if path.exists():
+        print(f"Already exists: {path}")
+        return 1
+    path.write_text(
+        templates.session_summary(
+            title=args.title,
+            date=today,
+            project=root.name,
+            agent=args.agent,
+            account=args.account,
+            environment=args.environment,
+        ),
+        encoding="utf-8",
+    )
+    print(f"Created {path}")
+    return 0
+
+
+def cmd_close(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    print(f"Closure check: {root}")
+    healthy = _print_findings(check_project(root))
+    print("\n" + templates.CLOSURE_PROMPT)
+    return 0 if healthy else 1
+
+
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
+    if not agents.exists() or not claude.exists():
+        missing = [p.name for p in (agents, claude) if not p.exists()]
+        print(f"Cannot reconcile; missing file(s): {', '.join(missing)}")
+        return 1
+
+    if args.source == "claude":
+        src, src_name, tgt, tgt_name = claude, "CLAUDE.md", agents, "AGENTS.md"
+    else:
+        src, src_name, tgt, tgt_name = agents, "AGENTS.md", claude, "CLAUDE.md"
+
+    result = reconcile(
+        src.read_text(encoding="utf-8"), src_name,
+        tgt.read_text(encoding="utf-8"), tgt_name,
+    )
+    if result.status == "no-source-block":
+        print(f"{src_name} has no managed block to project from.")
+        return 1
+    if result.status == "already-aligned":
+        print(f"Already aligned: {tgt_name} matches {src_name}.")
+        return 0
+    tgt.write_text(result.new_target_text, encoding="utf-8")
+    print(f"Synced {src_name} -> {tgt_name}.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="horus", description=__doc__)
     parser.add_argument("--version", action="version", version=f"horus {__version__}")
@@ -105,6 +196,36 @@ def build_parser() -> argparse.ArgumentParser:
     p_dash.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
     p_dash.add_argument("--port", type=int, default=8765, help="bind port (default: 8765)")
     p_dash.set_defaults(func=cmd_dashboard)
+
+    p_forget = sub.add_parser("forget", help="remove a project from the dashboard registry")
+    p_forget.add_argument("path", nargs="?", default=".", help="project root (default: cwd)")
+    p_forget.set_defaults(func=cmd_forget)
+
+    p_prune = sub.add_parser("prune", help="drop registered projects whose .horus/ is gone")
+    p_prune.set_defaults(func=cmd_prune)
+
+    p_session = sub.add_parser("session", help="create a new session summary from the template")
+    session_sub = p_session.add_subparsers(dest="session_cmd", required=True)
+    p_session_new = session_sub.add_parser("new", help="create a new session summary")
+    p_session_new.add_argument("title", help="short session title")
+    p_session_new.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_session_new.add_argument("--agent", default="claude")
+    p_session_new.add_argument("--account", default="personal")
+    p_session_new.add_argument("--environment", default="host")
+    p_session_new.set_defaults(func=cmd_session)
+
+    p_close = sub.add_parser("close", help="verify continuity and print the closure ritual")
+    p_close.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_close.set_defaults(func=cmd_close)
+
+    p_recon = sub.add_parser("reconcile", help="sync the managed instruction block across files")
+    p_recon.add_argument("target", nargs="?", choices=("instructions",), default="instructions")
+    p_recon.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_recon.add_argument(
+        "--from", dest="source", choices=("agents", "claude"), default="agents",
+        help="canonical source file (default: agents)",
+    )
+    p_recon.set_defaults(func=cmd_reconcile)
 
     return parser
 

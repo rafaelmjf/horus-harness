@@ -15,7 +15,7 @@ last_updated: 2026-06-24
 - [x] Decide sessions should be local/ignored by default.
 - [x] Add `AGENTS.md` and `CLAUDE.md` shared Horus-managed instruction blocks.
 - [x] Define `horus init` behavior for creating `.horus/`.
-- [ ] Define session summary and closure templates.
+- [x] Define session summary and closure templates.
 
 ## MVP 1 - Local Dashboard
 
@@ -25,15 +25,16 @@ last_updated: 2026-06-24
 - [x] Show project summary, current focus, roadmap, decisions, and recent local sessions.
 - [x] Add a simple `horus doctor project` check.
 - [x] Add a simple `horus doctor instructions` drift check for `AGENTS.md` / `CLAUDE.md`.
-- [ ] Add `horus forget` / prune for stale registered projects (follow-up).
+- [x] Add `horus forget` / prune for stale registered projects.
+- [x] Add `horus reconcile instructions` deterministic managed-block sync.
 
 ## MVP 2 - Session Continuity
 
 - [ ] Add SQLite registry for sessions and events.
 - [ ] Define session states including `closing`, `needs_closure`, and `closed_stale`.
-- [ ] Add session summary creation/checking.
-- [ ] Add closure verification (no agent spawned).
-- [ ] Add agent-delegated closure prompt when a summary is missing/stale (hybrid v1 path).
+- [x] Add session summary creation/checking (`horus session new`).
+- [x] Add closure verification, no agent spawned (`horus close`).
+- [x] Add agent-delegated closure prompt (`horus close` prints the ritual for the in-loop agent).
 - [ ] Add stale-session closure thresholds.
 - [ ] Add context rollover heuristics.
 

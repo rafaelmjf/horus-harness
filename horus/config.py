@@ -34,17 +34,47 @@ def _as_key(path: Path) -> str:
     return path.resolve().as_posix()
 
 
+def _write_projects(projects: list[str]) -> None:
+    config_dir().mkdir(parents=True, exist_ok=True)
+    lines = ["# Horus user config", "projects = ["]
+    lines += [f'  "{p}",' for p in projects]
+    lines.append("]")
+    config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def register_project(project_path: Path) -> bool:
     """Add ``project_path`` to the user config. Returns True if newly added."""
     key = _as_key(project_path)
     existing = load_projects()
     if key in existing:
         return False
-
     existing.append(key)
-    config_dir().mkdir(parents=True, exist_ok=True)
-    lines = ["# Horus user config", "projects = ["]
-    lines += [f'  "{p}",' for p in existing]
-    lines.append("]")
-    config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_projects(existing)
     return True
+
+
+def unregister_project(project_path: Path) -> bool:
+    """Remove ``project_path`` from the user config. Returns True if it was present."""
+    key = _as_key(project_path)
+    existing = load_projects()
+    if key not in existing:
+        return False
+    _write_projects([p for p in existing if p != key])
+    return True
+
+
+def prune_projects() -> list[str]:
+    """Drop registered projects whose path is gone or lacks a `.horus/` dir.
+
+    Returns the list of removed paths.
+    """
+    existing = load_projects()
+    kept, removed = [], []
+    for p in existing:
+        if (Path(p) / ".horus").is_dir():
+            kept.append(p)
+        else:
+            removed.append(p)
+    if removed:
+        _write_projects(kept)
+    return removed

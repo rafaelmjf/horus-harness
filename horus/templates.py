@@ -96,3 +96,50 @@ def decisions_md() -> str:
 
 Durable decisions and their reasoning. Dated entries. No ephemeral chatter.
 """
+
+
+def session_summary(
+    *,
+    title: str,
+    date: str,
+    project: str,
+    agent: str,
+    account: str,
+    environment: str,
+) -> str:
+    return f"""---
+date: {date}
+agent: {agent}
+account: {account}
+environment: {environment}
+project: {project}
+status: in-progress
+summary: "{title}"
+---
+
+# {title}
+
+## Summary
+
+What this session set out to do and what happened.
+
+## Key Points
+
+- ...
+
+## Next
+
+- ...
+"""
+
+
+CLOSURE_PROMPT = """Closure ritual - update project continuity before ending this session:
+
+1. Session summary: ensure a summary for this session exists under .horus/sessions/
+   (create one with `horus session new "<title>"` if this session moved the project forward).
+2. Roadmap: update .horus/roadmap.md if status or current focus changed.
+3. Decisions: record durable decisions in .horus/decisions.md, with reasoning.
+4. Instructions: keep the AGENTS.md / CLAUDE.md shared blocks aligned
+   (check with `horus doctor instructions`; fix with `horus reconcile instructions`).
+5. Do not continue editing source code as part of closure.
+"""

@@ -46,6 +46,47 @@ def normalize_block(raw: str) -> str:
     return "\n".join(lines).strip()
 
 
+def set_crossref(raw_block: str, other_name: str) -> str:
+    """Return ``raw_block`` with its cross-reference line pointing at ``other_name``."""
+    return _CROSSREF_RE.sub(lambda m: f"{m.group(1)}{other_name}{m.group(2)}", raw_block)
+
+
+def replace_block(text: str, new_block: str) -> str:
+    """Replace the managed block in ``text`` with ``new_block``.
+
+    If no block is present, the new block is appended (preserving existing content).
+    """
+    current = extract_block(text)
+    if not current.found:
+        sep = "" if text.endswith("\n\n") else ("\n" if text.endswith("\n") else "\n\n")
+        return text + sep + new_block + "\n"
+    return text.replace(current.raw, new_block, 1)
+
+
+class ReconcileResult(NamedTuple):
+    status: str  # "synced" | "already-aligned" | "no-source-block"
+    new_target_text: str | None
+
+
+def reconcile(
+    source_text: str, source_name: str, target_text: str, target_name: str
+) -> ReconcileResult:
+    """Project the canonical block from ``source`` into ``target``.
+
+    The target's cross-reference line is set to name the source file. Content
+    outside the managed block is left untouched.
+    """
+    source = extract_block(source_text)
+    if not source.found:
+        return ReconcileResult("no-source-block", None)
+
+    desired_block = set_crossref(source.raw, source_name)
+    new_target = replace_block(target_text, desired_block)
+    if new_target == target_text:
+        return ReconcileResult("already-aligned", None)
+    return ReconcileResult("synced", new_target)
+
+
 class DriftReport(NamedTuple):
     status: str  # "aligned" | "drift" | "missing"
     detail: str
