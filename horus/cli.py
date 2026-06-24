@@ -8,7 +8,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from horus import __version__, config, dashboard, infer, initialize, templates
+from horus import __version__, closure, config, dashboard, infer, initialize, templates
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
 from horus.instructions import check_drift, reconcile
 
@@ -137,10 +137,27 @@ def cmd_session(args: argparse.Namespace) -> int:
 
 def cmd_close(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
-    print(f"Closure check: {root}")
-    healthy = _print_findings(check_project(root))
+    print(f"Closure check: {root}\n")
+    findings = closure.closure_status(root)
+    healthy = _print_findings(findings)
+
+    if args.commit:
+        did, detail = closure.commit_continuity(root, args.message, push=args.push)
+        print(f"\n--commit: {detail}")
+        if did:
+            # The commit clears the "uncommitted continuity" warning.
+            healthy = not any(
+                f.level in ("warn", "fail")
+                for f in findings
+                if "uncommitted continuity" not in f.message
+            )
+
     print("\n" + templates.CLOSURE_PROMPT)
-    return 0 if healthy else 1
+    if healthy:
+        print("Continuity captured — ready to start a fresh session from `.horus/`.")
+        return 0
+    print("Action needed before closing — see the warnings above.")
+    return 1
 
 
 def cmd_infer(args: argparse.Namespace) -> int:
@@ -262,8 +279,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_session_new.add_argument("--environment", default="host")
     p_session_new.set_defaults(func=cmd_session)
 
-    p_close = sub.add_parser("close", help="verify continuity and print the closure ritual")
+    p_close = sub.add_parser("close", help="verify continuity (git-aware) and print the closure ritual")
     p_close.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_close.add_argument("--commit", action="store_true", help="stage+commit the continuity files")
+    p_close.add_argument("--push", action="store_true", help="with --commit, also push to origin")
+    p_close.add_argument("--message", "-m", help="commit message for --commit")
     p_close.set_defaults(func=cmd_close)
 
     p_infer = sub.add_parser("infer", help="infer project state from existing files (README, roadmap, CLAUDE.md, ...)")
