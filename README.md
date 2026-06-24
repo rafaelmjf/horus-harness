@@ -54,4 +54,4 @@ horus forget <path> | horus prune # manage the dashboard's project registry
 
 ## License
 
-MIT
+Apache-2.0

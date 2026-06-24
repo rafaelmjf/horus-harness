@@ -8,14 +8,14 @@ version = "0.0.1"
 description = "Project-centric continuity and control panel for official coding-agent CLIs"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [{ name = "Rafael M. J. Figueiredo" }]
 keywords = ["claude-code", "codex", "coding-agents", "continuity", "cli", "dashboard"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",

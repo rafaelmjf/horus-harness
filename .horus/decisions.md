@@ -170,3 +170,14 @@ Reasoning:
 - Subscription-auth / lightweight constraints are unaffected by packaging; this is pure distribution.
 - Trusted publishing avoids secret management and matches the project's security posture.
 
+## 2026-06-24 - License: Apache-2.0
+
+License the project under Apache-2.0 (initially drafted as MIT).
+
+Reasoning:
+
+- Permissive OSS with an explicit patent grant and clearer terms than MIT.
+- As sole copyright holder, future versions can still be relicensed/commercialized; only an already-published version stays under its license. Loosening later is easy, tightening is hard - Apache-2.0 is a safe permissive default without giving up that optionality.
+- To preserve relicensing freedom if outside contributions arrive, require a DCO/CLA or stay sole author.
+- Repo made public (was private) so GitHub Environments are available for the `pypi` trusted-publishing environment.
+
