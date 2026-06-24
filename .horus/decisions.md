@@ -206,6 +206,23 @@ Reasoning:
 - Deterministic inference was made strong enough to cover the common cases: explicit `NEXT STEP:` / `Next:` banners (highest priority for current_focus), status emoji as checkboxes, `[ ]` checkboxes, and bullets under roadmap/TODO headings.
 - An agent-assisted `horus infer --agent` remains a logged future enhancement for unstructured prose, to land with the execution layer.
 
+## 2026-06-25 - Remove Deterministic Inference; LLM-Based `infer` Under MVP3
+
+Removed the deterministic inference (`horus/infer.py`, the `horus infer` command, init-time mining). Supersedes the 2026-06-24 "Infer Project State (Deterministic)" and "Deterministic Inference Stays Default" decisions.
+
+Reasoning (from a real agent's review of the seeded `.horus/` in fabric):
+
+- Brittle parsing truncated multi-line bullets mid-sentence and produced empty scaffold sections.
+- Copying existing prose into `.horus/` created a second, drifting source of "what's next" alongside the project's own docs — against the don't-duplicate ethos.
+
+New approach:
+
+- `horus init` scaffolds clean templates + a `.horus/README.md` that explains the structure and says: this is the single concise source; distill from the project's canonical docs and point at them, don't maintain duplicates; mark superseded docs as stale.
+- Rich population becomes the **LLM-based `horus infer`** (MVP3, CLI-spawn): follow doc pointers, distill clean project + roadmap (planned/in-progress/done), mark old docs stale, prompt the user when unclear. Deferred with the rest of the execution layer (no `claude`/`codex` here to drive).
+- Near term, the in-loop agent populates `.horus/` from canonical docs, guided by the README + managed block.
+
+The four sibling repos' code-generated `.horus/` content was reset to clean templates + README.
+
 ## 2026-06-25 - Agent Execution Is the Next Major Phase, Deferred Until a CLI-Equipped Machine
 
 The execution layer (launching official agent CLIs as subprocesses, multiple isolated accounts, live oversight) is the project's core wedge and the agreed next major phase. Deferred for now because `claude`/`codex` are not installed on the current machine, so the subprocess-driving layer cannot be end-to-end tested here.

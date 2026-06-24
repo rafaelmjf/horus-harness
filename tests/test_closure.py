@@ -16,7 +16,7 @@ def _setup(tmp_path, monkeypatch):
     _run(tmp_path, "init")
     _run(tmp_path, "config", "user.email", "t@example.com")
     _run(tmp_path, "config", "user.name", "Tester")
-    initialize.init_project(tmp_path, assume_yes=True, infer_sources=False)
+    initialize.init_project(tmp_path, assume_yes=True)
     _run(tmp_path, "add", "-A")
     _run(tmp_path, "commit", "-m", "init")
     return tmp_path

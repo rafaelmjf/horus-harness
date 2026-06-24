@@ -24,7 +24,7 @@ last_updated: 2026-06-24
 - [x] Render a local read-only dashboard listing projects.
 - [x] Show project summary, current focus, roadmap, decisions, and recent local sessions.
 - [x] Surface latest change, roadmap progress, and a highlighted next step on the dashboard.
-- [x] Infer project state from existing files on init (+ `horus infer`); deterministic.
+- [x] ~~Infer project state deterministically on init~~ — REMOVED 2026-06-25 (brittle parsing: truncated bullets, duplicated existing docs). `init` now scaffolds clean templates + `.horus/README.md`; rich population is the LLM-based `horus infer` under MVP3.
 - [x] Add a simple `horus doctor project` check.
 - [x] Add a simple `horus doctor instructions` drift check for `AGENTS.md` / `CLAUDE.md`.
 - [x] Add `horus forget` / prune for stale registered projects.
@@ -60,6 +60,7 @@ last_updated: 2026-06-24
 - [ ] Turn the static dashboard into a live oversight app (process status + controls) on top of the registry.
 - [ ] Persist the registry in SQLite (now re-justified: real live processes to track).
 - [ ] Restrict autonomous closure edits to `.horus/**`, `AGENTS.md`, `CLAUDE.md`.
+- [ ] **LLM-based `horus infer`** (replaces the removed deterministic version): drive the official CLI to distill `.horus/` from the project's canonical docs — follow doc pointers (README → status/roadmap → CLAUDE.md → linked docs like docs/HISTORY.md), produce clean project + roadmap with planned/in-progress/done items, mark superseded source docs as stale, and prompt the user when intent is unclear.
 
 ## Later
 
@@ -69,5 +70,4 @@ last_updated: 2026-06-24
 - [ ] Optional `rulesync` integration.
 - [ ] Optional `horus reconcile instructions --ai`.
 - [ ] Optional private session sync outside git.
-- [ ] Agent-assisted `horus infer` (richer roadmap/next-step extraction via the official CLI).
-- [ ] Multi-line bullet joining in inference (currently truncates at the first line).
+- [ ] Propagate managed-block content updates across repos when Horus's canonical block changes (currently no mechanism; `reconcile` only syncs the two files within one repo).

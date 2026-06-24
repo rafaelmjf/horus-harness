@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
-from horus import config, infer, templates
+from horus import config, templates
 from horus.continuity import COMMITTED_FILES, HORUS_DIR, SESSIONS_DIR
 from horus.instructions import extract_block
 
@@ -57,18 +57,9 @@ def init_project(
     *,
     assume_yes: bool = False,
     no_input: bool = False,
-    infer_sources: bool = True,
 ) -> list[Action]:
     actions: list[Action] = []
     today = date.today().isoformat()
-
-    # Infer BEFORE creating anything, so we mine the project's pre-existing files
-    # (README, roadmap, CLAUDE.md, ...) and not Horus's own fresh scaffold.
-    inferred = infer.infer(project_root) if infer_sources else None
-    if inferred and inferred.has_content():
-        actions.append(
-            Action("info", f"inferred from {', '.join(inferred.sources)} ({len(inferred.tasks)} task(s))")
-        )
 
     hdir = project_root / HORUS_DIR
     hdir.mkdir(parents=True, exist_ok=True)
@@ -76,28 +67,22 @@ def init_project(
 
     actions.append(
         _write_if_missing(
+            hdir / "README.md",
+            templates.readme_md(),
+            f"{HORUS_DIR}/README.md",
+        )
+    )
+    actions.append(
+        _write_if_missing(
             hdir / "project.md",
-            templates.project_md(
-                project_root.name,
-                today,
-                description=inferred.description if inferred else "",
-                status=inferred.status if inferred else "planning",
-                current_focus=inferred.current_focus if inferred else "",
-                sources=inferred.sources if (inferred and inferred.has_content()) else None,
-            ),
+            templates.project_md(project_root.name, today),
             f"{HORUS_DIR}/project.md",
         )
     )
     actions.append(
         _write_if_missing(
             hdir / "roadmap.md",
-            templates.roadmap_md(
-                today,
-                current_focus=inferred.current_focus if inferred else "",
-                tasks=[(t.state, t.text, t.section) for t in inferred.tasks]
-                if (inferred and inferred.tasks)
-                else None,
-            ),
+            templates.roadmap_md(today),
             f"{HORUS_DIR}/roadmap.md",
         )
     )
