@@ -44,3 +44,43 @@ def test_project_detail_renders_sections(tmp_path, monkeypatch):
     html_out = dashboard.render_project(data)
     assert "Continuity health" in html_out
     assert "Roadmap" in html_out
+
+
+def test_next_step_and_latest_surface(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    # Roadmap template has an open "First task." -> it should be the next step.
+    data = dashboard.load_project(str(tmp_path))
+    assert data["next_step"]["text"] == "First task."
+    assert data["progress"]["total"] >= 1
+
+    # Add a session summary; it should become the "latest".
+    sessions = tmp_path / ".horus" / "sessions"
+    (sessions / "2026-06-25-newer.md").write_text(
+        '---\ndate: 2026-06-25\nsummary: "Newer change"\n---\n# x\n', encoding="utf-8"
+    )
+    (sessions / "2026-06-24-older.md").write_text(
+        '---\ndate: 2026-06-24\nsummary: "Older change"\n---\n# x\n', encoding="utf-8"
+    )
+    data = dashboard.load_project(str(tmp_path))
+    assert data["latest"]["summary"] == "Newer change"
+
+    html_out = dashboard.render_index([data])
+    assert "NEXT" in html_out
+    assert "First task." in html_out
+    assert "Newer change" in html_out
+
+
+def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    # Replace roadmap body with all-done tasks.
+    roadmap_md = tmp_path / ".horus" / "roadmap.md"
+    roadmap_md.write_text(
+        "---\nstatus: active\ncurrent_focus: \"x\"\n---\n# Roadmap\n\n- [x] all done\n",
+        encoding="utf-8",
+    )
+    data = dashboard.load_project(str(tmp_path))
+    assert data["next_step"] is None
+    assert "roadmap complete" in dashboard.render_project(data)

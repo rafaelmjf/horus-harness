@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from horus import config, frontmatter, markdown
+from horus import config, frontmatter, markdown, roadmap
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
 
@@ -34,6 +34,9 @@ def load_project(path_str: str) -> dict[str, Any]:
         "decisions_body": "",
         "sessions": [],
         "findings": [],
+        "next_step": None,
+        "latest": None,
+        "progress": {"done": 0, "total": 0, "pct": 0},
     }
     if not hdir.is_dir():
         return data
@@ -56,7 +59,7 @@ def load_project(path_str: str) -> dict[str, Any]:
     if decisions_md.is_file():
         data["decisions_body"] = decisions_md.read_text(encoding="utf-8")
 
-    for sp in recent_sessions(root):
+    for sp in recent_sessions(root, limit=12):
         doc = frontmatter.parse(sp.read_text(encoding="utf-8"))
         data["sessions"].append(
             {
@@ -65,8 +68,20 @@ def load_project(path_str: str) -> dict[str, Any]:
                 "agent": doc.front_matter.get("agent", ""),
                 "status": doc.front_matter.get("status", ""),
                 "summary": doc.front_matter.get("summary", ""),
+                "mtime": sp.stat().st_mtime,
             }
         )
+
+    # Sort newest-first by frontmatter date, then mtime, then filename, so
+    # "latest" is correct even when several summaries share a date.
+    data["sessions"].sort(key=lambda s: (s["date"], s["mtime"], s["file"]), reverse=True)
+    data["latest"] = data["sessions"][0] if data["sessions"] else None
+
+    tasks = roadmap.parse_tasks(data["roadmap_body"])
+    ns = roadmap.next_step(tasks)
+    data["next_step"] = {"text": ns.text, "section": ns.section} if ns else None
+    prog = roadmap.progress(tasks)
+    data["progress"] = {"done": prog.done, "total": prog.total, "pct": prog.pct}
 
     data["findings"] = [
         {"level": f.level, "message": f.message} for f in check_project(root)
@@ -100,6 +115,16 @@ main { padding: 24px 28px; max-width: 980px; }
                border-radius: 999px; margin-right: 6px; background: #232733; }
 .health-ok { color: #57d39a; } .health-warn { color: #e6c35c; }
 .health-fail { color: #f08a8a; }
+.next { background: #15281d; border: 1px solid #1f5138; border-left: 3px solid #57d39a;
+        border-radius: 8px; padding: 9px 12px; margin: 10px 0; }
+.next .lbl { color: #57d39a; font-weight: 600; font-size: 12px; letter-spacing: .5px; }
+.next.done { border-left-color: #6db3f2; }
+.next.done .lbl { color: #6db3f2; }
+.latest { color: #b9c2d0; font-size: 13px; margin: 8px 0; }
+.latest .date { color: #8a93a6; }
+.bar { height: 6px; background: #232733; border-radius: 999px; overflow: hidden; margin: 10px 0 4px; }
+.bar > span { display: block; height: 100%; background: #57d39a; }
+.progress-label { font-size: 12px; color: #8a93a6; }
 ul { padding-left: 22px; } li.task { list-style: none; margin-left: -16px; }
 li.done { color: #8a93a6; } li.partial { color: #e6c35c; }
 pre { background: #0b0d12; padding: 12px; border-radius: 8px; overflow-x: auto; }
@@ -133,6 +158,37 @@ def _health_summary(findings: list[dict[str, Any]]) -> str:
     return "<span class='health-ok'>&#9679; healthy</span>"
 
 
+def _next_html(p: dict[str, Any]) -> str:
+    ns = p["next_step"]
+    if ns is None:
+        if p["progress"]["total"]:
+            return "<div class='next done'><span class='lbl'>NEXT</span> &#10003; roadmap complete</div>"
+        return ""
+    section = f" <span class='muted'>({html.escape(ns['section'])})</span>" if ns["section"] else ""
+    return f"<div class='next'><span class='lbl'>NEXT &rarr;</span> {html.escape(ns['text'])}{section}</div>"
+
+
+def _latest_html(p: dict[str, Any]) -> str:
+    latest = p["latest"]
+    if not latest:
+        return "<div class='latest muted'>no sessions yet</div>"
+    summary = html.escape(latest["summary"]) or "(no summary)"
+    return (
+        f"<div class='latest'><span class='date'>{html.escape(latest['date'])}</span> "
+        f"&middot; {summary}</div>"
+    )
+
+
+def _progress_html(p: dict[str, Any]) -> str:
+    pr = p["progress"]
+    if not pr["total"]:
+        return ""
+    return (
+        f"<div class='bar'><span style='width:{pr['pct']}%'></span></div>"
+        f"<div class='progress-label'>roadmap: {pr['done']}/{pr['total']} done ({pr['pct']}%)</div>"
+    )
+
+
 def render_index(projects: list[dict[str, Any]]) -> str:
     if not projects:
         body = (
@@ -144,7 +200,6 @@ def render_index(projects: list[dict[str, Any]]) -> str:
 
     cards = []
     for i, p in enumerate(projects):
-        focus = html.escape(p["current_focus"]) or "<span class='muted'>no current focus</span>"
         status = html.escape(p["status"]) or "unknown"
         missing = "" if p["exists"] else " <span class='health-fail'>(no .horus/)</span>"
         cards.append(
@@ -152,7 +207,9 @@ def render_index(projects: list[dict[str, Any]]) -> str:
             f"{html.escape(p['name'])}</a>{missing}</h2>"
             f"<div class='badges'><span>status: {status}</span>"
             f"<span>{len(p['sessions'])} session(s)</span> {_health_summary(p['findings'])}</div>"
-            f"<p>{focus}</p>"
+            f"{_next_html(p)}"
+            f"{_latest_html(p)}"
+            f"{_progress_html(p)}"
             f"<p class='muted' style='font-size:12px'>{html.escape(p['path'])}</p></div>"
         )
     return _page("Horus", "".join(cards))
@@ -164,6 +221,9 @@ def render_project(p: dict[str, Any]) -> str:
         f"<h1 style='margin-top:6px'>{html.escape(p['name'])}</h1>",
         f"<div class='badges'><span>status: {html.escape(p['status']) or 'unknown'}</span>"
         f"{_health_summary(p['findings'])}</div>",
+        _next_html(p),
+        _latest_html(p),
+        _progress_html(p),
     ]
 
     if p["current_focus"]:

@@ -25,14 +25,14 @@ def recent_sessions(project_root: Path, limit: int = 5) -> list[Path]:
     sessions = horus_dir(project_root) / SESSIONS_DIR
     if not sessions.is_dir():
         return []
-    files = sorted(
-        (
-            p
-            for p in sessions.glob("*.md")
-            if p.is_file() and p.name.lower() != "readme.md"
-        ),
-        reverse=True,
-    )
+    # Sort newest-first by mtime (sessions/ is gitignored and local-only, so
+    # mtime reliably reflects real creation/edit order), tie-broken by name.
+    files = [
+        p
+        for p in sessions.glob("*.md")
+        if p.is_file() and p.name.lower() != "readme.md"
+    ]
+    files.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
     return files[:limit]
 
 

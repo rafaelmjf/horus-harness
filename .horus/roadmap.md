@@ -23,6 +23,7 @@ last_updated: 2026-06-24
 - [x] Build project registry that can discover configured projects and `.horus/` files.
 - [x] Render a local read-only dashboard listing projects.
 - [x] Show project summary, current focus, roadmap, decisions, and recent local sessions.
+- [x] Surface latest change, roadmap progress, and a highlighted next step on the dashboard.
 - [x] Add a simple `horus doctor project` check.
 - [x] Add a simple `horus doctor instructions` drift check for `AGENTS.md` / `CLAUDE.md`.
 - [x] Add `horus forget` / prune for stale registered projects.
