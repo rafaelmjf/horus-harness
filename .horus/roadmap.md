@@ -35,8 +35,9 @@ last_updated: 2026-06-24
 - [x] Add session summary creation/checking (`horus session new`).
 - [x] Add closure verification, no agent spawned (`horus close`).
 - [x] Add agent-delegated closure prompt (`horus close` prints the ritual for the in-loop agent).
-- [ ] Add staleness / context-rollover signals as file-based heuristics (mtime/age/git), surfaced in doctor + dashboard. No DB.
-- [ ] Add `horus close --commit` to stage+commit `.horus/` updates (close the multi-machine sync seam).
+- [x] Make `horus close` git-aware: work-commits-since-summary + uncommitted-continuity signals, clear verdict.
+- [x] Add `horus close --commit [--push]` to stage+commit `.horus/` updates (close the multi-machine sync seam).
+- [ ] Surface staleness / context-rollover signals in the dashboard too (currently in `horus close`). No DB.
 - [~] SQLite session/event registry + session states (`closing`/`needs_closure`/`closed_stale`) — DEFERRED. Premature at solo scale (file parsing is instant) and presupposes the deferred execution layer. Revisit when scale hurts perf or Horus runs sessions itself.
 
 ## MVP 3 - Agent Execution
