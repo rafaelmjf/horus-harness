@@ -206,6 +206,24 @@ Reasoning:
 - Deterministic inference was made strong enough to cover the common cases: explicit `NEXT STEP:` / `Next:` banners (highest priority for current_focus), status emoji as checkboxes, `[ ]` checkboxes, and bullets under roadmap/TODO headings.
 - An agent-assisted `horus infer --agent` remains a logged future enhancement for unstructured prose, to land with the execution layer.
 
+## 2026-06-25 - Agent Execution Is the Next Major Phase, Deferred Until a CLI-Equipped Machine
+
+The execution layer (launching official agent CLIs as subprocesses, multiple isolated accounts, live oversight) is the project's core wedge and the agreed next major phase. Deferred for now because `claude`/`codex` are not installed on the current machine, so the subprocess-driving layer cannot be end-to-end tested here.
+
+Locked approach (so resumption is clean):
+
+- Build order: the spawn primitive + session/process registry FIRST; the live oversight app comes after, built on the registry.
+- First real adapter: **Claude Code** (`claude -p --output-format stream-json`, `--resume`, `CLAUDE_CONFIG_DIR` per account); Codex second.
+- Thin owned adapter against a shared contract (`spawn`/`resume`/`parse_event`/`permission_flags`); a fake adapter can validate orchestration on any machine, including this one.
+- Multi-account isolation via per-account home dirs + a startup identity check.
+- The SQLite registry (previously deferred) becomes justified here, once there are real live processes to track.
+- Turning the static dashboard into a live oversight app is part of this phase, not before it.
+
+Reasoning:
+
+- Don't ship a subprocess-driving layer that can't be run/tested; build it where the CLIs live (e.g. the VM / another machine).
+- Keeps faith with the core constraints: subscription-auth only, official CLIs, lightweight (see [[horus-core-constraints]]).
+
 ## 2026-06-24 - Defer the SQLite Session Registry; Keep Session Continuity File-First
 
 Do not build the SQLite session/event registry or persisted session states yet.

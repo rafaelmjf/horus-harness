@@ -40,17 +40,26 @@ last_updated: 2026-06-24
 - [ ] Surface staleness / context-rollover signals in the dashboard too (currently in `horus close`). No DB.
 - [~] SQLite session/event registry + session states (`closing`/`needs_closure`/`closed_stale`) — DEFERRED. Premature at solo scale (file parsing is instant) and presupposes the deferred execution layer. Revisit when scale hurts perf or Horus runs sessions itself.
 
-## MVP 3 - Agent Execution
+## MVP 3 - Agent Execution (the core wedge; next major phase)
 
-> Deferred: Claude Code / Codex apps already allow running both from the same project folder by hand, so multi-session execution is not blocking. This phase also unlocks the autonomous (non-delegated) closure summarizer.
+> DEFERRED until working on a machine with the official CLIs installed + logged in.
+> `claude`/`codex` are not present on the current machine, so the subprocess-driving
+> layer can't be end-to-end tested here. Approach is locked below so resumption is clean.
+>
+> Locked decisions (2026-06-25): build order = spawn + registry FIRST, then the live
+> oversight app. First real adapter = Claude Code. Thin owned adapter against a shared
+> contract; a fake adapter can validate orchestration anywhere. This phase also unlocks
+> autonomous closure + agent-assisted infer.
 
-
-- [ ] Add concrete account config for Codex.
-- [ ] Implement Codex adapter command building.
-- [ ] Start and resume a real Codex session.
-- [ ] Associate sessions with project/account/environment.
-- [ ] Restrict closure mode to `.horus/**`, `AGENTS.md`, and `CLAUDE.md`.
-- [ ] Add Claude adapter after Codex flow is proven.
+- [ ] Define the adapter contract (`spawn`, `resume`, `parse_event`, `permission_flags`) + a fake adapter for tests.
+- [ ] Session/process registry: `(agent, account, project, environment, pid, session_id, status)`; survives restarts.
+- [ ] Claude Code adapter: `claude -p --output-format stream-json`, `--resume`, `CLAUDE_CONFIG_DIR` per account, permission posture.
+- [ ] Spawn + resume one headless session in a project under a chosen account; capture output; track state.
+- [ ] Multi-account isolation via per-account home dirs (`CLAUDE_CONFIG_DIR`) + startup identity check.
+- [ ] Codex adapter (second) to prove the abstraction.
+- [ ] Turn the static dashboard into a live oversight app (process status + controls) on top of the registry.
+- [ ] Persist the registry in SQLite (now re-justified: real live processes to track).
+- [ ] Restrict autonomous closure edits to `.horus/**`, `AGENTS.md`, `CLAUDE.md`.
 
 ## Later
 
