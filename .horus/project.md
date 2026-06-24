@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: planning
-current_focus: "Define the project-first continuity MVP before implementation."
+current_focus: "MVP0/MVP1 shipped (CLI: init, doctor, dashboard, session, close, reconcile). Next: MVP2 session continuity."
 last_updated: 2026-06-24
 ---
 

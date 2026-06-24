@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "Bootstrap repo-local project continuity, then build the smallest dashboard around it."
+current_focus: "MVP0/MVP1 shipped (init, doctor, dashboard, session/close, reconcile). Next: MVP2 session registry and context-rollover."
 last_updated: 2026-06-24
 ---
 
