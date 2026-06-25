@@ -17,6 +17,17 @@ def test_mascot_asset_is_packaged():
     assert path.is_file()
 
 
+def test_mascot_animation_frames_are_packaged():
+    paths = companion.mascot_frame_paths()
+    assert [p.name for p in paths] == [
+        "mascot_idle_0.png",
+        "mascot_idle_1.png",
+        "mascot_idle_2.png",
+        "mascot_blink.png",
+    ]
+    assert all(p.is_file() for p in paths)
+
+
 def test_ensure_dashboard_does_not_spawn_when_live(monkeypatch):
     monkeypatch.setattr(companion, "dashboard_is_live", lambda url: True)
 

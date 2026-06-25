@@ -58,6 +58,11 @@ def mascot_asset_path() -> Path:
     return Path(str(resources.files("horus").joinpath("assets", "mascot.png")))
 
 
+def mascot_frame_paths() -> list[Path]:
+    names = ["mascot_idle_0.png", "mascot_idle_1.png", "mascot_idle_2.png", "mascot_blink.png"]
+    return [Path(str(resources.files("horus").joinpath("assets", name))) for name in names]
+
+
 def run_close_check(project_root: Path, *, threshold: float = 90.0) -> tuple[str, str]:
     from horus import closure
 
@@ -100,22 +105,25 @@ def run_companion(
         root.attributes("-toolwindow", True)
     except tk.TclError:
         pass
-    root.configure(bg="#ffffff")
+    transparent = "#ff00ff"
+    root.configure(bg=transparent)
+    try:
+        root.attributes("-transparentcolor", transparent)
+    except tk.TclError:
+        pass
 
-    full_img = tk.PhotoImage(file=str(mascot_asset_path()))
-    scale = max(1, full_img.height() // 180)
-    mascot_img = full_img.subsample(scale, scale)
-    width = mascot_img.width()
-    height = mascot_img.height()
+    full_frames = [tk.PhotoImage(file=str(path)) for path in mascot_frame_paths()]
+    scale = max(1, max(frame.height() for frame in full_frames) // 180)
+    mascot_frames = [frame.subsample(scale, scale) for frame in full_frames]
+    width = max(frame.width() for frame in mascot_frames)
+    height = max(frame.height() for frame in mascot_frames)
     root.geometry(f"{width}x{height}+80+80")
 
-    canvas = tk.Canvas(root, width=width, height=height, bg="#ffffff", highlightthickness=0, bd=0)
+    canvas = tk.Canvas(root, width=width, height=height, bg=transparent, highlightthickness=0, bd=0)
     canvas.pack()
 
     menu = tk.Menu(root, tearoff=0)
-    mascot_item = canvas.create_image(width // 2, height // 2, image=mascot_img)
-    wing_item = canvas.create_polygon(0, 0, 1, 0, 1, 1, fill="#6db85f", outline="#2f6d39")
-    blink_item = canvas.create_rectangle(0, 0, 0, 0, fill="#143b74", outline="#143b74", state="hidden")
+    mascot_item = canvas.create_image(width // 2, height // 2, image=mascot_frames[0])
     status_item = canvas.create_rectangle(width - 18, height - 18, width - 8, height - 8, fill="#57d39a", outline="#ffffff")
     canvas.create_text(width - 13, height - 13, text="", fill="#ffffff")
 
@@ -161,26 +169,14 @@ def run_companion(
     def animate() -> None:
         n = frame["n"]
         bob = 1 if n % 24 in range(6, 12) else -1 if n % 24 in range(18, 24) else 0
-        canvas.coords(mascot_item, width // 2, height // 2 + bob)
-
-        flap = -3 if n % 28 < 14 else 2
-        x0, y0 = int(width * 0.61), int(height * 0.49) + flap
-        x1, y1 = int(width * 0.91), int(height * 0.65) + flap
-        x2, y2 = int(width * 0.75), int(height * 0.77) + flap
-        canvas.coords(wing_item, x0, y0, x1, y1, x2, y2, int(width * 0.66), int(height * 0.66) + flap)
-
-        blink_on = n % 96 in (0, 1, 2)
-        if blink_on:
-            canvas.coords(
-                blink_item,
-                int(width * 0.27),
-                int(height * 0.32) + bob,
-                int(width * 0.39),
-                int(height * 0.36) + bob,
-            )
-            canvas.itemconfigure(blink_item, state="normal")
+        if n % 96 in (0, 1, 2):
+            image_index = 3
+        elif n % 28 < 14:
+            image_index = 1
         else:
-            canvas.itemconfigure(blink_item, state="hidden")
+            image_index = 2
+        canvas.itemconfigure(mascot_item, image=mascot_frames[image_index])
+        canvas.coords(mascot_item, width // 2, height // 2 + bob)
 
         frame["n"] = n + 1
         root.after(120, animate)

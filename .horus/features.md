@@ -17,7 +17,7 @@ Status: **Shipped** · **In progress** · **Planned**
 
 | Capability | Since | Notes |
 |---|---|---|
-| Horus companion/mascot app | 2026-06-25 | `horus app` / `horus mascot`; borderless always-on-top Tkinter mascot, packaged pixel image asset, idle blink/bob/wing motion, starts/detects dashboard, opens it on click, context menu includes close check + quit |
+| Horus companion/mascot app | 2026-06-25 | `horus app` / `horus mascot`; borderless always-on-top Tkinter mascot, transparent packaged PNG frames, idle blink/bob/real wing-frame motion, starts/detects dashboard, opens it on click, context menu includes close check + quit |
 | `horus init` — scaffold `.horus/` + managed instruction blocks | — | never clobbers; injects managed block into existing AGENTS/CLAUDE |
 | `horus doctor` (project + instructions) | — | continuity health + cross-ref-normalized drift check |
 | `horus dashboard` — read-only multi-project view | — | next-step banner, roadmap breakdown, sessions |

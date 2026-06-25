@@ -141,6 +141,8 @@ dashboard and later becomes the place for continuity/status nudges.
   remove window chrome/taskbar decoration.
 - [x] Add subtle idle animation (blink/bob/wing motion) so the mascot does not
   feel frozen.
+- [x] Replace the wing overlay with real transparent PNG animation frames generated
+  from the mascot image; runtime remains Pillow-free.
 - [x] Clicking the mascot opens the dashboard at `http://127.0.0.1:8765`.
 - [x] Add a minimal context menu: Open Dashboard, Run Close Check, Quit.
 - [x] Show a basic status indicator: neutral/ok, warning, needs-closure. Initial
