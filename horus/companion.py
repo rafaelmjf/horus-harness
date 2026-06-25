@@ -209,15 +209,17 @@ def run_companion(
         if not drag["moved"]:
             open_action()
 
+    # Wing breathe: rest -> small lift -> peak -> small lift -> rest. Each step
+    # holds ~6 ticks so the flap reads as gentle, not mechanical.
+    wing_cycle = (0, 1, 2, 1)
+
     def animate() -> None:
         n = frame["n"]
         bob = 1 if n % 24 in range(6, 12) else -1 if n % 24 in range(18, 24) else 0
         if n % 96 in (0, 1, 2):
             image_index = 3
-        elif n % 28 < 14:
-            image_index = 1
         else:
-            image_index = 2
+            image_index = wing_cycle[(n // 6) % len(wing_cycle)]
         canvas.itemconfigure(mascot_item, image=mascot_frames[image_index])
         canvas.coords(mascot_item, width // 2, height // 2 + bob)
 
