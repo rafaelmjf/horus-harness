@@ -1,11 +1,43 @@
 """Tests for dashboard data gathering and HTML rendering (no socket)."""
 
 from horus import dashboard, initialize
+from horus.registry import Registry, SessionRecord
 
 
 def _init(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def test_render_sessions_card_empty():
+    html = dashboard.render_sessions_card([])
+    assert "Live sessions" in html and "No tracked agent sessions" in html
+
+
+def test_render_sessions_card_lists_records():
+    rec = SessionRecord(
+        session_id="abcdef123456", agent="claude", project="/home/u/myproj",
+        account="work", pid=4321, status="running", updated_at="2026-06-25T22:00:00",
+    )
+    html = dashboard.render_sessions_card([rec])
+    assert "running" in html and "claude" in html and "work" in html
+    assert "myproj" in html            # project basename, not the full path
+    assert "abcdef12" in html          # short session id
+    assert "health-ok" in html         # running -> green dot
+
+
+def test_gather_sessions_reconciles(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    reg = Registry.default()
+    reg.upsert(SessionRecord(session_id="x", agent="claude", project="/p", pid=None, status="running"))
+    records = dashboard.gather_sessions()
+    assert len(records) == 1 and records[0].status == "orphaned"  # pid-less running -> orphaned
+
+
+def test_render_index_includes_sessions_card(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    page = dashboard.render_index([], dashboard.gather_sessions())
+    assert "Live sessions" in page
 
 
 def test_dashboard_server_is_single_instance():
