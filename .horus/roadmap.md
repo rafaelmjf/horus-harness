@@ -163,6 +163,9 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] Fix console-window strobing on dashboard refresh (2026-06-25): `gitstate` git
   subprocesses now pass `CREATE_NO_WINDOW` on Windows (the overview fires many git
   calls per refresh).
+- [x] Single-instance companion (2026-06-25): `acquire_singleton_lock` binds a fixed
+  localhost port (8764) as a process-lifetime mutex; a second `horus app` exits
+  instead of stacking another mascot. OS releases it on death (no stale-PID files).
 - [x] Add a minimal context menu: Open Dashboard, Run Close Check, Quit.
 - [x] Show a basic status indicator: neutral/ok, warning, needs-closure. Initial
   data can come from existing `doctor`/`close`/usage checks; no live registry yet.
@@ -219,6 +222,11 @@ Known bug (deferred — user to fix later):
 - [x] Latest session summary rendered in full on the detail view (2026-06-25): the
   goal of the slice — a prominent "Latest session" card showing the newest local
   session body, with a filename fallback on the overview when frontmatter has no summary.
+- [x] Overview redesigned to per-project **columns** (2026-06-25, from user draft):
+  each column = name + "why this exists" one-liner + Last-session-summary box +
+  Roadmap box (highlighted next item, ▶ Start-a-session CTA, Remaining-top-items) +
+  Main-features in Idea/In-progress/Shipped buckets with names (`routines.feature_items`).
+  Pills kept (status, sessions, git, health).
 - [ ] "Fetch all" refresh action: `git fetch` across registered projects to update
   behind/ahead. Fetch does not touch the working tree, so the dashboard's
   read-only-on-files invariant holds. Pull (which mutates) is NOT auto-run.

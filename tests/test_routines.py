@@ -200,3 +200,16 @@ def test_distill_history_explicit_source(tmp_path):
     log.write_text("# big\n" + "x\n" * 10, encoding="utf-8")
     source = routines.find_source_log(tmp_path, "BIGLOG.md")
     assert source is not None and source.name == "BIGLOG.md"
+
+
+def test_feature_items_groups_names_by_section():
+    body = (
+        "## Shipped\n| Capability | Since |\n|---|---|\n| Dashboard | v1 |\n| Closure | v1 |\n"
+        "## In progress\n| Capability | Notes |\n|---|---|\n| Git awareness | wip |\n"
+        "## Planned\n| Capability | Notes |\n|---|---|\n| Telegram | later |\n"
+    )
+    items = routines.feature_items(body)
+    assert items["shipped"] == ["Dashboard", "Closure"]
+    assert items["in_progress"] == ["Git awareness"]
+    assert items["planned"] == ["Telegram"]
+    assert routines.feature_counts(body) == {"shipped": 2, "in_progress": 1, "planned": 1}

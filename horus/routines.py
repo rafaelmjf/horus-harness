@@ -87,9 +87,9 @@ def feature_capabilities(features_body: str) -> list[str]:
     return caps
 
 
-def feature_counts(features_body: str) -> dict[str, int]:
-    """Capability rows per section of features.md: shipped / in_progress / planned."""
-    counts = {"shipped": 0, "in_progress": 0, "planned": 0}
+def feature_items(features_body: str) -> dict[str, list[str]]:
+    """Capability names per section of features.md: shipped / in_progress / planned."""
+    items: dict[str, list[str]] = {"shipped": [], "in_progress": [], "planned": []}
     section: str | None = None
     for raw in features_body.splitlines():
         line = raw.strip()
@@ -107,8 +107,13 @@ def feature_counts(features_body: str) -> dict[str, int]:
             first = cells[0] if cells else ""
             if not first or set(first) <= set("-: ") or first.lower() == "capability":
                 continue
-            counts[section] += 1
-    return counts
+            items[section].append(first)
+    return items
+
+
+def feature_counts(features_body: str) -> dict[str, int]:
+    """Capability row counts per section of features.md."""
+    return {k: len(v) for k, v in feature_items(features_body).items()}
 
 
 def _read(hdir: Path, name: str) -> str | None:

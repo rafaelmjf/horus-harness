@@ -133,7 +133,9 @@ def test_dashboard_surfaces_features_and_history(tmp_path, monkeypatch):
     assert "<table>" in det  # capability ledger rendered as a table
 
     idx = dashboard.render_index([data])
-    assert "1 shipped" in idx  # capability badge on the card
+    # New column layout: features show as named buckets (Idea / In progress / Shipped).
+    assert "Main features" in idx and "Widget engine" in idx
+    assert "Last session summary" in idx
 
 
 def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):

@@ -39,6 +39,16 @@ def test_ensure_dashboard_does_not_spawn_when_live(monkeypatch):
     assert result.process is None
 
 
+def test_singleton_lock_is_exclusive():
+    first = companion.acquire_singleton_lock(8779)
+    assert first is not None
+    assert companion.acquire_singleton_lock(8779) is None  # second instance blocked
+    first.close()
+    again = companion.acquire_singleton_lock(8779)  # released on close
+    assert again is not None
+    again.close()
+
+
 def test_open_dashboard_prefers_app_window(monkeypatch):
     calls = {}
     monkeypatch.setattr(companion, "_app_browser", lambda: "FAKE.exe")

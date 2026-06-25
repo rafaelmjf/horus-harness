@@ -30,10 +30,12 @@ def load_project(path_str: str) -> dict[str, Any]:
         "title": root.name,
         "status": "",
         "current_focus": "",
+        "tagline": "",
         "project_body": "",
         "roadmap_body": "",
         "features_body": "",
         "feature_counts": {"shipped": 0, "in_progress": 0, "planned": 0},
+        "feature_items": {"shipped": [], "in_progress": [], "planned": []},
         "decisions_body": "",
         "history_body": "",
         "sessions": [],
@@ -54,6 +56,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         data["status"] = doc.front_matter.get("status", "")
         data["current_focus"] = doc.front_matter.get("current_focus", "")
         data["project_body"] = doc.body
+        data["tagline"] = _first_paragraph(doc.body)
 
     roadmap_md = hdir / "roadmap.md"
     if roadmap_md.is_file():
@@ -66,7 +69,8 @@ def load_project(path_str: str) -> dict[str, Any]:
     if features_md.is_file():
         doc = frontmatter.parse(features_md.read_text(encoding="utf-8"))
         data["features_body"] = doc.body
-        data["feature_counts"] = routines.feature_counts(doc.body)
+        data["feature_items"] = routines.feature_items(doc.body)
+        data["feature_counts"] = {k: len(v) for k, v in data["feature_items"].items()}
 
     decisions_md = hdir / "decisions.md"
     if decisions_md.is_file():
@@ -130,7 +134,25 @@ a:hover { text-decoration: underline; }
 header { padding: 18px 28px; border-bottom: 1px solid #232733; background: #151823; }
 header h1 { margin: 0; font-size: 18px; letter-spacing: .3px; }
 header .sub { color: #8a93a6; font-size: 13px; }
-main { padding: 24px 28px; max-width: 980px; }
+main { padding: 24px 28px; max-width: 1320px; }
+.columns { display: flex; gap: 16px; align-items: flex-start; overflow-x: auto; padding-bottom: 12px; }
+.col { flex: 0 0 360px; max-width: 360px; background: #151823; border: 1px solid #232733;
+       border-radius: 12px; padding: 14px 16px; }
+.col h2 { font-size: 17px; margin: 0 0 2px; }
+.col .why { color: #8a93a6; font-size: 13px; font-style: italic; margin: 0 0 10px; }
+.box { background: #12141b; border: 1px solid #232733; border-radius: 8px; padding: 8px 12px; margin: 10px 0; }
+.box .lbl { display: block; font-size: 11px; letter-spacing: .5px; text-transform: uppercase;
+            color: #8a93a6; margin-bottom: 5px; }
+.box.inner { margin: 8px 0 2px; background: #0f1115; }
+.start { display: inline-block; margin: 6px 0 2px; font-size: 12px; color: #57d39a;
+         border: 1px solid #1f5138; background: #15281d; border-radius: 6px; padding: 3px 8px; }
+.feat-buckets { display: flex; gap: 10px; }
+.feat-buckets > div { flex: 1 1 0; min-width: 0; }
+.feat-buckets h4 { margin: 0 0 4px; font-size: 12px; color: #8a93a6; font-weight: 600; }
+.feat-buckets ul { list-style: none; padding: 0; margin: 0; }
+.feat-buckets li { font-size: 12px; margin: 2px 0; overflow-wrap: anywhere; }
+.feat-buckets .idea li { color: #b9a6e0; } .feat-buckets .prog li { color: #e6c35c; }
+.feat-buckets .ship li { color: #57d39a; }
 .card { background: #151823; border: 1px solid #232733; border-radius: 10px;
         padding: 16px 18px; margin: 0 0 14px; }
 .card h2 { margin: 0 0 4px; font-size: 16px; }
@@ -200,6 +222,15 @@ def _health_summary(findings: list[dict[str, Any]]) -> str:
 def _plain(text: str) -> str:
     """Strip Markdown emphasis/code ticks for one-line display."""
     return re.sub(r"\*\*|__|`", "", text).strip()
+
+
+def _first_paragraph(body: str) -> str:
+    """First real paragraph of a doc body — the project's 'why this exists' one-liner."""
+    for raw in body.splitlines():
+        line = raw.strip()
+        if line and not line.startswith(("#", "-", "*", ">", "|", "```")):
+            return _plain(line)
+    return ""
 
 
 def next_steps(p: dict[str, Any], limit: int = 3) -> list[str]:
@@ -380,6 +411,63 @@ def _breakdown_html(p: dict[str, Any]) -> str:
     return "".join(out)
 
 
+def _start_session_html(p: dict[str, Any]) -> str:
+    """CTA prompting the user to start a session on the highlighted next item."""
+    steps = next_steps(p, limit=1)
+    title = _plain(steps[0])[:48] if steps else "session"
+    cmd = f'horus session new "{title}"'
+    return f"<div class='start' title='run in the project root'>&#9654; Start a session &middot; <code>{html.escape(cmd)}</code></div>"
+
+
+def _remaining_items_html(p: dict[str, Any], limit: int = 5) -> str:
+    open_tasks = [t for t in p["tasks"] if t["state"] in ("todo", "partial")]
+    # Drop the one already highlighted as NEXT so the list is genuinely "remaining".
+    highlighted = set(s.lower() for s in next_steps(p, limit=1))
+    rest = [t for t in open_tasks if _plain(t["text"]).lower() not in highlighted]
+    if not rest:
+        return ""
+    items = "".join(f"<li class='t-{t['state']}'>{html.escape(_plain(t['text']))}</li>" for t in rest[:limit])
+    return f"<div class='box inner'><span class='lbl'>Remaining top items</span><ul>{items}</ul></div>"
+
+
+def _features_buckets_html(p: dict[str, Any]) -> str:
+    fi = p["feature_items"]
+    if not any(fi.values()):
+        return ""
+
+    def bucket(label: str, key: str, cls: str) -> str:
+        lis = "".join(f"<li>{html.escape(n)}</li>" for n in fi[key][:8]) or "<li class='muted'>—</li>"
+        return f"<div class='{cls}'><h4>{html.escape(label)}</h4><ul>{lis}</ul></div>"
+
+    return (
+        "<div class='box'><span class='lbl'>Main features</span><div class='feat-buckets'>"
+        + bucket("Idea", "planned", "idea")
+        + bucket("In progress", "in_progress", "prog")
+        + bucket("Shipped", "shipped", "ship")
+        + "</div></div>"
+    )
+
+
+def _project_column(p: dict[str, Any], i: int) -> str:
+    missing = "" if p["exists"] else " <span class='health-fail'>(no .horus/)</span>"
+    why = f"<p class='why'>{html.escape(p['tagline'])}</p>" if p["tagline"] else ""
+    pills = (
+        f"<div class='badges'><span>status: {html.escape(p['status']) or 'unknown'}</span>"
+        f"<span>{len(p['sessions'])} session(s)</span> {_git_badge(p)} {_health_summary(p['findings'])}</div>"
+    )
+    last = f"<div class='box'><span class='lbl'>Last session summary</span>{_latest_html(p)}</div>"
+    roadmap = (
+        "<div class='box'><span class='lbl'>Roadmap</span>"
+        f"{_next_html(p)}{_start_session_html(p)}"
+        f"{_progress_html(p, href=f'/project?i={i}#roadmap')}"
+        f"{_remaining_items_html(p)}</div>"
+    )
+    return (
+        f"<div class='col'><h2><a href='/project?i={i}'>{html.escape(p['name'])}</a>{missing}</h2>"
+        f"{why}{pills}{last}{roadmap}{_features_buckets_html(p)}</div>"
+    )
+
+
 def render_index(projects: list[dict[str, Any]]) -> str:
     if not projects:
         body = (
@@ -388,23 +476,8 @@ def render_index(projects: list[dict[str, Any]]) -> str:
             "register it here.</p></div>"
         )
         return _page("Horus", body)
-
-    cards = []
-    for i, p in enumerate(projects):
-        status = html.escape(p["status"]) or "unknown"
-        missing = "" if p["exists"] else " <span class='health-fail'>(no .horus/)</span>"
-        cards.append(
-            f"<div class='card'><h2><a href='/project?i={i}'>"
-            f"{html.escape(p['name'])}</a>{missing}</h2>"
-            f"<div class='badges'><span>status: {status}</span>"
-            f"{_features_badge(p)}"
-            f"<span>{len(p['sessions'])} session(s)</span> {_git_badge(p)} {_health_summary(p['findings'])}</div>"
-            f"{_next_html(p)}"
-            f"{_latest_html(p)}"
-            f"{_progress_html(p, href=f'/project?i={i}#roadmap')}"
-            f"<p class='muted' style='font-size:12px'>{html.escape(p['path'])}</p></div>"
-        )
-    return _page("Horus", "".join(cards))
+    cols = "".join(_project_column(p, i) for i, p in enumerate(projects))
+    return _page("Horus", f"<div class='columns'>{cols}</div>")
 
 
 def render_project(p: dict[str, Any]) -> str:

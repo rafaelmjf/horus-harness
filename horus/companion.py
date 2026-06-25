@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import webbrowser
@@ -18,6 +19,25 @@ class DashboardProcess(NamedTuple):
     url: str
     started: bool
     process: subprocess.Popen[str] | None
+
+
+# Single-instance lock. Binding a fixed localhost port is a cross-platform mutex
+# the OS releases on process death (no stale-PID files to reap).
+# ponytail: if some unrelated process grabs this port, we'd wrongly think a
+# companion is running — picked an uncommon port to make that unlikely.
+SINGLETON_PORT = 8764
+
+
+def acquire_singleton_lock(port: int = SINGLETON_PORT) -> socket.socket | None:
+    """Hold a process-lifetime lock, or None if another companion already holds it."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("127.0.0.1", port))
+        sock.listen(1)
+    except OSError:
+        sock.close()
+        return None
+    return sock
 
 
 def dashboard_url(host: str = "127.0.0.1", port: int = 8765) -> str:
@@ -120,7 +140,7 @@ def open_dashboard(url: str, *, app_window: bool = True) -> None:
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
         try:
-            subprocess.Popen([exe, f"--app={url}", "--window-size=480,860"], **kwargs)
+            subprocess.Popen([exe, f"--app={url}", "--window-size=1200,760"], **kwargs)
             return
         except OSError:
             pass
@@ -164,6 +184,11 @@ def run_companion(
     except ImportError:
         print("Tkinter is not available; the Horus companion needs a desktop Python with Tk.")
         return 2
+
+    lock = acquire_singleton_lock()
+    if lock is None:
+        print("Horus companion already running; not starting another.")
+        return 0
 
     dashboard = ensure_dashboard(host, port, start=start_dashboard)
     if open_on_start:
