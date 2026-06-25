@@ -205,17 +205,27 @@ def _usage_check_claude(args: argparse.Namespace) -> int:
         healthy = _print_findings(findings)
         return 0 if healthy else 1
 
-    # Hook mode: drive the session into the closure routine, once, when over budget.
+    # Hook mode: drive the session into the closure routine when over budget.
     if not claude_usage.is_over_threshold(args.threshold, report):
         return 0
     hook_input = _read_hook_stdin()
-    if hook_input.get("stop_hook_active"):  # we already triggered a continuation
+    if hook_input.get("stop_hook_active"):  # we already triggered a Stop continuation
         return 0
     session_id = str(hook_input.get("session_id", "unknown"))
-    if native_hooks.closure_already_fired(session_id):
+    if native_hooks.closure_already_fired(session_id):  # re-arm window: avoid loops/nagging
         return 0
     native_hooks.mark_closure_fired(session_id)
-    print(json.dumps({"decision": "block", "reason": templates.USAGE_CLOSURE_INSTRUCTION}))
+
+    instruction = templates.USAGE_CLOSURE_INSTRUCTION
+    event = hook_input.get("hook_event_name", "Stop")
+    if event == "UserPromptSubmit":
+        # Pre-task: inject the closure directive as context BEFORE the agent starts the
+        # requested work, so an over-budget session closes instead of beginning it.
+        print(json.dumps({
+            "hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": instruction}
+        }))
+    else:  # Stop: block the stop and feed the directive back as the next instruction.
+        print(json.dumps({"decision": "block", "reason": instruction}))
     return 0
 
 

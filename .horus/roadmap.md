@@ -39,6 +39,8 @@ last_updated: 2026-06-25
 - [x] Add `horus close --commit [--push]` to stage+commit `.horus/` updates (close the multi-machine sync seam).
 - [x] Surface first context-rollover signal in `horus close` and dashboard: read local Codex rollout `token_count` events and warn at `--usage-threshold` (default 90). No DB.
 - [x] Add native Codex usage nudge: `horus usage check` plus `horus hook install --target codex`, which writes a `.codex/hooks.json` `Stop` hook. Hook mode prints only actionable closure warnings and exits 0.
+- [x] Claude usage→closure **pre-task** trigger (2026-06-25): `hook install --target claude` now writes a **`UserPromptSubmit`** hook (fires before the agent starts a task → diverts an over-budget session to closure *instead of* starting it) plus `Stop` as a safety net. Re-armable sentinel (`REARM_SECONDS`) replaces the permanent once-per-session guard that wrongly suppressed re-fires.
+- [ ] **Mid-task usage interruption (Codex-style "check between every action")** — IMPROVEMENT. `UserPromptSubmit`/`Stop` only fire at task boundaries; a single long turn can still blow past the limit. Add a `PreToolUse` hook that checks usage before each tool call (with a short ~60s cached read to avoid hammering the OAuth endpoint) and blocks → diverts to closure mid-task. Gate carefully to avoid spamming.
 - [~] SQLite session/event registry + session states (`closing`/`needs_closure`/`closed_stale`) — DEFERRED. Premature at solo scale (file parsing is instant) and presupposes the deferred execution layer. Revisit when scale hurts perf or Horus runs sessions itself.
 
 ## Structure v2 - `.horus/` lanes + distillation routines (prototyping in fabric)

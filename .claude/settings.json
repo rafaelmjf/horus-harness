@@ -10,6 +10,17 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m horus usage check --target claude --hook --threshold 90"
+          }
+        ]
+      }
     ]
   }
 }

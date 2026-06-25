@@ -191,6 +191,18 @@ def test_claude_hook_injects_closure_over_threshold(tmp_path, monkeypatch, capsy
     assert "horus-consolidate" in payload["reason"]  # drives the context-aware skill
 
 
+def test_claude_hook_userpromptsubmit_injects_context(tmp_path, monkeypatch, capsys):
+    rc, out = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=92.0, threshold=90,
+        stdin='{"session_id":"u1","hook_event_name":"UserPromptSubmit"}',
+    )
+    assert rc == 0
+    payload = json.loads(out.strip())
+    ctx = payload["hookSpecificOutput"]["additionalContext"]
+    assert payload["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+    assert "horus-consolidate" in ctx  # diverts the agent to closure before the task
+
+
 def test_claude_hook_quiet_under_threshold(tmp_path, monkeypatch, capsys):
     rc, out = _claude_hook_run(
         monkeypatch, tmp_path, capsys, percent=40.0, threshold=90,

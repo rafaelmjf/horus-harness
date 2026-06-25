@@ -57,14 +57,15 @@ def test_install_codex_usage_hook_is_idempotent(tmp_path):
     assert action.status == "exists"
 
 
-def test_install_claude_usage_hook_creates_stop_hook(tmp_path):
+def test_install_claude_usage_hook_creates_both_events(tmp_path):
     action = native_hooks.install_claude_usage_hook(tmp_path, threshold=85)
 
     assert action.status == "created"
     data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    handler = data["hooks"]["Stop"][0]["hooks"][0]
-    assert handler["type"] == "command"
-    assert "usage check --target claude --hook --threshold 85" in handler["command"]
+    for event in ("UserPromptSubmit", "Stop"):  # pre-task primary + post-turn safety net
+        handler = data["hooks"][event][0]["hooks"][0]
+        assert handler["type"] == "command"
+        assert "usage check --target claude --hook --threshold 85" in handler["command"]
 
 
 def test_install_claude_usage_hook_preserves_other_settings(tmp_path):
@@ -93,3 +94,12 @@ def test_closure_sentinel_fires_once(tmp_path, monkeypatch):
     assert native_hooks.closure_already_fired(sid) is True
     # distinct sessions are independent
     assert native_hooks.closure_already_fired("other") is False
+
+
+def test_closure_sentinel_rearms_after_window(tmp_path, monkeypatch):
+    monkeypatch.setattr(native_hooks.tempfile, "gettempdir", lambda: str(tmp_path))
+    sid = "rearm"
+    native_hooks.mark_closure_fired(sid)
+    assert native_hooks.closure_already_fired(sid) is True            # recent -> suppressed
+    native_hooks._sentinel_path(sid).write_text("1", encoding="utf-8")  # 1970 -> beyond window
+    assert native_hooks.closure_already_fired(sid) is False           # re-armed
