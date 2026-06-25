@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from horus import codex_usage, config, frontmatter, gitstate, markdown, roadmap, routines
+from horus import codex_usage, config, frontmatter, gitstate, markdown, registry, roadmap, routines
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
 
@@ -535,16 +535,62 @@ def _project_column(p: dict[str, Any], i: int) -> str:
     )
 
 
-def render_index(projects: list[dict[str, Any]]) -> str:
+_SESSION_STATUS_CLASS = {
+    "running": "health-ok",
+    "failed": "health-fail",
+    "orphaned": "health-warn",
+    "exited": "muted",
+}
+
+
+def gather_sessions() -> list[registry.SessionRecord]:
+    """Reconcile the registry against live PIDs, then return records newest-first."""
+    reg = registry.Registry.default()
+    reg.reconcile()  # correct records left "running" by a crashed/closed run
+    return sorted(reg.all(), key=lambda r: r.updated_at, reverse=True)
+
+
+def render_sessions_card(records: list[registry.SessionRecord]) -> str:
+    if not records:
+        return (
+            "<div class='card'><h2>Live sessions</h2>"
+            "<p class='muted'>No tracked agent sessions yet. They appear here once "
+            "Horus spawns or resumes one.</p></div>"
+        )
+    rows = []
+    for r in records:
+        cls = _SESSION_STATUS_CLASS.get(r.status, "muted")
+        rc = "" if r.returncode is None else f" ({r.returncode})"
+        rows.append(
+            f"<tr><td><span class='{cls}'>&#9679;</span> {html.escape(r.status)}{html.escape(rc)}</td>"
+            f"<td>{html.escape(r.agent)}</td>"
+            f"<td>{html.escape(r.account or '-')}</td>"
+            f"<td>{html.escape(Path(r.project).name)}</td>"
+            f"<td>{r.pid if r.pid is not None else '-'}</td>"
+            f"<td><code>{html.escape(r.session_id[:8])}</code></td>"
+            f"<td class='muted'>{html.escape(r.updated_at)}</td></tr>"
+        )
+    body = "".join(rows)
+    return (
+        "<div class='card'><h2>Live sessions</h2>"
+        "<table><tr><th>status</th><th>agent</th><th>account</th><th>project</th>"
+        "<th>pid</th><th>session</th><th>updated</th></tr>"
+        f"{body}</table></div>"
+    )
+
+
+def render_index(projects: list[dict[str, Any]], sessions: list[registry.SessionRecord] | None = None) -> str:
+    sessions_card = render_sessions_card(sessions or [])
     if not projects:
         body = (
-            "<div class='card'><h2>No projects registered</h2>"
+            sessions_card
+            + "<div class='card'><h2>No projects registered</h2>"
             "<p class='muted'>Run <code>horus init</code> inside a project to "
             "register it here.</p></div>"
         )
         return _page("Horus", body)
     cols = "".join(_project_column(p, i) for i, p in enumerate(projects))
-    return _page("Horus", f"<div class='columns'>{cols}</div>")
+    return _page("Horus", f"{sessions_card}<div class='columns'>{cols}</div>")
 
 
 def render_project(p: dict[str, Any]) -> str:
@@ -644,7 +690,10 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
         if parsed.path == "/":
-            self._send(render_index(gather_projects()))
+            self._send(render_index(gather_projects(), gather_sessions()))
+            return
+        if parsed.path == "/sessions":
+            self._send(_page("Horus — sessions", render_sessions_card(gather_sessions())))
             return
         if parsed.path == "/project":
             projects = gather_projects()
