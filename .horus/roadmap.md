@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "First Codex usage/rollover warning shipped via read-only rollout telemetry in `horus close` + dashboard. Next: consolidate this repo's own .horus lanes, then continue toward MVP3 adapter/registry work."
+current_focus: "Codex bridge started: usage/rollover warning shipped and Horus skills now project to Codex `.agents/skills/`. Next: consolidate this repo's own .horus lanes, then continue toward MVP3 adapter/registry work."
 last_updated: 2026-06-25
 ---
 
@@ -76,9 +76,10 @@ Phase 1 — keystone skill + plumbing (done 2026-06-25):
   lives as a string in `horus/skills.py` (like `templates.py`) — ships in the wheel,
   no package-data config.
 - [x] `horus init` scaffolds project skills into `.claude/skills/<name>/SKILL.md`
-  (`--no-skills` opt-out; version-aware, no-clobber).
-- [x] `horus skill install [--user] [--force]` + `horus-skill-version` marker; `horus
-  doctor` skill presence/staleness check; on-demand nudge from the file-only commands.
+  and `.agents/skills/<name>/SKILL.md` (`--no-skills` opt-out; version-aware, no-clobber).
+- [x] `horus skill install [--target claude|codex|all] [--user] [--force]` +
+  `horus-skill-version` marker; `horus doctor` skill presence/staleness check;
+  on-demand nudge from the file-only commands.
 - [x] Validate `consolidate` *execution* via an independent agent (2026-06-25):
   it split correctly + flagged an unreachable verify-criterion → fixed (cross-reference
   is the split marker; `consolidate` now treats cross-referenced items as reconciled;
@@ -90,9 +91,10 @@ Phase 1 — keystone skill + plumbing (done 2026-06-25):
   (template-body compare, not a required `##`); `infer` surfaces empty `decisions.md`
   gently; infer/distill skills → v2 (already-distilled source, pointer placement,
   size heuristic, forward roadmap-shaped content, no-pointer-if-canonical).
-- [ ] Triggering eval (skill-creator description-optimization, `claude -p`) — BLOCKED:
-  `claude` CLI is installed (`~/.local/bin/claude.exe`, on PATH now) but **not logged
-  in** (`claude /login` needed); harness auth ≠ CLI auth. Needed to tune skill triggering.
+- [ ] Triggering eval follow-up: `claude /login` was completed in the previous session;
+  direct `claude -p` probing confirmed real skill triggering works, but the
+  skill-creator `run_eval` proxy appeared incompatible with Claude Code 2.1.191 and
+  the custom real-mechanism harness had not produced a final matrix before handoff.
 
 Phase 2 — rest of the cognitive layer (done 2026-06-25):
 
@@ -101,11 +103,13 @@ Phase 2 — rest of the cognitive layer (done 2026-06-25):
   MVP3-deferred only for lack of an LLM; now an in-app skill. Added the `horus infer`
   CLI backend (discover canonical docs + detect placeholder lanes) as its signal layer.
 
-Phase 3 — portability (deferred behind Claude-first):
+Phase 3 — portability (started with direct Codex skill projection):
 
-- [ ] rulesync projection/import for Codex + other tools (rulesync supports skills
-  natively for Claude Code and "simulates" Codex via `.codex/skills/`). Author native
-  `SKILL.md` now (no coupling); project later. Decide if it also subsumes `reconcile`.
+- [x] Direct Codex project-skill projection: use Codex's native repo skill location
+  `.agents/skills/` for the bundled Horus skills. This is simpler than `rulesync` for
+  Horus's own skills because both Claude and Codex consume `SKILL.md`.
+- [ ] Evaluate `rulesync` for broader sync/projection (AGENTS/CLAUDE plus other tools),
+  where it may still subsume or complement `horus reconcile`.
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 

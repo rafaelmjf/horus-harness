@@ -18,6 +18,13 @@ def test_write_skill_create_then_exists(tmp_path):
     assert skills.write_skill(s, tmp_path).status == "exists"
 
 
+def test_write_codex_skill_uses_agents_directory(tmp_path):
+    s = skills.SKILLS[0]
+    assert skills.write_skill(s, tmp_path, target="codex").status == "created"
+    assert (tmp_path / ".agents" / "skills" / s.name / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude").exists()
+
+
 def test_write_skill_upgrades_older_version(tmp_path):
     s = skills.SKILLS[0]
     path = skills.skill_path(s, tmp_path)
@@ -50,6 +57,12 @@ def test_missing_or_stale_and_findings(tmp_path):
     assert all(f.level == "ok" for f in skills.skill_findings(tmp_path))
 
 
+def test_missing_or_stale_is_target_specific(tmp_path):
+    skills.install_skills(tmp_path, targets=("codex",))
+    assert skills.missing_or_stale(tmp_path, target="codex") == []
+    assert skills.missing_or_stale(tmp_path, target="claude") == list(skills.SKILLS)
+
+
 def test_stale_install_is_flagged(tmp_path):
     skills.install_skills(tmp_path)  # all current
     s = skills.SKILLS[0]
@@ -74,6 +87,7 @@ def test_init_scaffolds_all_skills_by_default(tmp_path, monkeypatch):
     initialize.init_project(tmp_path / "a", assume_yes=True)
     for s in skills.SKILLS:
         assert (tmp_path / "a" / ".claude" / "skills" / s.name / "SKILL.md").exists()
+        assert (tmp_path / "a" / ".agents" / "skills" / s.name / "SKILL.md").exists()
 
 
 def test_init_no_skills_opts_out(tmp_path, monkeypatch):

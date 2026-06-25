@@ -87,6 +87,15 @@ def test_skill_install_cli(tmp_path, monkeypatch):
     assert not (tmp_path / ".claude").exists()  # --no-skills opted out at init
     assert main(["skill", "install", "--path", str(tmp_path)]) == 0
     assert (tmp_path / ".claude" / "skills" / "horus-consolidate" / "SKILL.md").exists()
+    assert (tmp_path / ".agents" / "skills" / "horus-consolidate" / "SKILL.md").exists()
+
+
+def test_skill_install_codex_target_cli(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    assert main(["skill", "install", "--path", str(tmp_path), "--target", "codex"]) == 0
+    assert (tmp_path / ".agents" / "skills" / "horus-consolidate" / "SKILL.md").exists()
+    assert not (tmp_path / ".claude").exists()
 
 
 def test_forget_cli(tmp_path, monkeypatch):

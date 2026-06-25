@@ -6,7 +6,7 @@ with zero package-data/build config and is written into repos by ``horus init`` 
 
 Skills are the in-app, context-aware counterpart to the deterministic ``horus`` CLI
 routines. The CLI commands (``horus consolidate`` / ``horus distill-history``) only
-see the files; a skill runs *inside* the Claude Code session, so it also sees the
+see the files; a skill runs *inside* the active agent session, so it also sees the
 live conversation context — the work and decisions that aren't on disk yet. The
 skill calls the CLI for the deterministic signals, then applies judgement.
 
@@ -23,9 +23,14 @@ from typing import NamedTuple
 
 from horus.continuity import Finding
 
-# Project-scope install location (relative to the repo root). User scope swaps the
+# Project-scope install locations (relative to the repo root). User scope swaps the
 # repo root for the home directory.
-SKILLS_SUBDIR = ".claude/skills"
+CLAUDE_SKILLS_SUBDIR = ".claude/skills"
+CODEX_SKILLS_SUBDIR = ".agents/skills"
+TARGET_SUBDIRS = {
+    "claude": CLAUDE_SKILLS_SUBDIR,
+    "codex": CODEX_SKILLS_SUBDIR,
+}
 _VERSION_RE = re.compile(r"horus-skill-version:\s*(\d+)")
 
 
@@ -34,8 +39,8 @@ class Skill(NamedTuple):
     version: int
     content: str
 
-    def rel_path(self) -> str:
-        return f"{SKILLS_SUBDIR}/{self.name}/SKILL.md"
+    def rel_path(self, *, target: str = "claude") -> str:
+        return f"{TARGET_SUBDIRS[target]}/{self.name}/SKILL.md"
 
 
 class SkillAction(NamedTuple):
@@ -268,8 +273,14 @@ def _base_root(project_root: Path, *, user: bool) -> Path:
     return Path.home() if user else project_root
 
 
-def skill_path(skill: Skill, project_root: Path, *, user: bool = False) -> Path:
-    return _base_root(project_root, user=user) / SKILLS_SUBDIR / skill.name / "SKILL.md"
+def _target_subdir(target: str) -> str:
+    if target not in TARGET_SUBDIRS:
+        raise ValueError(f"unknown skill target: {target}")
+    return TARGET_SUBDIRS[target]
+
+
+def skill_path(skill: Skill, project_root: Path, *, user: bool = False, target: str = "claude") -> Path:
+    return _base_root(project_root, user=user) / _target_subdir(target) / skill.name / "SKILL.md"
 
 
 def installed_version(text: str) -> int | None:
@@ -277,12 +288,19 @@ def installed_version(text: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def write_skill(skill: Skill, project_root: Path, *, user: bool = False, force: bool = False) -> SkillAction:
+def write_skill(
+    skill: Skill,
+    project_root: Path,
+    *,
+    user: bool = False,
+    force: bool = False,
+    target: str = "claude",
+) -> SkillAction:
     """Write one skill, version-aware. Upgrades on a newer bundled version; leaves a
     same-or-unknown-version file untouched unless ``force`` (so we don't clobber user
     edits or downgrade)."""
-    path = skill_path(skill, project_root, user=user)
-    label = f"{skill.name} ({'user' if user else 'project'})"
+    path = skill_path(skill, project_root, user=user, target=target)
+    label = f"{skill.name} ({target}, {'user' if user else 'project'})"
     if path.exists():
         current = installed_version(path.read_text(encoding="utf-8"))
         if not force:
@@ -294,18 +312,28 @@ def write_skill(skill: Skill, project_root: Path, *, user: bool = False, force: 
         return SkillAction("updated", f"{label}: updated to v{skill.version}")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(skill.content, encoding="utf-8")
-    return SkillAction("created", f"created {skill.rel_path()}")
+    return SkillAction("created", f"created {skill.rel_path(target=target)}")
 
 
-def install_skills(project_root: Path, *, user: bool = False, force: bool = False) -> list[SkillAction]:
-    return [write_skill(s, project_root, user=user, force=force) for s in SKILLS]
+def install_skills(
+    project_root: Path,
+    *,
+    user: bool = False,
+    force: bool = False,
+    targets: tuple[str, ...] = ("claude",),
+) -> list[SkillAction]:
+    return [
+        write_skill(s, project_root, user=user, force=force, target=target)
+        for target in targets
+        for s in SKILLS
+    ]
 
 
-def missing_or_stale(project_root: Path) -> list[Skill]:
+def missing_or_stale(project_root: Path, *, target: str = "claude") -> list[Skill]:
     """Bundled skills not installed at project scope, or installed at an older version."""
     out: list[Skill] = []
     for skill in SKILLS:
-        path = skill_path(skill, project_root)
+        path = skill_path(skill, project_root, target=target)
         if not path.exists():
             out.append(skill)
             continue
@@ -315,19 +343,20 @@ def missing_or_stale(project_root: Path) -> list[Skill]:
     return out
 
 
-def skill_findings(project_root: Path) -> list[Finding]:
+def skill_findings(project_root: Path, *, targets: tuple[str, ...] = ("claude",)) -> list[Finding]:
     """Doctor findings for project-scope skills."""
     findings: list[Finding] = []
-    for skill in SKILLS:
-        path = skill_path(skill, project_root)
-        if not path.exists():
-            findings.append(Finding("warn", f"skill '{skill.name}' not installed (run `horus skill install`)"))
-            continue
-        current = installed_version(path.read_text(encoding="utf-8"))
-        if current is None:
-            findings.append(Finding("warn", f"skill '{skill.name}' present without a version marker"))
-        elif current < skill.version:
-            findings.append(Finding("warn", f"skill '{skill.name}' outdated (v{current} < v{skill.version}); run `horus skill install`"))
-        else:
-            findings.append(Finding("ok", f"skill '{skill.name}' installed (v{current})"))
+    for target in targets:
+        for skill in SKILLS:
+            path = skill_path(skill, project_root, target=target)
+            if not path.exists():
+                findings.append(Finding("warn", f"{target} skill '{skill.name}' not installed (run `horus skill install --target {target}`)"))
+                continue
+            current = installed_version(path.read_text(encoding="utf-8"))
+            if current is None:
+                findings.append(Finding("warn", f"{target} skill '{skill.name}' present without a version marker"))
+            elif current < skill.version:
+                findings.append(Finding("warn", f"{target} skill '{skill.name}' outdated (v{current} < v{skill.version}); run `horus skill install --target {target}`"))
+            else:
+                findings.append(Finding("ok", f"{target} skill '{skill.name}' installed (v{current})"))
     return findings

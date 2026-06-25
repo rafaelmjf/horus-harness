@@ -15,6 +15,10 @@ from horus.instructions import check_drift, reconcile
 _LEVEL_TAG = {"ok": "[ ok ]", "warn": "[warn]", "fail": "[fail]"}
 
 
+def _skill_targets(value: str) -> tuple[str, ...]:
+    return ("claude", "codex") if value == "all" else (value,)
+
+
 def _print_findings(findings) -> bool:
     """Print findings; return True if all good (no warn/fail)."""
     healthy = True
@@ -29,7 +33,11 @@ def cmd_init(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     print(f"Initializing Horus continuity in {root}")
     actions = initialize.init_project(
-        root, assume_yes=args.yes, no_input=args.no_input, with_skills=not args.no_skills
+        root,
+        assume_yes=args.yes,
+        no_input=args.no_input,
+        with_skills=not args.no_skills,
+        skill_targets=_skill_targets(args.skill_target),
     )
     for a in actions:
         print(f"  [{a.status}] {a.message}")
@@ -46,7 +54,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     if args.target in ("project", "all"):
         print(f"doctor project: {root}")
-        if not _print_findings(check_project(root) + skills.skill_findings(root)):
+        if not _print_findings(check_project(root) + skills.skill_findings(root, targets=("claude", "codex"))):
             rc = 1
         print()
 
@@ -172,11 +180,13 @@ def _resolve_dir(path_str: str) -> Path | None:
 
 def _skill_nudge(root: Path) -> None:
     """Point at the richer in-app skill when it isn't installed/current."""
-    stale = skills.missing_or_stale(root)
+    stale = []
+    for target in ("claude", "codex"):
+        stale.extend(f"{target}:{s.name}" for s in skills.missing_or_stale(root, target=target))
     if stale:
-        names = ", ".join(s.name for s in stale)
+        names = ", ".join(stale)
         print(
-            f"\ntip: a context-aware version runs inside Claude Code as the '{names}' "
+            f"\ntip: a context-aware version runs inside Claude Code/Codex as '{names}' "
             "skill (it sees this session, not just the files). Install with `horus skill install`."
         )
 
@@ -222,8 +232,9 @@ def cmd_infer(args: argparse.Namespace) -> int:
 def cmd_skill(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     scope = "user" if args.user else "project"
-    print(f"Installing Horus skills ({scope} scope): {root if not args.user else '~'}")
-    actions = skills.install_skills(root, user=args.user, force=args.force)
+    targets = _skill_targets(args.target)
+    print(f"Installing Horus skills ({scope} scope, target={args.target}): {root if not args.user else '~'}")
+    actions = skills.install_skills(root, user=args.user, force=args.force, targets=targets)
     for a in actions:
         print(f"  [{a.status}] {a.message}")
     return 0
@@ -266,7 +277,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("path", nargs="?", default=".", help="project root (default: cwd)")
     p_init.add_argument("--yes", "-y", action="store_true", help="auto-confirm block injection")
     p_init.add_argument("--no-input", action="store_true", help="never prompt; skip injection")
-    p_init.add_argument("--no-skills", action="store_true", help="don't scaffold the .claude/skills/ skills")
+    p_init.add_argument("--no-skills", action="store_true", help="don't scaffold agent skills")
+    p_init.add_argument(
+        "--skill-target",
+        choices=("all", "claude", "codex"),
+        default="all",
+        help="which agent skill target to scaffold (default: all)",
+    )
     p_init.set_defaults(func=cmd_init)
 
     p_doctor = sub.add_parser("doctor", help="check continuity and instruction health")
@@ -339,12 +356,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_infer.add_argument("--path", default=".", help="project root (default: cwd)")
     p_infer.set_defaults(func=cmd_infer)
 
-    p_skill = sub.add_parser("skill", help="manage Horus agent skills (.claude/skills/)")
+    p_skill = sub.add_parser("skill", help="manage Horus agent skills (.claude/skills/ and .agents/skills/)")
     skill_sub = p_skill.add_subparsers(dest="skill_cmd", required=True)
     p_skill_install = skill_sub.add_parser("install", help="install/update the bundled skills")
     p_skill_install.add_argument("--path", default=".", help="project root (default: cwd)")
-    p_skill_install.add_argument("--user", action="store_true", help="install to ~/.claude/skills instead of the project")
+    p_skill_install.add_argument("--user", action="store_true", help="install to the user-scope skills directory instead of the project")
     p_skill_install.add_argument("--force", action="store_true", help="overwrite even if present/unversioned")
+    p_skill_install.add_argument(
+        "--target",
+        choices=("all", "claude", "codex"),
+        default="all",
+        help="which agent skill target to install (default: all)",
+    )
     p_skill_install.set_defaults(func=cmd_skill)
 
     p_recon = sub.add_parser("reconcile", help="sync the managed instruction block across files")

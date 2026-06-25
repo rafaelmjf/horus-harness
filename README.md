@@ -41,7 +41,7 @@ horus close --usage-threshold 90  # warn when Codex context or rate-limit usage 
 horus consolidate                 # route/prune/distill .horus lanes; prints the agent ritual
 horus distill-history             # compress a large log into curated history.md
 horus infer                       # bootstrap/refresh .horus from canonical docs; prints the ritual
-horus skill install               # install/update bundled Claude Code skills
+horus skill install --target all  # install/update bundled Claude Code + Codex skills
 horus reconcile instructions      # deterministic AGENTS.md <-> CLAUDE.md managed-block sync
 horus forget <path> | horus prune # manage the dashboard's project registry
 ```
@@ -60,6 +60,8 @@ horus forget <path> | horus prune # manage the dashboard's project registry
 
 `AGENTS.md` and `CLAUDE.md` stay native; Horus only syncs the marked
 `<!-- HORUS:BEGIN shared-instructions -->` block and detects drift elsewhere.
+Horus project skills are scaffolded for both Claude Code (`.claude/skills`) and
+Codex (`.agents/skills`).
 
 `horus close` also performs a best-effort read of local Codex rollout telemetry
 from `$CODEX_HOME/sessions` when available. If the latest project turn is near

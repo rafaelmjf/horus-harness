@@ -58,6 +58,7 @@ def init_project(
     assume_yes: bool = False,
     no_input: bool = False,
     with_skills: bool = True,
+    skill_targets: tuple[str, ...] = ("claude", "codex"),
 ) -> list[Action]:
     actions: list[Action] = []
     today = date.today().isoformat()
@@ -131,7 +132,7 @@ def init_project(
         )
 
     if with_skills:
-        for sa in skills.install_skills(project_root):
+        for sa in skills.install_skills(project_root, targets=skill_targets):
             actions.append(Action(sa.status, sa.message))
 
     if config.register_project(project_root):

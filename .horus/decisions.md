@@ -327,3 +327,14 @@ Reasoning:
 - That gives Horus enough signal to warn during `horus close` and in the dashboard when a project is near its context or rate-limit budget, without waiting for the full MVP3 spawn/registry layer.
 - The inspector must be conservative: read-only, scoped to the matching project `turn_context`, tolerant of missing/schema-drifted files, and never dependent on secrets or auth files.
 - This is a bridge, not the final session model. Horus-managed sessions should later get usage directly from adapter events and the registry.
+
+## 2026-06-25 - Project Horus Skills Project Directly To Codex
+
+Project-scoped Horus skills should be written directly to Codex's native repo skill location, `.agents/skills/`, alongside Claude Code's `.claude/skills/`.
+
+Reasoning:
+
+- The current Codex manual says repo skills are discovered from `.agents/skills` from the working directory up to the repo root.
+- Claude and Codex both consume the same core `SKILL.md` authoring format, so Horus can project its own bundled skills without adding a conversion dependency.
+- Direct projection keeps the Claude-first skill authoring path intact while making the same routines usable from Codex immediately.
+- `rulesync` remains a candidate for broader multi-tool sync/projection, especially AGENTS/CLAUDE and future target-specific files, but it is heavier than needed for Horus's own three skills.
