@@ -87,44 +87,61 @@ def prune_projects() -> list[str]:
     return removed
 
 
-# --- Account aliases ---------------------------------------------------------
+# --- Accounts: aliases + per-account config dirs -----------------------------
 #
-# A session summary records *which* account ran it, but the real identifier is an
-# email (from the agent's auth) and session content is distilled upward into the
-# committed lanes. To keep the email out of anything that can be committed, the
-# email->alias map lives only in ``~/.horus/accounts.toml`` (never in the repo);
-# summaries carry the alias. ``accounts.toml`` lives in its own file so the
-# projects serializer never clobbers it.
+# ``~/.horus/accounts.toml`` (local only, never in a repo) holds two maps:
+#   [aliases]      email -> public alias   (keeps the real email out of commits)
+#   [config_dirs]  alias -> CLAUDE_CONFIG_DIR  (per-account login isolation for MVP3)
+# Its own file so the projects serializer never clobbers it; both sections are
+# preserved on every write.
+
+
+def _load_accounts() -> dict[str, dict[str, str]]:
+    path = accounts_path()
+    if not path.exists():
+        return {"aliases": {}, "config_dirs": {}}
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return {"aliases": {}, "config_dirs": {}}
+    return {
+        "aliases": {str(k): str(v) for k, v in (data.get("aliases") or {}).items()},
+        "config_dirs": {str(k): str(v) for k, v in (data.get("config_dirs") or {}).items()},
+    }
+
+
+def _write_accounts(aliases: dict[str, str], config_dirs: dict[str, str]) -> None:
+    config_dir().mkdir(parents=True, exist_ok=True)
+    lines = ["# Horus accounts (local only — keeps real emails out of git)", "", "[aliases]"]
+    # Quote both sides: emails contain '@' and '.', which are not bare-key safe.
+    lines += [f'"{ident}" = "{alias}"' for ident, alias in sorted(aliases.items())]
+    lines += ["", "[config_dirs]"]
+    lines += [f'"{alias}" = "{path}"' for alias, path in sorted(config_dirs.items())]
+    accounts_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def load_account_aliases() -> dict[str, str]:
     """Map of real account identifier (e.g. email) -> public alias."""
-    path = accounts_path()
-    if not path.exists():
-        return {}
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError):
-        return {}
-    aliases = data.get("aliases")
-    if not isinstance(aliases, dict):
-        return {}
-    return {str(k): str(v) for k, v in aliases.items()}
+    return _load_accounts()["aliases"]
 
 
-def _write_account_aliases(aliases: dict[str, str]) -> None:
-    config_dir().mkdir(parents=True, exist_ok=True)
-    lines = ["# Horus account aliases (local only — keeps real emails out of git)", "[aliases]"]
-    # Quote both sides: emails contain '@' and '.', which are not bare-key safe.
-    lines += [f'"{ident}" = "{alias}"' for ident, alias in sorted(aliases.items())]
-    accounts_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
+def load_account_config_dirs() -> dict[str, str]:
+    """Map of account alias -> ``CLAUDE_CONFIG_DIR`` for per-account login isolation."""
+    return _load_accounts()["config_dirs"]
 
 
 def set_account_alias(identifier: str, alias: str) -> None:
     """Map a real account identifier to a public alias (persisted locally)."""
-    aliases = load_account_aliases()
-    aliases[identifier] = alias
-    _write_account_aliases(aliases)
+    accts = _load_accounts()
+    accts["aliases"][identifier] = alias
+    _write_accounts(accts["aliases"], accts["config_dirs"])
+
+
+def set_account_config_dir(alias: str, config_dir_path: str) -> None:
+    """Map an account alias to its ``CLAUDE_CONFIG_DIR`` (persisted locally)."""
+    accts = _load_accounts()
+    accts["config_dirs"][alias] = config_dir_path
+    _write_accounts(accts["aliases"], accts["config_dirs"])
 
 
 def alias_for(identifier: str | None) -> str | None:

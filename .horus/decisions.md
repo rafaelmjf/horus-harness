@@ -583,3 +583,19 @@ directly, not from memory):
   Shape" decision; the fake had masked the gap because both were authored together.
 - Subscription-auth only: runs the user's own logged-in `claude`; no API key. spawn+resume
   proven live (spawn → session id; resume of that id recalled context from the first turn).
+
+## 2026-06-25 - Multi-Account Isolation: Per-Account CLAUDE_CONFIG_DIR + Alias-Round-Trip Identity Check
+
+Per-account isolation runs each account under its own `CLAUDE_CONFIG_DIR` (a separate
+Claude login/home), mapped alias→dir in `~/.horus/accounts.toml` `[config_dirs]` (its own
+section, preserved alongside `[aliases]`). `ClaudeAdapter` defaults its `config_dirs` from
+that map and sets the env per spawn.
+
+The startup identity check uses the **alias round-trip** as the equality test:
+`verify_account(account)` reads `<config_dir>/.claude.json` → `oauthAccount.emailAddress`,
+then asserts `config.alias_for(email) == account`. This reuses the existing email→alias map
+(no new identity store) and never exposes the email beyond the in-memory `IdentityCheck`.
+`_launch` runs the guard **before** any subprocess and raises `AccountMismatch` when a
+*mapped* account's login doesn't match — so a misconfigured account can't silently run
+under the wrong login. The guard fires only when an explicit per-account dir is configured;
+ambient single-account runs (e.g. the spawn/resume proof) are unaffected.

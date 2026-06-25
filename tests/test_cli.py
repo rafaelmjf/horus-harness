@@ -110,6 +110,20 @@ def test_account_command_show_and_set(tmp_path, monkeypatch, capsys):
     assert "rafa-personal" in out and "rafael@example.com" in out  # show reveals both locally
 
 
+def test_account_set_dir_maps_config_dir(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import claude_usage, config
+    monkeypatch.setattr(claude_usage, "current_account", lambda *a, **k: "rafael@example.com")
+    config.set_account_alias("rafael@example.com", "rafa-personal")
+
+    assert main(["account", "--set-dir", "/home/rafa/.claude-personal"]) == 0
+    assert config.load_account_config_dirs() == {"rafa-personal": "/home/rafa/.claude-personal"}
+
+    capsys.readouterr()
+    assert main(["account"]) == 0
+    assert "/home/rafa/.claude-personal" in capsys.readouterr().out  # surfaced in show
+
+
 def test_close_runs_and_returns_status(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes"])

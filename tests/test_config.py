@@ -82,3 +82,19 @@ def test_set_account_alias_preserves_projects(tmp_path, monkeypatch):
     config.register_project(proj)
     config.set_account_alias("a@b.com", "work")
     assert config._as_key(proj) in config.load_projects()
+
+
+def test_account_aliases_and_config_dirs_coexist(tmp_path, monkeypatch):
+    # Both sections live in accounts.toml; writing one must preserve the other.
+    _home(tmp_path, monkeypatch)
+    config.set_account_alias("rafa@work.com", "work")
+    config.set_account_config_dir("work", "/home/rafa/.claude-work")
+    config.set_account_alias("rafa@home.com", "personal")  # second alias write
+
+    assert config.load_account_aliases() == {"rafa@work.com": "work", "rafa@home.com": "personal"}
+    assert config.load_account_config_dirs() == {"work": "/home/rafa/.claude-work"}
+
+
+def test_config_dirs_empty_by_default(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.load_account_config_dirs() == {}

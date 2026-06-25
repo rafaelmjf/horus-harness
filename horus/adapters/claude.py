@@ -13,17 +13,31 @@ Subscription-auth only: it runs the user's own logged-in ``claude``; no API key.
 
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
 from pathlib import Path
 
-import json
-
+from horus import claude_usage, config
 from horus.adapters.base import (
     AgentAdapter,
     AgentEvent,
+    AgentRun,
     EventType,
     PermissionPosture,
     SpawnSpec,
 )
+
+
+class AccountMismatch(RuntimeError):
+    """Raised when a per-account config dir's login doesn't match the requested account."""
+
+
+@dataclass
+class IdentityCheck:
+    account: str | None
+    config_dir: str | None
+    detected_email: str | None
+    ok: bool
 
 # Normalized posture -> Claude Code --permission-mode value. Claude has no pure
 # read-only mode, so READ_ONLY maps to "plan" (its no-side-effects stance).
@@ -41,9 +55,10 @@ class ClaudeAdapter(AgentAdapter):
 
     def __init__(self, *, executable: str = "claude", config_dirs: dict[str, str] | None = None) -> None:
         """``config_dirs`` maps an account alias to its ``CLAUDE_CONFIG_DIR`` for
-        multi-account isolation. Unmapped accounts use the ambient login."""
+        multi-account isolation. Defaults to the configured map in
+        ``~/.horus/accounts.toml``; unmapped accounts use the ambient login."""
         self.executable = executable
-        self.config_dirs = config_dirs or {}
+        self.config_dirs = config_dirs if config_dirs is not None else config.load_account_config_dirs()
 
     # --- contract -------------------------------------------------------------
 
@@ -68,6 +83,37 @@ class ClaudeAdapter(AgentAdapter):
     def build_env(self, spec: SpawnSpec) -> dict[str, str]:
         cfg = self.config_dirs.get(spec.account) if spec.account else None
         return {"CLAUDE_CONFIG_DIR": str(Path(cfg))} if cfg else {}
+
+    # --- multi-account identity ----------------------------------------------
+
+    def verify_account(self, account: str | None) -> IdentityCheck:
+        """Confirm the config dir for ``account`` is actually logged in as that account.
+
+        Reads ``<CLAUDE_CONFIG_DIR>/.claude.json`` (or the ambient ``~/.claude.json``
+        when the account has no mapped dir) and checks its email aliases back to the
+        requested account. Read-only; never exposes the email beyond this result.
+        """
+        cfg = self.config_dirs.get(account) if account else None
+        claude_json = Path(cfg) / ".claude.json" if cfg else claude_usage.config_path()
+        email = claude_usage.current_account(claude_json)
+        if account is None:
+            ok = email is not None  # ambient: just confirm *someone* is logged in
+        else:
+            ok = email is not None and config.alias_for(email) == account
+        return IdentityCheck(account=account, config_dir=str(cfg) if cfg else None, detected_email=email, ok=ok)
+
+    def _launch(self, spec: SpawnSpec, *, resume_id: str | None) -> AgentRun:
+        # Guard only when explicit per-account isolation is configured (a mapped dir).
+        # Ambient single-account runs are unaffected.
+        if spec.account and spec.account in self.config_dirs:
+            check = self.verify_account(spec.account)
+            if not check.ok:
+                raise AccountMismatch(
+                    f"account {spec.account!r} maps to config dir {check.config_dir!r}, but its "
+                    f"login is {check.detected_email or 'absent'} "
+                    f"(alias {config.alias_for(check.detected_email)!r}) — refusing to spawn"
+                )
+        return super()._launch(spec, resume_id=resume_id)
 
     def parse_event(self, line: str) -> list[AgentEvent]:
         line = line.strip()

@@ -215,6 +215,17 @@ def cmd_account(args: argparse.Namespace) -> int:
         print(f"Aliased {args.agent} account -> {args.alias}")
         return 0
 
+    if args.set_dir is not None:
+        # Map an alias to its CLAUDE_CONFIG_DIR for per-account isolation. Use the
+        # explicit --alias-name, else the current account's resolved alias.
+        target = args.alias_name or config.alias_for(identifier)
+        if not target:
+            print("No account to map (pass --alias-name, or log in so an alias can be resolved).")
+            return 1
+        config.set_account_config_dir(target, args.set_dir)
+        print(f"Mapped account {target!r} -> CLAUDE_CONFIG_DIR {args.set_dir}")
+        return 0
+
     if not identifier:
         print(f"No {args.agent} account detected (is the agent logged in?).")
         return 1
@@ -222,8 +233,13 @@ def cmd_account(args: argparse.Namespace) -> int:
     print(f"agent:   {args.agent}")
     print(f"account: {identifier}")
     print(f"alias:   {alias}")
+    config_dirs = config.load_account_config_dirs()
+    if alias in config_dirs:
+        print(f"config:  {config_dirs[alias]}")
     if not config.load_account_aliases().get(identifier):
-        print(f"(auto-generated alias; set a friendly one with `horus account --set <name>`)")
+        print("(auto-generated alias; set a friendly one with `horus account --set <name>`)")
+    if config_dirs:
+        print(f"isolated accounts: {', '.join(sorted(config_dirs))}")
     return 0
 
 
@@ -531,9 +547,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_session_new.add_argument("--environment", default="host")
     p_session_new.set_defaults(func=cmd_session)
 
-    p_account = sub.add_parser("account", help="show the detected agent account and its session alias")
+    p_account = sub.add_parser("account", help="show the detected agent account, alias, and isolation dir")
     p_account.add_argument("--agent", default="claude", help="which agent's account to inspect (default: claude)")
     p_account.add_argument("--set", dest="alias", metavar="ALIAS", help="set the public alias for the detected account")
+    p_account.add_argument("--set-dir", metavar="PATH", help="map an account alias to its CLAUDE_CONFIG_DIR (isolation)")
+    p_account.add_argument("--alias-name", metavar="ALIAS", help="with --set-dir: which alias to map (default: current account's)")
     p_account.set_defaults(func=cmd_account)
 
     p_close = sub.add_parser("close", help="verify continuity (git-aware) and print the closure ritual")

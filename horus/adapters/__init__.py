@@ -23,10 +23,11 @@ from horus.adapters.base import (
     PermissionPosture,
     SpawnSpec,
 )
-from horus.adapters.claude import ClaudeAdapter
+from horus.adapters.claude import AccountMismatch, ClaudeAdapter, IdentityCheck
 from horus.adapters.fake import FakeAdapter
 
 __all__ = [
+    "AccountMismatch",
     "AgentAdapter",
     "AgentEvent",
     "AgentRun",
@@ -34,6 +35,7 @@ __all__ = [
     "ClaudeAdapter",
     "EventType",
     "FakeAdapter",
+    "IdentityCheck",
     "PermissionPosture",
     "SpawnSpec",
     "get_adapter",
