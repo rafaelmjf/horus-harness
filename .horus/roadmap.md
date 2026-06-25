@@ -156,6 +156,13 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] Replace the wing overlay with real transparent PNG animation frames generated
   from the mascot image; runtime remains Pillow-free.
 - [x] Clicking the mascot opens the dashboard at `http://127.0.0.1:8765`.
+- [x] Open the dashboard as a chromeless **app-mode window** (Edge/Chrome `--app=`),
+  not a browser tab, so it reads as a companion app (2026-06-25). `companion.open_dashboard`
+  prefers app-mode, falls back to a tab. Upgrade path: PySide/pywebview for a true
+  native window + taskbar identity.
+- [x] Fix console-window strobing on dashboard refresh (2026-06-25): `gitstate` git
+  subprocesses now pass `CREATE_NO_WINDOW` on Windows (the overview fires many git
+  calls per refresh).
 - [x] Add a minimal context menu: Open Dashboard, Run Close Check, Quit.
 - [x] Show a basic status indicator: neutral/ok, warning, needs-closure. Initial
   data can come from existing `doctor`/`close`/usage checks; no live registry yet.

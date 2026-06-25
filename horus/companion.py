@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import webbrowser
@@ -93,7 +94,36 @@ def relaunch_without_console() -> bool:
     return True
 
 
-def open_dashboard(url: str) -> None:
+# Chromium app-mode (`--app=`) gives a chromeless standalone window — no tabs, no
+# address bar — so the dashboard reads as a companion app, not a browser tab. Edge
+# ships on Windows 11; Chrome is the fallback. PySide/pywebview is the upgrade path
+# if we later want a true native window + taskbar identity.
+def _app_browser() -> str | None:
+    for candidate in (
+        shutil.which("msedge"),
+        shutil.which("chrome"),
+        shutil.which("google-chrome"),
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    ):
+        if candidate and Path(candidate).is_file():
+            return candidate
+    return None
+
+
+def open_dashboard(url: str, *, app_window: bool = True) -> None:
+    """Open the dashboard. Prefers a chromeless app-mode window; falls back to a tab."""
+    exe = _app_browser() if app_window else None
+    if exe:
+        kwargs: dict = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "stdin": subprocess.DEVNULL}
+        if sys.platform == "win32":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+        try:
+            subprocess.Popen([exe, f"--app={url}", "--window-size=480,860"], **kwargs)
+            return
+        except OSError:
+            pass
     webbrowser.open(url, new=2)
 
 

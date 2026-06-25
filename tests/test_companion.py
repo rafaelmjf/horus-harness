@@ -39,6 +39,28 @@ def test_ensure_dashboard_does_not_spawn_when_live(monkeypatch):
     assert result.process is None
 
 
+def test_open_dashboard_prefers_app_window(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(companion, "_app_browser", lambda: "FAKE.exe")
+    monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: calls.setdefault("cmd", cmd))
+    monkeypatch.setattr(companion.webbrowser, "open", lambda *a, **k: calls.setdefault("tab", a))
+
+    companion.open_dashboard("http://x")
+
+    assert "tab" not in calls
+    assert calls["cmd"][0] == "FAKE.exe" and "--app=http://x" in calls["cmd"]
+
+
+def test_open_dashboard_falls_back_to_tab(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(companion, "_app_browser", lambda: None)
+    monkeypatch.setattr(companion.webbrowser, "open", lambda url, **k: calls.setdefault("tab", url))
+
+    companion.open_dashboard("http://x")
+
+    assert calls["tab"] == "http://x"
+
+
 def test_ensure_dashboard_respects_no_start(monkeypatch):
     monkeypatch.setattr(companion, "dashboard_is_live", lambda url: False)
 

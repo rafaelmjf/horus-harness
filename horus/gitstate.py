@@ -9,11 +9,15 @@ partial data and never raises.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 # Unit separator: safe field delimiter for `git log --format` (never in a subject).
 _US = "\x1f"
+# Windows: keep each git child from flashing a console window. The dashboard makes
+# many git calls per refresh, so without this a refresh strobes terminals.
+_NO_WINDOW = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if sys.platform == "win32" else {}
 
 
 def git_state(root: Path, *, timeout: float = 3.0) -> dict[str, Any] | None:
@@ -26,7 +30,7 @@ def git_state(root: Path, *, timeout: float = 3.0) -> dict[str, Any] | None:
         try:
             r = subprocess.run(
                 ["git", "-C", str(root), *args],
-                capture_output=True, text=True, timeout=timeout,
+                capture_output=True, text=True, timeout=timeout, **_NO_WINDOW,
             )
         except (OSError, subprocess.SubprocessError):
             return None
