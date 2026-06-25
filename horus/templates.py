@@ -15,18 +15,22 @@ _SHARED_BODY = """## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
 
-Before substantial work:
+Before substantial work, read the `.horus/` lanes (each stays in its lane):
 
-- Read `.horus/project.md`.
-- Read `.horus/roadmap.md`.
-- Read `.horus/decisions.md`.
+- `project.md` — vision, shape, boundaries, current focus.
+- `roadmap.md` — open action points (the *what's next*).
+- `features.md` — capability ledger (shipped / in-progress / planned packages).
+- `decisions.md` — durable rules and their reasoning.
+- `history.md` — carried-forward lessons ("bumps in the road").
 - Review recent local session summaries in `.horus/sessions/` when available.
 
 After work that contributes to the project state:
 
 - Add a concise session summary under `.horus/sessions/`.
-- Update `.horus/roadmap.md` when roadmap status or current focus changes.
-- Update `.horus/decisions.md` only for durable decisions and their reasoning.
+- Keep facts in their lane: open action points in `roadmap.md`, shipped/planned
+  capabilities in `features.md`, durable rules in `decisions.md`, lessons in
+  `history.md`. Don't maintain the same fact in two files.
+- Run `horus consolidate` to route/prune/distill when the lanes drift.
 - Do not store secrets or full transcripts in `.horus/`.
 
 Instruction synchronization:
@@ -92,6 +96,54 @@ last_updated: {date}
 """
 
 
+def features_md(date: str) -> str:
+    return f"""---
+status: active
+last_updated: {date}
+---
+
+# Features — capability ledger
+
+Complete **capabilities** (shippable packages), status-tracked. A feature is a
+shippable unit of behaviour, not a task — bug fixes, corrections, and chores live
+in `roadmap.md` and never appear here. The action points to build a planned or
+in-progress feature live in `roadmap.md`; the *why* behind a shipped one is in
+`decisions.md` / `history.md`.
+
+Status: **Shipped** · **In progress** · **Planned**
+
+## Shipped
+
+| Capability | Since | Notes |
+|---|---|---|
+
+## In progress
+
+| Capability | Notes |
+|---|---|
+
+## Planned
+
+| Capability | Notes |
+|---|---|
+"""
+
+
+def history_md(date: str) -> str:
+    return f"""---
+status: active
+last_updated: {date}
+---
+
+# History — bumps in the road
+
+Curated, durable context: the problems that bit us and the lessons that shaped the
+design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
+just the war stories worth carrying forward. Compress a large existing changelog
+into this curated subset with `horus distill-history`.
+"""
+
+
 def readme_md() -> str:
     return """# `.horus/` — project continuity
 
@@ -99,9 +151,14 @@ Horus keeps a concise, vendor-neutral record of project state here so any agent
 (Claude, Codex, ...) can pick up continuity across machines — even without Horus
 installed. Read this first.
 
-- `project.md` — what this project is, current focus, shape, boundaries.
-- `roadmap.md` — current focus + a checklist of planned / in-progress / done items.
-- `decisions.md` — durable decisions and their reasoning, dated.
+- `project.md` — what this project is, current focus, shape, boundaries (overview + vision).
+- `roadmap.md` — open **action points** (any type: feature work, bug fix, chore),
+  pruned when done. The *what's next*, not a completed log.
+- `features.md` — the **capability ledger**: complete packages tracked
+  shipped / in-progress / planned. A capability, not a task — distinct from roadmap.
+- `decisions.md` — durable decisions / rules to follow and their reasoning, dated.
+- `history.md` — curated bumps in the road: problems that bit us and the lessons
+  that shaped the design. Relevant context, **not** a timeline and **not** open issues.
 - `sessions/` — local session summaries (gitignored; per-machine context that
   distills into the files above).
 
@@ -111,8 +168,12 @@ point to), distill the essentials here and treat those as the source — do not
 maintain two hand-written roadmaps that will drift. Mark a superseded doc as such
 once its content lives here.
 
-Durable state (`project.md` / `roadmap.md` / `decisions.md`) is committed and
-travels via git; session summaries stay local per machine.
+Keep each lane in its lane; run `horus consolidate` to route facts to the right
+file, prune what's done, and distill session summaries upward.
+
+Durable state (`project.md` / `roadmap.md` / `features.md` / `decisions.md` /
+`history.md`) is committed and travels via git; session summaries stay local per
+machine.
 
 These files are scaffolded by `horus init` and maintained by the agents working in
 this repo. A future `horus infer` will populate them automatically (LLM-based).
@@ -170,4 +231,40 @@ CLOSURE_PROMPT = """Closure ritual - update project continuity before ending thi
 4. Instructions: keep the AGENTS.md / CLAUDE.md shared blocks aligned
    (check with `horus doctor instructions`; fix with `horus reconcile instructions`).
 5. Do not continue editing source code as part of closure.
+"""
+
+
+CONSOLIDATE_PROMPT = """Consolidation routine - reshape .horus/ so each lane stays in its lane.
+Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.md).
+Never invent status, dates, or versions; when intent is unclear, leave it and flag it.
+
+1. Ship -> ledger: for each done roadmap action point that completed a shippable
+   capability, close it in roadmap.md and add/update the matching row in features.md
+   (Planned/In-progress -> Shipped; stamp the version if the repo records one, else blank).
+2. De-duplicate across lanes: where the same item sits in both roadmap.md and
+   features.md, keep the *action points* in roadmap.md and the *capability status* in
+   features.md, each pointing at the other. No fact maintained in two places.
+3. Prune: drop done/obsolete roadmap items (they live in features/history/git now).
+4. Distill sessions: fold durable content from sessions/*.md into the lanes, then
+   remove or mark the distilled summary.
+5. Keep lanes pure: no tasks in features.md; no shipped packages lingering in
+   roadmap.md; no open issues in history.md; no changelog in project.md.
+
+Re-run `horus consolidate` afterward; the candidates above should be resolved.
+"""
+
+
+DISTILL_HISTORY_PROMPT = """Distill-history routine - compress a large log into the curated history.md subset.
+Act on the signals above. Edit .horus/history.md (and freeze the source log); never
+invent incidents - only compress what the log already records.
+
+Signal test for each entry:
+- KEEP: a real problem the project hit + the durable lesson/design change it forced.
+- DROP: routine changelog/version-bump noise, resolved-and-irrelevant incidents,
+  anything already captured as a rule in decisions.md (cross-reference instead).
+- history.md is carried-forward context: NOT a timeline, NOT open issues (those are roadmap.md).
+
+1. Read the source log identified above.
+2. Write the high-signal "bumps in the road" into history.md (curated, deduplicated).
+3. Mark the source log as superseded/frozen at the top - do not delete it.
 """

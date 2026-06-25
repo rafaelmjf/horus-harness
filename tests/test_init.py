@@ -16,6 +16,8 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     assert (tmp_path / ".horus" / "project.md").exists()
     assert (tmp_path / ".horus" / "roadmap.md").exists()
     assert (tmp_path / ".horus" / "decisions.md").exists()
+    assert (tmp_path / ".horus" / "features.md").exists()
+    assert (tmp_path / ".horus" / "history.md").exists()
     assert (tmp_path / ".horus" / "sessions").is_dir()
     assert (tmp_path / ".horus" / "sessions" / ".gitkeep").exists()
     assert (tmp_path / "AGENTS.md").exists()

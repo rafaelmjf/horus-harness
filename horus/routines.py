@@ -1,0 +1,242 @@
+"""Agent-delegated maintenance routines over `.horus/`.
+
+Horus runs the deterministic pre-pass (parse the lanes, detect candidates, report)
+and the CLI then prints a ritual prompt for the in-loop agent to carry out the
+judgement-heavy edits. Like `closure`, nothing is spawned here — the agent already
+running in the repo is the LLM. See `docs/routines.md` for the full contracts.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from horus import frontmatter, roadmap
+from horus.continuity import (
+    HORUS_DIR,
+    RECOMMENDED_FILES,
+    Finding,
+    horus_dir,
+    recent_sessions,
+)
+
+# Lanes consolidate reasons about (sessions/ handled separately).
+_LANES = ("project.md", "roadmap.md", "features.md", "decisions.md", "history.md")
+
+# Common source logs `distill-history` can compress, in priority order.
+_SOURCE_LOGS = ("docs/HISTORY.md", "CHANGELOG.md", "HISTORY.md", "docs/CHANGELOG.md")
+
+_WORD_RE = re.compile(r"[a-z0-9_]+")
+_STOPWORDS = {
+    "the", "a", "an", "to", "of", "and", "or", "for", "in", "on", "with", "via",
+    "make", "add", "build", "into", "per", "is", "be", "do", "as", "at", "by",
+    "new", "use", "from", "that", "this", "it", "its", "our", "we",
+}
+
+
+def _key_tokens(text: str, extra_stop: frozenset[str] = frozenset()) -> set[str]:
+    """Significant lowercase tokens for fuzzy cross-lane matching."""
+    cleaned = re.sub(r"\*\*|__|`", "", text)
+    return {
+        w for w in _WORD_RE.findall(cleaned.lower())
+        if len(w) > 2 and w not in _STOPWORDS and w not in extra_stop
+    }
+
+
+def _overlap(a: set[str], b: set[str]) -> float:
+    """Overlap coefficient: |a ∩ b| / min(|a|, |b|)."""
+    if not a or not b:
+        return 0.0
+    return len(a & b) / min(len(a), len(b))
+
+
+def _similar(a: set[str], b: set[str], threshold: float, *, min_shared: int = 2) -> bool:
+    """Two token sets describe the same item: enough distinctive overlap."""
+    return len(a & b) >= min_shared and _overlap(a, b) >= threshold
+
+
+def _short(text: str, width: int = 48) -> str:
+    text = re.sub(r"\s+", " ", re.sub(r"\*\*|__|`", "", text)).strip()
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
+def feature_capabilities(features_body: str) -> list[str]:
+    """First-column (capability) cells from the markdown tables in features.md."""
+    caps: list[str] = []
+    for raw in features_body.splitlines():
+        line = raw.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if not cells:
+            continue
+        first = cells[0]
+        if not first or set(first) <= set("-: "):  # separator row
+            continue
+        if first.lower() == "capability":  # header row
+            continue
+        caps.append(first)
+    return caps
+
+
+def feature_counts(features_body: str) -> dict[str, int]:
+    """Capability rows per section of features.md: shipped / in_progress / planned."""
+    counts = {"shipped": 0, "in_progress": 0, "planned": 0}
+    section: str | None = None
+    for raw in features_body.splitlines():
+        line = raw.strip()
+        if line.startswith("#"):
+            low = line.lower()
+            section = (
+                "shipped" if "shipped" in low
+                else "in_progress" if "progress" in low
+                else "planned" if "planned" in low
+                else None
+            )
+            continue
+        if section and line.startswith("|"):
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            first = cells[0] if cells else ""
+            if not first or set(first) <= set("-: ") or first.lower() == "capability":
+                continue
+            counts[section] += 1
+    return counts
+
+
+def _read(hdir: Path, name: str) -> str | None:
+    path = hdir / name
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
+# --------------------------------------------------------------------------- #
+# consolidate
+# --------------------------------------------------------------------------- #
+
+def _name_stopwords(root: Path) -> frozenset[str]:
+    """Project-name tokens are low-signal *within* that project — exclude from matching."""
+    return frozenset(w for w in _WORD_RE.findall(root.name.lower()) if len(w) > 2)
+
+
+# Cap how many individual overlap lines we print before summarizing the rest.
+_MAX_OVERLAP_LINES = 8
+
+
+def consolidate_signals(root: Path, *, overlap_threshold: float = 0.5) -> list[Finding]:
+    """Detect what a consolidation pass should route/prune/distill. Read-only."""
+    findings: list[Finding] = []
+    hdir = horus_dir(root)
+    if not hdir.is_dir():
+        return [Finding("fail", f"no {HORUS_DIR}/ directory (run `horus init`)")]
+
+    for name in RECOMMENDED_FILES:
+        if not (hdir / name).is_file():
+            findings.append(Finding("warn", f"{HORUS_DIR}/{name} missing — run `horus init` to scaffold it"))
+
+    stop = _name_stopwords(root)
+    roadmap_body = _read(hdir, "roadmap.md")
+    features_body = _read(hdir, "features.md")
+
+    tasks = roadmap.parse_tasks(frontmatter.parse(roadmap_body).body) if roadmap_body else []
+    caps = feature_capabilities(features_body) if features_body else []
+    cap_tokens = [(c, _key_tokens(c, stop)) for c in caps]
+
+    def matched_cap(task_tokens: set[str]) -> str | None:
+        for cap, c_tokens in cap_tokens:
+            if _similar(task_tokens, c_tokens, overlap_threshold):
+                return cap
+        return None
+
+    # Rule 2: roadmap items that overlap a features row → split (action vs status).
+    overlaps: list[tuple[str, str]] = []
+    done = [t for t in tasks if t.state == "done"]
+    unshipped_done = 0
+    for t in tasks:
+        cap = matched_cap(_key_tokens(t.text, stop))
+        if cap:
+            overlaps.append((t.text, cap))
+        elif t.state == "done":
+            unshipped_done += 1
+
+    for text, cap in overlaps[:_MAX_OVERLAP_LINES]:
+        findings.append(Finding(
+            "warn",
+            f"overlap: roadmap '{_short(text)}' ↔ features '{_short(cap)}' — "
+            f"split (action points → roadmap, status → features)",
+        ))
+    if len(overlaps) > _MAX_OVERLAP_LINES:
+        findings.append(Finding("warn", f"… and {len(overlaps) - _MAX_OVERLAP_LINES} more roadmap↔features overlap(s)"))
+    if not overlaps:
+        findings.append(Finding("ok", "no roadmap↔features overlap detected"))
+
+    # Rule 1: done roadmap items without a matching capability row → maybe ship to ledger.
+    if done:
+        findings.append(Finding(
+            "warn",
+            f"{len(done)} done roadmap item(s); {unshipped_done} without a features row — "
+            f"move shipped capabilities to features.md, then prune the done items",
+        ))
+
+    # Rule 5: sessions waiting to be distilled upward.
+    sessions = recent_sessions(root, limit=999)
+    if sessions:
+        findings.append(Finding(
+            "warn", f"{len(sessions)} session summary(ies) to distill into the lanes"
+        ))
+
+    if not any(f.level in ("warn", "fail") for f in findings):
+        findings.append(Finding("ok", "lanes look consolidated — no routing/pruning candidates"))
+    return findings
+
+
+# --------------------------------------------------------------------------- #
+# distill-history
+# --------------------------------------------------------------------------- #
+
+def find_source_log(root: Path, explicit: str | None = None) -> Path | None:
+    """The large log to compress: explicit arg, else the first known candidate."""
+    if explicit:
+        p = (root / explicit) if not Path(explicit).is_absolute() else Path(explicit)
+        return p if p.is_file() else None
+    for rel in _SOURCE_LOGS:
+        p = root / rel
+        if p.is_file():
+            return p
+    return None
+
+
+def _log_stats(text: str) -> tuple[int, int]:
+    """(non-blank lines, heading count) — a cheap size signal."""
+    lines = text.splitlines()
+    nonblank = sum(1 for ln in lines if ln.strip())
+    headings = sum(1 for ln in lines if ln.lstrip().startswith("#"))
+    return nonblank, headings
+
+
+def distill_signals(root: Path, source: Path | None) -> list[Finding]:
+    """Report the compression target: source-log size vs current history.md size."""
+    findings: list[Finding] = []
+    hdir = horus_dir(root)
+    if not hdir.is_dir():
+        return [Finding("fail", f"no {HORUS_DIR}/ directory (run `horus init`)")]
+
+    if source is None:
+        findings.append(Finding(
+            "warn",
+            "no source log found (looked for docs/HISTORY.md, CHANGELOG.md, …) — "
+            "pass one explicitly, or distill the archive inside history.md",
+        ))
+    else:
+        lines, heads = _log_stats(source.read_text(encoding="utf-8"))
+        rel = source.relative_to(root) if source.is_relative_to(root) else source
+        findings.append(Finding(
+            "ok" if lines else "warn",
+            f"source log {rel}: {lines} non-blank line(s), {heads} heading(s) to compress",
+        ))
+
+    history_body = _read(hdir, "history.md")
+    if history_body is None:
+        findings.append(Finding("warn", f"{HORUS_DIR}/history.md missing — run `horus init` to scaffold it"))
+    else:
+        lines, heads = _log_stats(frontmatter.parse(history_body).body)
+        findings.append(Finding("ok", f"current history.md: {lines} line(s), {heads} curated entry/entries"))
+    return findings

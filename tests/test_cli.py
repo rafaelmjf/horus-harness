@@ -55,6 +55,26 @@ def test_reconcile_cli_resolves_drift(tmp_path, monkeypatch):
     ).status == "aligned"
 
 
+def test_consolidate_cli_runs(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes"])
+    assert main(["consolidate", "--path", str(tmp_path)]) == 0
+
+
+def test_distill_history_cli_runs(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes"])
+    assert main(["distill-history", "--path", str(tmp_path)]) == 0
+
+
+def test_skill_install_cli(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    assert not (tmp_path / ".claude").exists()  # --no-skills opted out at init
+    assert main(["skill", "install", "--path", str(tmp_path)]) == 0
+    assert (tmp_path / ".claude" / "skills" / "horus-consolidate" / "SKILL.md").exists()
+
+
 def test_forget_cli(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes"])

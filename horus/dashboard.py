@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from horus import config, frontmatter, markdown, roadmap
+from horus import config, frontmatter, markdown, roadmap, routines
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
 
@@ -32,7 +32,10 @@ def load_project(path_str: str) -> dict[str, Any]:
         "current_focus": "",
         "project_body": "",
         "roadmap_body": "",
+        "features_body": "",
+        "feature_counts": {"shipped": 0, "in_progress": 0, "planned": 0},
         "decisions_body": "",
+        "history_body": "",
         "sessions": [],
         "findings": [],
         "next_step": None,
@@ -57,9 +60,19 @@ def load_project(path_str: str) -> dict[str, Any]:
             data["current_focus"] = doc.front_matter.get("current_focus", "")
         data["roadmap_body"] = doc.body
 
+    features_md = hdir / "features.md"
+    if features_md.is_file():
+        doc = frontmatter.parse(features_md.read_text(encoding="utf-8"))
+        data["features_body"] = doc.body
+        data["feature_counts"] = routines.feature_counts(doc.body)
+
     decisions_md = hdir / "decisions.md"
     if decisions_md.is_file():
         data["decisions_body"] = decisions_md.read_text(encoding="utf-8")
+
+    history_md = hdir / "history.md"
+    if history_md.is_file():
+        data["history_body"] = frontmatter.parse(history_md.read_text(encoding="utf-8")).body
 
     for sp in recent_sessions(root, limit=12):
         doc = frontmatter.parse(sp.read_text(encoding="utf-8"))
@@ -211,6 +224,18 @@ def _next_html(p: dict[str, Any]) -> str:
     return ""
 
 
+def _features_badge(p: dict[str, Any]) -> str:
+    fc = p["feature_counts"]
+    if not any(fc.values()):
+        return ""
+    bits = [f"{fc['shipped']} shipped"]
+    if fc["in_progress"]:
+        bits.append(f"{fc['in_progress']} in progress")
+    if fc["planned"]:
+        bits.append(f"{fc['planned']} planned")
+    return f"<span>{html.escape(', '.join(bits))}</span>"
+
+
 def _latest_html(p: dict[str, Any]) -> str:
     latest = p["latest"]
     if not latest:
@@ -286,6 +311,7 @@ def render_index(projects: list[dict[str, Any]]) -> str:
             f"<div class='card'><h2><a href='/project?i={i}'>"
             f"{html.escape(p['name'])}</a>{missing}</h2>"
             f"<div class='badges'><span>status: {status}</span>"
+            f"{_features_badge(p)}"
             f"<span>{len(p['sessions'])} session(s)</span> {_health_summary(p['findings'])}</div>"
             f"{_next_html(p)}"
             f"{_latest_html(p)}"
@@ -331,6 +357,14 @@ def render_project(p: dict[str, Any]) -> str:
             f"<div class='section' id='roadmap'><h2>{heading}</h2>{_breakdown_html(p)}</div>"
         )
 
+    if p["features_body"]:
+        fc = p["feature_counts"]
+        sub = f" <span class='muted' style='font-size:13px'>({fc['shipped']} shipped)</span>" if fc["shipped"] else ""
+        parts.append(
+            f"<div class='section' id='features'><h2>Features{sub}</h2>"
+            f"{markdown.render(p['features_body'])}</div>"
+        )
+
     if p["sessions"]:
         srows = "".join(
             f"<tr><td>{html.escape(s['date'])}</td><td>{html.escape(s['agent'])}</td>"
@@ -346,6 +380,13 @@ def render_project(p: dict[str, Any]) -> str:
     if p["decisions_body"]:
         parts.append(
             f"<div class='section'><h2>Decisions</h2>{markdown.render(p['decisions_body'])}</div>"
+        )
+
+    if p["history_body"]:
+        parts.append(
+            "<div class='section' id='history'><h2>History</h2>"
+            "<details class='tasks'><summary>bumps in the road</summary>"
+            f"{markdown.render(p['history_body'])}</details></div>"
         )
 
     if p["project_body"]:

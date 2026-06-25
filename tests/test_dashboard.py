@@ -112,6 +112,30 @@ def test_progress_links_to_roadmap_breakdown(tmp_path, monkeypatch):
     assert "todo one" in det and "doing two" in det and "shipped" in det
 
 
+def test_dashboard_surfaces_features_and_history(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    (tmp_path / ".horus" / "features.md").write_text(
+        "---\nstatus: active\n---\n# Features\n\n## Shipped\n\n"
+        "| Capability | Since | Notes |\n|---|---|---|\n| Widget engine | 0.1 | core |\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".horus" / "history.md").write_text(
+        "---\nstatus: active\n---\n# History\n\n## the big outage\n\nlesson learned.\n",
+        encoding="utf-8",
+    )
+    data = dashboard.load_project(str(tmp_path))
+    assert data["feature_counts"]["shipped"] == 1
+
+    det = dashboard.render_project(data)
+    assert "id='features'" in det and "Widget engine" in det
+    assert "id='history'" in det and "the big outage" in det
+    assert "<table>" in det  # capability ledger rendered as a table
+
+    idx = dashboard.render_index([data])
+    assert "1 shipped" in idx  # capability badge on the card
+
+
 def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)

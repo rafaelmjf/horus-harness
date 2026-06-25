@@ -8,7 +8,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from horus import __version__, closure, config, dashboard, initialize, templates
+from horus import __version__, closure, config, dashboard, initialize, routines, skills, templates
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
 from horus.instructions import check_drift, reconcile
 
@@ -29,7 +29,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     print(f"Initializing Horus continuity in {root}")
     actions = initialize.init_project(
-        root, assume_yes=args.yes, no_input=args.no_input
+        root, assume_yes=args.yes, no_input=args.no_input, with_skills=not args.no_skills
     )
     for a in actions:
         print(f"  [{a.status}] {a.message}")
@@ -46,7 +46,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     if args.target in ("project", "all"):
         print(f"doctor project: {root}")
-        if not _print_findings(check_project(root)):
+        if not _print_findings(check_project(root) + skills.skill_findings(root)):
             rc = 1
         print()
 
@@ -160,6 +160,50 @@ def cmd_close(args: argparse.Namespace) -> int:
     return 1
 
 
+def _skill_nudge(root: Path) -> None:
+    """Point at the richer in-app skill when it isn't installed/current."""
+    stale = skills.missing_or_stale(root)
+    if stale:
+        names = ", ".join(s.name for s in stale)
+        print(
+            f"\ntip: a context-aware version runs inside Claude Code as the '{names}' "
+            "skill (it sees this session, not just the files). Install with `horus skill install`."
+        )
+
+
+def cmd_consolidate(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    print(f"Consolidation check: {root}\n")
+    findings = routines.consolidate_signals(root)
+    healthy = _print_findings(findings)
+    print("\n" + templates.CONSOLIDATE_PROMPT)
+    if healthy:
+        print("Lanes already consolidated — nothing to route or prune.")
+    else:
+        print("Consolidation candidates above — the in-loop agent applies the routine.")
+    _skill_nudge(root)
+    return 0
+
+
+def cmd_distill_history(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    source = routines.find_source_log(root, args.source)
+    print(f"Distill-history check: {root}\n")
+    _print_findings(routines.distill_signals(root, source))
+    print("\n" + templates.DISTILL_HISTORY_PROMPT)
+    return 0
+
+
+def cmd_skill(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    scope = "user" if args.user else "project"
+    print(f"Installing Horus skills ({scope} scope): {root if not args.user else '~'}")
+    actions = skills.install_skills(root, user=args.user, force=args.force)
+    for a in actions:
+        print(f"  [{a.status}] {a.message}")
+    return 0
+
+
 def cmd_reconcile(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
@@ -197,6 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("path", nargs="?", default=".", help="project root (default: cwd)")
     p_init.add_argument("--yes", "-y", action="store_true", help="auto-confirm block injection")
     p_init.add_argument("--no-input", action="store_true", help="never prompt; skip injection")
+    p_init.add_argument("--no-skills", action="store_true", help="don't scaffold the .claude/skills/ skills")
     p_init.set_defaults(func=cmd_init)
 
     p_doctor = sub.add_parser("doctor", help="check continuity and instruction health")
@@ -238,6 +283,31 @@ def build_parser() -> argparse.ArgumentParser:
     p_close.add_argument("--push", action="store_true", help="with --commit, also push to origin")
     p_close.add_argument("--message", "-m", help="commit message for --commit")
     p_close.set_defaults(func=cmd_close)
+
+    p_consol = sub.add_parser(
+        "consolidate",
+        help="route/prune/distill the .horus/ lanes (prints the routine for the in-loop agent)",
+    )
+    p_consol.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_consol.set_defaults(func=cmd_consolidate)
+
+    p_distill = sub.add_parser(
+        "distill-history",
+        help="compress a large log into the curated history.md (prints the routine for the in-loop agent)",
+    )
+    p_distill.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_distill.add_argument(
+        "--source", help="source log to compress (default: auto-detect docs/HISTORY.md, CHANGELOG.md, …)"
+    )
+    p_distill.set_defaults(func=cmd_distill_history)
+
+    p_skill = sub.add_parser("skill", help="manage Horus agent skills (.claude/skills/)")
+    skill_sub = p_skill.add_subparsers(dest="skill_cmd", required=True)
+    p_skill_install = skill_sub.add_parser("install", help="install/update the bundled skills")
+    p_skill_install.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_skill_install.add_argument("--user", action="store_true", help="install to ~/.claude/skills instead of the project")
+    p_skill_install.add_argument("--force", action="store_true", help="overwrite even if present/unversioned")
+    p_skill_install.set_defaults(func=cmd_skill)
 
     p_recon = sub.add_parser("reconcile", help="sync the managed instruction block across files")
     p_recon.add_argument("target", nargs="?", choices=("instructions",), default="instructions")

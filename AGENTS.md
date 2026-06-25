@@ -5,18 +5,22 @@
 
 This repository uses `.horus/` for project continuity.
 
-Before substantial work:
+Before substantial work, read the `.horus/` lanes (each stays in its lane):
 
-- Read `.horus/project.md`.
-- Read `.horus/roadmap.md`.
-- Read `.horus/decisions.md`.
+- `project.md` — vision, shape, boundaries, current focus.
+- `roadmap.md` — open action points (the *what's next*).
+- `features.md` — capability ledger (shipped / in-progress / planned packages).
+- `decisions.md` — durable rules and their reasoning.
+- `history.md` — carried-forward lessons ("bumps in the road").
 - Review recent local session summaries in `.horus/sessions/` when available.
 
 After work that contributes to the project state:
 
 - Add a concise session summary under `.horus/sessions/`.
-- Update `.horus/roadmap.md` when roadmap status or current focus changes.
-- Update `.horus/decisions.md` only for durable decisions and their reasoning.
+- Keep facts in their lane: open action points in `roadmap.md`, shipped/planned
+  capabilities in `features.md`, durable rules in `decisions.md`, lessons in
+  `history.md`. Don't maintain the same fact in two files.
+- Run `horus consolidate` to route/prune/distill when the lanes drift.
 - Do not store secrets or full transcripts in `.horus/`.
 
 Instruction synchronization:

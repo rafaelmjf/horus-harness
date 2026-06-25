@@ -7,3 +7,6 @@ build/
 dist/
 .venv/
 venv/
+
+# Real-project example fixtures kept local until curated for public sharing.
+examples/

@@ -1,0 +1,67 @@
+---
+name: horus-consolidate
+description: >-
+  Consolidate a project's Horus continuity (`.horus/`) so each lane stays in its
+  lane — route shipped work into the features ledger, prune done/stale roadmap
+  items, distill session notes into the durable files, and de-duplicate facts that
+  drifted across roadmap.md and features.md. Use this whenever wrapping up or
+  closing out a work session in a repo that has a `.horus/` directory; when the user
+  says "consolidate", "wrap up", "update continuity", "tidy the roadmap", or "close
+  out"; right after shipping a capability (to move it from roadmap to features); or
+  whenever the `.horus/` lanes look like they've drifted. Prefer this over editing
+  the `.horus/` files ad hoc, because it runs `horus consolidate` for precise signals
+  first and applies consistent routing rules.
+---
+
+<!-- horus-skill-version: 1 -->
+
+# Consolidate Horus continuity
+
+You are running *inside* the working session, so you have something the `horus`
+CLI does not: the **live context of what just happened** — decisions made, work
+shipped, things discussed but not yet written to `.horus/`. Use that. The CLI sees
+only the files and git; you see the conversation too. Fold both in.
+
+## Steps
+
+1. **Get the deterministic signals.** Run `horus consolidate` (optionally
+   `--path <repo>`). It reports candidates it can detect from the files alone:
+   roadmap↔features overlaps, done-but-unshipped roadmap items, session summaries to
+   distill, and missing lanes. Treat these as leads, not gospel — verify each.
+
+2. **Read the lanes.** Read `.horus/project.md`, `roadmap.md`, `features.md`,
+   `decisions.md`, `history.md`, and any `sessions/*.md`. If `docs/routines.md`
+   exists, it holds the full routing contract.
+
+3. **Apply the routing rules**, editing **`.horus/**` only** (never source files,
+   never `AGENTS.md`/`CLAUDE.md`):
+
+   - **Ship → ledger.** For each done roadmap action point that completed a
+     shippable capability, close it in `roadmap.md` and add/update the matching row
+     in `features.md` (move Planned/In-progress → Shipped; stamp the version if the
+     repo records one, else leave blank). Capture anything shipped *this session*
+     that isn't on disk yet.
+   - **De-duplicate across lanes.** Where the same item sits in both `roadmap.md`
+     and `features.md`, keep the *action points* in `roadmap.md` and the *capability
+     status* in `features.md`, each pointing at the other. No fact in two places.
+   - **Prune.** Drop done/obsolete roadmap items — they live in features/history/git
+     now. A roadmap is "what's next", not a completed log.
+   - **Distill sessions.** Fold durable content from `sessions/*.md` into the lanes
+     (a decision → `decisions.md`, a lesson → `history.md`, a shipped thing →
+     `features.md`), then remove or mark the distilled summary.
+   - **Record fresh context.** Decisions, lessons, and shipped capabilities from the
+     current session that belong in the lanes but aren't written yet — add them.
+
+4. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
+   `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`.
+
+5. **Verify.** Re-run `horus consolidate` — the candidates it flagged should now be
+   resolved. Running the skill again on a clean tree should change nothing.
+
+## Boundaries
+
+- **Never invent** status, dates, versions, or decisions. When intent is unclear,
+  leave the content in place and flag it for the user rather than guessing.
+- Edits are confined to `.horus/**`. This is continuity maintenance, not a coding
+  task — do not continue editing source as part of it.
+- Bump `last_updated` front matter on lanes you change.

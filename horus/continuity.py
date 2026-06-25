@@ -8,7 +8,10 @@ from typing import NamedTuple
 from horus import frontmatter
 
 HORUS_DIR = ".horus"
+# Required lanes: a project's continuity is broken without these.
 COMMITTED_FILES = ("project.md", "roadmap.md", "decisions.md")
+# Structure-v2 lanes: recommended, warn-if-missing so pre-v2 repos migrate gently.
+RECOMMENDED_FILES = ("features.md", "history.md")
 SESSIONS_DIR = "sessions"
 
 
@@ -56,6 +59,17 @@ def check_project(project_root: Path) -> list[Finding]:
             continue
         text = path.read_text(encoding="utf-8")
         if not text.strip():
+            findings.append(Finding("warn", f"{HORUS_DIR}/{name} is empty"))
+        else:
+            findings.append(Finding("ok", f"{HORUS_DIR}/{name} present"))
+
+    for name in RECOMMENDED_FILES:
+        path = hdir / name
+        if not path.is_file():
+            findings.append(
+                Finding("warn", f"{HORUS_DIR}/{name} missing (structure v2; run `horus init` to scaffold)")
+            )
+        elif not path.read_text(encoding="utf-8").strip():
             findings.append(Finding("warn", f"{HORUS_DIR}/{name} is empty"))
         else:
             findings.append(Finding("ok", f"{HORUS_DIR}/{name} present"))

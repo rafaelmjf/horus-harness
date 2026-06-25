@@ -12,8 +12,8 @@ from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
-from horus import config, templates
-from horus.continuity import COMMITTED_FILES, HORUS_DIR, SESSIONS_DIR
+from horus import config, skills, templates
+from horus.continuity import HORUS_DIR, SESSIONS_DIR
 from horus.instructions import extract_block
 
 # Session summaries are ignored via a .gitignore co-located inside .horus/,
@@ -57,6 +57,7 @@ def init_project(
     *,
     assume_yes: bool = False,
     no_input: bool = False,
+    with_skills: bool = True,
 ) -> list[Action]:
     actions: list[Action] = []
     today = date.today().isoformat()
@@ -88,9 +89,23 @@ def init_project(
     )
     actions.append(
         _write_if_missing(
+            hdir / "features.md",
+            templates.features_md(today),
+            f"{HORUS_DIR}/features.md",
+        )
+    )
+    actions.append(
+        _write_if_missing(
             hdir / "decisions.md",
             templates.decisions_md(),
             f"{HORUS_DIR}/decisions.md",
+        )
+    )
+    actions.append(
+        _write_if_missing(
+            hdir / "history.md",
+            templates.history_md(today),
+            f"{HORUS_DIR}/history.md",
         )
     )
     actions.append(
@@ -114,6 +129,10 @@ def init_project(
                 no_input=no_input,
             )
         )
+
+    if with_skills:
+        for sa in skills.install_skills(project_root):
+            actions.append(Action(sa.status, sa.message))
 
     if config.register_project(project_root):
         actions.append(Action("updated", "registered project in ~/.horus/config.toml"))
