@@ -441,3 +441,28 @@ white hat survives. "Active" indicator = a small extra PNG frame set swapped via
   run the `horus-consolidate` skill and fold the session's *context* (decisions + why,
   dead ends, next step) into the lanes — `horus consolidate` (the script) is only the
   signal layer the skill uses, never a replacement, because it can't see the session.
+
+## 2026-06-25 - OAuth Token Auto-Refresh + Account Anchor
+
+The usage→closure hook silently never fired: the on-disk `accessToken` in
+`~/.claude/.credentials.json` is routinely stale (Claude Code refreshes in-process and
+rewrites the file on its own cadence), so reading it and giving up on expiry meant no
+signal regardless of threshold.
+
+Decision: `claude_usage._oauth_token()` refreshes an expired token from `refreshToken`
+via `POST https://api.anthropic.com/v1/oauth/token` (client_id
+`9d1c250a-e61b-44d9-88ed-5944d1962f5e`, a `claude-cli` `User-Agent` — Cloudflare 1010s
+an empty UA) and **persists the rotated pair**.
+
+Reasoning / gotchas:
+
+- Refresh tokens are **single-use**: a refresh that succeeds but doesn't persist burns
+  the on-disk token → next refresh `invalid_grant` until re-login. Always persist.
+- `.credentials.json` always holds the **currently logged-in** account's tokens (Claude
+  Code overwrites on account switch), so the token path is inherently current-account;
+  no cross-account staleness check is needed there.
+- Account identity for *continuity* comes from `~/.claude.json` `oauthAccount.emailAddress`
+  (read-only, no secret) via `current_account()`. Sessions now carry a real `account:`
+  tag + a full timestamp (`YYYY-MM-DD-HHMMSS` filename, ISO `date:`), so multiple
+  sessions/day don't collide and each is attributable to an account — the anchor a
+  future MVP3 "startup identity check" can compare against.

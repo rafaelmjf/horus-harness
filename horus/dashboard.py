@@ -81,6 +81,7 @@ def load_project(path_str: str) -> dict[str, Any]:
                 "file": sp.name,
                 "date": doc.front_matter.get("date", ""),
                 "agent": doc.front_matter.get("agent", ""),
+                "account": doc.front_matter.get("account", ""),
                 "status": doc.front_matter.get("status", ""),
                 "summary": doc.front_matter.get("summary", ""),
                 "mtime": sp.stat().st_mtime,
@@ -369,12 +370,13 @@ def render_project(p: dict[str, Any]) -> str:
     if p["sessions"]:
         srows = "".join(
             f"<tr><td>{html.escape(s['date'])}</td><td>{html.escape(s['agent'])}</td>"
+            f"<td>{html.escape(s['account'])}</td>"
             f"<td>{html.escape(s['status'])}</td><td>{html.escape(s['summary'])}</td></tr>"
             for s in p["sessions"]
         )
         parts.append(
             "<div class='section'><h2>Recent sessions</h2>"
-            "<table><tr><th>date</th><th>agent</th><th>status</th><th>summary</th></tr>"
+            "<table><tr><th>date</th><th>agent</th><th>account</th><th>status</th><th>summary</th></tr>"
             f"{srows}</table></div>"
         )
 

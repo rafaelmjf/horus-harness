@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "Claude Code usage→closure parity shipped (reads 5h/weekly % via OAuth /usage endpoint; Stop hook injects the closure routine at threshold). Companion now launches windowless on Windows (pythonw re-exec). Next: real-world validation when a limit actually hits ~90%, then remaining mascot polish (wing animation, white-fringe asset cleanup)."
+current_focus: "Consolidated into main before MVP3: usage→closure parity + OAuth token auto-refresh (the on-disk token was stale → hook never fired) + account-tagged/timestamped sessions, mascot polish (wing breathe + asset defringe via scripts/regen_mascot.py), companion windowless on Windows. codex-usage-warning + usage-threshold-closure branches merged and retired. Next: MVP3 agent execution (adapter contract + fake adapter first). Re-login pending to live-test the usage hook (refresh token was burned during endpoint validation)."
 last_updated: 2026-06-25
 ---
 
@@ -121,6 +121,12 @@ Phase 3 — portability (started with direct Codex skill projection):
   check --target claude` + `horus hook install --target claude` install a `Stop` hook
   that injects the closure routine via `{"decision":"block","reason":…}` at threshold,
   once per session. Dogfooded into this repo's `.claude/settings.json`.
+- [x] OAuth token auto-refresh (2026-06-25): the on-disk `accessToken` is routinely
+  stale between runs (Claude Code refreshes in-process), which made the hook go dark
+  and never fire. `_oauth_token()` now refreshes an expired token from `refreshToken`
+  via `POST https://api.anthropic.com/v1/oauth/token` (client_id
+  `9d1c250a-…`, CLI `User-Agent` to clear Cloudflare 1010) and persists the rotated
+  pair. Refresh tokens are single-use — always persist or the next refresh 400s.
 - [ ] Evaluate `rulesync` for broader sync/projection (AGENTS/CLAUDE plus other tools),
   where it may still subsume or complement `horus reconcile`.
 
@@ -161,11 +167,16 @@ dashboard and later becomes the place for continuity/status nudges.
   `HORUS_DETACHED` loop guard, `--no-detach` opt-out). Trade-off: the detached
   child has no console, so a GUI startup failure is currently silent — log-file /
   error-dialog fallback is a follow-up if it bites.
-- [ ] Improve the wing animation beyond the current simple transparent-frame
+- [x] Improve the wing animation beyond the current simple transparent-frame
   flap; make it feel integrated with the mascot rather than mechanically shifted.
-- [ ] Replace or regenerate the mascot asset if cleaner than cutting the current
+  (2026-06-25) idle_1/idle_2 now lift the green wing a few px over the body (no
+  tear: vacated strip shows the body behind), and `animate()` eases
+  rest→lift→peak→lift→rest.
+- [x] Replace or regenerate the mascot asset if cleaner than cutting the current
   image: remove white fringe pixels around the silhouette, but preserve intentional
-  white regions such as the hat.
+  white regions such as the hat. (2026-06-25) `scripts/regen_mascot.py` defringes
+  (peels near-white edge pixels touching transparency; interior whites survive)
+  + drops keying specks. All 5 frames regenerated; runtime stays Pillow-free.
 - [ ] Later: surface native hook events, usage threshold warnings, stale summaries,
   uncommitted continuity, and per-project switching.
 

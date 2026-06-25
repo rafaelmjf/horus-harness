@@ -68,3 +68,67 @@ def test_oauth_token_none_when_expired(tmp_path):
 
 def test_oauth_token_none_when_missing(tmp_path):
     assert cu._oauth_token(tmp_path / "nope.json") is None
+
+
+def test_current_account_reads_email(tmp_path):
+    cfg = tmp_path / ".claude.json"
+    cfg.write_text(json.dumps({"oauthAccount": {"emailAddress": "a@b.com", "accountUuid": "uuid"}}), encoding="utf-8")
+    assert cu.current_account(cfg) == "a@b.com"
+
+
+def test_current_account_none_when_absent(tmp_path):
+    assert cu.current_account(tmp_path / "nope.json") is None
+    cfg = tmp_path / ".claude.json"
+    cfg.write_text(json.dumps({"numStartups": 3}), encoding="utf-8")
+    assert cu.current_account(cfg) is None
+
+
+class _FakeResp:
+    def __init__(self, body: bytes):
+        self._body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return self._body
+
+
+def test_oauth_token_refreshes_and_persists_when_expired(tmp_path, monkeypatch):
+    cred = tmp_path / ".credentials.json"
+    cred.write_text(
+        json.dumps({"claudeAiOauth": {
+            "accessToken": "old", "refreshToken": "r-old",
+            "expiresAt": 1_000, "subscriptionType": "pro",
+        }}),
+        encoding="utf-8",
+    )
+    payload = {"access_token": "new-access", "refresh_token": "r-new", "expires_in": 28800, "scope": "user:inference"}
+    monkeypatch.setattr(cu.urllib.request, "urlopen", lambda req, timeout=0: _FakeResp(json.dumps(payload).encode()))
+
+    assert cu._oauth_token(cred) == "new-access"
+
+    saved = json.loads(cred.read_text(encoding="utf-8"))["claudeAiOauth"]
+    assert saved["accessToken"] == "new-access"
+    assert saved["refreshToken"] == "r-new"            # rotation persisted
+    assert saved["expiresAt"] / 1000.0 > cu.time.time()  # no longer expired
+    assert saved["subscriptionType"] == "pro"          # untouched fields preserved
+
+
+def test_oauth_token_none_when_refresh_fails(tmp_path, monkeypatch):
+    cred = tmp_path / ".credentials.json"
+    cred.write_text(
+        json.dumps({"claudeAiOauth": {"accessToken": "old", "refreshToken": "r-old", "expiresAt": 1_000}}),
+        encoding="utf-8",
+    )
+
+    def boom(req, timeout=0):
+        raise cu.urllib.error.HTTPError(cu.TOKEN_URL, 400, "bad", {}, None)
+
+    monkeypatch.setattr(cu.urllib.request, "urlopen", boom)
+    assert cu._oauth_token(cred) is None
+    # file left untouched on failure
+    assert json.loads(cred.read_text(encoding="utf-8"))["claudeAiOauth"]["accessToken"] == "old"

@@ -6,7 +6,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from horus import (
@@ -137,18 +137,21 @@ def cmd_session(args: argparse.Namespace) -> int:
         return 1
     sessions.mkdir(parents=True, exist_ok=True)
 
-    today = date.today().isoformat()
-    path = sessions / f"{today}-{_slugify(args.title)}.md"
+    # Timestamp (not just date): multiple sessions a day must not collide or lose
+    # their order. Account tag anchors which Claude user the session ran under.
+    now = datetime.now()
+    path = sessions / f"{now:%Y-%m-%d-%H%M%S}-{_slugify(args.title)}.md"
     if path.exists():
         print(f"Already exists: {path}")
         return 1
+    account = args.account or claude_usage.current_account() or "unknown"
     path.write_text(
         templates.session_summary(
             title=args.title,
-            date=today,
+            date=now.strftime("%Y-%m-%dT%H:%M:%S"),
             project=root.name,
             agent=args.agent,
-            account=args.account,
+            account=account,
             environment=args.environment,
         ),
         encoding="utf-8",
@@ -450,7 +453,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_session_new.add_argument("title", help="short session title")
     p_session_new.add_argument("--path", default=".", help="project root (default: cwd)")
     p_session_new.add_argument("--agent", default="claude")
-    p_session_new.add_argument("--account", default="personal")
+    p_session_new.add_argument("--account", default=None, help="account tag (default: auto-detect the logged-in Claude account)")
     p_session_new.add_argument("--environment", default="host")
     p_session_new.set_defaults(func=cmd_session)
 

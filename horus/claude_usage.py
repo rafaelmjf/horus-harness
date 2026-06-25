@@ -24,8 +24,13 @@ from typing import Any, NamedTuple
 from horus.continuity import Finding
 
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+TOKEN_URL = "https://api.anthropic.com/v1/oauth/token"
 # Beta header Claude Code sends for OAuth-scoped endpoints (found in the CLI binary).
 _OAUTH_BETA = "oauth-2025-04-20"
+# Public OAuth client id Claude Code authenticates with.
+_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+# Cloudflare 1010-blocks requests with no User-Agent; mirror the CLI's shape.
+_USER_AGENT = "claude-cli (external, cli)"
 
 
 class UsageReport(NamedTuple):
@@ -39,8 +44,38 @@ def credentials_path() -> Path:
     return Path.home() / ".claude" / ".credentials.json"
 
 
+def config_path() -> Path:
+    return Path.home() / ".claude.json"
+
+
+def current_account(path: Path | None = None) -> str | None:
+    """Email of the Claude account currently logged in, or None.
+
+    Read from ``~/.claude.json`` (``oauthAccount.emailAddress``) — a read-only,
+    non-secret anchor for *which* account a session ran under. Useful for tagging
+    session summaries and, later, for scoping usage state per account.
+    """
+    cfg = path or config_path()
+    try:
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    oauth = data.get("oauthAccount")
+    if isinstance(oauth, dict):
+        ident = oauth.get("emailAddress") or oauth.get("accountUuid")
+        if isinstance(ident, str) and ident:
+            return ident
+    return None
+
+
 def _oauth_token(path: Path | None = None) -> str | None:
-    """The Claude Code OAuth access token, or None if absent/expired."""
+    """The Claude Code OAuth access token, refreshing it if the stored one expired.
+
+    Claude Code refreshes its token in-process and writes the file on its own
+    cadence, so the on-disk ``accessToken`` is routinely stale between runs. When
+    it is, mint a fresh one from the ``refreshToken`` (and persist it) rather than
+    going dark — otherwise the usage→closure hook never fires.
+    """
     cred = path or credentials_path()
     try:
         data = json.loads(cred.read_text(encoding="utf-8"))
@@ -50,14 +85,74 @@ def _oauth_token(path: Path | None = None) -> str | None:
     if not isinstance(oauth, dict):
         return None
     token = oauth.get("accessToken")
-    if not isinstance(token, str) or not token:
-        return None
     expires_at = oauth.get("expiresAt")
-    if isinstance(expires_at, int | float):
-        # expiresAt is epoch milliseconds; skip a call we know will 401.
-        if expires_at / 1000.0 <= time.time():
-            return None
-    return token
+    # expiresAt is epoch milliseconds; treat a missing/past value as expired.
+    expired = not isinstance(expires_at, int | float) or expires_at / 1000.0 <= time.time()
+    if isinstance(token, str) and token and not expired:
+        return token
+
+    refresh = oauth.get("refreshToken")
+    if isinstance(refresh, str) and refresh:
+        return _refresh_access_token(refresh, cred)
+    return None
+
+
+def _refresh_access_token(refresh_token: str, cred_path: Path, *, timeout: float = 15.0) -> str | None:
+    """Exchange the refresh token for a fresh access token and persist it.
+
+    Refresh tokens rotate, so the new ``refresh_token`` must be saved or the next
+    refresh fails. Best-effort: any auth/network/parse failure yields None.
+    """
+    body = json.dumps(
+        {"grant_type": "refresh_token", "refresh_token": refresh_token, "client_id": _OAUTH_CLIENT_ID}
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        TOKEN_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": _USER_AGENT,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (fixed https host)
+            payload = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError, json.JSONDecodeError):
+        return None
+    access = payload.get("access_token") if isinstance(payload, dict) else None
+    if not isinstance(access, str) or not access:
+        return None
+    _persist_refreshed(cred_path, payload)
+    return access
+
+
+def _persist_refreshed(cred_path: Path, payload: dict[str, Any]) -> None:
+    """Write the rotated token fields back into the credentials file in place.
+
+    Re-reads the file so we only touch the three OAuth fields and keep everything
+    else (subscriptionType, rateLimitTier, …) intact.
+    """
+    # ponytail: no file lock; a Claude Code write racing this is rare and self-heals
+    # on the next run. Add locking only if concurrent corruption is ever observed.
+    try:
+        data = json.loads(cred_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    oauth = data.get("claudeAiOauth")
+    if not isinstance(oauth, dict):
+        return
+    oauth["accessToken"] = payload["access_token"]
+    if isinstance(payload.get("refresh_token"), str):
+        oauth["refreshToken"] = payload["refresh_token"]
+    if isinstance(payload.get("expires_in"), int | float):
+        oauth["expiresAt"] = int((time.time() + payload["expires_in"]) * 1000)
+    if isinstance(payload.get("scope"), str):
+        oauth["scopes"] = payload["scope"].split()
+    try:
+        cred_path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+    except OSError:
+        return
 
 
 def fetch_usage(*, token: str | None = None, timeout: float = 8.0, cred_path: Path | None = None) -> dict[str, Any] | None:
@@ -72,6 +167,7 @@ def fetch_usage(*, token: str | None = None, timeout: float = 8.0, cred_path: Pa
             "anthropic-beta": _OAUTH_BETA,
             "anthropic-version": "2023-06-01",
             "Accept": "application/json",
+            "User-Agent": _USER_AGENT,
         },
     )
     try:
