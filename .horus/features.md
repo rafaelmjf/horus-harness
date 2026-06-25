@@ -35,11 +35,13 @@ Status: **Shipped** · **In progress** · **Planned**
 | Codex project-skill projection | — | `horus init` / `horus skill install --target codex` write bundled Horus skills to `.agents/skills/` alongside Claude `.claude/skills/` |
 | Codex native usage hook | 2026-06-25 | `horus usage check` plus `horus hook install --target codex`; writes `.codex/hooks.json` `Stop` hook that nudges at usage threshold without failing the turn |
 | Claude usage→closure hook | 2026-06-25 | `horus/claude_usage.py` reads 5h/weekly % from the OAuth `/usage` endpoint; `horus usage check --target claude`; `horus hook install --target claude` writes a `.claude/settings.json` `Stop` hook that injects the closure routine via `decision:block` at threshold (once/session) |
+| Aliased account-tagged sessions | 2026-06-25 | `horus session new` records *which* account ran a session via a local alias (`config.alias_for` + `~/.horus/accounts.toml`, `acct-<sha6>` fallback); `horus account [--set]`; the real email never lands in a commit |
 
 ## In progress
 
 | Capability | Notes |
 |---|---|
+| Agent execution layer (MVP3) | adapter contract + `FakeAdapter` + `ClaudeAdapter` shipped (`horus/adapters/`); spawn+resume **proven live** (session id captured, context carried across resume). Next: session/process registry, multi-account isolation, live oversight dashboard, Codex adapter |
 | Routine + skill validation on a real project | invoke on fabric in a CLI-equipped session; tune skill triggering (`claude -p`); harmonize siblings → `roadmap.md` |
 
 ## Planned
@@ -48,6 +50,5 @@ Status: **Shipped** · **In progress** · **Planned**
 |---|---|
 | rulesync projection to other tools | Phase 3; evaluate for broader AGENTS/CLAUDE/instruction sync beyond Horus's direct Claude/Codex skill and hook projection |
 | Companion status signals | Build on the mascot: usage warning, stale session summary, uncommitted continuity, hook active/trusted state, dashboard server state |
-| Autonomous routine variant (Horus spawns the agent) | the spawning half of consolidate/distill; MVP3 |
-| Agent execution layer (Claude adapter, spawn+registry, live oversight) | MVP3; deferred until a CLI-equipped machine |
+| Autonomous routine variant (Horus spawns the agent) | the spawning half of consolidate/distill; MVP3 (now unblocked — adapters exist) |
 | LLM-based `horus infer` | distill `.horus/` from canonical docs; lands with MVP3 |

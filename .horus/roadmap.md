@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "MVP2.5 git-aware dashboard shipped: horus/gitstate.py + a compact git badge on the overview and a full Git card + rendered Latest-session card on the detail view; horus status CLI peer. The app is now aware of the GitHub repos and shows the last session summary. Next within MVP2.5: fetch-all refresh + staleness in the verdict surface (both optional). Then MVP3 agent execution (adapter contract + fake adapter first)."
-next_action: "Decide whether to merge mvp2.5-git-aware-dashboard into main, then start MVP3 by defining the agent-adapter contract + a fake adapter."
-next_prompt: "Resume the Horus project on the mvp2.5-git-aware-dashboard branch. Read .horus/ first (project.md, roadmap.md, decisions.md, and the latest .horus/sessions/ summary) for full context. Decide with me whether to merge mvp2.5-git-aware-dashboard into main, then start MVP3: define the agent-adapter contract (spawn/resume/parse_event/permission_flags) plus a fake adapter for tests, before the real Claude Code adapter."
+current_focus: "0.0.2 'companion' milestone shipped to PyPI; MVP3 'manager' underway. The agent-adapter contract (horus/adapters/), FakeAdapter, AND the real ClaudeAdapter are done and merged to main (PR #4) — spawn+resume proven live (spawn returned a session id; resume recalled context from the first turn). Contract refined while building the real adapter: parse_event returns a list (one assistant line can carry text+tool_use); stdin=DEVNULL. Next: the session/process registry (AgentSession already has the row shape: agent/account/project/environment/pid/session_id/status), then multi-account isolation (CLAUDE_CONFIG_DIR) + the live oversight dashboard."
+next_action: "Build the session/process registry: persist (agent, account, project, environment, pid, session_id, status) across restarts, populated from AgentSession as runs spawn/resume/exit. Then multi-account isolation (CLAUDE_CONFIG_DIR per account + startup identity check) and the Codex adapter to prove the abstraction."
+next_prompt: "Resume the Horus project. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (don't trust local refs). The adapter work is merged to main (PR #4) and mvp3-agent-adapter is retired; start the next increment on a FRESH branch off main (e.g. mvp3-session-registry) and PR it (gh pr create → squash-merge, auto-delete). Read .horus/ lanes + the latest .horus/sessions/ summary. Continue MVP3 with the session/process registry — persist (agent, account, project, environment, pid, session_id, status) across restarts; AgentSession in horus/adapters/base.py already has that exact shape; populate it from adapter runs (FakeAdapter for tests, ClaudeAdapter for real)."
 last_updated: 2026-06-25
 ---
 
@@ -42,6 +42,15 @@ last_updated: 2026-06-25
 - [x] Surface first context-rollover signal in `horus close` and dashboard: read local Codex rollout `token_count` events and warn at `--usage-threshold` (default 90). No DB.
 - [x] Add native Codex usage nudge: `horus usage check` plus `horus hook install --target codex`, which writes a `.codex/hooks.json` `Stop` hook. Hook mode prints only actionable closure warnings and exits 0.
 - [x] Claude usage→closure **pre-task** trigger (2026-06-25): `hook install --target claude` now writes a **`UserPromptSubmit`** hook (fires before the agent starts a task → diverts an over-budget session to closure *instead of* starting it) plus `Stop` as a safety net. Re-armable sentinel (`REARM_SECONDS`) replaces the permanent once-per-session guard that wrongly suppressed re-fires.
+- [x] Account-tagged sessions are **aliased** (2026-06-25): `current_account()` reads the logged-in email as the
+  anchor, but session summaries distill upward into committed lanes, so the raw email must not appear. `config.alias_for()`
+  resolves an email→alias map in `~/.horus/accounts.toml` (own file so the projects serializer can't clobber it), with a
+  stable non-reversible `acct-<sha6>` fallback; `horus session new` records the alias, `horus account [--set ALIAS]` manages it.
+- [ ] **Clearer session handoff / branch pickup** — IMPROVEMENT (flagged 2026-06-25 after a handoff named a branch that
+  existed only on `origin`; the pickup agent trusted stale local refs and misjudged the state). Encode a fetch-first +
+  verify-branch step at session pickup (done for now via `next_prompt`); consider also recording `branch:` + push/merge
+  state in the session summary and surfacing it in `horus close`/dashboard. Possibly a `horus resume` command or a managed
+  instruction-block step. See history.md.
 - [ ] **Mid-task usage interruption (Codex-style "check between every action")** — IMPROVEMENT. `UserPromptSubmit`/`Stop` only fire at task boundaries; a single long turn can still blow past the limit. Add a `PreToolUse` hook that checks usage before each tool call (with a short ~60s cached read to avoid hammering the OAuth endpoint) and blocks → diverts to closure mid-task. Gate carefully to avoid spamming.
 - [~] SQLite session/event registry + session states (`closing`/`needs_closure`/`closed_stale`) — DEFERRED. Premature at solo scale (file parsing is instant) and presupposes the deferred execution layer. Revisit when scale hurts perf or Horus runs sessions itself.
 
@@ -168,6 +177,15 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] Single-instance companion (2026-06-25): `acquire_singleton_lock` binds a fixed
   localhost port (8764) as a process-lifetime mutex; a second `horus app` exits
   instead of stacking another mascot. OS releases it on death (no stale-PID files).
+- [ ] **BUG: the dashboard *server* (8765) leaks — not covered by the singleton**
+  (found 2026-06-25: 13 orphaned `horus dashboard` processes on one machine). The
+  8764 mutex guards only the mascot; the dashboard subprocess has no single-instance
+  guard and isn't reaped when the companion dies, so launches/restarts accumulate
+  servers. Whichever bound the port first keeps serving its **old in-memory build**
+  (Python doesn't hot-reload), so the dashboard shows stale UI/values after code
+  changes until every orphan is killed. Fix: before spawning, detect a healthy
+  `horus dashboard` already on 8765 and reuse it (or make the server single-instance
+  the same way), and have the companion terminate its dashboard child on exit.
 - [x] Add a minimal context menu: Open Dashboard, Run Close Check, Quit.
 - [x] Show a basic status indicator: neutral/ok, warning, needs-closure. Initial
   data can come from existing `doctor`/`close`/usage checks; no live registry yet.
@@ -238,19 +256,32 @@ dashboard and later becomes the place for continuity/status nudges.
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 
-> DEFERRED until working on a machine with the official CLIs installed + logged in.
-> `claude`/`codex` are not present on the current machine, so the subprocess-driving
-> layer can't be end-to-end tested here. Approach is locked below so resumption is clean.
+> No longer deferred: `claude` 2.1.191 is installed AND logged in on this machine, so
+> the subprocess-driving layer is now end-to-end testable here (was the only blocker).
 >
 > Locked decisions (2026-06-25): build order = spawn + registry FIRST, then the live
 > oversight app. First real adapter = Claude Code. Thin owned adapter against a shared
 > contract; a fake adapter can validate orchestration anywhere. This phase also unlocks
 > autonomous closure + agent-assisted infer.
 
-- [ ] Define the adapter contract (`spawn`, `resume`, `parse_event`, `permission_flags`) + a fake adapter for tests.
-- [ ] Session/process registry: `(agent, account, project, environment, pid, session_id, status)`; survives restarts.
-- [ ] Claude Code adapter: `claude -p --output-format stream-json`, `--resume`, `CLAUDE_CONFIG_DIR` per account, permission posture.
-- [ ] Spawn + resume one headless session in a project under a chosen account; capture output; track state.
+- [x] Define the adapter contract (`spawn`, `resume`, `parse_event`, `permission_flags`) + a fake adapter for tests
+  (2026-06-25). `horus/adapters/`: `base.py` is the contract — `AgentAdapter` ABC with four pure methods
+  (`permission_flags`/`build_command`/`build_env`/`parse_event`) plus shared `spawn`/`resume`, subprocess streaming,
+  and `AgentRun` session-id/status tracking; `SpawnSpec`/`AgentSession`/`AgentEvent`/`PermissionPosture`/`EventType`
+  normalize the I/O. `fake.py` (`FakeAdapter`) implements the whole contract in memory via a JSON-lines stream that
+  mirrors stream-json's shape, so orchestration is testable with no CLI. `get_adapter(name)`. 12 tests.
+- [x] **Claude Code adapter** (2026-06-25). `horus/adapters/claude.py` (`ClaudeAdapter`): fills the four pure methods
+  against the contract — `claude -p --output-format stream-json --verbose`, `--resume <id>`, posture→`--permission-mode`
+  (PLAN/READ_ONLY→plan, AUTO_EDIT→acceptEdits, FULL_AUTO→bypassPermissions), `--model`, comma-joined
+  `--allowedTools`/`--disallowedTools`, `CLAUDE_CONFIG_DIR` per account. `parse_event` maps the real 2.1.191 stream-json
+  (system/init→SESSION_STARTED carrying the id; assistant text/tool_use; user tool_result; result; ignores
+  rate_limit_event/thinking_tokens/post_turn_summary). Contract refined: `parse_event` now returns a **list** (one
+  assistant line can carry text+tool_use); base sets `stdin=DEVNULL` (skips Claude's 3s stdin wait). 10 tests on real fixtures.
+- [x] **Spawn + resume one headless session, capture output, track state** (2026-06-25) — PROVEN LIVE on this machine:
+  spawn returned "STORED" + session id; resume of that id recalled "42" from the first turn (context carried across a
+  fresh process); status/returncode tracked. The MVP3 first proof point.
+- [ ] **Session/process registry (NEXT)**: `(agent, account, project, environment, pid, session_id, status)`;
+  survives restarts. `AgentSession` already has this exact shape.
 - [ ] Multi-account isolation via per-account home dirs (`CLAUDE_CONFIG_DIR`) + startup identity check.
 - [ ] Codex adapter (second) to prove the abstraction.
 - [ ] Turn the static dashboard into a live oversight app (process status + controls) on top of the registry.

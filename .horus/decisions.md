@@ -533,3 +533,53 @@ Decisions:
 - **Tailscale** is reserved for reaching a *running* Horus's live state (MVP3), not for
   static durable state. `tailscale serve` of the read-only dashboard is an optional ops
   convenience, no code.
+
+## 2026-06-25 - Adapter Contract Shape: Thin ABC + Four Pure Methods, Fake Mirrors stream-json
+
+The MVP3 agent-adapter contract (`horus/adapters/`) is an ABC (`AgentAdapter`), not a
+bare Protocol, so the heavy, identical parts live once in the base and real adapters stay
+thin. An adapter implements exactly four **pure, individually-testable** methods —
+`permission_flags(posture)`, `build_command(spec, resume_id=...)`, `build_env(spec)`,
+`parse_event(line)`. The base owns `spawn`/`resume`, subprocess launch+streaming, and
+`AgentRun` (the iterable handle that fills in `session_id` from the first event and flips
+status to a terminal value at end-of-stream). `SpawnSpec` / `AgentSession` / `AgentEvent`
+/ `PermissionPosture` / `EventType` normalize the I/O; `AgentSession`'s fields are exactly
+the future registry row `(agent, account, project, environment, pid, session_id, status)`.
+
+`FakeAdapter` implements the *whole* contract in memory over a JSON-lines stream that
+mirrors the **shape** of stream-json (init → text/tool → result), so it exercises the same
+`parse_event` → `AgentRun` path a real adapter will, and lets the orchestration layer be
+built/tested on a machine with no `claude`/`codex`. The real Claude Code adapter (next)
+only fills in the four methods. Implements the locked "thin owned adapter against a shared
+contract; a fake adapter validates orchestration anywhere" approach.
+
+## 2026-06-25 - Session Account Tag Is an Alias, Never the Raw Email
+
+`current_account()` reads the logged-in email (`~/.claude.json` → `oauthAccount.emailAddress`)
+as the "which account ran this" anchor, but session summaries distill upward into the
+committed lanes and the repo is public — so the raw email must never reach a summary.
+`config.alias_for(identifier)` returns a configured alias from `~/.horus/accounts.toml`
+(its own file, so the projects serializer in `config.py` can't clobber it), or a stable,
+non-reversible `acct-<sha6>` fallback that keeps accounts distinguishable without exposing
+the email. `horus session new` records the alias; `horus account [--set ALIAS]` shows the
+detected account and manages the mapping. Refines the prior "account-tagged sessions" work,
+which wrote the email directly. See [[horus-core-constraints]] (subscription-auth, no secrets/PII in the repo).
+
+## 2026-06-25 - Claude Code Adapter: Ground-Truth Schema + Contract Refinement
+
+Built `horus/adapters/claude.py` against the *real* `claude` 2.1.191 headless surface (probed
+directly, not from memory):
+
+- Spawn `claude -p <prompt> --output-format stream-json --verbose`; stream-json under `-p`
+  **requires** `--verbose`. Resume `--resume <session_id>`; the id is echoed in the
+  `system/init` event, so no pre-assigned id is needed (`--session-id <uuid>` exists if we
+  later want to set it). Posture → `--permission-mode` (plan/acceptEdits/bypassPermissions/
+  default; no pure read-only mode, so READ_ONLY→plan). Per-account isolation via
+  `CLAUDE_CONFIG_DIR` (unmapped account → ambient login).
+- **Contract refinement forced by reality:** `parse_event` now returns a **list** of events,
+  not `AgentEvent | None` — one `assistant` line routinely carries several content blocks
+  (text + tool_use), which the single-event shape silently dropped. Also `stdin=DEVNULL` in
+  the base launch (Claude waits ~3s on stdin otherwise). Sharpens the prior "Adapter Contract
+  Shape" decision; the fake had masked the gap because both were authored together.
+- Subscription-auth only: runs the user's own logged-in `claude`; no API key. spawn+resume
+  proven live (spawn → session id; resume of that id recalled context from the first turn).
