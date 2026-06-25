@@ -41,7 +41,7 @@ Status: **Shipped** · **In progress** · **Planned**
 
 | Capability | Notes |
 |---|---|
-| Agent execution layer (MVP3) | adapter contract + `FakeAdapter` + `ClaudeAdapter` shipped (`horus/adapters/`); spawn+resume **proven live** (session id captured, context carried across resume). Next: session/process registry, multi-account isolation, live oversight dashboard, Codex adapter |
+| Agent execution layer (MVP3) | shipped: adapter contract + `FakeAdapter` + `ClaudeAdapter` (`horus/adapters/`, spawn+resume **proven live**) and the **session/process registry** (`horus/registry.py` — JSON-backed, `track()`/`reconcile()`/`prune()`, cross-platform PID liveness, `horus sessions` CLI). Next: multi-account isolation, live oversight dashboard, Codex adapter |
 | Routine + skill validation on a real project | invoke on fabric in a CLI-equipped session; tune skill triggering (`claude -p`); harmonize siblings → `roadmap.md` |
 
 ## Planned

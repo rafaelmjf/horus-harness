@@ -57,6 +57,21 @@ def test_session_new_refuses_without_horus(tmp_path, monkeypatch):
     assert main(["session", "new", "X", "--path", str(tmp_path)]) == 1
 
 
+def test_sessions_cmd_lists_and_prunes(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus.registry import Registry, SessionRecord
+    reg = Registry.default()  # ~/.horus/registry.json under the patched HOME
+    reg.upsert(SessionRecord(session_id="abc123", agent="claude", project="/proj", pid=None, status="running"))
+
+    assert main(["sessions"]) == 0
+    out = capsys.readouterr().out
+    assert "abc123" in out
+    assert "orphaned" in out  # reconcile flipped pid-less "running" -> orphaned
+
+    assert main(["sessions", "--prune"]) == 0
+    assert reg.all() == []
+
+
 def test_session_new_records_alias_not_email(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     from horus import claude_usage
