@@ -160,6 +160,16 @@ def cmd_close(args: argparse.Namespace) -> int:
     return 1
 
 
+def _resolve_dir(path_str: str) -> Path | None:
+    """Resolve --path and require it to be an existing directory. A mistyped path
+    must fail loudly, not silently report 'nothing here' and exit 0."""
+    root = Path(path_str).resolve()
+    if not root.is_dir():
+        print(f"error: path is not an existing directory: {root}")
+        return None
+    return root
+
+
 def _skill_nudge(root: Path) -> None:
     """Point at the richer in-app skill when it isn't installed/current."""
     stale = skills.missing_or_stale(root)
@@ -172,7 +182,9 @@ def _skill_nudge(root: Path) -> None:
 
 
 def cmd_consolidate(args: argparse.Namespace) -> int:
-    root = Path(args.path).resolve()
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
     print(f"Consolidation check: {root}\n")
     findings = routines.consolidate_signals(root)
     healthy = _print_findings(findings)
@@ -186,7 +198,9 @@ def cmd_consolidate(args: argparse.Namespace) -> int:
 
 
 def cmd_distill_history(args: argparse.Namespace) -> int:
-    root = Path(args.path).resolve()
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
     source = routines.find_source_log(root, args.source)
     print(f"Distill-history check: {root}\n")
     _print_findings(routines.distill_signals(root, source))
@@ -195,7 +209,9 @@ def cmd_distill_history(args: argparse.Namespace) -> int:
 
 
 def cmd_infer(args: argparse.Namespace) -> int:
-    root = Path(args.path).resolve()
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
     print(f"Infer check: {root}\n")
     _print_findings(routines.infer_signals(root))
     print("\n" + templates.INFER_PROMPT)

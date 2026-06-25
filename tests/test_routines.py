@@ -153,6 +153,40 @@ def test_infer_flags_placeholder_lanes(tmp_path):
         assert lane in msgs
 
 
+def test_infer_history_placeholder_cleared_by_real_content_without_heading(tmp_path):
+    # Regression: history.md should count as populated once it has real content,
+    # even with no '## ' heading (the shipped template has none).
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "project.md").write_text(
+        '---\ncurrent_focus: "ship it"\n---\n# p\n\nA real description of the thing.\n', encoding="utf-8"
+    )
+    (hdir / "roadmap.md").write_text("---\n---\n# Roadmap\n\n## Now\n\n- [ ] a real task\n", encoding="utf-8")
+    (hdir / "features.md").write_text(
+        "## Shipped\n\n| Capability | Since | Notes |\n|---|---|---|\n| Thing | 0.1 | x |\n", encoding="utf-8"
+    )
+    (hdir / "history.md").write_text(
+        "---\n---\n# History\n\nWe corrupted data once; lesson: validate before delete.\n", encoding="utf-8"
+    )
+    (tmp_path / "README.md").write_text("# real\n", encoding="utf-8")
+
+    msgs = " ".join(f.message for f in routines.infer_signals(tmp_path))
+    assert "all lanes already populated" in msgs
+    assert "placeholder/empty lanes" not in msgs
+
+
+def test_infer_notes_empty_decisions_without_pressuring(tmp_path):
+    from horus import templates
+
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "decisions.md").write_text(templates.decisions_md(), encoding="utf-8")
+    (tmp_path / "README.md").write_text("# r\n", encoding="utf-8")
+    findings = routines.infer_signals(tmp_path)
+    note = [f for f in findings if "decisions.md is empty" in f.message]
+    assert note and note[0].level == "ok"  # gentle, not a populate-warning
+
+
 def test_infer_warns_without_horus(tmp_path):
     (tmp_path / "README.md").write_text("# x\n", encoding="utf-8")
     assert any("no .horus/" in f.message for f in routines.infer_signals(tmp_path))

@@ -10,7 +10,7 @@ description: >-
   lanes. Runs `horus infer` first to find the canonical docs and the empty lanes.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -40,13 +40,17 @@ never drift.
 4. **Don't duplicate.** Where a canonical doc stays the deep reference, point at it
    from `.horus/` instead of copying it wholesale. The lanes are concise.
 
-5. **Mark superseded docs.** If a doc's "current state / next steps" role now lives in
-   `.horus/`, add a one-line pointer at its top. Ask before substantially rewriting a
-   source doc.
+5. **Mark superseded docs — only when truly superseded.** If a doc's "current state /
+   next steps" role now lives in `.horus/`, add a one-line pointer at its top. But if
+   `.horus/` merely *distills* a doc that stays the canonical deep reference, add no
+   pointer — just point at the doc from `.horus/`. Ask before substantially rewriting
+   any source doc.
 
 ## Boundaries
 
 - When intent is genuinely unclear (real status, priorities, what shipped vs planned),
-  **ask the user** rather than guess. Never invent decisions, dates, or versions.
+  **ask the user** rather than guess. Never invent decisions, dates, or versions —
+  `decisions.md` in particular: only record a decision the docs actually state with
+  reasoning; leave it empty rather than manufacturing one.
 - Edit scope is `.horus/**`, plus — with care and consent — a one-line pointer atop a
   superseded source doc.

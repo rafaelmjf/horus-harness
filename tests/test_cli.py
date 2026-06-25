@@ -73,6 +73,14 @@ def test_infer_cli_runs(tmp_path, monkeypatch):
     assert main(["infer", "--path", str(tmp_path)]) == 0
 
 
+def test_routine_commands_reject_nonexistent_path(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    missing = str(tmp_path / "does-not-exist")
+    assert main(["consolidate", "--path", missing]) == 2
+    assert main(["infer", "--path", missing]) == 2
+    assert main(["distill-history", "--path", missing]) == 2
+
+
 def test_skill_install_cli(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes", "--no-skills"])

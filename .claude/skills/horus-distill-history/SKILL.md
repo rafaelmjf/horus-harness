@@ -11,7 +11,7 @@ description: >-
   `horus distill-history` first for the source-log location and size.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Distill project history
 
@@ -34,14 +34,26 @@ to re-learn the hard way.
      irrelevant incidents, and anything already captured as a rule in `decisions.md`
      (cross-reference it instead of duplicating).
 
-4. **Write the curated subset** into `.horus/history.md`: short, deduplicated
-   "bumps in the road", each pairing the problem with the lesson. Not a timeline,
-   not open issues (those live in `roadmap.md`).
+   - If the source *already* contains a curated/highlights section plus a raw
+     archive, treat the highlights as just more input — re-derive across the whole
+     log and merge, rather than copying the existing summary verbatim.
 
-5. **Freeze the source**, don't delete it: add a one-line "superseded — curated in
-   `.horus/history.md`" pointer at its top so the two don't drift.
+4. **Write the curated subset** into `.horus/history.md`: short, deduplicated
+   "bumps in the road", each pairing the problem with the lesson. Aim for a scannable
+   set (roughly a dozen or two high-signal entries), not a line-for-line rewrite —
+   if you're keeping most of the log, you're not distilling. Not a timeline, not open
+   issues.
+
+5. **Forward open work, don't drop it.** If the log contains roadmap-shaped material
+   (backlog, "next session", planned-but-not-done), that's not history — note it for
+   the user to fold into `roadmap.md` rather than silently dropping it. (This skill
+   edits `history.md`, so flag it; don't edit `roadmap.md` here.)
+
+6. **Freeze the source**, don't delete it: add a one-line "superseded — curated in
+   `.horus/history.md`" pointer at the top of its body (just below any YAML front
+   matter, so the front matter stays first) so the two don't drift.
 
 ## Boundaries
 
 - Only compress what the log records — **never invent** incidents, dates, or causes.
-- Edit `.horus/history.md` (and the one-line pointer atop the source log); nothing else.
+- Edit `.horus/history.md` (and the one-line pointer on the source log); nothing else.

@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from horus import frontmatter, roadmap
+from horus import frontmatter, roadmap, templates
 from horus.continuity import (
     HORUS_DIR,
     RECOMMENDED_FILES,
@@ -274,11 +274,15 @@ def _placeholder_lanes(hdir: Path) -> list[str]:
     elif sum(feature_counts(fb).values()) == 0:
         out.append("features.md")
 
+    # Placeholder = body unchanged from the shipped template (reachable: any real
+    # content clears it — no need to add a particular heading).
     hb = _read(hdir, "history.md")
     if hb is None:
         out.append("history.md (missing)")
-    elif "## " not in frontmatter.parse(hb).body:
-        out.append("history.md")
+    else:
+        body = frontmatter.parse(hb).body.strip()
+        if not body or body == frontmatter.parse(templates.history_md("")).body.strip():
+            out.append("history.md")
 
     return out
 
@@ -306,6 +310,12 @@ def infer_signals(root: Path) -> list[Finding]:
             findings.append(Finding("warn", f"placeholder/empty lanes to populate: {', '.join(placeholders)}"))
         else:
             findings.append(Finding("ok", "all lanes already populated (infer would refine, not bootstrap)"))
+        # decisions.md is judgement-only — surface it, but don't pressure invention.
+        db = _read(hdir, "decisions.md")
+        if db is not None and db.strip() == templates.decisions_md().strip():
+            findings.append(Finding(
+                "ok", "decisions.md is empty — add entries only if the docs record real dated decisions (don't invent)"
+            ))
     return findings
 
 

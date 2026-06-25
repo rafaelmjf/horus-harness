@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "Skills layer shipped + `consolidate` execution validated by an independent agent — caught & fixed an unreachable verify-criterion (consolidate v2, cross-reference = split marker), 84 tests green. Next: validate infer/distill-history execution; triggering eval blocked on `claude /login`; then Phase 3 (rulesync→Codex) / MVP3."
+current_focus: "All 3 skills execution-validated by independent agents — caught & fixed several unreachable-criteria/silent-failure bugs (skills now v2; 86 tests green). Remaining validation: triggering eval, blocked on `claude /login` (CLI installed, not authenticated). Then Phase 3 (rulesync→Codex) / MVP3 (autonomous spawn)."
 last_updated: 2026-06-25
 ---
 
@@ -83,7 +83,13 @@ Phase 1 — keystone skill + plumbing (done 2026-06-25):
   it split correctly + flagged an unreachable verify-criterion → fixed (cross-reference
   is the split marker; `consolidate` now treats cross-referenced items as reconciled;
   skill bumped to v2). Verified end-to-end on the agent's real output (6/7 reconciled).
-- [ ] Validate `infer` + `distill-history` execution the same way (independent agent).
+- [x] Validate `infer` + `distill-history` execution via independent agents
+  (2026-06-25): both ran faithfully with zero invention (infer correctly *declined*
+  to fabricate a decision). Fixes from their feedback: `--path` now errors on a
+  nonexistent dir (was silent exit 0); `history.md` placeholder check is reachable
+  (template-body compare, not a required `##`); `infer` surfaces empty `decisions.md`
+  gently; infer/distill skills → v2 (already-distilled source, pointer placement,
+  size heuristic, forward roadmap-shaped content, no-pointer-if-canonical).
 - [ ] Triggering eval (skill-creator description-optimization, `claude -p`) — BLOCKED:
   `claude` CLI is installed (`~/.local/bin/claude.exe`, on PATH now) but **not logged
   in** (`claude /login` needed); harness auth ≠ CLI auth. Needed to tune skill triggering.

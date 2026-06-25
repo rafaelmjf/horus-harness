@@ -144,7 +144,7 @@ description: >-
   `horus distill-history` first for the source-log location and size.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Distill project history
 
@@ -167,17 +167,29 @@ to re-learn the hard way.
      irrelevant incidents, and anything already captured as a rule in `decisions.md`
      (cross-reference it instead of duplicating).
 
-4. **Write the curated subset** into `.horus/history.md`: short, deduplicated
-   "bumps in the road", each pairing the problem with the lesson. Not a timeline,
-   not open issues (those live in `roadmap.md`).
+   - If the source *already* contains a curated/highlights section plus a raw
+     archive, treat the highlights as just more input — re-derive across the whole
+     log and merge, rather than copying the existing summary verbatim.
 
-5. **Freeze the source**, don't delete it: add a one-line "superseded — curated in
-   `.horus/history.md`" pointer at its top so the two don't drift.
+4. **Write the curated subset** into `.horus/history.md`: short, deduplicated
+   "bumps in the road", each pairing the problem with the lesson. Aim for a scannable
+   set (roughly a dozen or two high-signal entries), not a line-for-line rewrite —
+   if you're keeping most of the log, you're not distilling. Not a timeline, not open
+   issues.
+
+5. **Forward open work, don't drop it.** If the log contains roadmap-shaped material
+   (backlog, "next session", planned-but-not-done), that's not history — note it for
+   the user to fold into `roadmap.md` rather than silently dropping it. (This skill
+   edits `history.md`, so flag it; don't edit `roadmap.md` here.)
+
+6. **Freeze the source**, don't delete it: add a one-line "superseded — curated in
+   `.horus/history.md`" pointer at the top of its body (just below any YAML front
+   matter, so the front matter stays first) so the two don't drift.
 
 ## Boundaries
 
 - Only compress what the log records — **never invent** incidents, dates, or causes.
-- Edit `.horus/history.md` (and the one-line pointer atop the source log); nothing else.
+- Edit `.horus/history.md` (and the one-line pointer on the source log); nothing else.
 """
 
 
@@ -194,7 +206,7 @@ description: >-
   lanes. Runs `horus infer` first to find the canonical docs and the empty lanes.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -224,14 +236,18 @@ never drift.
 4. **Don't duplicate.** Where a canonical doc stays the deep reference, point at it
    from `.horus/` instead of copying it wholesale. The lanes are concise.
 
-5. **Mark superseded docs.** If a doc's "current state / next steps" role now lives in
-   `.horus/`, add a one-line pointer at its top. Ask before substantially rewriting a
-   source doc.
+5. **Mark superseded docs — only when truly superseded.** If a doc's "current state /
+   next steps" role now lives in `.horus/`, add a one-line pointer at its top. But if
+   `.horus/` merely *distills* a doc that stays the canonical deep reference, add no
+   pointer — just point at the doc from `.horus/`. Ask before substantially rewriting
+   any source doc.
 
 ## Boundaries
 
 - When intent is genuinely unclear (real status, priorities, what shipped vs planned),
-  **ask the user** rather than guess. Never invent decisions, dates, or versions.
+  **ask the user** rather than guess. Never invent decisions, dates, or versions —
+  `decisions.md` in particular: only record a decision the docs actually state with
+  reasoning; leave it empty rather than manufacturing one.
 - Edit scope is `.horus/**`, plus — with care and consent — a one-line pointer atop a
   superseded source doc.
 """
@@ -239,8 +255,8 @@ never drift.
 
 SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 2, _CONSOLIDATE_SKILL),
-    Skill("horus-distill-history", 1, _DISTILL_HISTORY_SKILL),
-    Skill("horus-infer", 1, _INFER_SKILL),
+    Skill("horus-distill-history", 2, _DISTILL_HISTORY_SKILL),
+    Skill("horus-infer", 2, _INFER_SKILL),
 )
 
 
