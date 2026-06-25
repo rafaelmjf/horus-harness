@@ -41,7 +41,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         "history_body": "",
         "sessions": [],
         "findings": [],
-        "next_step": None,
+        "next_action": "",
         "latest": None,
         "latest_body": "",
         "progress": {"done": 0, "total": 0, "pct": 0},
@@ -65,6 +65,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         if not data["current_focus"]:
             data["current_focus"] = doc.front_matter.get("current_focus", "")
         data["next_prompt"] = doc.front_matter.get("next_prompt", "")
+        data["next_action"] = doc.front_matter.get("next_action", "")
         data["roadmap_body"] = doc.body
 
     features_md = hdir / "features.md"
@@ -105,9 +106,10 @@ def load_project(path_str: str) -> dict[str, Any]:
     if data["latest"]:
         data["latest_body"] = data["latest"]["_body"]
 
+    # The single best next step is agent-authored (roadmap.md `next_action`), not
+    # inferred here. We still parse the checkbox list for the progress bar and the
+    # "remaining items" display — that renders what the agent literally wrote.
     tasks = roadmap.parse_tasks(data["roadmap_body"])
-    ns = roadmap.next_step(tasks)
-    data["next_step"] = {"text": ns.text, "section": ns.section} if ns else None
     prog = roadmap.progress(tasks)
     data["progress"] = {"done": prog.done, "total": prog.total, "pct": prog.pct}
     data["tasks"] = [{"state": t.state, "text": t.text, "section": t.section} for t in tasks]
@@ -255,41 +257,6 @@ def _first_paragraph(body: str) -> str:
     return ""
 
 
-def next_steps(p: dict[str, Any], limit: int = 3) -> list[str]:
-    """A few suggested directions (not a strict order): the explicit focus banner
-    first, then in-progress tasks, then open tasks."""
-    steps: list[str] = []
-    seen: set[str] = set()
-
-    def add(text: str) -> None:
-        t = _plain(text)
-        key = t.lower()
-        if t and key not in seen:
-            seen.add(key)
-            steps.append(t)
-
-    focus = p["current_focus"].strip()
-    if focus and not focus.lower().startswith("describe "):
-        add(focus)
-    for state in ("partial", "todo"):
-        for t in p["tasks"]:
-            if len(steps) >= limit:
-                break
-            if t["state"] == state:
-                add(t["text"])
-    return steps[:limit]
-
-
-def _next_html(p: dict[str, Any]) -> str:
-    steps = next_steps(p)
-    if steps:
-        items = "".join(f"<li>{html.escape(s)}</li>" for s in steps)
-        return f"<div class='next'><span class='lbl'>NEXT</span><ul class='steps'>{items}</ul></div>"
-    if p["progress"]["total"]:
-        return "<div class='next done'><span class='lbl'>NEXT</span> &#10003; roadmap complete</div>"
-    return ""
-
-
 def _features_badge(p: dict[str, Any]) -> str:
     fc = p["feature_counts"]
     if not any(fc.values()):
@@ -434,28 +401,24 @@ def _breakdown_html(p: dict[str, Any]) -> str:
 
 
 def _best_next_text(p: dict[str, Any]) -> str:
-    """The single best next step: the roadmap's next open item, else the focus."""
-    ns = p.get("next_step")
-    if ns and ns.get("text"):
-        return _plain(ns["text"])
-    focus = p["current_focus"].strip()
-    if focus and not focus.lower().startswith("describe "):
-        return _plain(focus)
-    return ""
+    """The single best next step — agent-authored in roadmap.md `next_action`.
+
+    Not inferred from the checkbox list: the agent records it at closure. Empty
+    until then (the dashboard shows a prompt to author it)."""
+    return (p.get("next_action") or "").strip()
 
 
 def _single_next_html(p: dict[str, Any]) -> str:
-    """Highlight exactly ONE action + the paste-able prompt to resume it elsewhere."""
+    """Highlight the ONE authored next action (roadmap.md next_action)."""
     text = _best_next_text(p)
     if text:
         return (
             "<div class='next'><span class='lbl'>NEXT</span>"
-            f"<div class='next-one'>{html.escape(text)}</div>"
-            f"{_resume_html(p)}</div>"
+            f"<div class='next-one'>{html.escape(_plain(text))}</div></div>"
         )
-    if p["progress"]["total"]:
+    if p["progress"]["total"] and p["progress"]["done"] == p["progress"]["total"]:
         return "<div class='next done'><span class='lbl'>NEXT</span> &#10003; roadmap complete</div>"
-    return ""
+    return "<div class='next'><span class='lbl'>NEXT</span><div class='next-one muted'>not set — author <code>next_action</code> in roadmap.md at closure</div></div>"
 
 
 def _resume_prompt_text(p: dict[str, Any]) -> str:
@@ -562,7 +525,7 @@ def _project_column(p: dict[str, Any], i: int) -> str:
     last = f"<div class='box'><span class='lbl'>Last session summary</span>{_last_session_summary_html(p)}</div>"
     roadmap = (
         "<div class='box'><span class='lbl'>Roadmap</span>"
-        f"{_single_next_html(p)}"
+        f"{_single_next_html(p)}{_resume_html(p)}"
         f"{_progress_html(p, href=f'/project?i={i}#roadmap')}"
         f"{_remaining_items_html(p)}</div>"
     )
@@ -590,7 +553,8 @@ def render_project(p: dict[str, Any]) -> str:
         f"<h1 style='margin-top:6px'>{html.escape(p['name'])}</h1>",
         f"<div class='badges'><span>status: {html.escape(p['status']) or 'unknown'}</span>"
         f"{_health_summary(p['findings'])}</div>",
-        _next_html(p),
+        _single_next_html(p),
+        _resume_html(p),
         _latest_html(p),
         _progress_html(p, href="#roadmap"),
     ]

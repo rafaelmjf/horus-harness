@@ -467,6 +467,27 @@ Reasoning / gotchas:
   sessions/day don't collide and each is attributable to an account — the anchor a
   future MVP3 "startup identity check" can compare against.
 
+## 2026-06-25 - Default To Native Apps + Agent-Authored Metadata (core, until a session-manager UI)
+
+Core product stance for now: **default to the native agent apps and agent-authored
+metadata; do not use Python to *infer* judgment metadata.** This holds until Horus has
+a proper session-manager UI that owns sessions.
+
+Concretely:
+
+- Judgment metadata — the single next step, the resume prompt, the session summary,
+  status — is **authored by the session agent** (at closure, via `horus-consolidate`)
+  and stored in `.horus/` frontmatter/files. The dashboard *reads and displays* it.
+- The dashboard must **not infer** these. The parser-derived "next step"
+  (`roadmap.next_step`) was dropped from the dashboard; NEXT now reads the authored
+  `roadmap.md` `next_action`, and the resume prompt reads `next_prompt`. When unset, the
+  UI shows a "set it at closure" hint, not a guess.
+- Still fine (it's display of explicit content, not inference): rendering the checkbox
+  list, the progress count, the features table, git freshness. The line is *inference of
+  judgment*, not *rendering of what the agent literally wrote*.
+- Extends "The Session Agent Maintains The Lanes, Not Scripts" — same principle, now the
+  explicit default until the session manager exists.
+
 ## 2026-06-25 - The Session Agent Maintains The Lanes, Not Scripts
 
 The `.horus/` lanes are filled by the **agent running the session**, from the live

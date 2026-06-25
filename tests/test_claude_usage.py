@@ -43,7 +43,10 @@ def test_findings_trigger_is_5h_only_not_weekly():
     assert "weekly limit 95%" in findings[0].message  # still shown for context
 
 
-def test_findings_ok_when_unavailable():
+def test_findings_ok_when_unavailable(monkeypatch):
+    # report=None means "fetch the live one"; stub it to None so the test is hermetic
+    # (otherwise a logged-in machine over its 5h limit would make this warn).
+    monkeypatch.setattr(cu, "latest_usage", lambda **k: None)
     assert cu.usage_findings(threshold=90.0, report=None)[0].level == "ok"
 
 

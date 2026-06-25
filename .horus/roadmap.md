@@ -1,6 +1,7 @@
 ---
 status: active
 current_focus: "MVP2.5 git-aware dashboard shipped: horus/gitstate.py + a compact git badge on the overview and a full Git card + rendered Latest-session card on the detail view; horus status CLI peer. The app is now aware of the GitHub repos and shows the last session summary. Next within MVP2.5: fetch-all refresh + staleness in the verdict surface (both optional). Then MVP3 agent execution (adapter contract + fake adapter first)."
+next_action: "Decide whether to merge mvp2.5-git-aware-dashboard into main, then start MVP3 by defining the agent-adapter contract + a fake adapter."
 next_prompt: "Resume the Horus project on the mvp2.5-git-aware-dashboard branch. Read .horus/ first (project.md, roadmap.md, decisions.md, and the latest .horus/sessions/ summary) for full context. Decide with me whether to merge mvp2.5-git-aware-dashboard into main, then start MVP3: define the agent-adapter contract (spawn/resume/parse_event/permission_flags) plus a fake adapter for tests, before the real Claude Code adapter."
 last_updated: 2026-06-25
 ---
@@ -191,15 +192,9 @@ dashboard and later becomes the place for continuity/status nudges.
 - [ ] Later: surface native hook events, usage threshold warnings, stale summaries,
   uncommitted continuity, and per-project switching.
 
-Known bug (deferred — user to fix later):
-
-- [ ] `test_claude_usage.py::test_findings_ok_when_unavailable` is **non-hermetic**:
-  it passes `report=None`, but `usage_findings` reads `report is None` as "fetch the
-  live one" via `latest_usage()`, not "no signal available". On a logged-in machine
-  whose 5h window is already over threshold it returns `warn`, so the test fails
-  locally and only passes where no usage signal exists (offline/CI). Fix: stub
-  `latest_usage` to `None` in the test, or disambiguate "not supplied" vs "explicitly
-  none" with a sentinel default in `usage_findings`.
+- [x] `test_claude_usage.py::test_findings_ok_when_unavailable` non-hermeticity fixed
+  (2026-06-25): the test now stubs `latest_usage` to `None`, so it no longer warns on a
+  logged-in machine whose 5h window is over threshold.
 
 ## MVP 2.5 - Git-aware multi-project overview (next)
 

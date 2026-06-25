@@ -111,10 +111,12 @@ only the files and git; you see the conversation too. Fold both in.
      `features.md`), then remove or mark the distilled summary.
    - **Record fresh context.** Decisions, lessons, and shipped capabilities from the
      current session that belong in the lanes but aren't written yet — add them.
-   - **Refresh the resume prompt.** Update `roadmap.md`'s `next_prompt` frontmatter: a
-     natural-language prompt to paste into a fresh Claude/Codex session to resume the
-     single best next step. Write it for a cold reader (name the next step, point at
-     `.horus/`); the dashboard surfaces it with a copy button.
+   - **Set the next step + resume prompt.** The dashboard surfaces these from
+     `roadmap.md` frontmatter and never infers them, so author both:
+     `next_action` (the single best next step, one imperative line) and `next_prompt`
+     (a natural-language prompt to paste into a fresh Claude/Codex session to resume
+     it — write it for a cold reader: name the step, point at `.horus/`; shown with a
+     copy button).
 
 4. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
    `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`. If

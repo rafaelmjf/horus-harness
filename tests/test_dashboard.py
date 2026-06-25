@@ -46,16 +46,16 @@ def test_project_detail_renders_sections(tmp_path, monkeypatch):
     assert "Roadmap" in html_out
 
 
-def test_next_step_and_latest_surface(tmp_path, monkeypatch):
+def test_next_action_and_latest_surface(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)
 
-    # Roadmap template has an open "First task." -> it should be the next step.
-    data = dashboard.load_project(str(tmp_path))
-    assert data["next_step"]["text"] == "First task."
-    assert data["progress"]["total"] >= 1
-
-    # Add a session summary; it should become the "latest".
+    # The single NEXT is agent-authored (roadmap.md next_action), not inferred.
+    (tmp_path / ".horus" / "roadmap.md").write_text(
+        '---\nstatus: active\nnext_action: "Wire the adapter contract"\n---\n'
+        "# Roadmap\n\n- [ ] First task.\n",
+        encoding="utf-8",
+    )
     sessions = tmp_path / ".horus" / "sessions"
     (sessions / "2026-06-25-newer.md").write_text(
         '---\ndate: 2026-06-25\nsummary: "Newer change"\n---\n# x\n', encoding="utf-8"
@@ -64,11 +64,12 @@ def test_next_step_and_latest_surface(tmp_path, monkeypatch):
         '---\ndate: 2026-06-24\nsummary: "Older change"\n---\n# x\n', encoding="utf-8"
     )
     data = dashboard.load_project(str(tmp_path))
+    assert data["next_action"] == "Wire the adapter contract"
     assert data["latest"]["summary"] == "Newer change"
 
     html_out = dashboard.render_index([data])
     assert "NEXT" in html_out
-    assert "First task." in html_out
+    assert "Wire the adapter contract" in html_out  # authored, highlighted
     assert "Newer change" in html_out
 
 
@@ -89,21 +90,19 @@ def test_resume_prompt_prefers_written_then_falls_back(tmp_path, monkeypatch):
     assert "Resume prompt" in idx and "horusCopy(this)" in idx and "Paste me into Claude" in idx
 
 
-def test_next_steps_lists_up_to_three(tmp_path, monkeypatch):
+def test_remaining_items_render_as_checkbox_list(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)
     (tmp_path / ".horus" / "roadmap.md").write_text(
-        "---\nstatus: active\ncurrent_focus: \"x\"\n---\n# Roadmap\n\n## Now\n\n"
+        "---\nstatus: active\nnext_action: \"doing alpha\"\n---\n# Roadmap\n\n## Now\n\n"
         "- [~] doing alpha\n- [ ] open beta\n- [ ] open gamma\n- [ ] open delta\n- [x] done eps\n",
         encoding="utf-8",
     )
     data = dashboard.load_project(str(tmp_path))
-    steps = dashboard.next_steps(data)
-    assert len(steps) == 3
-    assert steps[0] == "doing alpha"  # in-progress first
-    assert "done eps" not in steps  # completed excluded
     html_out = dashboard.render_index([data])
-    assert html_out.count("<li>") >= 3
+    assert "doing alpha" in html_out  # authored NEXT highlighted
+    assert html_out.count("&#9744;") >= 3  # remaining open items as empty checkboxes
+    assert "done eps" not in html_out  # completed excluded
 
 
 def test_progress_links_to_roadmap_breakdown(tmp_path, monkeypatch):
@@ -165,5 +164,5 @@ def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     data = dashboard.load_project(str(tmp_path))
-    assert data["next_step"] is None
+    assert data["next_action"] == ""
     assert "roadmap complete" in dashboard.render_project(data)
