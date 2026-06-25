@@ -599,3 +599,25 @@ then asserts `config.alias_for(email) == account`. This reuses the existing emai
 *mapped* account's login doesn't match — so a misconfigured account can't silently run
 under the wrong login. The guard fires only when an explicit per-account dir is configured;
 ambient single-account runs (e.g. the spawn/resume proof) are unaffected.
+
+## 2026-06-26 - Attended (`horus open`) vs Headless (`horus run`) Session Launch
+
+Horus needs both launch modes. `horus run` is **headless** (`claude -p --output-format
+stream-json`): one-shot, streams events, blocks, ends `exited`. `horus open` is **attended**:
+it opens the real `claude` TUI in its *own terminal window* the user types into, and returns
+immediately, so the session is genuinely `running` until the user exits.
+
+Mechanics that make attended tracking work:
+- **Pre-assigned `--session-id` (uuid4).** Interactive runs don't stream stream-json back to us,
+  so we can't parse the id from `system/init`. Passing `--session-id` means we know it up front
+  and can register the session before it produces anything.
+- **`CREATE_NEW_CONSOLE` (Windows).** Launching `claude.exe` this way gives it a real console the
+  user can interact with AND makes the returned PID the child's own — so `registry.reconcile()`
+  flips the record to `exited` exactly when the user closes the window. (`os.kill`-on-Windows
+  caveat from the registry decision is why liveness uses the WaitForSingleObject path.)
+- Same `build_env` (per-account `CLAUDE_CONFIG_DIR`) and `verify_account` identity guard as the
+  headless path. `horus/launcher.py` isolates the platform bits; `interactive_command` is the
+  adapter's attended-argv builder (Claude + Fake have it; Codex will when it lands).
+
+This is what makes the dashboard show *live* sessions, not just finished ones — the visible
+payoff of the registry + oversight work.

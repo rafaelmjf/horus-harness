@@ -84,6 +84,20 @@ class ClaudeAdapter(AgentAdapter):
         cfg = self.config_dirs.get(spec.account) if spec.account else None
         return {"CLAUDE_CONFIG_DIR": str(Path(cfg))} if cfg else {}
 
+    def interactive_command(self, spec: SpawnSpec, *, session_id: str) -> list[str]:
+        """Argv for an *attended* TUI session (no ``-p``): the user types in it.
+
+        ``--session-id`` is pre-assigned so we can track the session before any
+        output is parsed (interactive runs don't stream stream-json back to us).
+        """
+        argv = [self.executable, "--session-id", session_id]
+        if spec.model:
+            argv += ["--model", spec.model]
+        if spec.posture is not PermissionPosture.DEFAULT:
+            argv += self.permission_flags(spec.posture)
+        argv += list(spec.extra_args)
+        return argv
+
     # --- multi-account identity ----------------------------------------------
 
     def verify_account(self, account: str | None) -> IdentityCheck:

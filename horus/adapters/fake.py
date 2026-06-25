@@ -66,6 +66,9 @@ class FakeAdapter(AgentAdapter):
         # Stand-in for real per-account isolation (e.g. CLAUDE_CONFIG_DIR).
         return {"FAKE_AGENT_ACCOUNT": spec.account} if spec.account else {}
 
+    def interactive_command(self, spec: SpawnSpec, *, session_id: str) -> list[str]:
+        return ["fake-agent", "--session-id", session_id]
+
     def parse_event(self, line: str) -> list[AgentEvent]:
         line = line.strip()
         if not line:

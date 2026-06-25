@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import sys
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from horus import (
     dashboard,
     gitstate,
     initialize,
+    launcher,
     native_hooks,
     registry,
     routines,
@@ -185,6 +187,56 @@ def cmd_run(args: argparse.Namespace) -> int:
     s = run.session
     print(f"\n{s.status} — session {s.session_id} (account {s.account or '-'})")
     return 0 if s.status == "exited" else 1
+
+
+def cmd_open(args: argparse.Namespace) -> int:
+    """Open an *attended* agent session in its own terminal window, tracked as running.
+
+    The interactive counterpart to `horus run`: launches the CLI's TUI (the user
+    types in it) under a chosen account + project, and registers it so it shows as
+    a live `running` session in `horus sessions` and the dashboard.
+    """
+    root = Path(args.path).resolve()
+    try:
+        adapter = adapters.get_adapter(args.agent)
+    except KeyError as exc:
+        print(exc)
+        return 2
+    if not hasattr(adapter, "interactive_command"):
+        print(f"{args.agent!r} does not support interactive sessions yet.")
+        return 2
+
+    spec = adapters.SpawnSpec(
+        prompt="",
+        project_dir=root,
+        account=args.account,
+        posture=adapters.PermissionPosture(args.posture),
+        model=args.model,
+    )
+    # Same identity guard as a headless spawn: refuse if a mapped account's login mismatches.
+    if args.account and getattr(adapter, "config_dirs", {}).get(args.account) and hasattr(adapter, "verify_account"):
+        check = adapter.verify_account(args.account)
+        if not check.ok:
+            print(f"Refusing to open: account {args.account!r} login mismatch (found {check.detected_email or 'no login'}).")
+            return 2
+
+    session_id = str(uuid.uuid4())
+    argv = adapter.interactive_command(spec, session_id=session_id)
+    try:
+        pid = launcher.open_terminal(argv, cwd=root, env=adapter.build_env(spec))
+    except OSError as exc:
+        print(f"Failed to open a terminal: {exc}")
+        return 1
+
+    registry.Registry.default().upsert(
+        registry.SessionRecord(
+            session_id=session_id, agent=adapter.name, project=root.as_posix(),
+            account=args.account, pid=pid, status="running",
+        )
+    )
+    print(f"Opened {adapter.name} session in {root.name} as {args.account or 'ambient'} "
+          f"(pid {pid}, session {session_id}).")
+    return 0
 
 
 def cmd_forget(args: argparse.Namespace) -> int:
@@ -594,6 +646,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--resume", metavar="SESSION_ID", help="resume an existing session by id")
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
     p_run.set_defaults(func=cmd_run)
+
+    p_open = sub.add_parser("open", help="open an interactive agent session in its own terminal (tracked)")
+    p_open.add_argument("path", nargs="?", default=".", help="project root to open in (default: cwd)")
+    p_open.add_argument("--agent", default="claude", help="adapter to use (claude | fake; default: claude)")
+    p_open.add_argument("--account", default=None, help="account alias to run under (uses its isolated config dir)")
+    p_open.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
+    p_open.add_argument(
+        "--posture",
+        default="default",
+        choices=[p.value for p in adapters.PermissionPosture],
+        help="permission posture (default: default)",
+    )
+    p_open.set_defaults(func=cmd_open)
 
     p_session = sub.add_parser("session", help="create a new session summary from the template")
     session_sub = p_session.add_subparsers(dest="session_cmd", required=True)

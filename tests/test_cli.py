@@ -129,6 +129,23 @@ def test_run_resume_uses_session_id(tmp_path, monkeypatch, capsys):
     assert "session prev-99" in capsys.readouterr().out  # resumed the given id
 
 
+def test_open_launches_and_tracks_running_session(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import launcher
+    from horus.registry import Registry
+
+    monkeypatch.setattr(launcher, "open_terminal", lambda argv, cwd, env=None: 9999)
+    rc = main(["open", str(tmp_path), "--agent", "fake", "--account", "demo"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Opened fake session" in out and "demo" in out
+
+    recs = Registry.default().all()
+    assert len(recs) == 1
+    r = recs[0]
+    assert r.status == "running" and r.pid == 9999 and r.account == "demo" and r.agent == "fake"
+
+
 def test_run_account_mismatch_refuses(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     import json

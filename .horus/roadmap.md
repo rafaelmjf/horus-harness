@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "0.0.2 'companion' milestone on PyPI; MVP3 'manager' is end-to-end usable: agent-adapter contract + FakeAdapter + ClaudeAdapter (spawn/resume proven live), session/process registry, multi-account isolation (per-account CLAUDE_CONFIG_DIR + identity check), live oversight dashboard, AND `horus run` (launch a tracked session from the CLI → shows in `horus sessions` + dashboard; account detection is now CLAUDE_CONFIG_DIR-aware). A two-account/two-session test run is now a real product flow. Next: the Codex adapter (second) to prove the contract abstraction; then oversight controls (terminate/resume) and autonomous closure."
+current_focus: "0.0.2 'companion' milestone on PyPI; MVP3 'manager' is end-to-end usable, both headless and attended. On main: adapter contract + FakeAdapter + ClaudeAdapter (spawn/resume proven live), registry, multi-account isolation, live oversight dashboard, `horus run` (headless one-shot, tracked), AND `horus open` (attended: opens the real claude TUI in its own terminal window per account+project, tracked as a live `running` session). Verified live: two interactive windows across two accounts/projects showing `running` in the dashboard. Next: the Codex adapter (prove the abstraction), oversight controls (terminate/resume from the UI), autonomous closure."
 next_action: "Build the Codex adapter (horus/adapters/codex.py) against the contract, with ClaudeAdapter/FakeAdapter as references and the real codex CLI as ground truth (probe it: exec/resume flags, event stream format, per-account isolation). Register in get_adapter. Then oversight controls (terminate a tracked session) as its own increment."
 next_prompt: "Resume the Horus project. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (don't trust local refs). The adapter layer + registry + multi-account isolation + live oversight dashboard are merged to main; start the next increment on a FRESH branch off main and PR it (gh pr create → squash-merge, auto-delete). Read .horus/ lanes + the latest .horus/sessions/ summary. Continue MVP3 with the Codex adapter (horus/adapters/codex.py) against the contract in horus/adapters/base.py — probe the real `codex` CLI for exec/resume flags + event-stream format (don't guess), mirror ClaudeAdapter's structure, register it in get_adapter. codex is installed on this machine."
 last_updated: 2026-06-25
@@ -302,6 +302,13 @@ dashboard and later becomes the place for continuity/status nudges.
   --model/--posture/--resume/--path`. Also made `claude_usage` account detection `CLAUDE_CONFIG_DIR`-aware
   so `horus account` can see a second account. Fixed a latent multi-account bug from PR #6: config-dir
   paths with Windows backslashes broke TOML parsing → silently empty map; now stored forward-slashed.
+- [x] **`horus open` — attended interactive sessions** (2026-06-26). Opens the real `claude`
+  TUI in its own terminal window (Windows `CREATE_NEW_CONSOLE`, so the returned PID is the
+  child's and dies on exit), under a chosen account (`CLAUDE_CONFIG_DIR`) + project (cwd), with a
+  pre-assigned `--session-id` so it's tracked before any output. Registers a **`running`** record
+  → the dashboard finally shows live sessions, not just finished ones. `horus/launcher.py`;
+  `ClaudeAdapter.interactive_command`; same identity guard as headless. Proven live: two windows
+  (work/horus-harness, personal/agentic-ttrpg) tracked running across two accounts. 3 tests.
 - [ ] **Oversight controls (NEXT)**: actions on a tracked session (terminate; later resume/attach)
   from the dashboard — needs a POST surface, which crosses the dashboard's current read-only line, so
   scope/UX deliberately deferred to its own increment. CLI `horus sessions --prune` covers cleanup today.
