@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "Codex bridge started: usage/rollover warning shipped and Horus skills now project to Codex `.agents/skills/`. Next: consolidate this repo's own .horus lanes, then continue toward MVP3 adapter/registry work."
+current_focus: "Native-app bridge: Codex usage hook + direct skill projection shipped. Next: verify Claude hook options, then evaluate rulesync for broader instruction/skill sync before MVP3 owned sessions."
 last_updated: 2026-06-25
 ---
 
@@ -38,6 +38,7 @@ last_updated: 2026-06-25
 - [x] Make `horus close` git-aware: work-commits-since-summary + uncommitted-continuity signals, clear verdict.
 - [x] Add `horus close --commit [--push]` to stage+commit `.horus/` updates (close the multi-machine sync seam).
 - [x] Surface first context-rollover signal in `horus close` and dashboard: read local Codex rollout `token_count` events and warn at `--usage-threshold` (default 90). No DB.
+- [x] Add native Codex usage nudge: `horus usage check` plus `horus hook install --target codex`, which writes a `.codex/hooks.json` `Stop` hook. Hook mode prints only actionable closure warnings and exits 0.
 - [~] SQLite session/event registry + session states (`closing`/`needs_closure`/`closed_stale`) — DEFERRED. Premature at solo scale (file parsing is instant) and presupposes the deferred execution layer. Revisit when scale hurts perf or Horus runs sessions itself.
 
 ## Structure v2 - `.horus/` lanes + distillation routines (prototyping in fabric)
@@ -60,14 +61,16 @@ Distillation routines — **agent-delegated prototype shipped 2026-06-25** (pre-
 - [ ] Autonomous variant (Horus spawns the summarizer/consolidator itself) — deferred to MVP3 with the execution layer.
 - [ ] Validate the prototypes by invoking them in a CLI-equipped session on a real project (fabric) and harmonizing the siblings to structure v2.
 
-## Skills layer - cognitive routines as in-app skills (Claude-first)
+## Native app layer - cognitive routines as in-app skills/hooks
 
 > The files-only `horus` CLI commands are the deterministic signal layer + the
 > headless/fresh-session path. The context-aware LLM parts ship as native Claude
-> Code **skills** that run inside the app, so they see the live context window (work
-> /decisions not yet on disk), not just the files. This pulls the interactive LLM
-> routines out of MVP3 — the native app provides the agent runtime + subscription
-> auth + context. See decisions 2026-06-25 "Cognitive Routines Ship As Claude Skills".
+> Code/Codex **skills** that run inside the app, so they see the live context window
+> (work/decisions not yet on disk), not just the files. Periodic checks use native
+> app **hooks** instead of skills. This pulls the interactive LLM routines out of
+> MVP3 — the native app provides the agent runtime + subscription auth + context.
+> See decisions 2026-06-25 "Cognitive Routines Ship As Claude Skills" and
+> "Native App Functionality Comes Before Horus-Owned Sessions".
 
 Phase 1 — keystone skill + plumbing (done 2026-06-25):
 
@@ -108,8 +111,20 @@ Phase 3 — portability (started with direct Codex skill projection):
 - [x] Direct Codex project-skill projection: use Codex's native repo skill location
   `.agents/skills/` for the bundled Horus skills. This is simpler than `rulesync` for
   Horus's own skills because both Claude and Codex consume `SKILL.md`.
+- [x] Direct Codex hook projection: install `.codex/hooks.json` with a `Stop` hook
+  for usage rollover warnings (`horus usage check --hook`). Skills do the closure
+  work; hooks decide when to nudge.
+- [ ] Verify Claude Code's native hook/event surface for the same usage-nudge pattern.
 - [ ] Evaluate `rulesync` for broader sync/projection (AGENTS/CLAUDE plus other tools),
   where it may still subsume or complement `horus reconcile`.
+
+## Native-app-first feature design
+
+- [x] Record the product rule: for every new Horus feature, define the native Claude
+  Code/Codex behavior first (instructions, skills, hooks, repo config), then decide
+  whether Horus-owned sessions are needed.
+- [ ] Add this lens to future feature specs: "native Claude path", "native Codex path",
+  "Horus-owned/session path if needed".
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 

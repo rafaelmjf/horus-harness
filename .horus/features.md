@@ -32,6 +32,7 @@ Status: **Shipped** · **In progress** · **Planned**
 | `horus infer` (agent-delegated) | — | discover canonical docs + detect placeholder lanes + emit bootstrap ritual; backs the `horus-infer` skill (replaces the removed deterministic infer) |
 | Codex usage/rollover closure signal | — | `horus close` + dashboard read local Codex rollout `token_count` events; warn at 90% by default before another large turn |
 | Codex project-skill projection | — | `horus init` / `horus skill install --target codex` write bundled Horus skills to `.agents/skills/` alongside Claude `.claude/skills/` |
+| Codex native usage hook | 2026-06-25 | `horus usage check` plus `horus hook install --target codex`; writes `.codex/hooks.json` `Stop` hook that nudges at usage threshold without failing the turn |
 
 ## In progress
 
@@ -43,7 +44,7 @@ Status: **Shipped** · **In progress** · **Planned**
 
 | Capability | Notes |
 |---|---|
-| rulesync projection to Codex / other tools | Phase 3; native Claude skill → simulated `.codex/skills/` |
+| rulesync projection to other tools | Phase 3; evaluate for broader AGENTS/CLAUDE/instruction sync beyond Horus's direct Claude/Codex skill and hook projection |
 | Autonomous routine variant (Horus spawns the agent) | the spawning half of consolidate/distill; MVP3 |
 | Agent execution layer (Claude adapter, spawn+registry, live oversight) | MVP3; deferred until a CLI-equipped machine |
 | LLM-based `horus infer` | distill `.horus/` from canonical docs; lands with MVP3 |

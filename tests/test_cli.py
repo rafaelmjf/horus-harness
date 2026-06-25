@@ -1,5 +1,7 @@
 """Integration tests driving commands through the CLI entry point."""
 
+import json
+
 from horus.cli import main
 from horus.instructions import check_drift
 
@@ -7,6 +9,34 @@ from horus.instructions import check_drift
 def _home(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def _write_codex_rollout(home, project, *, total=910, window=1000):
+    path = home / "sessions" / "2026" / "06" / "25" / "rollout-test.jsonl"
+    path.parent.mkdir(parents=True)
+    events = [
+        {
+            "timestamp": "2026-06-25T10:00:00Z",
+            "type": "turn_context",
+            "payload": {"cwd": str(project), "workspace_roots": [str(project)]},
+        },
+        {
+            "timestamp": "2026-06-25T10:01:00Z",
+            "type": "event_msg",
+            "payload": {
+                "type": "token_count",
+                "info": {
+                    "last_token_usage": {"total_tokens": total},
+                    "model_context_window": window,
+                },
+                "rate_limits": {
+                    "primary": {"used_percent": 12, "resets_at": 1782390000},
+                    "secondary": {"used_percent": 34, "resets_at": 1782990000},
+                },
+            },
+        },
+    ]
+    path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
 
 
 def test_session_new_creates_file_from_template(tmp_path, monkeypatch):
@@ -31,6 +61,26 @@ def test_close_runs_and_returns_status(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes"])
     assert main(["close", "--path", str(tmp_path)]) in (0, 1)
+
+
+def test_usage_check_cli_warns_and_hook_mode_exits_clean(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    codex_home = tmp_path / "codex-home"
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+    _write_codex_rollout(codex_home, tmp_path)
+
+    assert main(["usage", "check", "--path", str(tmp_path), "--threshold", "90"]) == 1
+    assert main(["usage", "check", "--path", str(tmp_path), "--threshold", "90", "--hook"]) == 0
+
+
+def test_hook_install_codex_cli(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+
+    assert main(["hook", "install", "--path", str(tmp_path), "--target", "codex"]) == 0
+    hooks_text = (tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8")
+    assert '"Stop"' in hooks_text
+    assert "horus usage check" in hooks_text
+    assert "commandWindows" in hooks_text
 
 
 def test_reconcile_cli_resolves_drift(tmp_path, monkeypatch):

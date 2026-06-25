@@ -338,3 +338,23 @@ Reasoning:
 - Claude and Codex both consume the same core `SKILL.md` authoring format, so Horus can project its own bundled skills without adding a conversion dependency.
 - Direct projection keeps the Claude-first skill authoring path intact while making the same routines usable from Codex immediately.
 - `rulesync` remains a candidate for broader multi-tool sync/projection, especially AGENTS/CLAUDE and future target-specific files, but it is heavier than needed for Horus's own three skills.
+
+## 2026-06-25 - Native App Functionality Comes Before Horus-Owned Sessions
+
+When designing or building a Horus feature, first define how it works inside the
+native apps the user already uses: Claude Code and Codex. Prefer their native
+surfaces - repo instructions, skills, hooks, and local config - before building a
+Horus-owned session runner.
+
+Reasoning:
+
+- The native apps already provide the interactive agent loop, subscription auth,
+  context window, permissions UI, and user trust model.
+- Horus-owned sessions are still valuable for unattended orchestration, multiple
+  accounts/environments, and live oversight, but that layer is less mature and
+  should not block useful native workflows.
+- Skills are a good native shape for context-aware routines the user or model can
+  invoke, while hooks are the right native shape for periodic or event-triggered
+  nudges such as context/usage rollover warnings.
+- Each future feature spec should state the native Claude path, native Codex path,
+  and only then the Horus-owned/session path if native surfaces are insufficient.

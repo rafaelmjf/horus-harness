@@ -46,3 +46,13 @@ store at odds with the file-first, git-synced, lightweight design. **Lesson:**
 session `.md` files are ephemeral context that distills into the durable lanes;
 at solo scale re-parsing markdown is instant. Registry deferred until real live
 processes exist to track.
+
+## Skills do not solve periodic native-app checks
+
+The first instinct for a context-rollover warning was "build a skill that gets
+called every few actions." But skills are invocation units, not reliable timers.
+Codex has a native hook surface with a `Stop` event, so the better bridge is a
+small hook that calls `horus usage check --hook` and lets the in-app skill handle
+the actual closure work when nudged. **Lesson:** choose the native primitive that
+matches the trigger shape - skills for cognitive routines, hooks for event-driven
+checks.

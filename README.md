@@ -38,6 +38,8 @@ horus dashboard                   # local, read-only multi-project web view (127
 horus session new "<title>"       # create a dated session summary from the template
 horus close                       # verify continuity, Codex usage, and print the closure ritual
 horus close --usage-threshold 90  # warn when Codex context or rate-limit usage reaches a percent
+horus usage check                 # check the same native-app usage signal directly
+horus hook install --target codex # install a Codex Stop hook for automatic usage nudges
 horus consolidate                 # route/prune/distill .horus lanes; prints the agent ritual
 horus distill-history             # compress a large log into curated history.md
 horus infer                       # bootstrap/refresh .horus from canonical docs; prints the ritual
@@ -67,6 +69,11 @@ Codex (`.agents/skills`).
 from `$CODEX_HOME/sessions` when available. If the latest project turn is near
 the configured usage threshold, Horus nudges you to run the closure ritual before
 starting another large turn.
+
+For a native Codex warning, run `horus hook install --target codex --path .`.
+That writes a project-local `.codex/hooks.json` `Stop` hook which calls
+`horus usage check --hook` after turns. Codex may ask you to review/trust the hook
+with `/hooks` before it runs.
 
 ## License
 

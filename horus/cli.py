@@ -8,7 +8,18 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from horus import __version__, closure, config, dashboard, initialize, routines, skills, templates
+from horus import (
+    __version__,
+    closure,
+    codex_usage,
+    config,
+    dashboard,
+    initialize,
+    native_hooks,
+    routines,
+    skills,
+    templates,
+)
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
 from horus.instructions import check_drift, reconcile
 
@@ -166,6 +177,33 @@ def cmd_close(args: argparse.Namespace) -> int:
         return 0
     print("Action needed before closing — see the warnings above.")
     return 1
+
+
+def cmd_usage_check(args: argparse.Namespace) -> int:
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
+    findings = codex_usage.usage_findings(root, threshold=args.threshold)
+    actionable = [f for f in findings if f.level in ("warn", "fail")]
+    if args.hook:
+        for f in actionable:
+            print(f"{_LEVEL_TAG.get(f.level, '[????]')} {f.message}")
+        return 0
+    healthy = _print_findings(findings)
+    return 0 if healthy else 1
+
+
+def cmd_hook_install(args: argparse.Namespace) -> int:
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
+    if args.target == "codex":
+        action = native_hooks.install_codex_usage_hook(root, threshold=args.threshold)
+        print(f"[{action.status}] {action.message}")
+        print("Codex may ask you to review/trust this project hook with /hooks before it runs.")
+        return 0
+    print(f"unsupported hook target: {args.target}")
+    return 2
 
 
 def _resolve_dir(path_str: str) -> Path | None:
@@ -331,6 +369,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="warn when Codex context or rate-limit usage reaches this percent (default: 90)",
     )
     p_close.set_defaults(func=cmd_close)
+
+    p_usage = sub.add_parser("usage", help="inspect native app usage signals")
+    usage_sub = p_usage.add_subparsers(dest="usage_cmd", required=True)
+    p_usage_check = usage_sub.add_parser("check", help="check whether usage is near a closure threshold")
+    p_usage_check.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_usage_check.add_argument(
+        "--threshold",
+        type=float,
+        default=90.0,
+        help="warn when Codex context or rate-limit usage reaches this percent (default: 90)",
+    )
+    p_usage_check.add_argument(
+        "--hook",
+        action="store_true",
+        help="hook mode: print only actionable warnings and always exit 0",
+    )
+    p_usage_check.set_defaults(func=cmd_usage_check)
+
+    p_hook = sub.add_parser("hook", help="install native app hooks")
+    hook_sub = p_hook.add_subparsers(dest="hook_cmd", required=True)
+    p_hook_install = hook_sub.add_parser("install", help="install a native app hook")
+    p_hook_install.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_hook_install.add_argument("--target", choices=("codex",), required=True, help="native app target")
+    p_hook_install.add_argument(
+        "--threshold",
+        type=float,
+        default=90.0,
+        help="usage percentage that triggers the Codex closure nudge (default: 90)",
+    )
+    p_hook_install.set_defaults(func=cmd_hook_install)
 
     p_consol = sub.add_parser(
         "consolidate",

@@ -1,8 +1,8 @@
 ---
 project: horus-harness
-status: planning
-current_focus: "MVP0/MVP1 shipped (CLI: init, doctor, dashboard, session, close, reconcile). Next: MVP2 session continuity."
-last_updated: 2026-06-24
+status: active
+current_focus: "Native-app bridge: prefer Claude Code/Codex native skills, hooks, and instructions before building Horus-owned sessions."
+last_updated: 2026-06-25
 ---
 
 # Horus Harness
@@ -20,6 +20,12 @@ The main value is not Telegram control by itself. The main value is project cont
 - visibility into which agent/account/environment worked on a project;
 - repo-local `.horus/` files that native Claude/Codex sessions can use without Horus running;
 - closure rituals that prevent useful work from disappearing into stale conversations.
+
+Near-term feature design is native-app-first: whenever Horus adds a capability,
+define how it works inside Claude Code and Codex using their own surfaces
+(instructions, skills, hooks, local config) before building a Horus-owned session
+or orchestration layer. Horus-owned sessions remain the later path for unattended
+or cross-session control that native apps cannot cover cleanly.
 
 ## Current Shape
 
@@ -39,6 +45,8 @@ First useful version:
 - render a project dashboard from those files;
 - maintain session summaries and roadmap state;
 - inspect instruction compatibility between `AGENTS.md` and `CLAUDE.md`;
+- project bundled routines into native Claude Code/Codex skill locations;
+- install small native hooks for app-level signals such as usage rollover;
 - later wire real Codex/Claude sessions into the same project view.
 
 ## Out Of Scope For Now
@@ -49,4 +57,3 @@ First useful version:
 - identity profile abstraction;
 - broad automatic rule conversion;
 - long-term memory system beyond repo-local project continuity.
-
