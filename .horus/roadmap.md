@@ -149,6 +149,13 @@ dashboard and later becomes the place for continuity/status nudges.
   data can come from existing `doctor`/`close`/usage checks; no live registry yet.
 - [x] Keep it optional and local-only; Horus must still work as CLI + files when
   the companion is not running.
+- [ ] Fix app launch so no terminal window remains open when the companion starts
+  from a user-facing shortcut or command.
+- [ ] Improve the wing animation beyond the current simple transparent-frame
+  flap; make it feel integrated with the mascot rather than mechanically shifted.
+- [ ] Replace or regenerate the mascot asset if cleaner than cutting the current
+  image: remove white fringe pixels around the silhouette, but preserve intentional
+  white regions such as the hat.
 - [ ] Later: surface native hook events, usage threshold warnings, stale summaries,
   uncommitted continuity, and per-project switching.
 
