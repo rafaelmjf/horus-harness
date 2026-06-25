@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "MVP2.5 git-aware dashboard shipped: horus/gitstate.py + a compact git badge on the overview and a full Git card + rendered Latest-session card on the detail view; horus status CLI peer. The app is now aware of the GitHub repos and shows the last session summary. Next within MVP2.5: fetch-all refresh + staleness in the verdict surface (both optional). Then MVP3 agent execution (adapter contract + fake adapter first)."
-next_action: "Decide whether to merge mvp2.5-git-aware-dashboard into main, then start MVP3 by defining the agent-adapter contract + a fake adapter."
-next_prompt: "Resume the Horus project on the mvp2.5-git-aware-dashboard branch. Read .horus/ first (project.md, roadmap.md, decisions.md, and the latest .horus/sessions/ summary) for full context. Decide with me whether to merge mvp2.5-git-aware-dashboard into main, then start MVP3: define the agent-adapter contract (spawn/resume/parse_event/permission_flags) plus a fake adapter for tests, before the real Claude Code adapter."
+current_focus: "MVP3 started. The agent-adapter contract + FakeAdapter shipped (horus/adapters/): a thin, tool-neutral contract — adapters implement four pure methods (permission_flags/build_command/build_env/parse_event) while spawn/resume, subprocess streaming, and session-id/status tracking are shared, so real adapters stay thin; FakeAdapter implements it all in memory so orchestration is testable with no CLI. Also: the session account tag is now aliased (config.alias_for + ~/.horus/accounts.toml + `horus account`) so the real email never lands in a commit. Next: the real Claude Code adapter (needs a machine with `claude` logged in), then the session/process registry. mvp2.5-git-aware-dashboard is a clean fast-forward over main and ready to merge."
+next_action: "Implement the Claude Code adapter (horus/adapters/claude.py) against the contract in horus/adapters/base.py, with FakeAdapter as the reference: `claude -p --output-format stream-json`, `--resume`, `CLAUDE_CONFIG_DIR` per account, stream-json parse_event. Needs a CLI-equipped machine. Then the session/process registry."
+next_prompt: "Resume the Horus project. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE before reasoning about it — do not trust local refs (a prior handoff was confused because the named branch existed only on origin). The active dev branch is `mvp3-agent-adapter`; confirm which branch holds the unmerged work and whether the local checkout is stale/already-merged, then check it out. Read .horus/ lanes + the latest .horus/sessions/ summary. Continue MVP3: implement the Claude Code adapter (horus/adapters/claude.py) against the contract in horus/adapters/base.py (FakeAdapter is the reference). This needs a machine with `claude` installed and logged in."
 last_updated: 2026-06-25
 ---
 
@@ -42,6 +42,15 @@ last_updated: 2026-06-25
 - [x] Surface first context-rollover signal in `horus close` and dashboard: read local Codex rollout `token_count` events and warn at `--usage-threshold` (default 90). No DB.
 - [x] Add native Codex usage nudge: `horus usage check` plus `horus hook install --target codex`, which writes a `.codex/hooks.json` `Stop` hook. Hook mode prints only actionable closure warnings and exits 0.
 - [x] Claude usage→closure **pre-task** trigger (2026-06-25): `hook install --target claude` now writes a **`UserPromptSubmit`** hook (fires before the agent starts a task → diverts an over-budget session to closure *instead of* starting it) plus `Stop` as a safety net. Re-armable sentinel (`REARM_SECONDS`) replaces the permanent once-per-session guard that wrongly suppressed re-fires.
+- [x] Account-tagged sessions are **aliased** (2026-06-25): `current_account()` reads the logged-in email as the
+  anchor, but session summaries distill upward into committed lanes, so the raw email must not appear. `config.alias_for()`
+  resolves an email→alias map in `~/.horus/accounts.toml` (own file so the projects serializer can't clobber it), with a
+  stable non-reversible `acct-<sha6>` fallback; `horus session new` records the alias, `horus account [--set ALIAS]` manages it.
+- [ ] **Clearer session handoff / branch pickup** — IMPROVEMENT (flagged 2026-06-25 after a handoff named a branch that
+  existed only on `origin`; the pickup agent trusted stale local refs and misjudged the state). Encode a fetch-first +
+  verify-branch step at session pickup (done for now via `next_prompt`); consider also recording `branch:` + push/merge
+  state in the session summary and surfacing it in `horus close`/dashboard. Possibly a `horus resume` command or a managed
+  instruction-block step. See history.md.
 - [ ] **Mid-task usage interruption (Codex-style "check between every action")** — IMPROVEMENT. `UserPromptSubmit`/`Stop` only fire at task boundaries; a single long turn can still blow past the limit. Add a `PreToolUse` hook that checks usage before each tool call (with a short ~60s cached read to avoid hammering the OAuth endpoint) and blocks → diverts to closure mid-task. Gate carefully to avoid spamming.
 - [~] SQLite session/event registry + session states (`closing`/`needs_closure`/`closed_stale`) — DEFERRED. Premature at solo scale (file parsing is instant) and presupposes the deferred execution layer. Revisit when scale hurts perf or Horus runs sessions itself.
 
@@ -247,9 +256,16 @@ dashboard and later becomes the place for continuity/status nudges.
 > contract; a fake adapter can validate orchestration anywhere. This phase also unlocks
 > autonomous closure + agent-assisted infer.
 
-- [ ] Define the adapter contract (`spawn`, `resume`, `parse_event`, `permission_flags`) + a fake adapter for tests.
+- [x] Define the adapter contract (`spawn`, `resume`, `parse_event`, `permission_flags`) + a fake adapter for tests
+  (2026-06-25). `horus/adapters/`: `base.py` is the contract — `AgentAdapter` ABC with four pure methods
+  (`permission_flags`/`build_command`/`build_env`/`parse_event`) plus shared `spawn`/`resume`, subprocess streaming,
+  and `AgentRun` session-id/status tracking; `SpawnSpec`/`AgentSession`/`AgentEvent`/`PermissionPosture`/`EventType`
+  normalize the I/O. `fake.py` (`FakeAdapter`) implements the whole contract in memory via a JSON-lines stream that
+  mirrors stream-json's shape, so orchestration is testable with no CLI. `get_adapter(name)`. 12 tests.
+- [ ] **Claude Code adapter (NEXT)**: `claude -p --output-format stream-json`, `--resume`, `CLAUDE_CONFIG_DIR` per
+  account, permission posture. Fills in the four pure methods against the contract; FakeAdapter is the reference.
+  Needs a machine with `claude` installed + logged in.
 - [ ] Session/process registry: `(agent, account, project, environment, pid, session_id, status)`; survives restarts.
-- [ ] Claude Code adapter: `claude -p --output-format stream-json`, `--resume`, `CLAUDE_CONFIG_DIR` per account, permission posture.
 - [ ] Spawn + resume one headless session in a project under a chosen account; capture output; track state.
 - [ ] Multi-account isolation via per-account home dirs (`CLAUDE_CONFIG_DIR`) + startup identity check.
 - [ ] Codex adapter (second) to prove the abstraction.

@@ -9,6 +9,21 @@ Curated, durable context: the problems that bit us and the lessons that shaped t
 design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
 just the war stories worth carrying forward.
 
+## A handoff named a branch the pickup couldn't see (trust the remote, not local refs)
+
+A session handoff (`next_prompt`) told the next session to "resume on the
+`mvp2.5-git-aware-dashboard` branch." That branch existed on `origin` but the
+pickup machine had never fetched it, so `git branch -a` didn't list it. The pickup
+agent concluded the branch didn't exist, that the local branch *was* the work, and
+nearly proceeded on stale assumptions — when in fact the local branch had already
+been merged into `main` and retired on the remote, and the real work lived on the
+unfetched branch. **Lesson:** a session pickup must `git fetch --all --prune` and
+reason from the *remote* state FIRST — local refs are a stale cache, and continuity
+that travels via git (handoffs across machines/sessions) is exactly the case where
+they're most likely wrong. Fixed for now by making `next_prompt` start with a
+fetch-first + verify-branch step; deeper options (record `branch:`/push state in the
+summary, a `horus resume` command) are tracked in roadmap.md.
+
 ## Claude's subscription usage IS readable — via the OAuth `/usage` endpoint
 
 While building the Claude-side usage→closure hook, I checked four surfaces (CLI verbs,
