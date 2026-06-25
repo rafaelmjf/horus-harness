@@ -15,7 +15,17 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from horus import codex_usage, config, frontmatter, gitstate, markdown, registry, roadmap, routines
+from horus import (
+    claude_usage,
+    codex_usage,
+    config,
+    frontmatter,
+    gitstate,
+    markdown,
+    registry,
+    roadmap,
+    routines,
+)
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
 
@@ -125,6 +135,37 @@ def gather_projects() -> list[dict[str, Any]]:
     return [load_project(p) for p in config.load_projects()]
 
 
+def _account_usage(alias: str, cred_path: Path | None) -> dict[str, Any]:
+    report = claude_usage.latest_usage(cred_path=cred_path)
+    reset = report.five_hour_resets_at if report else None
+    return {
+        "alias": alias,
+        "five_pct": report.five_hour_percent if report else None,
+        "week_pct": report.seven_day_percent if report else None,
+        "five_reset": claude_usage._fmt_reset(reset) if reset else None,
+    }
+
+
+def gather_accounts() -> list[dict[str, Any]]:
+    """Every Horus-known Claude account with its live usage (best-effort, read-only).
+
+    Reads the per-account ``CLAUDE_CONFIG_DIR`` isolation map (accounts.toml) and
+    adds the ambient login if it isn't one of them. Accounts are shown by alias, not
+    raw email (the alias privacy rule). Network failure / no token -> gray ring.
+    """
+    # ponytail: one live usage GET per account, sequential. Parallelize only if a
+    # large account list ever makes the page drag — a handful is fine.
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for alias, d in sorted(config.load_account_config_dirs().items()):
+        out.append(_account_usage(alias, Path(d) / ".credentials.json"))
+        seen.add(alias)
+    ambient_alias = config.alias_for(claude_usage.current_account())
+    if ambient_alias and ambient_alias not in seen:
+        out.append(_account_usage(ambient_alias, None))  # ambient credentials path
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # HTML rendering
 # --------------------------------------------------------------------------- #
@@ -210,22 +251,61 @@ code { background: #0b0d12; padding: 1px 5px; border-radius: 4px; }
 .back { font-size: 13px; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 td, th { text-align: left; padding: 6px 10px; border-bottom: 1px solid #232733; }
+nav { margin-top: 10px; display: flex; gap: 18px; }
+nav a { color: #8a93a6; font-size: 13px; padding-bottom: 4px; border-bottom: 2px solid transparent; }
+nav a.active { color: #e6e6e6; border-bottom-color: #6db3f2; }
+nav a:hover { text-decoration: none; color: #e6e6e6; }
+.control { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
+main.wide { max-width: none; }
+.acct { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+.acct .who { font-size: 14px; font-weight: 600; }
+svg.ring text { font-family: -apple-system, Segoe UI, sans-serif; font-weight: 600; }
+.proj-row { display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 0; border-bottom: 1px solid #1c1f2a; }
+.proj-row:last-child { border-bottom: 0; }
+details.launch > summary { list-style: none; cursor: pointer; color: #57d39a; font-size: 13px;
+            padding: 2px 9px; border: 1px solid #1f5138; border-radius: 6px; background: #15281d; }
+details.launch > summary::-webkit-details-marker { display: none; }
+.launch-body { margin-top: 8px; }
+.cmd { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+.cmd code { flex: 1; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sessions-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); }
+.scard { background: #151823; border: 1px solid #232733; border-radius: 10px; padding: 16px 18px; }
+.scard-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.scard-t { font-size: 16px; font-weight: 600; }
+.pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #232733; color: #b9c2d0; }
+.usagebar { height: 14px; background: #232733; border-radius: 4px; overflow: hidden; margin: 12px 0 4px; }
+.usagebar > span { display: block; height: 100%; }
 """
 
 _LEVEL_CLASS = {"ok": "health-ok", "warn": "health-warn", "fail": "health-fail"}
 
 
-def _page(title: str, body: str) -> str:
+def _nav(active: str) -> str:
+    links = [("/", "Projects", "projects"), ("/control", "Control", "control")]
+    items = "".join(
+        f"<a href='{href}'{' class=\"active\"' if key == active else ''}>{label}</a>"
+        for href, label, key in links
+    )
+    return f"<nav>{items}</nav>"
+
+
+def _page(title: str, body: str, active: str = "projects", wide: bool = False) -> str:
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>{html.escape(title)}</title><style>{_STYLE}</style></head><body>"
         "<header><h1>Horus</h1>"
-        "<div class='sub'>project continuity &amp; control panel</div></header>"
-        f"<main>{body}</main>"
+        "<div class='sub'>project continuity &amp; control panel</div>"
+        f"{_nav(active)}</header>"
+        f"<main{' class=\"wide\"' if wide else ''}>{body}</main>"
         "<script>"
         "function horusCopy(btn){"
         "var t=btn.closest('.resume').querySelector('.resume-text').textContent;"
         "navigator.clipboard.writeText(t).then(function(){"
+        "var o=btn.textContent;btn.textContent='Copied';"
+        "setTimeout(function(){btn.textContent=o;},1200);});}"
+        "function horusCopyPrev(btn){"
+        "navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(function(){"
         "var o=btn.textContent;btn.textContent='Copied';"
         "setTimeout(function(){btn.textContent=o;},1200);});}"
         "</script>"
@@ -675,6 +755,149 @@ def render_project(p: dict[str, Any]) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Control panel — accounts (usage rings) + projects (launch) + live sessions
+# --------------------------------------------------------------------------- #
+
+def _usage_color(pct: float) -> str:
+    return "#f08a8a" if pct >= 90 else "#e6c35c" if pct >= 70 else "#57d39a"
+
+
+def _ring(pct: float | None) -> str:
+    """Small donut showing a usage percent; gray when unknown (offline/no token)."""
+    if pct is None:
+        color, dash, txt = "#3a4151", 0.0, "--"
+    else:
+        v = max(0.0, min(100.0, pct))
+        color, dash, txt = _usage_color(v), v, f"{v:.0f}%"
+    return (
+        "<svg class='ring' viewBox='0 0 40 40' width='42' height='42'>"
+        "<circle cx='20' cy='20' r='16' fill='none' stroke='#232733' stroke-width='4'/>"
+        f"<circle cx='20' cy='20' r='16' fill='none' stroke='{color}' stroke-width='4' "
+        f"pathLength='100' stroke-dasharray='{dash:.0f} 100' stroke-linecap='round' "
+        "transform='rotate(-90 20 20)'/>"
+        f"<text x='20' y='24' text-anchor='middle' font-size='11' fill='#e6e6e6'>{txt}</text>"
+        "</svg>"
+    )
+
+
+def _usage_bar(pct: float | None, label: str) -> str:
+    fill = ""
+    if pct is not None:
+        v = max(0.0, min(100.0, pct))
+        fill = f"<span style='width:{v:.0f}%;background:{_usage_color(v)}'></span>"
+    return f"<div class='usagebar'>{fill}</div><div class='progress-label'>{html.escape(label)}</div>"
+
+
+def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
+    if not accounts:
+        return (
+            "<div class='card'><h2>Accounts</h2>"
+            "<p class='muted' style='font-size:13px'>No Claude login detected. Run "
+            "<code>claude</code> to sign in, or map isolated accounts with "
+            "<code>horus account --set-dir</code>.</p></div>"
+        )
+    rows = []
+    for a in accounts:
+        reset = (
+            f"<div class='muted' style='font-size:11px'>5h resets {html.escape(a['five_reset'])}</div>"
+            if a.get("five_reset")
+            else ""
+        )
+        week = (
+            f"<div class='muted' style='font-size:11px'>weekly {a['week_pct']:.0f}%</div>"
+            if a.get("week_pct") is not None
+            else ""
+        )
+        rows.append(
+            f"<div class='acct'>{_ring(a['five_pct'])}"
+            f"<div><div class='who'>{html.escape(a['alias'])}</div>{reset}{week}</div></div>"
+        )
+    return f"<div class='card'><h2>Accounts</h2>{''.join(rows)}</div>"
+
+
+def _launch_cmds(project_path: str, accounts: list[dict[str, Any]]) -> str:
+    """Copyable real launch commands: ambient first, then one per known account."""
+    cmds = [f'horus open "{project_path}"']
+    cmds += [f'horus open "{project_path}" --account {a["alias"]}' for a in accounts]
+    return "".join(
+        f"<div class='cmd'><code>{html.escape(c)}</code>"
+        "<button class='copy' type='button' onclick='horusCopyPrev(this)'>Copy</button></div>"
+        for c in cmds
+    )
+
+
+def _projects_panel(projects: list[dict[str, Any]], accounts: list[dict[str, Any]]) -> str:
+    if not projects:
+        return "<div class='card'><h2>Projects</h2><p class='muted'>None registered.</p></div>"
+    rows = []
+    for i, p in enumerate(projects):
+        rows.append(
+            f"<div class='proj-row'><a href='/project?i={i}'>{html.escape(p['name'])}</a>"
+            "<details class='launch'><summary title='Launch a session'>&#9654;</summary>"
+            f"<div class='launch-body'>{_launch_cmds(p['path'], accounts)}</div></details></div>"
+        )
+    return f"<div class='card'><h2>Projects</h2>{''.join(rows)}</div>"
+
+
+def _control_session_card(rec: registry.SessionRecord, accounts: list[dict[str, Any]]) -> str:
+    """A live-session column: status, account usage bar, and (Codex) context window."""
+    acct = next((a for a in accounts if a["alias"] == rec.account), None)
+    pct = acct["five_pct"] if acct else None
+    label_bits = []
+
+    context_line = ""
+    if rec.agent == "codex":
+        cu = codex_usage.latest_usage(Path(rec.project))
+        if cu:
+            context_line = (
+                "<div class='progress-label'>context "
+                f"{cu.context_tokens // 1000}K / {cu.context_window // 1000}K "
+                f"({cu.context_percent:.0f}%)</div>"
+            )
+            if pct is None and cu.primary_percent is not None:
+                pct = cu.primary_percent
+
+    label_bits.append(f"5h limit {pct:.0f}%" if pct is not None else "usage unknown")
+    if acct and acct.get("five_reset"):
+        label_bits.append(f"resets {acct['five_reset']}")
+
+    dot_cls = _SESSION_STATUS_CLASS.get(rec.status, "muted")
+    meta = (
+        f"<div class='muted' style='font-size:12px'><span class='{dot_cls}'>&#9679;</span> "
+        f"{html.escape(rec.status)} &middot; {html.escape(rec.agent)} &middot; "
+        f"pid {rec.pid if rec.pid is not None else '-'}</div>"
+    )
+    return (
+        f"<div class='scard'><div class='scard-h'>"
+        f"<span class='scard-t'>{html.escape(Path(rec.project).name)}</span>"
+        f"<span class='pill'>{html.escape(rec.account or 'ambient')}</span></div>"
+        f"{meta}{_usage_bar(pct, ' · '.join(label_bits))}{context_line}"
+        f"<div class='muted' style='font-size:11px;margin-top:8px'>session "
+        f"<code>{html.escape(rec.session_id[:8])}</code> &middot; updated {html.escape(rec.updated_at)}</div>"
+        "</div>"
+    )
+
+
+def render_control(
+    projects: list[dict[str, Any]],
+    accounts: list[dict[str, Any]],
+    sessions: list[registry.SessionRecord],
+) -> str:
+    # Live processes only (per the design): a session is "live" while its process runs.
+    live = [s for s in sessions if s.status == "running"]
+    cards = "".join(_control_session_card(s, accounts) for s in live) or (
+        "<p class='muted'>No live sessions. Launch one from a project on the left "
+        "(or <code>horus open</code>); it appears here while its process runs.</p>"
+    )
+    body = (
+        "<div class='control'><div class='sidebar'>"
+        f"{_accounts_panel(accounts)}{_projects_panel(projects, accounts)}</div>"
+        f"<div class='sessions-grid'>{cards}</div></div>"
+    )
+    return _page("Horus - Control", body, active="control", wide=True)
+
+
+# --------------------------------------------------------------------------- #
 # Server
 # --------------------------------------------------------------------------- #
 
@@ -694,6 +917,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/sessions":
             self._send(_page("Horus — sessions", render_sessions_card(gather_sessions())))
+            return
+        if parsed.path == "/control":
+            self._send(render_control(gather_projects(), gather_accounts(), gather_sessions()))
             return
         if parsed.path == "/project":
             projects = gather_projects()
