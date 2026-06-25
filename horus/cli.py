@@ -20,6 +20,7 @@ from horus import (
     gitstate,
     initialize,
     native_hooks,
+    registry,
     routines,
     skills,
     templates,
@@ -121,6 +122,25 @@ def cmd_status(args: argparse.Namespace) -> int:
         else:
             sess = "no sessions"
         print(f"{p['name']}\n  git:  {git}\n  last: {sess}")
+    return 0
+
+
+def cmd_sessions(args: argparse.Namespace) -> int:
+    """List tracked agent sessions, reconciling live state against real PIDs first."""
+    reg = registry.Registry.default()
+    reg.reconcile()  # correct records left "running" by a crashed/closed run
+    if args.prune:
+        removed = reg.prune()
+        print(f"Pruned {len(removed)} finished session(s).")
+        return 0
+    records = sorted(reg.all(), key=lambda r: r.updated_at, reverse=True)
+    if not records:
+        print("No tracked sessions.")
+        return 0
+    for r in records:
+        proj = Path(r.project).name
+        rc = "" if r.returncode is None else f" rc={r.returncode}"
+        print(f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} pid={r.pid or '-'} {r.session_id}{rc}")
     return 0
 
 
@@ -496,6 +516,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_prune = sub.add_parser("prune", help="drop registered projects whose .horus/ is gone")
     p_prune.set_defaults(func=cmd_prune)
+
+    p_sessions = sub.add_parser("sessions", help="list tracked agent sessions (reconciles live state)")
+    p_sessions.add_argument("--prune", action="store_true", help="drop finished/dead sessions instead of listing")
+    p_sessions.set_defaults(func=cmd_sessions)
 
     p_session = sub.add_parser("session", help="create a new session summary from the template")
     session_sub = p_session.add_subparsers(dest="session_cmd", required=True)

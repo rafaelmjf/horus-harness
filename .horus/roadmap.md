@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "0.0.2 'companion' milestone shipped to PyPI; MVP3 'manager' underway. The agent-adapter contract (horus/adapters/), FakeAdapter, AND the real ClaudeAdapter are done and merged to main (PR #4) — spawn+resume proven live (spawn returned a session id; resume recalled context from the first turn). Contract refined while building the real adapter: parse_event returns a list (one assistant line can carry text+tool_use); stdin=DEVNULL. Next: the session/process registry (AgentSession already has the row shape: agent/account/project/environment/pid/session_id/status), then multi-account isolation (CLAUDE_CONFIG_DIR) + the live oversight dashboard."
-next_action: "Build the session/process registry: persist (agent, account, project, environment, pid, session_id, status) across restarts, populated from AgentSession as runs spawn/resume/exit. Then multi-account isolation (CLAUDE_CONFIG_DIR per account + startup identity check) and the Codex adapter to prove the abstraction."
-next_prompt: "Resume the Horus project. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (don't trust local refs). The adapter work is merged to main (PR #4) and mvp3-agent-adapter is retired; start the next increment on a FRESH branch off main (e.g. mvp3-session-registry) and PR it (gh pr create → squash-merge, auto-delete). Read .horus/ lanes + the latest .horus/sessions/ summary. Continue MVP3 with the session/process registry — persist (agent, account, project, environment, pid, session_id, status) across restarts; AgentSession in horus/adapters/base.py already has that exact shape; populate it from adapter runs (FakeAdapter for tests, ClaudeAdapter for real)."
+current_focus: "0.0.2 'companion' milestone on PyPI; MVP3 'manager' underway. Done & merged to main: the agent-adapter contract + FakeAdapter + ClaudeAdapter (spawn/resume proven live, PR #4) and the session/process registry (horus/registry.py — JSON-backed, AgentSession row shape, track()/reconcile()/prune(), cross-platform PID liveness, `horus sessions` CLI). Next: multi-account isolation (CLAUDE_CONFIG_DIR per account + identity check; ClaudeAdapter already takes a config_dirs map), then the live oversight dashboard on top of the registry, and the Codex adapter."
+next_action: "Multi-account isolation: wire an account→CLAUDE_CONFIG_DIR map (so per-account logins are isolated) into ClaudeAdapter.config_dirs, add a startup identity check that the spawned session's oauthAccount matches the requested account, and surface it. Then build the live oversight dashboard view over horus/registry.py."
+next_prompt: "Resume the Horus project. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (don't trust local refs). The adapter layer + session registry are merged to main; start the next increment on a FRESH branch off main and PR it (gh pr create → squash-merge, auto-delete). Read .horus/ lanes + the latest .horus/sessions/ summary. Continue MVP3 with multi-account isolation: account→CLAUDE_CONFIG_DIR wiring into ClaudeAdapter (horus/adapters/claude.py, already has config_dirs) + a startup identity check (the spawned session's oauthAccount must match the requested account). Then the live oversight dashboard over horus/registry.py."
 last_updated: 2026-06-25
 ---
 
@@ -280,12 +280,19 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] **Spawn + resume one headless session, capture output, track state** (2026-06-25) — PROVEN LIVE on this machine:
   spawn returned "STORED" + session id; resume of that id recalled "42" from the first turn (context carried across a
   fresh process); status/returncode tracked. The MVP3 first proof point.
-- [ ] **Session/process registry (NEXT)**: `(agent, account, project, environment, pid, session_id, status)`;
-  survives restarts. `AgentSession` already has this exact shape.
-- [ ] Multi-account isolation via per-account home dirs (`CLAUDE_CONFIG_DIR`) + startup identity check.
+- [x] **Session/process registry** (2026-06-25). `horus/registry.py` — `Registry` over
+  `~/.horus/registry.json` (file-first, machine-local since it tracks PIDs), records keyed by
+  session_id with exactly the `AgentSession` shape. `SessionRecord.from_session` bridges the adapter;
+  `track(registry, run)` registers on first id + records final status while passing events through;
+  `reconcile()` corrects stale `running` records via cross-platform `process_alive` (POSIX `os.kill(.,0)`;
+  Windows `OpenProcess`+`WaitForSingleObject` — never `os.kill`, which terminates on Windows); `prune()`;
+  `horus sessions [--prune]` CLI. 10 tests. SQLite stays the later step (below) if scale/concurrency demands it.
+- [ ] **Multi-account isolation (NEXT)** via per-account home dirs (`CLAUDE_CONFIG_DIR`) + startup identity
+  check. ClaudeAdapter already accepts a `config_dirs` map; needs the account→dir wiring + an identity check
+  that the spawned session's `oauthAccount` matches the requested account.
 - [ ] Codex adapter (second) to prove the abstraction.
 - [ ] Turn the static dashboard into a live oversight app (process status + controls) on top of the registry.
-- [ ] Persist the registry in SQLite (now re-justified: real live processes to track).
+- [ ] Persist the registry in SQLite (re-justified once concurrency/scale hurts; JSON file shipped first).
 - [ ] Restrict autonomous closure edits to `.horus/**`, `AGENTS.md`, `CLAUDE.md`.
 - [ ] **LLM-based `horus infer`** (replaces the removed deterministic version): drive the official CLI to distill `.horus/` from the project's canonical docs — follow doc pointers (README → status/roadmap → CLAUDE.md → linked docs like docs/HISTORY.md), produce clean project + roadmap with planned/in-progress/done items, mark superseded source docs as stale, and prompt the user when intent is unclear.
 
