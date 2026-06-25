@@ -48,3 +48,37 @@ def test_prune_noop_when_all_live(tmp_path, monkeypatch):
     (live / ".horus").mkdir(parents=True)
     config.register_project(live)
     assert config.prune_projects() == []
+
+
+def test_alias_for_uses_configured_mapping(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.set_account_alias("rafael@example.com", "rafa-personal")
+    assert config.alias_for("rafael@example.com") == "rafa-personal"
+    # round-trips through the file
+    assert config.load_account_aliases()["rafael@example.com"] == "rafa-personal"
+
+
+def test_alias_for_falls_back_without_exposing_email(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    alias = config.alias_for("rafael@example.com")
+    assert alias.startswith("acct-")
+    assert "rafael" not in alias and "@" not in alias  # email never leaks
+    # stable for the same identifier, distinct for another
+    assert alias == config.alias_for("rafael@example.com")
+    assert alias != config.alias_for("other@example.com")
+
+
+def test_alias_for_none_when_no_identifier(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.alias_for(None) is None
+    assert config.alias_for("") is None
+
+
+def test_set_account_alias_preserves_projects(tmp_path, monkeypatch):
+    # accounts live in their own file, so writing an alias must not touch projects.
+    _home(tmp_path, monkeypatch)
+    proj = tmp_path / "p1"
+    proj.mkdir()
+    config.register_project(proj)
+    config.set_account_alias("a@b.com", "work")
+    assert config._as_key(proj) in config.load_projects()

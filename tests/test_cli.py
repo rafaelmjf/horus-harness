@@ -57,6 +57,44 @@ def test_session_new_refuses_without_horus(tmp_path, monkeypatch):
     assert main(["session", "new", "X", "--path", str(tmp_path)]) == 1
 
 
+def test_session_new_records_alias_not_email(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    from horus import claude_usage
+    monkeypatch.setattr(claude_usage, "current_account", lambda *a, **k: "rafael@example.com")
+    main(["init", str(tmp_path), "--yes"])
+
+    assert main(["session", "new", "Alias Test", "--path", str(tmp_path)]) == 0
+    text = list((tmp_path / ".horus" / "sessions").glob("*-alias-test.md"))[0].read_text(encoding="utf-8")
+    assert "rafael@example.com" not in text  # raw email never written
+    assert "account: acct-" in text          # aliased instead
+
+
+def test_session_new_uses_configured_alias(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    from horus import claude_usage, config
+    monkeypatch.setattr(claude_usage, "current_account", lambda *a, **k: "rafael@example.com")
+    config.set_account_alias("rafael@example.com", "rafa-personal")
+    main(["init", str(tmp_path), "--yes"])
+
+    main(["session", "new", "Named", "--path", str(tmp_path)])
+    text = list((tmp_path / ".horus" / "sessions").glob("*-named.md"))[0].read_text(encoding="utf-8")
+    assert "account: rafa-personal" in text
+
+
+def test_account_command_show_and_set(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import claude_usage, config
+    monkeypatch.setattr(claude_usage, "current_account", lambda *a, **k: "rafael@example.com")
+
+    assert main(["account", "--set", "rafa-personal"]) == 0
+    assert config.load_account_aliases()["rafael@example.com"] == "rafa-personal"
+
+    capsys.readouterr()
+    assert main(["account"]) == 0
+    out = capsys.readouterr().out
+    assert "rafa-personal" in out and "rafael@example.com" in out  # show reveals both locally
+
+
 def test_close_runs_and_returns_status(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes"])

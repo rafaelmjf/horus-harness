@@ -164,7 +164,9 @@ def cmd_session(args: argparse.Namespace) -> int:
     if path.exists():
         print(f"Already exists: {path}")
         return 1
-    account = args.account or claude_usage.current_account() or "unknown"
+    # Record the alias, never the raw email: session content distills into the
+    # committed lanes, so the real identifier must not land in the summary.
+    account = args.account or config.alias_for(claude_usage.current_account()) or "unknown"
     path.write_text(
         templates.session_summary(
             title=args.title,
@@ -177,6 +179,31 @@ def cmd_session(args: argparse.Namespace) -> int:
         encoding="utf-8",
     )
     print(f"Created {path}")
+    return 0
+
+
+def cmd_account(args: argparse.Namespace) -> int:
+    # Account detection is Claude-specific for now (reads ~/.claude.json); other
+    # agents fall through to "not detected" until they get their own reader.
+    identifier = claude_usage.current_account() if args.agent == "claude" else None
+
+    if args.alias:
+        if not identifier:
+            print(f"No {args.agent} account detected; nothing to alias (is the agent logged in?).")
+            return 1
+        config.set_account_alias(identifier, args.alias)
+        print(f"Aliased {args.agent} account -> {args.alias}")
+        return 0
+
+    if not identifier:
+        print(f"No {args.agent} account detected (is the agent logged in?).")
+        return 1
+    alias = config.alias_for(identifier)
+    print(f"agent:   {args.agent}")
+    print(f"account: {identifier}")
+    print(f"alias:   {alias}")
+    if not config.load_account_aliases().get(identifier):
+        print(f"(auto-generated alias; set a friendly one with `horus account --set <name>`)")
     return 0
 
 
@@ -479,6 +506,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_session_new.add_argument("--account", default=None, help="account tag (default: auto-detect the logged-in Claude account)")
     p_session_new.add_argument("--environment", default="host")
     p_session_new.set_defaults(func=cmd_session)
+
+    p_account = sub.add_parser("account", help="show the detected agent account and its session alias")
+    p_account.add_argument("--agent", default="claude", help="which agent's account to inspect (default: claude)")
+    p_account.add_argument("--set", dest="alias", metavar="ALIAS", help="set the public alias for the detected account")
+    p_account.set_defaults(func=cmd_account)
 
     p_close = sub.add_parser("close", help="verify continuity (git-aware) and print the closure ritual")
     p_close.add_argument("--path", default=".", help="project root (default: cwd)")
