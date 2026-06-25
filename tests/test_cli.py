@@ -164,6 +164,55 @@ def test_skill_install_codex_target_cli(tmp_path, monkeypatch):
     assert not (tmp_path / ".claude").exists()
 
 
+def _claude_hook_run(monkeypatch, tmp_path, capsys, *, percent, threshold, stdin):
+    """Drive `usage check --target claude --hook` with a mocked usage report + stdin."""
+    import io
+
+    from horus import claude_usage, native_hooks
+
+    monkeypatch.setattr(
+        claude_usage, "latest_usage",
+        lambda **k: claude_usage.UsageReport(percent, None, 0.0, None),
+    )
+    monkeypatch.setattr(native_hooks.tempfile, "gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr("sys.stdin", io.StringIO(stdin))
+    rc = main(["usage", "check", "--target", "claude", "--hook", "--threshold", str(threshold)])
+    return rc, capsys.readouterr().out
+
+
+def test_claude_hook_injects_closure_over_threshold(tmp_path, monkeypatch, capsys):
+    rc, out = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=92.0, threshold=90,
+        stdin='{"session_id":"s1","stop_hook_active":false}',
+    )
+    assert rc == 0
+    payload = json.loads(out.strip())
+    assert payload["decision"] == "block" and "closure" in payload["reason"].lower()
+
+
+def test_claude_hook_quiet_under_threshold(tmp_path, monkeypatch, capsys):
+    rc, out = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=40.0, threshold=90,
+        stdin='{"session_id":"s2"}',
+    )
+    assert rc == 0 and out.strip() == ""
+
+
+def test_claude_hook_fires_once_per_session(tmp_path, monkeypatch, capsys):
+    stdin = '{"session_id":"dup","stop_hook_active":false}'
+    _, out1 = _claude_hook_run(monkeypatch, tmp_path, capsys, percent=92.0, threshold=90, stdin=stdin)
+    _, out2 = _claude_hook_run(monkeypatch, tmp_path, capsys, percent=92.0, threshold=90, stdin=stdin)
+    assert out1.strip() and out2.strip() == ""  # second call suppressed by sentinel
+
+
+def test_claude_hook_respects_stop_hook_active(tmp_path, monkeypatch, capsys):
+    rc, out = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=99.0, threshold=90,
+        stdin='{"session_id":"s3","stop_hook_active":true}',
+    )
+    assert rc == 0 and out.strip() == ""
+
+
 def test_forget_cli(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes"])

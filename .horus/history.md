@@ -9,6 +9,18 @@ Curated, durable context: the problems that bit us and the lessons that shaped t
 design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
 just the war stories worth carrying forward.
 
+## Claude's subscription usage IS readable — via the OAuth `/usage` endpoint
+
+While building the Claude-side usage→closure hook, I checked four surfaces (CLI verbs,
+local caches, the session transcript, `--debug` API output) and wrongly concluded
+Claude Code exposes no subscription usage locally. The user pushed back ("`/usage`
+clearly shows it"), and they were right: the `/usage` TUI reads it from
+`GET /api/oauth/usage` — visible as a string in the CLI binary. **Lesson:** when a
+client UI displays data, it came from an endpoint; find that endpoint (grep the
+binary, watch the network) before concluding "unavailable." Also: the signal that
+fired the Codex closure was the **5h rate limit (92%)**, not context (52.7%) — for
+Opus, quota fills long before context, so the usage signal is the one that matters.
+
 ## Deterministic inference produced drifting, truncated `.horus/`
 
 The first `horus init` mined README/STATUS/CLAUDE docs to pre-populate `.horus/`.

@@ -34,6 +34,7 @@ Status: **Shipped** · **In progress** · **Planned**
 | Codex usage/rollover closure signal | — | `horus close` + dashboard read local Codex rollout `token_count` events; warn at 90% by default before another large turn |
 | Codex project-skill projection | — | `horus init` / `horus skill install --target codex` write bundled Horus skills to `.agents/skills/` alongside Claude `.claude/skills/` |
 | Codex native usage hook | 2026-06-25 | `horus usage check` plus `horus hook install --target codex`; writes `.codex/hooks.json` `Stop` hook that nudges at usage threshold without failing the turn |
+| Claude usage→closure hook | 2026-06-25 | `horus/claude_usage.py` reads 5h/weekly % from the OAuth `/usage` endpoint; `horus usage check --target claude`; `horus hook install --target claude` writes a `.claude/settings.json` `Stop` hook that injects the closure routine via `decision:block` at threshold (once/session) |
 
 ## In progress
 

@@ -234,6 +234,17 @@ CLOSURE_PROMPT = """Closure ritual - update project continuity before ending thi
 """
 
 
+USAGE_CLOSURE_INSTRUCTION = (
+    "You are close to your usage limit and risk being cut off mid-task. Stop the "
+    "current work now and run the Horus closure routine so the session ends cleanly: "
+    "(1) consolidate continuity — invoke the horus-consolidate skill (or run "
+    "`horus consolidate`), folding in what changed this session; (2) write a concise "
+    "handover summary under `.horus/sessions/` describing what shipped and the next "
+    "step; (3) commit the continuity files with `horus close --commit`. Then stop — do "
+    "not resume the main task."
+)
+
+
 CONSOLIDATE_PROMPT = """Consolidation routine - reshape .horus/ so each lane stays in its lane.
 Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.md).
 Never invent status, dates, or versions; when intent is unclear, leave it and flag it.

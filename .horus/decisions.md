@@ -376,3 +376,29 @@ Reasoning:
 - It preserves the native-app-first rule: build the presence/status layer around
   existing apps before Horus takes responsibility for spawning and supervising
   agent sessions.
+
+## 2026-06-25 - Read Claude Usage Via The OAuth `/usage` Endpoint
+
+Claude Code exposes no subscription usage to hooks or transcripts, but the data its
+`/usage` panel shows comes from `GET https://api.anthropic.com/api/oauth/usage`
+(endpoint found in the CLI binary), authenticated with the OAuth token Claude Code
+already stores in `~/.claude/.credentials.json` plus header `anthropic-beta:
+oauth-2025-04-20`. It returns `five_hour.utilization`, `seven_day.utilization`,
+`resets_at`, and a structured `limits[]` array. `horus/claude_usage.py` reads it with
+stdlib `urllib` (no new deps) — the Claude peer of the Codex rollout telemetry in
+`codex_usage.py`.
+
+Threshold → closure: `horus hook install --target claude` writes a `.claude/
+settings.json` `Stop` hook running `horus usage check --target claude --hook`. When an
+active limit ≥ threshold (default 90), the hook emits `{"decision":"block","reason":
+<closure instruction>}`, which Claude feeds back as the next instruction — driving the
+session into the closure routine. A per-session sentinel (keyed off the hook's stdin
+`session_id`) plus the `stop_hook_active` flag fire it once per session.
+
+Reasoning:
+
+- Subscription-auth-consistent: it uses the subscription's own OAuth token, read-only,
+  to GET the user's own usage — no API key, matching [[horus-core-constraints]].
+- This is the signal that actually matters for Opus (quota, not context — context
+  rarely fills before the 5h/weekly limit). Codex already had it via rollouts; this
+  closes the gap for Claude Code. Graceful when the token is missing/expired or offline.

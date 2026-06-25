@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "First companion/mascot slice shipped. Next: use it, then improve status signals and native hook feedback before owned session orchestration."
+current_focus: "Claude Code usage→closure parity shipped (reads 5h/weekly % via OAuth /usage endpoint; Stop hook injects the closure routine at threshold). Next: real-world validation when a limit actually hits ~90%, then companion status signals / mascot polish."
 last_updated: 2026-06-25
 ---
 
@@ -114,7 +114,11 @@ Phase 3 — portability (started with direct Codex skill projection):
 - [x] Direct Codex hook projection: install `.codex/hooks.json` with a `Stop` hook
   for usage rollover warnings (`horus usage check --hook`). Skills do the closure
   work; hooks decide when to nudge.
-- [ ] Verify Claude Code's native hook/event surface for the same usage-nudge pattern.
+- [x] Claude Code usage→closure parity (2026-06-25): `horus/claude_usage.py` reads the
+  5h/weekly % from the OAuth `/usage` endpoint (`GET /api/oauth/usage`); `horus usage
+  check --target claude` + `horus hook install --target claude` install a `Stop` hook
+  that injects the closure routine via `{"decision":"block","reason":…}` at threshold,
+  once per session. Dogfooded into this repo's `.claude/settings.json`.
 - [ ] Evaluate `rulesync` for broader sync/projection (AGENTS/CLAUDE plus other tools),
   where it may still subsume or complement `horus reconcile`.
 

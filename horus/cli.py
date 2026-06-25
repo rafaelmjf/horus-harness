@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from datetime import date
@@ -10,6 +11,7 @@ from pathlib import Path
 
 from horus import (
     __version__,
+    claude_usage,
     closure,
     companion,
     codex_usage,
@@ -180,7 +182,47 @@ def cmd_close(args: argparse.Namespace) -> int:
     return 1
 
 
+def _read_hook_stdin() -> dict:
+    """Parse the JSON a native app pipes to a hook command (empty when run by hand)."""
+    if sys.stdin.isatty():
+        return {}
+    try:
+        raw = sys.stdin.read()
+    except OSError:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _usage_check_claude(args: argparse.Namespace) -> int:
+    report = claude_usage.latest_usage()
+    findings = claude_usage.usage_findings(threshold=args.threshold, report=report)
+
+    if not args.hook:
+        healthy = _print_findings(findings)
+        return 0 if healthy else 1
+
+    # Hook mode: drive the session into the closure routine, once, when over budget.
+    if not claude_usage.is_over_threshold(args.threshold, report):
+        return 0
+    hook_input = _read_hook_stdin()
+    if hook_input.get("stop_hook_active"):  # we already triggered a continuation
+        return 0
+    session_id = str(hook_input.get("session_id", "unknown"))
+    if native_hooks.closure_already_fired(session_id):
+        return 0
+    native_hooks.mark_closure_fired(session_id)
+    print(json.dumps({"decision": "block", "reason": templates.USAGE_CLOSURE_INSTRUCTION}))
+    return 0
+
+
 def cmd_usage_check(args: argparse.Namespace) -> int:
+    if args.target == "claude":
+        return _usage_check_claude(args)
+
     root = _resolve_dir(args.path)
     if root is None:
         return 2
@@ -202,6 +244,12 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
         action = native_hooks.install_codex_usage_hook(root, threshold=args.threshold)
         print(f"[{action.status}] {action.message}")
         print("Codex may ask you to review/trust this project hook with /hooks before it runs.")
+        return 0
+    if args.target == "claude":
+        action = native_hooks.install_claude_usage_hook(root, threshold=args.threshold)
+        print(f"[{action.status}] {action.message}")
+        print("Reads the 5h/weekly limit from the OAuth /usage endpoint; at threshold it")
+        print("drives the session into the Horus closure routine (one continuation per session).")
         return 0
     print(f"unsupported hook target: {args.target}")
     return 2
@@ -405,10 +453,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_usage_check = usage_sub.add_parser("check", help="check whether usage is near a closure threshold")
     p_usage_check.add_argument("--path", default=".", help="project root (default: cwd)")
     p_usage_check.add_argument(
+        "--target", choices=("codex", "claude"), default="codex",
+        help="which app's usage to read (default: codex). claude reads the OAuth /usage endpoint",
+    )
+    p_usage_check.add_argument(
         "--threshold",
         type=float,
         default=90.0,
-        help="warn when Codex context or rate-limit usage reaches this percent (default: 90)",
+        help="warn when context or rate-limit usage reaches this percent (default: 90)",
     )
     p_usage_check.add_argument(
         "--hook",
@@ -421,12 +473,12 @@ def build_parser() -> argparse.ArgumentParser:
     hook_sub = p_hook.add_subparsers(dest="hook_cmd", required=True)
     p_hook_install = hook_sub.add_parser("install", help="install a native app hook")
     p_hook_install.add_argument("--path", default=".", help="project root (default: cwd)")
-    p_hook_install.add_argument("--target", choices=("codex",), required=True, help="native app target")
+    p_hook_install.add_argument("--target", choices=("codex", "claude"), required=True, help="native app target")
     p_hook_install.add_argument(
         "--threshold",
         type=float,
         default=90.0,
-        help="usage percentage that triggers the Codex closure nudge (default: 90)",
+        help="usage percentage that triggers the closure routine (default: 90)",
     )
     p_hook_install.set_defaults(func=cmd_hook_install)
 
