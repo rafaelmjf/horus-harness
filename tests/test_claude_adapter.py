@@ -120,6 +120,14 @@ def test_parse_result_and_noise():
     assert ClaudeAdapter().parse_event("not json")[0].type is EventType.RAW
 
 
+def test_interactive_command_is_a_tui_with_preassigned_session():
+    argv = ClaudeAdapter().interactive_command(_spec(model="haiku"), session_id="uuid-1")
+    assert argv[0] == "claude"
+    assert ["--session-id", "uuid-1"] == [argv[argv.index("--session-id")], argv[argv.index("--session-id") + 1]]
+    assert ["--model", "haiku"] == [argv[argv.index("--model")], argv[argv.index("--model") + 1]]
+    assert "-p" not in argv and "--output-format" not in argv  # interactive, not headless
+
+
 def test_get_adapter_resolves_claude():
     assert isinstance(get_adapter("claude"), ClaudeAdapter)
 
