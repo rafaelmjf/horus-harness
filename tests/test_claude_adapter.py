@@ -7,13 +7,29 @@ stream-json --verbose` (Claude Code 2.1.191), trimmed for size.
 import json
 from pathlib import Path
 
-from horus.adapters import ClaudeAdapter, EventType, PermissionPosture, SpawnSpec, get_adapter
+import pytest
+
+from horus import config
+from horus.adapters import AccountMismatch, ClaudeAdapter, EventType, PermissionPosture, SpawnSpec, get_adapter
 
 
 def _spec(**kw) -> SpawnSpec:
     base = {"prompt": "do the thing", "project_dir": Path("/proj")}
     base.update(kw)
     return SpawnSpec(**base)
+
+
+def _home(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def _config_dir_with_email(tmp_path, name, email):
+    """A fake CLAUDE_CONFIG_DIR containing a .claude.json logged in as `email`."""
+    d = tmp_path / name
+    d.mkdir(parents=True, exist_ok=True)
+    (d / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": email}}), encoding="utf-8")
+    return d
 
 
 # --- build_command -----------------------------------------------------------
@@ -106,3 +122,46 @@ def test_parse_result_and_noise():
 
 def test_get_adapter_resolves_claude():
     assert isinstance(get_adapter("claude"), ClaudeAdapter)
+
+
+# --- multi-account isolation -------------------------------------------------
+
+def test_config_dirs_default_from_config(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.set_account_config_dir("work", "/home/work/.claude")
+    assert ClaudeAdapter().config_dirs == {"work": "/home/work/.claude"}  # picked up from accounts.toml
+
+
+def test_verify_account_match(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    cfg = _config_dir_with_email(tmp_path, "work-dir", "rafa@work.com")
+    config.set_account_alias("rafa@work.com", "work")
+    adapter = ClaudeAdapter(config_dirs={"work": str(cfg)})
+
+    check = adapter.verify_account("work")
+    assert check.ok is True
+    assert check.detected_email == "rafa@work.com"
+    assert check.config_dir == str(cfg)
+
+
+def test_verify_account_mismatch(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    cfg = _config_dir_with_email(tmp_path, "work-dir", "rafa@work.com")
+    config.set_account_alias("rafa@work.com", "work")
+    # "personal" points at a dir that is actually logged in as the "work" account.
+    adapter = ClaudeAdapter(config_dirs={"personal": str(cfg)})
+
+    check = adapter.verify_account("personal")
+    assert check.ok is False
+    assert check.detected_email == "rafa@work.com"
+
+
+def test_spawn_guard_refuses_account_mismatch(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    cfg = _config_dir_with_email(tmp_path, "work-dir", "rafa@work.com")
+    config.set_account_alias("rafa@work.com", "work")
+    adapter = ClaudeAdapter(config_dirs={"personal": str(cfg)})
+
+    # The guard runs before any subprocess, so this raises without launching claude.
+    with pytest.raises(AccountMismatch):
+        adapter.spawn(_spec(account="personal"))
