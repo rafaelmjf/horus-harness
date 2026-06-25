@@ -138,8 +138,8 @@ Phase 3 — portability (started with direct Codex skill projection):
   via `POST https://api.anthropic.com/v1/oauth/token` (client_id
   `9d1c250a-…`, CLI `User-Agent` to clear Cloudflare 1010) and persists the rotated
   pair. Refresh tokens are single-use — always persist or the next refresh 400s.
-- [ ] Evaluate `rulesync` for broader sync/projection (AGENTS/CLAUDE plus other tools),
-  where it may still subsume or complement `horus reconcile`.
+- [ ] Evaluate `rulesync` for broader sync/projection — folded into the dedicated
+  "Cross-tool interface sync" milestone track below (the 3rd-target trigger).
 
 ## Native-app-first feature design
 
@@ -316,6 +316,39 @@ dashboard and later becomes the place for continuity/status nudges.
 - [ ] Persist the registry in SQLite (re-justified once concurrency/scale hurts; JSON file shipped first).
 - [ ] Restrict autonomous closure edits to `.horus/**`, `AGENTS.md`, `CLAUDE.md`.
 - [ ] **LLM-based `horus infer`** (replaces the removed deterministic version): drive the official CLI to distill `.horus/` from the project's canonical docs — follow doc pointers (README → status/roadmap → CLAUDE.md → linked docs like docs/HISTORY.md), produce clean project + roadmap with planned/in-progress/done items, mark superseded source docs as stale, and prompt the user when intent is unclear.
+
+## Cross-tool interface sync (Claude ↔ Codex ↔ Gemini CLI ↔ Copilot …)
+
+> The differentiator is NOT a new converter — `rulesync` already projects rules/skills/
+> commands/MCP across 20+ tools. Horus splits this into two layers and only *owns* the one
+> that's inherently its own. See decisions 2026-06-25 "rulesync: stay direct at two tools;
+> own the behavioral layer always" and the `codex-plan-review.md` compatibility section.
+>
+> - **Layer 1 — artifact projection** (instructions, `SKILL.md`, commands, MCP): commodity;
+>   `rulesync` does it. Horus stays direct/zero-dep at two tools, adopts rulesync at the 3rd.
+> - **Layer 2 — behavioral/semantic adapters** (hook control protocol per tool; usage-signal
+>   *source* per tool; per-account config-dir env var): inherently Horus's; never portable.
+>   This is where the value is and Horus owns it regardless.
+
+Already shipped (Claude + Codex): dual-write `SKILL.md` to `.claude/skills/` + `.agents/skills/`;
+`reconcile instructions` for the `AGENTS.md`↔`CLAUDE.md` managed block; per-tool usage→closure
+hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
+
+- [ ] **`horus doctor compat` (observe first)** — per project, report what *each* installed agent
+  (claude/codex/gemini/copilot) would actually load: which instruction files, skills, MCP, hooks.
+  Read-only; solves the real pain ("which instructions/skills are active here, for this agent?").
+- [ ] **Canonical + projections, formalized** — `.horus/compat.toml` declares canonical surfaces
+  (`AGENTS.md`, `.agents/skills/`) + per-target projection policy; generated `CLAUDE.md` /
+  `.claude/skills/` are marked-generated with drift detection. Extends today's ad-hoc dual-write.
+- [ ] **3rd/4th target via rulesync (trigger: Gemini CLI / Copilot)** — shell out to / document
+  `rulesync` for Layer-1 projection (`GEMINI.md`, `.cursor/rules`, `.github/instructions/…`),
+  never embed (it's npm/Node). Horus wraps it with provenance, diff-before-install, and trust UX.
+- [ ] **Per-tool behavioral adapters (Layer 2)** — as each agent gets an execution adapter, add its
+  usage-signal source + hook control protocol + config-dir env var (Claude `CLAUDE_CONFIG_DIR`,
+  Codex `CODEX_HOME`, …). Pairs 1:1 with the adapter work in MVP3/4.
+- [ ] **Skill-projection security/trust** — provenance, diff before install/update, explicit trust
+  per project/account, warn on scripts/hooks/MCP/auto-approve, never silently install a
+  personal-sourced skill into a work account (projecting into N agents multiplies blast radius).
 
 ## Later
 
