@@ -137,6 +137,10 @@ dashboard and later becomes the place for continuity/status nudges.
   noted before building.
 - [x] Add `horus app` (or `horus mascot`) to start/detect the local dashboard and
   show a small always-on-top mascot/status bubble.
+- [x] Replace the placeholder drawing with the packaged pixel mascot image and
+  remove window chrome/taskbar decoration.
+- [x] Add subtle idle animation (blink/bob/wing motion) so the mascot does not
+  feel frozen.
 - [x] Clicking the mascot opens the dashboard at `http://127.0.0.1:8765`.
 - [x] Add a minimal context menu: Open Dashboard, Run Close Check, Quit.
 - [x] Show a basic status indicator: neutral/ok, warning, needs-closure. Initial

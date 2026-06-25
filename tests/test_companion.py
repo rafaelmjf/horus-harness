@@ -11,6 +11,12 @@ def test_dashboard_url_defaults_to_localhost():
     assert companion.dashboard_url("localhost", 9000) == "http://localhost:9000"
 
 
+def test_mascot_asset_is_packaged():
+    path = companion.mascot_asset_path()
+    assert path.name == "mascot.png"
+    assert path.is_file()
+
+
 def test_ensure_dashboard_does_not_spawn_when_live(monkeypatch):
     monkeypatch.setattr(companion, "dashboard_is_live", lambda url: True)
 

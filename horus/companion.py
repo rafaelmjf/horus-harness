@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import webbrowser
+from importlib import resources
 from pathlib import Path
 from typing import NamedTuple
 from urllib.error import URLError
@@ -53,6 +54,10 @@ def open_dashboard(url: str) -> None:
     webbrowser.open(url, new=2)
 
 
+def mascot_asset_path() -> Path:
+    return Path(str(resources.files("horus").joinpath("assets", "mascot.png")))
+
+
 def run_close_check(project_root: Path, *, threshold: float = 90.0) -> tuple[str, str]:
     from horus import closure
 
@@ -88,38 +93,44 @@ def run_companion(
 
     root = tk.Tk()
     root.title("Horus")
-    root.geometry("96x112+80+80")
     root.resizable(False, False)
+    root.overrideredirect(True)
     root.attributes("-topmost", True)
-    root.configure(bg="#101319")
+    try:
+        root.attributes("-toolwindow", True)
+    except tk.TclError:
+        pass
+    root.configure(bg="#ffffff")
 
-    status = tk.StringVar(value="active")
-    canvas = tk.Canvas(root, width=96, height=88, bg="#101319", highlightthickness=0)
+    full_img = tk.PhotoImage(file=str(mascot_asset_path()))
+    scale = max(1, full_img.height() // 180)
+    mascot_img = full_img.subsample(scale, scale)
+    width = mascot_img.width()
+    height = mascot_img.height()
+    root.geometry(f"{width}x{height}+80+80")
+
+    canvas = tk.Canvas(root, width=width, height=height, bg="#ffffff", highlightthickness=0, bd=0)
     canvas.pack()
-    label = tk.Label(root, textvariable=status, bg="#101319", fg="#d7e0ef", font=("Segoe UI", 8))
-    label.pack(fill="x")
 
     menu = tk.Menu(root, tearoff=0)
+    mascot_item = canvas.create_image(width // 2, height // 2, image=mascot_img)
+    wing_item = canvas.create_polygon(0, 0, 1, 0, 1, 1, fill="#6db85f", outline="#2f6d39")
+    blink_item = canvas.create_rectangle(0, 0, 0, 0, fill="#143b74", outline="#143b74", state="hidden")
+    status_item = canvas.create_rectangle(width - 18, height - 18, width - 8, height - 8, fill="#57d39a", outline="#ffffff")
+    canvas.create_text(width - 13, height - 13, text="", fill="#ffffff")
 
-    def draw(color: str = "#57d39a") -> None:
-        canvas.delete("all")
-        # Flat pixel mascot: simple eye/sun motif inspired by Horus without assets.
-        canvas.create_rectangle(0, 0, 96, 88, fill="#101319", outline="#101319")
-        canvas.create_rectangle(28, 18, 68, 58, fill="#d7b95b", outline="#d7b95b")
-        canvas.create_rectangle(20, 30, 76, 46, fill="#d7b95b", outline="#d7b95b")
-        canvas.create_rectangle(36, 26, 60, 50, fill="#101319", outline="#101319")
-        canvas.create_rectangle(42, 32, 54, 44, fill="#e8f0ff", outline="#e8f0ff")
-        canvas.create_rectangle(46, 34, 52, 42, fill="#101319", outline="#101319")
-        canvas.create_rectangle(12, 66, 84, 72, fill=color, outline=color)
-        canvas.create_rectangle(44, 62, 52, 80, fill=color, outline=color)
+    drag: dict[str, int | bool] = {"x": 0, "y": 0, "root_x": 80, "root_y": 80, "moved": False}
+    frame = {"n": 0}
+
+    def set_status(color: str) -> None:
+        canvas.itemconfigure(status_item, fill=color)
 
     def open_action(_event: object | None = None) -> None:
         open_dashboard(dashboard.url)
 
     def close_check_action() -> None:
         level, message = run_close_check(project_root, threshold=usage_threshold)
-        status.set(message)
-        draw({"ok": "#57d39a", "warn": "#e6c35c", "fail": "#f08a8a"}.get(level, "#57d39a"))
+        set_status({"ok": "#57d39a", "warn": "#e6c35c", "fail": "#f08a8a"}.get(level, "#57d39a"))
         if level != "ok":
             messagebox.showwarning("Horus", message)
 
@@ -129,16 +140,61 @@ def run_companion(
     def show_menu(event: tk.Event) -> None:
         menu.tk_popup(event.x_root, event.y_root)
 
+    def press(event: tk.Event) -> None:
+        drag["x"] = event.x_root
+        drag["y"] = event.y_root
+        drag["root_x"] = root.winfo_x()
+        drag["root_y"] = root.winfo_y()
+        drag["moved"] = False
+
+    def motion(event: tk.Event) -> None:
+        dx = event.x_root - int(drag["x"])
+        dy = event.y_root - int(drag["y"])
+        if abs(dx) + abs(dy) > 4:
+            drag["moved"] = True
+        root.geometry(f"+{int(drag['root_x']) + dx}+{int(drag['root_y']) + dy}")
+
+    def release(_event: tk.Event) -> None:
+        if not drag["moved"]:
+            open_action()
+
+    def animate() -> None:
+        n = frame["n"]
+        bob = 1 if n % 24 in range(6, 12) else -1 if n % 24 in range(18, 24) else 0
+        canvas.coords(mascot_item, width // 2, height // 2 + bob)
+
+        flap = -3 if n % 28 < 14 else 2
+        x0, y0 = int(width * 0.61), int(height * 0.49) + flap
+        x1, y1 = int(width * 0.91), int(height * 0.65) + flap
+        x2, y2 = int(width * 0.75), int(height * 0.77) + flap
+        canvas.coords(wing_item, x0, y0, x1, y1, x2, y2, int(width * 0.66), int(height * 0.66) + flap)
+
+        blink_on = n % 96 in (0, 1, 2)
+        if blink_on:
+            canvas.coords(
+                blink_item,
+                int(width * 0.27),
+                int(height * 0.32) + bob,
+                int(width * 0.39),
+                int(height * 0.36) + bob,
+            )
+            canvas.itemconfigure(blink_item, state="normal")
+        else:
+            canvas.itemconfigure(blink_item, state="hidden")
+
+        frame["n"] = n + 1
+        root.after(120, animate)
+
     menu.add_command(label="Open Dashboard", command=open_action)
     menu.add_command(label="Run Close Check", command=close_check_action)
     menu.add_separator()
     menu.add_command(label="Quit", command=quit_action)
 
-    canvas.bind("<Button-1>", open_action)
+    canvas.bind("<ButtonPress-1>", press)
+    canvas.bind("<B1-Motion>", motion)
+    canvas.bind("<ButtonRelease-1>", release)
     canvas.bind("<Button-3>", show_menu)
-    label.bind("<Button-1>", open_action)
-    label.bind("<Button-3>", show_menu)
 
-    draw()
+    animate()
     root.mainloop()
     return 0

@@ -35,3 +35,6 @@ horus = "horus.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["horus*"]
+
+[tool.setuptools.package-data]
+horus = ["assets/*.png"]
