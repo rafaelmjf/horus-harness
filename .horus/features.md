@@ -41,7 +41,7 @@ Status: **Shipped** · **In progress** · **Planned**
 
 | Capability | Notes |
 |---|---|
-| Agent execution layer (MVP3) | shipped: adapter contract + `FakeAdapter` + `ClaudeAdapter` (`horus/adapters/`, spawn+resume **proven live**), the **session/process registry** (`horus/registry.py`), **multi-account isolation** (per-account `CLAUDE_CONFIG_DIR` + identity check), and a **live oversight dashboard** (reconciles the registry on load; "Live sessions" card + `/sessions`, read-only). Next: Codex adapter, oversight controls (terminate/resume), autonomous closure |
+| Agent execution layer (MVP3) | shipped: adapter contract + `FakeAdapter` + `ClaudeAdapter` (`horus/adapters/`, spawn+resume **proven live**), the **session/process registry** (`horus/registry.py`), **multi-account isolation** (per-account `CLAUDE_CONFIG_DIR` + identity check), a **live oversight dashboard** (registry view), and **`horus run`** (launch a tracked session from the CLI; `CLAUDE_CONFIG_DIR`-aware account detection). Next: Codex adapter, oversight controls (terminate/resume), autonomous closure |
 | Routine + skill validation on a real project | invoke on fabric in a CLI-equipped session; tune skill triggering (`claude -p`); harmonize siblings → `roadmap.md` |
 
 ## Planned
