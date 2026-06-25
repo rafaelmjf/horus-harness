@@ -153,6 +153,11 @@ main { padding: 24px 28px; max-width: 1320px; }
 .feat-buckets li { font-size: 12px; margin: 2px 0; overflow-wrap: anywhere; }
 .feat-buckets .idea li { color: #b9a6e0; } .feat-buckets .prog li { color: #e6c35c; }
 .feat-buckets .ship li { color: #57d39a; }
+.next-one { font-size: 14px; margin: 5px 0 7px; color: #eaf6ee; }
+.checklist { list-style: none; padding-left: 0; margin: 4px 0 2px; }
+.checklist li { font-size: 12px; margin: 3px 0; color: #b9c2d0; overflow-wrap: anywhere; }
+.summary-scroll { max-height: 200px; overflow: auto; margin-top: 4px; font-size: 13px; }
+.summary-scroll p, .summary-scroll li { margin: 4px 0; }
 .card { background: #151823; border: 1px solid #232733; border-radius: 10px;
         padding: 16px 18px; margin: 0 0 14px; }
 .card h2 { margin: 0 0 4px; font-size: 16px; }
@@ -411,23 +416,83 @@ def _breakdown_html(p: dict[str, Any]) -> str:
     return "".join(out)
 
 
+def _best_next_text(p: dict[str, Any]) -> str:
+    """The single best next step: the roadmap's next open item, else the focus."""
+    ns = p.get("next_step")
+    if ns and ns.get("text"):
+        return _plain(ns["text"])
+    focus = p["current_focus"].strip()
+    if focus and not focus.lower().startswith("describe "):
+        return _plain(focus)
+    return ""
+
+
+def _single_next_html(p: dict[str, Any]) -> str:
+    """Highlight exactly ONE action + the prompt to get back to it."""
+    text = _best_next_text(p)
+    if text:
+        return (
+            "<div class='next'><span class='lbl'>NEXT</span>"
+            f"<div class='next-one'>{html.escape(text)}</div>"
+            f"{_start_session_html(p)}</div>"
+        )
+    if p["progress"]["total"]:
+        return "<div class='next done'><span class='lbl'>NEXT</span> &#10003; roadmap complete</div>"
+    return ""
+
+
 def _start_session_html(p: dict[str, Any]) -> str:
-    """CTA prompting the user to start a session on the highlighted next item."""
-    steps = next_steps(p, limit=1)
-    title = _plain(steps[0])[:48] if steps else "session"
+    """Suggested prompt to resume the single best step (a future one-click start)."""
+    title = _best_next_text(p)[:48] or "session"
     cmd = f'horus session new "{title}"'
-    return f"<div class='start' title='run in the project root'>&#9654; Start a session &middot; <code>{html.escape(cmd)}</code></div>"
+    return f"<div class='start' title='will start a session on this step'>&#9654; Resume &middot; <code>{html.escape(cmd)}</code></div>"
 
 
-def _remaining_items_html(p: dict[str, Any], limit: int = 5) -> str:
+def _remaining_items_html(p: dict[str, Any], limit: int = 8) -> str:
+    """The rest of the open roadmap items as a plain empty-checkbox list."""
     open_tasks = [t for t in p["tasks"] if t["state"] in ("todo", "partial")]
-    # Drop the one already highlighted as NEXT so the list is genuinely "remaining".
-    highlighted = set(s.lower() for s in next_steps(p, limit=1))
-    rest = [t for t in open_tasks if _plain(t["text"]).lower() not in highlighted]
+    highlighted = _best_next_text(p).lower()
+    rest = [t for t in open_tasks if _plain(t["text"]).lower() != highlighted]
     if not rest:
         return ""
-    items = "".join(f"<li class='t-{t['state']}'>{html.escape(_plain(t['text']))}</li>" for t in rest[:limit])
-    return f"<div class='box inner'><span class='lbl'>Remaining top items</span><ul>{items}</ul></div>"
+    items = "".join(f"<li>&#9744; {html.escape(_plain(t['text']))}</li>" for t in rest[:limit])
+    return f"<div class='box inner'><span class='lbl'>Remaining roadmap items</span><ul class='checklist'>{items}</ul></div>"
+
+
+def _session_summary_excerpt(body: str) -> str:
+    """The agent's written summary of the latest session: the `## Summary` section
+    if present, else the prose after the leading title."""
+    lines = body.splitlines()
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith("##") and "summary" in s.lower():
+            out = []
+            for nxt in lines[i + 1:]:
+                if nxt.strip().startswith("#"):
+                    break
+                out.append(nxt)
+            text = "\n".join(out).strip()
+            if text:
+                return text
+    body = body.strip()
+    if body.startswith("#"):  # drop the leading H1 title
+        nl = body.find("\n")
+        body = body[nl + 1:].strip() if nl != -1 else ""
+    return body
+
+
+def _last_session_summary_html(p: dict[str, Any]) -> str:
+    """The verbose summary the agent wrote, not just the date."""
+    latest = p.get("latest")
+    if not latest:
+        return "<div class='latest muted'>no sessions yet</div>"
+    date = html.escape(latest.get("date", ""))
+    datetag = f"<span class='date'>{date}</span>" if date else ""
+    text = _session_summary_excerpt(p.get("latest_body", ""))
+    if text:
+        return f"{datetag}<div class='summary-scroll'>{markdown.render(text)}</div>"
+    one = html.escape(latest.get("summary", "")) or "(no summary)"
+    return f"{datetag}<p class='latest'>{one}</p>"
 
 
 def _features_buckets_html(p: dict[str, Any]) -> str:
@@ -455,10 +520,10 @@ def _project_column(p: dict[str, Any], i: int) -> str:
         f"<div class='badges'><span>status: {html.escape(p['status']) or 'unknown'}</span>"
         f"<span>{len(p['sessions'])} session(s)</span> {_git_badge(p)} {_health_summary(p['findings'])}</div>"
     )
-    last = f"<div class='box'><span class='lbl'>Last session summary</span>{_latest_html(p)}</div>"
+    last = f"<div class='box'><span class='lbl'>Last session summary</span>{_last_session_summary_html(p)}</div>"
     roadmap = (
         "<div class='box'><span class='lbl'>Roadmap</span>"
-        f"{_next_html(p)}{_start_session_html(p)}"
+        f"{_single_next_html(p)}"
         f"{_progress_html(p, href=f'/project?i={i}#roadmap')}"
         f"{_remaining_items_html(p)}</div>"
     )
