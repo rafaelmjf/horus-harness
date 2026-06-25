@@ -467,6 +467,27 @@ Reasoning / gotchas:
   sessions/day don't collide and each is attributable to an account — the anchor a
   future MVP3 "startup identity check" can compare against.
 
+## 2026-06-25 - The Session Agent Maintains The Lanes, Not Scripts
+
+The `.horus/` lanes are filled by the **agent running the session**, from the live
+conversation context, via the `horus-consolidate` skill — NOT by Python that parses
+files and rewrites lane content.
+
+Reasoning:
+
+- The high-value content (decisions + *why*, dead ends, the real next step, what
+  shipped) lives in the session's context window, which a file-only script cannot see.
+  Deterministic extraction from files can only reshuffle what's already written, and
+  earlier attempts at it were brittle (the removed deterministic `infer`).
+- So the CLI is a **signal + verification + scaffolding** layer only: `horus close` /
+  `consolidate` / `doctor` emit candidates and checks and print the ritual; `init` /
+  `session new` scaffold empty templates. None of them write lane *content*.
+- The dashboard *reads* the lanes to display them (gitstate, feature buckets, next-step
+  highlight) — that's presentation, not maintenance, and is fine. What must never happen
+  is a script deciding lane content.
+- Clarified in the managed instruction block (templates.py + AGENTS.md/CLAUDE.md) so an
+  agent reads this at session start. See also "Cognitive Routines Ship As Claude Skills".
+
 ## 2026-06-25 - Git Is The Cross-Machine Transport (MVP2.5 shape)
 
 The multi-machine project overview will **not** use a central server, hosted session
