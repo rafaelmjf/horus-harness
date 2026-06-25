@@ -138,7 +138,7 @@ def cmd_session(args: argparse.Namespace) -> int:
 def cmd_close(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     print(f"Closure check: {root}\n")
-    findings = closure.closure_status(root)
+    findings = closure.closure_status(root, usage_threshold=args.usage_threshold)
     healthy = _print_findings(findings)
 
     if args.commit:
@@ -307,6 +307,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_close.add_argument("--commit", action="store_true", help="stage+commit the continuity files")
     p_close.add_argument("--push", action="store_true", help="with --commit, also push to origin")
     p_close.add_argument("--message", "-m", help="commit message for --commit")
+    p_close.add_argument(
+        "--usage-threshold",
+        type=float,
+        default=90.0,
+        help="warn when Codex context or rate-limit usage reaches this percent (default: 90)",
+    )
     p_close.set_defaults(func=cmd_close)
 
     p_consol = sub.add_parser(

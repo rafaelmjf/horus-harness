@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "All 3 skills execution-validated by independent agents — caught & fixed several unreachable-criteria/silent-failure bugs (skills now v2; 86 tests green). Remaining validation: triggering eval, blocked on `claude /login` (CLI installed, not authenticated). Then Phase 3 (rulesync→Codex) / MVP3 (autonomous spawn)."
+current_focus: "First Codex usage/rollover warning shipped via read-only rollout telemetry in `horus close` + dashboard. Next: consolidate this repo's own .horus lanes, then continue toward MVP3 adapter/registry work."
 last_updated: 2026-06-25
 ---
 
@@ -37,7 +37,7 @@ last_updated: 2026-06-25
 - [x] Add agent-delegated closure prompt (`horus close` prints the ritual for the in-loop agent).
 - [x] Make `horus close` git-aware: work-commits-since-summary + uncommitted-continuity signals, clear verdict.
 - [x] Add `horus close --commit [--push]` to stage+commit `.horus/` updates (close the multi-machine sync seam).
-- [ ] Surface staleness / context-rollover signals in the dashboard too (currently in `horus close`). No DB.
+- [x] Surface first context-rollover signal in `horus close` and dashboard: read local Codex rollout `token_count` events and warn at `--usage-threshold` (default 90). No DB.
 - [~] SQLite session/event registry + session states (`closing`/`needs_closure`/`closed_stale`) — DEFERRED. Premature at solo scale (file parsing is instant) and presupposes the deferred execution layer. Revisit when scale hurts perf or Horus runs sessions itself.
 
 ## Structure v2 - `.horus/` lanes + distillation routines (prototyping in fabric)

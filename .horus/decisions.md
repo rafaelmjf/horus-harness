@@ -317,3 +317,13 @@ Reasoning:
 
 Also decided this session: structure v2 (`features.md` + `history.md`) is no longer "not yet locked" for the **non-LLM** parts — templates, managed block, and dashboard rendering shipped and are dogfooded in this repo. `features.md`/`history.md` are `RECOMMENDED_FILES` (warn-if-missing, not fail) so pre-v2 repos migrate gently. The overlap heuristic strips project-name tokens and requires ≥2 distinctive shared tokens to avoid false positives. See [[horus-locked-decisions]].
 
+## 2026-06-25 - Codex Rollout Telemetry Can Bootstrap Context Warnings
+
+Use local Codex rollout JSONL as a read-only, best-effort source for the first context/usage warning.
+
+Reasoning:
+
+- A real Codex session records `token_count` events under `$CODEX_HOME/sessions`, including `last_token_usage`, `model_context_window`, and rate-limit percentages.
+- That gives Horus enough signal to warn during `horus close` and in the dashboard when a project is near its context or rate-limit budget, without waiting for the full MVP3 spawn/registry layer.
+- The inspector must be conservative: read-only, scoped to the matching project `turn_context`, tolerant of missing/schema-drifted files, and never dependent on secrets or auth files.
+- This is a bridge, not the final session model. Horus-managed sessions should later get usage directly from adapter events and the registry.

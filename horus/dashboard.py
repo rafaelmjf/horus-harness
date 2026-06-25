@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from horus import config, frontmatter, markdown, roadmap, routines
+from horus import codex_usage, config, frontmatter, markdown, roadmap, routines
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
 
@@ -100,7 +100,8 @@ def load_project(path_str: str) -> dict[str, Any]:
     data["tasks"] = [{"state": t.state, "text": t.text, "section": t.section} for t in tasks]
 
     data["findings"] = [
-        {"level": f.level, "message": f.message} for f in check_project(root)
+        {"level": f.level, "message": f.message}
+        for f in check_project(root) + codex_usage.usage_findings(root)
     ]
     return data
 

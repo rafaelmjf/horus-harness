@@ -15,6 +15,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from horus import codex_usage
 from horus.continuity import Finding, check_project, recent_sessions
 from horus.instructions import check_drift
 
@@ -49,9 +50,10 @@ def _work_commits_since(root: Path, mtime: float) -> int:
     return sum(1 for line in out.splitlines() if line.strip().isdigit() and int(line) > mtime)
 
 
-def closure_status(root: Path) -> list[Finding]:
+def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding]:
     """Compose continuity health + instruction drift + git-aware closure signals."""
     findings = list(check_project(root))
+    findings.extend(codex_usage.usage_findings(root, threshold=usage_threshold))
 
     agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
     if agents.is_file() and claude.is_file():
