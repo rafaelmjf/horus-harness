@@ -144,8 +144,13 @@ class AgentAdapter(ABC):
         return {}
 
     @abstractmethod
-    def parse_event(self, line: str) -> AgentEvent | None:
-        """Parse one output line into an event, or ``None`` to ignore it."""
+    def parse_event(self, line: str) -> list[AgentEvent]:
+        """Parse one output line into zero or more events.
+
+        A list (not a single event) because one stream line can carry several
+        normalized events — e.g. a Claude ``assistant`` message whose content is
+        both a text block and a tool_use block. Return ``[]`` to ignore a line.
+        """
 
     # --- shared orchestration -------------------------------------------------
 
@@ -162,6 +167,7 @@ class AgentAdapter(ABC):
             argv,
             cwd=str(spec.project_dir),
             env=env,
+            stdin=subprocess.DEVNULL,  # the prompt is an arg; don't let the child wait on stdin
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
@@ -180,9 +186,7 @@ class AgentAdapter(ABC):
     def _stream(self, proc: subprocess.Popen, session: AgentSession) -> Iterator[AgentEvent]:
         assert proc.stdout is not None
         for line in proc.stdout:
-            ev = self.parse_event(line.rstrip("\n"))
-            if ev is not None:
-                yield ev
+            yield from self.parse_event(line.rstrip("\n"))
         session.returncode = proc.wait()
         if session.returncode != 0:
             session.status = "failed"

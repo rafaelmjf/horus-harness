@@ -9,7 +9,27 @@ Curated, durable context: the problems that bit us and the lessons that shaped t
 design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
 just the war stories worth carrying forward.
 
-## A handoff named a branch the pickup couldn't see (trust the remote, not local refs)
+## Building the real adapter reshaped the contract (one stream line → many events)
+
+The adapter contract first had `parse_event(line) -> AgentEvent | None` — fine for the
+FakeAdapter, whose stream is one event per line. But the first real adapter (Claude Code)
+showed a single `assistant` stream-json line routinely carries *several* content blocks
+(a text block **and** a tool_use block), so one event per line silently dropped the
+tool_use. **Lesson:** validate a contract against the real thing early — the fake agreed
+with my wrong assumption because I designed both. `parse_event` now returns a **list**
+(zero or more events). Also learned from the real CLI: `claude -p` stream-json needs
+`--verbose`; it waits ~3s on stdin unless you pass `stdin=DEVNULL`; and `system/init`
+echoes the session id, so resume needs no pre-assigned id.
+
+## A moving-major action tag that didn't exist silently broke every release
+
+The v0.0.2 PyPI publish failed instantly: the workflow pinned `astral-sh/setup-uv@v8`,
+but that action publishes only `vX.Y.Z` tags (latest `v8.2.0`) — there is no rolling
+`v8` major tag, so `@v8` was unresolvable. A "bump CI actions" commit had introduced it
+after the working v0.0.1 release, so it lay dormant until the next release. **Lesson:**
+don't assume an action ships a moving major tag; pin a tag you've confirmed exists
+(`@v8.2.0`). A release workflow only runs at release time, so a broken pin hides until
+the worst moment — verify the tag resolves, not just that the YAML looks right.
 
 A session handoff (`next_prompt`) told the next session to "resume on the
 `mvp2.5-git-aware-dashboard` branch." That branch existed on `origin` but the

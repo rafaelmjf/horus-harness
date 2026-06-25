@@ -58,20 +58,20 @@ def test_build_env_isolates_by_account():
 
 def test_parse_event_maps_each_kind():
     fake = FakeAdapter()
-    assert fake.parse_event('{"event":"init","session_id":"s1"}') == AgentEvent(
-        EventType.SESSION_STARTED, session_id="s1", raw={"event": "init", "session_id": "s1"}
-    )
-    assert fake.parse_event('{"event":"text","text":"hi"}').type is EventType.ASSISTANT_TEXT
-    assert fake.parse_event('{"event":"tool","tool":"Bash"}').tool == "Bash"
-    assert fake.parse_event('{"event":"result","ok":false}').is_error is True
-    assert fake.parse_event('{"event":"error","message":"boom"}').type is EventType.ERROR
+    assert fake.parse_event('{"event":"init","session_id":"s1"}') == [
+        AgentEvent(EventType.SESSION_STARTED, session_id="s1", raw={"event": "init", "session_id": "s1"})
+    ]
+    assert fake.parse_event('{"event":"text","text":"hi"}')[0].type is EventType.ASSISTANT_TEXT
+    assert fake.parse_event('{"event":"tool","tool":"Bash"}')[0].tool == "Bash"
+    assert fake.parse_event('{"event":"result","ok":false}')[0].is_error is True
+    assert fake.parse_event('{"event":"error","message":"boom"}')[0].type is EventType.ERROR
 
 
 def test_parse_event_handles_blank_and_garbage():
     fake = FakeAdapter()
-    assert fake.parse_event("   ") is None
+    assert fake.parse_event("   ") == []
     raw = fake.parse_event("not json")
-    assert raw.type is EventType.RAW and raw.text == "not json"
+    assert raw[0].type is EventType.RAW and raw[0].text == "not json"
 
 
 # --- spawn / resume (shared orchestration via AgentRun) ----------------------

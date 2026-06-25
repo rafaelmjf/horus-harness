@@ -66,28 +66,28 @@ class FakeAdapter(AgentAdapter):
         # Stand-in for real per-account isolation (e.g. CLAUDE_CONFIG_DIR).
         return {"FAKE_AGENT_ACCOUNT": spec.account} if spec.account else {}
 
-    def parse_event(self, line: str) -> AgentEvent | None:
+    def parse_event(self, line: str) -> list[AgentEvent]:
         line = line.strip()
         if not line:
-            return None
+            return []
         try:
             obj = json.loads(line)
         except json.JSONDecodeError:
-            return AgentEvent(EventType.RAW, text=line)
+            return [AgentEvent(EventType.RAW, text=line)]
         kind = obj.get("event")
         if kind == "init":
-            return AgentEvent(EventType.SESSION_STARTED, session_id=obj.get("session_id"), raw=obj)
+            return [AgentEvent(EventType.SESSION_STARTED, session_id=obj.get("session_id"), raw=obj)]
         if kind == "text":
-            return AgentEvent(EventType.ASSISTANT_TEXT, text=obj.get("text"), raw=obj)
+            return [AgentEvent(EventType.ASSISTANT_TEXT, text=obj.get("text"), raw=obj)]
         if kind == "tool":
-            return AgentEvent(EventType.TOOL_USE, tool=obj.get("tool"), raw=obj)
+            return [AgentEvent(EventType.TOOL_USE, tool=obj.get("tool"), raw=obj)]
         if kind == "permission":
-            return AgentEvent(EventType.PERMISSION_REQUEST, tool=obj.get("tool"), raw=obj)
+            return [AgentEvent(EventType.PERMISSION_REQUEST, tool=obj.get("tool"), raw=obj)]
         if kind == "result":
-            return AgentEvent(EventType.RESULT, is_error=not bool(obj.get("ok", True)), raw=obj)
+            return [AgentEvent(EventType.RESULT, is_error=not bool(obj.get("ok", True)), raw=obj)]
         if kind == "error":
-            return AgentEvent(EventType.ERROR, text=obj.get("message"), is_error=True, raw=obj)
-        return AgentEvent(EventType.RAW, text=line, raw=obj)
+            return [AgentEvent(EventType.ERROR, text=obj.get("message"), is_error=True, raw=obj)]
+        return [AgentEvent(EventType.RAW, text=line, raw=obj)]
 
     # --- orchestration: in-memory instead of a subprocess ---------------------
 
@@ -104,9 +104,7 @@ class FakeAdapter(AgentAdapter):
 
     def _emit(self, spec: SpawnSpec, resume_id: str | None) -> Iterator[AgentEvent]:
         for payload in self._script_lines(spec, resume_id):
-            ev = self.parse_event(json.dumps(payload))
-            if ev is not None:
-                yield ev
+            yield from self.parse_event(json.dumps(payload))
 
     def _script_lines(self, spec: SpawnSpec, resume_id: str | None) -> list[dict]:
         if self._script is not None:

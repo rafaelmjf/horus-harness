@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "MVP3 started. The agent-adapter contract + FakeAdapter shipped (horus/adapters/): a thin, tool-neutral contract — adapters implement four pure methods (permission_flags/build_command/build_env/parse_event) while spawn/resume, subprocess streaming, and session-id/status tracking are shared, so real adapters stay thin; FakeAdapter implements it all in memory so orchestration is testable with no CLI. Also: the session account tag is now aliased (config.alias_for + ~/.horus/accounts.toml + `horus account`) so the real email never lands in a commit. Next: the real Claude Code adapter (needs a machine with `claude` logged in), then the session/process registry. mvp2.5-git-aware-dashboard is a clean fast-forward over main and ready to merge."
-next_action: "Implement the Claude Code adapter (horus/adapters/claude.py) against the contract in horus/adapters/base.py, with FakeAdapter as the reference: `claude -p --output-format stream-json`, `--resume`, `CLAUDE_CONFIG_DIR` per account, stream-json parse_event. Needs a CLI-equipped machine. Then the session/process registry."
-next_prompt: "Resume the Horus project. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE before reasoning about it — do not trust local refs (a prior handoff was confused because the named branch existed only on origin). The active dev branch is `mvp3-agent-adapter`; confirm which branch holds the unmerged work and whether the local checkout is stale/already-merged, then check it out. Read .horus/ lanes + the latest .horus/sessions/ summary. Continue MVP3: implement the Claude Code adapter (horus/adapters/claude.py) against the contract in horus/adapters/base.py (FakeAdapter is the reference). This needs a machine with `claude` installed and logged in."
+current_focus: "0.0.2 'companion' milestone shipped to PyPI; MVP3 'manager' underway on mvp3-agent-adapter. The agent-adapter contract (horus/adapters/), FakeAdapter, AND the real ClaudeAdapter are done — spawn+resume proven live (spawn returned a session id; resume recalled context from the first turn). Contract refined while building the real adapter: parse_event returns a list (one assistant line can carry text+tool_use); stdin=DEVNULL. Next: the session/process registry (AgentSession already has the row shape: agent/account/project/environment/pid/session_id/status), then multi-account isolation (CLAUDE_CONFIG_DIR) + the live oversight dashboard."
+next_action: "Build the session/process registry: persist (agent, account, project, environment, pid, session_id, status) across restarts, populated from AgentSession as runs spawn/resume/exit. Then multi-account isolation (CLAUDE_CONFIG_DIR per account + startup identity check) and the Codex adapter to prove the abstraction."
+next_prompt: "Resume the Horus project. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (don't trust local refs). Active dev branch: `mvp3-agent-adapter`. Read .horus/ lanes + the latest .horus/sessions/ summary. The adapter contract + FakeAdapter + ClaudeAdapter are done and spawn/resume is proven; merges go via PR (gh pr create → squash-merge, auto-delete). Continue MVP3 with the session/process registry (AgentSession in horus/adapters/base.py already has the row shape) backed by the adapters."
 last_updated: 2026-06-25
 ---
 
@@ -256,9 +256,8 @@ dashboard and later becomes the place for continuity/status nudges.
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 
-> DEFERRED until working on a machine with the official CLIs installed + logged in.
-> `claude`/`codex` are not present on the current machine, so the subprocess-driving
-> layer can't be end-to-end tested here. Approach is locked below so resumption is clean.
+> No longer deferred: `claude` 2.1.191 is installed AND logged in on this machine, so
+> the subprocess-driving layer is now end-to-end testable here (was the only blocker).
 >
 > Locked decisions (2026-06-25): build order = spawn + registry FIRST, then the live
 > oversight app. First real adapter = Claude Code. Thin owned adapter against a shared
@@ -271,11 +270,18 @@ dashboard and later becomes the place for continuity/status nudges.
   and `AgentRun` session-id/status tracking; `SpawnSpec`/`AgentSession`/`AgentEvent`/`PermissionPosture`/`EventType`
   normalize the I/O. `fake.py` (`FakeAdapter`) implements the whole contract in memory via a JSON-lines stream that
   mirrors stream-json's shape, so orchestration is testable with no CLI. `get_adapter(name)`. 12 tests.
-- [ ] **Claude Code adapter (NEXT)**: `claude -p --output-format stream-json`, `--resume`, `CLAUDE_CONFIG_DIR` per
-  account, permission posture. Fills in the four pure methods against the contract; FakeAdapter is the reference.
-  Needs a machine with `claude` installed + logged in.
-- [ ] Session/process registry: `(agent, account, project, environment, pid, session_id, status)`; survives restarts.
-- [ ] Spawn + resume one headless session in a project under a chosen account; capture output; track state.
+- [x] **Claude Code adapter** (2026-06-25). `horus/adapters/claude.py` (`ClaudeAdapter`): fills the four pure methods
+  against the contract — `claude -p --output-format stream-json --verbose`, `--resume <id>`, posture→`--permission-mode`
+  (PLAN/READ_ONLY→plan, AUTO_EDIT→acceptEdits, FULL_AUTO→bypassPermissions), `--model`, comma-joined
+  `--allowedTools`/`--disallowedTools`, `CLAUDE_CONFIG_DIR` per account. `parse_event` maps the real 2.1.191 stream-json
+  (system/init→SESSION_STARTED carrying the id; assistant text/tool_use; user tool_result; result; ignores
+  rate_limit_event/thinking_tokens/post_turn_summary). Contract refined: `parse_event` now returns a **list** (one
+  assistant line can carry text+tool_use); base sets `stdin=DEVNULL` (skips Claude's 3s stdin wait). 10 tests on real fixtures.
+- [x] **Spawn + resume one headless session, capture output, track state** (2026-06-25) — PROVEN LIVE on this machine:
+  spawn returned "STORED" + session id; resume of that id recalled "42" from the first turn (context carried across a
+  fresh process); status/returncode tracked. The MVP3 first proof point.
+- [ ] **Session/process registry (NEXT)**: `(agent, account, project, environment, pid, session_id, status)`;
+  survives restarts. `AgentSession` already has this exact shape.
 - [ ] Multi-account isolation via per-account home dirs (`CLAUDE_CONFIG_DIR`) + startup identity check.
 - [ ] Codex adapter (second) to prove the abstraction.
 - [ ] Turn the static dashboard into a live oversight app (process status + controls) on top of the registry.
