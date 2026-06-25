@@ -1,7 +1,7 @@
 ---
 status: active
-current_focus: "MVP0/MVP1 shipped (init, doctor, dashboard, session/close, reconcile). Next: MVP2 session registry and context-rollover."
-last_updated: 2026-06-24
+current_focus: "Skills layer Phase 1 shipped: horus-consolidate SKILL.md bundled in horus/skills.py, scaffolded by init, `horus skill install`, doctor check + nudge (77 tests green). Next: Phase 2 skills (distill-history, infer) + validate on a CLI-equipped machine (skill triggering eval needs `claude -p`)."
+last_updated: 2026-06-25
 ---
 
 # Roadmap
@@ -39,6 +39,60 @@ last_updated: 2026-06-24
 - [x] Add `horus close --commit [--push]` to stage+commit `.horus/` updates (close the multi-machine sync seam).
 - [ ] Surface staleness / context-rollover signals in the dashboard too (currently in `horus close`). No DB.
 - [~] SQLite session/event registry + session states (`closing`/`needs_closure`/`closed_stale`) — DEFERRED. Premature at solo scale (file parsing is instant) and presupposes the deferred execution layer. Revisit when scale hurts perf or Horus runs sessions itself.
+
+## Structure v2 - `.horus/` lanes + distillation routines (prototyping in fabric)
+
+> Designed against `fabric-metadata-driven-medallion` as a live fixture (user-steered).
+> Drift from canonical templates is intentional until the structure locks, then packaged.
+> See decisions 2026-06-25 "Structure v2 + distillation routines".
+
+File-structure (NOT LLM-dependent — done 2026-06-25):
+
+- [x] Add `features.md` (capability ledger) + `history.md` (curated lessons) to `init` templates and `.horus/README.md`.
+- [x] Update the managed instruction block (`templates.py`) to read/maintain the new lanes (dogfooded in this repo's AGENTS/CLAUDE).
+- [x] Teach the dashboard to parse/surface `features.md` and `history.md` (capability badge + ledger table + collapsible history; added GFM table support to `markdown.py`).
+- [ ] Propagate the updated managed block to the sibling repos (cross-repo propagation still manual; see "Later").
+
+Distillation routines — **agent-delegated prototype shipped 2026-06-25** (pre-pass + emitted prompt, like `close`; runs on any machine with an in-loop agent). Contract in `docs/routines.md`.
+
+- [x] **`consolidate`** — deterministic pre-pass (roadmap↔features overlap, done-but-unshipped, sessions-to-distill, missing lanes) + emitted routing ritual.
+- [x] **`distill-history`** — source-log detection + size signals + emitted compression ritual.
+- [ ] Autonomous variant (Horus spawns the summarizer/consolidator itself) — deferred to MVP3 with the execution layer.
+- [ ] Validate the prototypes by invoking them in a CLI-equipped session on a real project (fabric) and harmonizing the siblings to structure v2.
+
+## Skills layer - cognitive routines as in-app skills (Claude-first)
+
+> The files-only `horus` CLI commands are the deterministic signal layer + the
+> headless/fresh-session path. The context-aware LLM parts ship as native Claude
+> Code **skills** that run inside the app, so they see the live context window (work
+> /decisions not yet on disk), not just the files. This pulls the interactive LLM
+> routines out of MVP3 — the native app provides the agent runtime + subscription
+> auth + context. See decisions 2026-06-25 "Cognitive Routines Ship As Claude Skills".
+
+Phase 1 — keystone skill + plumbing (done 2026-06-25):
+
+- [x] Author `horus-consolidate` `SKILL.md`: calls `horus consolidate` for signals,
+  folds in live session context, applies routing rules to edit `.horus/**`. Content
+  lives as a string in `horus/skills.py` (like `templates.py`) — ships in the wheel,
+  no package-data config.
+- [x] `horus init` scaffolds project skills into `.claude/skills/<name>/SKILL.md`
+  (`--no-skills` opt-out; version-aware, no-clobber).
+- [x] `horus skill install [--user] [--force]` + `horus-skill-version` marker; `horus
+  doctor` skill presence/staleness check; on-demand nudge from the file-only commands.
+- [ ] Run the skill-creator eval/description-optimization loop on a CLI-equipped
+  machine (needs `claude -p`) to tune triggering before wider rollout.
+
+Phase 2 — rest of the cognitive layer (now unblocked):
+
+- [ ] `horus:distill-history` skill.
+- [ ] `horus:infer` skill — LLM bootstrap of `.horus/` from canonical docs. Was
+  MVP3-deferred only for lack of an LLM; available now as an in-app skill.
+
+Phase 3 — portability (deferred behind Claude-first):
+
+- [ ] rulesync projection/import for Codex + other tools (rulesync supports skills
+  natively for Claude Code and "simulates" Codex via `.codex/skills/`). Author native
+  `SKILL.md` now (no coupling); project later. Decide if it also subsumes `reconcile`.
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 

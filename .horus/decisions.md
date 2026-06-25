@@ -143,6 +143,27 @@ Reasoning:
 - The `HORUS:BEGIN/END shared-instructions` blocks in `AGENTS.md` and `CLAUDE.md` are intentionally not identical: each ends with a line pointing at the other file ("keep aligned with the matching block in CLAUDE.md" vs "...AGENTS.md").
 - The drift checker must normalize/ignore that cross-reference line, or it will report false drift on every run.
 
+## 2026-06-25 - Cognitive Routines Ship As Claude Skills; rulesync Is The Portability Path
+
+The context-aware / LLM parts of the routines (`consolidate`, `distill-history`, and the previously-deferred `infer`) ship as **native Claude Code skills** that run *inside* the app. The files-only `horus` CLI commands stay the deterministic signal layer + the headless/fresh-session path.
+
+Reasoning:
+
+- A skill runs in the active session, so it sees the **live context window** — decisions and work from the conversation that aren't on disk yet. The CLI pre-pass is blind to that (files + git only). Session-closure consolidation is exactly where that context is most valuable.
+- This pulls the *interactive* LLM routines out of the MVP3-deferred bucket: the native app already supplies the agent runtime, subscription auth, and context. Only the **unattended/orchestrated** path (Horus spawning its own session) still needs the deferred execution layer. Notably this makes LLM-based `infer` available now (it was deferred only because Horus couldn't call an LLM).
+- The skill and the CLI's printed ritual both derive from `docs/routines.md` — one source for the routine, not two.
+
+Distribution / install-on-demand:
+
+- Skills are bundled as package data and ship on PyPI with the CLI.
+- `horus init` scaffolds project skills into `.claude/skills/<name>/SKILL.md` (`--no-skills` opt-out, same no-clobber discipline as `.horus/`).
+- For already-initialized repos: version-stamp each skill so `horus doctor` warns on missing/stale, add `horus skill install [--project|--user] [--force]`, and have the file-only commands **nudge** (not gate) toward the skill when it's absent. The CLI path stands alone.
+
+Portability (Phase 3, deferred behind Claude-first):
+
+- **rulesync** (verified 2026-06-25) now treats skills as a first-class feature: native for Claude Code, and "**simulated**" for Codex CLI (which lacks native project skills) by copying to `.codex/skills/` referenced via instructions. Workflow: `rulesync generate --targets "*" --features skills` (and `rulesync import` the other direction).
+- So the Codex/other-tool port becomes a rulesync *projection*, not a hand-port — refines the earlier "defer rulesync" decision: rulesync is now the chosen mechanism for the skill/command/instruction layer, and could later subsume `reconcile`. Still deferred behind Claude-first; author native `SKILL.md` now and keep skills self-contained so `rulesync import` picks them up cleanly. rulesync is npm/Node, so Horus shells out / documents it — never embeds. See [[horus-core-constraints]].
+
 ## 2026-06-24 - Defer rulesync Integration To Post-MVP
 
 Do not integrate `rulesync` (or build instruction/skill projection) until after the first MVP.
@@ -258,4 +279,41 @@ Instead (still file-first, no DB): staleness/context-rollover signals derived fr
 
 - The dashboard NEXT callout lists up to 3 suggested directions (not a strict order): the explicit `current_focus` banner first, then in-progress tasks, then open tasks. Goal is "a few ideas of where to go next," not just the single next action.
 - The roadmap progress count (e.g. 21/39) links through to an anchored, state-grouped breakdown (Open & in progress / Completed) so the items behind the number are one click away.
+
+## 2026-06-25 - Structure v2 + distillation routines (prototyping in fabric, not yet locked)
+
+Using `fabric-metadata-driven-medallion` as a live design fixture (user-steered, commit `a39d118`) to evolve the `.horus/` structure beyond the canonical four files before packaging it back into Horus. **Not locked** — the drift between fabric and Horus's templates/dashboard/managed-block is intentional during ideation.
+
+Structure direction (6 lanes, each in its own lane):
+
+- `project.md` — vision / shape / boundaries / current focus.
+- `roadmap.md` — open **action points** only (any type), pruned when done.
+- `features.md` — **capability ledger**: shipped / in-progress / planned *packages*. Status only; action points live in `roadmap.md`. Distinct from roadmap because a feature is a closed shippable unit, not a task.
+- `decisions.md` — durable rules + reasoning, dated.
+- `history.md` — curated "bumps in the road" (lessons/war-stories), NOT a log and NOT open issues.
+- `sessions/` — local ephemeral, distills upward.
+
+Key insight: a multi-list structure (roadmap vs features) only stays honest if a **routine owns the routing**, not human discipline. That motivates two new LLM-driven (CLI-spawn, MVP3 family) routines, alongside the deferred `infer`:
+
+- **`consolidate`** — distillation/routing pass over a live `.horus/`: on ship, close roadmap action points and write/update the `features.md` row; prune done/stale; distill session summaries into the durable files; flag roadmap↔features overlap. Runs during `close` / on demand.
+- **`distill history`** — compress a giant raw log (e.g. fabric's 1538-line `docs/HISTORY.md`, copied into `history.md` as the fixture) into the high-signal curated subset. Most valuable when onboarding Horus into a long-running project with a large existing changelog.
+
+Split of work: the file-structure changes (templates, README, managed block, **dashboard parsing** of `features.md`/`history.md`) are NOT LLM-dependent and can be packaged once the structure locks. The two routines are LLM-shaped distillation → execute under MVP3 (need `claude`/`codex` to drive), but their contracts are designable now against fabric. See [[horus-locked-decisions]].
+
+Reasoning:
+
+- Designing against a real long-running project (fabric) surfaces the real failure modes (roadmap/features duplication, giant-log onboarding) that blank templates hide.
+- Keeps faith with the lightweight ethos: `history.md`'s end state is the distilled subset, not the verbatim archive — the copy is input for `distill history`, not the deliverable.
+
+## 2026-06-25 - Routines Are Agent-Delegated First (pre-pass + emitted prompt), Autonomous Variant Deferred
+
+`horus consolidate` and `horus distill-history` ship as **agent-delegated** routines: Horus runs a deterministic, read-only pre-pass (parse the lanes, detect candidates, report signals) and the CLI prints a ritual prompt for the **in-loop agent already running in the repo** to execute. Nothing is spawned. This mirrors the established `horus close` phasing (see "Closure Is Hybrid, Phased To Avoid Pulling In Execution").
+
+Reasoning:
+
+- Makes a *working, invocable* prototype possible on any machine — including ones without `claude`/`codex` installed — because the LLM is whatever agent is already in the loop. This is what lets the user install the CLI and run the routines on other projects now, ahead of MVP3.
+- The autonomous variant (Horus spawns its own summarizer/consolidator subprocess) needs the deferred execution layer; the verify/emit path does not. Forward-compatible: the same pre-pass + prompt can later be handed to a spawned agent instead of printed.
+- Edit scope is `.horus/**` only (tighter than `close`, which also touches AGENTS/CLAUDE); routines never edit source. Idempotent, never-invent. Full contract in `docs/routines.md`.
+
+Also decided this session: structure v2 (`features.md` + `history.md`) is no longer "not yet locked" for the **non-LLM** parts — templates, managed block, and dashboard rendering shipped and are dogfooded in this repo. `features.md`/`history.md` are `RECOMMENDED_FILES` (warn-if-missing, not fail) so pre-v2 repos migrate gently. The overlap heuristic strips project-name tokens and requires ≥2 distinctive shared tokens to avoid false positives. See [[horus-locked-decisions]].
 
