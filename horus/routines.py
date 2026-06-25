@@ -155,25 +155,35 @@ def consolidate_signals(root: Path, *, overlap_threshold: float = 0.5) -> list[F
         return None
 
     # Rule 2: roadmap items that overlap a features row → split (action vs status).
+    # A roadmap item that already points back at features.md is treated as an
+    # intentional, reconciled split (the cross-reference is the split marker), so the
+    # warning clears once the agent adds the pointer — otherwise in-progress/planned
+    # items that legitimately live in both lanes would warn forever.
     overlaps: list[tuple[str, str]] = []
+    reconciled = 0
     done = [t for t in tasks if t.state == "done"]
     unshipped_done = 0
     for t in tasks:
         cap = matched_cap(_key_tokens(t.text, stop))
         if cap:
-            overlaps.append((t.text, cap))
+            if "features.md" in t.text.lower():
+                reconciled += 1
+            else:
+                overlaps.append((t.text, cap))
         elif t.state == "done":
             unshipped_done += 1
 
     for text, cap in overlaps[:_MAX_OVERLAP_LINES]:
         findings.append(Finding(
             "warn",
-            f"overlap: roadmap '{_short(text)}' ↔ features '{_short(cap)}' — "
-            f"split (action points → roadmap, status → features)",
+            f"overlap: roadmap '{_short(text)}' ↔ features '{_short(cap)}' — split: keep "
+            f"action points in roadmap, status in features, and cross-reference both",
         ))
     if len(overlaps) > _MAX_OVERLAP_LINES:
-        findings.append(Finding("warn", f"… and {len(overlaps) - _MAX_OVERLAP_LINES} more roadmap↔features overlap(s)"))
-    if not overlaps:
+        findings.append(Finding("warn", f"… and {len(overlaps) - _MAX_OVERLAP_LINES} more roadmap↔features overlap(s) to split"))
+    if reconciled:
+        findings.append(Finding("ok", f"{reconciled} roadmap↔features pair(s) already split (cross-referenced)"))
+    if not overlaps and not reconciled:
         findings.append(Finding("ok", "no roadmap↔features overlap detected"))
 
     # Rule 1: done roadmap items without a matching capability row → maybe ship to ledger.

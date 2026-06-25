@@ -26,6 +26,18 @@ identical — each ends with a line naming the *other* file. **Lesson:**
 `doctor instructions` normalizes/ignores that cross-reference line, or it reports
 false drift on every run.
 
+## A routine's "verify" step must be reachable by following the routine
+
+The first `horus consolidate` flagged roadmap↔features overlaps purely on shared
+capability *name*, while the skill correctly told the agent to **keep both** (split:
+action points in roadmap, status in features). So a correct split never cleared the
+warning — the success criterion contradicted the rule. An independent validation
+agent caught it and noted it could loop or delete ledger rows chasing zero.
+**Lesson:** align the machine signal with the rule. The cross-reference pointer
+(`→ features.md`) is the detectable marker of an *intentional* split, so consolidate
+now treats a cross-referenced item as reconciled and only flags un-split ones. When a
+routine emits a "now re-run to confirm" step, make that zero actually reachable.
+
 ## A machine-local SQLite session registry cut against the ethos
 
 Considered a SQLite session/event registry early. It presupposed Horus

@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "Skills layer Phases 1+2 shipped: horus-consolidate / -distill-history / -infer skills bundled in horus/skills.py + `horus infer` CLI backend (82 tests green). Next: validate skills on a CLI-equipped machine (triggering eval needs `claude -p`) on the fabric repo; then Phase 3 (rulesync→Codex) or MVP3 (autonomous spawn)."
+current_focus: "Skills layer shipped + `consolidate` execution validated by an independent agent — caught & fixed an unreachable verify-criterion (consolidate v2, cross-reference = split marker), 84 tests green. Next: validate infer/distill-history execution; triggering eval blocked on `claude /login`; then Phase 3 (rulesync→Codex) / MVP3."
 last_updated: 2026-06-25
 ---
 
@@ -79,8 +79,14 @@ Phase 1 — keystone skill + plumbing (done 2026-06-25):
   (`--no-skills` opt-out; version-aware, no-clobber).
 - [x] `horus skill install [--user] [--force]` + `horus-skill-version` marker; `horus
   doctor` skill presence/staleness check; on-demand nudge from the file-only commands.
-- [ ] Run the skill-creator eval/description-optimization loop on a CLI-equipped
-  machine (needs `claude -p`) to tune triggering before wider rollout.
+- [x] Validate `consolidate` *execution* via an independent agent (2026-06-25):
+  it split correctly + flagged an unreachable verify-criterion → fixed (cross-reference
+  is the split marker; `consolidate` now treats cross-referenced items as reconciled;
+  skill bumped to v2). Verified end-to-end on the agent's real output (6/7 reconciled).
+- [ ] Validate `infer` + `distill-history` execution the same way (independent agent).
+- [ ] Triggering eval (skill-creator description-optimization, `claude -p`) — BLOCKED:
+  `claude` CLI is installed (`~/.local/bin/claude.exe`, on PATH now) but **not logged
+  in** (`claude /login` needed); harness auth ≠ CLI auth. Needed to tune skill triggering.
 
 Phase 2 — rest of the cognitive layer (done 2026-06-25):
 

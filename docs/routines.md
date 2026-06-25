@@ -70,7 +70,10 @@ Reads the lanes and reports, without mutating anything:
 - **Lane presence** — which of the 6 lanes exist; missing recommended lanes
   (`features.md`, `history.md`).
 - **Overlap candidates** — roadmap item text vs. `features.md` row text, matched on
-  a normalized token-overlap heuristic; each hit is a candidate for rule 3.
+  a normalized token-overlap heuristic; each hit is a candidate for rule 3. A roadmap
+  item that already points back at `features.md` is treated as a *reconciled* split
+  (the cross-reference is the split marker) and is reported as resolved, not flagged —
+  so an in-progress/planned item legitimately in both lanes stops warning once split.
 - **Done-but-unshipped** — roadmap items marked done (`[x]`) whose text has no
   corresponding `features.md` row (candidate for rule 1).
 - **Sessions to distill** — session summaries present (candidates for rule 5).

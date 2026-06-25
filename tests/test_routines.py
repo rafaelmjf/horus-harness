@@ -42,6 +42,18 @@ def test_consolidate_flags_real_overlap_only(tmp_path):
     assert "parquet" in overlaps[0].message
 
 
+def test_consolidate_treats_cross_referenced_as_reconciled(tmp_path):
+    # Once a roadmap item points at features.md, the split is intentional -> no warning.
+    _mk_horus(
+        tmp_path,
+        roadmap_body="# Roadmap\n\n## Now\n\n- [ ] parquet export compaction — status in → features.md\n",
+        features_body="## In progress\n\n| Capability | Notes |\n|---|---|\n| parquet export compaction | action points → roadmap.md |\n",
+    )
+    findings = routines.consolidate_signals(tmp_path)
+    assert not any(f.message.startswith("overlap:") for f in findings)
+    assert any("already split (cross-referenced)" in f.message for f in findings)
+
+
 def test_consolidate_reports_no_overlap_when_disjoint(tmp_path):
     _mk_horus(
         tmp_path,

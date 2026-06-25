@@ -13,7 +13,7 @@ description: >-
   first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Consolidate Horus continuity
 
@@ -31,7 +31,8 @@ only the files and git; you see the conversation too. Fold both in.
 
 2. **Read the lanes.** Read `.horus/project.md`, `roadmap.md`, `features.md`,
    `decisions.md`, `history.md`, and any `sessions/*.md`. If `docs/routines.md`
-   exists, it holds the full routing contract.
+   exists, it holds the full routing contract; if it's absent, the rules in this
+   skill are authoritative.
 
 3. **Apply the routing rules**, editing **`.horus/**` only** (never source files,
    never `AGENTS.md`/`CLAUDE.md`):
@@ -43,7 +44,11 @@ only the files and git; you see the conversation too. Fold both in.
      that isn't on disk yet.
    - **De-duplicate across lanes.** Where the same item sits in both `roadmap.md`
      and `features.md`, keep the *action points* in `roadmap.md` and the *capability
-     status* in `features.md`, each pointing at the other. No fact in two places.
+     status* in `features.md`. Make the split explicit with a cross-reference each
+     way: put a literal `→ features.md` pointer in the roadmap item, and an `action
+     points → roadmap.md` note on the features row. That pointer is the marker that
+     the item was *intentionally* split (both `horus consolidate` and a future reader
+     rely on it), not a leftover duplicate. No fact maintained in two places.
    - **Prune.** Drop done/obsolete roadmap items — they live in features/history/git
      now. A roadmap is "what's next", not a completed log.
    - **Distill sessions.** Fold durable content from `sessions/*.md` into the lanes
@@ -53,10 +58,17 @@ only the files and git; you see the conversation too. Fold both in.
      current session that belong in the lanes but aren't written yet — add them.
 
 4. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
-   `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`.
+   `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`. If
+   `history.md` has grown into a verbatim log/changelog rather than curated lessons,
+   that's a `horus-distill-history` job — flag it rather than fixing it here.
 
-5. **Verify.** Re-run `horus consolidate` — the candidates it flagged should now be
-   resolved. Running the skill again on a clean tree should change nothing.
+5. **Verify.** Re-run `horus consolidate`. An overlap clears once you've split the
+   item *and* added the cross-reference — the `→ features.md` / `→ roadmap.md` pointer
+   is how the tool knows a shared name is an intentional split, not a duplicate. An
+   in-progress or planned item that legitimately lives in both lanes is *expected* to
+   keep appearing until it carries that pointer; do **not** delete ledger rows or
+   roadmap actions chasing zero warnings. Only done/shipped items clear by being
+   pruned from the roadmap. Running the skill again on a clean tree changes nothing.
 
 ## Boundaries
 
@@ -64,4 +76,4 @@ only the files and git; you see the conversation too. Fold both in.
   leave the content in place and flag it for the user rather than guessing.
 - Edits are confined to `.horus/**`. This is continuity maintenance, not a coding
   task — do not continue editing source as part of it.
-- Bump `last_updated` front matter on lanes you change.
+- Bump `last_updated` front matter on lanes you change (if it isn't already today).
