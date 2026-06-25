@@ -96,6 +96,26 @@ def test_ensure_dashboard_spawns_horus_dashboard(monkeypatch):
     assert calls[0][0] == [sys.executable, "-m", "horus", "dashboard", "--host", "127.0.0.1", "--port", "9999"]
 
 
+def test_stop_dashboard_terminates_only_spawned():
+    class FakeProc:
+        def __init__(self):
+            self.terminated = False
+
+        def terminate(self):
+            self.terminated = True
+
+    spawned = FakeProc()
+    companion.stop_dashboard(companion.DashboardProcess("http://x", True, spawned))
+    assert spawned.terminated is True
+
+    reused = FakeProc()
+    companion.stop_dashboard(companion.DashboardProcess("http://x", False, reused))
+    assert reused.terminated is False  # reused/existing one is left alone
+
+    # No process at all -> no crash.
+    companion.stop_dashboard(companion.DashboardProcess("http://x", True, None))
+
+
 def test_relaunch_without_console_noop_off_windows(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     assert companion.relaunch_without_console() is False

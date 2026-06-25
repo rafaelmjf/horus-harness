@@ -72,6 +72,17 @@ def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool =
     return DashboardProcess(url, True, process)
 
 
+def stop_dashboard(dashboard: DashboardProcess) -> None:
+    """Terminate a dashboard server *this* companion spawned, so it doesn't outlive
+    the mascot and pile up as an orphan. No-op when the dashboard was reused (an
+    existing one was already live) or none was started."""
+    if dashboard.started and dashboard.process is not None:
+        try:
+            dashboard.process.terminate()
+        except OSError:
+            pass
+
+
 def relaunch_without_console() -> bool:
     """On Windows, re-exec the current ``horus`` invocation under ``pythonw.exe`` so
     the always-on-top companion runs with no console window attached.
@@ -292,5 +303,9 @@ def run_companion(
     canvas.bind("<Button-3>", show_menu)
 
     animate()
-    root.mainloop()
+    try:
+        root.mainloop()
+    finally:
+        # Don't leave the dashboard server running once the mascot is gone.
+        stop_dashboard(dashboard)
     return 0
