@@ -92,6 +92,8 @@ def test_app_cli_dispatches_to_companion(tmp_path, monkeypatch):
         return 0
 
     monkeypatch.setattr("horus.cli.companion.run_companion", fake_run)
+    # Don't re-exec under pythonw.exe during the test; exercise inline dispatch.
+    monkeypatch.setattr("horus.cli.companion.relaunch_without_console", lambda: False)
 
     assert main(["app", "--path", str(tmp_path), "--port", "9999", "--no-dashboard"]) == 0
     assert calls[0][0] == tmp_path.resolve()

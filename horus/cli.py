@@ -269,6 +269,10 @@ def cmd_app(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
         return 2
+    if not getattr(args, "no_detach", False) and companion.relaunch_without_console():
+        # Re-spawned under pythonw.exe so no console window lingers; the detached
+        # child carries the GUI from here.
+        return 0
     return companion.run_companion(
         root,
         host=args.host,
@@ -420,6 +424,11 @@ def build_parser() -> argparse.ArgumentParser:
         p_app.add_argument("--port", type=int, default=8765, help="dashboard port (default: 8765)")
         p_app.add_argument("--no-dashboard", action="store_true", help="don't start the dashboard if it is offline")
         p_app.add_argument("--open", action="store_true", help="open the dashboard immediately")
+        p_app.add_argument(
+            "--no-detach",
+            action="store_true",
+            help="keep the launching console attached (Windows) instead of re-launching windowless",
+        )
         p_app.add_argument(
             "--usage-threshold",
             type=float,

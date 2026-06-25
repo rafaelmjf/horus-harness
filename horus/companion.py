@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import webbrowser
@@ -48,6 +49,48 @@ def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool =
         **kwargs,
     )
     return DashboardProcess(url, True, process)
+
+
+def relaunch_without_console() -> bool:
+    """On Windows, re-exec the current ``horus`` invocation under ``pythonw.exe`` so
+    the always-on-top companion runs with no console window attached.
+
+    ``horus app`` normally runs under console-subsystem ``python.exe``; because the
+    Tk ``mainloop`` blocks for the whole session, that console window lingers for as
+    long as the mascot is up. Spawning a detached ``pythonw.exe`` child and exiting
+    the parent frees the launching terminal immediately.
+
+    Returns ``True`` when a detached child was spawned (the caller should exit), and
+    ``False`` when nothing was done and the companion should run inline.
+    """
+    if sys.platform != "win32":
+        return False
+    if os.environ.get("HORUS_DETACHED") == "1":
+        # We are the detached child (or the user opted to keep the console).
+        return False
+    executable = Path(sys.executable)
+    if executable.name.lower() != "python.exe":
+        # Already pythonw.exe (no console) or an unusual launcher — run inline.
+        return False
+    pythonw = executable.with_name("pythonw.exe")
+    if not pythonw.is_file():
+        return False
+
+    env = dict(os.environ)
+    env["HORUS_DETACHED"] = "1"
+    # DETACHED_PROCESS exists only on the Windows subprocess module; resolve it
+    # defensively so the call is exercisable under tests on other platforms.
+    detached = getattr(subprocess, "DETACHED_PROCESS", 0)
+    subprocess.Popen(
+        [str(pythonw), "-m", "horus", *sys.argv[1:]],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        creationflags=detached,
+        close_fds=True,
+    )
+    return True
 
 
 def open_dashboard(url: str) -> None:

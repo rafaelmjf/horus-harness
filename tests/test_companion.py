@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+from pathlib import Path
 
 from horus import companion
 
@@ -61,3 +62,41 @@ def test_ensure_dashboard_spawns_horus_dashboard(monkeypatch):
 
     assert result.started is True
     assert calls[0][0] == [sys.executable, "-m", "horus", "dashboard", "--host", "127.0.0.1", "--port", "9999"]
+
+
+def test_relaunch_without_console_noop_off_windows(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert companion.relaunch_without_console() is False
+
+
+def test_relaunch_without_console_noop_when_already_detached(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("HORUS_DETACHED", "1")
+    assert companion.relaunch_without_console() is False
+
+
+def test_relaunch_without_console_noop_under_pythonw(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delenv("HORUS_DETACHED", raising=False)
+    monkeypatch.setattr(sys, "executable", r"C:\Python\pythonw.exe")
+    assert companion.relaunch_without_console() is False
+
+
+def test_relaunch_without_console_spawns_pythonw(monkeypatch):
+    calls = []
+
+    class FakePopen:
+        def __init__(self, cmd, **kwargs):
+            calls.append((cmd, kwargs))
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delenv("HORUS_DETACHED", raising=False)
+    monkeypatch.setattr(sys, "executable", r"C:\Python\python.exe")
+    monkeypatch.setattr(sys, "argv", ["horus", "app", "--path", "."])
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    monkeypatch.setattr(subprocess, "Popen", FakePopen)
+
+    assert companion.relaunch_without_console() is True
+    cmd, kwargs = calls[0]
+    assert cmd == [r"C:\Python\pythonw.exe", "-m", "horus", "app", "--path", "."]
+    assert kwargs["env"]["HORUS_DETACHED"] == "1"

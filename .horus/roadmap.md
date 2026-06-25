@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "Claude Code usage→closure parity shipped (reads 5h/weekly % via OAuth /usage endpoint; Stop hook injects the closure routine at threshold). Next: real-world validation when a limit actually hits ~90%, then companion status signals / mascot polish."
+current_focus: "Claude Code usage→closure parity shipped (reads 5h/weekly % via OAuth /usage endpoint; Stop hook injects the closure routine at threshold). Companion now launches windowless on Windows (pythonw re-exec). Next: real-world validation when a limit actually hits ~90%, then remaining mascot polish (wing animation, white-fringe asset cleanup)."
 last_updated: 2026-06-25
 ---
 
@@ -155,8 +155,12 @@ dashboard and later becomes the place for continuity/status nudges.
   data can come from existing `doctor`/`close`/usage checks; no live registry yet.
 - [x] Keep it optional and local-only; Horus must still work as CLI + files when
   the companion is not running.
-- [ ] Fix app launch so no terminal window remains open when the companion starts
-  from a user-facing shortcut or command.
+- [x] Fix app launch so no terminal window remains open when the companion starts
+  from a user-facing shortcut or command. (2026-06-25) `horus app` now re-execs
+  under `pythonw.exe` detached on Windows (`companion.relaunch_without_console`,
+  `HORUS_DETACHED` loop guard, `--no-detach` opt-out). Trade-off: the detached
+  child has no console, so a GUI startup failure is currently silent — log-file /
+  error-dialog fallback is a follow-up if it bites.
 - [ ] Improve the wing animation beyond the current simple transparent-frame
   flap; make it feel integrated with the mascot rather than mechanically shifted.
 - [ ] Replace or regenerate the mascot asset if cleaner than cutting the current
@@ -164,6 +168,16 @@ dashboard and later becomes the place for continuity/status nudges.
   white regions such as the hat.
 - [ ] Later: surface native hook events, usage threshold warnings, stale summaries,
   uncommitted continuity, and per-project switching.
+
+Known bug (deferred — user to fix later):
+
+- [ ] `test_claude_usage.py::test_findings_ok_when_unavailable` is **non-hermetic**:
+  it passes `report=None`, but `usage_findings` reads `report is None` as "fetch the
+  live one" via `latest_usage()`, not "no signal available". On a logged-in machine
+  whose 5h window is already over threshold it returns `warn`, so the test fails
+  locally and only passes where no usage signal exists (offline/CI). Fix: stub
+  `latest_usage` to `None` in the test, or disambiguate "not supplied" vs "explicitly
+  none" with a sentinel default in `usage_findings`.
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 
