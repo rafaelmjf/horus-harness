@@ -194,6 +194,15 @@ def cmd_distill_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_infer(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    print(f"Infer check: {root}\n")
+    _print_findings(routines.infer_signals(root))
+    print("\n" + templates.INFER_PROMPT)
+    _skill_nudge(root)
+    return 0
+
+
 def cmd_skill(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     scope = "user" if args.user else "project"
@@ -300,6 +309,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--source", help="source log to compress (default: auto-detect docs/HISTORY.md, CHANGELOG.md, …)"
     )
     p_distill.set_defaults(func=cmd_distill_history)
+
+    p_infer = sub.add_parser(
+        "infer",
+        help="bootstrap/refresh .horus/ from the project's docs (prints the routine for the in-loop agent)",
+    )
+    p_infer.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_infer.set_defaults(func=cmd_infer)
 
     p_skill = sub.add_parser("skill", help="manage Horus agent skills (.claude/skills/)")
     skill_sub = p_skill.add_subparsers(dest="skill_cmd", required=True)

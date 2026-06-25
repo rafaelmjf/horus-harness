@@ -268,3 +268,29 @@ Signal test for each entry:
 2. Write the high-signal "bumps in the road" into history.md (curated, deduplicated).
 3. Mark the source log as superseded/frozen at the top - do not delete it.
 """
+
+
+INFER_PROMPT = """Infer routine - bootstrap/refresh .horus/ by distilling the project's own docs.
+Act on the signals above. The goal is a single concise source of "what is this and
+what's next", distilled FROM the canonical docs - not a second copy of them.
+
+1. If .horus/ doesn't exist yet, run `horus init` to scaffold the lanes first.
+2. Read the canonical docs found above and follow their pointers (README -> status/
+   roadmap -> CLAUDE.md -> linked docs like docs/*.md). Build a model of the project.
+3. Distill into the lanes, each in its lane:
+   - project.md - what it is, current shape, boundaries, current focus.
+   - roadmap.md - open action points (what's next), grouped.
+   - features.md - shipped / in-progress / planned capabilities.
+   - decisions.md - durable decisions + reasoning, dated.
+   - history.md - curated lessons / bumps in the road.
+4. Don't duplicate: where a canonical doc stays the deep reference, point at it from
+   .horus/ instead of copying it wholesale. Distill the essentials.
+5. Mark superseded docs: if a doc's "current state / next steps" role now lives in
+   .horus/, add a one-line pointer at its top (e.g. "Current state: see .horus/").
+   Ask before substantially rewriting any source doc.
+6. When intent is genuinely unclear (status, priorities), ask the user rather than
+   guess. Never invent decisions, dates, or versions.
+
+Edit scope: .horus/** (plus, with care and consent, a one-line pointer atop a
+superseded source doc).
+"""

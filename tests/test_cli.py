@@ -67,6 +67,12 @@ def test_distill_history_cli_runs(tmp_path, monkeypatch):
     assert main(["distill-history", "--path", str(tmp_path)]) == 0
 
 
+def test_infer_cli_runs(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes"])
+    assert main(["infer", "--path", str(tmp_path)]) == 0
+
+
 def test_skill_install_cli(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes", "--no-skills"])

@@ -36,22 +36,25 @@ def test_write_skill_skips_unversioned_without_force(tmp_path):
     assert skills.write_skill(s, tmp_path, force=True).status == "updated"
 
 
+def test_expected_skills_registered():
+    names = {s.name for s in skills.SKILLS}
+    assert {"horus-consolidate", "horus-distill-history", "horus-infer"} <= names
+
+
 def test_missing_or_stale_and_findings(tmp_path):
-    s = skills.SKILLS[0]
     assert skills.missing_or_stale(tmp_path) == list(skills.SKILLS)
     assert any(f.level == "warn" for f in skills.skill_findings(tmp_path))
 
-    skills.write_skill(s, tmp_path)
+    skills.install_skills(tmp_path)
     assert skills.missing_or_stale(tmp_path) == []
     assert all(f.level == "ok" for f in skills.skill_findings(tmp_path))
 
 
 def test_stale_install_is_flagged(tmp_path):
+    skills.install_skills(tmp_path)  # all current
     s = skills.SKILLS[0]
-    path = skills.skill_path(s, tmp_path)
-    path.parent.mkdir(parents=True)
-    path.write_text("<!-- horus-skill-version: 0 -->\n", encoding="utf-8")
-    assert skills.missing_or_stale(tmp_path) == [s]
+    skills.skill_path(s, tmp_path).write_text("<!-- horus-skill-version: 0 -->\n", encoding="utf-8")
+    assert skills.missing_or_stale(tmp_path) == [s]  # only the downgraded one
     assert any("outdated" in f.message for f in skills.skill_findings(tmp_path))
 
 
@@ -65,11 +68,12 @@ def test_user_scope_uses_home(tmp_path, monkeypatch):
     assert not (tmp_path / ".claude").exists()
 
 
-def test_init_scaffolds_skill_by_default(tmp_path, monkeypatch):
+def test_init_scaffolds_all_skills_by_default(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     initialize.init_project(tmp_path / "a", assume_yes=True)
-    assert (tmp_path / "a" / ".claude" / "skills" / "horus-consolidate" / "SKILL.md").exists()
+    for s in skills.SKILLS:
+        assert (tmp_path / "a" / ".claude" / "skills" / s.name / "SKILL.md").exists()
 
 
 def test_init_no_skills_opts_out(tmp_path, monkeypatch):

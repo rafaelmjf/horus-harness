@@ -28,7 +28,8 @@ Status: **Shipped** · **In progress** · **Planned**
 | `.horus/` structure v2 (6 lanes: + `features.md` + `history.md`) | — | templates, README, managed block, dashboard rendering, GFM tables in `markdown.py` |
 | `horus consolidate` (agent-delegated) | — | pre-pass: roadmap↔features overlap, done-but-unshipped, sessions-to-distill + emitted routing ritual; `docs/routines.md` |
 | `horus distill-history` (agent-delegated) | — | source-log detection + size signals + emitted compression ritual; `docs/routines.md` |
-| Agent-skills layer (`horus-consolidate` skill) | — | bundled in `horus/skills.py`; `init` scaffolds `.claude/skills/`; `horus skill install`, version marker, doctor check + nudge; in-app context-aware counterpart to the CLI routine |
+| Agent-skills layer (`horus-consolidate` / `-distill-history` / `-infer`) | — | bundled in `horus/skills.py`; `init` scaffolds `.claude/skills/`; `horus skill install`, version markers, doctor check + nudge; in-app context-aware counterparts to the CLI routines |
+| `horus infer` (agent-delegated) | — | discover canonical docs + detect placeholder lanes + emit bootstrap ritual; backs the `horus-infer` skill (replaces the removed deterministic infer) |
 
 ## In progress
 
@@ -40,7 +41,6 @@ Status: **Shipped** · **In progress** · **Planned**
 
 | Capability | Notes |
 |---|---|
-| `horus-distill-history` + `horus-infer` skills | Phase 2; infer is the LLM `.horus/` bootstrap, now in-app → `roadmap.md` |
 | rulesync projection to Codex / other tools | Phase 3; native Claude skill → simulated `.codex/skills/` |
 | Autonomous routine variant (Horus spawns the agent) | the spawning half of consolidate/distill; MVP3 |
 | Agent execution layer (Claude adapter, spawn+registry, live oversight) | MVP3; deferred until a CLI-equipped machine |

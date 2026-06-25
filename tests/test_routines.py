@@ -112,6 +112,40 @@ def test_distill_history_no_source(tmp_path):
     assert any("no source log" in f.message for f in routines.distill_signals(tmp_path, None))
 
 
+def test_infer_discovers_canonical_docs(tmp_path):
+    (tmp_path / "README.md").write_text("# Proj\n", encoding="utf-8")
+    (tmp_path / "ROADMAP.md").write_text("# Roadmap\n", encoding="utf-8")
+    (tmp_path / "CLAUDE.md").write_text("# c\n", encoding="utf-8")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "HISTORY.md").write_text("# H\n", encoding="utf-8")
+    names = {p.name for p in routines.discover_canonical_docs(tmp_path)}
+    assert {"README.md", "ROADMAP.md", "CLAUDE.md", "HISTORY.md"} <= names
+
+
+def test_infer_flags_placeholder_lanes(tmp_path):
+    from horus import templates
+
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "project.md").write_text(templates.project_md("p", "2026-01-01"), encoding="utf-8")
+    (hdir / "roadmap.md").write_text(templates.roadmap_md("2026-01-01"), encoding="utf-8")
+    (hdir / "features.md").write_text(templates.features_md("2026-01-01"), encoding="utf-8")
+    (hdir / "history.md").write_text(templates.history_md("2026-01-01"), encoding="utf-8")
+    (tmp_path / "README.md").write_text("# real project\n\ndoes things\n", encoding="utf-8")
+
+    msgs = " ".join(f.message for f in routines.infer_signals(tmp_path))
+    assert "canonical doc(s) to distill from" in msgs
+    assert "placeholder/empty lanes" in msgs
+    for lane in ("project.md", "roadmap.md", "features.md", "history.md"):
+        assert lane in msgs
+
+
+def test_infer_warns_without_horus(tmp_path):
+    (tmp_path / "README.md").write_text("# x\n", encoding="utf-8")
+    assert any("no .horus/" in f.message for f in routines.infer_signals(tmp_path))
+
+
 def test_distill_history_explicit_source(tmp_path):
     hdir = tmp_path / ".horus"
     hdir.mkdir()

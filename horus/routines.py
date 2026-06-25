@@ -26,6 +26,14 @@ _LANES = ("project.md", "roadmap.md", "features.md", "decisions.md", "history.md
 # Common source logs `distill-history` can compress, in priority order.
 _SOURCE_LOGS = ("docs/HISTORY.md", "CHANGELOG.md", "HISTORY.md", "docs/CHANGELOG.md")
 
+# Root-level canonical docs `infer` distills `.horus/` from (glob prefixes + exact names).
+_CANONICAL_DOC_GLOBS = (
+    "README*", "ROADMAP*", "TODO*", "PLAN*", "PROJECT_STATUS*", "STATUS*",
+    "CHANGELOG*", "HISTORY*", "ARCHITECTURE*",
+)
+_CANONICAL_DOC_NAMES = ("CLAUDE.md", "AGENTS.md")
+_DOC_SUFFIXES = ("", ".md", ".markdown", ".rst", ".txt")
+
 _WORD_RE = re.compile(r"[a-z0-9_]+")
 _STOPWORDS = {
     "the", "a", "an", "to", "of", "and", "or", "for", "in", "on", "with", "via",
@@ -210,6 +218,85 @@ def _log_stats(text: str) -> tuple[int, int]:
     nonblank = sum(1 for ln in lines if ln.strip())
     headings = sum(1 for ln in lines if ln.lstrip().startswith("#"))
     return nonblank, headings
+
+
+def discover_canonical_docs(root: Path) -> list[Path]:
+    """Project docs `infer` can distill `.horus/` from: root status/roadmap/readme
+    files, the instruction files, and anything under docs/. De-duplicated, sorted."""
+    found: dict[str, Path] = {}
+    for pattern in _CANONICAL_DOC_GLOBS:
+        for p in root.glob(pattern):
+            if p.is_file() and p.suffix.lower() in _DOC_SUFFIXES:
+                found[p.name] = p
+    for name in _CANONICAL_DOC_NAMES:
+        p = root / name
+        if p.is_file():
+            found[name] = p
+    docs_dir = root / "docs"
+    if docs_dir.is_dir():
+        for p in sorted(docs_dir.glob("*.md")):
+            found[f"docs/{p.name}"] = p
+    return [found[k] for k in sorted(found)]
+
+
+def _placeholder_lanes(hdir: Path) -> list[str]:
+    """Lanes that are missing or still carry `horus init` placeholder content."""
+    out: list[str] = []
+
+    proj = _read(hdir, "project.md")
+    if proj is None:
+        out.append("project.md (missing)")
+    else:
+        doc = frontmatter.parse(proj)
+        focus = doc.front_matter.get("current_focus", "").strip().lower()
+        if focus.startswith("describe ") or "one-paragraph description" in doc.body.lower():
+            out.append("project.md")
+
+    rm = _read(hdir, "roadmap.md")
+    if rm is None:
+        out.append("roadmap.md (missing)")
+    elif "first task." in rm.lower() or "describe the current focus" in rm.lower():
+        out.append("roadmap.md")
+
+    fb = _read(hdir, "features.md")
+    if fb is None:
+        out.append("features.md (missing)")
+    elif sum(feature_counts(fb).values()) == 0:
+        out.append("features.md")
+
+    hb = _read(hdir, "history.md")
+    if hb is None:
+        out.append("history.md (missing)")
+    elif "## " not in frontmatter.parse(hb).body:
+        out.append("history.md")
+
+    return out
+
+
+def infer_signals(root: Path) -> list[Finding]:
+    """What an `infer` pass has to work with: canonical docs to distill from, and
+    which `.horus/` lanes still need populating. Read-only."""
+    findings: list[Finding] = []
+    hdir = horus_dir(root)
+    if not hdir.is_dir():
+        findings.append(Finding("warn", "no .horus/ yet — run `horus init`, then infer populates it"))
+
+    docs = discover_canonical_docs(root)
+    if docs:
+        names = ", ".join(d.name if d.parent == root else f"docs/{d.name}" for d in docs)
+        findings.append(Finding("ok", f"{len(docs)} canonical doc(s) to distill from: {names}"))
+    else:
+        findings.append(Finding(
+            "warn", "no canonical docs found (README/ROADMAP/STATUS/…); infer has little to distill from"
+        ))
+
+    if hdir.is_dir():
+        placeholders = _placeholder_lanes(hdir)
+        if placeholders:
+            findings.append(Finding("warn", f"placeholder/empty lanes to populate: {', '.join(placeholders)}"))
+        else:
+            findings.append(Finding("ok", "all lanes already populated (infer would refine, not bootstrap)"))
+    return findings
 
 
 def distill_signals(root: Path, source: Path | None) -> list[Finding]:

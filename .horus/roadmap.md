@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "Skills layer Phase 1 shipped: horus-consolidate SKILL.md bundled in horus/skills.py, scaffolded by init, `horus skill install`, doctor check + nudge (77 tests green). Next: Phase 2 skills (distill-history, infer) + validate on a CLI-equipped machine (skill triggering eval needs `claude -p`)."
+current_focus: "Skills layer Phases 1+2 shipped: horus-consolidate / -distill-history / -infer skills bundled in horus/skills.py + `horus infer` CLI backend (82 tests green). Next: validate skills on a CLI-equipped machine (triggering eval needs `claude -p`) on the fabric repo; then Phase 3 (rulesync→Codex) or MVP3 (autonomous spawn)."
 last_updated: 2026-06-25
 ---
 
@@ -82,11 +82,12 @@ Phase 1 — keystone skill + plumbing (done 2026-06-25):
 - [ ] Run the skill-creator eval/description-optimization loop on a CLI-equipped
   machine (needs `claude -p`) to tune triggering before wider rollout.
 
-Phase 2 — rest of the cognitive layer (now unblocked):
+Phase 2 — rest of the cognitive layer (done 2026-06-25):
 
-- [ ] `horus:distill-history` skill.
-- [ ] `horus:infer` skill — LLM bootstrap of `.horus/` from canonical docs. Was
-  MVP3-deferred only for lack of an LLM; available now as an in-app skill.
+- [x] `horus-distill-history` skill (calls `horus distill-history`).
+- [x] `horus-infer` skill — LLM bootstrap of `.horus/` from canonical docs. Was
+  MVP3-deferred only for lack of an LLM; now an in-app skill. Added the `horus infer`
+  CLI backend (discover canonical docs + detect placeholder lanes) as its signal layer.
 
 Phase 3 — portability (deferred behind Claude-first):
 
