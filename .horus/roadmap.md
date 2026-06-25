@@ -177,6 +177,15 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] Single-instance companion (2026-06-25): `acquire_singleton_lock` binds a fixed
   localhost port (8764) as a process-lifetime mutex; a second `horus app` exits
   instead of stacking another mascot. OS releases it on death (no stale-PID files).
+- [ ] **BUG: the dashboard *server* (8765) leaks — not covered by the singleton**
+  (found 2026-06-25: 13 orphaned `horus dashboard` processes on one machine). The
+  8764 mutex guards only the mascot; the dashboard subprocess has no single-instance
+  guard and isn't reaped when the companion dies, so launches/restarts accumulate
+  servers. Whichever bound the port first keeps serving its **old in-memory build**
+  (Python doesn't hot-reload), so the dashboard shows stale UI/values after code
+  changes until every orphan is killed. Fix: before spawning, detect a healthy
+  `horus dashboard` already on 8765 and reuse it (or make the server single-instance
+  the same way), and have the companion terminate its dashboard child on exit.
 - [x] Add a minimal context menu: Open Dashboard, Run Close Check, Quit.
 - [x] Show a basic status indicator: neutral/ok, warning, needs-closure. Initial
   data can come from existing `doctor`/`close`/usage checks; no live registry yet.
