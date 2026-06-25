@@ -187,7 +187,8 @@ def test_claude_hook_injects_closure_over_threshold(tmp_path, monkeypatch, capsy
     )
     assert rc == 0
     payload = json.loads(out.strip())
-    assert payload["decision"] == "block" and "closure" in payload["reason"].lower()
+    assert payload["decision"] == "block"
+    assert "horus-consolidate" in payload["reason"]  # drives the context-aware skill
 
 
 def test_claude_hook_quiet_under_threshold(tmp_path, monkeypatch, capsys):

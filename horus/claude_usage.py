@@ -122,25 +122,24 @@ def usage_findings(*, threshold: float = 90.0, report: UsageReport | None = None
         return [Finding("ok", "no Claude usage signal available (token missing/expired or offline)")]
 
     parts: list[str] = []
-    over = False
+    # Closure triggers on the 5-hour window only — it's the fast-moving limit you hit
+    # mid-session. The weekly figure is shown for context but does not drive closure
+    # (a separate weekly-aware nudge is a future feature). See is_over_threshold.
     if report.five_hour_percent is not None:
         parts.append(f"5h limit {report.five_hour_percent:.0f}% (resets {_fmt_reset(report.five_hour_resets_at)})")
-        over = over or report.five_hour_percent >= threshold
     if report.seven_day_percent is not None:
         parts.append(f"weekly limit {report.seven_day_percent:.0f}% (resets {_fmt_reset(report.seven_day_resets_at)})")
-        over = over or report.seven_day_percent >= threshold
 
     if not parts:
         return [Finding("ok", "no Claude usage signal available")]
+    over = is_over_threshold(threshold, report)
     level = "warn" if over else "ok"
     suffix = "; run the closure ritual before continuing this session" if over else ""
     return [Finding(level, "Claude " + "; ".join(parts) + suffix)]
 
 
 def is_over_threshold(threshold: float, report: UsageReport | None) -> bool:
-    if report is None:
+    """Closure trigger: the 5-hour window only (not weekly)."""
+    if report is None or report.five_hour_percent is None:
         return False
-    return any(
-        p is not None and p >= threshold
-        for p in (report.five_hour_percent, report.seven_day_percent)
-    )
+    return report.five_hour_percent >= threshold

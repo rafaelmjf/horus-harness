@@ -35,14 +35,22 @@ def test_findings_ok_under_threshold():
     assert findings[0].level == "ok"
 
 
+def test_findings_trigger_is_5h_only_not_weekly():
+    # Weekly high but 5h low -> not actionable (closure triggers on the 5h window).
+    r = cu.UsageReport(40.0, None, 95.0, None)
+    findings = cu.usage_findings(threshold=90.0, report=r)
+    assert findings[0].level == "ok"
+    assert "weekly limit 95%" in findings[0].message  # still shown for context
+
+
 def test_findings_ok_when_unavailable():
     assert cu.usage_findings(threshold=90.0, report=None)[0].level == "ok"
 
 
-def test_is_over_threshold():
-    r = cu.UsageReport(37.0, None, 95.0, None)
-    assert cu.is_over_threshold(90.0, r) is True   # weekly over
-    assert cu.is_over_threshold(96.0, r) is False
+def test_is_over_threshold_5h_only():
+    assert cu.is_over_threshold(90.0, cu.UsageReport(92.0, None, 10.0, None)) is True   # 5h over
+    assert cu.is_over_threshold(90.0, cu.UsageReport(40.0, None, 95.0, None)) is False  # only weekly over
+    assert cu.is_over_threshold(90.0, cu.UsageReport(None, None, 99.0, None)) is False
     assert cu.is_over_threshold(90.0, None) is False
 
 

@@ -402,3 +402,15 @@ Reasoning:
 - This is the signal that actually matters for Opus (quota, not context — context
   rarely fills before the 5h/weekly limit). Codex already had it via rollouts; this
   closes the gap for Claude Code. Graceful when the token is missing/expired or offline.
+
+Refinements (2026-06-25, after the first live fire):
+
+- **Closure triggers on the 5-hour window only**, not weekly. The 5h limit is the
+  fast-moving one you actually hit mid-session; the weekly figure is shown for context
+  but does not force closure. A separate, softer weekly-aware nudge is a future feature.
+- **The hook drives the context-aware skill, not the file-only script.** The whole
+  point of closing inside the live app session (vs a fresh CLI/spawned session) is that
+  the agent can see the conversation. `USAGE_CLOSURE_INSTRUCTION` now tells the agent to
+  run the `horus-consolidate` skill and fold the session's *context* (decisions + why,
+  dead ends, next step) into the lanes — `horus consolidate` (the script) is only the
+  signal layer the skill uses, never a replacement, because it can't see the session.

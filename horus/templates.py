@@ -235,13 +235,16 @@ CLOSURE_PROMPT = """Closure ritual - update project continuity before ending thi
 
 
 USAGE_CLOSURE_INSTRUCTION = (
-    "You are close to your usage limit and risk being cut off mid-task. Stop the "
-    "current work now and run the Horus closure routine so the session ends cleanly: "
-    "(1) consolidate continuity — invoke the horus-consolidate skill (or run "
-    "`horus consolidate`), folding in what changed this session; (2) write a concise "
-    "handover summary under `.horus/sessions/` describing what shipped and the next "
-    "step; (3) commit the continuity files with `horus close --commit`. Then stop — do "
-    "not resume the main task."
+    "You are close to your 5-hour usage limit and risk being cut off mid-task. Stop the "
+    "current work now and close the session cleanly so nothing in your head is lost. "
+    "Use the horus-consolidate skill — it can see THIS conversation, which a file-only "
+    "script cannot — and fold the session's *context* into .horus, not just what files "
+    "changed: the decisions made and why, what shipped, dead ends worth remembering, "
+    "and the next step. Concretely: (1) run the horus-consolidate skill to update the "
+    ".horus lanes from this session's context (the skill uses `horus consolidate` for "
+    "signals, but you supply the context a script can't); (2) write a concise handover "
+    "summary under `.horus/sessions/` with what shipped and the next step; (3) commit "
+    "with `horus close --commit`. Then stop — do not resume the main task."
 )
 
 
