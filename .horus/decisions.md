@@ -621,3 +621,35 @@ Mechanics that make attended tracking work:
 
 This is what makes the dashboard show *live* sessions, not just finished ones — the visible
 payoff of the registry + oversight work.
+
+## 2026-06-26 - Strategic Review After MVP3 (on track? reinventing? the wedge?)
+
+A mid-project evaluation against the founding docs (`product_interview.md`, `plan.md`,
+`codex-plan-review.md`). Conclusions, for continuity:
+
+- **On track, with disciplined deliberate deviations.** plan.md's 6 steps are largely
+  done; the divergences were all reasoned and documented: Claude-first not Codex (machine
+  had Claude), JSON registry not SQLite (lightweight; SQLite re-justified only at scale),
+  companion/mascot emerged, Telegram fully deferred. The one strategic fork: the external
+  review thought *Telegram remote* was the wedge; we pivoted to **continuity-first** —
+  judged correct (Telegram bots are commoditized; continuity is not), but remote control
+  remains a logged later need.
+- **Not meaningfully reinventing the wheel.** We build intentionally *thin* versions of
+  things that exist only as heavy platforms (claw-orchestrator = multi-CLI subprocess
+  runtime; tmux/kube-coder = sessions; PACE = memory; rulesync = rule projection). Watch-
+  item: the **execution layer is the part most at risk of drifting into "yet another
+  orchestrator"** — keep continuity the headline.
+- **Biggest value others don't provide:** (1) continuity that **survives without Horus
+  running** and is agent-maintained (no competitor does this — they're runtimes you live
+  inside); (2) **subscription-auth, multi-account, official CLIs** (no API keys); (3)
+  **usage→closure** — reading the subscription's own `/usage`/rollouts to divert an
+  over-budget session into a continuity-preserving close (the single most novel feature).
+- **Honest risks:** account isolation ≠ security isolation (don't oversell); CLI-automation
+  is ToS-adjacent (re-check before public); the "vendor-neutral contract" is **unproven at
+  N=1** until the Codex adapter lands; lightweight-vs-creep (mascot + growing execution);
+  continuity debt (this very backlog).
+- **Next phases:** MVP4 = prove the abstraction (Codex adapter) + actionable oversight
+  (terminate/resume from UI) + user's flagged UI work + `horus doctor compat`. MVP5 =
+  autonomous closure (the thematic heart, now unblocked) + stale-session detection + LLM
+  `infer`. MVP6 = optional remote surfaces (Telegram/Tailscale). Plus the new **Cross-tool
+  interface sync** track (two-layer model; see its own decision and roadmap section).
