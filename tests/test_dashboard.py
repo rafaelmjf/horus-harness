@@ -8,6 +8,23 @@ def _init(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
 
 
+def test_dashboard_server_is_single_instance():
+    # The leak fix: only one dashboard may hold a port. Default ThreadingHTTPServer
+    # allows address reuse (multiple binds on Windows); ours must not.
+    assert dashboard._SingleInstanceServer.allow_reuse_address is False
+
+
+def test_serve_refuses_when_port_already_bound(monkeypatch, capsys):
+    class Taken(dashboard.ThreadingHTTPServer):
+        def __init__(self, *a, **k):
+            raise OSError("address in use")
+
+    monkeypatch.setattr(dashboard, "_SingleInstanceServer", Taken)
+    dashboard.serve(port=8765)  # must not raise
+    out = capsys.readouterr().out
+    assert "already running" in out
+
+
 def test_load_project_reads_frontmatter_and_health(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)

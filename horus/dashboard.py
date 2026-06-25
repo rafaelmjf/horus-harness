@@ -662,8 +662,22 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
 
+class _SingleInstanceServer(ThreadingHTTPServer):
+    # One dashboard per port. ``ThreadingHTTPServer`` defaults ``allow_reuse_address``
+    # to True; on Windows SO_REUSEADDR lets *multiple* sockets bind the same port at
+    # once, so every ``horus dashboard`` invocation used to bind 8765 and the OS routed
+    # requests to an arbitrary (often stale) one — which left the UI showing an old
+    # in-memory build. False makes a second bind fail fast, so a duplicate launch
+    # refuses instead of piling up.
+    allow_reuse_address = False
+
+
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
-    server = ThreadingHTTPServer((host, port), _Handler)
+    try:
+        server = _SingleInstanceServer((host, port), _Handler)
+    except OSError:
+        print(f"Horus dashboard already running at http://{host}:{port}; not starting another.")
+        return
     count = len(config.load_projects())
     print(f"Horus dashboard: http://{host}:{port}  ({count} project(s))")
     print("Read-only. Press Ctrl+C to stop.")
