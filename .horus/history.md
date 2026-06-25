@@ -59,6 +59,16 @@ session `.md` files are ephemeral context that distills into the durable lanes;
 at solo scale re-parsing markdown is instant. Registry deferred until real live
 processes exist to track.
 
+## A blocking GUI under console `python.exe` keeps the terminal window alive
+
+`horus app` left a console window open for the whole session. Cause: it ran under
+console-subsystem `python.exe`, and Tk's `mainloop` blocks, so the attached console
+never closed. **Lesson:** on Windows a GUI must run under windowless `pythonw.exe` —
+the companion now re-execs itself (`relaunch_without_console`, `DETACHED_PROCESS`,
+`HORUS_DETACHED` loop guard, `--no-detach` escape hatch) and the parent exits.
+Trade-off to remember: a detached child has **no console**, so a GUI startup failure
+is now silent — a log-file/error-dialog fallback is the follow-up if it ever bites.
+
 ## Skills do not solve periodic native-app checks
 
 The first instinct for a context-rollover warning was "build a skill that gets
