@@ -35,6 +35,7 @@ pip install horus-harness
 horus init [path]                 # scaffold .horus/ + managed AGENTS.md/CLAUDE.md blocks
 horus doctor [project|instructions|all]   # continuity + instruction-drift health checks
 horus dashboard                   # local, read-only multi-project web view (127.0.0.1:8765)
+horus app                         # tiny always-on-top companion; click opens dashboard
 horus session new "<title>"       # create a dated session summary from the template
 horus close                       # verify continuity, Codex usage, and print the closure ritual
 horus close --usage-threshold 90  # warn when Codex context or rate-limit usage reaches a percent

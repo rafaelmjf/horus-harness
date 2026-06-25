@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "Native-app bridge: Codex usage hook + direct skill projection shipped. Next: verify Claude hook options, then evaluate rulesync for broader instruction/skill sync before MVP3 owned sessions."
+current_focus: "First companion/mascot slice shipped. Next: use it, then improve status signals and native hook feedback before owned session orchestration."
 last_updated: 2026-06-25
 ---
 
@@ -125,6 +125,26 @@ Phase 3 — portability (started with direct Codex skill projection):
   whether Horus-owned sessions are needed.
 - [ ] Add this lens to future feature specs: "native Claude path", "native Codex path",
   "Horus-owned/session path if needed".
+
+## Companion app / mascot - visible Horus presence (next)
+
+Intent: make Horus feel active without prematurely owning agent sessions. The first
+app slice should be a tiny always-on-top companion that acts as a doorway to the
+dashboard and later becomes the place for continuity/status nudges.
+
+- [x] Choose the lightest viable desktop shell for Windows-first development
+  (Python/Tk, PySide, Tauri, or another small option) with packaging implications
+  noted before building.
+- [x] Add `horus app` (or `horus mascot`) to start/detect the local dashboard and
+  show a small always-on-top mascot/status bubble.
+- [x] Clicking the mascot opens the dashboard at `http://127.0.0.1:8765`.
+- [x] Add a minimal context menu: Open Dashboard, Run Close Check, Quit.
+- [x] Show a basic status indicator: neutral/ok, warning, needs-closure. Initial
+  data can come from existing `doctor`/`close`/usage checks; no live registry yet.
+- [x] Keep it optional and local-only; Horus must still work as CLI + files when
+  the companion is not running.
+- [ ] Later: surface native hook events, usage threshold warnings, stale summaries,
+  uncommitted continuity, and per-project switching.
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 

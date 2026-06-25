@@ -358,3 +358,21 @@ Reasoning:
   nudges such as context/usage rollover warnings.
 - Each future feature spec should state the native Claude path, native Codex path,
   and only then the Horus-owned/session path if native surfaces are insufficient.
+
+## 2026-06-25 - Companion App Before Owned Session Orchestration
+
+The first "real app" slice should be a tiny always-on-top Horus companion/mascot,
+not the full Horus-owned session runner.
+
+Reasoning:
+
+- A visible companion makes Horus feel active and available while keeping the
+  actual agent loop inside Claude Code/Codex for now.
+- Clicking the companion to open the dashboard gives immediate product value
+  without inventing a new control plane.
+- The companion becomes a natural home for native-app bridge signals: usage
+  rollover, closure needed, stale summaries, uncommitted continuity, and later
+  hook/session health.
+- It preserves the native-app-first rule: build the presence/status layer around
+  existing apps before Horus takes responsibility for spawning and supervising
+  agent sessions.

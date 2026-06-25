@@ -83,6 +83,22 @@ def test_hook_install_codex_cli(tmp_path, monkeypatch):
     assert "commandWindows" in hooks_text
 
 
+def test_app_cli_dispatches_to_companion(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    calls = []
+
+    def fake_run(project_root, **kwargs):
+        calls.append((project_root, kwargs))
+        return 0
+
+    monkeypatch.setattr("horus.cli.companion.run_companion", fake_run)
+
+    assert main(["app", "--path", str(tmp_path), "--port", "9999", "--no-dashboard"]) == 0
+    assert calls[0][0] == tmp_path.resolve()
+    assert calls[0][1]["port"] == 9999
+    assert calls[0][1]["start_dashboard"] is False
+
+
 def test_reconcile_cli_resolves_drift(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes"])

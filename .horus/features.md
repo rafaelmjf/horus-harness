@@ -17,6 +17,7 @@ Status: **Shipped** · **In progress** · **Planned**
 
 | Capability | Since | Notes |
 |---|---|---|
+| Horus companion/mascot app | 2026-06-25 | `horus app` / `horus mascot`; tiny always-on-top Tkinter pixel mascot, starts/detects dashboard, opens it on click, context menu includes close check + quit |
 | `horus init` — scaffold `.horus/` + managed instruction blocks | — | never clobbers; injects managed block into existing AGENTS/CLAUDE |
 | `horus doctor` (project + instructions) | — | continuity health + cross-ref-normalized drift check |
 | `horus dashboard` — read-only multi-project view | — | next-step banner, roadmap breakdown, sessions |
@@ -45,6 +46,7 @@ Status: **Shipped** · **In progress** · **Planned**
 | Capability | Notes |
 |---|---|
 | rulesync projection to other tools | Phase 3; evaluate for broader AGENTS/CLAUDE/instruction sync beyond Horus's direct Claude/Codex skill and hook projection |
+| Companion status signals | Build on the mascot: usage warning, stale session summary, uncommitted continuity, hook active/trusted state, dashboard server state |
 | Autonomous routine variant (Horus spawns the agent) | the spawning half of consolidate/distill; MVP3 |
 | Agent execution layer (Claude adapter, spawn+registry, live oversight) | MVP3; deferred until a CLI-equipped machine |
 | LLM-based `horus infer` | distill `.horus/` from canonical docs; lands with MVP3 |

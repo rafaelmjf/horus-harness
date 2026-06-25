@@ -11,6 +11,7 @@ from pathlib import Path
 from horus import (
     __version__,
     closure,
+    companion,
     codex_usage,
     config,
     dashboard,
@@ -206,6 +207,20 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
     return 2
 
 
+def cmd_app(args: argparse.Namespace) -> int:
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
+    return companion.run_companion(
+        root,
+        host=args.host,
+        port=args.port,
+        start_dashboard=not args.no_dashboard,
+        open_on_start=args.open,
+        usage_threshold=args.usage_threshold,
+    )
+
+
 def _resolve_dir(path_str: str) -> Path | None:
     """Resolve --path and require it to be an existing directory. A mistyped path
     must fail loudly, not silently report 'nothing here' and exit 0."""
@@ -339,6 +354,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_dash.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
     p_dash.add_argument("--port", type=int, default=8765, help="bind port (default: 8765)")
     p_dash.set_defaults(func=cmd_dashboard)
+
+    for name in ("app", "mascot"):
+        p_app = sub.add_parser(name, help="show the always-on-top Horus companion")
+        p_app.add_argument("--path", default=".", help="project root (default: cwd)")
+        p_app.add_argument("--host", default="127.0.0.1", help="dashboard host (default: 127.0.0.1)")
+        p_app.add_argument("--port", type=int, default=8765, help="dashboard port (default: 8765)")
+        p_app.add_argument("--no-dashboard", action="store_true", help="don't start the dashboard if it is offline")
+        p_app.add_argument("--open", action="store_true", help="open the dashboard immediately")
+        p_app.add_argument(
+            "--usage-threshold",
+            type=float,
+            default=90.0,
+            help="usage percentage used by the companion close check (default: 90)",
+        )
+        p_app.set_defaults(func=cmd_app)
 
     p_forget = sub.add_parser("forget", help="remove a project from the dashboard registry")
     p_forget.add_argument("path", nargs="?", default=".", help="project root (default: cwd)")

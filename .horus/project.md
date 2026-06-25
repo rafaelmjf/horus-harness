@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Native-app bridge: prefer Claude Code/Codex native skills, hooks, and instructions before building Horus-owned sessions."
+current_focus: "First always-on-top companion/mascot is shipped; next focus is improving status signals while native Claude/Codex sessions keep doing the agent work."
 last_updated: 2026-06-25
 ---
 
@@ -37,6 +37,18 @@ project + agent + account + environment + session
 
 It should not model abstract identity profiles yet.
 
+## Companion App Direction
+
+The next product slice is a small always-on-top Horus companion/mascot. Its first
+job is not orchestration; it is presence. The mascot should make Horus visibly
+"active" while staying lightweight: click to open the dashboard, show simple
+status, and eventually surface closure/usage nudges from the native-app bridge.
+
+This should feel like a native companion to Claude Code/Codex, not a replacement
+for them. The native apps remain where agent work happens. Horus provides the
+project continuity layer, dashboard, and a gentle visual affordance for state
+that would otherwise be hidden in terminal output or hook logs.
+
 ## Near-Term Scope
 
 First useful version:
@@ -47,6 +59,7 @@ First useful version:
 - inspect instruction compatibility between `AGENTS.md` and `CLAUDE.md`;
 - project bundled routines into native Claude Code/Codex skill locations;
 - install small native hooks for app-level signals such as usage rollover;
+- ship a minimal always-on-top companion/mascot that opens the dashboard;
 - later wire real Codex/Claude sessions into the same project view.
 
 ## Out Of Scope For Now
