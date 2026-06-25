@@ -403,7 +403,34 @@ Reasoning:
   rarely fills before the 5h/weekly limit). Codex already had it via rollouts; this
   closes the gap for Claude Code. Graceful when the token is missing/expired or offline.
 
-Refinements (2026-06-25, after the first live fire):
+## 2026-06-25 - rulesync: stay direct at two tools; own the behavioral layer always
+
+Cross-tool support splits into two layers: (1) **projection** of artifacts (rules,
+skills `SKILL.md`, commands, MCP) — what `rulesync` does well across 20+ tools; and (2)
+the **behavioral/semantic** layer (hook control protocols — Codex stdout-as-context vs
+Claude `decision:block`; usage signal *sources* — Codex rollouts vs Claude OAuth
+`/usage`). rulesync cannot touch layer 2; those adapters are inherently Horus's own and
+are where the value is. Decision: at exactly two tools (Claude + Codex), keep our
+direct, **zero-dependency** projection (dual-write `SKILL.md`, `reconcile`); do NOT
+build our own rulesync and do NOT adopt rulesync yet. Adopt it (shell out / document)
+for layer 1 only when a **3rd target** appears or the dual-write gets unwieldy — and
+keep owning layer 2 regardless. Sharpens [[horus-locked-decisions]] / the earlier
+"defer rulesync" calls.
+
+## 2026-06-25 - Mascot: stay Tkinter; fix the fringe offline; no new tool/skill
+
+Researched lightweight desktop-mascot approaches. Conclusion: **stay on Tkinter**
+(zero runtime deps, lightest packaging, fine for subtle blink/bob). There is **no**
+Claude skill/plugin or mature Python desktop-pet library worth installing; PySide6 is
+the only thing with true per-pixel alpha but costs ~80 MB + Qt packaging — overkill.
+Tk's `-transparentcolor` is a chroma key (no true alpha), so the white halo is
+anti-aliased edge pixels not matching the key. Highest-value fix is in the **offline
+Pillow asset step**: edge-color bleed into the partial-alpha ring → erode alpha ~1px →
+flatten edge to the colorkey, **keyed on the alpha edge (not on whiteness)** so the
+white hat survives. "Active" indicator = a small extra PNG frame set swapped via
+`after()` on the same Canvas item. Do NOT add `pystray` (pulls Pillow into the runtime).
+
+## 2026-06-25 - Refinements (after the first live fire):
 
 - **Closure triggers on the 5-hour window only**, not weekly. The 5h limit is the
   fast-moving one you actually hit mid-session; the weekly figure is shown for context
