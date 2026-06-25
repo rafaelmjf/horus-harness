@@ -72,6 +72,23 @@ def test_next_step_and_latest_surface(tmp_path, monkeypatch):
     assert "Newer change" in html_out
 
 
+def test_resume_prompt_prefers_written_then_falls_back(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    data = dashboard.load_project(str(tmp_path))
+
+    # No next_prompt set -> generic paste-able fallback naming the project + next step.
+    fallback = dashboard._resume_prompt_text(data)
+    assert tmp_path.name in fallback and ".horus/" in fallback
+    assert "horus session new" not in fallback  # not a CLI trigger
+
+    # Authored next_prompt wins, and renders with a copy button.
+    data["next_prompt"] = "Paste me into Claude to resume."
+    assert dashboard._resume_prompt_text(data) == "Paste me into Claude to resume."
+    idx = dashboard.render_index([data])
+    assert "Resume prompt" in idx and "horusCopy(this)" in idx and "Paste me into Claude" in idx
+
+
 def test_next_steps_lists_up_to_three(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)

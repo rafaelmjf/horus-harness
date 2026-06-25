@@ -91,6 +91,7 @@ def roadmap_md(date: str) -> str:
     return f"""---
 status: active
 current_focus: "Describe the current focus here."
+next_prompt: ""
 last_updated: {date}
 ---
 
@@ -236,7 +237,10 @@ CLOSURE_PROMPT = """Closure ritual - update project continuity before ending thi
 
 1. Session summary: ensure a summary for this session exists under .horus/sessions/
    (create one with `horus session new "<title>"` if this session moved the project forward).
-2. Roadmap: update .horus/roadmap.md if status or current focus changed.
+2. Roadmap: update .horus/roadmap.md if status or current focus changed, and refresh
+   its `next_prompt` frontmatter — a natural-language prompt to paste into a fresh
+   Claude/Codex session to resume the single best next step (the dashboard shows it
+   with a copy button). Write it for a cold reader: name the next step + point at .horus/.
 3. Decisions: record durable decisions in .horus/decisions.md, with reasoning.
 4. Instructions: keep the AGENTS.md / CLAUDE.md shared blocks aligned
    (check with `horus doctor instructions`; fix with `horus reconcile instructions`).

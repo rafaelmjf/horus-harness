@@ -30,6 +30,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         "title": root.name,
         "status": "",
         "current_focus": "",
+        "next_prompt": "",
         "tagline": "",
         "project_body": "",
         "roadmap_body": "",
@@ -63,6 +64,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         doc = frontmatter.parse(roadmap_md.read_text(encoding="utf-8"))
         if not data["current_focus"]:
             data["current_focus"] = doc.front_matter.get("current_focus", "")
+        data["next_prompt"] = doc.front_matter.get("next_prompt", "")
         data["roadmap_body"] = doc.body
 
     features_md = hdir / "features.md"
@@ -158,6 +160,13 @@ main { padding: 24px 28px; max-width: 1320px; }
 .checklist li { font-size: 12px; margin: 3px 0; color: #b9c2d0; overflow-wrap: anywhere; }
 .summary-scroll { max-height: 200px; overflow: auto; margin-top: 4px; font-size: 13px; }
 .summary-scroll p, .summary-scroll li { margin: 4px 0; }
+.resume { margin-top: 8px; }
+.resume-head { display: flex; align-items: center; justify-content: space-between; }
+.resume-text { font-size: 12px; color: #cdd6e4; background: #0b0d12; border: 1px solid #232733;
+               border-radius: 6px; padding: 7px 9px; margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.copy { font-size: 11px; color: #6db3f2; background: #0b0d12; border: 1px solid #284058;
+        border-radius: 6px; padding: 2px 9px; cursor: pointer; }
+.copy:hover { background: #16202b; }
 .card { background: #151823; border: 1px solid #232733; border-radius: 10px;
         padding: 16px 18px; margin: 0 0 14px; }
 .card h2 { margin: 0 0 4px; font-size: 16px; }
@@ -210,7 +219,15 @@ def _page(title: str, body: str) -> str:
         f"<title>{html.escape(title)}</title><style>{_STYLE}</style></head><body>"
         "<header><h1>Horus</h1>"
         "<div class='sub'>project continuity &amp; control panel</div></header>"
-        f"<main>{body}</main></body></html>"
+        f"<main>{body}</main>"
+        "<script>"
+        "function horusCopy(btn){"
+        "var t=btn.closest('.resume').querySelector('.resume-text').textContent;"
+        "navigator.clipboard.writeText(t).then(function(){"
+        "var o=btn.textContent;btn.textContent='Copied';"
+        "setTimeout(function(){btn.textContent=o;},1200);});}"
+        "</script>"
+        "</body></html>"
     )
 
 
@@ -428,24 +445,46 @@ def _best_next_text(p: dict[str, Any]) -> str:
 
 
 def _single_next_html(p: dict[str, Any]) -> str:
-    """Highlight exactly ONE action + the prompt to get back to it."""
+    """Highlight exactly ONE action + the paste-able prompt to resume it elsewhere."""
     text = _best_next_text(p)
     if text:
         return (
             "<div class='next'><span class='lbl'>NEXT</span>"
             f"<div class='next-one'>{html.escape(text)}</div>"
-            f"{_start_session_html(p)}</div>"
+            f"{_resume_html(p)}</div>"
         )
     if p["progress"]["total"]:
         return "<div class='next done'><span class='lbl'>NEXT</span> &#10003; roadmap complete</div>"
     return ""
 
 
-def _start_session_html(p: dict[str, Any]) -> str:
-    """Suggested prompt to resume the single best step (a future one-click start)."""
-    title = _best_next_text(p)[:48] or "session"
-    cmd = f'horus session new "{title}"'
-    return f"<div class='start' title='will start a session on this step'>&#9654; Resume &middot; <code>{html.escape(cmd)}</code></div>"
+def _resume_prompt_text(p: dict[str, Any]) -> str:
+    """The natural-language prompt to resume this project in a fresh Claude/Codex session.
+
+    Authored by the closure skill into roadmap.md `next_prompt`. When absent, fall back
+    to a generic paste-able prompt built from the next step (display convenience only).
+    """
+    written = (p.get("next_prompt") or "").strip()
+    if written:
+        return written
+    nxt = _best_next_text(p)
+    base = (
+        f"Continue work on the {p['name']} project. First read .horus/ for context "
+        f"(project.md, roadmap.md, decisions.md, and the latest .horus/sessions/ summary)."
+    )
+    return f"{base} Then start on the next step: {nxt}" if nxt else base
+
+
+def _resume_html(p: dict[str, Any]) -> str:
+    """Paste-into-Claude/Codex resume prompt with a copy button."""
+    prompt = _resume_prompt_text(p)
+    if not prompt:
+        return ""
+    return (
+        "<div class='resume'><div class='resume-head'><span class='lbl'>Resume prompt</span>"
+        "<button class='copy' type='button' onclick='horusCopy(this)'>Copy</button></div>"
+        f"<div class='resume-text'>{html.escape(prompt)}</div></div>"
+    )
 
 
 def _remaining_items_html(p: dict[str, Any], limit: int = 8) -> str:

@@ -1,6 +1,7 @@
 ---
 status: active
 current_focus: "MVP2.5 git-aware dashboard shipped: horus/gitstate.py + a compact git badge on the overview and a full Git card + rendered Latest-session card on the detail view; horus status CLI peer. The app is now aware of the GitHub repos and shows the last session summary. Next within MVP2.5: fetch-all refresh + staleness in the verdict surface (both optional). Then MVP3 agent execution (adapter contract + fake adapter first)."
+next_prompt: "Resume the Horus project on the mvp2.5-git-aware-dashboard branch. Read .horus/ first (project.md, roadmap.md, decisions.md, and the latest .horus/sessions/ summary) for full context. Decide with me whether to merge mvp2.5-git-aware-dashboard into main, then start MVP3: define the agent-adapter contract (spawn/resume/parse_event/permission_flags) plus a fake adapter for tests, before the real Claude Code adapter."
 last_updated: 2026-06-25
 ---
 
