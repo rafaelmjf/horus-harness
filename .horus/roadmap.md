@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "Consolidated into main before MVP3: usage→closure parity + OAuth token auto-refresh (the on-disk token was stale → hook never fired) + account-tagged/timestamped sessions, mascot polish (wing breathe + asset defringe via scripts/regen_mascot.py), companion windowless on Windows. codex-usage-warning + usage-threshold-closure branches merged and retired. Next: MVP3 agent execution (adapter contract + fake adapter first). Re-login pending to live-test the usage hook (refresh token was burned during endpoint validation)."
+current_focus: "MVP2.5 git-aware dashboard shipped: horus/gitstate.py + a compact git badge on the overview and a full Git card + rendered Latest-session card on the detail view; horus status CLI peer. The app is now aware of the GitHub repos and shows the last session summary. Next within MVP2.5: fetch-all refresh + staleness in the verdict surface (both optional). Then MVP3 agent execution (adapter contract + fake adapter first)."
 last_updated: 2026-06-25
 ---
 
@@ -189,6 +189,41 @@ Known bug (deferred — user to fix later):
   locally and only passes where no usage signal exists (offline/CI). Fix: stub
   `latest_usage` to `None` in the test, or disambiguate "not supplied" vs "explicitly
   none" with a sentinel default in `usage_findings`.
+
+## MVP 2.5 - Git-aware multi-project overview (next)
+
+> Goal: a trustworthy overview of all projects from any machine. Decided
+> 2026-06-25 (see decisions "Git Is The Cross-Machine Transport"): git already
+> carries the durable lanes (project/roadmap/decisions/features/history), so the
+> overview needs no server, no session hosting, no Tailscale. The gap is that the
+> dashboard reads local clones with **no freshness signal** — so make it git-aware.
+> Config stays per-machine (paths are local); sessions stay local and distill into
+> the committed lanes. Deterministic signal layer only (no LLM), like `doctor`/`close`.
+
+- [x] `horus/gitstate.py` (2026-06-25): best-effort git signals for a repo via
+  subprocess — branch, last commit (short hash + relative time + subject), dirty
+  (uncommitted y/n), behind/ahead vs upstream **from existing refs** (no implicit
+  network), remote URL. Non-repo → None, never raises. CLI peer `horus status`
+  reuses `dashboard.load_project`; self-check in `__main__`.
+- [x] Surface freshness on the dashboard (2026-06-25): overview cards get a compact
+  git badge (branch · last-commit-rel · ↓behind ↑ahead · uncommitted), yellow when
+  stale; the project detail view gets a full **Git** card (commit, up-to-date /
+  behind-with-`git pull --ff-only` / no-upstream, dirty, remote URL).
+- [x] Latest session summary rendered in full on the detail view (2026-06-25): the
+  goal of the slice — a prominent "Latest session" card showing the newest local
+  session body, with a filename fallback on the overview when frontmatter has no summary.
+- [ ] "Fetch all" refresh action: `git fetch` across registered projects to update
+  behind/ahead. Fetch does not touch the working tree, so the dashboard's
+  read-only-on-files invariant holds. Pull (which mutates) is NOT auto-run.
+- [ ] Fold staleness into the existing warning/verdict surface (reuse `close`'s
+  uncommitted-`.horus/` check): "behind origin — pull to refresh" / "uncommitted
+  continuity". Show the exact `git pull --ff-only` command rather than a button.
+- [ ] Defer: a one-click pull endpoint (breaks read-only-files invariant — add only
+  if showing the command proves too much friction).
+- [ ] Optional ops, no code: document `tailscale serve` of the read-only dashboard so
+  phone/laptop can glance at *that machine's* view over the tailnet.
+- [ ] Optional, YAGNI for now: store each project's remote URL in the registry so the
+  same project can be recognized across machines (only if cross-machine dedup is wanted).
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 

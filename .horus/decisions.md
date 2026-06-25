@@ -466,3 +466,28 @@ Reasoning / gotchas:
   tag + a full timestamp (`YYYY-MM-DD-HHMMSS` filename, ISO `date:`), so multiple
   sessions/day don't collide and each is attributable to an account — the anchor a
   future MVP3 "startup identity check" can compare against.
+
+## 2026-06-25 - Git Is The Cross-Machine Transport (MVP2.5 shape)
+
+The multi-machine project overview will **not** use a central server, hosted session
+store, or Tailscale for data. Git already syncs the durable lanes
+(project/roadmap/decisions/features/history); the overview just needs each machine's
+dashboard to read its local clones and **show whether they're fresh**.
+
+Decisions:
+
+- **Dashboard becomes git-aware** (freshness, dirty, behind/ahead) instead of silently
+  rendering possibly-stale local files. Deterministic signal layer, no LLM.
+- **Config stays per-machine.** `~/.horus/config.toml` lists local paths and is not
+  synced; "path changes per machine" is avoided by never sharing it. Portable identity
+  (remote URL) is optional/YAGNI until cross-machine dedup is actually wanted.
+- **Sessions stay local + distill into the committed lanes** (upholds Git-Policy-For-
+  Sessions: ephemeral + may hold private account details). Cross-machine memory flows
+  through `decisions.md`/`history.md`/`roadmap.md`, not raw sessions.
+- **No implicit network on render.** behind/ahead come from existing refs; an explicit
+  "fetch all" updates them. `fetch` is allowed (no working-tree mutation); `pull`
+  (mutating) is shown as a command, not auto-run — preserving the read-only-on-files
+  invariant.
+- **Tailscale** is reserved for reaching a *running* Horus's live state (MVP3), not for
+  static durable state. `tailscale serve` of the read-only dashboard is an optional ops
+  convenience, no code.

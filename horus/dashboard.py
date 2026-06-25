@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from horus import codex_usage, config, frontmatter, markdown, roadmap, routines
+from horus import codex_usage, config, frontmatter, gitstate, markdown, roadmap, routines
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
 
@@ -40,8 +40,10 @@ def load_project(path_str: str) -> dict[str, Any]:
         "findings": [],
         "next_step": None,
         "latest": None,
+        "latest_body": "",
         "progress": {"done": 0, "total": 0, "pct": 0},
         "tasks": [],
+        "git": gitstate.git_state(root),
     }
     if not hdir.is_dir():
         return data
@@ -85,6 +87,8 @@ def load_project(path_str: str) -> dict[str, Any]:
                 "status": doc.front_matter.get("status", ""),
                 "summary": doc.front_matter.get("summary", ""),
                 "mtime": sp.stat().st_mtime,
+                "_path": str(sp),
+                "_body": doc.body,
             }
         )
 
@@ -92,6 +96,8 @@ def load_project(path_str: str) -> dict[str, Any]:
     # "latest" is correct even when several summaries share a date.
     data["sessions"].sort(key=lambda s: (s["date"], s["mtime"], s["file"]), reverse=True)
     data["latest"] = data["sessions"][0] if data["sessions"] else None
+    if data["latest"]:
+        data["latest_body"] = data["latest"]["_body"]
 
     tasks = roadmap.parse_tasks(data["roadmap_body"])
     ns = roadmap.next_step(tasks)
@@ -142,6 +148,11 @@ main { padding: 24px 28px; max-width: 980px; }
 .next.done .lbl { color: #6db3f2; display: inline; }
 .latest { color: #b9c2d0; font-size: 13px; margin: 8px 0; }
 .latest .date { color: #8a93a6; }
+.git { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px !important; }
+.git.stale { background: #2e2718 !important; color: #e6c35c; }
+.session-body { background: #12141b; border: 1px solid #232733; border-left: 3px solid #6db3f2;
+                border-radius: 8px; padding: 4px 16px; }
+.session-body .meta { color: #8a93a6; font-size: 12px; }
 .bar { height: 6px; background: #232733; border-radius: 999px; overflow: hidden; margin: 10px 0 4px; }
 .bar > span { display: block; height: 100%; background: #57d39a; }
 .progress-label { font-size: 12px; color: #8a93a6; }
@@ -242,10 +253,83 @@ def _latest_html(p: dict[str, Any]) -> str:
     latest = p["latest"]
     if not latest:
         return "<div class='latest muted'>no sessions yet</div>"
-    summary = html.escape(latest["summary"]) or "(no summary)"
+    # Fall back to a title derived from the filename when frontmatter has no summary.
+    fallback = re.sub(r"^\d{4}-\d{2}-\d{2}(-\d{6})?-|\.md$", "", latest["file"]).replace("-", " ")
+    summary = html.escape(latest["summary"] or fallback) or "(no summary)"
     return (
         f"<div class='latest'><span class='date'>{html.escape(latest['date'])}</span> "
         f"&middot; {summary}</div>"
+    )
+
+
+def _git_badge(p: dict[str, Any]) -> str:
+    """Compact git freshness chip for the overview card."""
+    g = p.get("git")
+    if not g:
+        return ""
+    bits = [html.escape(g["branch"])]
+    if g["commit"].get("rel"):
+        bits.append(html.escape(g["commit"]["rel"]))
+    stale = False
+    if g["upstream"] is None:
+        bits.append("no upstream")
+    else:
+        if g["behind"]:
+            bits.append(f"&#8595;{g['behind']}")  # behind origin
+            stale = True
+        if g["ahead"]:
+            bits.append(f"&#8593;{g['ahead']}")  # ahead of origin
+    if g["dirty"]:
+        bits.append("uncommitted")
+        stale = True
+    cls = "git stale" if stale else "git"
+    return f"<span class='{cls}'>{' &middot; '.join(bits)}</span>"
+
+
+def _git_html(p: dict[str, Any]) -> str:
+    """Full git block for the project detail view."""
+    g = p.get("git")
+    if not g:
+        return ""
+    c = g["commit"]
+    rows = [f"<strong>branch:</strong> {html.escape(g['branch'])}"]
+    if c.get("hash"):
+        rows.append(
+            f"<strong>last commit:</strong> {html.escape(c['hash'])} "
+            f"&middot; {html.escape(c.get('rel', ''))} &middot; {html.escape(c.get('subject', ''))}"
+        )
+    if g["upstream"] is None:
+        rows.append("<span class='health-warn'>no upstream tracking branch</span>")
+    elif g["behind"] or g["ahead"]:
+        sync = []
+        if g["behind"]:
+            sync.append(f"behind origin by {g['behind']} &mdash; <code>git pull --ff-only</code>")
+        if g["ahead"]:
+            sync.append(f"ahead by {g['ahead']}")
+        rows.append("<span class='health-warn'>" + "; ".join(sync) + "</span>")
+    else:
+        rows.append("<span class='health-ok'>up to date with origin</span>")
+    if g["dirty"]:
+        rows.append("<span class='health-warn'>uncommitted changes in the working tree</span>")
+    if g["remote_url"]:
+        rows.append(f"<span class='muted'>{html.escape(g['remote_url'])}</span>")
+    body = "<br>".join(rows)
+    return f"<div class='card'><h2 style='font-size:14px'>Git</h2>{body}</div>"
+
+
+def _latest_session_card(p: dict[str, Any]) -> str:
+    """The most recent session summary, rendered in full."""
+    latest = p.get("latest")
+    body = p.get("latest_body", "")
+    if not latest or not body.strip():
+        return ""
+    meta = " &middot; ".join(
+        html.escape(latest[k]) for k in ("date", "agent", "account") if latest.get(k)
+    )
+    return (
+        "<div class='section'><h2>Latest session</h2>"
+        f"<div class='session-body'><p class='meta'>{meta}</p>"
+        f"{markdown.render(body)}</div></div>"
     )
 
 
@@ -314,7 +398,7 @@ def render_index(projects: list[dict[str, Any]]) -> str:
             f"{html.escape(p['name'])}</a>{missing}</h2>"
             f"<div class='badges'><span>status: {status}</span>"
             f"{_features_badge(p)}"
-            f"<span>{len(p['sessions'])} session(s)</span> {_health_summary(p['findings'])}</div>"
+            f"<span>{len(p['sessions'])} session(s)</span> {_git_badge(p)} {_health_summary(p['findings'])}</div>"
             f"{_next_html(p)}"
             f"{_latest_html(p)}"
             f"{_progress_html(p, href=f'/project?i={i}#roadmap')}"
@@ -339,6 +423,9 @@ def render_project(p: dict[str, Any]) -> str:
             f"<div class='card'><strong>Current focus:</strong> "
             f"{html.escape(p['current_focus'])}</div>"
         )
+
+    parts.append(_git_html(p))
+    parts.append(_latest_session_card(p))
 
     # Continuity health
     rows = "".join(

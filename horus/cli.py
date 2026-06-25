@@ -17,6 +17,7 @@ from horus import (
     codex_usage,
     config,
     dashboard,
+    gitstate,
     initialize,
     native_hooks,
     routines,
@@ -101,6 +102,25 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 def cmd_dashboard(args: argparse.Namespace) -> int:
     dashboard.serve(host=args.host, port=args.port)
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """Headless peer of the dashboard overview: git freshness + latest session."""
+    projects = config.load_projects()
+    if not projects:
+        print("No projects registered (run `horus init` inside a project).")
+        return 0
+    for path in projects:
+        p = dashboard.load_project(path)
+        git = gitstate.summary(p.get("git")) or "not a git repo"
+        latest = p.get("latest")
+        if latest:
+            label = latest.get("summary") or latest.get("file", "")
+            sess = f"{latest.get('date', '')} — {label}".strip(" —")
+        else:
+            sess = "no sessions"
+        print(f"{p['name']}\n  git:  {git}\n  last: {sess}")
     return 0
 
 
@@ -419,6 +439,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_dash.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
     p_dash.add_argument("--port", type=int, default=8765, help="bind port (default: 8765)")
     p_dash.set_defaults(func=cmd_dashboard)
+
+    p_status = sub.add_parser("status", help="print git freshness + latest session for all registered projects")
+    p_status.set_defaults(func=cmd_status)
 
     for name in ("app", "mascot"):
         p_app = sub.add_parser(name, help="show the always-on-top Horus companion")
