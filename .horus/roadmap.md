@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "0.0.2 'companion' milestone on PyPI; MVP3 'manager' has a full execution spine merged to main: agent-adapter contract + FakeAdapter + ClaudeAdapter (spawn/resume proven live), session/process registry (horus/registry.py), multi-account isolation (per-account CLAUDE_CONFIG_DIR + identity check), AND a live oversight dashboard (reconciles the registry on load; 'Live sessions' card + /sessions route; read-only kept). Next: the Codex adapter (second) to prove the contract abstraction; then oversight controls (terminate/resume, needs a POST surface) and autonomous closure."
+current_focus: "0.0.2 'companion' milestone on PyPI; MVP3 'manager' is end-to-end usable: agent-adapter contract + FakeAdapter + ClaudeAdapter (spawn/resume proven live), session/process registry, multi-account isolation (per-account CLAUDE_CONFIG_DIR + identity check), live oversight dashboard, AND `horus run` (launch a tracked session from the CLI → shows in `horus sessions` + dashboard; account detection is now CLAUDE_CONFIG_DIR-aware). A two-account/two-session test run is now a real product flow. Next: the Codex adapter (second) to prove the contract abstraction; then oversight controls (terminate/resume) and autonomous closure."
 next_action: "Build the Codex adapter (horus/adapters/codex.py) against the contract, with ClaudeAdapter/FakeAdapter as references and the real codex CLI as ground truth (probe it: exec/resume flags, event stream format, per-account isolation). Register in get_adapter. Then oversight controls (terminate a tracked session) as its own increment."
 next_prompt: "Resume the Horus project. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (don't trust local refs). The adapter layer + registry + multi-account isolation + live oversight dashboard are merged to main; start the next increment on a FRESH branch off main and PR it (gh pr create → squash-merge, auto-delete). Read .horus/ lanes + the latest .horus/sessions/ summary. Continue MVP3 with the Codex adapter (horus/adapters/codex.py) against the contract in horus/adapters/base.py — probe the real `codex` CLI for exec/resume flags + event-stream format (don't guess), mirror ClaudeAdapter's structure, register it in get_adapter. codex is installed on this machine."
 last_updated: 2026-06-25
@@ -296,6 +296,12 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] **Live oversight dashboard** (2026-06-25, status view). The dashboard now reconciles
   `horus/registry.py` on load and renders a "Live sessions" card (status dot + agent/account/
   project/pid/session/updated) on the index, plus a `/sessions` route. Read-only invariant kept.
+- [x] **`horus run` launch command** (2026-06-25) — the glue that makes a user-facing test run
+  possible: spawn (or `--resume`) an agent session via the adapter, `track()` it into the registry
+  (so it shows in `horus sessions` + the dashboard), stream events to stdout. `--agent/--account/
+  --model/--posture/--resume/--path`. Also made `claude_usage` account detection `CLAUDE_CONFIG_DIR`-aware
+  so `horus account` can see a second account. Fixed a latent multi-account bug from PR #6: config-dir
+  paths with Windows backslashes broke TOML parsing → silently empty map; now stored forward-slashed.
 - [ ] **Oversight controls (NEXT)**: actions on a tracked session (terminate; later resume/attach)
   from the dashboard — needs a POST surface, which crosses the dashboard's current read-only line, so
   scope/UX deliberately deferred to its own increment. CLI `horus sessions --prune` covers cleanup today.

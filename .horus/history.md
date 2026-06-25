@@ -9,6 +9,18 @@ Curated, durable context: the problems that bit us and the lessons that shaped t
 design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
 just the war stories worth carrying forward.
 
+## Windows backslash paths silently broke TOML config (forward-slash everything)
+
+The multi-account `[config_dirs]` writer (PR #6) stored paths verbatim: on Windows that
+means `"work" = "C:\Users\…"`, and `\U`/`\w` are invalid escapes in a TOML *basic* string —
+so `tomllib` raised, the tolerant loader swallowed it, and the whole map read back **empty**.
+The feature looked fine on POSIX and in tests that used `/`-paths; it only broke on a real
+Windows `--set-dir`. Caught later when the `horus run` test used a real tmp path. **Lesson:**
+this project already learned to store the projects list forward-slashed for exactly this
+reason — apply it to *every* path written to TOML/JSON config, and don't let a tolerant
+"return {} on parse error" reader hide a serializer bug. Config-dir paths are now normalized
+to forward slashes on write (`Path` reads them back fine on every OS).
+
 ## Building the real adapter reshaped the contract (one stream line → many events)
 
 The adapter contract first had `parse_event(line) -> AgentEvent | None` — fine for the

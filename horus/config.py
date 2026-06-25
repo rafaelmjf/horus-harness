@@ -116,7 +116,9 @@ def _write_accounts(aliases: dict[str, str], config_dirs: dict[str, str]) -> Non
     # Quote both sides: emails contain '@' and '.', which are not bare-key safe.
     lines += [f'"{ident}" = "{alias}"' for ident, alias in sorted(aliases.items())]
     lines += ["", "[config_dirs]"]
-    lines += [f'"{alias}" = "{path}"' for alias, path in sorted(config_dirs.items())]
+    # Forward slashes so Windows paths need no TOML escaping (backslash is an escape
+    # in a basic string); Path() reads them back fine on every platform.
+    lines += [f'"{alias}" = "{path.replace(chr(92), "/")}"' for alias, path in sorted(config_dirs.items())]
     accounts_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

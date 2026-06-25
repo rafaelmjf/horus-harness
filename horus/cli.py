@@ -11,6 +11,7 @@ from pathlib import Path
 
 from horus import (
     __version__,
+    adapters,
     claude_usage,
     closure,
     companion,
@@ -142,6 +143,48 @@ def cmd_sessions(args: argparse.Namespace) -> int:
         rc = "" if r.returncode is None else f" rc={r.returncode}"
         print(f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} pid={r.pid or '-'} {r.session_id}{rc}")
     return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    """Spawn (or resume) an agent session through an adapter, tracked in the registry.
+
+    Streams the session's events to stdout and records it so it shows up in
+    `horus sessions` and the dashboard's Live sessions card.
+    """
+    root = Path(args.path).resolve()
+    try:
+        adapter = adapters.get_adapter(args.agent)
+    except KeyError as exc:
+        print(exc)
+        return 2
+
+    spec = adapters.SpawnSpec(
+        prompt=args.prompt,
+        project_dir=root,
+        account=args.account,
+        posture=adapters.PermissionPosture(args.posture),
+        model=args.model,
+    )
+    reg = registry.Registry.default()
+    try:
+        run = adapter.resume(args.resume, spec) if args.resume else adapter.spawn(spec)
+    except adapters.AccountMismatch as exc:
+        print(f"Refusing to run: {exc}")
+        return 2
+
+    for ev in registry.track(reg, run):
+        if ev.type is adapters.EventType.SESSION_STARTED:
+            print(f"... session {ev.session_id}")
+        elif ev.type is adapters.EventType.ASSISTANT_TEXT and ev.text:
+            print(ev.text)
+        elif ev.type is adapters.EventType.TOOL_USE:
+            print(f"  [tool] {ev.tool}")
+        elif ev.type is adapters.EventType.ERROR:
+            print(f"  [error] {ev.text or ''}")
+
+    s = run.session
+    print(f"\n{s.status} — session {s.session_id} (account {s.account or '-'})")
+    return 0 if s.status == "exited" else 1
 
 
 def cmd_forget(args: argparse.Namespace) -> int:
@@ -536,6 +579,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_sessions = sub.add_parser("sessions", help="list tracked agent sessions (reconciles live state)")
     p_sessions.add_argument("--prune", action="store_true", help="drop finished/dead sessions instead of listing")
     p_sessions.set_defaults(func=cmd_sessions)
+
+    p_run = sub.add_parser("run", help="spawn (or resume) an agent session, tracked in the registry")
+    p_run.add_argument("prompt", help="the prompt to send the agent")
+    p_run.add_argument("--agent", default="claude", help="adapter to use (claude | fake; default: claude)")
+    p_run.add_argument("--account", default=None, help="account alias to run under (uses its isolated config dir)")
+    p_run.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
+    p_run.add_argument(
+        "--posture",
+        default="default",
+        choices=[p.value for p in adapters.PermissionPosture],
+        help="permission posture (default: default)",
+    )
+    p_run.add_argument("--resume", metavar="SESSION_ID", help="resume an existing session by id")
+    p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
+    p_run.set_defaults(func=cmd_run)
 
     p_session = sub.add_parser("session", help="create a new session summary from the template")
     session_sub = p_session.add_subparsers(dest="session_cmd", required=True)

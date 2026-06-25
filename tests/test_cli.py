@@ -110,6 +110,43 @@ def test_account_command_show_and_set(tmp_path, monkeypatch, capsys):
     assert "rafa-personal" in out and "rafael@example.com" in out  # show reveals both locally
 
 
+def test_run_fake_adapter_tracks_session(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus.registry import Registry
+
+    rc = main(["run", "hello there", "--agent", "fake", "--path", str(tmp_path)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "(fake) hello there" in out and "exited" in out
+    recs = Registry.default().all()
+    assert len(recs) == 1 and recs[0].agent == "fake"  # spawned session was tracked
+
+
+def test_run_resume_uses_session_id(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    rc = main(["run", "continue", "--agent", "fake", "--resume", "prev-99", "--path", str(tmp_path)])
+    assert rc == 0
+    assert "session prev-99" in capsys.readouterr().out  # resumed the given id
+
+
+def test_run_account_mismatch_refuses(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    import json
+    from horus import config
+
+    cfgdir = tmp_path / "work-dir"
+    cfgdir.mkdir()
+    (cfgdir / ".claude.json").write_text(
+        json.dumps({"oauthAccount": {"emailAddress": "real@work.com"}}), encoding="utf-8"
+    )
+    config.set_account_alias("real@work.com", "actually-work")
+    config.set_account_config_dir("work", str(cfgdir))  # "work" maps to a dir logged in as someone else
+
+    rc = main(["run", "hi", "--agent", "claude", "--account", "work", "--path", str(tmp_path)])
+    assert rc == 2  # guard refused before any subprocess
+    assert "Refusing to run" in capsys.readouterr().out
+
+
 def test_account_set_dir_maps_config_dir(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     from horus import claude_usage, config

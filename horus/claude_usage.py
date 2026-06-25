@@ -14,6 +14,7 @@ drift simply produces no usable report (no exception escapes).
 from __future__ import annotations
 
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -40,12 +41,21 @@ class UsageReport(NamedTuple):
     seven_day_resets_at: str | None
 
 
+def _claude_home() -> Path | None:
+    """The relocated Claude config dir when ``CLAUDE_CONFIG_DIR`` is set (per-account
+    isolation), else None (the ambient default locations apply)."""
+    env = os.environ.get("CLAUDE_CONFIG_DIR")
+    return Path(env) if env else None
+
+
 def credentials_path() -> Path:
-    return Path.home() / ".claude" / ".credentials.json"
+    home = _claude_home()
+    return (home / ".credentials.json") if home else (Path.home() / ".claude" / ".credentials.json")
 
 
 def config_path() -> Path:
-    return Path.home() / ".claude.json"
+    home = _claude_home()
+    return (home / ".claude.json") if home else (Path.home() / ".claude.json")
 
 
 def current_account(path: Path | None = None) -> str | None:

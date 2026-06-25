@@ -73,6 +73,19 @@ def test_oauth_token_none_when_missing(tmp_path):
     assert cu._oauth_token(tmp_path / "nope.json") is None
 
 
+def test_config_paths_respect_claude_config_dir(monkeypatch, tmp_path):
+    acct = tmp_path / "acct"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(acct))
+    assert cu.config_path() == acct / ".claude.json"
+    assert cu.credentials_path() == acct / ".credentials.json"
+
+
+def test_config_paths_fall_back_to_home(monkeypatch):
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    assert cu.config_path().name == ".claude.json"
+    assert cu.credentials_path().parts[-2:] == (".claude", ".credentials.json")
+
+
 def test_current_account_reads_email(tmp_path):
     cfg = tmp_path / ".claude.json"
     cfg.write_text(json.dumps({"oauthAccount": {"emailAddress": "a@b.com", "accountUuid": "uuid"}}), encoding="utf-8")
