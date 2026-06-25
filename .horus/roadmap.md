@@ -260,6 +260,11 @@ dashboard and later becomes the place for continuity/status nudges.
 
 ## Later
 
+- [ ] **Consolidation pass (continuity debt).** `horus consolidate` reports ~34
+  roadmap↔features overlaps and 36 done roadmap items without a `features.md` row
+  (accumulated drift). Move shipped capabilities (incl. all of MVP2.5) into
+  `features.md`, cross-reference each split, and prune done roadmap items. Sizable;
+  do it as a dedicated pass, not mid-feature.
 - [ ] Optional Telegram bridge.
 - [ ] Optional Tailscale-exposed dashboard.
 - [ ] Optional VM/worker mode.
