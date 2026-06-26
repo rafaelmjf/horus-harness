@@ -349,6 +349,8 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] **Persistent session-host** (`pty_host.py`) + **xterm.js** viewer (vendored, no CDN):
   real TUI in-app, scrollback replay, re-attach across tabs/reloads, multi-viewer. → features.md
 - [x] **Pop-out** a session into its own window (a second viewer of the same host-owned PTY). → features.md
+- [x] **Permission posture at launch** — the launch form picks Claude's `--permission-mode`
+  (Ask / Plan / Accept-edits / Bypass) instead of hardcoding default; changeable later in the TUI. → features.md
 - [ ] **Codex in the terminal** — falls out of the Codex adapter (above); the PTY host already
   calls `interactive_command`, so it works once Codex implements it.
 

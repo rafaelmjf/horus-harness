@@ -285,6 +285,9 @@ def test_control_tab_renders_launch_controls(tmp_path, monkeypatch):
     # In-app terminal is the primary action; OS window is the demoted secondary.
     assert "value='app'>&#9654; Open terminal in app" in page
     assert "value='window'" in page and "separate OS window" in page
+    # Permission posture is selectable at launch (default + bypass available).
+    assert "<select name='posture'>" in page
+    assert "value='default' selected" in page and "value='full-auto'>Bypass all prompts" in page
     # Account row -> a one-click fresh-session button.
     assert "+ session" in page
     # Copy-the-command path is still offered as a secondary option.
@@ -316,11 +319,18 @@ def test_process_launch_in_app_opens_pty_terminal(tmp_path, monkeypatch):
     monkeypatch.setattr(dashboard.pty_host.host, "start", fake_start)
 
     query = dashboard.process_launch(
-        {"project": "0", "mode": "fresh", "agent": "fake", "target": "app"},
+        {"project": "0", "mode": "fresh", "agent": "fake", "target": "app", "posture": "full-auto"},
         projects=[str(proj)], known_aliases=set(),
     )
     assert query == "tab=pty-1"
     assert calls["agent"] == "fake" and str(calls["project_dir"]) == str(proj)
+    assert calls["posture"] == "full-auto"  # chosen permission posture threaded through
+
+    # An unknown posture is rejected (not silently launched at default).
+    assert dashboard.process_launch(
+        {"project": "0", "target": "app", "posture": "nope"},
+        projects=[str(proj)], known_aliases=set(),
+    ) == "error=unknown+permission+mode"
 
 
 def test_terminal_panel_renders_xterm_wiring(tmp_path, monkeypatch):

@@ -128,6 +128,16 @@ def test_interactive_command_is_a_tui_with_preassigned_session():
     assert "-p" not in argv and "--output-format" not in argv  # interactive, not headless
 
 
+def test_interactive_command_carries_permission_posture():
+    # Bypass posture -> the real Claude --permission-mode value (valid interactively).
+    bypass = ClaudeAdapter().interactive_command(
+        _spec(posture=PermissionPosture.FULL_AUTO), session_id="s1"
+    )
+    assert bypass[bypass.index("--permission-mode") + 1] == "bypassPermissions"
+    # Default posture stays clean (no flag) so the TUI uses its normal prompts.
+    assert "--permission-mode" not in ClaudeAdapter().interactive_command(_spec(), session_id="s1")
+
+
 def test_interactive_command_injects_initial_prompt():
     # A non-empty prompt seeds the TUI as Claude's positional initial prompt;
     # an empty prompt leaves the session fresh (no trailing positional).

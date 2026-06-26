@@ -905,6 +905,21 @@ def _launch_cmds(project_path: str, accounts: list[dict[str, Any]]) -> str:
     )
 
 
+# Permission postures offered at launch (value = PermissionPosture value, so
+# process_launch maps it straight through; the adapter turns it into Claude's
+# --permission-mode). Default first. Changeable later inside the TUI (shift+tab).
+_POSTURE_CHOICES = (
+    ("default", "Ask (default)"),
+    ("plan", "Plan only"),
+    ("auto-edit", "Accept edits"),
+    ("full-auto", "Bypass all prompts"),
+)
+_POSTURE_OPTIONS = "".join(
+    f"<option value='{v}'{' selected' if v == 'default' else ''}>{html.escape(label)}</option>"
+    for v, label in _POSTURE_CHOICES
+)
+
+
 def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[str, Any]]) -> str:
     """Pick an account + fresh-or-resume, then launch (POST). Mirrors the sketch's
     "select acc and select fresh session or resume" flow on the project play button."""
@@ -916,6 +931,7 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
         "<form class='launch-form' method='post' action='/launch'>"
         f"<input type='hidden' name='project' value='{i}'>"
         f"<label>Account <select name='account'>{opts}</select></label>"
+        f"<label>Permissions <select name='posture'>{_POSTURE_OPTIONS}</select></label>"
         "<div class='modes'>"
         "<label><input type='radio' name='mode' value='fresh' checked> Fresh session</label>"
         "<label><input type='radio' name='mode' value='resume'> Resume (inject continuity prompt)</label>"
@@ -1223,6 +1239,12 @@ def process_launch(
     agent = (form.get("agent") or "claude").strip()
     raw_project = (form.get("project") or "").strip()
 
+    posture = (form.get("posture") or "default").strip()
+    try:
+        adapters.PermissionPosture(posture)  # validate; the adapter maps it to --permission-mode
+    except ValueError:
+        return "error=" + quote_plus("unknown permission mode")
+
     prompt = ""
     if raw_project == "":
         project_dir: Path = Path.home()  # account-only quick session
@@ -1240,14 +1262,14 @@ def process_launch(
         try:
             term_id = pty_host.host.start(
                 agent=agent, project_dir=project_dir, account=account,
-                prompt=(prompt if mode == "resume" else ""),
+                posture=posture, prompt=(prompt if mode == "resume" else ""),
             )
         except (ValueError, adapters.AccountMismatch) as exc:
             return "error=" + quote_plus(str(exc))
         return f"tab={quote_plus(term_id)}"
 
     result = launch.launch_interactive(
-        agent=agent, project_dir=project_dir, account=account, prompt=prompt,
+        agent=agent, project_dir=project_dir, account=account, posture=posture, prompt=prompt,
     )
     if not result.ok:
         return "error=" + quote_plus(result.error or "launch failed")
