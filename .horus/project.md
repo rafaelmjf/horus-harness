@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Codex is now a first-class agent in the dashboard, not just an adapter: accounts, usage rings, and a weekly usage bar all render like Claude (PR #15 merged 2026-06-26; vendor-neutral contract proven at N=2). Next focus is MVP5 — make the loosely-wired pieces (mascot + dashboard server + in-app PTY sessions) feel like one app: unify the lifecycle and stop an in-app session from being able to restart/kill its own host (it happened — see history.md). Continuity (the moat) stays the headline; the continuity-debt backlog (~84 done roadmap items, ~48 missing features rows, ~38 sessions to distill) remains the standing opt-in cleanup job."
+current_focus: "Codex is now a first-class agent in the dashboard (accounts + usage rings + weekly bar, PR #15). Closure enforcement got its missing piece: a local pre-merge gate (`horus close --hook`, a Claude PreToolUse hook that blocks `gh pr merge` while lanes are stale) — the in-loop counterpart to the advisory CI. Next focus is MVP5 — make the loosely-wired pieces (mascot + dashboard server + in-app PTY sessions) feel like one app: unify the lifecycle and stop an in-app session from being able to restart/kill its own host (it happened — see history.md). Continuity (the moat) stays the headline; the continuity-debt backlog (~84 done roadmap items, ~48 missing features rows, ~38 sessions to distill) remains the standing opt-in cleanup job."
 last_updated: 2026-06-26
 ---
 

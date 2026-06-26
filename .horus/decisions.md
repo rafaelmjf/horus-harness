@@ -739,6 +739,37 @@ is gitignored and absent on CI (so CI sees the committed-lane subset + a "code c
 lane update" git heuristic). Promote to required by dropping the warning fallbacks. The
 post-merge *autonomous spawn* (Horus spawns the closer) remains the deferred, weaker option.
 
+## 2026-06-26 - The Pre-Merge Closure Gate Is a Local PreToolUse Hook, Not Just CI
+
+The "pre-merge closure gate" intent (a feature isn't done until the lanes reflect it,
+enforced *before* the merge) had shipped only as the advisory CI workflow
+(`continuity.yml`). That runs **server-side, after push, and never blocks**, and is blind
+to `.horus/sessions/` (gitignored) — so it nudges, it doesn't gate, and it isn't where
+the session context that closure *authoring* needs still exists.
+
+Decision: add a real **local** gate as a Claude **`PreToolUse` hook** matching the `Bash`
+tool, running `horus close --hook`. The command filters for `gh pr merge` (everything else
+passes instantly), runs the freshness gate, and on stale lanes emits
+`permissionDecision:deny` with `MERGE_CLOSURE_INSTRUCTION` — Claude blocks the merge and
+the agent is diverted to `horus-consolidate` first. This mirrors the usage hook's
+block-and-divert, but the trigger is the **action** (merge) rather than **quota**.
+
+Reasoning / shape:
+- **Trigger at the merge command**, not at PR-create or push: the latest safe point where
+  in-session context is still available, with the fewest false positives. (`gh pr merge`
+  only; configurable later.)
+- **Block, don't warn** — the CI already covers the soft-nudge posture; the local hook is
+  the hard gate. Self-clearing: consolidate → `horus close --check` passes → re-running the
+  merge proceeds. Errs toward *allowing* on any checker error (never wedge the user).
+- **Matcher is the tool name** (`Bash`), since Claude Code matches PreToolUse on tool name,
+  not command substring — so the command itself does the `gh pr merge` filtering.
+- **Baked into `horus hook install --kind {usage,merge,all}`** (default `usage` preserves
+  prior behavior); Claude-only (Codex has no gh-pr-merge interception surface). The two
+  layer: local hook = the gate inside Claude Code; CI = backstop for merges done elsewhere.
+- **Known limitation:** the freshness signal is date-granular, so a same-day feature whose
+  lanes were already authored earlier that day may pass the gate without a forced re-bump —
+  the authored-field checks still apply, but the mtime signal won't fire within the day.
+
 ## 2026-06-26 - Codex Account Usage: Used% From Rollout Rate-Limits, Last-Observed
 
 The dashboard Accounts panel shows Codex accounts with the same usage affordances as Claude
