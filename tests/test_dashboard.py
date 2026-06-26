@@ -1,8 +1,9 @@
 """Tests for dashboard data gathering and HTML rendering (no socket)."""
 
 import os
+from pathlib import Path
 
-from horus import dashboard, initialize
+from horus import dashboard, initialize, launcher
 from horus.registry import Registry, SessionRecord
 
 
@@ -266,6 +267,104 @@ def test_dashboard_surfaces_features_and_history(tmp_path, monkeypatch):
     # New column layout: features show as named buckets (Idea / In progress / Shipped).
     assert "Main features" in idx and "Widget engine" in idx
     assert "Last session summary" in idx
+
+
+def test_control_tab_renders_launch_controls(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    accounts = [{"alias": "work", "five_pct": 60.0, "week_pct": 10.0, "five_reset": None}]
+    page = dashboard.render_control(dashboard.gather_projects(), accounts, [])
+
+    # Project play -> a POST form with account select + fresh/resume radios.
+    assert "method='post' action='/launch'" in page
+    assert "name='mode' value='fresh'" in page and "name='mode' value='resume'" in page
+    assert "<select name='account'>" in page and ">work</option>" in page
+    # Account row -> a one-click fresh-session button.
+    assert "+ session" in page
+    # Copy-the-command path is still offered as a secondary option.
+    assert "horus open" in page
+
+
+def test_launch_notice_banner():
+    ok = dashboard._launch_notice({"launched": ["abcd1234"]})
+    assert "Launched session" in ok and "abcd1234" in ok and "banner ok" in ok
+    err = dashboard._launch_notice({"error": ["unknown account"]})
+    assert "Launch failed" in err and "unknown account" in err and "banner err" in err
+    assert dashboard._launch_notice({}) == ""
+
+
+def test_process_launch_fresh_by_project_index(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    captured = {}
+
+    def fake_open(argv, cwd, env=None):
+        captured["argv"], captured["cwd"] = argv, cwd
+        return 555
+
+    monkeypatch.setattr(launcher, "open_terminal", fake_open)
+
+    query = dashboard.process_launch(
+        {"project": "0", "mode": "fresh", "agent": "fake"},
+        projects=[str(proj)], known_aliases=set(),
+    )
+    assert query.startswith("launched=")
+    assert str(proj) == str(captured["cwd"])
+    assert captured["argv"][-1] != ""  # fresh: no injected prompt
+    recs = Registry.default().all()
+    assert len(recs) == 1 and recs[0].status == "running"
+
+
+def test_process_launch_resume_injects_continuity_prompt(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    captured = {}
+
+    def fake_open(argv, cwd, env=None):
+        captured["argv"] = argv
+        return 7
+
+    monkeypatch.setattr(launcher, "open_terminal", fake_open)
+
+    query = dashboard.process_launch(
+        {"project": "0", "mode": "resume", "agent": "fake"},
+        projects=[str(proj)], known_aliases=set(),
+    )
+    assert query.startswith("launched=")
+    # The resume prompt (project name + read-.horus instruction) is seeded into the session.
+    assert "demo" in captured["argv"][-1] and ".horus/" in captured["argv"][-1]
+
+
+def test_process_launch_rejects_unknown_project_and_account(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    assert dashboard.process_launch({"project": "9"}, projects=[], known_aliases=set()) == "error=unknown+project"
+    assert dashboard.process_launch(
+        {"project": "", "account": "ghost"}, projects=[], known_aliases={"work"}
+    ) == "error=unknown+account"
+
+
+def test_process_launch_account_only_uses_home_dir(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    captured = {}
+
+    def fake_open(argv, cwd, env=None):
+        captured["cwd"] = cwd
+        return 8
+
+    monkeypatch.setattr(launcher, "open_terminal", fake_open)
+
+    query = dashboard.process_launch(
+        {"account": "work", "mode": "fresh", "agent": "fake"},
+        projects=[], known_aliases={"work"},
+    )
+    assert query.startswith("launched=")
+    assert Path(captured["cwd"]) == (tmp_path / "home").resolve()  # account-only -> home dir
 
 
 def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):

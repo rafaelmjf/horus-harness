@@ -1,9 +1,15 @@
-"""Read-only, local-only multi-project dashboard.
+"""Local-only multi-project dashboard.
 
 Serves an overview of every project registered in ``~/.horus/config.toml`` plus a
-per-project detail view rendered from that repo's `.horus/` files. Read-only: no
-prompt input, no mutation, no arbitrary file access (projects are addressed by
-their index in the config list, never by a path from the request).
+per-project detail view rendered from that repo's `.horus/` files. Reads are
+side-effect-free and never touch arbitrary files (projects are addressed by their
+index in the config list, never by a path from the request).
+
+The one mutating action is the Control tab's **launch** button (``POST /launch``):
+it opens an attended agent session in its own terminal via :mod:`horus.launch` —
+the same path as ``horus open``. Inputs are constrained to keep the read surface's
+guarantees: projects are still addressed by index, accounts validated against the
+known set, and the POST is same-origin-guarded (the server binds loopback only).
 """
 
 from __future__ import annotations
@@ -13,7 +19,7 @@ import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote_plus, urlparse
 
 from horus import (
     claude_usage,
@@ -21,6 +27,7 @@ from horus import (
     config,
     frontmatter,
     gitstate,
+    launch,
     markdown,
     registry,
     roadmap,
@@ -281,6 +288,20 @@ details.launch > summary::-webkit-details-marker { display: none; }
 .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #232733; color: #b9c2d0; }
 .usagebar { height: 14px; background: #232733; border-radius: 4px; overflow: hidden; margin: 12px 0 4px; }
 .usagebar > span { display: block; height: 100%; }
+form.launch-form { margin: 8px 0 4px; display: flex; flex-direction: column; gap: 8px; }
+form.launch-form label { font-size: 12px; color: #b9c2d0; }
+form.launch-form select { background: #0b0d12; color: #e6e6e6; border: 1px solid #284058;
+            border-radius: 6px; padding: 3px 6px; font-size: 12px; margin-left: 4px; }
+form.launch-form .modes { display: flex; flex-direction: column; gap: 3px; }
+form.launch-form .modes label { display: flex; align-items: center; gap: 6px; }
+button.start { font: inherit; cursor: pointer; }
+form.acct-launch { margin-left: auto; }
+.or-cmds { margin-top: 6px; }
+.or-cmds > summary { cursor: pointer; font-size: 11px; color: #8a93a6; list-style: none; }
+.or-cmds > summary::-webkit-details-marker { display: none; }
+.banner { border-radius: 8px; padding: 9px 13px; margin: 0 0 16px; font-size: 13px; }
+.banner.ok { background: #15281d; border: 1px solid #1f5138; color: #aee9c8; }
+.banner.err { background: #2e1b1b; border: 1px solid #5c2a2a; color: #f0b3b3; }
 """
 
 _LEVEL_CLASS = {"ok": "health-ok", "warn": "health-warn", "fail": "health-fail"}
@@ -829,9 +850,21 @@ def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
         )
         rows.append(
             f"<div class='acct'>{_ring(a['five_pct'])}"
-            f"<div><div class='who'>{html.escape(a['alias'])}</div>{reset}{week}</div></div>"
+            f"<div><div class='who'>{html.escape(a['alias'])}</div>{reset}{week}</div>"
+            f"{_account_launch_form(a['alias'])}</div>"
         )
     return f"<div class='card'><h2>Accounts</h2>{''.join(rows)}</div>"
+
+
+def _account_launch_form(alias: str) -> str:
+    """A one-click "fresh session as this account" button (opens in your home dir)."""
+    return (
+        "<form class='acct-launch' method='post' action='/launch'>"
+        f"<input type='hidden' name='account' value='{html.escape(alias, quote=True)}'>"
+        "<input type='hidden' name='mode' value='fresh'>"
+        "<button class='start' type='submit' title='Open a fresh session as this account'>"
+        "+ session</button></form>"
+    )
 
 
 def _launch_cmds(project_path: str, accounts: list[dict[str, Any]]) -> str:
@@ -845,6 +878,28 @@ def _launch_cmds(project_path: str, accounts: list[dict[str, Any]]) -> str:
     )
 
 
+def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[str, Any]]) -> str:
+    """Pick an account + fresh-or-resume, then launch (POST). Mirrors the sketch's
+    "select acc and select fresh session or resume" flow on the project play button."""
+    opts = "<option value=''>ambient (logged-in)</option>" + "".join(
+        f"<option value='{html.escape(a['alias'], quote=True)}'>{html.escape(a['alias'])}</option>"
+        for a in accounts
+    )
+    return (
+        "<form class='launch-form' method='post' action='/launch'>"
+        f"<input type='hidden' name='project' value='{i}'>"
+        f"<label>Account <select name='account'>{opts}</select></label>"
+        "<div class='modes'>"
+        "<label><input type='radio' name='mode' value='fresh' checked> Fresh session</label>"
+        "<label><input type='radio' name='mode' value='resume'> Resume (inject continuity prompt)</label>"
+        "</div>"
+        "<button class='start' type='submit'>Launch &#9654;</button>"
+        "</form>"
+        "<details class='or-cmds'><summary>&#8230; or run it in your own terminal</summary>"
+        f"<div class='launch-body'>{_launch_cmds(project['path'], accounts)}</div></details>"
+    )
+
+
 def _projects_panel(projects: list[dict[str, Any]], accounts: list[dict[str, Any]]) -> str:
     if not projects:
         return "<div class='card'><h2>Projects</h2><p class='muted'>None registered.</p></div>"
@@ -853,7 +908,7 @@ def _projects_panel(projects: list[dict[str, Any]], accounts: list[dict[str, Any
         rows.append(
             f"<div class='proj-row'><a href='/project?i={i}'>{html.escape(p['name'])}</a>"
             "<details class='launch'><summary title='Launch a session'>&#9654;</summary>"
-            f"<div class='launch-body'>{_launch_cmds(p['path'], accounts)}</div></details></div>"
+            f"<div class='launch-body'>{_project_launch_form(i, p, accounts)}</div></details></div>"
         )
     return f"<div class='card'><h2>Projects</h2>{''.join(rows)}</div>"
 
@@ -923,23 +978,95 @@ def _reopen_html(rec: registry.SessionRecord) -> str:
     return block
 
 
+def _launch_notice(params: dict[str, list[str]]) -> str:
+    """Banner shown after a launch POST redirects back to /control."""
+    if "launched" in params:
+        sid = html.escape(params["launched"][0])
+        return (
+            f"<div class='banner ok'>Launched session <code>{sid}</code> in a new "
+            "terminal &mdash; it appears below once its process is up.</div>"
+        )
+    if "error" in params:
+        return f"<div class='banner err'>Launch failed: {html.escape(params['error'][0])}</div>"
+    return ""
+
+
 def render_control(
     projects: list[dict[str, Any]],
     accounts: list[dict[str, Any]],
     sessions: list[registry.SessionRecord],
+    notice: str = "",
 ) -> str:
     # Live processes only (per the design): a session is "live" while its process runs.
     live = [s for s in sessions if s.status == "running"]
     cards = "".join(_control_session_card(s, accounts) for s in live) or (
-        "<p class='muted'>No live sessions. Launch one from a project on the left "
-        "(or <code>horus open</code>); it appears here while its process runs.</p>"
+        "<p class='muted'>No live sessions. Launch one from an account or project on "
+        "the left; it appears here while its process runs.</p>"
     )
     body = (
-        "<div class='control'><div class='sidebar'>"
+        f"{notice}<div class='control'><div class='sidebar'>"
         f"{_accounts_panel(accounts)}{_projects_panel(projects, accounts)}</div>"
         f"<div class='sessions-grid'>{cards}</div></div>"
     )
     return _page("Horus - Control", body, active="control", wide=True, live=len(live))
+
+
+# --------------------------------------------------------------------------- #
+# Launch (the one mutating action): POST /launch -> horus.launch
+# --------------------------------------------------------------------------- #
+
+def _known_aliases() -> set[str]:
+    """Account aliases the dashboard will accept on a launch POST — the isolated
+    config-dir map plus the ambient login. No network (unlike ``gather_accounts``)."""
+    aliases = set(config.load_account_config_dirs())
+    ambient = config.alias_for(claude_usage.current_account())
+    if ambient:
+        aliases.add(ambient)
+    return aliases
+
+
+def process_launch(
+    form: dict[str, str],
+    *,
+    projects: list[str] | None = None,
+    known_aliases: set[str] | None = None,
+) -> str:
+    """Handle a Control-tab launch request; return the query string to redirect
+    ``/control`` to (``launched=<id8>`` or ``error=<reason>``).
+
+    Safety mirrors the read surface: a project is addressed by its **index** into
+    the registered list (never an arbitrary path), and an account must be in the
+    **known** set. An empty project means an account-only quick session, opened in
+    the user's home directory.
+    """
+    projects = config.load_projects() if projects is None else projects
+    known = _known_aliases() if known_aliases is None else known_aliases
+
+    account = (form.get("account") or "").strip() or None
+    if account is not None and account not in known:
+        return "error=" + quote_plus("unknown account")
+
+    mode = (form.get("mode") or "fresh").strip()
+    agent = (form.get("agent") or "claude").strip()
+    raw_project = (form.get("project") or "").strip()
+
+    prompt = ""
+    if raw_project == "":
+        project_dir: Path = Path.home()  # account-only quick session
+    else:
+        try:
+            project_dir = Path(projects[int(raw_project)])
+        except (ValueError, IndexError):
+            return "error=" + quote_plus("unknown project")
+        if mode == "resume":
+            prompt = _resume_prompt_text(load_project(str(project_dir)))
+
+    result = launch.launch_interactive(
+        agent=agent, project_dir=project_dir, account=account, prompt=prompt,
+    )
+    if not result.ok:
+        return "error=" + quote_plus(result.error or "launch failed")
+    return f"launched={result.session_id[:8]}"
 
 
 # --------------------------------------------------------------------------- #
@@ -965,7 +1092,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(_page("Horus — sessions", render_sessions_card(recs), live=_live_count(recs)))
             return
         if parsed.path == "/control":
-            self._send(render_control(gather_projects(), gather_accounts(), gather_sessions()))
+            notice = _launch_notice(parse_qs(parsed.query))
+            self._send(render_control(gather_projects(), gather_accounts(), gather_sessions(), notice))
             return
         if parsed.path == "/project":
             projects = gather_projects()
@@ -978,6 +1106,37 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(render_project(project))
             return
         self._send(_page("Not found", "<p>Not found.</p>"), 404)
+
+    def _same_origin(self) -> bool:
+        """Reject cross-origin POSTs (CSRF guard for the loopback server).
+
+        A browser sends ``Origin`` on cross-site form/fetch POSTs; if present it must
+        match our ``Host``. Absent ``Origin`` means a non-browser client (e.g. curl)
+        on loopback, which is allowed — the server binds 127.0.0.1 only.
+        """
+        origin = self.headers.get("Origin")
+        if origin is None:
+            return True
+        host = self.headers.get("Host", "")
+        return origin in (f"http://{host}", f"https://{host}")
+
+    def do_POST(self) -> None:  # noqa: N802 (stdlib naming)
+        parsed = urlparse(self.path)
+        if parsed.path != "/launch":
+            self._send(_page("Not found", "<p>Not found.</p>"), 404)
+            return
+        if not self._same_origin():
+            self._send(_page("Forbidden", "<p>Cross-origin request refused.</p>"), 403)
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length).decode("utf-8", "replace") if length else ""
+        form = {k: v[0] for k, v in parse_qs(raw).items()}
+        query = process_launch(form)
+        # 303 -> GET /control so a refresh doesn't re-submit the launch (PRG pattern).
+        self.send_response(303)
+        self.send_header("Location", f"/control?{query}")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def log_message(self, *args: Any) -> None:  # silence default stderr logging
         pass

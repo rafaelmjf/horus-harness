@@ -6,7 +6,6 @@ import argparse
 import json
 import re
 import sys
-import uuid
 from datetime import date, datetime
 from pathlib import Path
 
@@ -21,6 +20,7 @@ from horus import (
     dashboard,
     gitstate,
     initialize,
+    launch,
     launcher,
     native_hooks,
     registry,
@@ -225,48 +225,22 @@ def cmd_open(args: argparse.Namespace) -> int:
 
     The interactive counterpart to `horus run`: launches the CLI's TUI (the user
     types in it) under a chosen account + project, and registers it so it shows as
-    a live `running` session in `horus sessions` and the dashboard.
+    a live `running` session in `horus sessions` and the dashboard. Shares the
+    launch path with the dashboard's Control-tab buttons (`horus.launch`).
     """
-    root = Path(args.path).resolve()
-    try:
-        adapter = adapters.get_adapter(args.agent)
-    except KeyError as exc:
-        print(exc)
-        return 2
-    if not hasattr(adapter, "interactive_command"):
-        print(f"{args.agent!r} does not support interactive sessions yet.")
-        return 2
-
-    spec = adapters.SpawnSpec(
-        prompt="",
-        project_dir=root,
+    result = launch.launch_interactive(
+        agent=args.agent,
+        project_dir=args.path,
         account=args.account,
-        posture=adapters.PermissionPosture(args.posture),
+        posture=args.posture,
         model=args.model,
+        prompt=args.prompt or "",
     )
-    # Same identity guard as a headless spawn: refuse if a mapped account's login mismatches.
-    if args.account and getattr(adapter, "config_dirs", {}).get(args.account) and hasattr(adapter, "verify_account"):
-        check = adapter.verify_account(args.account)
-        if not check.ok:
-            print(f"Refusing to open: account {args.account!r} login mismatch (found {check.detected_email or 'no login'}).")
-            return 2
-
-    session_id = str(uuid.uuid4())
-    argv = adapter.interactive_command(spec, session_id=session_id)
-    try:
-        pid = launcher.open_terminal(argv, cwd=root, env=adapter.build_env(spec))
-    except OSError as exc:
-        print(f"Failed to open a terminal: {exc}")
-        return 1
-
-    registry.Registry.default().upsert(
-        registry.SessionRecord(
-            session_id=session_id, agent=adapter.name, project=root.as_posix(),
-            account=args.account, pid=pid, status="running",
-        )
-    )
-    print(f"Opened {adapter.name} session in {root.name} as {args.account or 'ambient'} "
-          f"(pid {pid}, session {session_id}).")
+    if not result.ok:
+        print(f"Refusing to open: {result.error}")
+        return 2
+    print(f"Opened {result.agent} session in {result.project.name} as {result.account or 'ambient'} "
+          f"(pid {result.pid}, session {result.session_id}).")
     return 0
 
 
@@ -692,6 +666,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="default",
         choices=[p.value for p in adapters.PermissionPosture],
         help="permission posture (default: default)",
+    )
+    p_open.add_argument(
+        "--prompt",
+        default=None,
+        help="initial prompt to seed the interactive session (default: fresh, unseeded)",
     )
     p_open.set_defaults(func=cmd_open)
 

@@ -89,6 +89,9 @@ class ClaudeAdapter(AgentAdapter):
 
         ``--session-id`` is pre-assigned so we can track the session before any
         output is parsed (interactive runs don't stream stream-json back to us).
+        A non-empty ``spec.prompt`` is passed as Claude's positional initial prompt
+        (``claude [options] [prompt]``) to seed the session — used to inject a
+        project's continuity/resume prompt; empty means a fresh, unseeded session.
         """
         argv = [self.executable, "--session-id", session_id]
         if spec.model:
@@ -96,6 +99,8 @@ class ClaudeAdapter(AgentAdapter):
         if spec.posture is not PermissionPosture.DEFAULT:
             argv += self.permission_flags(spec.posture)
         argv += list(spec.extra_args)
+        if spec.prompt:
+            argv.append(spec.prompt)  # positional initial prompt for the TUI
         return argv
 
     # --- multi-account identity ----------------------------------------------

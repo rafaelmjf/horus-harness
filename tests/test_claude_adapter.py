@@ -128,6 +128,15 @@ def test_interactive_command_is_a_tui_with_preassigned_session():
     assert "-p" not in argv and "--output-format" not in argv  # interactive, not headless
 
 
+def test_interactive_command_injects_initial_prompt():
+    # A non-empty prompt seeds the TUI as Claude's positional initial prompt;
+    # an empty prompt leaves the session fresh (no trailing positional).
+    seeded = ClaudeAdapter().interactive_command(_spec(prompt="resume the foo project"), session_id="s1")
+    assert seeded[-1] == "resume the foo project"
+    fresh = ClaudeAdapter().interactive_command(_spec(prompt=""), session_id="s1")
+    assert fresh[-1] == "s1"  # ends at --session-id value; nothing appended
+
+
 def test_get_adapter_resolves_claude():
     assert isinstance(get_adapter("claude"), ClaudeAdapter)
 
