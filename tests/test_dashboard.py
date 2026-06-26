@@ -3,7 +3,9 @@
 import os
 from pathlib import Path
 
-from horus import dashboard, initialize, launcher
+import json
+
+from horus import config, dashboard, initialize, launcher
 from horus.registry import Registry, SessionRecord
 
 
@@ -426,6 +428,119 @@ def test_process_launch_account_only_uses_home_dir(tmp_path, monkeypatch):
     )
     assert query.startswith("launched=")
     assert Path(captured["cwd"]) == (tmp_path / "home").resolve()  # account-only -> home dir
+
+
+def _write_codex_auth(home, account_id="codex-acct-1"):
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "auth.json").write_text(
+        json.dumps({"tokens": {"account_id": account_id}}), encoding="utf-8"
+    )
+
+
+def _write_codex_rollout(home, primary=5.0, secondary=40.0):
+    path = home / "sessions" / "2026" / "06" / "26" / "rollout-d.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    event = {
+        "timestamp": "2026-06-26T10:00:00Z",
+        "type": "event_msg",
+        "payload": {
+            "type": "token_count",
+            "info": {"last_token_usage": {"total_tokens": 100}, "model_context_window": 1000},
+            "rate_limits": {
+                "primary": {"used_percent": primary, "resets_at": 1782390000},
+                "secondary": {"used_percent": secondary, "resets_at": 1782990000},
+            },
+        },
+    }
+    path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+
+def test_gather_accounts_includes_isolated_codex_home(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.set_account_codex_home("codex-work", str(tmp_path / "cx-home"))
+    accounts = dashboard.gather_accounts()
+    codex = [a for a in accounts if a.get("agent") == "codex"]
+    assert len(codex) == 1
+    assert codex[0]["alias"] == "codex-work"
+    assert codex[0]["five_pct"] is None  # no rollouts reporting limits yet -> gray ring
+
+
+def test_gather_accounts_codex_ring_from_rollout_rate_limits(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    home = tmp_path / "cx-home"
+    config.set_account_codex_home("codex-work", str(home))
+    _write_codex_rollout(home, primary=5.0, secondary=40.0)
+    codex = [a for a in dashboard.gather_accounts() if a.get("agent") == "codex"][0]
+    # used% (matches the Claude ring convention, inverse of the Codex app's "remaining")
+    assert codex["five_pct"] == 5.0
+    assert codex["week_pct"] == 40.0
+    assert codex["five_reset"]  # primary reset formatted, not None
+    assert codex["week_reset"]  # secondary (weekly) reset formatted, not None
+
+
+def test_accounts_panel_renders_weekly_bar_with_reset(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    accounts = [{
+        "agent": "codex", "alias": "codex-work", "five_pct": 1.0, "week_pct": 69.0,
+        "five_reset": "2026-06-26 22:22", "week_reset": "2026-06-28 15:34",
+    }]
+    page = dashboard.render_control(dashboard.gather_projects(), accounts, [])
+    assert "class='usagebar'" in page       # full-width weekly bar
+    assert "width:69%" in page               # proportional fill = used%
+    assert "Weekly 69%" in page
+    assert "resets 2026-06-28 15:34" in page  # weekly reset date shown
+
+
+def test_gather_accounts_includes_ambient_codex(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    # No isolated homes; ambient ~/.codex/auth.json under the tmp HOME.
+    _write_codex_auth(tmp_path / "home" / ".codex")
+    accounts = dashboard.gather_accounts()
+    codex = [a for a in accounts if a.get("agent") == "codex"]
+    assert len(codex) == 1 and codex[0]["alias"]  # aliased, never the raw account_id
+    assert codex[0]["alias"] != "codex-acct-1"
+
+
+def test_known_aliases_includes_codex_isolated_and_ambient(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.set_account_codex_home("codex-work", str(tmp_path / "cx-home"))
+    _write_codex_auth(tmp_path / "home" / ".codex", account_id="ambient-codex")
+    aliases = dashboard._known_aliases()
+    assert "codex-work" in aliases
+    assert config.alias_for("ambient-codex") in aliases
+
+
+def test_accounts_panel_badges_and_codex_launch_form(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    accounts = [
+        {"agent": "claude", "alias": "work", "five_pct": 60.0, "week_pct": 10.0, "five_reset": None},
+        {"agent": "codex", "alias": "codex-work", "five_pct": None, "week_pct": None, "five_reset": None},
+    ]
+    page = dashboard.render_control(dashboard.gather_projects(), accounts, [])
+    # Both accounts carry an uppercase agent badge.
+    assert ">claude</span>" in page and ">codex</span>" in page
+    # The Codex account's one-click launch form forwards agent=codex.
+    assert "name='agent' value='codex'" in page
+
+
+def test_process_launch_codex_account_routes_to_pty(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    calls = {}
+
+    def fake_start(**kw):
+        calls.update(kw)
+        return "pty-cx"
+
+    monkeypatch.setattr(dashboard.pty_host.host, "start", fake_start)
+
+    query = dashboard.process_launch(
+        {"account": "codex-work", "agent": "codex", "mode": "fresh",
+         "target": "app", "posture": "read-only"},
+        projects=[], known_aliases={"codex-work"},
+    )
+    assert query == "tab=pty-cx"
+    assert calls["agent"] == "codex" and calls["account"] == "codex-work"
+    assert calls["posture"] == "read-only"
 
 
 def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):

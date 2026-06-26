@@ -24,6 +24,7 @@ from horus.adapters.base import (
     SpawnSpec,
 )
 from horus.adapters.claude import AccountMismatch, ClaudeAdapter, IdentityCheck
+from horus.adapters.codex import CodexAdapter
 from horus.adapters.fake import FakeAdapter
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "AgentRun",
     "AgentSession",
     "ClaudeAdapter",
+    "CodexAdapter",
     "EventType",
     "FakeAdapter",
     "IdentityCheck",
@@ -46,10 +48,12 @@ def get_adapter(name: str) -> AgentAdapter:
     """Return an adapter instance by name. Raises ``KeyError`` if unknown.
 
     ``fake`` is always available for tests/dry runs; ``claude`` drives the
-    official ``claude`` CLI.
+    official ``claude`` CLI; ``codex`` drives the official ``codex`` CLI.
     """
     if name == "fake":
         return FakeAdapter()
     if name == "claude":
         return ClaudeAdapter()
+    if name == "codex":
+        return CodexAdapter()
     raise KeyError(f"unknown agent adapter: {name!r}")

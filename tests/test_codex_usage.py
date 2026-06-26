@@ -74,3 +74,48 @@ def test_usage_findings_ok_when_absent(tmp_path):
     findings = codex_usage.usage_findings(tmp_path, home=tmp_path / "missing")
     assert findings[0].level == "ok"
     assert "no Codex usage signal" in findings[0].message
+
+
+def test_latest_account_usage_picks_newest_snapshot_ignoring_project(tmp_path):
+    home = tmp_path / "codex-home"
+    # Older rollout (one project) + a newer rollout (another project). Rate limits
+    # are account-global, so the newest snapshot wins regardless of cwd.
+    _write_rollout(home, _token("2026-06-25T10:00:00Z", 500, primary=10, secondary=20))
+    newer = home / "sessions" / "2026" / "06" / "26" / "rollout-new.jsonl"
+    newer.parent.mkdir(parents=True)
+    newer.write_text(
+        json.dumps(_token("2026-06-26T10:00:00Z", 600, primary=80, secondary=90)) + "\n",
+        encoding="utf-8",
+    )
+    report = codex_usage.latest_account_usage(home=home)
+    assert report is not None
+    assert report.primary_percent == 80 and report.secondary_percent == 90
+    assert report.primary_resets_at is not None
+
+
+def test_latest_account_usage_none_when_no_rollouts(tmp_path):
+    assert codex_usage.latest_account_usage(home=tmp_path / "missing") is None
+
+
+def test_current_account_reads_account_id(tmp_path):
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    (home / "auth.json").write_text(
+        json.dumps({"tokens": {"account_id": "acct-abc-123"}}), encoding="utf-8"
+    )
+    assert codex_usage.current_account(home=home) == "acct-abc-123"
+
+
+def test_current_account_none_when_file_missing(tmp_path):
+    assert codex_usage.current_account(home=tmp_path / "missing") is None
+
+
+def test_current_account_none_on_malformed_or_no_id(tmp_path):
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    # No account_id in the tokens object -> None (not KeyError).
+    (home / "auth.json").write_text(json.dumps({"tokens": {}}), encoding="utf-8")
+    assert codex_usage.current_account(home=home) is None
+    # Garbage JSON -> None, never raises.
+    (home / "auth.json").write_text("{not json", encoding="utf-8")
+    assert codex_usage.current_account(home=home) is None

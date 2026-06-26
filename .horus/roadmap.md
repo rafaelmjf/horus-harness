@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "MVP4 'unified terminal' is merged: the Control tab launches real agent sessions and hosts them as **in-app terminals** — the actual `claude` TUI under a PTY, rendered with xterm.js, persistent + re-attachable + pop-outable. The closure ritual was then **hardened** (branch `closure-freshness`): a deterministic freshness gate (`horus close --check`) + a sharper `horus-consolidate` skill (v3: explicit dashboard-contract checklist + per-session/backlog split) + an advisory PR continuity CI, so the dashboard's lanes can't silently go stale. The single biggest open de-risk remains the **Codex adapter** — the vendor-neutral contract is proven only at N=1 (Claude). Continuity stays the headline; resist over-building the terminal/IDE layer."
-next_action: "Build the Codex adapter (horus/adapters/codex.py) against horus/adapters/base.py, with ClaudeAdapter as the reference — it proves the vendor-neutral contract (unproven at N=1) and makes the in-app terminal + launch + Control tab genuinely multi-agent. It needs interactive_command (the PTY terminal reuses it) + build_env (CODEX_HOME per account) + parse_event. Probe the real codex CLI for exec/resume flags + event-stream format; don't guess."
-next_prompt: "Resume Horus. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (local refs lie — see history.md). MVP4 in-app terminal is merged: dashboard launches real claude TUIs via a cross-platform PTY (horus/pty_session.py) hosted in a persistent, re-attachable, pop-outable session-host (horus/pty_host.py), rendered with vendored xterm.js. Start a FRESH branch off main and PR it (squash-merge, auto-delete). Read .horus/ lanes + the latest .horus/sessions/ summary. Next slice: the **Codex adapter** (horus/adapters/codex.py) mirroring ClaudeAdapter — implement permission_flags/build_command/build_env(CODEX_HOME)/parse_event/interactive_command, register in adapters.get_adapter, probe the real `codex` CLI (don't guess), and confirm a Codex session launches in the in-app terminal. Also pending (own session): the continuity-debt pass (~74 done roadmap items, ~44 missing features rows, ~34 sessions to distill)."
+current_focus: "Vendor-neutral adapter contract proven at N=2: the Codex adapter (`horus/adapters/codex.py`) is shipped — `codex exec --json` spawn, `codex exec resume` resume, `CODEX_HOME` per-account isolation, real JSONL event parsing (`thread.started`/`item.completed`/`turn.completed`), in-app PTY `interactive_command`. 256 tests pass, live proof confirmed. The lanes carry significant continuity debt (~74 done roadmap items, ~47 missing features rows, ~37 sessions to distill) — the dedicated backlog-consolidation pass is the standing next job."
+next_action: "Squash-merge PR #15 (Codex adapter, feat/codex-adapter) and auto-delete. Then run a dedicated backlog-consolidation pass (invoke horus-consolidate skill in backlog mode): distill old sessions, move 74+ done roadmap items into features.md, de-duplicate overlaps."
+next_prompt: "Resume Horus. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (local refs lie — see history.md). PR #15 (Codex adapter) is on origin/feat/codex-adapter — squash-merge and auto-delete. Read .horus/ lanes. Then run a **backlog-consolidation pass** (explicitly invoke the horus-consolidate skill in 'backlog consolidation' mode): distill ~37 old sessions, move 74+ done roadmap items into features.md, de-duplicate the ~48 roadmap↔features overlaps. This is a dedicated pass, not a per-session close — it may take multiple rounds. After completion, `horus close --check` should pass cleanly."
 last_updated: 2026-06-26
 ---
 
@@ -325,11 +325,11 @@ dashboard and later becomes the place for continuity/status nudges.
     HWND/HANDLE truncation made it silently no-op; fixed by declaring `argtypes`/`restype`. Ceilings:
     Windows-only; `SetForegroundWindow` is subject to the OS foreground lock; a session hosted in a shared
     Windows Terminal process (window not a pid descendant) won't match → clear failure message + fallback.
-- [ ] **Codex adapter (THE next step)** — second adapter to prove the vendor-neutral contract,
-  unproven at N=1. `horus/adapters/codex.py` mirroring `ClaudeAdapter`: `permission_flags` /
-  `build_command` / `build_env` (`CODEX_HOME` per account) / `parse_event` / `interactive_command`
-  (the in-app PTY terminal reuses it), registered in `adapters.get_adapter`. Probe the real `codex`
-  CLI for exec/resume flags + event format; don't guess. → unblocks multi-agent terminal/launch.
+- [x] **Codex adapter** (2026-06-26) — `horus/adapters/codex.py` (`CodexAdapter`): all four contract
+  methods + `interactive_command`. Spawn: `codex exec --json`; resume: `codex exec resume --json`.
+  `CODEX_HOME` per-account isolation (`[codex_homes]` in `accounts.toml`). JSONL event parsing
+  (`thread.started` → SESSION_STARTED; `item.completed/agent_message` → ASSISTANT_TEXT;
+  `turn.completed` → RESULT). Registered in `get_adapter`. Live proof confirmed. → features.md
 - [ ] Persist the registry in SQLite (re-justified once concurrency/scale hurts; JSON file shipped first).
 - [ ] Restrict autonomous closure edits to `.horus/**`, `AGENTS.md`, `CLAUDE.md`.
 - [ ] **LLM-based `horus infer`** (replaces the removed deterministic version): drive the official CLI to distill `.horus/` from the project's canonical docs — follow doc pointers (README → status/roadmap → CLAUDE.md → linked docs like docs/HISTORY.md), produce clean project + roadmap with planned/in-progress/done items, mark superseded source docs as stale, and prompt the user when intent is unclear.
@@ -351,8 +351,8 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] **Pop-out** a session into its own window (a second viewer of the same host-owned PTY). → features.md
 - [x] **Permission posture at launch** — the launch form picks Claude's `--permission-mode`
   (Ask / Plan / Accept-edits / Bypass) instead of hardcoding default; changeable later in the TUI. → features.md
-- [ ] **Codex in the terminal** — falls out of the Codex adapter (above); the PTY host already
-  calls `interactive_command`, so it works once Codex implements it.
+- [x] **Codex in the terminal** (2026-06-26) — `CodexAdapter.interactive_command` is implemented;
+  `get_adapter("codex")` now resolves; the PTY host works without changes. → features.md
 
 Deferred (noted as future direction, low value for now):
 
@@ -416,6 +416,32 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
   pre-merge closure nudge. → features.md
 - [ ] Promote the CI check from advisory to a required gate once proven (drop the
   `|| echo ::warning::` fallbacks).
+
+## MVP 5 - App cohesion / lifecycle (next, after the Codex adaptation)
+
+> Why (flagged 2026-06-26): the app still feels like loosely-wired parts (mascot +
+> dashboard server + in-app PTY sessions) rather than one application. Two concrete
+> bites surfaced. The goal of this milestone is that Horus reads and behaves as a
+> single app — ready for real alpha use, not just a dev harness.
+
+- [ ] **BUG/FOOTGUN: an in-app agent session must not be able to kill its own host
+  by restarting the app** (flagged 2026-06-26). A Claude session running *inside* the
+  in-app PTY terminal was editing `dashboard.py`, then restarted the app to see the
+  change — which tore down the dashboard process that hosts its own PTY, so the
+  session killed itself mid-task (work was uncommitted; recovered from the working
+  tree, no session note). Decouple the session-host lifecycle from a
+  dashboard/code reload (the deferred "standalone session-host daemon" in MVP 4 is
+  the structural fix), and/or guard against a hosted agent triggering a self-restart
+  (warn / refuse / hot-reload code without dropping live PTYs). Relates to the
+  dashboard-server-leak bug in the companion section (no single-instance + no reaping).
+- [ ] **Unify the app lifecycle so the pieces act as one app** (flagged 2026-06-26):
+  closing the mascot should close the whole app (mascot + dashboard server + hosted
+  sessions, with a confirm if sessions are live); closing the dashboard window via its
+  UI should terminate the backing process (not orphan it — see the 8765 leak); and the
+  reverse — quitting should not leave a stray mascot or server. Today these are
+  disconnected: the mascot, the dashboard server, and the PTY host have independent
+  lifetimes. Define one ownership/teardown model. Prereq lens for design: the existing
+  single-instance mutex (8764) and the dashboard-server-leak fix belong inside this.
 
 ## Later
 

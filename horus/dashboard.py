@@ -149,31 +149,74 @@ def gather_projects() -> list[dict[str, Any]]:
 def _account_usage(alias: str, cred_path: Path | None) -> dict[str, Any]:
     report = claude_usage.latest_usage(cred_path=cred_path)
     reset = report.five_hour_resets_at if report else None
+    week_reset = report.seven_day_resets_at if report else None
     return {
+        "agent": "claude",
         "alias": alias,
         "five_pct": report.five_hour_percent if report else None,
         "week_pct": report.seven_day_percent if report else None,
         "five_reset": claude_usage._fmt_reset(reset) if reset else None,
+        "week_reset": claude_usage._fmt_reset(week_reset) if week_reset else None,
+    }
+
+
+def _codex_account_usage(alias: str, home: Path | None) -> dict[str, Any]:
+    """A Codex account row with its 5h/weekly rate limits (best-effort, read-only).
+
+    Codex has no live usage endpoint, so the percentages are the *last observed*
+    rate-limit snapshot from this account's rollouts (account-global, only as
+    fresh as the last Codex activity). ``used_percent`` semantics match the Claude
+    ring (the ring fills as you consume) — note this is the inverse of the Codex
+    app's "remaining" framing. No rollout reporting limits yet -> gray ring.
+    """
+    report = codex_usage.latest_account_usage(home=home)
+    reset = report.primary_resets_at if report else None
+    week_reset = report.secondary_resets_at if report else None
+    return {
+        "agent": "codex",
+        "alias": alias,
+        "five_pct": report.primary_percent if report else None,
+        "week_pct": report.secondary_percent if report else None,
+        "five_reset": codex_usage._fmt_reset(reset) if reset is not None else None,
+        "week_reset": codex_usage._fmt_reset(week_reset) if week_reset is not None else None,
     }
 
 
 def gather_accounts() -> list[dict[str, Any]]:
-    """Every Horus-known Claude account with its live usage (best-effort, read-only).
+    """Every Horus-known account (Claude + Codex) with usage where available.
 
-    Reads the per-account ``CLAUDE_CONFIG_DIR`` isolation map (accounts.toml) and
-    adds the ambient login if it isn't one of them. Accounts are shown by alias, not
-    raw email (the alias privacy rule). Network failure / no token -> gray ring.
+    Claude accounts: read ``CLAUDE_CONFIG_DIR`` isolation map + ambient login;
+    usage comes from the OAuth ``/usage`` endpoint (best-effort, may be gray).
+    Codex accounts: read ``CODEX_HOME`` isolation map + ambient ``~/.codex``;
+    usage is the last-observed 5h/weekly rate-limit snapshot from rollouts (no
+    live API), gray until a rollout has reported limits.
+    Accounts are shown by alias, not raw email/id (alias privacy rule).
     """
-    # ponytail: one live usage GET per account, sequential. Parallelize only if a
-    # large account list ever makes the page drag — a handful is fine.
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
+
+    # --- Claude accounts ---
     for alias, d in sorted(config.load_account_config_dirs().items()):
         out.append(_account_usage(alias, Path(d) / ".credentials.json"))
         seen.add(alias)
-    ambient_alias = config.alias_for(claude_usage.current_account())
-    if ambient_alias and ambient_alias not in seen:
-        out.append(_account_usage(ambient_alias, None))  # ambient credentials path
+    ambient_claude = config.alias_for(claude_usage.current_account())
+    if ambient_claude and ambient_claude not in seen:
+        out.append(_account_usage(ambient_claude, None))
+        seen.add(ambient_claude)
+
+    # --- Codex accounts ---
+    codex_seen: set[str] = set()
+    for alias, d in sorted(config.load_account_codex_homes().items()):
+        out.append(_codex_account_usage(alias, Path(d)))
+        codex_seen.add(alias)
+    # Ambient Codex: show once when no explicit homes are configured and ~/.codex exists.
+    if not codex_seen:
+        ambient_codex_id = codex_usage.current_account()
+        if ambient_codex_id:
+            ambient_codex_alias = config.alias_for(ambient_codex_id)
+            if ambient_codex_alias:
+                out.append(_codex_account_usage(ambient_codex_alias, None))  # ambient ~/.codex
+
     return out
 
 
@@ -290,7 +333,7 @@ details.launch > summary::-webkit-details-marker { display: none; }
 .scard-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .scard-t { font-size: 16px; font-weight: 600; }
 .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #232733; color: #b9c2d0; }
-.usagebar { height: 14px; background: #232733; border-radius: 4px; overflow: hidden; margin: 12px 0 4px; }
+.usagebar { height: 8px; background: #232733; border-radius: 4px; overflow: hidden; margin: 12px 0 4px; }
 .usagebar > span { display: block; height: 100%; }
 form.launch-form { margin: 8px 0 4px; display: flex; flex-direction: column; gap: 8px; }
 form.launch-form label { font-size: 12px; color: #b9c2d0; }
@@ -865,29 +908,39 @@ def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
         )
     rows = []
     for a in accounts:
+        agent = a.get("agent", "claude")
+        badge_color = "#4a9eff" if agent == "claude" else "#9b7fe8"
+        badge = (
+            f"<span style='font-size:10px;font-weight:600;letter-spacing:.4px;"
+            f"text-transform:uppercase;color:{badge_color};margin-left:4px'>{html.escape(agent)}</span>"
+        )
         reset = (
             f"<div class='muted' style='font-size:11px'>5h resets {html.escape(a['five_reset'])}</div>"
             if a.get("five_reset")
             else ""
         )
-        week = (
-            f"<div class='muted' style='font-size:11px'>weekly {a['week_pct']:.0f}%</div>"
-            if a.get("week_pct") is not None
-            else ""
-        )
+        # Weekly usage as a full-card-width bar under the row (used%, like the ring).
+        week_bar = ""
+        if a.get("week_pct") is not None:
+            label = f"Weekly {a['week_pct']:.0f}%"
+            if a.get("week_reset"):
+                label += f" · resets {a['week_reset']}"
+            week_bar = _usage_bar(a["week_pct"], label)
         rows.append(
             f"<div class='acct'>{_ring(a['five_pct'])}"
-            f"<div><div class='who'>{html.escape(a['alias'])}</div>{reset}{week}</div>"
-            f"{_account_launch_form(a['alias'])}</div>"
+            f"<div><div class='who'>{html.escape(a['alias'])}{badge}</div>{reset}</div>"
+            f"{_account_launch_form(a['alias'], agent)}</div>"
+            f"{week_bar}"
         )
     return f"<div class='card'><h2>Accounts</h2>{''.join(rows)}</div>"
 
 
-def _account_launch_form(alias: str) -> str:
+def _account_launch_form(alias: str, agent: str = "claude") -> str:
     """A one-click "fresh session as this account" button (opens an in-app tab)."""
     return (
         "<form class='acct-launch' method='post' action='/launch'>"
         f"<input type='hidden' name='account' value='{html.escape(alias, quote=True)}'>"
+        f"<input type='hidden' name='agent' value='{html.escape(agent, quote=True)}'>"
         "<input type='hidden' name='mode' value='fresh'>"
         "<button class='start' type='submit' name='target' value='app' "
         "title='Open a fresh in-app session as this account'>+ session</button></form>"
@@ -1202,12 +1255,22 @@ def render_control(
 # --------------------------------------------------------------------------- #
 
 def _known_aliases() -> set[str]:
-    """Account aliases the dashboard will accept on a launch POST — the isolated
-    config-dir map plus the ambient login. No network (unlike ``gather_accounts``)."""
-    aliases = set(config.load_account_config_dirs())
-    ambient = config.alias_for(claude_usage.current_account())
-    if ambient:
-        aliases.add(ambient)
+    """Account aliases the dashboard will accept on a launch POST.
+
+    Includes isolated config-dir aliases (Claude + Codex), the ambient Claude
+    login, and the ambient Codex login. No network (unlike ``gather_accounts``).
+    """
+    aliases: set[str] = set()
+    aliases.update(config.load_account_config_dirs())
+    aliases.update(config.load_account_codex_homes())
+    ambient_claude = config.alias_for(claude_usage.current_account())
+    if ambient_claude:
+        aliases.add(ambient_claude)
+    ambient_codex_id = codex_usage.current_account()
+    if ambient_codex_id:
+        ambient_codex = config.alias_for(ambient_codex_id)
+        if ambient_codex:
+            aliases.add(ambient_codex)
     return aliases
 
 
