@@ -67,7 +67,10 @@ class FakeAdapter(AgentAdapter):
         return {"FAKE_AGENT_ACCOUNT": spec.account} if spec.account else {}
 
     def interactive_command(self, spec: SpawnSpec, *, session_id: str) -> list[str]:
-        return ["fake-agent", "--session-id", session_id]
+        argv = ["fake-agent", "--session-id", session_id]
+        if spec.prompt:
+            argv.append(spec.prompt)  # mirrors a real adapter's initial-prompt injection
+        return argv
 
     def parse_event(self, line: str) -> list[AgentEvent]:
         line = line.strip()
