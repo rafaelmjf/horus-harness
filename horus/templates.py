@@ -286,6 +286,21 @@ MERGE_CLOSURE_INSTRUCTION = (
     "`gh pr merge`. Do not work around this by skipping the close."
 )
 
+HOSTED_RESTART_INSTRUCTION = (
+    "This command was blocked by Horus: you are running inside Horus's own in-app "
+    "PTY terminal, which is hosted *by the dashboard process* (HORUS_PTY_HOST_PID). "
+    "The command would kill or restart that process — so it would tear down the very "
+    "session you are in and lose any uncommitted work mid-task (this exact footgun is "
+    "in history.md: 'an in-app agent restarted the app it was hosted in — and killed "
+    "itself'). Do NOT restart or kill the Horus app from inside a hosted session. "
+    "Instead: (1) commit your work so nothing is lost; (2) if you need the app "
+    "restarted to see a code change, ask the user to restart Horus from OUTSIDE the "
+    "dashboard (a normal terminal), or open a separate terminal that Horus does not "
+    "host. Note: Python does not hot-reload, so a long-running dashboard keeps serving "
+    "its old in-memory build until it is restarted from outside."
+)
+
+
 CONSOLIDATE_PROMPT = """Consolidation routine - reshape .horus/ so each lane stays in its lane.
 Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.md).
 Never invent status, dates, or versions; when intent is unclear, leave it and flag it.

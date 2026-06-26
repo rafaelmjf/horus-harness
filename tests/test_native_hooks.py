@@ -110,6 +110,34 @@ def test_usage_and_merge_hooks_coexist_without_clobber(tmp_path):
     assert data["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "python -m horus close --hook"
 
 
+def test_install_claude_guard_hook_creates_pretooluse_gate(tmp_path):
+    action = native_hooks.install_claude_guard_hook(tmp_path)
+    assert action.status == "created"
+    data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    group = data["hooks"]["PreToolUse"][0]
+    assert group["matcher"] == "Bash"
+    assert group["hooks"][0]["command"] == "python -m horus guard-host --hook"
+
+
+def test_install_claude_guard_hook_idempotent(tmp_path):
+    native_hooks.install_claude_guard_hook(tmp_path)
+    assert native_hooks.install_claude_guard_hook(tmp_path).status == "exists"
+
+
+def test_usage_merge_and_guard_hooks_coexist_without_clobber(tmp_path):
+    native_hooks.install_claude_usage_hook(tmp_path)
+    native_hooks.install_claude_merge_hook(tmp_path)
+    native_hooks.install_claude_guard_hook(tmp_path)
+    # Re-running each install must not wipe the others (distinct markers + groups).
+    native_hooks.install_claude_usage_hook(tmp_path)
+    native_hooks.install_claude_merge_hook(tmp_path)
+    data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert "UserPromptSubmit" in data["hooks"] and "Stop" in data["hooks"]
+    commands = {g["hooks"][0]["command"] for g in data["hooks"]["PreToolUse"]}
+    assert "python -m horus close --hook" in commands
+    assert "python -m horus guard-host --hook" in commands
+
+
 def test_closure_sentinel_fires_once(tmp_path, monkeypatch):
     monkeypatch.setattr(native_hooks.tempfile, "gettempdir", lambda: str(tmp_path))
     sid = "sess-abc"

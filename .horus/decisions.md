@@ -789,3 +789,77 @@ already parses — `primary` = 5h, `secondary` = weekly. No new endpoint, no new
   conflated per-session *context* usage (genuinely not an account number) with the
   account-global *rate limits* (which are). Context% stays a per-session signal on the
   live-session cards. See [[horus-core-constraints]] (subscription-auth, read-only).
+
+## 2026-06-26 - The Self-Restart Footgun Is Fixed Guard-First (PreToolUse), Daemon Deferred
+
+The MVP5 footgun — an in-app agent restarting/killing the dashboard process that hosts its
+own PTY, killing itself mid-task (history.md) — has two candidate fixes: a **lightweight
+guard** (refuse the dangerous command) or the **structural daemon** (host PTYs in a process
+that outlives the dashboard). We shipped the guard first and deferred the daemon.
+
+Shape: `pty_host.start` injects `HORUS_HOSTED_SESSION=1` + `HORUS_PTY_HOST_PID` into the PTY
+env; a Claude `PreToolUse(Bash)` hook (`horus guard-host --hook`) inherits those (it's a child
+of the agent's shell) and — **only when hosted** — emits `permissionDecision:deny`
+(`templates.HOSTED_RESTART_INSTRUCTION`) for a command that would restart the app
+(`horus app`/`dashboard`), kill the host PID, or kill the host by interpreter/name
+(`python`/`horus`/`dashboard`). Outside a hosted session it's a no-op, so normal terminals are
+untouched; it errs toward *allowing* (never wedge the user). `hook install --kind guard|all`;
+coexists with the usage + merge hooks as a second `PreToolUse/Bash` group.
+
+Reasoning:
+- **Cross-OS was the deciding criterion** (user-raised). The guard is pure env-vars + string
+  matching — identical on every OS; the only OS-flavored part is the *list of recognized
+  command spellings* (`kill`/`pkill` vs `taskkill`/`Stop-Process`), which is data, not a
+  code-path fork. The daemon is the **opposite**: detach + survive-parent + reap is exactly
+  where Windows and POSIX diverge most — the same class of trap that already bit `horus focus`
+  (ctypes 64-bit handle truncation) and the `os.kill`-terminates-on-Windows registry caveat.
+- **Native-app-first** ([[horus-locked-decisions]]): mirrors the proven usage + pre-merge
+  `PreToolUse` gates (block-and-divert), so it slots into the established pattern.
+- **The guard only stops the *agent* from triggering it.** A user restart, a crash, or a code
+  reload still drops live PTYs — so the structural daemon stays the real fix, deferred and
+  tracked in MVP5/MVP4. The two are complementary, not alternatives.
+
+## 2026-06-26 - pywebview Tried and Rejected; Edge `--app` + Mascot Now, Proper App Later
+
+Attempted to graduate the UI shell from "Edge `--app=` window + Tkinter mascot" to a
+Python-owned **pywebview** window (to own the window lifecycle: close-window→quit, no stale
+tab). **Live-tested on the Win11 dev machine and rejected** — reverted to the prior Edge +
+Tk-mascot shell. This supersedes the same-session "graduate to pywebview" idea (it was never
+committed).
+
+Why pywebview was rejected (live evidence, not theory):
+- **Unstable**: pywebview's WebView2/WinForms integration crashed intermittently with
+  `AccessibilityObject.Bounds … maximum recursion depth exceeded` — at startup *and* after the
+  windows were up — even with the AppUserModelID call removed. Not shippable when it crashes on
+  the developer's own machine.
+- **Slow**: tab navigation took ~4 s (the dashboard uses full-page navigation; pywebview's
+  wrapper made each reload heavy). The same dashboard in a real Edge `--app` window was fast.
+- **Key insight**: a plain Edge `--app` (full Chromium) was both fast and stable, so **the
+  Chromium engine is fine — pywebview's wrapper was the problem.** Measuring proved the server
+  renders in ~15 ms (cold `/control` 750 ms = synchronous OAuth `/usage` calls), so the lag was
+  the shell, not the Python brain.
+
+Decision — a two-tier frontend, with the **Python brain + web UI as the stable contract** (any
+window host just loads `http://127.0.0.1:8765`, so hosts are swappable and forward-compatible):
+- **Lightweight tier (ships now, via uv): the existing Edge/Chrome `--app` window + the Tk
+  mascot.** Fast, stable, zero heavy deps. Accepts the known lifecycle drawbacks for now
+  (closing the dashboard window does not quit the app; the 8765-server-leak/single-instance
+  gaps remain) — these are the user's accepted trade-offs until the proper app exists. The Tk
+  mascot returns (it has real chroma-key transparency, which WebView2 lacks) using the refreshed
+  Horus-falcon art.
+- **Proper-app tier (planned, separate downloadable package): a real native desktop app** that
+  owns the window lifecycle, taskbar icon, and tray. Stack **not yet chosen** — needs more eval;
+  the candidates and trade-offs (recorded for that decision):
+  - **PySide6 / Qt WebEngine** — bundled Chromium, **stays all-Python (one runtime)**, native
+    window/tray/icon, trivial in-process lifecycle; heavy (~100–150 MB). Best fit if staying
+    single-language matters.
+  - **Electron** — bundled Chromium + **Node (a 2nd runtime beside Python)**; the most mature/
+    polished shell (auto-update, tray); heaviest. User said acceptable if it buys stability.
+  - **Tauri** — Rust shell + **system WebView2** (the engine that misbehaved here, but via a
+    cleaner integration than pywebview's WinForms wrapper) + a JS SPA; tiny binary (~5–15 MB);
+    most toolchain (Rust + frontend build).
+
+Reasoning / lesson: don't "graduate" a shell on theory — pywebview *looked* ideal (system
+webview, Python, cross-OS) but failed on contact with the real machine. Ship the proven
+lightweight thing; make the proper app a deliberate, separately-evaluated choice. See
+history.md "pywebview was the worst of both worlds".

@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Vendor-neutral adapter contract proven at N=2: the Codex adapter (`horus/adapters/codex.py`) is shipped — `codex exec --json` spawn, `codex exec resume` resume, `CODEX_HOME` per-account isolation, real JSONL event parsing (`thread.started`/`item.completed`/`turn.completed`), in-app PTY `interactive_command`. 256 tests pass, live proof confirmed. The lanes carry significant continuity debt (~74 done roadmap items, ~47 missing features rows, ~37 sessions to distill) — the dedicated backlog-consolidation pass is the standing next job."
-next_action: "Start MVP5 (app cohesion / lifecycle). First bite: a hosted agent must not be able to restart and kill the dashboard process it runs inside — the self-restart footgun (see history.md). Fix by giving long-lived agent processes a standalone daemon that survives a code reload, or by guarding the restart path. Pairs with unifying the mascot↔server↔agent lifetimes and fixing the 8765 dashboard-server leak. The continuity-debt backlog remains a separate opt-in pass."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the REMOTE (local refs lie — see history.md). Recently merged: PR #15 (Codex accounts/usage in the dashboard) and the local pre-merge closure gate (`horus close --hook`, a Claude PreToolUse hook on `gh pr merge`). Read the .horus/ lanes. Next is MVP5 'app cohesion / lifecycle' (see its roadmap section): start with the in-app self-restart footgun — a session hosted in the dashboard's PTY can restart the app and kill itself (it happened; see history.md). Decouple the session-host lifecycle from a code reload (deferred standalone session-host daemon) and/or unify the mascot/dashboard-server/PTY-host lifetimes + fix the 8765 server leak. Separately, the continuity-debt backlog pass (invoke horus-consolidate in backlog mode: ~84 done roadmap items, ~48 missing features rows, ~38 sessions to distill) is a standing opt-in job. After substantive work, `horus close --check` must pass — and the new merge gate will enforce it at `gh pr merge`."
+current_focus: "MVP5 (app cohesion / lifecycle). (1) SHIPPED: the in-app self-restart footgun is guarded — `pty_host` marks the PTY env (`HORUS_HOSTED_SESSION` + `HORUS_PTY_HOST_PID`) and a Claude PreToolUse(Bash) `horus guard-host --hook` blocks a hosted agent from restarting/killing the dashboard that hosts it (`hook install --kind guard`; dogfooded here). (2) FRONTEND: tried graduating the shell to pywebview to own the window lifecycle — **live-tested unstable (WinForms/WebView2 recursion crash) + slow (~4 s tab) on Win11, so REVERTED** to the proven Edge `--app` + Tk mascot shell (refreshed Horus-falcon art). Decided a two-tier frontend: the lightweight Edge+mascot ships now via uv (accepting the close-window-doesn't-quit / 8765-leak drawbacks); a separate downloadable proper native app (PySide/Electron/Tauri — stack TBD) is where real lifecycle ownership + taskbar icon land. The Python server + web UI is the stable contract both hosts share. Still open: the STRUCTURAL session-host daemon. Continuity-debt backlog (~85 done items, ~48 missing features rows, ~40 sessions) stays the standing opt-in pass."
+next_action: "Decide the proper-app stack (PySide6 vs Electron vs Tauri — trade-offs in decisions.md 'pywebview Tried and Rejected') and scope it as a separate downloadable package that loads the same localhost server + web UI; that tier is where window-lifecycle ownership (close→quit, no stale tab), taskbar icon, tray, async usage loading, and the 8765/single-instance fixes belong. The lightweight Edge `--app` + mascot shell is reverted-and-working for the uv package now. Also still open: the STRUCTURAL session-host daemon (survive a user/crash/code-reload restart). Continuity-debt backlog remains a separate opt-in pass."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the REMOTE (local refs lie — see history.md). On branch `feat/hosted-session-guard` (may be merged) this session SHIPPED the hosted-session self-restart guard (`horus guard-host --hook` + `pty_host` env markers + `hook install --kind guard`), refreshed the mascot art + added an icon (rewrote `scripts/regen_mascot.py`), and TRIED-THEN-REVERTED a pywebview UI shell (live-tested unstable+slow on Win11 — see decisions.md/history.md; the working tree is back to the Edge `--app` + Tk mascot). Read the .horus/ lanes. Next: pick the proper-app stack (PySide6/Electron/Tauri) for a separate downloadable native app that owns the window lifecycle + taskbar icon (loads the same localhost server + web UI) — that's where the close-window→quit + 8765 fixes land; the Edge+mascot lightweight tier ships via uv as-is meanwhile. Also open: the STRUCTURAL session-host daemon. Separately, the continuity-debt backlog pass (horus-consolidate backlog mode: ~85 done roadmap items, ~48 missing features rows, ~40 sessions) is a standing opt-in job. After substantive work, `horus close --check` must pass — the merge gate enforces it at `gh pr merge`."
 last_updated: 2026-06-26
 ---
 
@@ -430,16 +430,19 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
 > bites surfaced. The goal of this milestone is that Horus reads and behaves as a
 > single app — ready for real alpha use, not just a dev harness.
 
-- [ ] **BUG/FOOTGUN: an in-app agent session must not be able to kill its own host
-  by restarting the app** (flagged 2026-06-26). A Claude session running *inside* the
-  in-app PTY terminal was editing `dashboard.py`, then restarted the app to see the
-  change — which tore down the dashboard process that hosts its own PTY, so the
-  session killed itself mid-task (work was uncommitted; recovered from the working
-  tree, no session note). Decouple the session-host lifecycle from a
-  dashboard/code reload (the deferred "standalone session-host daemon" in MVP 4 is
-  the structural fix), and/or guard against a hosted agent triggering a self-restart
-  (warn / refuse / hot-reload code without dropping live PTYs). Relates to the
-  dashboard-server-leak bug in the companion section (no single-instance + no reaping).
+- [x] **FOOTGUN guard shipped (2026-06-26): a hosted agent can no longer kill its own
+  host by restarting the app.** The lightweight half of the fix landed — `pty_host`
+  marks the PTY env (`HORUS_HOSTED_SESSION` + `HORUS_PTY_HOST_PID`) and a Claude
+  PreToolUse(Bash) `horus guard-host --hook` blocks/diverts a restart-or-kill-the-host
+  command *only* inside a hosted session. Chosen over the daemon for this bite because
+  it's the most cross-OS option (env+string, no process-lifecycle APIs) and mirrors the
+  proven usage/merge gate. → features.md.
+- [ ] **STRUCTURAL fix still open: decouple the session-host lifecycle from a
+  dashboard/code reload** — the guard above prevents the *agent* from triggering it,
+  but a user restart / crash / code-reload still drops live PTYs. The deferred
+  "standalone session-host daemon" (MVP 4) is the real fix (host PTYs in a process that
+  outlives the dashboard). Relates to the dashboard-server-leak bug in the companion
+  section (no single-instance + no reaping).
 - [ ] **Unify the app lifecycle so the pieces act as one app** (flagged 2026-06-26):
   closing the mascot should close the whole app (mascot + dashboard server + hosted
   sessions, with a confirm if sessions are live); closing the dashboard window via its
@@ -448,6 +451,31 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
   disconnected: the mascot, the dashboard server, and the PTY host have independent
   lifetimes. Define one ownership/teardown model. Prereq lens for design: the existing
   single-instance mutex (8764) and the dashboard-server-leak fix belong inside this.
+  - **Concrete bidirectional bind for the dashboard window** (user note, 2026-06-26):
+    the dashboard window today is the Edge `--app=` window opened by `companion.open_dashboard`,
+    launched **fire-and-forget** (the `subprocess.Popen` handle is discarded). So (a) quitting
+    the mascot leaves that Edge window as a **stale tab**, and (b) closing the Edge window does
+    nothing to the mascot/server. Want both directions: quit mascot → close the window; close
+    the window → quit mascot + stop server. Goal in the user's words: "feel like an app —
+    no stale browser tabs left open." Enabling constraint: a bare `msedge --app=` hands off to
+    the user's existing Edge (untrackable, and unsafe to kill — would close their browser), so
+    the window must be **owned** (dedicated `--user-data-dir` → its own killable Edge instance
+    whose liveness reflects the window) for either direction to work safely.
+  - **pywebview was tried for this and REJECTED (2026-06-26)** — live-tested unstable
+    (WinForms/WebView2 recursion crash) + slow (~4 s tab) on Win11; reverted to the Edge `--app`
+    + Tk mascot shell. See decisions.md "pywebview Tried and Rejected" + history.md. The
+    decision split the frontend into two tiers:
+  - [ ] **Lightweight tier (SHIPS NOW, via uv): Edge `--app` + Tk mascot** — fast, stable, zero
+    heavy deps; refreshed mascot art. **Accepts the lifecycle drawbacks for now** (closing the
+    dashboard window doesn't quit the app; 8765 server-leak + single-instance gaps remain). The
+    bidirectional close↔quit bind is explicitly *deferred to the proper app*, not solved here.
+  - [ ] **Proper-app tier (PLANNED, separate downloadable package): a real native desktop app**
+    that owns the window lifecycle + taskbar icon + tray. **Stack not chosen** — eval PySide6
+    (all-Python, heavy) vs Electron (Node, polished) vs Tauri (tiny, Rust+SPA); trade-offs in
+    decisions.md. Shares the same Python server + web UI (the stable contract), so it's an
+    additive host. This is where "close the window → close the app" and the 8765/single-instance
+    fixes land. Also fold in: load account usage async (cold `/control` is 750 ms of synchronous
+    OAuth `/usage` calls — measured) and consider client-side tab switching.
 
 ## Later
 

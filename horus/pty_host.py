@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import base64
 import itertools
+import os
 import threading
 import uuid
 from collections.abc import Iterator
@@ -112,7 +113,15 @@ class PtyHost:
 
         session_id = str(uuid.uuid4())
         argv = adapter.interactive_command(spec, session_id=session_id)
-        pty = spawn_pty(argv, cwd=root, env=adapter.build_env(spec), cols=cols, rows=rows)
+        # Mark the hosted runtime so anything running *inside* this PTY (notably the
+        # agent's own shell) can tell it lives inside Horus's dashboard process — and
+        # which PID is that host. The self-restart guard hook reads these to refuse a
+        # command that would kill/restart the very process hosting this session (the
+        # footgun in history.md: an in-app agent restarted the app and killed itself).
+        env = adapter.build_env(spec)
+        env["HORUS_HOSTED_SESSION"] = "1"
+        env["HORUS_PTY_HOST_PID"] = str(os.getpid())
+        pty = spawn_pty(argv, cwd=root, env=env, cols=cols, rows=rows)
 
         term_id = f"pty-{next(self._ids)}"
         term = PtyTerminal(

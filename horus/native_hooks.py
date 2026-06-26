@@ -22,6 +22,7 @@ class HookAction(NamedTuple):
 
 _HORUS_USAGE_MARKER = "horus usage check"
 _HORUS_MERGE_MARKER = "horus close --hook"
+_HORUS_GUARD_MARKER = "horus guard-host"
 
 
 def _codex_hook_command(threshold: float) -> dict[str, Any]:
@@ -60,6 +61,10 @@ def _is_horus_usage_hook(handler: Any) -> bool:
 
 def _is_horus_merge_hook(handler: Any) -> bool:
     return _handler_has_marker(handler, _HORUS_MERGE_MARKER)
+
+
+def _is_horus_guard_hook(handler: Any) -> bool:
+    return _handler_has_marker(handler, _HORUS_GUARD_MARKER)
 
 
 def install_codex_usage_hook(project_root: Path, *, threshold: float = 90.0) -> HookAction:
@@ -123,6 +128,16 @@ def _claude_merge_hook_command() -> dict[str, Any]:
     return {
         "type": "command",
         "command": "python -m horus close --hook",
+    }
+
+
+def _claude_guard_hook_command() -> dict[str, Any]:
+    # PreToolUse gate that fires only inside a Horus-hosted PTY session (detected via
+    # HORUS_HOSTED_SESSION in the inherited env); it blocks a Bash command that would
+    # restart/kill the dashboard process hosting the session. No-op everywhere else.
+    return {
+        "type": "command",
+        "command": "python -m horus guard-host --hook",
     }
 
 
@@ -196,6 +211,20 @@ def install_claude_merge_hook(project_root: Path) -> HookAction:
     )
     data["hooks"] = hooks
     return _persist_hook(path, data, "Claude pre-merge closure hook")
+
+
+def install_claude_guard_hook(project_root: Path) -> HookAction:
+    """Install/update a Claude `PreToolUse` hook that stops a Horus-hosted PTY session
+    from restarting/killing the dashboard process hosting it. Matches the `Bash` tool;
+    the command no-ops unless run inside a hosted session (HORUS_HOSTED_SESSION), so a
+    normal terminal is unaffected. Coexists with the usage + merge hooks (own marker)."""
+    path, data, hooks = _claude_hooks_dict(project_root)
+    _merge_event_hook(
+        hooks, "PreToolUse", _claude_guard_hook_command(),
+        matcher="Bash", is_mine=_is_horus_guard_hook,
+    )
+    data["hooks"] = hooks
+    return _persist_hook(path, data, "Claude hosted-session guard hook")
 
 
 # --------------------------------------------------------------------------- #

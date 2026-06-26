@@ -61,12 +61,23 @@ def _wait(pred, timeout=3.0):
 
 def test_host_streams_writes_resizes_and_persists(tmp_path, monkeypatch):
     fake = _FakePty()
-    monkeypatch.setattr(pty_host, "spawn_pty", lambda *a, **k: fake)
+    captured: dict = {}
+
+    def _fake_spawn(*a, **k):
+        captured.update(k)
+        return fake
+
+    monkeypatch.setattr(pty_host, "spawn_pty", _fake_spawn)
     h = pty_host.PtyHost()
 
     tid = h.start(agent="fake", project_dir=tmp_path, account=None)
     term = h.get(tid)
     assert term is not None and term.pid == 4242 and term.alive
+
+    # The PTY env marks the hosted runtime so the self-restart guard can detect it.
+    env = captured.get("env") or {}
+    assert env.get("HORUS_HOSTED_SESSION") == "1"
+    assert env.get("HORUS_PTY_HOST_PID")  # the host (dashboard) process PID
 
     # Output the PTY produces is buffered on the host.
     fake.feed(b"hello "); fake.feed(b"world")
