@@ -274,6 +274,18 @@ USAGE_CLOSURE_INSTRUCTION = (
 )
 
 
+MERGE_CLOSURE_INSTRUCTION = (
+    "This `gh pr merge` was blocked by Horus: the project's `.horus/` continuity "
+    "lanes are stale, so the dashboard would not reflect this work once it lands on "
+    "main. Closure authoring needs THIS session's context (decisions + why, what "
+    "shipped, the next step) — which is gone after the merge — so the gate is "
+    "pre-merge by design. Close the session FIRST, then merge: (1) run the "
+    "horus-consolidate skill to fold this session's context into `.horus/**` (it uses "
+    "`horus consolidate` for signals, but you supply what a file-only script can't "
+    "see); (2) verify with `horus close --check` until it passes; (3) re-run the "
+    "`gh pr merge`. Do not work around this by skipping the close."
+)
+
 CONSOLIDATE_PROMPT = """Consolidation routine - reshape .horus/ so each lane stays in its lane.
 Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.md).
 Never invent status, dates, or versions; when intent is unclear, leave it and flag it.

@@ -21,6 +21,7 @@ class HookAction(NamedTuple):
 
 
 _HORUS_USAGE_MARKER = "horus usage check"
+_HORUS_MERGE_MARKER = "horus close --hook"
 
 
 def _codex_hook_command(threshold: float) -> dict[str, Any]:
@@ -45,12 +46,20 @@ def _load_json(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _is_horus_usage_hook(handler: Any) -> bool:
+def _handler_has_marker(handler: Any, marker: str) -> bool:
     if not isinstance(handler, dict):
         return False
     command = str(handler.get("command", ""))
     command_windows = str(handler.get("commandWindows", handler.get("command_windows", "")))
-    return _HORUS_USAGE_MARKER in command or _HORUS_USAGE_MARKER in command_windows
+    return marker in command or marker in command_windows
+
+
+def _is_horus_usage_hook(handler: Any) -> bool:
+    return _handler_has_marker(handler, _HORUS_USAGE_MARKER)
+
+
+def _is_horus_merge_hook(handler: Any) -> bool:
+    return _handler_has_marker(handler, _HORUS_MERGE_MARKER)
 
 
 def install_codex_usage_hook(project_root: Path, *, threshold: float = 90.0) -> HookAction:
@@ -107,20 +116,58 @@ def _claude_hook_command(threshold: float) -> dict[str, Any]:
     }
 
 
-def _merge_event_hook(hooks: dict[str, Any], event: str, handler: dict[str, Any]) -> None:
-    """Replace any prior Horus usage handler for ``event`` with ``handler`` (no dupes)."""
+def _claude_merge_hook_command() -> dict[str, Any]:
+    # PreToolUse gate on `gh pr merge`. The command itself inspects the tool call
+    # (stdin) and only blocks a merge while the lanes are stale; everything else
+    # passes. `python -m horus` so it doesn't depend on the console script on PATH.
+    return {
+        "type": "command",
+        "command": "python -m horus close --hook",
+    }
+
+
+def _merge_event_hook(
+    hooks: dict[str, Any],
+    event: str,
+    handler: dict[str, Any],
+    *,
+    matcher: str = "",
+    is_mine: Any = _is_horus_usage_hook,
+) -> None:
+    """Replace any prior Horus handler for ``event`` (matched by ``is_mine``) with
+    ``handler``, under ``matcher``, with no duplicates."""
     groups = hooks.get(event)
     if not isinstance(groups, list):
         groups = []
     for group in groups:
         if isinstance(group, dict) and isinstance(group.get("hooks"), list):
-            group["hooks"] = [h for h in group["hooks"] if not _is_horus_usage_hook(h)]
+            group["hooks"] = [h for h in group["hooks"] if not is_mine(h)]
     groups = [
         g for g in groups
         if not (isinstance(g, dict) and isinstance(g.get("hooks"), list) and not g["hooks"])
     ]
-    groups.append({"matcher": "", "hooks": [handler]})
+    groups.append({"matcher": matcher, "hooks": [handler]})
     hooks[event] = groups
+
+
+def _claude_hooks_dict(project_root: Path) -> tuple[Path, dict[str, Any], dict[str, Any]]:
+    path = project_root / ".claude" / "settings.json"
+    data = _load_json(path)
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        hooks = {}
+        data["hooks"] = hooks
+    return path, data, hooks
+
+
+def _persist_hook(path: Path, data: dict[str, Any], label: str) -> HookAction:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new_text = json.dumps(data, indent=2) + "\n"
+    old_text = path.read_text(encoding="utf-8") if path.exists() else None
+    if old_text == new_text:
+        return HookAction("exists", f"{label} already installed in {path}")
+    path.write_text(new_text, encoding="utf-8")
+    return HookAction("updated" if old_text is not None else "created", f"installed {label} in {path}")
 
 
 def install_claude_usage_hook(project_root: Path, *, threshold: float = 90.0) -> HookAction:
@@ -129,26 +176,26 @@ def install_claude_usage_hook(project_root: Path, *, threshold: float = 90.0) ->
     `UserPromptSubmit` is the primary trigger — it fires *before* the agent works on a
     new task, so an over-budget session closes instead of starting expensive work.
     `Stop` is kept as a secondary net (close between turns)."""
-    claude_dir = project_root / ".claude"
-    path = claude_dir / "settings.json"
-    data = _load_json(path)
-    hooks = data.setdefault("hooks", {})
-    if not isinstance(hooks, dict):
-        hooks = {}
-        data["hooks"] = hooks
-
+    path, data, hooks = _claude_hooks_dict(project_root)
     handler = _claude_hook_command(threshold)
     _merge_event_hook(hooks, "UserPromptSubmit", handler)
     _merge_event_hook(hooks, "Stop", handler)
     data["hooks"] = hooks
+    return _persist_hook(path, data, "Claude usage hook")
 
-    claude_dir.mkdir(parents=True, exist_ok=True)
-    new_text = json.dumps(data, indent=2) + "\n"
-    old_text = path.read_text(encoding="utf-8") if path.exists() else None
-    if old_text == new_text:
-        return HookAction("exists", f"Claude usage hook already installed in {path}")
-    path.write_text(new_text, encoding="utf-8")
-    return HookAction("updated" if old_text is not None else "created", f"installed Claude usage hook in {path}")
+
+def install_claude_merge_hook(project_root: Path) -> HookAction:
+    """Install/update a Claude `PreToolUse` hook that gates `gh pr merge` on the
+    closure freshness check — blocks the merge and diverts to consolidation when the
+    dashboard lanes are stale. Matches the `Bash` tool; the command filters for the
+    merge itself, so non-merge Bash calls pass straight through."""
+    path, data, hooks = _claude_hooks_dict(project_root)
+    _merge_event_hook(
+        hooks, "PreToolUse", _claude_merge_hook_command(),
+        matcher="Bash", is_mine=_is_horus_merge_hook,
+    )
+    data["hooks"] = hooks
+    return _persist_hook(path, data, "Claude pre-merge closure hook")
 
 
 # --------------------------------------------------------------------------- #

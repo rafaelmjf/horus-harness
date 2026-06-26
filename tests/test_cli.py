@@ -403,3 +403,60 @@ def test_forget_cli(tmp_path, monkeypatch):
     main(["init", str(tmp_path), "--yes"])
     assert main(["forget", str(tmp_path)]) == 0
     assert main(["forget", str(tmp_path)]) == 1  # already gone
+
+
+# --- pre-merge closure gate (`horus close --hook`, a PreToolUse hook) ---
+
+def _merge_hook_run(monkeypatch, capsys, *, tool_input, findings):
+    from pathlib import Path
+
+    from horus import cli
+    from horus.continuity import Finding
+
+    monkeypatch.setattr(cli, "_read_hook_stdin", lambda: tool_input)
+    monkeypatch.setattr(cli.closure, "freshness_gate",
+                        lambda root: [Finding(*f) for f in findings])
+    rc = cli._close_merge_hook(Path("."))
+    return rc, capsys.readouterr().out
+
+
+def test_merge_hook_blocks_merge_when_lanes_stale(monkeypatch, capsys):
+    rc, out = _merge_hook_run(
+        monkeypatch, capsys,
+        tool_input={"tool_name": "Bash", "tool_input": {"command": "gh pr merge 15 --squash"}},
+        findings=[("warn", "lanes stale")],
+    )
+    assert rc == 0
+    payload = json.loads(out)
+    hso = payload["hookSpecificOutput"]
+    assert hso["hookEventName"] == "PreToolUse"
+    assert hso["permissionDecision"] == "deny"
+    assert "horus-consolidate" in hso["permissionDecisionReason"]
+
+
+def test_merge_hook_allows_merge_when_fresh(monkeypatch, capsys):
+    rc, out = _merge_hook_run(
+        monkeypatch, capsys,
+        tool_input={"tool_name": "Bash", "tool_input": {"command": "gh pr merge 15"}},
+        findings=[("ok", "fresh")],
+    )
+    assert rc == 0 and out.strip() == ""
+
+
+def test_merge_hook_ignores_non_merge_bash(monkeypatch, capsys):
+    # Stale lanes, but the command isn't a merge -> never blocked.
+    rc, out = _merge_hook_run(
+        monkeypatch, capsys,
+        tool_input={"tool_name": "Bash", "tool_input": {"command": "git status"}},
+        findings=[("fail", "lanes stale")],
+    )
+    assert rc == 0 and out.strip() == ""
+
+
+def test_merge_hook_ignores_non_bash_tool(monkeypatch, capsys):
+    rc, out = _merge_hook_run(
+        monkeypatch, capsys,
+        tool_input={"tool_name": "Edit", "tool_input": {"command": "gh pr merge"}},
+        findings=[("fail", "lanes stale")],
+    )
+    assert rc == 0 and out.strip() == ""

@@ -365,8 +365,45 @@ def cmd_account(args: argparse.Namespace) -> int:
     return 0
 
 
+def _close_merge_hook(root: Path) -> int:
+    """PreToolUse gate: block a `gh pr merge` while the continuity lanes are stale,
+    diverting the session into closure first. Closure authoring needs the in-session
+    context that's gone after merge, so this fires at the merge boundary.
+
+    Allows everything that isn't a merge (return 0, no output). When the merge would
+    land stale lanes, emits a PreToolUse `deny` decision so Claude blocks the call and
+    feeds the closure instruction back to the agent. Best-effort: any trouble reading
+    the lanes errs toward allowing the merge (never wedges the user)."""
+    hook_input = _read_hook_stdin()
+    tool = hook_input.get("tool_name") or hook_input.get("toolName") or ""
+    tool_input = hook_input.get("tool_input") or hook_input.get("toolInput") or {}
+    command = str(tool_input.get("command", "")) if isinstance(tool_input, dict) else ""
+    if tool != "Bash" or "gh pr merge" not in command:
+        return 0  # not a merge — let it through
+
+    try:
+        stale = any(f.level in ("warn", "fail") for f in closure.freshness_gate(root))
+    except Exception:
+        return 0  # never block the merge on a checker error
+    if not stale:
+        return 0
+
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": templates.MERGE_CLOSURE_INSTRUCTION,
+        }
+    }))
+    return 0
+
+
 def cmd_close(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
+
+    if getattr(args, "hook", False):
+        # PreToolUse merge-gate mode (reads the tool call from stdin).
+        return _close_merge_hook(root)
 
     if getattr(args, "check", False):
         # Gate mode (scriptable / CI): only dashboard-freshness signals, verdict + exit
@@ -468,16 +505,28 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
         return 2
+    kind = getattr(args, "kind", "usage")
     if args.target == "codex":
+        if kind not in ("usage", "all"):
+            print("Codex supports only the usage hook (use --kind usage). The pre-merge")
+            print("closure gate is a Claude PreToolUse hook (--target claude --kind merge).")
+            return 2
         action = native_hooks.install_codex_usage_hook(root, threshold=args.threshold)
         print(f"[{action.status}] {action.message}")
         print("Codex may ask you to review/trust this project hook with /hooks before it runs.")
         return 0
     if args.target == "claude":
-        action = native_hooks.install_claude_usage_hook(root, threshold=args.threshold)
-        print(f"[{action.status}] {action.message}")
-        print("Reads the 5h/weekly limit from the OAuth /usage endpoint; at threshold it")
-        print("drives the session into the Horus closure routine (one continuation per session).")
+        if kind in ("usage", "all"):
+            action = native_hooks.install_claude_usage_hook(root, threshold=args.threshold)
+            print(f"[{action.status}] {action.message}")
+            print("Reads the 5h/weekly limit from the OAuth /usage endpoint; at threshold it")
+            print("drives the session into the Horus closure routine (one continuation per session).")
+        if kind in ("merge", "all"):
+            action = native_hooks.install_claude_merge_hook(root)
+            print(f"[{action.status}] {action.message}")
+            print("PreToolUse gate on `gh pr merge`: blocks the merge while the .horus lanes")
+            print("are stale and diverts the session to horus-consolidate first. Clears once")
+            print("`horus close --check` passes, so a re-run of the merge proceeds.")
         return 0
     print(f"unsupported hook target: {args.target}")
     return 2
@@ -730,6 +779,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--check", action="store_true",
         help="gate mode: print the freshness verdict and exit non-zero if the lanes are stale (for scripts/CI)",
     )
+    p_close.add_argument(
+        "--hook", action="store_true",
+        help="PreToolUse hook mode: read a tool call from stdin and block `gh pr merge` while the lanes are stale",
+    )
     p_close.add_argument("--commit", action="store_true", help="stage+commit the continuity files")
     p_close.add_argument("--push", action="store_true", help="with --commit, also push to origin")
     p_close.add_argument("--message", "-m", help="commit message for --commit")
@@ -767,6 +820,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_hook_install = hook_sub.add_parser("install", help="install a native app hook")
     p_hook_install.add_argument("--path", default=".", help="project root (default: cwd)")
     p_hook_install.add_argument("--target", choices=("codex", "claude"), required=True, help="native app target")
+    p_hook_install.add_argument(
+        "--kind", choices=("usage", "merge", "all"), default="usage",
+        help="which hook(s): usage = quota→closure (default); merge = Claude PreToolUse "
+             "gate on `gh pr merge`; all = both. merge is Claude-only.",
+    )
     p_hook_install.add_argument(
         "--threshold",
         type=float,

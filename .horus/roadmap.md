@@ -2,7 +2,7 @@
 status: active
 current_focus: "Vendor-neutral adapter contract proven at N=2: the Codex adapter (`horus/adapters/codex.py`) is shipped — `codex exec --json` spawn, `codex exec resume` resume, `CODEX_HOME` per-account isolation, real JSONL event parsing (`thread.started`/`item.completed`/`turn.completed`), in-app PTY `interactive_command`. 256 tests pass, live proof confirmed. The lanes carry significant continuity debt (~74 done roadmap items, ~47 missing features rows, ~37 sessions to distill) — the dedicated backlog-consolidation pass is the standing next job."
 next_action: "Start MVP5 (app cohesion / lifecycle). First bite: a hosted agent must not be able to restart and kill the dashboard process it runs inside — the self-restart footgun (see history.md). Fix by giving long-lived agent processes a standalone daemon that survives a code reload, or by guarding the restart path. Pairs with unifying the mascot↔server↔agent lifetimes and fixing the 8765 dashboard-server leak. The continuity-debt backlog remains a separate opt-in pass."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the REMOTE (local refs lie — see history.md); PR #15 (Codex adapter + Codex accounts/usage in the dashboard) is merged to main. Read the .horus/ lanes. Codex is now a first-class agent in the dashboard. Next is MVP5 'app cohesion / lifecycle' (see its roadmap section): start with the in-app self-restart footgun — a session hosted in the dashboard's PTY can restart the app and kill itself (it happened; see history.md). Decouple the session-host lifecycle from a code reload (deferred standalone session-host daemon) and/or unify the mascot/dashboard-server/PTY-host lifetimes + fix the 8765 server leak. Separately, the continuity-debt backlog pass (invoke horus-consolidate in backlog mode: ~84 done roadmap items, ~48 missing features rows, ~38 sessions to distill) is a standing opt-in job. After substantive work, `horus close --check` must pass."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the REMOTE (local refs lie — see history.md). Recently merged: PR #15 (Codex accounts/usage in the dashboard) and the local pre-merge closure gate (`horus close --hook`, a Claude PreToolUse hook on `gh pr merge`). Read the .horus/ lanes. Next is MVP5 'app cohesion / lifecycle' (see its roadmap section): start with the in-app self-restart footgun — a session hosted in the dashboard's PTY can restart the app and kill itself (it happened; see history.md). Decouple the session-host lifecycle from a code reload (deferred standalone session-host daemon) and/or unify the mascot/dashboard-server/PTY-host lifetimes + fix the 8765 server leak. Separately, the continuity-debt backlog pass (invoke horus-consolidate in backlog mode: ~84 done roadmap items, ~48 missing features rows, ~38 sessions to distill) is a standing opt-in job. After substantive work, `horus close --check` must pass — and the new merge gate will enforce it at `gh pr merge`."
 last_updated: 2026-06-26
 ---
 
@@ -413,9 +413,15 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
   per-session-close vs backlog-consolidation split (the structural reason the ritual
   got half-done). Mirrored in `templates.py` CLOSURE_PROMPT.
 - [x] **Advisory PR continuity CI** (`.github/workflows/continuity.yml`) — the
-  pre-merge closure nudge. → features.md
+  pre-merge closure nudge (server-side, post-push, advisory). → features.md
+- [x] **Local pre-merge closure gate** (`horus close --hook`, 2026-06-26) — a Claude
+  PreToolUse hook that *blocks* `gh pr merge` in-session while lanes are stale and
+  diverts to consolidation. The real in-loop gate the CI couldn't be; they layer
+  (local = gate, CI = backstop). `horus hook install --kind {usage,merge,all}`. → features.md
 - [ ] Promote the CI check from advisory to a required gate once proven (drop the
   `|| echo ::warning::` fallbacks).
+- [ ] Decide whether `horus init` installs the merge gate by default (`--kind all`)
+  or keeps it opt-in; same question for projecting it to Codex if a surface appears.
 
 ## MVP 5 - App cohesion / lifecycle (next, after the Codex adaptation)
 
