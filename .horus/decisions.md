@@ -738,3 +738,23 @@ reader. So the same `horus close --check` runs as an **advisory** CI check on PR
 is gitignored and absent on CI (so CI sees the committed-lane subset + a "code changed without
 lane update" git heuristic). Promote to required by dropping the warning fallbacks. The
 post-merge *autonomous spawn* (Horus spawns the closer) remains the deferred, weaker option.
+
+## 2026-06-26 - Codex Account Usage: Used% From Rollout Rate-Limits, Last-Observed
+
+The dashboard Accounts panel shows Codex accounts with the same usage affordances as Claude
+(donut ring + weekly bar), sourced from the Codex rollout `rate_limits` that `codex_usage`
+already parses — `primary` = 5h, `secondary` = weekly. No new endpoint, no new auth.
+
+- **Used%, not remaining.** Codex's own app shows usage *remaining* (e.g. "5h 99%"); Horus
+  shows *used* (1%), because the ring/bar must mean the same thing across agents — it fills and
+  reddens as you consume, exactly like the Claude ring. Cross-agent consistency beats matching
+  each vendor's display convention. Same source value, just `100 − remaining`.
+- **Last-observed, not live.** Claude polls the OAuth `/usage` GET per render; Codex exposes no
+  such endpoint, so `latest_account_usage()` reads the newest `rate_limits`-bearing
+  `token_count` event across the account's rollouts. Rate limits are account-global (written
+  into whatever session was active), so the newest rollout anywhere is the best snapshot — but
+  it is only as fresh as the last Codex activity. The UI is framed as "last observed."
+- This corrects the initial N=2 shortcut that left the Codex ring permanently gray, which
+  conflated per-session *context* usage (genuinely not an account number) with the
+  account-global *rate limits* (which are). Context% stays a per-session signal on the
+  live-session cards. See [[horus-core-constraints]] (subscription-auth, read-only).

@@ -1,6 +1,6 @@
 ---
 status: active
-last_updated: 2026-06-25
+last_updated: 2026-06-26
 ---
 
 # History — bumps in the road
@@ -142,6 +142,22 @@ the companion now re-execs itself (`relaunch_without_console`, `DETACHED_PROCESS
 `HORUS_DETACHED` loop guard, `--no-detach` escape hatch) and the parent exits.
 Trade-off to remember: a detached child has **no console**, so a GUI startup failure
 is now silent — a log-file/error-dialog fallback is the follow-up if it ever bites.
+
+## An in-app agent restarted the app it was hosted in — and killed itself
+
+A session running inside the dashboard's in-app PTY terminal was editing `dashboard.py`,
+then restarted the app to see its change live. The dashboard process *hosts the PTY*, so the
+restart tore down the session's own host — it killed itself mid-task, before committing, with
+no session note (the work was recoverable from the working tree). Compounding it: the dashboard
+page is static (no auto-refresh) and Python doesn't hot-reload, so even after the code landed
+the running server kept serving the old in-memory build and the open window kept showing a
+stale snapshot — which read as "the feature isn't there." **Lessons:** (1) an agent hosted in
+the app must not be able to restart/kill its own host — decouple the session-host lifecycle
+from a code reload (the deferred standalone session-host daemon is the structural fix), flagged
+as MVP5; (2) when verifying a dashboard change, a long-running server holds an old in-memory
+build and the page won't auto-refresh — restart the server and hard-reload before concluding
+anything; (3) to confirm a "missing" UI element, check what the *server* actually renders
+(fetch the HTML) before trusting the window.
 
 ## Skills do not solve periodic native-app checks
 

@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Vendor-neutral adapter contract proven at N=2: `CodexAdapter` shipped (2026-06-26), the dashboard/PTY host are now genuinely multi-agent. The closure ritual is hardened (freshness gate + skill v3 + advisory CI). Continuity debt backlog is the standing next job (~74 done roadmap items, ~47 missing features rows, ~37 sessions to distill). Continuity (the moat) stays the headline; resist over-building the terminal/IDE layer."
+current_focus: "Codex is now a first-class agent in the dashboard, not just an adapter: accounts, usage rings, and a weekly usage bar all render like Claude (PR #15 merged 2026-06-26; vendor-neutral contract proven at N=2). Next focus is MVP5 — make the loosely-wired pieces (mascot + dashboard server + in-app PTY sessions) feel like one app: unify the lifecycle and stop an in-app session from being able to restart/kill its own host (it happened — see history.md). Continuity (the moat) stays the headline; the continuity-debt backlog (~84 done roadmap items, ~48 missing features rows, ~38 sessions to distill) remains the standing opt-in cleanup job."
 last_updated: 2026-06-26
 ---
 
