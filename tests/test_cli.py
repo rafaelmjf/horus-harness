@@ -1,9 +1,12 @@
 """Integration tests driving commands through the CLI entry point."""
 
 import json
+import os
 
+from horus import launcher, registry
 from horus.cli import main
 from horus.instructions import check_drift
+from horus.registry import Registry, SessionRecord
 
 
 def _home(tmp_path, monkeypatch):
@@ -55,6 +58,37 @@ def test_session_new_creates_file_from_template(tmp_path, monkeypatch):
 def test_session_new_refuses_without_horus(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     assert main(["session", "new", "X", "--path", str(tmp_path)]) == 1
+
+
+def test_focus_running_session_calls_raiser(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    Registry.default().upsert(SessionRecord(
+        session_id="abc12345def", agent="claude", project="/p",
+        account="work", pid=os.getpid(), status="running",  # live pid -> stays running
+    ))
+    raised = {}
+    monkeypatch.setattr(launcher, "focus_window_for_pid", lambda pid: raised.setdefault("pid", pid) or True)
+
+    assert main(["focus", "abc123"]) == 0          # prefix match
+    assert raised["pid"] == os.getpid()
+    assert "Focused" in capsys.readouterr().out
+
+
+def test_focus_unknown_and_not_running(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    assert main(["focus", "nope"]) == 2            # no match
+    assert "No session" in capsys.readouterr().out
+
+    Registry.default().upsert(SessionRecord(
+        session_id="dead0001", agent="claude", project="/p", pid=None, status="running",
+    ))  # pid-less running -> reconcile -> orphaned -> not focusable
+    assert main(["focus", "dead0001"]) == 1
+    assert "not running" in capsys.readouterr().out
+
+
+def test_focus_window_for_pid_safe_on_no_pid():
+    assert launcher.focus_window_for_pid(None) is False
+    assert launcher.focus_window_for_pid(0) is False
 
 
 def test_sessions_cmd_lists_and_prunes(tmp_path, monkeypatch, capsys):

@@ -1,5 +1,7 @@
 """Tests for dashboard data gathering and HTML rendering (no socket)."""
 
+import os
+
 from horus import dashboard, initialize
 from horus.registry import Registry, SessionRecord
 
@@ -38,6 +40,69 @@ def test_render_index_includes_sessions_card(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     page = dashboard.render_index([], dashboard.gather_sessions())
     assert "Live sessions" in page
+
+
+def test_control_usage_color_and_ring_by_threshold():
+    assert dashboard._usage_color(95) == "#f08a8a"
+    assert dashboard._usage_color(75) == "#e6c35c"
+    assert dashboard._usage_color(10) == "#57d39a"
+    assert "stroke-dasharray='60 100'" in dashboard._ring(60.4)
+    assert ">--<" in dashboard._ring(None)  # unknown usage -> gray, no fill
+
+
+def test_control_tab_offline_empty_states(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    # No credentials under tmp HOME -> no network, empty accounts; no registry -> no live cards.
+    accounts = dashboard.gather_accounts()
+    assert accounts == []
+    page = dashboard.render_control([], accounts, dashboard.gather_sessions())
+    assert "No Claude login detected" in page
+    assert "No live sessions" in page
+    assert "class=\"active\"" in page  # Control nav highlighted
+
+
+def test_control_live_session_card_uses_account_usage(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    reg = Registry.default()
+    reg.upsert(SessionRecord(
+        session_id="abcdef123456", agent="claude", project=str(proj),
+        account="work", pid=os.getpid(), status="running",  # live pid -> stays "running"
+    ))
+    accounts = [{"alias": "work", "five_pct": 62.0, "week_pct": 20.0, "five_reset": "2026-06-26 18:00"}]
+    records = dashboard.gather_sessions()
+    page = dashboard.render_control(dashboard.gather_projects(), accounts, records)
+    # Account ring + the live card's bar both reflect the real percent.
+    assert "demo" in page and "work" in page
+    assert "5h limit 62%" in page          # session card bar label from the matched account
+    assert "horus open" in page            # launch command in the projects panel
+    assert "1 live" in page                # header live-session indicator
+    assert "horus focus abcdef12" in page          # raise-the-running-window shortcut
+    assert "claude --resume abcdef123456" in page  # reopen-in-a-new-window shortcut
+
+    # The indicator rides in the header, so it shows on the index too.
+    idx = dashboard.render_index(dashboard.gather_projects(), records)
+    assert "1 live" in idx and "class='live-badge'" in idx
+
+
+def test_live_indicator_absent_when_nothing_running(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    assert dashboard._live_count([]) == 0
+    # The CSS rule mentions .live-badge; the rendered anchor does not exist with no live sessions.
+    assert "class='live-badge'" not in dashboard.render_index([], [])
+
+
+def test_control_session_card_only_when_running(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    reg = Registry.default()
+    reg.upsert(SessionRecord(
+        session_id="dead0001", agent="claude", project="/p",
+        account="work", pid=None, status="running",  # pid-less -> reconciles to orphaned
+    ))
+    page = dashboard.render_control([], [], dashboard.gather_sessions())
+    assert "No live sessions" in page  # orphaned is not "live"
 
 
 def test_dashboard_server_is_single_instance():
