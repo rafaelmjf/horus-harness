@@ -251,10 +251,15 @@ code { background: #0b0d12; padding: 1px 5px; border-radius: 4px; }
 .back { font-size: 13px; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 td, th { text-align: left; padding: 6px 10px; border-bottom: 1px solid #232733; }
-nav { margin-top: 10px; display: flex; gap: 18px; }
+nav { margin-top: 10px; display: flex; gap: 18px; align-items: center; }
 nav a { color: #8a93a6; font-size: 13px; padding-bottom: 4px; border-bottom: 2px solid transparent; }
 nav a.active { color: #e6e6e6; border-bottom-color: #6db3f2; }
 nav a:hover { text-decoration: none; color: #e6e6e6; }
+nav a.live-badge { margin-left: auto; color: #57d39a; font-size: 12px; padding: 2px 11px;
+                   border: 1px solid #1f5138; background: #15281d; border-radius: 999px; }
+nav a.live-badge:hover { border-color: #2e7d52; }
+.live-dot { animation: livepulse 1.6s ease-in-out infinite; }
+@keyframes livepulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 .control { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
 main.wide { max-width: none; }
 .acct { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
@@ -281,22 +286,34 @@ details.launch > summary::-webkit-details-marker { display: none; }
 _LEVEL_CLASS = {"ok": "health-ok", "warn": "health-warn", "fail": "health-fail"}
 
 
-def _nav(active: str) -> str:
+def _live_count(records: list[registry.SessionRecord]) -> int:
+    """Native agent sessions currently running (a live process)."""
+    return sum(1 for r in records if r.status == "running")
+
+
+def _nav(active: str, live: int = 0) -> str:
     links = [("/", "Projects", "projects"), ("/control", "Control", "control")]
     items = "".join(
         f"<a href='{href}'{' class=\"active\"' if key == active else ''}>{label}</a>"
         for href, label, key in links
     )
-    return f"<nav>{items}</nav>"
+    badge = ""
+    if live:
+        s = "" if live == 1 else "s"
+        badge = (
+            f"<a href='/control' class='live-badge' title='{live} live native session{s} running'>"
+            f"<span class='live-dot'>&#9679;</span> {live} live</a>"
+        )
+    return f"<nav>{items}{badge}</nav>"
 
 
-def _page(title: str, body: str, active: str = "projects", wide: bool = False) -> str:
+def _page(title: str, body: str, active: str = "projects", wide: bool = False, live: int = 0) -> str:
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>{html.escape(title)}</title><style>{_STYLE}</style></head><body>"
         "<header><h1>Horus</h1>"
         "<div class='sub'>project continuity &amp; control panel</div>"
-        f"{_nav(active)}</header>"
+        f"{_nav(active, live)}</header>"
         f"<main{' class=\"wide\"' if wide else ''}>{body}</main>"
         "<script>"
         "function horusCopy(btn){"
@@ -660,7 +677,9 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
 
 
 def render_index(projects: list[dict[str, Any]], sessions: list[registry.SessionRecord] | None = None) -> str:
-    sessions_card = render_sessions_card(sessions or [])
+    records = sessions or []
+    live = _live_count(records)
+    sessions_card = render_sessions_card(records)
     if not projects:
         body = (
             sessions_card
@@ -668,9 +687,9 @@ def render_index(projects: list[dict[str, Any]], sessions: list[registry.Session
             "<p class='muted'>Run <code>horus init</code> inside a project to "
             "register it here.</p></div>"
         )
-        return _page("Horus", body)
+        return _page("Horus", body, live=live)
     cols = "".join(_project_column(p, i) for i, p in enumerate(projects))
-    return _page("Horus", f"{sessions_card}<div class='columns'>{cols}</div>")
+    return _page("Horus", f"{sessions_card}<div class='columns'>{cols}</div>", live=live)
 
 
 def render_project(p: dict[str, Any]) -> str:
@@ -751,7 +770,7 @@ def render_project(p: dict[str, Any]) -> str:
             f"<div class='section'><h2>Project brief</h2>{markdown.render(p['project_body'])}</div>"
         )
 
-    return _page(f"Horus - {p['name']}", "".join(parts))
+    return _page(f"Horus - {p['name']}", "".join(parts), live=_live_count(gather_sessions()))
 
 
 # --------------------------------------------------------------------------- #
@@ -872,9 +891,27 @@ def _control_session_card(rec: registry.SessionRecord, accounts: list[dict[str, 
         f"<span class='scard-t'>{html.escape(Path(rec.project).name)}</span>"
         f"<span class='pill'>{html.escape(rec.account or 'ambient')}</span></div>"
         f"{meta}{_usage_bar(pct, ' · '.join(label_bits))}{context_line}"
+        f"{_reopen_html(rec)}"
         f"<div class='muted' style='font-size:11px;margin-top:8px'>session "
         f"<code>{html.escape(rec.session_id[:8])}</code> &middot; updated {html.escape(rec.updated_at)}</div>"
         "</div>"
+    )
+
+
+def _reopen_html(rec: registry.SessionRecord) -> str:
+    """A copyable command to (re)open this session in the native app's own window.
+
+    The dashboard is read-only and a browser can't raise a desktop window, so the
+    shortcut is the exact command to run. Only Claude supports resume-by-id today.
+    """
+    if rec.agent != "claude":
+        return ""
+    cmd = f'cd "{rec.project}"\nclaude --resume {rec.session_id}'
+    return (
+        "<div class='cmd' style='margin-top:8px'>"
+        f"<code>{html.escape(cmd)}</code>"
+        "<button class='copy' type='button' onclick='horusCopyPrev(this)'>Copy</button></div>"
+        "<div class='muted' style='font-size:11px'>reopen in a native window</div>"
     )
 
 
@@ -894,7 +931,7 @@ def render_control(
         f"{_accounts_panel(accounts)}{_projects_panel(projects, accounts)}</div>"
         f"<div class='sessions-grid'>{cards}</div></div>"
     )
-    return _page("Horus - Control", body, active="control", wide=True)
+    return _page("Horus - Control", body, active="control", wide=True, live=len(live))
 
 
 # --------------------------------------------------------------------------- #
@@ -916,7 +953,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(render_index(gather_projects(), gather_sessions()))
             return
         if parsed.path == "/sessions":
-            self._send(_page("Horus — sessions", render_sessions_card(gather_sessions())))
+            recs = gather_sessions()
+            self._send(_page("Horus — sessions", render_sessions_card(recs), live=_live_count(recs)))
             return
         if parsed.path == "/control":
             self._send(render_control(gather_projects(), gather_accounts(), gather_sessions()))

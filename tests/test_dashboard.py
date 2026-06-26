@@ -72,11 +72,25 @@ def test_control_live_session_card_uses_account_usage(tmp_path, monkeypatch):
         account="work", pid=os.getpid(), status="running",  # live pid -> stays "running"
     ))
     accounts = [{"alias": "work", "five_pct": 62.0, "week_pct": 20.0, "five_reset": "2026-06-26 18:00"}]
-    page = dashboard.render_control(dashboard.gather_projects(), accounts, dashboard.gather_sessions())
+    records = dashboard.gather_sessions()
+    page = dashboard.render_control(dashboard.gather_projects(), accounts, records)
     # Account ring + the live card's bar both reflect the real percent.
     assert "demo" in page and "work" in page
     assert "5h limit 62%" in page          # session card bar label from the matched account
     assert "horus open" in page            # launch command in the projects panel
+    assert "1 live" in page                # header live-session indicator
+    assert "claude --resume abcdef123456" in page  # reopen-in-native-app shortcut
+
+    # The indicator rides in the header, so it shows on the index too.
+    idx = dashboard.render_index(dashboard.gather_projects(), records)
+    assert "1 live" in idx and "class='live-badge'" in idx
+
+
+def test_live_indicator_absent_when_nothing_running(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    assert dashboard._live_count([]) == 0
+    # The CSS rule mentions .live-badge; the rendered anchor does not exist with no live sessions.
+    assert "class='live-badge'" not in dashboard.render_index([], [])
 
 
 def test_control_session_card_only_when_running(tmp_path, monkeypatch):

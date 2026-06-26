@@ -312,6 +312,13 @@ dashboard and later becomes the place for continuity/status nudges.
 - [ ] **Oversight controls (NEXT)**: actions on a tracked session (terminate; later resume/attach)
   from the dashboard — needs a POST surface, which crosses the dashboard's current read-only line, so
   scope/UX deliberately deferred to its own increment. CLI `horus sessions --prune` covers cleanup today.
+  - [x] **Live-session indicator + reopen shortcut** (2026-06-26, branch `feat/control-tab-ui`): a
+    header "● N live" badge (count of `running` registry records, links to Control, on every page) and a
+    per-card copyable `cd <project>; claude --resume <id>` "reopen in a native window". Stays read-only —
+    a browser can't raise a desktop window.
+  - [ ] `horus focus <session_id>` — OS-level raise of a running session's terminal by PID (the true
+    "open the native app" the read-only dashboard can't do). Windows: main-window handle for the PID +
+    `SetForegroundWindow`. Pairs with the indicator's reopen command (which starts a *new* view, not focus).
 - [ ] Codex adapter (second) to prove the abstraction.
 - [ ] Persist the registry in SQLite (re-justified once concurrency/scale hurts; JSON file shipped first).
 - [ ] Restrict autonomous closure edits to `.horus/**`, `AGENTS.md`, `CLAUDE.md`.
