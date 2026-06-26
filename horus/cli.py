@@ -147,6 +147,37 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_focus(args: argparse.Namespace) -> int:
+    """Raise a running session's terminal window (the dashboard can't, being read-only).
+
+    Matches a session id by prefix (like git short hashes). Best-effort: Windows-only
+    window raising, subject to the OS foreground lock and to how the session's terminal
+    is hosted (see ``launcher.focus_window_for_pid``).
+    """
+    reg = registry.Registry.default()
+    reg.reconcile()
+    matches = [r for r in reg.all() if r.session_id.startswith(args.session_id)]
+    if not matches:
+        print(f"No session matching {args.session_id!r}. Run `horus sessions` to list them.")
+        return 2
+    if len(matches) > 1:
+        print(f"{args.session_id!r} is ambiguous ({len(matches)} sessions); use more of the id.")
+        return 2
+    rec = matches[0]
+    if rec.status != "running":
+        print(f"Session {rec.session_id[:8]} is {rec.status}, not running — nothing to focus.")
+        return 1
+    if launcher.focus_window_for_pid(rec.pid):
+        print(f"Focused {rec.agent} session {rec.session_id[:8]} (pid {rec.pid}).")
+        return 0
+    print(
+        f"Could not raise the window for pid {rec.pid}. It may be hosted in a shared "
+        "terminal process, or the OS blocked the foreground change. Try the taskbar, "
+        f"or reopen with `claude --resume {rec.session_id}` in {Path(rec.project).name}."
+    )
+    return 1
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Spawn (or resume) an agent session through an adapter, tracked in the registry.
 
@@ -631,6 +662,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_sessions = sub.add_parser("sessions", help="list tracked agent sessions (reconciles live state)")
     p_sessions.add_argument("--prune", action="store_true", help="drop finished/dead sessions instead of listing")
     p_sessions.set_defaults(func=cmd_sessions)
+
+    p_focus = sub.add_parser("focus", help="raise a running session's terminal window (best-effort, Windows)")
+    p_focus.add_argument("session_id", help="session id (or a unique prefix)")
+    p_focus.set_defaults(func=cmd_focus)
 
     p_run = sub.add_parser("run", help="spawn (or resume) an agent session, tracked in the registry")
     p_run.add_argument("prompt", help="the prompt to send the agent")

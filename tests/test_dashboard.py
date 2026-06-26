@@ -79,7 +79,8 @@ def test_control_live_session_card_uses_account_usage(tmp_path, monkeypatch):
     assert "5h limit 62%" in page          # session card bar label from the matched account
     assert "horus open" in page            # launch command in the projects panel
     assert "1 live" in page                # header live-session indicator
-    assert "claude --resume abcdef123456" in page  # reopen-in-native-app shortcut
+    assert "horus focus abcdef12" in page          # raise-the-running-window shortcut
+    assert "claude --resume abcdef123456" in page  # reopen-in-a-new-window shortcut
 
     # The indicator rides in the header, so it shows on the index too.
     idx = dashboard.render_index(dashboard.gather_projects(), records)

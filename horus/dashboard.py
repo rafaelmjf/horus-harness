@@ -899,20 +899,28 @@ def _control_session_card(rec: registry.SessionRecord, accounts: list[dict[str, 
 
 
 def _reopen_html(rec: registry.SessionRecord) -> str:
-    """A copyable command to (re)open this session in the native app's own window.
+    """Copyable commands to jump to this session's native window.
 
     The dashboard is read-only and a browser can't raise a desktop window, so the
-    shortcut is the exact command to run. Only Claude supports resume-by-id today.
+    shortcut is the exact command to run: `horus focus` raises the *running* window;
+    `claude --resume` opens a fresh view (Claude-only resume-by-id today).
     """
-    if rec.agent != "claude":
-        return ""
-    cmd = f'cd "{rec.project}"\nclaude --resume {rec.session_id}'
-    return (
+    focus = f"horus focus {rec.session_id[:8]}"
+    block = (
         "<div class='cmd' style='margin-top:8px'>"
-        f"<code>{html.escape(cmd)}</code>"
+        f"<code>{html.escape(focus)}</code>"
         "<button class='copy' type='button' onclick='horusCopyPrev(this)'>Copy</button></div>"
-        "<div class='muted' style='font-size:11px'>reopen in a native window</div>"
+        "<div class='muted' style='font-size:11px'>raise the running window</div>"
     )
+    if rec.agent == "claude":
+        reopen = f'cd "{rec.project}"\nclaude --resume {rec.session_id}'
+        block += (
+            "<div class='cmd' style='margin-top:6px'>"
+            f"<code>{html.escape(reopen)}</code>"
+            "<button class='copy' type='button' onclick='horusCopyPrev(this)'>Copy</button></div>"
+            "<div class='muted' style='font-size:11px'>or reopen in a new window</div>"
+        )
+    return block
 
 
 def render_control(

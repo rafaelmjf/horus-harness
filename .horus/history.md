@@ -9,6 +9,33 @@ Curated, durable context: the problems that bit us and the lessons that shaped t
 design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
 just the war stories worth carrying forward.
 
+## ctypes silently truncated 64-bit handles; only live-exercise caught it
+
+`horus focus` (raise a session's window) used `ctypes.windll.user32`/`kernel32` without
+declaring `argtypes`/`restype`. ctypes then defaults every argument to a 32-bit `int`, so
+on 64-bit Windows the `HWND`s and the Toolhelp `HANDLE` were **truncated** —
+`GetWindowThreadProcessId` got a corrupt handle (never matched a pid) and
+`CreateToolhelp32Snapshot`'s handle was mangled (so the descendant walk silently fell back
+to `{pid}`). The function returned `False` every time while looking completely correct. The
+unit tests passed because they only hit the early `pid is None` return — they never exercised
+the FFI path at all. It surfaced only by launching a real window and calling the function
+against its pid. **Lessons:** (1) always declare `argtypes`/`restype` for ctypes calls that
+touch handles/pointers — the default `int` is a 64-bit truncation trap; (2) FFI/`ctypes` code
+is invisible to early-return unit tests — leave one live-exercise check behind, not just a
+None-guard test; (3) a started session began as a stale-base mistake earlier this same day —
+verify against reality (the remote, the running process, the actual window), not against what
+looks right.
+
+## Started work on a stale local main (fetch before trusting local refs)
+
+A session "continued" from `git log -1` (local only) and built a whole dashboard tab on a
+base that was 20 commits behind `origin/main` — before MVP3 even existed — and asserted "no
+CLIs installed" from a stale `.horus/roadmap.md` when `claude` was in fact on PATH. The work
+had to be stashed and redone against real main. The pickup `next_prompt` *already* said
+"fetch-first, verify from the REMOTE"; it was ignored. **Lesson:** at session start in this
+repo, `git fetch` and compare to `origin/<branch>` before trusting local refs or `.horus`
+prose; the continuity files describe the last *committed* state, which may itself be behind.
+
 ## Windows backslash paths silently broke TOML config (forward-slash everything)
 
 The multi-account `[config_dirs]` writer (PR #6) stored paths verbatim: on Windows that

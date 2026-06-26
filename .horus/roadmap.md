@@ -316,9 +316,14 @@ dashboard and later becomes the place for continuity/status nudges.
     header "● N live" badge (count of `running` registry records, links to Control, on every page) and a
     per-card copyable `cd <project>; claude --resume <id>` "reopen in a native window". Stays read-only —
     a browser can't raise a desktop window.
-  - [ ] `horus focus <session_id>` — OS-level raise of a running session's terminal by PID (the true
-    "open the native app" the read-only dashboard can't do). Windows: main-window handle for the PID +
-    `SetForegroundWindow`. Pairs with the indicator's reopen command (which starts a *new* view, not focus).
+  - [x] `horus focus <session_id>` (2026-06-26) — OS-level raise of a running session's terminal.
+    `launcher.focus_window_for_pid`: matches the pid's whole descendant tree (Toolhelp snapshot, so a
+    child `conhost` counts) against visible top-level windows (`EnumWindows`) and `SetForegroundWindow`s
+    the first. Id-prefix lookup like git hashes. Surfaced on the live cards as "raise the running window".
+    **Bug caught only by live-testing** (history.md): ctypes defaults handle args to 32-bit int → 64-bit
+    HWND/HANDLE truncation made it silently no-op; fixed by declaring `argtypes`/`restype`. Ceilings:
+    Windows-only; `SetForegroundWindow` is subject to the OS foreground lock; a session hosted in a shared
+    Windows Terminal process (window not a pid descendant) won't match → clear failure message + fallback.
 - [ ] Codex adapter (second) to prove the abstraction.
 - [ ] Persist the registry in SQLite (re-justified once concurrency/scale hurts; JSON file shipped first).
 - [ ] Restrict autonomous closure edits to `.horus/**`, `AGENTS.md`, `CLAUDE.md`.
