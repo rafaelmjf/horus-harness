@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "0.0.2 'companion' milestone on PyPI; MVP3 'manager' is end-to-end usable, both headless and attended. On main: adapter contract + FakeAdapter + ClaudeAdapter (spawn/resume proven live), registry, multi-account isolation, live oversight dashboard, `horus run` (headless one-shot, tracked), `horus open` (attended claude TUI per account+project, tracked running). The user's flagged UI work is now DONE (PR #10): a dashboard **Control tab** (`/control` — accounts usage rings, projects launch commands, live-session cards), a header **live-session indicator**, and **`horus focus`** to raise a running session's window. Next: MVP4 — Codex adapter (proves the abstraction at N=1), in-UI oversight controls (terminate/resume — needs a POST surface, crosses the read-only line), `horus doctor compat`; then MVP5 autonomous closure."
-next_action: "Start MVP4. Highest-leverage: the Codex adapter (horus/adapters/codex.py) — it proves the vendor-neutral contract, which is unproven at N=1. In parallel/after: in-UI oversight controls (terminate/resume from the dashboard — needs a POST surface), and `horus doctor compat` (read-only: what each agent loads). Probe the real codex CLI for exec/resume flags + event-stream format; don't guess."
-next_prompt: "Resume the Horus project. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (don't trust local refs — a prior session built on a stale local main; see history.md). MVP3 is merged (adapter contract + Claude adapter + registry + multi-account + live dashboard + `horus run`/`horus open`), and PR #10 added the dashboard Control tab + live-session indicator + `horus focus`. Start the next increment on a FRESH branch off main and PR it (squash-merge, auto-delete). Read .horus/ lanes + the latest .horus/sessions/ summary. Recommended MVP4 first slice: the Codex adapter (horus/adapters/codex.py) against horus/adapters/base.py with ClaudeAdapter as the reference — probe the real `codex` CLI for exec/resume flags + event-stream format, mirror ClaudeAdapter, register in get_adapter. Then in-UI oversight controls (terminate/resume) which require crossing the dashboard's read-only line with a POST surface. Also pending: a continuity-debt consolidation pass (~72 done roadmap items, overlaps, sessions to distill)."
+current_focus: "MVP4 'unified terminal' shipped on `app-consolidation` (PR pending): the Control tab now launches real agent sessions and hosts them as **in-app terminals** — the actual `claude` TUI under a pseudo-terminal (PTY), rendered with xterm.js inside the dashboard. PR #11 (merged) added the launch buttons + the dashboard's first POST surface (`/launch`, shared `horus/launch.py`). This branch adds the cross-platform PTY (`pywinpty`/stdlib `pty`), a persistent re-attachable **session-host** (`pty_host.py`), and **pop-out** (a session in its own window = a second viewer). The single biggest open de-risk is the **Codex adapter** — the vendor-neutral contract is still proven only at N=1 (Claude), and the terminal/launch path needs it to be multi-agent."
+next_action: "Build the Codex adapter (horus/adapters/codex.py) against horus/adapters/base.py, with ClaudeAdapter as the reference — it proves the vendor-neutral contract (unproven at N=1) and makes the in-app terminal + launch + Control tab genuinely multi-agent. It needs interactive_command (the PTY terminal reuses it) + build_env (CODEX_HOME per account) + parse_event. Probe the real codex CLI for exec/resume flags + event-stream format; don't guess."
+next_prompt: "Resume Horus. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (local refs lie — see history.md). MVP4 in-app terminal is merged: dashboard launches real claude TUIs via a cross-platform PTY (horus/pty_session.py) hosted in a persistent, re-attachable, pop-outable session-host (horus/pty_host.py), rendered with vendored xterm.js. Start a FRESH branch off main and PR it (squash-merge, auto-delete). Read .horus/ lanes + the latest .horus/sessions/ summary. Next slice: the **Codex adapter** (horus/adapters/codex.py) mirroring ClaudeAdapter — implement permission_flags/build_command/build_env(CODEX_HOME)/parse_event/interactive_command, register in adapters.get_adapter, probe the real `codex` CLI (don't guess), and confirm a Codex session launches in the in-app terminal. Also pending (own session): the continuity-debt pass (~74 done roadmap items, ~44 missing features rows, ~34 sessions to distill)."
 last_updated: 2026-06-26
 ---
 
@@ -309,9 +309,10 @@ dashboard and later becomes the place for continuity/status nudges.
   → the dashboard finally shows live sessions, not just finished ones. `horus/launcher.py`;
   `ClaudeAdapter.interactive_command`; same identity guard as headless. Proven live: two windows
   (work/horus-harness, personal/agentic-ttrpg) tracked running across two accounts. 3 tests.
-- [ ] **Oversight controls (NEXT)**: actions on a tracked session (terminate; later resume/attach)
-  from the dashboard — needs a POST surface, which crosses the dashboard's current read-only line, so
-  scope/UX deliberately deferred to its own increment. CLI `horus sessions --prune` covers cleanup today.
+- [~] **Oversight controls**: actions on a tracked session from the dashboard. The **POST surface
+  shipped** (PR #11 — `/launch`, same-origin-guarded, loopback-only; → features.md), which was the
+  blocker. Still open: terminate/resume of a *windowed* session from the UI (in-app PTY terminals
+  already have kill via `/pty/kill`). CLI `horus sessions --prune` covers cleanup today.
   - [x] **Live-session indicator + reopen shortcut** (2026-06-26, branch `feat/control-tab-ui`): a
     header "● N live" badge (count of `running` registry records, links to Control, on every page) and a
     per-card copyable `cd <project>; claude --resume <id>` "reopen in a native window". Stays read-only —
@@ -324,10 +325,46 @@ dashboard and later becomes the place for continuity/status nudges.
     HWND/HANDLE truncation made it silently no-op; fixed by declaring `argtypes`/`restype`. Ceilings:
     Windows-only; `SetForegroundWindow` is subject to the OS foreground lock; a session hosted in a shared
     Windows Terminal process (window not a pid descendant) won't match → clear failure message + fallback.
-- [ ] Codex adapter (second) to prove the abstraction.
+- [ ] **Codex adapter (THE next step)** — second adapter to prove the vendor-neutral contract,
+  unproven at N=1. `horus/adapters/codex.py` mirroring `ClaudeAdapter`: `permission_flags` /
+  `build_command` / `build_env` (`CODEX_HOME` per account) / `parse_event` / `interactive_command`
+  (the in-app PTY terminal reuses it), registered in `adapters.get_adapter`. Probe the real `codex`
+  CLI for exec/resume flags + event format; don't guess. → unblocks multi-agent terminal/launch.
 - [ ] Persist the registry in SQLite (re-justified once concurrency/scale hurts; JSON file shipped first).
 - [ ] Restrict autonomous closure edits to `.horus/**`, `AGENTS.md`, `CLAUDE.md`.
 - [ ] **LLM-based `horus infer`** (replaces the removed deterministic version): drive the official CLI to distill `.horus/` from the project's canonical docs — follow doc pointers (README → status/roadmap → CLAUDE.md → linked docs like docs/HISTORY.md), produce clean project + roadmap with planned/in-progress/done items, mark superseded source docs as stale, and prompt the user when intent is unclear.
+
+## MVP 4 - Unified in-app terminal (the cockpit)
+
+> Shipped this milestone: the Control tab launches real sessions and hosts them as
+> in-app terminals (the real agent TUI under a PTY, rendered with xterm.js). Decided
+> 2026-06-26: keep the viewer in Horus (not a VS Code extension), local + persistent +
+> re-attachable, cross-platform PTY. See features.md for the capabilities and
+> decisions.md ("Unified in-app terminal", "Cross-platform PTY") for the why.
+
+- [x] Dashboard **launch buttons + first POST surface** (PR #11): `/launch` via shared
+  `horus/launch.py`; same-origin-guarded, loopback-only, projects-by-index. → features.md
+- [x] **Cross-platform PTY** (`pty_session.py`): `pywinpty` (Windows, conditional dep) +
+  stdlib `pty` (macOS/Linux, dep-free). → features.md
+- [x] **Persistent session-host** (`pty_host.py`) + **xterm.js** viewer (vendored, no CDN):
+  real TUI in-app, scrollback replay, re-attach across tabs/reloads, multi-viewer. → features.md
+- [x] **Pop-out** a session into its own window (a second viewer of the same host-owned PTY). → features.md
+- [ ] **Codex in the terminal** — falls out of the Codex adapter (above); the PTY host already
+  calls `interactive_command`, so it works once Codex implements it.
+
+Deferred (noted as future direction, low value for now):
+
+- [ ] **Standalone session-host daemon** — survive a Horus *restart* (today re-attach only
+  spans tabs/reloads while the dashboard process runs).
+- [ ] **Remote / cross-machine attach** — run the host per machine, attach over a tailnet with
+  auth (Tailscale was already reserved for live state). Protocol kept transport-agnostic for this.
+- [ ] **Monitor sessions Horus did NOT start** (read-only) — discover foreign `claude`/`codex`
+  sessions from the transcripts they already write (`~/.claude/projects/<slug>/<uuid>.jsonl`;
+  Codex rollouts already read by `codex_usage`), surfacing project/last-activity/message-count.
+  Plus a "continue this here" bridge via `claude --resume <id>` into a Horus-owned PTY. Cannot
+  *attach/drive* a foreign PTY — observe only. Optional process-scan layer (cwd→project) wants psutil.
+- [ ] Literal OS-level drag gestures / re-dock automation (pop-out covers the practical need).
+- [ ] Register in-app PTY terminals in the registry so `horus sessions` / usage cards see them.
 
 ## Cross-tool interface sync (Claude ↔ Codex ↔ Gemini CLI ↔ Copilot …)
 

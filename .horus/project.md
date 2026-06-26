@@ -1,8 +1,8 @@
 ---
 project: horus-harness
 status: active
-current_focus: "First always-on-top companion/mascot is shipped; next focus is improving status signals while native Claude/Codex sessions keep doing the agent work."
-last_updated: 2026-06-25
+current_focus: "Execution + oversight layer is real: the dashboard launches sessions and hosts them as in-app terminals (real agent TUI under a PTY, xterm.js), persistent + re-attachable + pop-outable. Still single-agent — the next focus is the Codex adapter to prove the vendor-neutral contract and make it multi-agent. Continuity (the moat) stays the headline; resist over-building the terminal/IDE layer."
+last_updated: 2026-06-26
 ---
 
 # Horus Harness

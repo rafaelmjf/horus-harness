@@ -653,3 +653,56 @@ A mid-project evaluation against the founding docs (`product_interview.md`, `pla
   autonomous closure (the thematic heart, now unblocked) + stale-session detection + LLM
   `infer`. MVP6 = optional remote surfaces (Telegram/Tailscale). Plus the new **Cross-tool
   interface sync** track (two-layer model; see its own decision and roadmap section).
+
+## 2026-06-26 - Unified In-App Terminal: Own xterm.js Viewer, Not a VS Code Extension
+
+The Control tab launches real agent sessions and hosts them as **in-app terminals** — the
+actual `claude`/`codex` TUI under a pseudo-terminal, rendered with xterm.js *inside* the
+dashboard. When the question arose (real TUI + window controls → "is this still its own app,
+or pivot to a VS Code extension?"), the decision was: **keep the viewer in Horus.**
+
+Reasoning:
+
+- The vision is *oversight across projects/accounts*, with attach/detach and (later) remote
+  streaming. That is **multi-host terminal multiplexing**, which a VS Code extension does NOT
+  provide for free (its integrated terminal is local to that instance). Once "stream from
+  other machines / re-attach" is the requirement, VS Code's free terminal advantage collapses.
+- Horus is a Python *brain* (CLI + adapters + registry + files); the dashboard is one
+  front-end. The right move is to build the **host/attach protocol** and keep the viewer ours
+  (a thin xterm.js client). VS Code could later be *a* viewer (webview), never the strategy —
+  and coupling the control surface to VS Code would betray the terminal-first/editor-agnostic
+  thesis (Claude Code/Codex users aren't all in VS Code).
+- Architecture = **session-host vs viewer** (tmux-style). The host (`pty_host.py`) owns PTYs and
+  keeps them alive regardless of who's watching; a viewer attaches by replaying scrollback +
+  live bytes over SSE and detaches by disconnecting. "Drag out" = a **pop-out window** = a second
+  viewer of the same persistent session. This only works for sessions **Horus started** (it owns
+  the PTY); attaching to an externally-started TUI is infeasible (can't attach a PTY you don't own).
+- Scope locked **local + persistent + re-attachable**; **remote deferred** (per-machine daemon +
+  tailnet + auth — Tailscale already reserved for live state). Re-attach today spans tabs/reloads
+  while Horus runs; surviving a Horus *restart* needs a standalone daemon (deferred). The attach
+  protocol is kept transport-agnostic so the remote stage slots in without reshaping it.
+- **Monitoring sessions Horus did NOT start** is a separate, read-only future idea: discover
+  foreign `claude`/`codex` sessions from the transcripts they already write
+  (`~/.claude/projects/<slug>/<uuid>.jsonl`; Codex rollouts already read by `codex_usage`), and
+  optionally "continue this here" via `claude --resume <id>` into a Horus-owned PTY. Observe-only;
+  no driving a foreign PTY. Noted in roadmap, not built.
+
+## 2026-06-26 - Cross-Platform PTY: pywinpty on Windows, stdlib `pty` Elsewhere (the one accepted dep)
+
+A real agent TUI needs a pseudo-terminal. `horus/pty_session.py` is one byte-oriented handle with
+two backends: **ConPTY via `pywinpty`** on Windows, the **stdlib `pty`** module on macOS/Linux.
+
+Reasoning / consequence:
+
+- This **crosses the "zero runtime deps" non-negotiable** ([[horus-core-constraints]]) — accepted
+  deliberately, because there is no stdlib Windows ConPTY binding and a real TUI has no zero-dep
+  path. The cost is contained: declared as a **conditional** dependency
+  (`pywinpty>=2.0; sys_platform == 'win32'`), so macOS/Linux stay dependency-free, which fits the
+  user's stated intent to support Mac/Linux later. A pure-ctypes ConPTY was rejected (Windows-only
+  anyway, and exactly the 64-bit-handle ctypes trap that already bit `horus focus` — see history.md).
+- **xterm.js is vendored** (`horus/assets/vendor/xterm/`, served at `/assets/xterm/`), not a CDN —
+  keeps the dashboard local-only/offline and is a JS asset, not a Python dependency.
+- Transport stayed **SSE-out + POST-in** (reused the existing stdlib `http.server`); WebSocket is a
+  latency optimization for later, not required for a human-paced terminal. base64-framing keeps
+  control bytes intact. Verified live: real `claude` TUI renders; keystrokes reach the PTY; two
+  concurrent viewers share one session.

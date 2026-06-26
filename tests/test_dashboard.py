@@ -58,7 +58,8 @@ def test_control_tab_offline_empty_states(tmp_path, monkeypatch):
     assert accounts == []
     page = dashboard.render_control([], accounts, dashboard.gather_sessions())
     assert "No Claude login detected" in page
-    assert "No live sessions" in page
+    assert "No windowed sessions" in page  # registry-tracked OS-window sessions
+    assert "No in-app terminals yet" in page  # the integrated terminal panel
     assert "class=\"active\"" in page  # Control nav highlighted
 
 
@@ -103,7 +104,7 @@ def test_control_session_card_only_when_running(tmp_path, monkeypatch):
         account="work", pid=None, status="running",  # pid-less -> reconciles to orphaned
     ))
     page = dashboard.render_control([], [], dashboard.gather_sessions())
-    assert "No live sessions" in page  # orphaned is not "live"
+    assert "No windowed sessions" in page  # orphaned is not "live"
 
 
 def test_dashboard_server_is_single_instance():
@@ -281,6 +282,9 @@ def test_control_tab_renders_launch_controls(tmp_path, monkeypatch):
     assert "method='post' action='/launch'" in page
     assert "name='mode' value='fresh'" in page and "name='mode' value='resume'" in page
     assert "<select name='account'>" in page and ">work</option>" in page
+    # In-app terminal is the primary action; OS window is the demoted secondary.
+    assert "value='app'>&#9654; Open terminal in app" in page
+    assert "value='window'" in page and "separate OS window" in page
     # Account row -> a one-click fresh-session button.
     assert "+ session" in page
     # Copy-the-command path is still offered as a secondary option.
@@ -292,7 +296,54 @@ def test_launch_notice_banner():
     assert "Launched session" in ok and "abcd1234" in ok and "banner ok" in ok
     err = dashboard._launch_notice({"error": ["unknown account"]})
     assert "Launch failed" in err and "unknown account" in err and "banner err" in err
+    tab = dashboard._launch_notice({"tab": ["app-1"]})
+    assert "terminal panel" in tab and "banner ok" in tab
     assert dashboard._launch_notice({}) == ""
+
+
+def test_process_launch_in_app_opens_pty_terminal(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    # Stub the host so no real PTY/process is spawned; capture the start args.
+    calls = {}
+
+    def fake_start(**kw):
+        calls.update(kw)
+        return "pty-1"
+
+    monkeypatch.setattr(dashboard.pty_host.host, "start", fake_start)
+
+    query = dashboard.process_launch(
+        {"project": "0", "mode": "fresh", "agent": "fake", "target": "app"},
+        projects=[str(proj)], known_aliases=set(),
+    )
+    assert query == "tab=pty-1"
+    assert calls["agent"] == "fake" and str(calls["project_dir"]) == str(proj)
+
+
+def test_terminal_panel_renders_xterm_wiring(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    term = dashboard.pty_host.PtyTerminal(
+        term_id="pty-7", agent="claude", project_dir=tmp_path, title="demo · work",
+    )
+    page = dashboard.render_control([], [], [], terminals=[term])
+    assert "data-tid='pty-7'" in page                  # a tab + pane for the terminal
+    assert "id='x-pty-7'" in page                       # the xterm mount point
+    assert "/assets/xterm/xterm.js" in page             # vendored xterm.js loaded (no CDN)
+    assert "EventSource('/pty/stream?id='" in page      # SSE byte stream wiring
+    assert "/pty/input" in page and "/pty/resize" in page  # keystroke + resize wiring
+    assert "horusAttachTerm" in page                    # shared attach fn (panel + pop-out)
+    assert "class='popout linkbtn' data-tid='pty-7'" in page  # pop-out control per terminal
+
+
+def test_pty_term_page_is_a_standalone_viewer():
+    page = dashboard.render_pty_term_page("pty-9", "demo · work")
+    assert "<!doctype html>" in page
+    assert "/assets/xterm/xterm.js" in page                       # same vendored xterm
+    assert "window.horusAttachTerm('term', 'pty-9')" in page      # attaches the same session
+    assert "demo · work" in page                                  # window title
 
 
 def test_process_launch_fresh_by_project_index(tmp_path, monkeypatch):
@@ -309,7 +360,7 @@ def test_process_launch_fresh_by_project_index(tmp_path, monkeypatch):
     monkeypatch.setattr(launcher, "open_terminal", fake_open)
 
     query = dashboard.process_launch(
-        {"project": "0", "mode": "fresh", "agent": "fake"},
+        {"project": "0", "mode": "fresh", "agent": "fake", "target": "window"},
         projects=[str(proj)], known_aliases=set(),
     )
     assert query.startswith("launched=")
@@ -333,7 +384,7 @@ def test_process_launch_resume_injects_continuity_prompt(tmp_path, monkeypatch):
     monkeypatch.setattr(launcher, "open_terminal", fake_open)
 
     query = dashboard.process_launch(
-        {"project": "0", "mode": "resume", "agent": "fake"},
+        {"project": "0", "mode": "resume", "agent": "fake", "target": "window"},
         projects=[str(proj)], known_aliases=set(),
     )
     assert query.startswith("launched=")
@@ -360,7 +411,7 @@ def test_process_launch_account_only_uses_home_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(launcher, "open_terminal", fake_open)
 
     query = dashboard.process_launch(
-        {"account": "work", "mode": "fresh", "agent": "fake"},
+        {"account": "work", "mode": "fresh", "agent": "fake", "target": "window"},
         projects=[], known_aliases={"work"},
     )
     assert query.startswith("launched=")

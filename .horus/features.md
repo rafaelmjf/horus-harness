@@ -1,6 +1,6 @@
 ---
 status: active
-last_updated: 2026-06-25
+last_updated: 2026-06-26
 ---
 
 # Features — capability ledger
@@ -38,12 +38,16 @@ Status: **Shipped** · **In progress** · **Planned**
 | Aliased account-tagged sessions | 2026-06-25 | `horus session new` records *which* account ran a session via a local alias (`config.alias_for` + `~/.horus/accounts.toml`, `acct-<sha6>` fallback); `horus account [--set]`; the real email never lands in a commit |
 | Dashboard Control tab | 2026-06-26 | `/control` route + header nav (Projects ↔ Control). Control-panel layout from the design mockup: **accounts column** with live usage **donut rings** per Horus-known account (`gather_accounts` reads the `accounts.toml` config-dir map + ambient login; alias-only, best-effort OAuth `/usage`); **projects column** with a launch ▶ that reveals copyable real `horus open "<path>" [--account <alias>]` commands; **live-session cards** (running processes only, from the registry) showing status/agent/pid + the account's 5h usage bar and, for Codex sessions, context window. Read-only, stdlib-only, no JS backend beyond clipboard copy. Header **"● N live" indicator** (count of `running` sessions, on every page, links to Control) + per-card jump-to-session shortcuts (`horus focus <id>` to raise the running window; `claude --resume <id>` for a new view) |
 | `horus focus <session_id>` | 2026-06-26 | Raises a running session's terminal window by PID (`launcher.focus_window_for_pid`: Toolhelp descendant-tree match + `EnumWindows` + `SetForegroundWindow`; git-style id-prefix lookup). The true "open the native app" the read-only dashboard can't do. Windows-only, best-effort (foreground lock; shared-Terminal hosting may miss → clear fallback message) |
+| Dashboard launch buttons (first POST surface) | 2026-06-26 | The Control tab *launches* sessions, not just shows commands (PR #11). `POST /launch` via shared `horus/launch.py` (used by `horus open` too); same-origin-guarded, loopback-only, projects-by-index, accounts validated. Account "+ session" (fresh) + project play (Fresh / Resume-with-continuity-prompt). action points → roadmap.md (MVP4) |
+| Cross-platform PTY (`pty_session.py`) | 2026-06-26 | One byte-oriented pseudo-terminal handle: `pywinpty`/ConPTY on Windows (conditional dep), stdlib `pty` on macOS/Linux (dep-free). read/write/resize/isalive/terminate |
+| In-app terminal: PTY session-host + xterm.js | 2026-06-26 | The real `claude`/`codex` TUI runs under a PTY in a persistent **session-host** (`pty_host.py`) and renders with vendored xterm.js (local, no CDN) inside the dashboard. Bytes stream over SSE (`/pty/stream`); keystrokes/resize POST back (`/pty/input`,`/pty/resize`,`/pty/kill`). Sessions persist independent of viewers → **re-attach** across tabs/reloads; **multi-viewer**. action points → roadmap.md (MVP4) |
+| Terminal pop-out window | 2026-06-26 | `⤢` opens a host-owned session in its own browser window (`/pty/term`) — a second viewer of the same persistent PTY. The practical "drag out"; "drag in" = the session stays a tab to re-attach. Only for Horus-started sessions |
 
 ## In progress
 
 | Capability | Notes |
 |---|---|
-| Agent execution layer (MVP3) | shipped: adapter contract + `FakeAdapter` + `ClaudeAdapter` (`horus/adapters/`, spawn+resume **proven live**), the **session/process registry** (`horus/registry.py`), **multi-account isolation** (per-account `CLAUDE_CONFIG_DIR` + identity check), a **live oversight dashboard** (registry view), **`horus run`** (headless one-shot, tracked), and **`horus open`** (attended: real `claude` TUI in its own terminal per account+project, tracked as a live `running` session). Next: Codex adapter, oversight controls (terminate/resume), autonomous closure |
+| Agent execution layer (MVP3→4) | shipped: adapter contract + `FakeAdapter` + `ClaudeAdapter` (`horus/adapters/`, spawn+resume **proven live**), the **session/process registry** (`horus/registry.py`), **multi-account isolation** (per-account `CLAUDE_CONFIG_DIR` + identity check), **`horus run`** (headless), **`horus open`** (attended OS-window), and the **in-app terminal** (PTY session-host + xterm.js, see rows above). Still single-agent (Claude). **Next: the Codex adapter** — the only thing proving the vendor-neutral contract at N>1 and making the terminal/launch multi-agent; then oversight terminate/resume + autonomous closure |
 | Routine + skill validation on a real project | invoke on fabric in a CLI-equipped session; tune skill triggering (`claude -p`); harmonize siblings → `roadmap.md` |
 
 ## Planned
