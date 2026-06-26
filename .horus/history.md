@@ -157,7 +157,32 @@ from a code reload (the deferred standalone session-host daemon is the structura
 as MVP5; (2) when verifying a dashboard change, a long-running server holds an old in-memory
 build and the page won't auto-refresh — restart the server and hard-reload before concluding
 anything; (3) to confirm a "missing" UI element, check what the *server* actually renders
-(fetch the HTML) before trusting the window.
+(fetch the HTML) before trusting the window. **Update 2026-06-26:** lesson (1)'s
+agent-triggered path is now guarded — `pty_host` marks the PTY env and a Claude
+PreToolUse(Bash) `horus guard-host --hook` refuses a hosted agent's restart/kill-the-host
+command (decisions.md). That stops the *agent* footgun; a user/crash/code-reload restart still
+drops live PTYs, so the standalone daemon remains the structural fix.
+
+## pywebview was the worst of both worlds — live-test the shell before graduating to it
+
+To fix the app-lifecycle gaps (closing the dashboard window didn't quit the app; stale Edge
+tabs), we decided to graduate the UI shell from "Edge `--app=` + Tk mascot" to a Python-owned
+**pywebview** window. On paper it was perfect: system webview (no bundled Chromium), stays
+Python, cross-OS, owns the window lifecycle for free. The headless checks passed (API shape
+validated against pywebview 6.2.1 with `start()` stubbed). Then it met the real Win11 machine:
+it **crashed intermittently** (`AccessibilityObject.Bounds … maximum recursion depth exceeded`,
+pywebview's WinForms/WebView2 layer — at startup and after load) and tab switches took **~4 s**.
+A plain Edge `--app` window of the same dashboard was fast and stable. **Lessons:** (1) the
+Chromium *engine* was never the problem — pywebview's *wrapper* was; when a thin layer over a
+known-good engine misbehaves, suspect the layer. (2) A GUI shell can't be validated headless —
+API-shape smoke tests (stubbing the event loop) prove nothing about stability/perf; only a live
+run on the target OS does. (3) Don't rip out a working lightweight thing for a theoretically-
+better one before live-testing the replacement. We reverted to the Edge `--app` + Tk mascot
+(uncommitted, so a clean `git checkout` restored it) and made the "proper native app" a
+separate, deliberately-evaluated future package instead. Also measured en route: the dashboard
+server renders in ~15 ms, but a cold `/control` was 750 ms because account usage hits the OAuth
+`/usage` endpoint synchronously per render — a real perf item for the proper app (load usage
+async). See decisions.md "pywebview Tried and Rejected".
 
 ## Skills do not solve periodic native-app checks
 
