@@ -23,7 +23,11 @@ classifiers = [
     "Topic :: Software Development",
     "Topic :: Utilities",
 ]
-dependencies = []
+# Windows has no stdlib pseudo-console binding, so the in-app terminal needs
+# pywinpty there (ConPTY). macOS/Linux use the stdlib `pty` module — no dep.
+dependencies = [
+    "pywinpty>=2.0; sys_platform == 'win32'",
+]
 
 [project.urls]
 Homepage = "https://github.com/rafaelmjf/horus-harness"

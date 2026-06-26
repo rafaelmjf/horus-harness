@@ -21,7 +21,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote_plus, urlparse
 
+from importlib import resources
+
 from horus import (
+    adapters,
     claude_usage,
     codex_usage,
     config,
@@ -29,10 +32,10 @@ from horus import (
     gitstate,
     launch,
     markdown,
+    pty_host,
     registry,
     roadmap,
     routines,
-    session_stream,
 )
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
@@ -319,19 +322,13 @@ button.linkbtn:hover { color: #b9c2d0; }
 .tdot.s-running { background: #57d39a; animation: livepulse 1.6s ease-in-out infinite; }
 .tdot.s-idle { background: #6db3f2; } .tdot.s-failed { background: #f08a8a; }
 .tdot.s-exited { background: #3a4151; }
-.term-pane { display: none; flex-direction: column; background: #0b0d12; border: 1px solid #284058;
-            border-radius: 0 8px 8px 8px; }
-.term-pane.active { display: flex; }
-.term-out { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12.5px;
-            line-height: 1.55; padding: 12px 14px; height: 340px; overflow-y: auto; white-space: pre-wrap;
-            overflow-wrap: anywhere; }
-.tl { margin: 1px 0; } .tl-user { color: #6db3f2; font-weight: 600; }
-.tl-tool { color: #e6c35c; } .tl-tool_result { color: #8a93a6; }
-.tl-result { color: #57d39a; margin-top: 4px; } .tl-err, .tl-error { color: #f08a8a; }
-.term-input { display: flex; gap: 8px; border-top: 1px solid #232733; padding: 10px 12px; }
-.term-input input { flex: 1; background: #12141b; color: #e6e6e6; border: 1px solid #284058;
-            border-radius: 6px; padding: 7px 10px; font: inherit; font-size: 13px; }
-.term-input input:disabled { opacity: .5; }
+.term-pane { display: none; background: #0b0d12; border: 1px solid #284058;
+            border-radius: 0 8px 8px 8px; padding: 8px; }
+.term-pane.active { display: block; }
+.term-bar { display: flex; justify-content: space-between; align-items: center; padding: 0 4px 6px; }
+.term-bar .popout { margin: 0; }
+.xterm-host { height: 420px; }
+.xterm-host .xterm { height: 100%; }
 """
 
 _LEVEL_CLASS = {"ok": "health-ok", "warn": "health-warn", "fail": "health-fail"}
@@ -1030,34 +1027,36 @@ def _launch_notice(params: dict[str, list[str]]) -> str:
     return ""
 
 
-def _terminal_panel(app_sessions: list[session_stream.InAppSession]) -> str:
-    """The integrated terminal: a tab + streaming transcript per in-app session.
+def _terminal_panel(terminals: list[pty_host.PtyTerminal]) -> str:
+    """The integrated terminal: a tab + real xterm.js terminal per PTY session.
 
-    Each session runs the agent headless inside the dashboard process; its events
-    stream here over SSE (see ``session_stream``). A transcript, not the raw TUI —
-    the xterm.js + ConPTY upgrade is deferred (kept zero-dependency on purpose)."""
-    if not app_sessions:
+    Each terminal is a real ``claude``/``codex`` TUI running under a pseudo-terminal
+    in the session-host (:mod:`horus.pty_host`); its bytes stream here over SSE and
+    keystrokes/resizes post back. Sessions persist on the host, so a tab re-attaches
+    to the live screen after a reload."""
+    if not terminals:
         empty = (
-            "<p class='muted'>No in-app sessions yet. Use <strong>Launch in app</strong> "
-            "on a project, or <strong>+ session</strong> on an account, and it opens here "
-            "as a terminal tab you can type into.</p>"
+            "<p class='muted'>No in-app terminals yet. Use <strong>Open terminal in app</strong> "
+            "on a project, or <strong>+ session</strong> on an account, and the real agent TUI "
+            "opens here — you drive it like any terminal.</p>"
         )
         return f"<div class='card termpanel'><h2>Terminal</h2>{empty}</div>"
 
     tabs, panes = [], []
-    for s in app_sessions:
-        cid = html.escape(s.client_id, quote=True)
-        title = html.escape(s.title or s.client_id)
+    for t in terminals:
+        tid = html.escape(t.term_id, quote=True)
+        title = html.escape(t.title or t.term_id)
+        state = "running" if t.alive else "exited"
         tabs.append(
-            f"<button class='term-tab' data-cid='{cid}'>"
-            f"<span class='tdot s-{html.escape(s.status)}'></span> {title}</button>"
+            f"<button class='term-tab' data-tid='{tid}'>"
+            f"<span class='tdot s-{state}'></span> {title}</button>"
         )
         panes.append(
-            f"<div class='term-pane' data-cid='{cid}' data-status='{html.escape(s.status)}'>"
-            f"<div class='term-out' id='out-{cid}'></div>"
-            f"<form class='term-input' data-cid='{cid}'>"
-            "<input type='text' autocomplete='off' placeholder='type a message and press Enter…'>"
-            "<button class='start' type='submit'>Send</button></form></div>"
+            f"<div class='term-pane' data-tid='{tid}'>"
+            f"<div class='term-bar'><span class='muted'>{title}</span>"
+            f"<button class='popout linkbtn' data-tid='{tid}' title='Open this session in its own window'>"
+            "&#10696; pop out</button></div>"
+            f"<div class='xterm-host' id='x-{tid}'></div></div>"
         )
     return (
         "<div class='card termpanel'><h2>Terminal</h2>"
@@ -1066,59 +1065,96 @@ def _terminal_panel(app_sessions: list[session_stream.InAppSession]) -> str:
     )
 
 
+# Vendored xterm.js (local, no CDN). _XTERM_ATTACH_JS defines window.horusAttachTerm,
+# shared by the Control panel AND the pop-out window — both are just *viewers* attaching
+# to the same host-owned PTY over SSE (bytes in) + POST (keystrokes/resize out). base64
+# keeps control bytes intact. The pop-out works precisely because the session persists on
+# the host independent of any viewer, so a second window attaches to the same live screen.
+_TERMINAL_HEAD = (
+    "<link rel='stylesheet' href='/assets/xterm/xterm.css'>"
+    "<script src='/assets/xterm/xterm.js'></script>"
+    "<script src='/assets/xterm/xterm-addon-fit.js'></script>"
+)
+
+_XTERM_ATTACH_JS = """
+<script>
+window.horusAttachTerm = function(hostId, tid){
+  if(typeof Terminal==='undefined') return null;
+  function b64bytes(b64){var s=atob(b64);var a=new Uint8Array(s.length);
+    for(var i=0;i<s.length;i++){a[i]=s.charCodeAt(i);} return a;}
+  function post(path, obj){
+    var body=Object.keys(obj).map(function(k){return k+'='+encodeURIComponent(obj[k]);}).join('&');
+    fetch(path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});
+  }
+  var term=new Terminal({convertEol:false, cursorBlink:true, fontSize:13,
+    fontFamily:'ui-monospace, SFMono-Regular, Consolas, monospace',
+    theme:{background:'#0b0d12', foreground:'#e6e6e6'}});
+  var fit=new FitAddon.FitAddon(); term.loadAddon(fit);
+  term.open(document.getElementById(hostId));
+  function sync(){ try{fit.fit();}catch(_){ } if(term.cols>0 && term.rows>0){ post('/pty/resize',{id:tid, cols:term.cols, rows:term.rows}); } }
+  term.onData(function(d){ post('/pty/input',{id:tid, data:d}); });
+  term.onResize(function(s){ if(s.cols>0 && s.rows>0){ post('/pty/resize',{id:tid, cols:s.cols, rows:s.rows}); } });
+  var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid));
+  es.addEventListener('output', function(e){ term.write(b64bytes(e.data)); });
+  es.addEventListener('status', function(e){
+    if(e.data==='exited'){ term.write('\\r\\n\\x1b[2m[process exited]\\x1b[0m\\r\\n'); es.close();
+      var d=document.querySelector('.term-tab[data-tid="'+tid+'"] .tdot'); if(d){d.className='tdot s-exited';} }
+  });
+  setTimeout(sync, 30);
+  return {term:term, fit:fit, sync:sync};
+};
+</script>
+"""
+
 _TERMINAL_JS = """
 <script>
 (function(){
-  function activate(cid){
-    document.querySelectorAll('.term-tab').forEach(function(t){t.classList.toggle('active', t.dataset.cid===cid);});
-    document.querySelectorAll('.term-pane').forEach(function(p){p.classList.toggle('active', p.dataset.cid===cid);});
-    var inp=document.querySelector('.term-pane.active .term-input input');
-    if(inp && !inp.disabled){inp.focus();}
-  }
-  function setStatus(cid, status){
-    var tab=document.querySelector('.term-tab[data-cid="'+cid+'"]');
-    if(tab){var d=tab.querySelector('.tdot'); if(d){d.className='tdot s-'+status;}}
-    var form=document.querySelector('.term-input[data-cid="'+cid+'"]');
-    if(form){form.querySelector('input').disabled=(status==='running');}
-  }
-  function append(cid, ev){
-    if(ev.kind==='status'){setStatus(cid, ev.text); return;}
-    var out=document.getElementById('out-'+cid);
-    if(!out) return;
-    var line=document.createElement('div');
-    line.className='tl tl-'+ev.kind+(ev.is_error?' tl-err':'');
-    if(ev.kind==='user'){line.textContent='\\u276f '+(ev.text||'');}
-    else if(ev.kind==='tool'){line.textContent='\\u2699 '+(ev.tool||'');}
-    else if(ev.kind==='tool_result'){line.textContent='  \\u2514 '+(ev.is_error?'tool error':'tool ok');}
-    else if(ev.kind==='result'){line.textContent=ev.text||'\\u2500 turn complete';}
-    else if(ev.kind==='error'){line.textContent='! '+(ev.text||'error');}
-    else {line.textContent=ev.text||'';}
-    out.appendChild(line); out.scrollTop=out.scrollHeight;
-  }
-  function connect(cid){
-    var es=new EventSource('/stream?session='+encodeURIComponent(cid));
-    es.onmessage=function(e){try{append(cid, JSON.parse(e.data));}catch(_){}};
-  }
-  function send(cid, input){
-    var p=input.value; if(!p.trim()) return; input.value='';
-    fetch('/input',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:'client_id='+encodeURIComponent(cid)+'&prompt='+encodeURIComponent(p)});
+  if(typeof Terminal==='undefined') return;
+  var terms={};
+  document.querySelectorAll('.term-pane').forEach(function(p){
+    terms[p.dataset.tid]=window.horusAttachTerm('x-'+p.dataset.tid, p.dataset.tid);
+  });
+  function activate(tid){
+    document.querySelectorAll('.term-tab').forEach(function(t){t.classList.toggle('active', t.dataset.tid===tid);});
+    document.querySelectorAll('.term-pane').forEach(function(p){p.classList.toggle('active', p.dataset.tid===tid);});
+    var t=terms[tid]; if(t){ t.sync(); t.term.focus(); }
   }
   document.querySelectorAll('.term-tab').forEach(function(t){
-    t.addEventListener('click', function(){activate(t.dataset.cid);});
+    t.addEventListener('click', function(){activate(t.dataset.tid);});
   });
-  document.querySelectorAll('.term-pane').forEach(function(p){
-    var cid=p.dataset.cid; connect(cid); setStatus(cid, p.dataset.status||'idle');
-    var form=p.querySelector('.term-input');
-    if(form){form.addEventListener('submit', function(e){e.preventDefault(); send(cid, form.querySelector('input'));});}
+  document.querySelectorAll('.popout').forEach(function(b){
+    b.addEventListener('click', function(e){ e.stopPropagation();
+      window.open('/pty/term?id='+encodeURIComponent(b.dataset.tid), 'horus-'+b.dataset.tid,
+        'width=940,height=640'); });
+  });
+  window.addEventListener('resize', function(){
+    var a=document.querySelector('.term-pane.active'); if(a&&terms[a.dataset.tid]){terms[a.dataset.tid].sync();}
   });
   var want=new URLSearchParams(location.search).get('tab');
   var first=document.querySelector('.term-tab');
-  if(want && document.querySelector('.term-tab[data-cid="'+want+'"]')){activate(want);}
-  else if(first){activate(first.dataset.cid);}
+  if(want && document.querySelector('.term-tab[data-tid="'+want+'"]')){activate(want);}
+  else if(first){activate(first.dataset.tid);}
 })();
 </script>
 """
+
+
+def render_pty_term_page(term_id: str, title: str = "") -> str:
+    """Standalone full-window page for a single PTY terminal — the pop-out window.
+
+    Just another viewer attaching to the same host-owned session, so the in-panel
+    tab and the pop-out show the same live screen and either can be closed freely."""
+    tid = html.escape(term_id, quote=True)
+    label = html.escape(title or term_id)
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        f"<title>Horus terminal — {label}</title>{_TERMINAL_HEAD}"
+        "<style>html,body{margin:0;height:100%;background:#0b0d12;}"
+        "#term{position:fixed;inset:0;padding:6px;}</style></head><body>"
+        f"<div id='term'></div>{_XTERM_ATTACH_JS}"
+        f"<script>window.horusAttachTerm('term', '{tid}');</script>"
+        "</body></html>"
+    )
 
 
 def render_control(
@@ -1126,21 +1162,21 @@ def render_control(
     accounts: list[dict[str, Any]],
     sessions: list[registry.SessionRecord],
     notice: str = "",
-    app_sessions: list[session_stream.InAppSession] | None = None,
+    terminals: list[pty_host.PtyTerminal] | None = None,
 ) -> str:
     # Live processes only (per the design): a session is "live" while its process runs.
     live = [s for s in sessions if s.status == "running"]
     cards = "".join(_control_session_card(s, accounts) for s in live) or (
-        "<p class='muted'>No windowed sessions. <strong>New window</strong> on a project "
-        "opens the real TUI in its own console; it appears here while it runs.</p>"
+        "<p class='muted'>No windowed sessions. <strong>Separate OS window</strong> on a "
+        "project opens the real TUI in its own console; it appears here while it runs.</p>"
     )
     body = (
-        f"{notice}<div class='control'><div class='sidebar'>"
+        f"{_TERMINAL_HEAD}{notice}<div class='control'><div class='sidebar'>"
         f"{_accounts_panel(accounts)}{_projects_panel(projects, accounts)}</div>"
-        f"<div class='control-main'>{_terminal_panel(app_sessions or [])}"
+        f"<div class='control-main'>{_terminal_panel(terminals or [])}"
         f"<div class='card'><h2>Windowed sessions</h2>"
         f"<div class='sessions-grid'>{cards}</div></div></div></div>"
-        f"{_TERMINAL_JS}"
+        f"{_XTERM_ATTACH_JS}{_TERMINAL_JS}"
     )
     return _page("Horus - Control", body, active="control", wide=True, live=len(live))
 
@@ -1199,13 +1235,16 @@ def process_launch(
             prompt = _resume_prompt_text(load_project(str(project_dir)))
 
     if target == "app":
-        # In-app terminal tab: a fresh session opens idle (waits for the first typed
-        # message); resume seeds the first turn with the continuity prompt.
-        client_id = session_stream.manager.start(
-            agent=agent, project_dir=project_dir, account=account,
-            prompt=(prompt if mode == "resume" else ""),
-        )
-        return f"tab={quote_plus(client_id)}"
+        # In-app terminal: spawn the real agent TUI under a PTY in the session-host.
+        # Fresh opens an empty TUI; resume seeds it with the continuity prompt.
+        try:
+            term_id = pty_host.host.start(
+                agent=agent, project_dir=project_dir, account=account,
+                prompt=(prompt if mode == "resume" else ""),
+            )
+        except (ValueError, adapters.AccountMismatch) as exc:
+            return "error=" + quote_plus(str(exc))
+        return f"tab={quote_plus(term_id)}"
 
     result = launch.launch_interactive(
         agent=agent, project_dir=project_dir, account=account, prompt=prompt,
@@ -1241,12 +1280,25 @@ class _Handler(BaseHTTPRequestHandler):
             notice = _launch_notice(parse_qs(parsed.query))
             self._send(render_control(
                 gather_projects(), gather_accounts(), gather_sessions(),
-                notice, session_stream.manager.sessions(),
+                notice, pty_host.host.terminals(),
             ))
             return
-        if parsed.path == "/stream":
-            client_id = parse_qs(parsed.query).get("session", [""])[0]
-            self._stream_sse(client_id)
+        if parsed.path == "/pty/stream":
+            term_id = parse_qs(parsed.query).get("id", [""])[0]
+            self._stream_sse(term_id)
+            return
+        if parsed.path == "/pty/term":
+            # Pop-out window: a standalone viewer for one host-owned terminal. Render
+            # only for an existing session, using its canonical id (no request value
+            # reaches the page markup -> no injection from the ?id= param).
+            term = pty_host.host.get(parse_qs(parsed.query).get("id", [""])[0])
+            if term is None:
+                self._send(_page("Not found", "<p>Unknown terminal.</p>"), 404)
+                return
+            self._send(render_pty_term_page(term.term_id, term.title))
+            return
+        if parsed.path.startswith("/assets/xterm/"):
+            self._send_asset(parsed.path[len("/assets/xterm/"):])
             return
         if parsed.path == "/project":
             projects = gather_projects()
@@ -1260,9 +1312,30 @@ class _Handler(BaseHTTPRequestHandler):
             return
         self._send(_page("Not found", "<p>Not found.</p>"), 404)
 
-    def _stream_sse(self, client_id: str) -> None:
-        """Stream an in-app session's events as Server-Sent Events until the client
-        disconnects (a broken pipe on write ends the loop)."""
+    _ASSET_TYPES = {".js": "application/javascript", ".css": "text/css"}
+
+    def _send_asset(self, name: str) -> None:
+        """Serve a vendored xterm.js asset (local, no CDN). Name is a bare filename."""
+        if "/" in name or "\\" in name or ".." in name:  # no path traversal
+            self._send(_page("Not found", "<p>Not found.</p>"), 404)
+            return
+        try:
+            data = resources.files("horus").joinpath("assets", "vendor", "xterm", name).read_bytes()
+        except (FileNotFoundError, OSError, ModuleNotFoundError):
+            self._send(_page("Not found", "<p>Not found.</p>"), 404)
+            return
+        ctype = self._ASSET_TYPES.get(name[name.rfind("."):], "application/octet-stream")
+        self.send_response(200)
+        self.send_header("Content-Type", f"{ctype}; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "max-age=86400")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _stream_sse(self, term_id: str) -> None:
+        """Stream a PTY terminal's bytes as Server-Sent Events until the client
+        disconnects (a broken pipe on write ends the loop). The session keeps
+        running on the host — detaching a viewer does not kill the terminal."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -1270,11 +1343,11 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("X-Accel-Buffering", "no")  # don't let a proxy buffer the stream
         self.end_headers()
         try:
-            for frame in session_stream.manager.subscribe(client_id):
+            for frame in pty_host.host.subscribe(term_id):
                 self.wfile.write(frame.encode("utf-8"))
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionError, OSError):
-            return  # client closed the tab; let the handler thread end
+            return  # client detached; the terminal stays alive on the host
 
     def _same_origin(self) -> bool:
         """Reject cross-origin POSTs (CSRF guard for the loopback server).
@@ -1294,22 +1367,37 @@ class _Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length).decode("utf-8", "replace") if length else ""
         return {k: v[0] for k, v in parse_qs(raw).items()}
 
+    def _no_content(self) -> None:
+        self.send_response(204)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_POST(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
-        if parsed.path not in ("/launch", "/input"):
+        if parsed.path not in ("/launch", "/pty/input", "/pty/resize", "/pty/kill"):
             self._send(_page("Not found", "<p>Not found.</p>"), 404)
             return
         if not self._same_origin():
             self._send(_page("Forbidden", "<p>Cross-origin request refused.</p>"), 403)
             return
 
-        if parsed.path == "/input":
-            # A typed terminal turn (fetch from the tab). 204, no body to render.
+        if parsed.path == "/pty/input":
+            # Keystrokes from an xterm tab → the PTY. Bytes are UTF-8 of the data field.
             form = self._read_form()
-            session_stream.manager.send_input(form.get("client_id", ""), form.get("prompt", ""))
-            self.send_response(204)
-            self.send_header("Content-Length", "0")
-            self.end_headers()
+            pty_host.host.write(form.get("id", ""), form.get("data", "").encode("utf-8"))
+            self._no_content()
+            return
+        if parsed.path == "/pty/resize":
+            form = self._read_form()
+            try:
+                pty_host.host.resize(form.get("id", ""), int(form.get("cols", 0)), int(form.get("rows", 0)))
+            except ValueError:
+                pass
+            self._no_content()
+            return
+        if parsed.path == "/pty/kill":
+            pty_host.host.kill(self._read_form().get("id", ""))
+            self._no_content()
             return
 
         query = process_launch(self._read_form())
@@ -1341,7 +1429,7 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
         return
     count = len(config.load_projects())
     print(f"Horus dashboard: http://{host}:{port}  ({count} project(s))")
-    print("Read-only. Press Ctrl+C to stop.")
+    print("Local-only (loopback). Launches in-app terminals on request. Press Ctrl+C to stop.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -59,7 +59,7 @@ def test_control_tab_offline_empty_states(tmp_path, monkeypatch):
     page = dashboard.render_control([], accounts, dashboard.gather_sessions())
     assert "No Claude login detected" in page
     assert "No windowed sessions" in page  # registry-tracked OS-window sessions
-    assert "No in-app sessions yet" in page  # the integrated terminal panel
+    assert "No in-app terminals yet" in page  # the integrated terminal panel
     assert "class=\"active\"" in page  # Control nav highlighted
 
 
@@ -301,33 +301,49 @@ def test_launch_notice_banner():
     assert dashboard._launch_notice({}) == ""
 
 
-def test_process_launch_in_app_opens_terminal_tab(tmp_path, monkeypatch):
+def test_process_launch_in_app_opens_pty_terminal(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     proj = tmp_path / "demo"
     proj.mkdir()
     initialize.init_project(proj, assume_yes=True)
-    # Use a fresh manager so the test is isolated from any module-level state.
-    monkeypatch.setattr(dashboard.session_stream, "manager", dashboard.session_stream.SessionManager())
+    # Stub the host so no real PTY/process is spawned; capture the start args.
+    calls = {}
+
+    def fake_start(**kw):
+        calls.update(kw)
+        return "pty-1"
+
+    monkeypatch.setattr(dashboard.pty_host.host, "start", fake_start)
 
     query = dashboard.process_launch(
         {"project": "0", "mode": "fresh", "agent": "fake", "target": "app"},
         projects=[str(proj)], known_aliases=set(),
     )
-    assert query.startswith("tab=")
-    sessions = dashboard.session_stream.manager.sessions()
-    assert len(sessions) == 1 and sessions[0].agent == "fake"
-    assert str(sessions[0].project_dir) == str(proj)
+    assert query == "tab=pty-1"
+    assert calls["agent"] == "fake" and str(calls["project_dir"]) == str(proj)
 
 
-def test_terminal_panel_renders_tabs_and_stream_wiring(tmp_path, monkeypatch):
+def test_terminal_panel_renders_xterm_wiring(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
-    monkeypatch.setattr(dashboard.session_stream, "manager", dashboard.session_stream.SessionManager())
-    cid = dashboard.session_stream.manager.start(agent="fake", project_dir=tmp_path, prompt="")
-    page = dashboard.render_control([], [], [], app_sessions=dashboard.session_stream.manager.sessions())
-    assert f"data-cid='{cid}'" in page          # a tab + pane for the session
-    assert f"out-{cid}" in page                  # its output target
-    assert "EventSource('/stream?session=" in page  # SSE wiring in the client JS
-    assert "fetch('/input'" in page              # typed-turn wiring
+    term = dashboard.pty_host.PtyTerminal(
+        term_id="pty-7", agent="claude", project_dir=tmp_path, title="demo · work",
+    )
+    page = dashboard.render_control([], [], [], terminals=[term])
+    assert "data-tid='pty-7'" in page                  # a tab + pane for the terminal
+    assert "id='x-pty-7'" in page                       # the xterm mount point
+    assert "/assets/xterm/xterm.js" in page             # vendored xterm.js loaded (no CDN)
+    assert "EventSource('/pty/stream?id='" in page      # SSE byte stream wiring
+    assert "/pty/input" in page and "/pty/resize" in page  # keystroke + resize wiring
+    assert "horusAttachTerm" in page                    # shared attach fn (panel + pop-out)
+    assert "class='popout linkbtn' data-tid='pty-7'" in page  # pop-out control per terminal
+
+
+def test_pty_term_page_is_a_standalone_viewer():
+    page = dashboard.render_pty_term_page("pty-9", "demo · work")
+    assert "<!doctype html>" in page
+    assert "/assets/xterm/xterm.js" in page                       # same vendored xterm
+    assert "window.horusAttachTerm('term', 'pty-9')" in page      # attaches the same session
+    assert "demo · work" in page                                  # window title
 
 
 def test_process_launch_fresh_by_project_index(tmp_path, monkeypatch):
