@@ -32,6 +32,7 @@ from horus import (
     registry,
     roadmap,
     routines,
+    session_stream,
 )
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
@@ -302,6 +303,35 @@ form.acct-launch { margin-left: auto; }
 .banner { border-radius: 8px; padding: 9px 13px; margin: 0 0 16px; font-size: 13px; }
 .banner.ok { background: #15281d; border: 1px solid #1f5138; color: #aee9c8; }
 .banner.err { background: #2e1b1b; border: 1px solid #5c2a2a; color: #f0b3b3; }
+button.start.primary { width: 100%; text-align: center; padding: 7px 10px; font-size: 13px; }
+button.linkbtn { display: block; margin: 6px 0 0; padding: 0; background: none; border: none;
+            color: #8a93a6; font: inherit; font-size: 11px; cursor: pointer; text-decoration: underline dotted; }
+button.linkbtn:hover { color: #b9c2d0; }
+.control-main { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.termpanel { min-width: 0; }
+.term-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid #232733;
+            margin: 6px 0 0; padding-bottom: 0; }
+.term-tab { font: inherit; font-size: 12px; cursor: pointer; color: #b9c2d0; background: #12141b;
+            border: 1px solid #232733; border-bottom: none; border-radius: 7px 7px 0 0;
+            padding: 6px 12px; display: flex; align-items: center; gap: 7px; margin-bottom: -1px; }
+.term-tab.active { background: #0b0d12; color: #e6e6e6; border-color: #284058; }
+.tdot { width: 8px; height: 8px; border-radius: 50%; background: #3a4151; display: inline-block; }
+.tdot.s-running { background: #57d39a; animation: livepulse 1.6s ease-in-out infinite; }
+.tdot.s-idle { background: #6db3f2; } .tdot.s-failed { background: #f08a8a; }
+.tdot.s-exited { background: #3a4151; }
+.term-pane { display: none; flex-direction: column; background: #0b0d12; border: 1px solid #284058;
+            border-radius: 0 8px 8px 8px; }
+.term-pane.active { display: flex; }
+.term-out { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12.5px;
+            line-height: 1.55; padding: 12px 14px; height: 340px; overflow-y: auto; white-space: pre-wrap;
+            overflow-wrap: anywhere; }
+.tl { margin: 1px 0; } .tl-user { color: #6db3f2; font-weight: 600; }
+.tl-tool { color: #e6c35c; } .tl-tool_result { color: #8a93a6; }
+.tl-result { color: #57d39a; margin-top: 4px; } .tl-err, .tl-error { color: #f08a8a; }
+.term-input { display: flex; gap: 8px; border-top: 1px solid #232733; padding: 10px 12px; }
+.term-input input { flex: 1; background: #12141b; color: #e6e6e6; border: 1px solid #284058;
+            border-radius: 6px; padding: 7px 10px; font: inherit; font-size: 13px; }
+.term-input input:disabled { opacity: .5; }
 """
 
 _LEVEL_CLASS = {"ok": "health-ok", "warn": "health-warn", "fail": "health-fail"}
@@ -857,13 +887,13 @@ def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
 
 
 def _account_launch_form(alias: str) -> str:
-    """A one-click "fresh session as this account" button (opens in your home dir)."""
+    """A one-click "fresh session as this account" button (opens an in-app tab)."""
     return (
         "<form class='acct-launch' method='post' action='/launch'>"
         f"<input type='hidden' name='account' value='{html.escape(alias, quote=True)}'>"
         "<input type='hidden' name='mode' value='fresh'>"
-        "<button class='start' type='submit' title='Open a fresh session as this account'>"
-        "+ session</button></form>"
+        "<button class='start' type='submit' name='target' value='app' "
+        "title='Open a fresh in-app session as this account'>+ session</button></form>"
     )
 
 
@@ -893,9 +923,13 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
         "<label><input type='radio' name='mode' value='fresh' checked> Fresh session</label>"
         "<label><input type='radio' name='mode' value='resume'> Resume (inject continuity prompt)</label>"
         "</div>"
-        "<button class='start' type='submit'>Launch &#9654;</button>"
+        "<button class='start primary' type='submit' name='target' value='app'>"
+        "&#9654; Open terminal in app</button>"
+        "<button class='linkbtn' type='submit' name='target' value='window' "
+        "title='Open the real claude TUI in its own OS console window'>"
+        "or open in a separate OS window &#10697;</button>"
         "</form>"
-        "<details class='or-cmds'><summary>&#8230; or run it in your own terminal</summary>"
+        "<details class='or-cmds'><summary>&#8230; or copy a terminal command</summary>"
         f"<div class='launch-body'>{_launch_cmds(project['path'], accounts)}</div></details>"
     )
 
@@ -980,15 +1014,111 @@ def _reopen_html(rec: registry.SessionRecord) -> str:
 
 def _launch_notice(params: dict[str, list[str]]) -> str:
     """Banner shown after a launch POST redirects back to /control."""
+    if "tab" in params:
+        return (
+            "<div class='banner ok'>Session opened in the terminal panel below "
+            "&mdash; type to drive it.</div>"
+        )
     if "launched" in params:
         sid = html.escape(params["launched"][0])
         return (
             f"<div class='banner ok'>Launched session <code>{sid}</code> in a new "
-            "terminal &mdash; it appears below once its process is up.</div>"
+            "window &mdash; it appears under Live sessions once its process is up.</div>"
         )
     if "error" in params:
         return f"<div class='banner err'>Launch failed: {html.escape(params['error'][0])}</div>"
     return ""
+
+
+def _terminal_panel(app_sessions: list[session_stream.InAppSession]) -> str:
+    """The integrated terminal: a tab + streaming transcript per in-app session.
+
+    Each session runs the agent headless inside the dashboard process; its events
+    stream here over SSE (see ``session_stream``). A transcript, not the raw TUI —
+    the xterm.js + ConPTY upgrade is deferred (kept zero-dependency on purpose)."""
+    if not app_sessions:
+        empty = (
+            "<p class='muted'>No in-app sessions yet. Use <strong>Launch in app</strong> "
+            "on a project, or <strong>+ session</strong> on an account, and it opens here "
+            "as a terminal tab you can type into.</p>"
+        )
+        return f"<div class='card termpanel'><h2>Terminal</h2>{empty}</div>"
+
+    tabs, panes = [], []
+    for s in app_sessions:
+        cid = html.escape(s.client_id, quote=True)
+        title = html.escape(s.title or s.client_id)
+        tabs.append(
+            f"<button class='term-tab' data-cid='{cid}'>"
+            f"<span class='tdot s-{html.escape(s.status)}'></span> {title}</button>"
+        )
+        panes.append(
+            f"<div class='term-pane' data-cid='{cid}' data-status='{html.escape(s.status)}'>"
+            f"<div class='term-out' id='out-{cid}'></div>"
+            f"<form class='term-input' data-cid='{cid}'>"
+            "<input type='text' autocomplete='off' placeholder='type a message and press Enter…'>"
+            "<button class='start' type='submit'>Send</button></form></div>"
+        )
+    return (
+        "<div class='card termpanel'><h2>Terminal</h2>"
+        f"<div class='term-tabs'>{''.join(tabs)}</div>"
+        f"<div class='term-panes'>{''.join(panes)}</div></div>"
+    )
+
+
+_TERMINAL_JS = """
+<script>
+(function(){
+  function activate(cid){
+    document.querySelectorAll('.term-tab').forEach(function(t){t.classList.toggle('active', t.dataset.cid===cid);});
+    document.querySelectorAll('.term-pane').forEach(function(p){p.classList.toggle('active', p.dataset.cid===cid);});
+    var inp=document.querySelector('.term-pane.active .term-input input');
+    if(inp && !inp.disabled){inp.focus();}
+  }
+  function setStatus(cid, status){
+    var tab=document.querySelector('.term-tab[data-cid="'+cid+'"]');
+    if(tab){var d=tab.querySelector('.tdot'); if(d){d.className='tdot s-'+status;}}
+    var form=document.querySelector('.term-input[data-cid="'+cid+'"]');
+    if(form){form.querySelector('input').disabled=(status==='running');}
+  }
+  function append(cid, ev){
+    if(ev.kind==='status'){setStatus(cid, ev.text); return;}
+    var out=document.getElementById('out-'+cid);
+    if(!out) return;
+    var line=document.createElement('div');
+    line.className='tl tl-'+ev.kind+(ev.is_error?' tl-err':'');
+    if(ev.kind==='user'){line.textContent='\\u276f '+(ev.text||'');}
+    else if(ev.kind==='tool'){line.textContent='\\u2699 '+(ev.tool||'');}
+    else if(ev.kind==='tool_result'){line.textContent='  \\u2514 '+(ev.is_error?'tool error':'tool ok');}
+    else if(ev.kind==='result'){line.textContent=ev.text||'\\u2500 turn complete';}
+    else if(ev.kind==='error'){line.textContent='! '+(ev.text||'error');}
+    else {line.textContent=ev.text||'';}
+    out.appendChild(line); out.scrollTop=out.scrollHeight;
+  }
+  function connect(cid){
+    var es=new EventSource('/stream?session='+encodeURIComponent(cid));
+    es.onmessage=function(e){try{append(cid, JSON.parse(e.data));}catch(_){}};
+  }
+  function send(cid, input){
+    var p=input.value; if(!p.trim()) return; input.value='';
+    fetch('/input',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'client_id='+encodeURIComponent(cid)+'&prompt='+encodeURIComponent(p)});
+  }
+  document.querySelectorAll('.term-tab').forEach(function(t){
+    t.addEventListener('click', function(){activate(t.dataset.cid);});
+  });
+  document.querySelectorAll('.term-pane').forEach(function(p){
+    var cid=p.dataset.cid; connect(cid); setStatus(cid, p.dataset.status||'idle');
+    var form=p.querySelector('.term-input');
+    if(form){form.addEventListener('submit', function(e){e.preventDefault(); send(cid, form.querySelector('input'));});}
+  });
+  var want=new URLSearchParams(location.search).get('tab');
+  var first=document.querySelector('.term-tab');
+  if(want && document.querySelector('.term-tab[data-cid="'+want+'"]')){activate(want);}
+  else if(first){activate(first.dataset.cid);}
+})();
+</script>
+"""
 
 
 def render_control(
@@ -996,17 +1126,21 @@ def render_control(
     accounts: list[dict[str, Any]],
     sessions: list[registry.SessionRecord],
     notice: str = "",
+    app_sessions: list[session_stream.InAppSession] | None = None,
 ) -> str:
     # Live processes only (per the design): a session is "live" while its process runs.
     live = [s for s in sessions if s.status == "running"]
     cards = "".join(_control_session_card(s, accounts) for s in live) or (
-        "<p class='muted'>No live sessions. Launch one from an account or project on "
-        "the left; it appears here while its process runs.</p>"
+        "<p class='muted'>No windowed sessions. <strong>New window</strong> on a project "
+        "opens the real TUI in its own console; it appears here while it runs.</p>"
     )
     body = (
         f"{notice}<div class='control'><div class='sidebar'>"
         f"{_accounts_panel(accounts)}{_projects_panel(projects, accounts)}</div>"
-        f"<div class='sessions-grid'>{cards}</div></div>"
+        f"<div class='control-main'>{_terminal_panel(app_sessions or [])}"
+        f"<div class='card'><h2>Windowed sessions</h2>"
+        f"<div class='sessions-grid'>{cards}</div></div></div></div>"
+        f"{_TERMINAL_JS}"
     )
     return _page("Horus - Control", body, active="control", wide=True, live=len(live))
 
@@ -1032,7 +1166,9 @@ def process_launch(
     known_aliases: set[str] | None = None,
 ) -> str:
     """Handle a Control-tab launch request; return the query string to redirect
-    ``/control`` to (``launched=<id8>`` or ``error=<reason>``).
+    ``/control`` to. ``target=app`` (default) opens an in-app terminal tab
+    (``tab=<client_id>``); ``target=window`` opens an OS console (``launched=<id8>``).
+    Failures return ``error=<reason>``.
 
     Safety mirrors the read surface: a project is addressed by its **index** into
     the registered list (never an arbitrary path), and an account must be in the
@@ -1047,6 +1183,7 @@ def process_launch(
         return "error=" + quote_plus("unknown account")
 
     mode = (form.get("mode") or "fresh").strip()
+    target = (form.get("target") or "app").strip()
     agent = (form.get("agent") or "claude").strip()
     raw_project = (form.get("project") or "").strip()
 
@@ -1060,6 +1197,15 @@ def process_launch(
             return "error=" + quote_plus("unknown project")
         if mode == "resume":
             prompt = _resume_prompt_text(load_project(str(project_dir)))
+
+    if target == "app":
+        # In-app terminal tab: a fresh session opens idle (waits for the first typed
+        # message); resume seeds the first turn with the continuity prompt.
+        client_id = session_stream.manager.start(
+            agent=agent, project_dir=project_dir, account=account,
+            prompt=(prompt if mode == "resume" else ""),
+        )
+        return f"tab={quote_plus(client_id)}"
 
     result = launch.launch_interactive(
         agent=agent, project_dir=project_dir, account=account, prompt=prompt,
@@ -1093,7 +1239,14 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/control":
             notice = _launch_notice(parse_qs(parsed.query))
-            self._send(render_control(gather_projects(), gather_accounts(), gather_sessions(), notice))
+            self._send(render_control(
+                gather_projects(), gather_accounts(), gather_sessions(),
+                notice, session_stream.manager.sessions(),
+            ))
+            return
+        if parsed.path == "/stream":
+            client_id = parse_qs(parsed.query).get("session", [""])[0]
+            self._stream_sse(client_id)
             return
         if parsed.path == "/project":
             projects = gather_projects()
@@ -1106,6 +1259,22 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(render_project(project))
             return
         self._send(_page("Not found", "<p>Not found.</p>"), 404)
+
+    def _stream_sse(self, client_id: str) -> None:
+        """Stream an in-app session's events as Server-Sent Events until the client
+        disconnects (a broken pipe on write ends the loop)."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("X-Accel-Buffering", "no")  # don't let a proxy buffer the stream
+        self.end_headers()
+        try:
+            for frame in session_stream.manager.subscribe(client_id):
+                self.wfile.write(frame.encode("utf-8"))
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionError, OSError):
+            return  # client closed the tab; let the handler thread end
 
     def _same_origin(self) -> bool:
         """Reject cross-origin POSTs (CSRF guard for the loopback server).
@@ -1120,18 +1289,30 @@ class _Handler(BaseHTTPRequestHandler):
         host = self.headers.get("Host", "")
         return origin in (f"http://{host}", f"https://{host}")
 
+    def _read_form(self) -> dict[str, str]:
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length).decode("utf-8", "replace") if length else ""
+        return {k: v[0] for k, v in parse_qs(raw).items()}
+
     def do_POST(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
-        if parsed.path != "/launch":
+        if parsed.path not in ("/launch", "/input"):
             self._send(_page("Not found", "<p>Not found.</p>"), 404)
             return
         if not self._same_origin():
             self._send(_page("Forbidden", "<p>Cross-origin request refused.</p>"), 403)
             return
-        length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(length).decode("utf-8", "replace") if length else ""
-        form = {k: v[0] for k, v in parse_qs(raw).items()}
-        query = process_launch(form)
+
+        if parsed.path == "/input":
+            # A typed terminal turn (fetch from the tab). 204, no body to render.
+            form = self._read_form()
+            session_stream.manager.send_input(form.get("client_id", ""), form.get("prompt", ""))
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        query = process_launch(self._read_form())
         # 303 -> GET /control so a refresh doesn't re-submit the launch (PRG pattern).
         self.send_response(303)
         self.send_header("Location", f"/control?{query}")
