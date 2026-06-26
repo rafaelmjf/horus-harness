@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import date, datetime
@@ -452,6 +453,74 @@ def _read_hook_stdin() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _is_host_restart_command(command: str, host_pid: str) -> bool:
+    """True when a hosted session's Bash command would kill/restart its own host.
+
+    Conservative — only clear matches block, so a benign command is never wedged.
+    The recognised spellings are OS-flavoured *data* (POSIX kill verbs + Windows
+    taskkill/Stop-Process), not platform code, so this stays cross-OS by design."""
+    lowered = command.lower()
+    # Relaunching the Horus app/dashboard from inside its own host.
+    if re.search(r"\bhorus\b.*\b(app|dashboard)\b", lowered) or re.search(
+        r"-m\s+horus\s+(app|dashboard)\b", lowered
+    ):
+        return True
+    # A kill verb aimed at the host PID specifically.
+    kill_verb = r"(taskkill|stop-process|\bkill\b|pkill|killall)"
+    if host_pid and re.search(rf"{kill_verb}.*\b{re.escape(host_pid)}\b", lowered):
+        return True
+    # A kill verb aimed at the process that *is* the host: the Python interpreter, or
+    # the host identified by name (`horus` / `dashboard`).
+    if re.search(rf"{kill_verb}.*(\bpython(w)?(\.exe)?\b|\bhorus\b|\bdashboard\b)", lowered):
+        return True
+    return False
+
+
+def _guard_host_hook(root: Path) -> int:
+    """PreToolUse gate: refuse a Bash command that would kill/restart the Horus
+    dashboard process *when run from inside a Horus-hosted PTY session*.
+
+    The footgun (history.md): an in-app agent restarted the app it was hosted in and
+    killed itself mid-task. ``pty_host`` marks hosted sessions with
+    ``HORUS_HOSTED_SESSION`` + ``HORUS_PTY_HOST_PID`` in the env, which this hook (a
+    child of the agent's shell) inherits. Outside a hosted session it does nothing, so
+    normal terminals are unaffected. Errs toward *allowing* (never wedge the user)."""
+    if os.environ.get("HORUS_HOSTED_SESSION") != "1":
+        return 0  # not inside a Horus-hosted PTY — leave everything alone
+    hook_input = _read_hook_stdin()
+    tool = hook_input.get("tool_name") or hook_input.get("toolName") or ""
+    tool_input = hook_input.get("tool_input") or hook_input.get("toolInput") or {}
+    command = str(tool_input.get("command", "")) if isinstance(tool_input, dict) else ""
+    if tool != "Bash" or not command:
+        return 0
+    host_pid = os.environ.get("HORUS_PTY_HOST_PID", "")
+    if not _is_host_restart_command(command, host_pid):
+        return 0
+
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": templates.HOSTED_RESTART_INSTRUCTION,
+        }
+    }))
+    return 0
+
+
+def cmd_guard_host(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    if getattr(args, "hook", False):
+        return _guard_host_hook(root)
+    # Non-hook invocation: report whether this shell is inside a Horus-hosted session.
+    if os.environ.get("HORUS_HOSTED_SESSION") == "1":
+        pid = os.environ.get("HORUS_PTY_HOST_PID", "?")
+        print(f"Inside a Horus-hosted PTY session (host process PID {pid}).")
+        print("Do not restart/kill the Horus app from here — it would kill this session.")
+    else:
+        print("Not inside a Horus-hosted PTY session.")
+    return 0
+
+
 def _usage_check_claude(args: argparse.Namespace) -> int:
     report = claude_usage.latest_usage()
     findings = claude_usage.usage_findings(threshold=args.threshold, report=report)
@@ -509,7 +578,8 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
     if args.target == "codex":
         if kind not in ("usage", "all"):
             print("Codex supports only the usage hook (use --kind usage). The pre-merge")
-            print("closure gate is a Claude PreToolUse hook (--target claude --kind merge).")
+            print("closure gate and the hosted-session guard are Claude PreToolUse hooks")
+            print("(--target claude --kind merge|guard).")
             return 2
         action = native_hooks.install_codex_usage_hook(root, threshold=args.threshold)
         print(f"[{action.status}] {action.message}")
@@ -527,6 +597,12 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
             print("PreToolUse gate on `gh pr merge`: blocks the merge while the .horus lanes")
             print("are stale and diverts the session to horus-consolidate first. Clears once")
             print("`horus close --check` passes, so a re-run of the merge proceeds.")
+        if kind in ("guard", "all"):
+            action = native_hooks.install_claude_guard_hook(root)
+            print(f"[{action.status}] {action.message}")
+            print("PreToolUse gate: inside a Horus-hosted PTY session, blocks a Bash command")
+            print("that would restart/kill the dashboard process hosting the session (so an")
+            print("in-app agent can't kill itself). No effect outside a hosted session.")
         return 0
     print(f"unsupported hook target: {args.target}")
     return 2
@@ -794,6 +870,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_close.set_defaults(func=cmd_close)
 
+    p_guard = sub.add_parser(
+        "guard-host",
+        help="guard a Horus-hosted PTY session from restarting/killing its own host",
+    )
+    p_guard.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_guard.add_argument(
+        "--hook", action="store_true",
+        help="PreToolUse hook mode: read a Bash tool call from stdin and block a "
+             "command that would kill/restart the host while inside a hosted session",
+    )
+    p_guard.set_defaults(func=cmd_guard_host)
+
     p_usage = sub.add_parser("usage", help="inspect native app usage signals")
     usage_sub = p_usage.add_subparsers(dest="usage_cmd", required=True)
     p_usage_check = usage_sub.add_parser("check", help="check whether usage is near a closure threshold")
@@ -821,9 +909,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_hook_install.add_argument("--path", default=".", help="project root (default: cwd)")
     p_hook_install.add_argument("--target", choices=("codex", "claude"), required=True, help="native app target")
     p_hook_install.add_argument(
-        "--kind", choices=("usage", "merge", "all"), default="usage",
+        "--kind", choices=("usage", "merge", "guard", "all"), default="usage",
         help="which hook(s): usage = quota→closure (default); merge = Claude PreToolUse "
-             "gate on `gh pr merge`; all = both. merge is Claude-only.",
+             "gate on `gh pr merge`; guard = Claude PreToolUse gate that stops a hosted "
+             "session restarting/killing its own host; all = every applicable hook. "
+             "merge and guard are Claude-only.",
     )
     p_hook_install.add_argument(
         "--threshold",

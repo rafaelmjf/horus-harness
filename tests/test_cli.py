@@ -460,3 +460,68 @@ def test_merge_hook_ignores_non_bash_tool(monkeypatch, capsys):
         findings=[("fail", "lanes stale")],
     )
     assert rc == 0 and out.strip() == ""
+
+
+# --- hosted-session self-restart guard (`horus guard-host --hook`) ---
+
+def _guard_hook_run(monkeypatch, capsys, *, command, hosted=True, host_pid="4242", tool="Bash"):
+    from pathlib import Path
+
+    from horus import cli
+
+    if hosted:
+        monkeypatch.setenv("HORUS_HOSTED_SESSION", "1")
+        monkeypatch.setenv("HORUS_PTY_HOST_PID", host_pid)
+    else:
+        monkeypatch.delenv("HORUS_HOSTED_SESSION", raising=False)
+        monkeypatch.delenv("HORUS_PTY_HOST_PID", raising=False)
+    monkeypatch.setattr(cli, "_read_hook_stdin",
+                        lambda: {"tool_name": tool, "tool_input": {"command": command}})
+    rc = cli._guard_host_hook(Path("."))
+    return rc, capsys.readouterr().out
+
+
+def _assert_denied(rc, out):
+    assert rc == 0
+    hso = json.loads(out)["hookSpecificOutput"]
+    assert hso["hookEventName"] == "PreToolUse"
+    assert hso["permissionDecision"] == "deny"
+    assert "hosted" in hso["permissionDecisionReason"].lower()
+
+
+def test_guard_blocks_app_relaunch_when_hosted(monkeypatch, capsys):
+    _assert_denied(*_guard_hook_run(monkeypatch, capsys, command="horus app"))
+
+
+def test_guard_blocks_dashboard_relaunch_via_module(monkeypatch, capsys):
+    _assert_denied(*_guard_hook_run(monkeypatch, capsys, command="python -m horus dashboard"))
+
+
+def test_guard_blocks_taskkill_of_python(monkeypatch, capsys):
+    _assert_denied(*_guard_hook_run(monkeypatch, capsys, command="taskkill /F /IM python.exe"))
+
+
+def test_guard_blocks_kill_of_host_pid(monkeypatch, capsys):
+    _assert_denied(*_guard_hook_run(monkeypatch, capsys, command="kill -9 4242", host_pid="4242"))
+
+
+def test_guard_blocks_kill_of_host_by_name(monkeypatch, capsys):
+    for cmd in ("pkill -f horus", "taskkill /F /FI \"WINDOWTITLE eq horus dashboard\""):
+        _assert_denied(*_guard_hook_run(monkeypatch, capsys, command=cmd))
+
+
+def test_guard_allows_benign_command_when_hosted(monkeypatch, capsys):
+    for cmd in ("git commit -m x", "ls -la", "gh pr merge 15", "kill -9 999"):
+        rc, out = _guard_hook_run(monkeypatch, capsys, command=cmd, host_pid="4242")
+        assert rc == 0 and out.strip() == "", cmd
+
+
+def test_guard_noop_outside_hosted_session(monkeypatch, capsys):
+    # The very commands that would be blocked inside a host are untouched elsewhere.
+    rc, out = _guard_hook_run(monkeypatch, capsys, command="horus app", hosted=False)
+    assert rc == 0 and out.strip() == ""
+
+
+def test_guard_ignores_non_bash_tool(monkeypatch, capsys):
+    rc, out = _guard_hook_run(monkeypatch, capsys, command="horus app", tool="Edit")
+    assert rc == 0 and out.strip() == ""
