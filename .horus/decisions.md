@@ -706,3 +706,35 @@ Reasoning / consequence:
   latency optimization for later, not required for a human-paced terminal. base64-framing keeps
   control bytes intact. Verified live: real `claude` TUI renders; keystrokes reach the PTY; two
   concurrent viewers share one session.
+
+## 2026-06-26 - Closure Freshness Is Gated (LLM Authors, Python Detects); the PR Hook Is Pre-Merge
+
+The closure ritual kept leaving stale lanes (e.g. `project.md current_focus` stale since
+before MVP3; a growing done-items/undistilled-sessions backlog) even though it ran several
+times. Root causes: per-session close and backlog cleanup were **conflated** (so the heavy
+backlog half was always deferred), the ritual never enumerated **what the dashboard reads**
+(so fields rotted), and **nothing failed** on staleness (so drift was invisible).
+
+Decision — fix it without breaking "the session agent maintains the lanes, not scripts"
+([[horus-locked-decisions]]): keep **LLM authoring**, add **deterministic detection**.
+
+- **`routines.freshness_signals` + `horus close --check`** (`closure.freshness_gate`):
+  detect (never author) when a dashboard field is stale — lane `last_updated` < newest
+  session, empty `next_action`/`next_prompt`/`current_focus`, `next_action` matching a
+  Shipped capability (≥3 shared tokens to avoid context-mention false positives). `--check`
+  exits non-zero, so closure isn't "done" until the dashboard is fresh. Scoped to
+  dashboard-freshness — usage/drift and the mtime-nagging work-commits signal stay in the
+  full `horus close` (the latter would otherwise nag within the very session being closed).
+- **Skill v3 + CLOSURE_PROMPT**: an explicit **dashboard-contract checklist** (the exact
+  rendered fields) and a **per-session-close vs backlog-consolidation split** — the
+  structural fix for "the ritual got half-done because the backlog looked huge." Per-session
+  close runs every time and is bounded; the backlog pass is opt-in.
+
+The PR hook (user's idea): **a PRE-merge gate, not a post-merge action.** Closure *authoring*
+needs the live session context, which exists *before* merge; a merge-time hook has no context
+(the rejected brittle path) and could only run deterministic stubs or a context-poor diff
+reader. So the same `horus close --check` runs as an **advisory** CI check on PRs
+(`.github/workflows/continuity.yml`) — annotates rather than blocks, since `.horus/sessions/`
+is gitignored and absent on CI (so CI sees the committed-lane subset + a "code changed without
+lane update" git heuristic). Promote to required by dropping the warning fallbacks. The
+post-merge *autonomous spawn* (Horus spawns the closer) remains the deferred, weaker option.

@@ -1,0 +1,39 @@
+name: continuity
+
+# Pre-merge closure gate: nudge that a PR closed its Horus session — the dashboard's
+# lanes reflect the change before it lands on main. Closure *authoring* is in-session
+# (the agent has the context); this just verifies the committed result at the PR
+# boundary. ADVISORY for now — it annotates, never blocks (`.horus/sessions/` is
+# gitignored so CI can't run the full local freshness check). Promote to a required
+# gate by removing the `|| echo "::warning::..."` fallbacks once it's proven.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need the base ref for the diff heuristic
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e .  # pywinpty is win-only/conditional; stdlib pty on Linux
+      - name: Dashboard-freshness check
+        run: |
+          python -m horus close --check \
+            || echo "::warning::Continuity lanes look stale — run the horus-consolidate skill so the dashboard reflects this work."
+      - name: Code-changed-without-continuity heuristic
+        run: |
+          base="origin/${{ github.base_ref }}"
+          changed=$(git diff --name-only "$base"...HEAD || true)
+          work=$(echo "$changed" | grep -E '\.py$' | grep -vE '^\.horus/' || true)
+          lanes=$(echo "$changed" | grep -E '^\.horus/(project|roadmap|features)\.md$' || true)
+          if [ -n "$work" ] && [ -z "$lanes" ]; then
+            echo "::warning::This PR changes code but updates none of .horus/{project,roadmap,features}.md — did you close the session (horus-consolidate)?"
+          else
+            echo "continuity: ok (lanes updated alongside the code, or no code change)"
+          fi

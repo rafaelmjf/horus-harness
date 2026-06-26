@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "MVP4 'unified terminal' shipped on `app-consolidation` (PR pending): the Control tab now launches real agent sessions and hosts them as **in-app terminals** — the actual `claude` TUI under a pseudo-terminal (PTY), rendered with xterm.js inside the dashboard. PR #11 (merged) added the launch buttons + the dashboard's first POST surface (`/launch`, shared `horus/launch.py`). This branch adds the cross-platform PTY (`pywinpty`/stdlib `pty`), a persistent re-attachable **session-host** (`pty_host.py`), and **pop-out** (a session in its own window = a second viewer). The single biggest open de-risk is the **Codex adapter** — the vendor-neutral contract is still proven only at N=1 (Claude), and the terminal/launch path needs it to be multi-agent."
+current_focus: "MVP4 'unified terminal' is merged: the Control tab launches real agent sessions and hosts them as **in-app terminals** — the actual `claude` TUI under a PTY, rendered with xterm.js, persistent + re-attachable + pop-outable. The closure ritual was then **hardened** (branch `closure-freshness`): a deterministic freshness gate (`horus close --check`) + a sharper `horus-consolidate` skill (v3: explicit dashboard-contract checklist + per-session/backlog split) + an advisory PR continuity CI, so the dashboard's lanes can't silently go stale. The single biggest open de-risk remains the **Codex adapter** — the vendor-neutral contract is proven only at N=1 (Claude). Continuity stays the headline; resist over-building the terminal/IDE layer."
 next_action: "Build the Codex adapter (horus/adapters/codex.py) against horus/adapters/base.py, with ClaudeAdapter as the reference — it proves the vendor-neutral contract (unproven at N=1) and makes the in-app terminal + launch + Control tab genuinely multi-agent. It needs interactive_command (the PTY terminal reuses it) + build_env (CODEX_HOME per account) + parse_event. Probe the real codex CLI for exec/resume flags + event-stream format; don't guess."
 next_prompt: "Resume Horus. FIRST run `git fetch --all --prune` and verify branch state from the REMOTE (local refs lie — see history.md). MVP4 in-app terminal is merged: dashboard launches real claude TUIs via a cross-platform PTY (horus/pty_session.py) hosted in a persistent, re-attachable, pop-outable session-host (horus/pty_host.py), rendered with vendored xterm.js. Start a FRESH branch off main and PR it (squash-merge, auto-delete). Read .horus/ lanes + the latest .horus/sessions/ summary. Next slice: the **Codex adapter** (horus/adapters/codex.py) mirroring ClaudeAdapter — implement permission_flags/build_command/build_env(CODEX_HOME)/parse_event/interactive_command, register in adapters.get_adapter, probe the real `codex` CLI (don't guess), and confirm a Codex session launches in the in-app terminal. Also pending (own session): the continuity-debt pass (~74 done roadmap items, ~44 missing features rows, ~34 sessions to distill)."
 last_updated: 2026-06-26
@@ -399,13 +399,31 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
   per project/account, warn on scripts/hooks/MCP/auto-approve, never silently install a
   personal-sourced skill into a work account (projecting into N agents multiplies blast radius).
 
+## Closure ritual hardening (shipped 2026-06-26)
+
+> Why: lanes drifted (stale `current_focus`, growing backlog) despite the ritual
+> running several times. Fix keeps LLM-authors / Python-detects. See features.md
+> ("Closure freshness gate", "Continuity PR check") + decisions.md.
+
+- [x] **`horus close --check`** freshness gate (`routines.freshness_signals` +
+  `closure.freshness_gate`) — non-zero while a dashboard field is stale. → features.md
+- [x] **`horus-consolidate` skill v3** — explicit dashboard-contract checklist +
+  per-session-close vs backlog-consolidation split (the structural reason the ritual
+  got half-done). Mirrored in `templates.py` CLOSURE_PROMPT.
+- [x] **Advisory PR continuity CI** (`.github/workflows/continuity.yml`) — the
+  pre-merge closure nudge. → features.md
+- [ ] Promote the CI check from advisory to a required gate once proven (drop the
+  `|| echo ::warning::` fallbacks).
+
 ## Later
 
-- [ ] **Consolidation pass (continuity debt).** `horus consolidate` reports ~34
-  roadmap↔features overlaps and 36 done roadmap items without a `features.md` row
-  (accumulated drift). Move shipped capabilities (incl. all of MVP2.5) into
-  `features.md`, cross-reference each split, and prune done roadmap items. Sizable;
-  do it as a dedicated pass, not mid-feature.
+- [ ] **One-time continuity-debt paydown (now tooled).** The drift backlog: `horus
+  consolidate` reports ~39 roadmap↔features overlaps, ~44 done items without a
+  `features.md` row, ~35 sessions to distill. Now a clean, supported job (skill v3's
+  "backlog consolidation" mode + `horus close --check` to verify). Distill old sessions,
+  move shipped capabilities into `features.md`, cross-reference each split, prune done
+  roadmap items — so the freshly-hardened ritual starts from a clean baseline. Sizable;
+  dedicated pass, not mid-feature.
 - [ ] Optional Telegram bridge.
 - [ ] Optional Tailscale-exposed dashboard.
 - [ ] Optional VM/worker mode.

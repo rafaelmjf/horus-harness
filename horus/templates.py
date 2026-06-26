@@ -234,20 +234,29 @@ What this session set out to do and what happened.
 """
 
 
-CLOSURE_PROMPT = """Closure ritual - update project continuity before ending this session:
+CLOSURE_PROMPT = """Closure ritual - make the dashboard reflect THIS session before ending it.
+(For the full context-aware version, run the `horus-consolidate` skill — it sees this
+conversation. This is the file-level checklist.)
 
-1. Session summary: ensure a summary for this session exists under .horus/sessions/
-   (create one with `horus session new "<title>"` if this session moved the project forward).
-2. Roadmap: update .horus/roadmap.md if status or current focus changed, and set the
-   two agent-authored fields the dashboard surfaces (it never infers them):
+The dashboard renders these fields as the project's *current* state and never infers
+them — keep each current at every close:
+
+1. Session summary: ensure one for this session exists under .horus/sessions/
+   (`horus session new "<title>"` if this session moved the project forward).
+2. project.md `current_focus` (frontmatter): refresh the one-line "where things are now".
+3. roadmap.md, the two agent-authored fields + the checkboxes:
    - `next_action`: the single best next step, one imperative line.
-   - `next_prompt`: a natural-language prompt to paste into a fresh Claude/Codex session
-     to resume that step (shown with a copy button). Write it for a cold reader — name
-     the step + point at .horus/.
-3. Decisions: record durable decisions in .horus/decisions.md, with reasoning.
-4. Instructions: keep the AGENTS.md / CLAUDE.md shared blocks aligned
-   (check with `horus doctor instructions`; fix with `horus reconcile instructions`).
-5. Do not continue editing source code as part of closure.
+   - `next_prompt`: a paste-into-a-fresh-session prompt to resume it (cold reader: name
+     the step + point at .horus/).
+   - tick the roadmap checkboxes for what this session did.
+4. features.md: add a Shipped row for any capability shipped this session.
+5. decisions.md: record durable decisions + reasoning. Bump `last_updated` on lanes you touched.
+6. Instructions: keep the AGENTS.md / CLAUDE.md shared blocks aligned
+   (`horus doctor instructions` / `horus reconcile instructions`). Don't edit source as part of closure.
+
+Verify: `horus close --check` must pass (it fails while any dashboard field above is stale).
+Backlog cleanup (distilling old sessions, pruning historical done items, splitting overlaps)
+is a SEPARATE pass — only when asked, not every close.
 """
 
 

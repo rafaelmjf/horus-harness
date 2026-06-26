@@ -9,6 +9,7 @@ running in the repo is the LLM. See `docs/routines.md` for the full contracts.
 from __future__ import annotations
 
 import re
+from datetime import date, datetime
 from pathlib import Path
 
 from horus import frontmatter, roadmap, templates
@@ -208,6 +209,103 @@ def consolidate_signals(root: Path, *, overlap_threshold: float = 0.5) -> list[F
 
     if not any(f.level in ("warn", "fail") for f in findings):
         findings.append(Finding("ok", "lanes look consolidated — no routing/pruning candidates"))
+    return findings
+
+
+# --------------------------------------------------------------------------- #
+# freshness — is the dashboard's read-surface current with the work + this session?
+# --------------------------------------------------------------------------- #
+
+# The exact fields the dashboard renders as a project's *current* state. The closure
+# ritual must keep these fresh; these checks detect (never author) when it didn't.
+# project.md/roadmap.md should track every project-moving session; features.md only
+# changes on a ship (covered by the consolidate ship→ledger signal), so it's not here.
+_FRESH_LANES = ("project.md", "roadmap.md")
+
+
+def _as_date(value: object) -> date | None:
+    """Coerce a frontmatter ``last_updated`` / ``date`` value to a date, tolerantly."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return date.fromisoformat(value.strip()[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def freshness_signals(root: Path) -> list[Finding]:
+    """Detect when the dashboard would show *stale* state after a close — read-only.
+
+    The drift this catches (and what closure must fix): lanes not refreshed since the
+    latest session, an empty/placeholder NEXT or focus, or a `next_action` that points
+    at work already shipped. Detection only — the agent authors the fix in the skill."""
+    findings: list[Finding] = []
+    hdir = horus_dir(root)
+    if not hdir.is_dir():
+        return findings
+
+    sessions = recent_sessions(root, limit=1)
+    session_date = None
+    if sessions:
+        session_date = _as_date(frontmatter.parse(sessions[0].read_text(encoding="utf-8")).front_matter.get("date"))
+
+    # 1) Lanes that should track every session, but weren't updated since the last one.
+    if session_date:
+        for lane in _FRESH_LANES:
+            body = _read(hdir, lane)
+            if body is None:
+                continue
+            lu = _as_date(frontmatter.parse(body).front_matter.get("last_updated"))
+            if lu is None or lu < session_date:
+                stamp = lu.isoformat() if lu else "unset"
+                findings.append(Finding(
+                    "warn",
+                    f"{HORUS_DIR}/{lane} last_updated ({stamp}) is older than the latest session "
+                    f"({session_date.isoformat()}) — refresh it (the dashboard shows it) and bump last_updated",
+                ))
+
+    # 2) The dashboard's NEXT + focus must be authored (it never infers them).
+    rm = _read(hdir, "roadmap.md")
+    next_action = ""
+    if rm is not None:
+        fm = frontmatter.parse(rm).front_matter
+        next_action = (fm.get("next_action") or "").strip()
+        if not next_action:
+            findings.append(Finding(
+                "warn", "roadmap.md next_action is empty — the dashboard NEXT shows 'not set'; author it at closure"
+            ))
+        if not (fm.get("next_prompt") or "").strip():
+            findings.append(Finding(
+                "warn", "roadmap.md next_prompt is empty — the dashboard's resume prompt is blank; author it"
+            ))
+
+    pj = _read(hdir, "project.md")
+    if pj is not None and not (frontmatter.parse(pj).front_matter.get("current_focus") or "").strip():
+        findings.append(Finding(
+            "warn", "project.md current_focus is empty — the dashboard shows it; set it at closure"
+        ))
+
+    # 3) NEXT pointing at already-shipped work. Fuzzy, so require a *strong* match
+    # (≥3 shared distinctive tokens) — next_action often *mentions* shipped capabilities
+    # as context ("…makes the Control tab multi-agent"); only a heavy overlap is a real flag.
+    fb = _read(hdir, "features.md")
+    if next_action and fb is not None:
+        stop = _name_stopwords(root)
+        na_tokens = _key_tokens(next_action, stop)
+        for cap in feature_items(fb)["shipped"]:
+            if _similar(na_tokens, _key_tokens(cap, stop), 0.6, min_shared=3):
+                findings.append(Finding(
+                    "warn",
+                    f"next_action may point at already-shipped work ('{_short(cap)}') — confirm it's still the next step",
+                ))
+                break
+
+    if not any(f.level in ("warn", "fail") for f in findings):
+        findings.append(Finding("ok", "dashboard lanes are fresh (NEXT + focus authored, lanes updated this session)"))
     return findings
 
 

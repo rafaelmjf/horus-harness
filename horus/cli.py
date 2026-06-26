@@ -345,6 +345,16 @@ def cmd_account(args: argparse.Namespace) -> int:
 
 def cmd_close(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
+
+    if getattr(args, "check", False):
+        # Gate mode (scriptable / CI): only dashboard-freshness signals, verdict + exit
+        # code, no ritual prompt and no usage/drift noise.
+        print(f"Closure freshness check: {root}\n")
+        healthy = _print_findings(closure.freshness_gate(root))
+        print("\nFresh — the dashboard reflects this session." if healthy
+              else "\nStale — update the lanes (run the horus-consolidate skill) before closing/merging.")
+        return 0 if healthy else 1
+
     print(f"Closure check: {root}\n")
     findings = closure.closure_status(root, usage_threshold=args.usage_threshold)
     healthy = _print_findings(findings)
@@ -693,6 +703,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_close = sub.add_parser("close", help="verify continuity (git-aware) and print the closure ritual")
     p_close.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_close.add_argument(
+        "--check", action="store_true",
+        help="gate mode: print the freshness verdict and exit non-zero if the lanes are stale (for scripts/CI)",
+    )
     p_close.add_argument("--commit", action="store_true", help="stage+commit the continuity files")
     p_close.add_argument("--push", action="store_true", help="with --commit, also push to origin")
     p_close.add_argument("--message", "-m", help="commit message for --commit")
