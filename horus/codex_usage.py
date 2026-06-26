@@ -39,6 +39,20 @@ def codex_home() -> Path:
     return Path(configured).expanduser() if configured else Path.home() / ".codex"
 
 
+def current_account(home: Path | None = None) -> str | None:
+    """Return the ``account_id`` from ``$CODEX_HOME/auth.json``, or ``None`` if absent.
+
+    Reads ``tokens.account_id`` from the auth file (chatgpt auth mode). Best-effort:
+    missing file, wrong schema, or any read error returns ``None``.
+    """
+    try:
+        auth = (home or codex_home()) / "auth.json"
+        data = json.loads(auth.read_text(encoding="utf-8"))
+        return data.get("tokens", {}).get("account_id") or None
+    except Exception:
+        return None
+
+
 def _rollouts(home: Path) -> list[Path]:
     sessions = home / "sessions"
     if not sessions.is_dir():
@@ -144,6 +158,43 @@ def latest_usage(project_root: Path, *, home: Path | None = None) -> UsageReport
                 continue
             report = _report_from_event(path, event)
             if report is None:
+                continue
+            ts = _timestamp_key(report.timestamp)
+            if ts >= best_ts:
+                best = report
+                best_ts = ts
+    return best
+
+
+def latest_account_usage(home: Path | None = None) -> UsageReport | None:
+    """Most recent Codex rate-limit snapshot for the account at ``home``.
+
+    Unlike :func:`latest_usage`, this ignores the project: the 5h/weekly rate
+    limits are account-global, so the newest ``token_count`` event carrying
+    ``rate_limits`` (across every local rollout) is the best snapshot of the
+    account's limits. ``None`` until some rollout has reported rate limits.
+
+    This is the *last observed* state, not a live poll — Codex exposes no usage
+    API, so it is only as fresh as the most recent Codex activity.
+    """
+    best: UsageReport | None = None
+    best_ts = -1.0
+    for path in _rollouts(home or codex_home()):
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            report = _report_from_event(path, event)
+            if report is None:
+                continue
+            if report.primary_percent is None and report.secondary_percent is None:
                 continue
             ts = _timestamp_key(report.timestamp)
             if ts >= best_ts:

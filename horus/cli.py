@@ -303,21 +303,24 @@ def cmd_session(args: argparse.Namespace) -> int:
 
 
 def cmd_account(args: argparse.Namespace) -> int:
-    # Account detection is Claude-specific for now (reads ~/.claude.json); other
-    # agents fall through to "not detected" until they get their own reader.
-    identifier = claude_usage.current_account() if args.agent == "claude" else None
+    from horus import codex_usage as _codex_usage  # local import to keep the top lean
+
+    agent = args.agent
+    if agent == "codex":
+        identifier = _codex_usage.current_account()
+    else:
+        identifier = claude_usage.current_account()
 
     if args.alias:
         if not identifier:
-            print(f"No {args.agent} account detected; nothing to alias (is the agent logged in?).")
+            print(f"No {agent} account detected; nothing to alias (is the agent logged in?).")
             return 1
         config.set_account_alias(identifier, args.alias)
-        print(f"Aliased {args.agent} account -> {args.alias}")
+        print(f"Aliased {agent} account -> {args.alias}")
         return 0
 
     if args.set_dir is not None:
-        # Map an alias to its CLAUDE_CONFIG_DIR for per-account isolation. Use the
-        # explicit --alias-name, else the current account's resolved alias.
+        # Map an alias to its CLAUDE_CONFIG_DIR for per-account isolation.
         target = args.alias_name or config.alias_for(identifier)
         if not target:
             print("No account to map (pass --alias-name, or log in so an alias can be resolved).")
@@ -326,20 +329,39 @@ def cmd_account(args: argparse.Namespace) -> int:
         print(f"Mapped account {target!r} -> CLAUDE_CONFIG_DIR {args.set_dir}")
         return 0
 
+    if getattr(args, "set_codex_home", None) is not None:
+        # Map an alias to its CODEX_HOME for per-account Codex isolation.
+        target = args.alias_name or config.alias_for(identifier)
+        if not target:
+            print("No account to map (pass --alias-name, or log in so an alias can be resolved).")
+            return 1
+        config.set_account_codex_home(target, args.set_codex_home)
+        print(f"Mapped account {target!r} -> CODEX_HOME {args.set_codex_home}")
+        return 0
+
     if not identifier:
-        print(f"No {args.agent} account detected (is the agent logged in?).")
+        print(f"No {agent} account detected (is the agent logged in?).")
         return 1
     alias = config.alias_for(identifier)
-    print(f"agent:   {args.agent}")
+    print(f"agent:   {agent}")
     print(f"account: {identifier}")
     print(f"alias:   {alias}")
-    config_dirs = config.load_account_config_dirs()
-    if alias in config_dirs:
-        print(f"config:  {config_dirs[alias]}")
-    if not config.load_account_aliases().get(identifier):
-        print("(auto-generated alias; set a friendly one with `horus account --set <name>`)")
-    if config_dirs:
-        print(f"isolated accounts: {', '.join(sorted(config_dirs))}")
+    if agent == "codex":
+        codex_homes = config.load_account_codex_homes()
+        if alias in codex_homes:
+            print(f"home:    {codex_homes[alias]}")
+        if not config.load_account_aliases().get(identifier):
+            print("(auto-generated alias; set a friendly one with `horus account --agent codex --set <name>`)")
+        if codex_homes:
+            print(f"isolated accounts: {', '.join(sorted(codex_homes))}")
+    else:
+        config_dirs = config.load_account_config_dirs()
+        if alias in config_dirs:
+            print(f"config:  {config_dirs[alias]}")
+        if not config.load_account_aliases().get(identifier):
+            print("(auto-generated alias; set a friendly one with `horus account --set <name>`)")
+        if config_dirs:
+            print(f"isolated accounts: {', '.join(sorted(config_dirs))}")
     return 0
 
 
@@ -698,7 +720,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_account.add_argument("--agent", default="claude", help="which agent's account to inspect (default: claude)")
     p_account.add_argument("--set", dest="alias", metavar="ALIAS", help="set the public alias for the detected account")
     p_account.add_argument("--set-dir", metavar="PATH", help="map an account alias to its CLAUDE_CONFIG_DIR (isolation)")
-    p_account.add_argument("--alias-name", metavar="ALIAS", help="with --set-dir: which alias to map (default: current account's)")
+    p_account.add_argument("--set-codex-home", metavar="PATH", help="map an account alias to its CODEX_HOME (Codex isolation)")
+    p_account.add_argument("--alias-name", metavar="ALIAS", help="with --set-dir / --set-codex-home: which alias to map (default: current account's)")
     p_account.set_defaults(func=cmd_account)
 
     p_close = sub.add_parser("close", help="verify continuity (git-aware) and print the closure ritual")

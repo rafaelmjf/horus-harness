@@ -417,6 +417,32 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
 - [ ] Promote the CI check from advisory to a required gate once proven (drop the
   `|| echo ::warning::` fallbacks).
 
+## MVP 5 - App cohesion / lifecycle (next, after the Codex adaptation)
+
+> Why (flagged 2026-06-26): the app still feels like loosely-wired parts (mascot +
+> dashboard server + in-app PTY sessions) rather than one application. Two concrete
+> bites surfaced. The goal of this milestone is that Horus reads and behaves as a
+> single app — ready for real alpha use, not just a dev harness.
+
+- [ ] **BUG/FOOTGUN: an in-app agent session must not be able to kill its own host
+  by restarting the app** (flagged 2026-06-26). A Claude session running *inside* the
+  in-app PTY terminal was editing `dashboard.py`, then restarted the app to see the
+  change — which tore down the dashboard process that hosts its own PTY, so the
+  session killed itself mid-task (work was uncommitted; recovered from the working
+  tree, no session note). Decouple the session-host lifecycle from a
+  dashboard/code reload (the deferred "standalone session-host daemon" in MVP 4 is
+  the structural fix), and/or guard against a hosted agent triggering a self-restart
+  (warn / refuse / hot-reload code without dropping live PTYs). Relates to the
+  dashboard-server-leak bug in the companion section (no single-instance + no reaping).
+- [ ] **Unify the app lifecycle so the pieces act as one app** (flagged 2026-06-26):
+  closing the mascot should close the whole app (mascot + dashboard server + hosted
+  sessions, with a confirm if sessions are live); closing the dashboard window via its
+  UI should terminate the backing process (not orphan it — see the 8765 leak); and the
+  reverse — quitting should not leave a stray mascot or server. Today these are
+  disconnected: the mascot, the dashboard server, and the PTY host have independent
+  lifetimes. Define one ownership/teardown model. Prereq lens for design: the existing
+  single-instance mutex (8764) and the dashboard-server-leak fix belong inside this.
+
 ## Later
 
 - [ ] **One-time continuity-debt paydown (now tooled).** The drift backlog: `horus
