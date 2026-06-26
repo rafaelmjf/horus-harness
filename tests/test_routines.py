@@ -1,6 +1,78 @@
 """Tests for the agent-delegated maintenance routines (consolidate, distill-history)."""
 
+from pathlib import Path
+
 from horus import routines
+
+
+def _mk_fresh(
+    root: Path, *, session_date="2026-06-26T10:00:00", proj_updated="2026-06-26",
+    road_updated="2026-06-26", next_action="Build the Codex adapter", next_prompt="Resume: build Codex adapter",
+    current_focus="Shipping the terminal", shipped=(),
+):
+    """A .horus/ with frontmatter + one session, for exercising freshness_signals."""
+    hdir = root / ".horus"
+    (hdir / "sessions").mkdir(parents=True, exist_ok=True)
+    (hdir / "sessions" / "s1.md").write_text(
+        f"---\ndate: {session_date}\nsummary: x\n---\n# s\n", encoding="utf-8"
+    )
+    (hdir / "project.md").write_text(
+        f"---\nstatus: active\ncurrent_focus: \"{current_focus}\"\nlast_updated: {proj_updated}\n---\n# P\n",
+        encoding="utf-8",
+    )
+    (hdir / "roadmap.md").write_text(
+        f"---\nstatus: active\nnext_action: \"{next_action}\"\nnext_prompt: \"{next_prompt}\"\n"
+        f"last_updated: {road_updated}\n---\n# Roadmap\n",
+        encoding="utf-8",
+    )
+    rows = "".join(f"| {c} |  |  |\n" for c in shipped)
+    (hdir / "features.md").write_text(
+        "---\nstatus: active\n---\n# Features\n\n## Shipped\n\n| Capability | Since | Notes |\n|---|---|---|\n" + rows,
+        encoding="utf-8",
+    )
+    return hdir
+
+
+def _levels(findings):
+    return [(f.level, f.message) for f in findings]
+
+
+def test_freshness_ok_when_lanes_current(tmp_path):
+    _mk_fresh(tmp_path)
+    f = routines.freshness_signals(tmp_path)
+    assert not any(lvl == "warn" for lvl, _ in _levels(f))
+    assert any("fresh" in m for lvl, m in _levels(f) if lvl == "ok")
+
+
+def test_freshness_flags_stale_lanes(tmp_path):
+    _mk_fresh(tmp_path, proj_updated="2026-06-20", road_updated="2026-06-20")
+    msgs = [m for lvl, m in _levels(routines.freshness_signals(tmp_path)) if lvl == "warn"]
+    assert any("project.md last_updated" in m for m in msgs)
+    assert any("roadmap.md last_updated" in m for m in msgs)
+
+
+def test_freshness_flags_empty_next_and_focus(tmp_path):
+    _mk_fresh(tmp_path, next_action="", next_prompt="", current_focus="")
+    msgs = [m for lvl, m in _levels(routines.freshness_signals(tmp_path)) if lvl == "warn"]
+    assert any("next_action is empty" in m for m in msgs)
+    assert any("next_prompt is empty" in m for m in msgs)
+    assert any("current_focus is empty" in m for m in msgs)
+
+
+def test_freshness_flags_next_pointing_at_shipped(tmp_path):
+    # Strong overlap (≥3 shared tokens) -> flag; a passing mention would not.
+    _mk_fresh(tmp_path, next_action="Finish the Codex adapter execution layer",
+              shipped=["Codex adapter execution layer"])
+    msgs = [m for lvl, m in _levels(routines.freshness_signals(tmp_path)) if lvl == "warn"]
+    assert any("already-shipped work" in m for m in msgs)
+
+
+def test_freshness_no_false_positive_on_context_mention(tmp_path):
+    # next_action *mentions* a shipped capability as context -> not flagged (weak overlap).
+    _mk_fresh(tmp_path, next_action="Build the Codex adapter; it makes the Control tab multi-agent",
+              shipped=["Dashboard Control tab"])
+    msgs = [m for lvl, m in _levels(routines.freshness_signals(tmp_path)) if lvl == "warn"]
+    assert not any("already-shipped" in m for m in msgs)
 
 
 def _mk_horus(root, *, roadmap_body="# Roadmap\n", features_body="", history=True):

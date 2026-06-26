@@ -218,6 +218,21 @@ def test_close_runs_and_returns_status(tmp_path, monkeypatch):
     assert main(["close", "--path", str(tmp_path)]) in (0, 1)
 
 
+def test_close_check_gates_on_freshness(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from tests.test_routines import _mk_fresh
+
+    # Fresh lanes (current last_updated, authored NEXT/focus), non-git tmp -> gate passes.
+    _mk_fresh(tmp_path)
+    assert main(["close", "--check", "--path", str(tmp_path)]) == 0
+    assert "Fresh" in capsys.readouterr().out
+
+    # Stale lanes (last_updated older than the session) -> gate fails non-zero.
+    _mk_fresh(tmp_path, proj_updated="2026-06-01", road_updated="2026-06-01")
+    assert main(["close", "--check", "--path", str(tmp_path)]) == 1
+    assert "Stale" in capsys.readouterr().out
+
+
 def test_usage_check_cli_warns_and_hook_mode_exits_clean(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     codex_home = tmp_path / "codex-home"

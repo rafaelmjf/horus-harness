@@ -13,7 +13,7 @@ description: >-
   first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Consolidate Horus continuity
 
@@ -22,64 +22,82 @@ CLI does not: the **live context of what just happened** — decisions made, wor
 shipped, things discussed but not yet written to `.horus/`. Use that. The CLI sees
 only the files and git; you see the conversation too. Fold both in.
 
+## Two jobs — do not conflate them
+
+This skill spans two sizes of work. **Do the per-session close every time; do the
+backlog pass only when the user asks for it.** Conflating them is why lanes drift:
+the per-session part gets half-done because the backlog looks huge.
+
+- **Per-session close (always, bounded):** capture *this* session and make the
+  dashboard reflect it. Small and complete — only this session's delta plus the
+  dashboard fields below. Steps 3–4.
+- **Backlog consolidation (occasional, opt-in):** distill the *accumulated* old
+  sessions, move historical done-items into features, split long-standing overlaps.
+  A large, separate pass — run it only on an explicit "pay down continuity debt" /
+  "consolidate the backlog" request. Step 5. The signals will report a big backlog
+  (many done items / undistilled sessions); that pressure is for *this* job, not the
+  per-session close — **do not try to clear it every time.**
+
+## The dashboard contract — keep these current at EVERY close
+
+The dashboard renders exactly these as the project's *current* state and never
+infers them. If this session moved the project, each must reflect it before you
+finish:
+
+- `project.md` → `current_focus` (frontmatter): the one-line "where things are now".
+- `roadmap.md` → `next_action` (the single NEXT) and `next_prompt` (the resume prompt).
+- `roadmap.md` → the checkbox states behind the progress bar (mark what this session did).
+- `features.md` → a row for anything **shipped this session** (Planned/In-progress → Shipped).
+- `last_updated` frontmatter on every lane you touched (bump to today).
+
+`horus close --check` is the gate: it fails (non-zero) while any of these is stale,
+so closure isn't done until it passes. It also backs a pre-merge CI check.
+
 ## Steps
 
 1. **Get the deterministic signals.** Run `horus consolidate` (optionally
-   `--path <repo>`). It reports candidates it can detect from the files alone:
-   roadmap↔features overlaps, done-but-unshipped roadmap items, session summaries to
-   distill, and missing lanes. Treat these as leads, not gospel — verify each.
+   `--path <repo>`). It reports file-only candidates: roadmap↔features overlaps,
+   done-but-unshipped items, session summaries to distill, missing lanes. Leads, not
+   gospel — and most belong to the backlog job (Step 5), not this close.
 
 2. **Read the lanes.** Read `.horus/project.md`, `roadmap.md`, `features.md`,
-   `decisions.md`, `history.md`, and any `sessions/*.md`. If `docs/routines.md`
-   exists, it holds the full routing contract; if it's absent, the rules in this
-   skill are authoritative.
+   `decisions.md`, `history.md`, and the newest `sessions/*.md`. If `docs/routines.md`
+   exists it holds the full routing contract; otherwise this skill is authoritative.
 
-3. **Apply the routing rules**, editing **`.horus/**` only** (never source files,
-   never `AGENTS.md`/`CLAUDE.md`):
+3. **Per-session close — record this session** (`.horus/**` only; never source,
+   `AGENTS.md`, or `CLAUDE.md`):
 
-   - **Ship → ledger.** For each done roadmap action point that completed a
-     shippable capability, close it in `roadmap.md` and add/update the matching row
-     in `features.md` (move Planned/In-progress → Shipped; stamp the version if the
-     repo records one, else leave blank). Capture anything shipped *this session*
-     that isn't on disk yet.
-   - **De-duplicate across lanes.** Where the same item sits in both `roadmap.md`
-     and `features.md`, keep the *action points* in `roadmap.md` and the *capability
-     status* in `features.md`. Make the split explicit with a cross-reference each
-     way: put a literal `→ features.md` pointer in the roadmap item, and an `action
-     points → roadmap.md` note on the features row. That pointer is the marker that
-     the item was *intentionally* split (both `horus consolidate` and a future reader
-     rely on it), not a leftover duplicate. No fact maintained in two places.
-   - **Prune.** Drop done/obsolete roadmap items — they live in features/history/git
-     now. A roadmap is "what's next", not a completed log.
-   - **Distill sessions.** Fold durable content from `sessions/*.md` into the lanes
-     (a decision → `decisions.md`, a lesson → `history.md`, a shipped thing →
-     `features.md`), then remove or mark the distilled summary.
-   - **Record fresh context.** Decisions, lessons, and shipped capabilities from the
-     current session that belong in the lanes but aren't written yet — add them.
-   - **Set the next step + resume prompt.** The dashboard surfaces these from
-     `roadmap.md` frontmatter and never infers them, so author both:
-     `next_action` (the single best next step, one imperative line) and `next_prompt`
-     (a natural-language prompt to paste into a fresh Claude/Codex session to resume
-     it — write it for a cold reader: name the step, point at `.horus/`; shown with a
-     copy button).
+   - **Record fresh context.** Decisions + *why*, lessons/dead-ends, and capabilities
+     shipped *this session* that aren't on disk yet → `decisions.md` / `history.md` /
+     `features.md` (a Shipped row for each capability). This is the content only you
+     can supply — it's in the conversation, not the files.
+   - **Update the dashboard contract** (the checklist above): refresh `current_focus`,
+     `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
+     `last_updated` on touched lanes. Author the next step for a *cold* reader — name
+     it, point at `.horus/`.
 
 4. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
    `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`. If
-   `history.md` has grown into a verbatim log/changelog rather than curated lessons,
-   that's a `horus-distill-history` job — flag it rather than fixing it here.
+   `history.md` has grown into a verbatim log, that's a `horus-distill-history` job —
+   flag it, don't fix it here.
 
-5. **Verify.** Re-run `horus consolidate`. An overlap clears once you've split the
-   item *and* added the cross-reference — the `→ features.md` / `→ roadmap.md` pointer
-   is how the tool knows a shared name is an intentional split, not a duplicate. An
-   in-progress or planned item that legitimately lives in both lanes is *expected* to
-   keep appearing until it carries that pointer; do **not** delete ledger rows or
-   roadmap actions chasing zero warnings. Only done/shipped items clear by being
-   pruned from the roadmap. Running the skill again on a clean tree changes nothing.
+5. **Backlog consolidation — ONLY when explicitly asked.** Distill old `sessions/*.md`
+   into the lanes then remove them; move historical done items into `features.md` and
+   **prune** them from `roadmap.md`; **de-duplicate** roadmap↔features overlaps by
+   keeping action points in `roadmap.md` and status in `features.md`, with a literal
+   `→ features.md` / `action points → roadmap.md` cross-reference each way (that
+   pointer is how `horus consolidate` knows a shared name is an *intentional* split,
+   not a duplicate). Skip this entirely during a normal close.
+
+6. **Verify.** Run `horus close --check` — it must pass (the dashboard is fresh). For
+   a backlog pass, also re-run `horus consolidate`: an overlap clears only once split
+   *and* cross-referenced; in-progress/planned items that legitimately live in both
+   lanes keep appearing until they carry the pointer — **do not delete ledger rows or
+   roadmap actions chasing zero.**
 
 ## Boundaries
 
 - **Never invent** status, dates, versions, or decisions. When intent is unclear,
-  leave the content in place and flag it for the user rather than guessing.
-- Edits are confined to `.horus/**`. This is continuity maintenance, not a coding
-  task — do not continue editing source as part of it.
+  leave the content and flag it for the user rather than guessing.
+- Edits are confined to `.horus/**`. This is continuity maintenance, not a coding task.
 - Bump `last_updated` front matter on lanes you change (if it isn't already today).

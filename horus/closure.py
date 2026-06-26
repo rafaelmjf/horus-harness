@@ -15,7 +15,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from horus import codex_usage
+from horus import codex_usage, routines
 from horus.continuity import Finding, check_project, recent_sessions
 from horus.instructions import check_drift
 
@@ -50,9 +50,37 @@ def _work_commits_since(root: Path, mtime: float) -> int:
     return sum(1 for line in out.splitlines() if line.strip().isdigit() and int(line) > mtime)
 
 
+def _summary_freshness(root: Path) -> list[Finding]:
+    """Git signal: real-work commits made since the latest session summary (i.e. work
+    not yet captured). Empty when not a repo or there are no sessions."""
+    if not is_git_repo(root):
+        return []
+    recent = recent_sessions(root, limit=1)
+    if not recent:
+        return []
+    n = _work_commits_since(root, recent[0].stat().st_mtime)
+    if n:
+        return [Finding("warn", f"{n} work commit(s) since the latest session summary; summarize before closing")]
+    return [Finding("ok", "session summary is current with work commits")]
+
+
+def freshness_gate(root: Path) -> list[Finding]:
+    """The dashboard-freshness subset, for `horus close --check` / a CI pre-merge gate:
+    are the lanes the dashboard renders current with this session?
+
+    Deliberately just :func:`routines.freshness_signals` — the reliable per-field
+    checks. The "work commits since summary" nudge (:func:`_summary_freshness`) and
+    usage/drift signals stay in the full `horus close`; they're informational and the
+    former mtime-nags within the very session being closed, so they don't gate."""
+    return routines.freshness_signals(root)
+
+
 def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding]:
     """Compose continuity health + instruction drift + git-aware closure signals."""
     findings = list(check_project(root))
+    # Dashboard-freshness gate: the lanes the dashboard renders must be current with
+    # this session before closure is "done" (the drift that motivated this check).
+    findings.extend(routines.freshness_signals(root))
     findings.extend(codex_usage.usage_findings(root, threshold=usage_threshold))
 
     agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
@@ -68,17 +96,8 @@ def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding
                 Finding("warn", f"instruction blocks {report.status}; run `horus reconcile instructions`")
             )
 
+    findings.extend(_summary_freshness(root))
     if is_git_repo(root):
-        recent = recent_sessions(root, limit=1)
-        if recent:
-            n = _work_commits_since(root, recent[0].stat().st_mtime)
-            if n:
-                findings.append(
-                    Finding("warn", f"{n} work commit(s) since the latest session summary; summarize before closing")
-                )
-            else:
-                findings.append(Finding("ok", "session summary is current with work commits"))
-
         status = _git(root, "status", "--porcelain", "--", *_CONTINUITY_PATHSPEC)
         changed = [line for line in (status or "").splitlines() if line.strip()]
         if changed:

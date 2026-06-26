@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Execution + oversight layer is real: the dashboard launches sessions and hosts them as in-app terminals (real agent TUI under a PTY, xterm.js), persistent + re-attachable + pop-outable. Still single-agent — the next focus is the Codex adapter to prove the vendor-neutral contract and make it multi-agent. Continuity (the moat) stays the headline; resist over-building the terminal/IDE layer."
+current_focus: "Execution + oversight layer is real: the dashboard launches sessions and hosts them as in-app terminals (real agent TUI under a PTY, xterm.js), persistent + re-attachable + pop-outable. The closure ritual is now hardened so the dashboard's lanes can't silently go stale (a `horus close --check` freshness gate + a dashboard-contract skill + advisory PR CI). Still single-agent — the next focus is the Codex adapter to prove the vendor-neutral contract and make it multi-agent. Continuity (the moat) stays the headline; resist over-building the terminal/IDE layer."
 last_updated: 2026-06-26
 ---
 
