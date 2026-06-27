@@ -18,6 +18,7 @@ def test_open_terminal_returns_child_pid(monkeypatch, tmp_path):
 
     monkeypatch.setattr(launcher.shutil, "which", lambda name: name)  # resolve to itself
     monkeypatch.setattr(launcher.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(sys, "platform", "win32")
 
     pid = launcher.open_terminal(["claude", "--session-id", "x"], cwd=tmp_path, env={"A": "1"})
 
@@ -25,5 +26,17 @@ def test_open_terminal_returns_child_pid(monkeypatch, tmp_path):
     assert calls["argv"] == ["claude", "--session-id", "x"]
     assert calls["cwd"] == str(tmp_path)
     assert calls["env"]["A"] == "1"
-    expected = subprocess.CREATE_NEW_CONSOLE if sys.platform == "win32" else 0
-    assert calls["creationflags"] == expected  # own window on Windows
+    assert calls["creationflags"] == getattr(subprocess, "CREATE_NEW_CONSOLE", 0)  # own window on Windows
+
+
+def test_open_terminal_fails_without_posix_display(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+
+    try:
+        launcher.open_terminal(["codex"], cwd=tmp_path)
+    except OSError as exc:
+        assert "no graphical display" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected OSError")

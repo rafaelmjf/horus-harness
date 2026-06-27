@@ -30,7 +30,7 @@ def _codex_hook_command(threshold: float) -> dict[str, Any]:
     # override on Windows and the portable command elsewhere.
     return {
         "type": "command",
-        "command": f"python -m horus usage check --path . --threshold {threshold:g} --hook",
+        "command": f"python3 -m horus usage check --path . --threshold {threshold:g} --hook",
         "commandWindows": f"py -m horus usage check --path . --threshold {threshold:g} --hook",
         "timeout": 30,
         "statusMessage": "Checking Horus usage",
@@ -40,7 +40,7 @@ def _codex_hook_command(threshold: float) -> dict[str, Any]:
 def _codex_merge_hook_command() -> dict[str, Any]:
     return {
         "type": "command",
-        "command": "python -m horus close --hook",
+        "command": "python3 -m horus close --hook",
         "commandWindows": "py -m horus close --hook",
         "timeout": 30,
         "statusMessage": "Checking Horus closure",
@@ -50,7 +50,7 @@ def _codex_merge_hook_command() -> dict[str, Any]:
 def _codex_guard_hook_command() -> dict[str, Any]:
     return {
         "type": "command",
-        "command": "python -m horus guard-host --hook",
+        "command": "python3 -m horus guard-host --hook",
         "commandWindows": "py -m horus guard-host --hook",
         "timeout": 30,
         "statusMessage": "Checking Horus host safety",
@@ -120,22 +120,31 @@ def _merge_codex_pretooluse_hook(
     if not isinstance(groups, list):
         groups = []
 
+    inserted = False
+    new_groups = []
     for group in groups:
         if not isinstance(group, dict):
+            new_groups.append(group)
             continue
         handlers = group.get("hooks")
         if not isinstance(handlers, list):
+            new_groups.append(group)
             continue
-        kept = [h for h in handlers if not is_mine(h)]
-        if len(kept) != len(handlers):
+        kept = []
+        for existing in handlers:
+            if is_mine(existing):
+                if not inserted:
+                    kept.append(handler)
+                    inserted = True
+            else:
+                kept.append(existing)
+        if kept:
             group["hooks"] = kept
+            new_groups.append(group)
 
-    groups = [
-        group for group in groups
-        if not (isinstance(group, dict) and isinstance(group.get("hooks"), list) and not group["hooks"])
-    ]
-    groups.append({"matcher": "Bash", "hooks": [handler]})
-    hooks["PreToolUse"] = groups
+    if not inserted:
+        new_groups.append({"matcher": "Bash", "hooks": [handler]})
+    hooks["PreToolUse"] = new_groups
 
 
 def install_codex_usage_hook(project_root: Path, *, threshold: float = 90.0) -> HookAction:
@@ -253,15 +262,26 @@ def _merge_event_hook(
     groups = hooks.get(event)
     if not isinstance(groups, list):
         groups = []
+    inserted = False
+    new_groups = []
     for group in groups:
-        if isinstance(group, dict) and isinstance(group.get("hooks"), list):
-            group["hooks"] = [h for h in group["hooks"] if not is_mine(h)]
-    groups = [
-        g for g in groups
-        if not (isinstance(g, dict) and isinstance(g.get("hooks"), list) and not g["hooks"])
-    ]
-    groups.append({"matcher": matcher, "hooks": [handler]})
-    hooks[event] = groups
+        if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+            new_groups.append(group)
+            continue
+        kept = []
+        for existing in group["hooks"]:
+            if is_mine(existing):
+                if not inserted:
+                    kept.append(handler)
+                    inserted = True
+            else:
+                kept.append(existing)
+        if kept:
+            group["hooks"] = kept
+            new_groups.append(group)
+    if not inserted:
+        new_groups.append({"matcher": matcher, "hooks": [handler]})
+    hooks[event] = new_groups
 
 
 def _claude_hooks_dict(project_root: Path) -> tuple[Path, dict[str, Any], dict[str, Any]]:

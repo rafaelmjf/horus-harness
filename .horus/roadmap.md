@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Handoff to a Linux Codex session. The current feature set is architected as cross-platform at the core, but only Windows has been dogfooded end-to-end. Validate Linux before continuing MVP5 proper-app stack selection: continuity CLI, dashboard, registry, Codex hooks, Codex adapter, and especially the stdlib POSIX PTY path used by the in-app terminal. Windows-only/degraded pieces are known (`horus focus`, native terminal spawn behavior, and desktop companion polish)."
-next_action: "On a Linux machine, open a Codex session and validate the current setup. Start with `git fetch --all --prune` and remote branch verification, then run install/test smokes: `python -m pytest -q`, `python -m horus doctor`, `python -m horus close --check`, `python -m horus consolidate`, `python -m horus dashboard`, direct POSIX PTY smoke if needed, and the Codex path (`codex doctor`, `python -m horus hook install --target codex --kind all`, `/hooks` trust review if prompted, in-app Codex launch through the dashboard/PTY). Record any Linux-only failures as roadmap/history before returning to MVP5 proper-app stack choice."
-next_prompt: "Resume Horus on Linux. FIRST `git fetch --all --prune` and verify the branch from the remote, not stale local refs. Goal: validate the current Windows-dogfooded setup on Linux before choosing the proper native app stack. Read `.horus/sessions/2026-06-27-222052-linux-validation-handoff.md` for the checklist. Prove or falsify: full tests, `horus doctor`, `horus close --check`, dashboard serve, POSIX stdlib PTY/in-app terminal, Codex adapter launch, Codex usage/merge/guard hook install + native `/hooks` trust behavior, and companion assumptions. Known caveats: `horus focus` is Windows-only; attended `horus open` does not truly create a new terminal window on POSIX yet; Tk/browser app-window desktop polish may vary. If Linux exposes a real issue, capture it in roadmap/history before continuing MVP5."
-last_updated: 2026-06-27
+current_focus: "Project upgrade/refresh is shipped as `horus upgrade-project`: dry-run/report by default, `--apply` refreshes managed blocks, Claude/Codex skills, and native hooks from the installed CLI while skipping unowned content. Next priority: finish Linux live desktop validation (`horus app`, Flatpak Chrome app-window behavior, mascot background fallback) before returning to MVP5 proper native-app stack selection."
+next_action: "Run the Linux live desktop validation pass after the upgrade workflow: exercise `horus app` from this installed tree, confirm Flatpak Chrome is used for the dashboard app window, verify the mascot background fallback is acceptable, and record any remaining Linux desktop gaps before picking the proper native-app architecture."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: run the Linux live desktop validation pass now that `horus upgrade-project` exists and the Linux blockers are fixed. Validate `horus app` on this machine with Flatpak Chrome (`flatpak run com.google.Chrome --app=...` path), check dashboard opening, mascot behavior/background, and no-display failure handling. If gaps remain, fix or record them; otherwise move back to MVP5 proper native-app stack selection. Use `horus upgrade-project` as the official per-project refresh path when checking projected artifacts."
+last_updated: 2026-06-28
 ---
 
 # Roadmap
@@ -148,6 +148,23 @@ Phase 3 — portability (started with direct Codex skill projection):
   whether Horus-owned sessions are needed.
 - [ ] Add this lens to future feature specs: "native Claude path", "native Codex path",
   "Horus-owned/session path if needed".
+
+## Project upgrade / projection refresh
+
+> Goal: already-initialized repos should be able to tell whether their Horus-projected
+> artifacts are stale relative to the installed CLI, and refresh them safely. Upgrading
+> `horus-harness` updates the command code, but not repo-local projections.
+
+- [x] Define the managed artifact contract: `.claude/skills`, `.agents/skills`, Codex hooks,
+  Claude hooks, AGENTS/CLAUDE managed block, and any versioned `.horus/` scaffolding that can be
+  safely refreshed without overwriting lane content.
+- [x] Add a first-class command (`horus upgrade-project`) with dry-run/report
+  and apply modes. It should show what is stale/missing, then update only managed/projection
+  surfaces.
+- [x] Reuse existing safe mechanisms: skill writers, hook installers,
+  `reconcile instructions`, and no-clobber init logic where appropriate.
+- [x] Make `horus doctor` point at the upgrade command when it detects stale projected artifacts.
+- [x] Document the official per-project refresh process in README once the command exists. → features.md
 
 ## Companion app / mascot - visible Horus presence (next)
 
@@ -353,10 +370,27 @@ dashboard and later becomes the place for continuity/status nudges.
   (Ask / Plan / Accept-edits / Bypass) instead of hardcoding default; changeable later in the TUI. → features.md
 - [x] **Codex in the terminal** (2026-06-26) — `CodexAdapter.interactive_command` is implemented;
   `get_adapter("codex")` now resolves; the PTY host works without changes. → features.md
-- [ ] **Linux validation pass** (handoff 2026-06-27) - prove the current setup on a real Linux
+- [x] **Linux validation pass** (handoff 2026-06-27) - proved the current setup on a real Linux
   Codex machine before continuing MVP5: full tests, dashboard, POSIX stdlib PTY/in-app
   terminal, Codex adapter launch, hook install/trust behavior, and companion assumptions.
-  Capture any Linux-only failure in roadmap/history.
+- [x] **Linux hook interpreter portability** - Codex hook installer now writes POSIX commands as
+  `python3 -m horus ...` while keeping `commandWindows: py -m ...`; `.codex/hooks.json` was
+  regenerated so usage/merge/guard hooks run on this host without a `python` shim.
+- [x] **Hosted PTY TERM on Linux** - the in-app Codex PTY now forces `TERM=xterm-256color` when
+  the inherited env is missing or `dumb`. Smoke: dashboard-launched Codex PTY no longer emits
+  the `TERM=dumb` warning and reaches Codex's normal trust prompt.
+- [x] **POSIX attended launch semantics** - `horus open --agent codex` now refuses headless
+  launches with a clear message and does not register a false running session. In graphical
+  POSIX sessions, it attempts common terminal emulators; otherwise users should use the dashboard
+  in-app terminal.
+- [x] **Linux test/package hygiene** - added a dev dependency group for pytest, restored Python
+  3.11 parsing by moving the dashboard active-class quote out of an f-string expression, and added
+  `tests/__init__.py` so cross-test helper imports work. `uv run pytest -q` now passes.
+- [x] **Linux companion dependency/fallback** - local prerequisite `python3-tk` installed; Horus
+  now prefers Flatpak Chrome/Edge (`flatpak run com.google.Chrome --app=...`) for app-mode
+  windows, also detects native/snap Chromium-family browsers, and returns a clear no-display
+  message instead of a Tk traceback when run from a headless Codex shell. Still requires a real
+  desktop session with `DISPLAY`/`WAYLAND_DISPLAY` for the mascot to appear.
 
 Deferred (noted as future direction, low value for now):
 
@@ -478,8 +512,11 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
     (all-Python, heavy) vs Electron (Node, polished) vs Tauri (tiny, Rust+SPA); trade-offs in
     decisions.md. Shares the same Python server + web UI (the stable contract), so it's an
     additive host. This is where "close the window → close the app" and the 8765/single-instance
-    fixes land. Also fold in: load account usage async (cold `/control` is 750 ms of synchronous
-    OAuth `/usage` calls — measured) and consider client-side tab switching.
+    fixes land. Also fold in: reliable per-pixel mascot/window transparency on Linux (Tk's
+    `-transparentcolor` is Windows-friendly but unreliable under Linux compositors; PySide6/Qt is
+    the cleanest Python-native candidate if transparency matters), load account usage async (cold
+    `/control` is 750 ms of synchronous OAuth `/usage` calls — measured), and consider client-side
+    tab switching.
 
 ## Later
 

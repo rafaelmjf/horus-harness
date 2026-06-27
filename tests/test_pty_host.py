@@ -78,6 +78,7 @@ def test_host_streams_writes_resizes_and_persists(tmp_path, monkeypatch):
     env = captured.get("env") or {}
     assert env.get("HORUS_HOSTED_SESSION") == "1"
     assert env.get("HORUS_PTY_HOST_PID")  # the host (dashboard) process PID
+    assert env.get("TERM") == "xterm-256color"
 
     # Output the PTY produces is buffered on the host.
     fake.feed(b"hello "); fake.feed(b"world")

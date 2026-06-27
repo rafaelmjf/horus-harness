@@ -385,7 +385,7 @@ def _live_count(records: list[registry.SessionRecord]) -> int:
 def _nav(active: str, live: int = 0) -> str:
     links = [("/", "Projects", "projects"), ("/control", "Control", "control")]
     items = "".join(
-        f"<a href='{href}'{' class=\"active\"' if key == active else ''}>{label}</a>"
+        f"<a href='{href}'{_active_class(key == active)}>{label}</a>"
         for href, label, key in links
     )
     badge = ""
@@ -396,6 +396,10 @@ def _nav(active: str, live: int = 0) -> str:
             f"<span class='live-dot'>&#9679;</span> {live} live</a>"
         )
     return f"<nav>{items}{badge}</nav>"
+
+
+def _active_class(active: bool) -> str:
+    return ' class="active"' if active else ""
 
 
 def _page(title: str, body: str, active: str = "projects", wide: bool = False, live: int = 0) -> str:

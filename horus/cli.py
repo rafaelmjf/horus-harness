@@ -28,6 +28,7 @@ from horus import (
     routines,
     skills,
     templates,
+    upgrade,
 )
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
 from horus.instructions import check_drift, reconcile
@@ -99,6 +100,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 print(f"  {_LEVEL_TAG['warn']} managed blocks drifted:")
                 for line in report.detail.splitlines():
                     print(f"      {line}")
+                print("      run `horus upgrade-project --apply --no-hooks --no-skills` to refresh Horus-managed blocks")
                 rc = 1
         print()
 
@@ -640,6 +642,35 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
     return 2
 
 
+def cmd_upgrade_project(args: argparse.Namespace) -> int:
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
+    targets = _skill_targets(args.target)
+    actions = upgrade.upgrade_project(
+        root,
+        apply=args.apply,
+        targets=targets,
+        hooks=not args.no_hooks,
+        skills_=not args.no_skills,
+        instructions=not args.no_instructions,
+    )
+    mode = "Applying" if args.apply else "Checking"
+    print(f"{mode} Horus project projections in {root}\n")
+    for action in actions:
+        print(f"  [{action.status}] {action.message}")
+    if not args.apply:
+        pending = [a for a in actions if a.status == "would-update"]
+        if pending:
+            print("\nDry run only. Re-run with `--apply` to write these managed updates.")
+            return 1
+        skipped = [a for a in actions if a.status == "skipped"]
+        if skipped:
+            print("\nSome artifacts were skipped because Horus does not own them.")
+            return 1
+    return 0
+
+
 def cmd_app(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
@@ -786,6 +817,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_doctor.add_argument("--path", default=".", help="project root (default: cwd)")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_upgrade = sub.add_parser("upgrade-project", help="refresh repo-local Horus projected artifacts")
+    p_upgrade.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_upgrade.add_argument("--apply", action="store_true", help="write updates (default is dry-run/report)")
+    p_upgrade.add_argument(
+        "--target",
+        choices=("all", "claude", "codex"),
+        default="all",
+        help="which agent target projections to refresh (default: all)",
+    )
+    p_upgrade.add_argument("--no-hooks", action="store_true", help="skip native hook refresh")
+    p_upgrade.add_argument("--no-skills", action="store_true", help="skip skill refresh")
+    p_upgrade.add_argument("--no-instructions", action="store_true", help="skip AGENTS/CLAUDE managed-block refresh")
+    p_upgrade.set_defaults(func=cmd_upgrade_project)
 
     p_dash = sub.add_parser("dashboard", help="serve the read-only multi-project dashboard")
     p_dash.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")

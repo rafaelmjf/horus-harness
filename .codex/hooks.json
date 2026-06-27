@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -m horus usage check --path . --threshold 90 --hook",
+            "command": "python3 -m horus usage check --path . --threshold 90 --hook",
             "commandWindows": "py -m horus usage check --path . --threshold 90 --hook",
             "timeout": 30,
             "statusMessage": "Checking Horus usage"
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -m horus usage check --path . --threshold 90 --hook",
+            "command": "python3 -m horus usage check --path . --threshold 90 --hook",
             "commandWindows": "py -m horus usage check --path . --threshold 90 --hook",
             "timeout": 30,
             "statusMessage": "Checking Horus usage"
@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -m horus close --hook",
+            "command": "python3 -m horus close --hook",
             "commandWindows": "py -m horus close --hook",
             "timeout": 30,
             "statusMessage": "Checking Horus closure"
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -m horus guard-host --hook",
+            "command": "python3 -m horus guard-host --hook",
             "commandWindows": "py -m horus guard-host --hook",
             "timeout": 30,
             "statusMessage": "Checking Horus host safety"
