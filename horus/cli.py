@@ -387,6 +387,13 @@ def _close_merge_hook(root: Path) -> int:
     except Exception:
         return 0  # never block the merge on a checker error
     if not stale:
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": "Horus closure check passed: .horus lanes are already fresh; allowing `gh pr merge`.",
+            }
+        }))
         return 0
 
     print(json.dumps({

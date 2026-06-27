@@ -490,7 +490,11 @@ def test_merge_hook_allows_merge_when_fresh(monkeypatch, capsys):
         tool_input={"tool_name": "Bash", "tool_input": {"command": "gh pr merge 15"}},
         findings=[("ok", "fresh")],
     )
-    assert rc == 0 and out.strip() == ""
+    assert rc == 0
+    payload = json.loads(out)
+    hso = payload["hookSpecificOutput"]
+    assert hso["permissionDecision"] == "allow"
+    assert "closure check passed" in hso["permissionDecisionReason"].lower()
 
 
 def test_merge_hook_ignores_non_merge_bash(monkeypatch, capsys):
