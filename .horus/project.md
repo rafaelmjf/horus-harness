@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "MVP5 (app cohesion / lifecycle) — making the loosely-wired pieces feel like one app. This session: (1) SHIPPED — the self-restart footgun is guarded (a hosted in-app agent can no longer restart/kill the dashboard hosting its own PTY; `horus guard-host` PreToolUse hook + `pty_host` env markers). (2) FRONTEND — tried a pywebview shell to own the window lifecycle but it was unstable + slow on Win11, so REVERTED to the proven Edge `--app` + Tk mascot (refreshed art). Settled on a two-tier frontend: lightweight Edge+mascot ships now via uv (with known lifecycle drawbacks accepted); a separate downloadable proper native app (PySide/Electron/Tauri — TBD) is where real window-lifecycle ownership + taskbar icon land, sharing the same Python server + web UI. Still open: the structural session-host daemon. Continuity (the moat) stays the headline; the continuity-debt backlog (~85 done roadmap items, ~48 missing features rows, ~40 sessions to distill) remains the standing opt-in cleanup job."
+current_focus: "Handoff to a Linux Codex session: validate the current Horus setup on Linux before choosing the proper native app stack. The core is designed to be portable (continuity lanes, dashboard, hooks, adapters, registry, and POSIX stdlib PTY), but only Windows has been dogfooded end-to-end. Next session should run the Linux smoke checklist, especially the in-app PTY/Codex path, hook install/trust behavior, dashboard, and companion assumptions. MVP5 app cohesion still follows after this platform proof; continuity-debt backlog remains a separate opt-in cleanup job."
 last_updated: 2026-06-27
 ---
 
