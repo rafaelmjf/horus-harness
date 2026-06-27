@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "`horus overhead` now gives a first-pass way to quantify Horus workflow cost: static prompt footprint plus observed local token usage from Codex rollouts and Claude project JSONL, explicitly labeled as upper-bound attribution rather than a counterfactual. Project upgrade/refresh is already shipped via `horus upgrade-project`. Next priority: refine overhead measurement with controlled A/B baselines or dashboard surfacing, then finish Linux live desktop validation before MVP5 proper native-app stack selection."
+current_focus: "`horus overhead` now quantifies Horus workflow cost at two levels: project-level static/observed attribution and per tracked-session totals via `--sessions` when native logs expose a matching session id. Attribution remains explicitly upper-bound, not counterfactual. Project upgrade/refresh and Linux desktop smoke are already validated; next priority is either controlled A/B baseline measurement or dashboard surfacing of the overhead report."
 last_updated: 2026-06-28
 ---
 

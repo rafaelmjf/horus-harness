@@ -4,6 +4,7 @@ import json
 
 from horus import overhead
 from horus.cli import main
+from horus.registry import Registry, SessionRecord
 
 
 def _write_jsonl(path, *events):
@@ -15,6 +16,13 @@ def _codex_turn(root):
     return {
         "type": "turn_context",
         "payload": {"cwd": str(root), "workspace_roots": [str(root)]},
+    }
+
+
+def _codex_meta(session_id, root):
+    return {
+        "type": "session_meta",
+        "payload": {"session_id": session_id, "id": session_id, "cwd": str(root)},
     }
 
 
@@ -114,6 +122,56 @@ def test_claude_overhead_dedupes_request_ids(tmp_path):
     assert summary.horus.total_tokens == 100
 
 
+def test_codex_session_usage_matches_session_meta(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    home = tmp_path / "codex"
+    rollout = home / "sessions" / "2026" / "06" / "28" / "rollout-test.jsonl"
+    _write_jsonl(
+        rollout,
+        _codex_meta("codex-session", project),
+        _codex_turn(project),
+        _codex_tokens(55, input_tokens=50, output_tokens=5),
+    )
+
+    result = overhead.codex_session_usage("codex-session", project, home=home)
+    assert result is not None
+    turns, total = result
+    assert turns == 1
+    assert total.total_tokens == 55
+
+
+def test_claude_session_usage_matches_session_id_and_dedupes(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    home = tmp_path / "claude"
+    log = home / "projects" / "-tmp-project" / "session.jsonl"
+    usage = {"input_tokens": 7, "output_tokens": 3}
+    event = _claude_event(project, "req-1", usage, [{"type": "text", "text": "horus"}])
+    event["sessionId"] = "claude-session"
+    duplicate = _claude_event(project, "req-1", usage, [{"type": "text", "text": "same request"}])
+    duplicate["sessionId"] = "claude-session"
+    _write_jsonl(log, event, duplicate)
+
+    result = overhead.claude_session_usage("claude-session", project, home=home)
+    assert result is not None
+    turns, total = result
+    assert turns == 1
+    assert total.total_tokens == 10
+
+
+def test_session_usages_reports_unmatched_interactive_codex(tmp_path):
+    record = SessionRecord(
+        session_id="horus-internal-id",
+        agent="codex",
+        project=str(tmp_path),
+        status="running",
+    )
+    rows = overhead.session_usages([record], codex_home=tmp_path / "missing")
+    assert rows[0].matched is False
+    assert "no matching Codex" in rows[0].note
+
+
 def test_overhead_cli_reports_both_agents(tmp_path, capsys):
     project = tmp_path / "project"
     project.mkdir()
@@ -144,3 +202,33 @@ def test_overhead_cli_reports_both_agents(tmp_path, capsys):
     assert "Static prompt footprint" in out
     assert "codex: 1/1 Horus-related turns" in out
     assert "claude: 1/1 Horus-related turns" in out
+
+
+def test_overhead_cli_reports_tracked_sessions(tmp_path, monkeypatch, capsys):
+    project = tmp_path / "project"
+    project.mkdir()
+    codex_home = tmp_path / "codex"
+    _write_jsonl(
+        codex_home / "sessions" / "2026" / "06" / "28" / "rollout-test.jsonl",
+        _codex_meta("codex-session", project),
+        _codex_turn(project),
+        _codex_tokens(88),
+    )
+    reg = Registry(tmp_path / "registry.json")
+    reg.upsert(SessionRecord(session_id="codex-session", agent="codex", project=str(project), status="exited"))
+    monkeypatch.setattr("horus.registry.Registry.default", lambda: reg)
+
+    rc = main([
+        "overhead",
+        "--path",
+        str(project),
+        "--agent",
+        "codex",
+        "--codex-home",
+        str(codex_home),
+        "--sessions",
+    ])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Tracked session usage" in out
+    assert "codex codex-se exited: 1 turn(s), 88 raw tokens" in out

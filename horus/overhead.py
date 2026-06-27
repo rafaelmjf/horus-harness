@@ -40,6 +40,17 @@ class UsageSummary(NamedTuple):
     horus: TokenUsage
 
 
+class SessionUsage(NamedTuple):
+    session_id: str
+    agent: str
+    project: str
+    status: str
+    turns: int
+    total: TokenUsage
+    matched: bool
+    note: str = ""
+
+
 _HORUS_MARKERS = (
     "horus",
     ".horus",
@@ -111,6 +122,53 @@ def codex_overhead(project_root: Path, *, home: Path | None = None) -> UsageSumm
     return UsageSummary("codex", turns, horus_turns, total, horus)
 
 
+def codex_session_usage(
+    session_id: str,
+    project_root: Path,
+    *,
+    home: Path | None = None,
+) -> tuple[int, TokenUsage] | None:
+    root = project_root.resolve()
+    for path in _codex_rollouts(home or codex_usage.codex_home()):
+        current_session = False
+        current_project = False
+        meta_project = False
+        turns = 0
+        total = TokenUsage()
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            payload = event.get("payload")
+            if event.get("type") == "session_meta":
+                current_session = isinstance(payload, dict) and (
+                    payload.get("session_id") == session_id or payload.get("id") == session_id
+                )
+                meta_project = isinstance(payload, dict) and _matches_project(payload, root)
+                current_project = meta_project
+                continue
+            if not current_session:
+                continue
+            if event.get("type") == "turn_context":
+                current_project = isinstance(payload, dict) and _matches_project(payload, root)
+                continue
+            usage = _codex_token_usage(payload)
+            if usage is None or not (current_project or meta_project):
+                continue
+            turns += 1
+            total = _add_usage(total, usage)
+        if current_session:
+            return turns, total
+    return None
+
+
 def claude_overhead(project_root: Path, *, home: Path | None = None) -> UsageSummary:
     root = project_root.resolve()
     records: dict[str, dict[str, Any]] = {}
@@ -143,6 +201,73 @@ def claude_overhead(project_root: Path, *, home: Path | None = None) -> UsageSum
             horus_turns += 1
             horus = _add_usage(horus, usage)
     return UsageSummary("claude", len(records), horus_turns, total, horus)
+
+
+def claude_session_usage(
+    session_id: str,
+    project_root: Path,
+    *,
+    home: Path | None = None,
+) -> tuple[int, TokenUsage] | None:
+    root = project_root.resolve()
+    records: dict[str, TokenUsage] = {}
+    found_session = False
+    for path in _claude_jsonl_files(home):
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict) or event.get("sessionId") != session_id:
+                continue
+            found_session = True
+            if not _event_matches_project(event, root):
+                continue
+            usage = _claude_token_usage(event)
+            if usage is None:
+                continue
+            key = str(event.get("requestId") or event.get("uuid") or f"{path}:{len(records)}")
+            records.setdefault(key, usage)
+    if not found_session:
+        return None
+    total = TokenUsage()
+    for usage in records.values():
+        total = _add_usage(total, usage)
+    return len(records), total
+
+
+def session_usages(
+    records: list[Any],
+    *,
+    codex_home: Path | None = None,
+    claude_home: Path | None = None,
+) -> list[SessionUsage]:
+    out: list[SessionUsage] = []
+    for rec in records:
+        project = Path(rec.project)
+        result: tuple[int, TokenUsage] | None
+        note = ""
+        if rec.agent == "codex":
+            result = codex_session_usage(rec.session_id, project, home=codex_home)
+            if result is None:
+                note = "no matching Codex rollout session id"
+        elif rec.agent == "claude":
+            result = claude_session_usage(rec.session_id, project, home=claude_home)
+            if result is None:
+                note = "no matching Claude project log session id"
+        else:
+            result = None
+            note = "unsupported agent"
+        if result is None:
+            out.append(SessionUsage(rec.session_id, rec.agent, rec.project, rec.status, 0, TokenUsage(), False, note))
+        else:
+            turns, total = result
+            out.append(SessionUsage(rec.session_id, rec.agent, rec.project, rec.status, turns, total, True, note))
+    return out
 
 
 def _codex_rollouts(home: Path) -> list[Path]:

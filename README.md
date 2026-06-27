@@ -106,6 +106,7 @@ To quantify the token cost Horus adds to a native-agent workflow:
 
 ```sh
 horus overhead
+horus overhead --sessions
 horus overhead --agent codex
 horus overhead --agent claude
 ```
@@ -116,6 +117,12 @@ agent logs. Observed attribution is intentionally labeled as an upper bound:
 when a turn touches Horus files or commands, the whole turn is counted as
 Horus-related because local logs do not expose the counterfactual cost of the
 same turn without Horus.
+
+With `--sessions`, Horus also joins the machine-local session registry to native
+logs by session id and reports per tracked-session token totals where the native
+app exposes a matching id. Claude sessions and headless Codex sessions can match;
+interactive Codex PTYs may show as unmatched because Codex does not accept
+Horus's preassigned session id.
 
 `horus close` also performs a best-effort read of local Codex rollout telemetry
 from `$CODEX_HOME/sessions` when available. If the latest project turn is near
