@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Project upgrade/refresh is now the official answer for already-initialized repos: `horus upgrade-project` reports stale repo-local projections and `horus upgrade-project --apply` refreshes managed blocks, Claude/Codex skills, and hooks from the installed CLI without touching source or unowned content. Next priority: finish Linux live desktop validation (`horus app`, Flatpak Chrome app-window behavior, mascot background fallback) before returning to MVP5 proper native-app stack selection."
+current_focus: "`horus overhead` now gives a first-pass way to quantify Horus workflow cost: static prompt footprint plus observed local token usage from Codex rollouts and Claude project JSONL, explicitly labeled as upper-bound attribution rather than a counterfactual. Project upgrade/refresh is already shipped via `horus upgrade-project`. Next priority: refine overhead measurement with controlled A/B baselines or dashboard surfacing, then finish Linux live desktop validation before MVP5 proper native-app stack selection."
 last_updated: 2026-06-28
 ---
 

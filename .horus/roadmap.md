@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Project upgrade/refresh is shipped as `horus upgrade-project`: dry-run/report by default, `--apply` refreshes managed blocks, Claude/Codex skills, and native hooks from the installed CLI while skipping unowned content. Next priority: finish Linux live desktop validation (`horus app`, Flatpak Chrome app-window behavior, mascot background fallback) before returning to MVP5 proper native-app stack selection."
-next_action: "Run the Linux live desktop validation pass after the upgrade workflow: exercise `horus app` from this installed tree, confirm Flatpak Chrome is used for the dashboard app window, verify the mascot background fallback is acceptable, and record any remaining Linux desktop gaps before picking the proper native-app architecture."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: run the Linux live desktop validation pass now that `horus upgrade-project` exists and the Linux blockers are fixed. Validate `horus app` on this machine with Flatpak Chrome (`flatpak run com.google.Chrome --app=...` path), check dashboard opening, mascot behavior/background, and no-display failure handling. If gaps remain, fix or record them; otherwise move back to MVP5 proper native-app stack selection. Use `horus upgrade-project` as the official per-project refresh path when checking projected artifacts."
+current_focus: "`horus overhead` is shipped as a first-pass measurement command: it reports static Horus prompt footprint and observed local Claude/Codex token usage attributable to Horus-related turns, clearly marked as an upper bound rather than a counterfactual. Project upgrade/refresh is already shipped via `horus upgrade-project`. Next priority: refine overhead measurement with controlled A/B baselines or dashboard surfacing, then finish Linux live desktop validation before MVP5 proper native-app stack selection."
+next_action: "Refine token-overhead measurement: decide whether the next slice is a controlled A/B baseline command, a dashboard card, or per-session deltas captured by Horus-owned launches. Keep `horus overhead`'s current local-log attribution as the baseline, and preserve the explicit upper-bound wording."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: continue the token-overhead feature from `horus overhead`. It already reports static prompt footprint plus observed local Claude/Codex token usage for Horus-related turns. Decide and implement the next refinement: controlled A/B baseline, dashboard surfacing, or per-session deltas for Horus-owned launches. Be careful not to print transcript content; only aggregate token counts. After this feature is in good shape, return to Linux live desktop validation (`horus app`, Flatpak Chrome app window, mascot background fallback)."
 last_updated: 2026-06-28
 ---
 
@@ -165,6 +165,23 @@ Phase 3 — portability (started with direct Codex skill projection):
   `reconcile instructions`, and no-clobber init logic where appropriate.
 - [x] Make `horus doctor` point at the upgrade command when it detects stale projected artifacts.
 - [x] Document the official per-project refresh process in README once the command exists. → features.md
+
+## Token overhead / workflow cost measurement
+
+> Goal: quantify how much token/context overhead Horus adds compared with a plain
+> native Claude Code or Codex workflow, without pretending the first local-log
+> attribution pass is a precise counterfactual.
+
+- [x] Add `horus overhead` with a rough static prompt footprint for managed blocks,
+  skills, and hook/routine prompts.
+- [x] Parse local Codex rollout `token_count` events for project turns and count
+  Horus-related turns as upper-bound attributed usage.
+- [x] Parse local Claude project JSONL usage records, de-duplicate request ids, and
+  count Horus-related turns as upper-bound attributed usage.
+- [x] Keep the command read-only and aggregate-only: never print transcript content.
+- [ ] Add a controlled comparison mode or baseline recipe for "same task without Horus"
+  so the estimate can move from upper-bound attribution toward measured incremental cost.
+- [ ] Decide where to surface this in the dashboard once the CLI report shape stabilizes.
 
 ## Companion app / mascot - visible Horus presence (next)
 
