@@ -702,6 +702,26 @@ def cmd_overhead(args: argparse.Namespace) -> int:
                 f"cache_write={h.cache_creation_input_tokens}, output={h.output_tokens}, "
                 f"reasoning={h.reasoning_output_tokens}"
             )
+    if args.sessions:
+        print("\nTracked session usage (local logs joined by session id):")
+        reg = registry.Registry.default()
+        reg.reconcile()
+        supported = {"claude", "codex"} if args.agent == "all" else {args.agent}
+        records = [r for r in reg.all() if r.agent in supported and Path(r.project).resolve() == root]
+        codex_home = Path(args.codex_home).expanduser() if args.codex_home else None
+        claude_home = Path(args.claude_home).expanduser() if args.claude_home else None
+        rows = overhead.session_usages(records, codex_home=codex_home, claude_home=claude_home)
+        if not rows:
+            print("  no tracked sessions for this project")
+        for row in rows:
+            sid = row.session_id[:8]
+            if not row.matched:
+                print(f"  {row.agent} {sid} {row.status}: {row.note}")
+                continue
+            print(
+                f"  {row.agent} {sid} {row.status}: "
+                f"{row.turns} turn(s), {row.total.total_tokens} raw tokens"
+            )
     return 0
 
 
@@ -880,6 +900,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_overhead.add_argument("--codex-home", help="CODEX_HOME to inspect (default: ambient ~/.codex)")
     p_overhead.add_argument("--claude-home", help="Claude config dir to inspect (default: ambient ~/.claude)")
+    p_overhead.add_argument(
+        "--sessions",
+        action="store_true",
+        help="also report per tracked-session token usage by joining local logs on session id",
+    )
     p_overhead.set_defaults(func=cmd_overhead)
 
     p_dash = sub.add_parser("dashboard", help="serve the read-only multi-project dashboard")

@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "`horus overhead` is shipped as a first-pass measurement command: it reports static Horus prompt footprint and observed local Claude/Codex token usage attributable to Horus-related turns, clearly marked as an upper bound rather than a counterfactual. Project upgrade/refresh is already shipped via `horus upgrade-project`. Next priority: refine overhead measurement with controlled A/B baselines or dashboard surfacing, then finish Linux live desktop validation before MVP5 proper native-app stack selection."
-next_action: "Refine token-overhead measurement: decide whether the next slice is a controlled A/B baseline command, a dashboard card, or per-session deltas captured by Horus-owned launches. Keep `horus overhead`'s current local-log attribution as the baseline, and preserve the explicit upper-bound wording."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: continue the token-overhead feature from `horus overhead`. It already reports static prompt footprint plus observed local Claude/Codex token usage for Horus-related turns. Decide and implement the next refinement: controlled A/B baseline, dashboard surfacing, or per-session deltas for Horus-owned launches. Be careful not to print transcript content; only aggregate token counts. After this feature is in good shape, return to Linux live desktop validation (`horus app`, Flatpak Chrome app window, mascot background fallback)."
+current_focus: "`horus overhead` is shipped with project-level static/observed attribution and per tracked-session totals via `--sessions` when native logs expose a matching session id. Attribution remains explicitly upper-bound, not counterfactual. Project upgrade/refresh and Linux desktop smoke are already validated. Next priority: controlled A/B baseline measurement or dashboard surfacing of the overhead report."
+next_action: "Add the next measurement refinement: either a controlled A/B baseline recipe/command for comparable tasks with and without Horus, or a dashboard card that surfaces the current project/session report."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: continue token-overhead measurement after `horus overhead --sessions`. The CLI now reports static prompt footprint, project-level observed Claude/Codex usage, and per tracked-session totals where native logs expose matching session ids. Decide and implement the next refinement: controlled A/B baseline measurement or dashboard surfacing. Keep output aggregate-only; do not print transcript content. Linux desktop smoke was already user-validated, so do not repeat it unless a specific app gap is reported."
 last_updated: 2026-06-28
 ---
 
@@ -179,6 +179,10 @@ Phase 3 — portability (started with direct Codex skill projection):
 - [x] Parse local Claude project JSONL usage records, de-duplicate request ids, and
   count Horus-related turns as upper-bound attributed usage.
 - [x] Keep the command read-only and aggregate-only: never print transcript content.
+- [x] Add `horus overhead --sessions` to join the local session registry to native
+  logs by session id and report per tracked-session token totals when a matching
+  Claude/Codex session id exists. Interactive Codex PTYs can remain unmatched because
+  Codex does not accept Horus's preassigned id.
 - [ ] Add a controlled comparison mode or baseline recipe for "same task without Horus"
   so the estimate can move from upper-bound attribution toward measured incremental cost.
 - [ ] Decide where to surface this in the dashboard once the CLI report shape stabilizes.
