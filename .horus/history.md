@@ -1,6 +1,6 @@
 ---
 status: active
-last_updated: 2026-06-26
+last_updated: 2026-06-27
 ---
 
 # History — bumps in the road
@@ -193,3 +193,13 @@ small hook that calls `horus usage check --hook` and lets the in-app skill handl
 the actual closure work when nudged. **Lesson:** choose the native primitive that
 matches the trigger shape - skills for cognitive routines, hooks for event-driven
 checks.
+
+## A hook file can be installed and still be semantically wrong
+
+The Codex usage hook existed in `.codex/hooks.json`, the repo was trusted, and `codex doctor`
+was clean, but the hook still was not valid for the intended closure behavior: over-threshold
+hook mode printed a human `[warn] ...` line. Current Codex `Stop` hooks require structured JSON
+on stdout, so tests that only asserted "exits 0" missed the actual contract failure. **Lessons:**
+(1) validate native hooks against the app's stdout contract, not just file shape; (2) install
+both the pre-task hook and the between-turn safety net when the native app supports both; (3)
+include a forced-threshold smoke test that parses the emitted JSON.

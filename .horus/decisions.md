@@ -863,3 +863,62 @@ Reasoning / lesson: don't "graduate" a shell on theory — pywebview *looked* id
 webview, Python, cross-OS) but failed on contact with the real machine. Ship the proven
 lightweight thing; make the proper app a deliberate, separately-evaluated choice. See
 history.md "pywebview was the worst of both worlds".
+
+## 2026-06-27 - Codex Usage Hooks Must Emit Structured Hook JSON
+
+The Codex usage hook is an active closure diversion, not a plain console warning. Current
+Codex hook semantics require `Stop` hooks that exit 0 to emit JSON on stdout, and
+`UserPromptSubmit` can inject pre-task context with `hookSpecificOutput.additionalContext`.
+
+Decision:
+
+- Install the Codex usage check on both `UserPromptSubmit` and `Stop`.
+- Under threshold, hook mode stays silent and exits 0.
+- At threshold, `UserPromptSubmit` emits `hookSpecificOutput` with the Horus closure
+  instruction as additional context, so the agent closes before starting another task.
+- At threshold, `Stop` emits `{"decision":"block","reason":...}` with the same closure
+  instruction, so the just-finished turn is followed by the closure ritual.
+- Keep the per-session re-arm sentinel used by Claude, so the hook does not loop or nag.
+
+Reasoning: the previous Codex hook file was installed in the right place, but hook mode printed
+plain `[warn] ...` text. That was useful to a human and covered by tests that only asserted exit
+code 0, but it was not a valid Codex `Stop` response and would not reliably drive closure.
+Codex may still require the user to review/trust the project hook with `/hooks`; Horus can write
+the file, but trust remains a native Codex step.
+
+## 2026-06-27 - Codex Supports The Pre-Merge Closure Gate
+
+The pre-merge closure gate is not fundamentally Claude-only. Current Codex hooks support
+`PreToolUse` for `Bash`, including structured denial of a supported tool call. Horus's previous
+installer policy rejected `--target codex --kind merge` because it assumed Codex only had the
+usage/Stop hook surface; that assumption was stale.
+
+Decision:
+
+- `horus hook install --target codex --kind merge` installs a `.codex/hooks.json`
+  `PreToolUse` hook with matcher `Bash`.
+- The hook runs `horus close --hook`, the same command as Claude, because the parser already
+  accepts the native hook input shape and filters for `gh pr merge`.
+- Fresh lanes allow silently; stale lanes deny with the Horus consolidation instruction.
+- The hosted-session self-restart guard is a separate hook from the PR merge gate; Codex parity
+  for that guard was added immediately afterward (see next decision).
+
+## 2026-06-27 - Codex Also Gets The Hosted-Session Guard
+
+After adding the Codex pre-merge gate, the same `PreToolUse`/`Bash` hook surface proved suitable
+for the hosted-session self-restart guard too. The guard logic was already app-neutral: it checks
+the `HORUS_HOSTED_SESSION` and `HORUS_PTY_HOST_PID` environment markers that `pty_host` injects
+for any Horus-hosted PTY, then denies only clear restart/kill-the-host Bash commands.
+
+Decision:
+
+- `horus hook install --target codex --kind guard` installs a `.codex/hooks.json`
+  `PreToolUse` hook with matcher `Bash`.
+- The hook runs `horus guard-host --hook`, the same command used by Claude.
+- The installer keeps the Codex usage, merge, and guard hooks as separate matcher groups so
+  reinstalling one does not clobber the others.
+- Codex still requires native hook trust review (`/hooks`) for changed project-local hooks.
+
+Reasoning: this is not a separate OS/process-control mechanism. The hard part was already solved
+by the env-marker guard design; Codex only needed a project hook projection that matches its
+documented hook shape (`hooks.json`, `PreToolUse`, `Bash`, `commandWindows`).
