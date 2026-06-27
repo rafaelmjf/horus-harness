@@ -32,6 +32,7 @@ from horus import (
     gitstate,
     launch,
     markdown,
+    overhead,
     pty_host,
     registry,
     roadmap,
@@ -283,6 +284,10 @@ main { padding: 24px 28px; max-width: 1320px; }
 .latest .date { color: #8a93a6; }
 .git { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px !important; }
 .git.stale { background: #2e2718 !important; color: #e6c35c; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 8px 0 12px; }
+.metric { background: #12141b; border: 1px solid #232733; border-radius: 8px; padding: 9px 11px; }
+.metric .num { display: block; font-size: 18px; color: #eaf6ee; font-weight: 600; }
+.metric .lbl { display: block; font-size: 11px; color: #8a93a6; text-transform: uppercase; letter-spacing: .4px; }
 .session-body { background: #12141b; border: 1px solid #232733; border-left: 3px solid #6db3f2;
                 border-radius: 8px; padding: 4px 16px; }
 .session-body .meta { color: #8a93a6; font-size: 12px; }
@@ -527,6 +532,72 @@ def _git_html(p: dict[str, Any]) -> str:
         rows.append(f"<span class='muted'>{html.escape(g['remote_url'])}</span>")
     body = "<br>".join(rows)
     return f"<div class='card'><h2 style='font-size:14px'>Git</h2>{body}</div>"
+
+
+def _fmt_int(value: int) -> str:
+    return f"{value:,}"
+
+
+def _project_overhead_html(project_path: str) -> str:
+    """Aggregate-only token overhead card for one project detail view."""
+    root = Path(project_path).resolve()
+    try:
+        static_total = sum(item.estimated_tokens for item in overhead.static_footprint())
+        summaries = [overhead.codex_overhead(root), overhead.claude_overhead(root)]
+        reg = registry.Registry.default()
+        reg.reconcile()
+        records = [r for r in reg.all() if r.agent in ("claude", "codex") and Path(r.project).resolve() == root]
+        session_rows = overhead.session_usages(records)
+    except Exception as exc:
+        return (
+            "<div class='section'><h2>Token overhead</h2>"
+            f"<div class='card'><span class='health-warn'>unavailable:</span> {html.escape(str(exc))}</div></div>"
+        )
+
+    observed_total = sum(s.total.total_tokens for s in summaries)
+    observed_horus = sum(s.horus.total_tokens for s in summaries)
+    observed_pct = (observed_horus / observed_total * 100.0) if observed_total else 0.0
+    matched_sessions = [s for s in session_rows if s.matched]
+
+    metrics = (
+        "<div class='metric-grid'>"
+        f"<div class='metric'><span class='num'>{_fmt_int(static_total)}</span><span class='lbl'>static tokens est.</span></div>"
+        f"<div class='metric'><span class='num'>{_fmt_int(observed_horus)}</span><span class='lbl'>observed Horus-related</span></div>"
+        f"<div class='metric'><span class='num'>{observed_pct:.1f}%</span><span class='lbl'>upper-bound share</span></div>"
+        f"<div class='metric'><span class='num'>{len(matched_sessions)}/{len(session_rows)}</span><span class='lbl'>sessions matched</span></div>"
+        "</div>"
+    )
+
+    usage_rows = "".join(
+        f"<tr><td>{html.escape(s.agent)}</td><td>{s.horus_turns}/{s.turns}</td>"
+        f"<td>{_fmt_int(s.horus.total_tokens)}</td><td>{_fmt_int(s.total.total_tokens)}</td></tr>"
+        for s in summaries
+    )
+    usage_table = (
+        "<table><tr><th>agent</th><th>Horus turns</th><th>Horus-related tokens</th><th>total observed</th></tr>"
+        f"{usage_rows}</table>"
+    )
+
+    if session_rows:
+        srows = "".join(
+            f"<tr><td>{html.escape(row.agent)}</td><td><code>{html.escape(row.session_id[:8])}</code></td>"
+            f"<td>{html.escape(row.status)}</td><td>{row.turns if row.matched else '-'}</td>"
+            f"<td>{_fmt_int(row.total.total_tokens) if row.matched else html.escape(row.note)}</td></tr>"
+            for row in session_rows[:8]
+        )
+        session_table = (
+            "<details class='tasks'><summary>Tracked sessions</summary>"
+            "<table><tr><th>agent</th><th>session</th><th>status</th><th>turns</th><th>tokens / note</th></tr>"
+            f"{srows}</table></details>"
+        )
+    else:
+        session_table = "<p class='muted'>No tracked Claude/Codex sessions for this project.</p>"
+
+    return (
+        "<div class='section' id='overhead'><h2>Token overhead</h2>"
+        "<p class='muted'>Aggregate-only local estimate. Observed usage is upper-bound attribution, not a counterfactual.</p>"
+        f"{metrics}{usage_table}{session_table}</div>"
+    )
 
 
 def _latest_session_card(p: dict[str, Any]) -> str:
@@ -806,6 +877,7 @@ def render_project(p: dict[str, Any]) -> str:
         )
 
     parts.append(_git_html(p))
+    parts.append(_project_overhead_html(p["path"]))
     parts.append(_latest_session_card(p))
 
     # Continuity health

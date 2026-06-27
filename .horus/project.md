@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "`horus overhead` now quantifies Horus workflow cost at two levels: project-level static/observed attribution and per tracked-session totals via `--sessions` when native logs expose a matching session id. Attribution remains explicitly upper-bound, not counterfactual. Project upgrade/refresh and Linux desktop smoke are already validated; next priority is either controlled A/B baseline measurement or dashboard surfacing of the overhead report."
+current_focus: "The dashboard now surfaces Horus token overhead on each project detail page: static prompt estimate, observed upper-bound Horus-related usage, and tracked-session totals where native logs expose matching session ids. Attribution remains explicitly upper-bound, not counterfactual. Project upgrade/refresh and Linux desktop smoke are already validated; next priority is controlled A/B baseline measurement for comparable work with and without Horus."
 last_updated: 2026-06-28
 ---
 
