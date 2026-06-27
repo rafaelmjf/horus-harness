@@ -51,7 +51,7 @@ def test_singleton_lock_is_exclusive():
 
 def test_open_dashboard_prefers_app_window(monkeypatch):
     calls = {}
-    monkeypatch.setattr(companion, "_app_browser", lambda: "FAKE.exe")
+    monkeypatch.setattr(companion, "_app_browser", lambda: ["FAKE.exe"])
     monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: calls.setdefault("cmd", cmd))
     monkeypatch.setattr(companion.webbrowser, "open", lambda *a, **k: calls.setdefault("tab", a))
 
@@ -59,6 +59,22 @@ def test_open_dashboard_prefers_app_window(monkeypatch):
 
     assert "tab" not in calls
     assert calls["cmd"][0] == "FAKE.exe" and "--app=http://x" in calls["cmd"]
+
+
+def test_open_dashboard_supports_flatpak_argv(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(companion, "_app_browser", lambda: ["flatpak", "run", "com.google.Chrome"])
+    monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: calls.setdefault("cmd", cmd))
+
+    companion.open_dashboard("http://x")
+
+    assert calls["cmd"] == [
+        "flatpak",
+        "run",
+        "com.google.Chrome",
+        "--app=http://x",
+        "--window-size=1200,760",
+    ]
 
 
 def test_open_dashboard_falls_back_to_tab(monkeypatch):

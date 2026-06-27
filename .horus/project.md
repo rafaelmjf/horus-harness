@@ -1,8 +1,8 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Handoff to a Linux Codex session: validate the current Horus setup on Linux before choosing the proper native app stack. The core is designed to be portable (continuity lanes, dashboard, hooks, adapters, registry, and POSIX stdlib PTY), but only Windows has been dogfooded end-to-end. Next session should run the Linux smoke checklist, especially the in-app PTY/Codex path, hook install/trust behavior, dashboard, and companion assumptions. MVP5 app cohesion still follows after this platform proof; continuity-debt backlog remains a separate opt-in cleanup job."
-last_updated: 2026-06-27
+current_focus: "Project upgrade/refresh is now the official answer for already-initialized repos: `horus upgrade-project` reports stale repo-local projections and `horus upgrade-project --apply` refreshes managed blocks, Claude/Codex skills, and hooks from the installed CLI without touching source or unowned content. Next priority: finish Linux live desktop validation (`horus app`, Flatpak Chrome app-window behavior, mascot background fallback) before returning to MVP5 proper native-app stack selection."
+last_updated: 2026-06-28
 ---
 
 # Horus Harness

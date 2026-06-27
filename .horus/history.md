@@ -1,6 +1,6 @@
 ---
 status: active
-last_updated: 2026-06-27
+last_updated: 2026-06-28
 ---
 
 # History — bumps in the road
@@ -203,3 +203,16 @@ on stdout, so tests that only asserted "exits 0" missed the actual contract fail
 (1) validate native hooks against the app's stdout contract, not just file shape; (2) install
 both the pre-task hook and the between-turn safety net when the native app supports both; (3)
 include a forced-threshold smoke test that parses the emitted JSON.
+
+## Linux validation exposed hidden Windows and shell assumptions
+
+The 2026-06-27 Linux smoke pass proved the file-first CLI, dashboard rendering, POSIX stdlib
+PTY transport, headless Codex adapter, and structured hook JSON all work in principle. It also
+found assumptions that Windows dogfooding hid: installed hooks wrote `python -m ...` even though
+many Linux hosts only have `python3`; hosted Codex PTYs inherited the parent `TERM=dumb`; POSIX
+`horus open` did not open a real terminal and still reported success after Codex refused to
+start; the advertised Python 3.11 support was not covered by a clean test path; and the Tk
+companion needs explicit Linux desktop/Tk prerequisites or a graceful fallback. **Lessons:**
+cross-platform is not just avoiding Windows-only imports — hook command strings, terminal
+environment, process launch semantics, test runners, and GUI dependencies all need live Linux
+smokes before calling a feature portable.

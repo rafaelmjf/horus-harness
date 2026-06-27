@@ -20,19 +20,55 @@ def open_terminal(argv: list[str], cwd: Path | str, env: dict[str, str] | None =
 
     On Windows uses ``CREATE_NEW_CONSOLE`` so the child gets a real console window
     (the returned PID is the child's, not a launcher's, so liveness tracking works).
-    Elsewhere it falls back to a plain spawn attached to the current terminal.
+    On POSIX, require a graphical session and a terminal emulator; otherwise fail
+    clearly instead of pretending a non-TTY child is an attended session.
     """
     exe = shutil.which(argv[0]) or argv[0]
     full_argv = [exe, *argv[1:]]
     full_env = {**os.environ, **(env or {})}
-    creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if sys.platform == "win32" else 0
-    proc = subprocess.Popen(  # noqa: S603 (argv built by the adapter, not shell)
-        full_argv,
-        cwd=str(cwd),
-        env=full_env,
-        creationflags=creationflags,
-    )
+    if sys.platform == "win32":
+        proc = subprocess.Popen(  # noqa: S603 (argv built by the adapter, not shell)
+            full_argv,
+            cwd=str(cwd),
+            env=full_env,
+            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+        )
+        return proc.pid
+
+    terminal_argv = _posix_terminal_argv(full_argv, cwd=Path(cwd))
+    proc = subprocess.Popen(terminal_argv, cwd=str(cwd), env=full_env)  # noqa: S603
     return proc.pid
+
+
+def _posix_terminal_argv(argv: list[str], *, cwd: Path) -> list[str]:
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        raise OSError(
+            "no graphical display detected; run `horus open` from a desktop session "
+            "or use the dashboard in-app terminal"
+        )
+
+    command = " ".join(shlex_quote(part) for part in argv)
+    candidates = (
+        ("x-terminal-emulator", ["x-terminal-emulator", "-e", "sh", "-lc", command]),
+        ("gnome-terminal", ["gnome-terminal", f"--working-directory={cwd}", "--", *argv]),
+        ("kgx", ["kgx", "--working-directory", str(cwd), "-e", *argv]),
+        ("konsole", ["konsole", "--workdir", str(cwd), "-e", *argv]),
+        ("xfce4-terminal", ["xfce4-terminal", "--working-directory", str(cwd), "-e", command]),
+        ("xterm", ["xterm", "-e", command]),
+        ("alacritty", ["alacritty", "--working-directory", str(cwd), "-e", *argv]),
+        ("kitty", ["kitty", "--directory", str(cwd), *argv]),
+    )
+    for name, term_argv in candidates:
+        exe = shutil.which(name)
+        if exe:
+            return [exe, *term_argv[1:]]
+    raise OSError("no supported terminal emulator found for `horus open`; use the dashboard in-app terminal")
+
+
+def shlex_quote(value: str) -> str:
+    import shlex
+
+    return shlex.quote(value)
 
 
 def _descendant_pids(pid: int) -> set[int]:

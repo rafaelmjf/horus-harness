@@ -288,7 +288,7 @@ def test_hook_install_codex_merge_cli(tmp_path, monkeypatch):
     data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     group = data["hooks"]["PreToolUse"][0]
     assert group["matcher"] == "Bash"
-    assert group["hooks"][0]["command"] == "python -m horus close --hook"
+    assert group["hooks"][0]["command"] == "python3 -m horus close --hook"
     assert group["hooks"][0]["commandWindows"] == "py -m horus close --hook"
 
 
@@ -299,8 +299,38 @@ def test_hook_install_codex_guard_cli(tmp_path, monkeypatch):
     data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     group = data["hooks"]["PreToolUse"][0]
     assert group["matcher"] == "Bash"
-    assert group["hooks"][0]["command"] == "python -m horus guard-host --hook"
+    assert group["hooks"][0]["command"] == "python3 -m horus guard-host --hook"
     assert group["hooks"][0]["commandWindows"] == "py -m horus guard-host --hook"
+
+
+def test_upgrade_project_cli_dry_run_reports_pending(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import initialize
+
+    initialize.init_project(tmp_path, assume_yes=True)
+    (tmp_path / ".codex" / "hooks.json").unlink(missing_ok=True)
+
+    rc = main(["upgrade-project", "--path", str(tmp_path), "--target", "codex", "--no-skills", "--no-instructions"])
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "Dry run only" in out
+    assert "would-update" in out
+    assert not (tmp_path / ".codex" / "hooks.json").exists()
+
+
+def test_upgrade_project_cli_apply_writes(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import initialize
+
+    initialize.init_project(tmp_path, assume_yes=True)
+    (tmp_path / ".codex" / "hooks.json").unlink(missing_ok=True)
+
+    rc = main(["upgrade-project", "--path", str(tmp_path), "--target", "codex", "--no-skills", "--no-instructions", "--apply"])
+
+    assert rc == 0
+    assert (tmp_path / ".codex" / "hooks.json").exists()
+    assert "Applying Horus project projections" in capsys.readouterr().out
 
 
 def test_app_cli_dispatches_to_companion(tmp_path, monkeypatch):

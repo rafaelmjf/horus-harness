@@ -9,7 +9,7 @@ import subprocess
 import sys
 import webbrowser
 from importlib import resources
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import NamedTuple
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -100,12 +100,12 @@ def relaunch_without_console() -> bool:
     if os.environ.get("HORUS_DETACHED") == "1":
         # We are the detached child (or the user opted to keep the console).
         return False
-    executable = Path(sys.executable)
-    if executable.name.lower() != "python.exe":
+    executable_name = PureWindowsPath(sys.executable).name
+    if executable_name.lower() != "python.exe":
         # Already pythonw.exe (no console) or an unusual launcher — run inline.
         return False
-    pythonw = executable.with_name("pythonw.exe")
-    if not pythonw.is_file():
+    pythonw = PureWindowsPath(sys.executable).with_name("pythonw.exe")
+    if not Path(str(pythonw)).is_file():
         return False
 
     env = dict(os.environ)
@@ -129,29 +129,60 @@ def relaunch_without_console() -> bool:
 # address bar — so the dashboard reads as a companion app, not a browser tab. Edge
 # ships on Windows 11; Chrome is the fallback. PySide/pywebview is the upgrade path
 # if we later want a true native window + taskbar identity.
-def _app_browser() -> str | None:
+def _flatpak_app(app_id: str) -> list[str] | None:
+    flatpak = shutil.which("flatpak")
+    if not flatpak:
+        return None
+    try:
+        result = subprocess.run(
+            [flatpak, "info", app_id],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return None
+    if result.returncode == 0:
+        return [flatpak, "run", app_id]
+    return None
+
+
+def _app_browser() -> list[str] | None:
+    for app_id in (
+        "com.google.Chrome",
+        "com.microsoft.Edge",
+        "org.chromium.Chromium",
+        "com.brave.Browser",
+    ):
+        argv = _flatpak_app(app_id)
+        if argv:
+            return argv
     for candidate in (
         shutil.which("msedge"),
+        shutil.which("microsoft-edge"),
         shutil.which("chrome"),
         shutil.which("google-chrome"),
+        shutil.which("chromium"),
+        shutil.which("chromium-browser"),
+        shutil.which("brave-browser"),
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     ):
         if candidate and Path(candidate).is_file():
-            return candidate
+            return [candidate]
     return None
 
 
 def open_dashboard(url: str, *, app_window: bool = True) -> None:
     """Open the dashboard. Prefers a chromeless app-mode window; falls back to a tab."""
-    exe = _app_browser() if app_window else None
-    if exe:
+    browser = _app_browser() if app_window else None
+    if browser:
         kwargs: dict = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "stdin": subprocess.DEVNULL}
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
         try:
-            subprocess.Popen([exe, f"--app={url}", "--window-size=1200,760"], **kwargs)
+            subprocess.Popen([*browser, f"--app={url}", "--window-size=1200,760"], **kwargs)
             return
         except OSError:
             pass
@@ -195,6 +226,9 @@ def run_companion(
     except ImportError:
         print("Tkinter is not available; the Horus companion needs a desktop Python with Tk.")
         return 2
+    if sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        print("No graphical display detected; run `horus app` from a Linux desktop session with DISPLAY or WAYLAND_DISPLAY set.")
+        return 2
 
     lock = acquire_singleton_lock()
     if lock is None:
@@ -215,11 +249,12 @@ def run_companion(
     except tk.TclError:
         pass
     transparent = "#ff00ff"
-    root.configure(bg=transparent)
+    background = transparent
     try:
         root.attributes("-transparentcolor", transparent)
     except tk.TclError:
-        pass
+        background = "#0f1115"
+    root.configure(bg=background)
 
     full_frames = [tk.PhotoImage(file=str(path)) for path in mascot_frame_paths()]
     scale = max(1, max(frame.height() for frame in full_frames) // 180)
@@ -228,7 +263,7 @@ def run_companion(
     height = max(frame.height() for frame in mascot_frames)
     root.geometry(f"{width}x{height}+80+80")
 
-    canvas = tk.Canvas(root, width=width, height=height, bg=transparent, highlightthickness=0, bd=0)
+    canvas = tk.Canvas(root, width=width, height=height, bg=background, highlightthickness=0, bd=0)
     canvas.pack()
 
     menu = tk.Menu(root, tearoff=0)

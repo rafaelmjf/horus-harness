@@ -34,13 +34,15 @@ pip install horus-harness
 ```sh
 horus init [path]                 # scaffold .horus/ + managed AGENTS.md/CLAUDE.md blocks
 horus doctor [project|instructions|all]   # continuity + instruction-drift health checks
+horus upgrade-project             # report stale repo-local Horus projections
+horus upgrade-project --apply     # refresh managed blocks, skills, and hooks
 horus dashboard                   # local, read-only multi-project web view (127.0.0.1:8765)
 horus app                         # borderless animated companion; click opens dashboard
 horus session new "<title>"       # create a dated session summary from the template
 horus close                       # verify continuity, Codex usage, and print the closure ritual
 horus close --usage-threshold 90  # warn when Codex context or rate-limit usage reaches a percent
 horus usage check                 # check the same native-app usage signal directly
-horus hook install --target codex # install a Codex Stop hook for automatic usage nudges
+horus hook install --target codex --kind all # install Codex usage/merge/guard hooks
 horus consolidate                 # route/prune/distill .horus lanes; prints the agent ritual
 horus distill-history             # compress a large log into curated history.md
 horus infer                       # bootstrap/refresh .horus from canonical docs; prints the ritual
@@ -66,15 +68,46 @@ horus forget <path> | horus prune # manage the dashboard's project registry
 Horus project skills are scaffolded for both Claude Code (`.claude/skills`) and
 Codex (`.agents/skills`).
 
+## Adding Horus to a project
+
+Run this once from the project root:
+
+```sh
+horus init -y --skill-target all
+horus hook install --target codex --kind all
+horus hook install --target claude --kind all
+horus doctor
+```
+
+For an existing project with useful README/status/roadmap docs, run `horus infer`
+after init and let the in-app `horus-infer` skill distill the docs into `.horus/`.
+
+## Keeping projected artifacts current
+
+Upgrading the Horus CLI updates the command code, but not repo-local projected
+artifacts that were copied into each project. To check and refresh those safely:
+
+```sh
+uv tool upgrade horus-harness
+cd /path/to/project
+horus upgrade-project          # dry-run/report
+horus upgrade-project --apply  # refresh managed blocks, skills, and hooks
+horus doctor
+```
+
+`upgrade-project` only touches Horus-managed/projection surfaces: the managed
+blocks in `AGENTS.md`/`CLAUDE.md`, bundled skills, and native hooks. It does not
+rewrite source files or author `.horus/` lane content.
+
 `horus close` also performs a best-effort read of local Codex rollout telemetry
 from `$CODEX_HOME/sessions` when available. If the latest project turn is near
 the configured usage threshold, Horus nudges you to run the closure ritual before
 starting another large turn.
 
-For a native Codex warning, run `horus hook install --target codex --path .`.
-That writes a project-local `.codex/hooks.json` `Stop` hook which calls
-`horus usage check --hook` after turns. Codex may ask you to review/trust the hook
-with `/hooks` before it runs.
+For native Codex warnings and gates, run `horus hook install --target codex --kind all --path .`.
+That writes project-local `.codex/hooks.json` hooks for usage closure, pre-merge
+closure, and hosted-session self-restart safety. Codex may ask you to review/trust
+the hook with `/hooks` before it runs.
 
 ## License
 

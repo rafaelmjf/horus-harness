@@ -121,6 +121,8 @@ class PtyHost:
         env = adapter.build_env(spec)
         env["HORUS_HOSTED_SESSION"] = "1"
         env["HORUS_PTY_HOST_PID"] = str(os.getpid())
+        if not env.get("TERM") or env.get("TERM") == "dumb":
+            env["TERM"] = "xterm-256color"
         pty = spawn_pty(argv, cwd=root, env=env, cols=cols, rows=rows)
 
         term_id = f"pty-{next(self._ids)}"

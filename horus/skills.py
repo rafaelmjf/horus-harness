@@ -374,13 +374,13 @@ def skill_findings(project_root: Path, *, targets: tuple[str, ...] = ("claude",)
         for skill in SKILLS:
             path = skill_path(skill, project_root, target=target)
             if not path.exists():
-                findings.append(Finding("warn", f"{target} skill '{skill.name}' not installed (run `horus skill install --target {target}`)"))
+                findings.append(Finding("warn", f"{target} skill '{skill.name}' not installed (run `horus upgrade-project --apply --target {target}`)"))
                 continue
             current = installed_version(path.read_text(encoding="utf-8"))
             if current is None:
-                findings.append(Finding("warn", f"{target} skill '{skill.name}' present without a version marker"))
+                findings.append(Finding("warn", f"{target} skill '{skill.name}' present without a version marker (inspect, then use `horus skill install --target {target} --force` if it is safe to overwrite)"))
             elif current < skill.version:
-                findings.append(Finding("warn", f"{target} skill '{skill.name}' outdated (v{current} < v{skill.version}); run `horus skill install --target {target}`"))
+                findings.append(Finding("warn", f"{target} skill '{skill.name}' outdated (v{current} < v{skill.version}); run `horus upgrade-project --apply --target {target}`"))
             else:
                 findings.append(Finding("ok", f"{target} skill '{skill.name}' installed (v{current})"))
     return findings

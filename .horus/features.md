@@ -1,6 +1,6 @@
 ---
 status: active
-last_updated: 2026-06-27
+last_updated: 2026-06-28
 ---
 
 # Features — capability ledger
@@ -17,6 +17,7 @@ Status: **Shipped** · **In progress** · **Planned**
 
 | Capability | Since | Notes |
 |---|---|---|
+| Project upgrade / projection refresh | 2026-06-28 | `horus upgrade-project` is the official per-project refresh path after `uv tool upgrade horus-harness`: dry-run/report by default, `--apply` refreshes Horus-managed AGENTS/CLAUDE blocks, Claude/Codex project skills, and native hooks from the installed CLI. It skips instruction files without a Horus managed block and unversioned skills instead of clobbering unowned content. `horus doctor` now points stale projected artifacts at this command; README documents init + refresh workflows. action points → roadmap.md |
 | Horus companion/mascot app | 2026-06-25 | `horus app` / `horus mascot`; borderless always-on-top Tkinter mascot, transparent packaged PNG frames, idle blink/bob motion, starts/detects dashboard + opens it as an Edge/Chrome `--app` window on click, context menu includes close check + quit; launches windowless on Windows (re-exec under `pythonw.exe`, `--no-detach` opt-out) so no console lingers. **Art refreshed 2026-06-26** (new Horus-falcon mascot + a head/bust `icon.png`/`icon.ico`); `scripts/regen_mascot.py` rewritten to key out the white background from the source art (border flood-fill preserves interior whites), strip the dark top-edge line, and autocrop. The known lifecycle gaps (close-window doesn't quit; 8765 leak) are accepted here — the proper native app (Planned) is where they get solved |
 | `horus init` — scaffold `.horus/` + managed instruction blocks | — | never clobbers; injects managed block into existing AGENTS/CLAUDE |
 | `horus doctor` (project + instructions) | — | continuity health + cross-ref-normalized drift check |
