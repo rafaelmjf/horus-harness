@@ -12,6 +12,45 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m horus usage check --path . --threshold 90 --hook",
+            "commandWindows": "py -m horus usage check --path . --threshold 90 --hook",
+            "timeout": 30,
+            "statusMessage": "Checking Horus usage"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m horus close --hook",
+            "commandWindows": "py -m horus close --hook",
+            "timeout": 30,
+            "statusMessage": "Checking Horus closure"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m horus guard-host --hook",
+            "commandWindows": "py -m horus guard-host --hook",
+            "timeout": 30,
+            "statusMessage": "Checking Horus host safety"
+          }
+        ]
+      }
     ]
   }
 }

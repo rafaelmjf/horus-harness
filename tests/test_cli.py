@@ -233,14 +233,42 @@ def test_close_check_gates_on_freshness(tmp_path, monkeypatch, capsys):
     assert "Stale" in capsys.readouterr().out
 
 
-def test_usage_check_cli_warns_and_hook_mode_exits_clean(tmp_path, monkeypatch):
+def test_usage_check_cli_warns_and_codex_stop_hook_blocks_with_json(tmp_path, monkeypatch, capsys):
+    import io
+
     _home(tmp_path, monkeypatch)
     codex_home = tmp_path / "codex-home"
     monkeypatch.setenv("CODEX_HOME", str(codex_home))
     _write_codex_rollout(codex_home, tmp_path)
+    monkeypatch.setattr("horus.native_hooks.tempfile.gettempdir", lambda: str(tmp_path))
 
     assert main(["usage", "check", "--path", str(tmp_path), "--threshold", "90"]) == 1
+    capsys.readouterr()
+    monkeypatch.setattr("sys.stdin", io.StringIO('{"session_id":"codex-stop","hook_event_name":"Stop"}'))
     assert main(["usage", "check", "--path", str(tmp_path), "--threshold", "90", "--hook"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["decision"] == "block"
+    assert "horus-consolidate" in payload["reason"]
+
+
+def test_codex_userpromptsubmit_hook_injects_context(tmp_path, monkeypatch, capsys):
+    import io
+
+    _home(tmp_path, monkeypatch)
+    codex_home = tmp_path / "codex-home"
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+    _write_codex_rollout(codex_home, tmp_path)
+    monkeypatch.setattr("horus.native_hooks.tempfile.gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(
+        "sys.stdin",
+        io.StringIO('{"session_id":"codex-prompt","hook_event_name":"UserPromptSubmit"}'),
+    )
+
+    assert main(["usage", "check", "--path", str(tmp_path), "--threshold", "90", "--hook"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    hso = payload["hookSpecificOutput"]
+    assert hso["hookEventName"] == "UserPromptSubmit"
+    assert "horus-consolidate" in hso["additionalContext"]
 
 
 def test_hook_install_codex_cli(tmp_path, monkeypatch):
@@ -251,6 +279,28 @@ def test_hook_install_codex_cli(tmp_path, monkeypatch):
     assert '"Stop"' in hooks_text
     assert "horus usage check" in hooks_text
     assert "commandWindows" in hooks_text
+
+
+def test_hook_install_codex_merge_cli(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+
+    assert main(["hook", "install", "--path", str(tmp_path), "--target", "codex", "--kind", "merge"]) == 0
+    data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    group = data["hooks"]["PreToolUse"][0]
+    assert group["matcher"] == "Bash"
+    assert group["hooks"][0]["command"] == "python -m horus close --hook"
+    assert group["hooks"][0]["commandWindows"] == "py -m horus close --hook"
+
+
+def test_hook_install_codex_guard_cli(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+
+    assert main(["hook", "install", "--path", str(tmp_path), "--target", "codex", "--kind", "guard"]) == 0
+    data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    group = data["hooks"]["PreToolUse"][0]
+    assert group["matcher"] == "Bash"
+    assert group["hooks"][0]["command"] == "python -m horus guard-host --hook"
+    assert group["hooks"][0]["commandWindows"] == "py -m horus guard-host --hook"
 
 
 def test_app_cli_dispatches_to_companion(tmp_path, monkeypatch):

@@ -563,8 +563,27 @@ def cmd_usage_check(args: argparse.Namespace) -> int:
     findings = codex_usage.usage_findings(root, threshold=args.threshold)
     actionable = [f for f in findings if f.level in ("warn", "fail")]
     if args.hook:
-        for f in actionable:
-            print(f"{_LEVEL_TAG.get(f.level, '[????]')} {f.message}")
+        if not actionable:
+            return 0
+        hook_input = _read_hook_stdin()
+        if hook_input.get("stop_hook_active") or hook_input.get("stopHookActive"):
+            return 0
+        session_id = str(hook_input.get("session_id") or hook_input.get("sessionId") or "unknown")
+        if native_hooks.closure_already_fired(session_id):
+            return 0
+        native_hooks.mark_closure_fired(session_id)
+
+        instruction = templates.USAGE_CLOSURE_INSTRUCTION
+        event = hook_input.get("hook_event_name") or hook_input.get("hookEventName") or "Stop"
+        if event == "UserPromptSubmit":
+            print(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "UserPromptSubmit",
+                    "additionalContext": instruction,
+                }
+            }))
+        else:
+            print(json.dumps({"decision": "block", "reason": instruction}))
         return 0
     healthy = _print_findings(findings)
     return 0 if healthy else 1
@@ -576,13 +595,19 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
         return 2
     kind = getattr(args, "kind", "usage")
     if args.target == "codex":
-        if kind not in ("usage", "all"):
-            print("Codex supports only the usage hook (use --kind usage). The pre-merge")
-            print("closure gate and the hosted-session guard are Claude PreToolUse hooks")
-            print("(--target claude --kind merge|guard).")
-            return 2
-        action = native_hooks.install_codex_usage_hook(root, threshold=args.threshold)
-        print(f"[{action.status}] {action.message}")
+        if kind in ("usage", "all"):
+            action = native_hooks.install_codex_usage_hook(root, threshold=args.threshold)
+            print(f"[{action.status}] {action.message}")
+        if kind in ("merge", "all"):
+            action = native_hooks.install_codex_merge_hook(root)
+            print(f"[{action.status}] {action.message}")
+            print("PreToolUse gate on `gh pr merge`: blocks the merge while the .horus lanes")
+            print("are stale and diverts the session to horus-consolidate first.")
+        if kind in ("guard", "all"):
+            action = native_hooks.install_codex_guard_hook(root)
+            print(f"[{action.status}] {action.message}")
+            print("PreToolUse gate: inside a Horus-hosted PTY session, blocks a Bash command")
+            print("that would restart/kill the dashboard process hosting the session.")
         print("Codex may ask you to review/trust this project hook with /hooks before it runs.")
         return 0
     if args.target == "claude":

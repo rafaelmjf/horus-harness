@@ -37,6 +37,26 @@ def _codex_hook_command(threshold: float) -> dict[str, Any]:
     }
 
 
+def _codex_merge_hook_command() -> dict[str, Any]:
+    return {
+        "type": "command",
+        "command": "python -m horus close --hook",
+        "commandWindows": "py -m horus close --hook",
+        "timeout": 30,
+        "statusMessage": "Checking Horus closure",
+    }
+
+
+def _codex_guard_hook_command() -> dict[str, Any]:
+    return {
+        "type": "command",
+        "command": "python -m horus guard-host --hook",
+        "commandWindows": "py -m horus guard-host --hook",
+        "timeout": 30,
+        "statusMessage": "Checking Horus host safety",
+    }
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -67,21 +87,12 @@ def _is_horus_guard_hook(handler: Any) -> bool:
     return _handler_has_marker(handler, _HORUS_GUARD_MARKER)
 
 
-def install_codex_usage_hook(project_root: Path, *, threshold: float = 90.0) -> HookAction:
-    """Install/update a project-local Codex Stop hook for usage checks."""
-    codex_dir = project_root / ".codex"
-    path = codex_dir / "hooks.json"
-    data = _load_json(path)
-    hooks = data.setdefault("hooks", {})
-    if not isinstance(hooks, dict):
-        hooks = {}
-        data["hooks"] = hooks
+def _merge_codex_usage_hook(hooks: dict[str, Any], event: str, threshold: float) -> None:
+    groups = hooks.setdefault(event, [])
+    if not isinstance(groups, list):
+        groups = []
 
-    stop_groups = hooks.setdefault("Stop", [])
-    if not isinstance(stop_groups, list):
-        stop_groups = []
-
-    for group in stop_groups:
+    for group in groups:
         if not isinstance(group, dict):
             continue
         handlers = group.get("hooks")
@@ -91,12 +102,56 @@ def install_codex_usage_hook(project_root: Path, *, threshold: float = 90.0) -> 
         if len(kept) != len(handlers):
             group["hooks"] = kept
 
-    stop_groups = [
-        group for group in stop_groups
+    groups = [
+        group for group in groups
         if not (isinstance(group, dict) and isinstance(group.get("hooks"), list) and not group["hooks"])
     ]
-    stop_groups.append({"hooks": [_codex_hook_command(threshold)]})
-    hooks["Stop"] = stop_groups
+    groups.append({"hooks": [_codex_hook_command(threshold)]})
+    hooks[event] = groups
+
+
+def _merge_codex_pretooluse_hook(
+    hooks: dict[str, Any],
+    handler: dict[str, Any],
+    *,
+    is_mine: Any = _is_horus_merge_hook,
+) -> None:
+    groups = hooks.setdefault("PreToolUse", [])
+    if not isinstance(groups, list):
+        groups = []
+
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        handlers = group.get("hooks")
+        if not isinstance(handlers, list):
+            continue
+        kept = [h for h in handlers if not is_mine(h)]
+        if len(kept) != len(handlers):
+            group["hooks"] = kept
+
+    groups = [
+        group for group in groups
+        if not (isinstance(group, dict) and isinstance(group.get("hooks"), list) and not group["hooks"])
+    ]
+    groups.append({"matcher": "Bash", "hooks": [handler]})
+    hooks["PreToolUse"] = groups
+
+
+def install_codex_usage_hook(project_root: Path, *, threshold: float = 90.0) -> HookAction:
+    """Install/update project-local Codex hooks for usage checks."""
+    codex_dir = project_root / ".codex"
+    path = codex_dir / "hooks.json"
+    data = _load_json(path)
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        hooks = {}
+        data["hooks"] = hooks
+
+    # UserPromptSubmit is the primary pre-task diversion; Stop is the safety net
+    # between turns if the session crossed the threshold during the just-finished turn.
+    _merge_codex_usage_hook(hooks, "UserPromptSubmit", threshold)
+    _merge_codex_usage_hook(hooks, "Stop", threshold)
     data["hooks"] = hooks
 
     codex_dir.mkdir(parents=True, exist_ok=True)
@@ -106,6 +161,50 @@ def install_codex_usage_hook(project_root: Path, *, threshold: float = 90.0) -> 
         return HookAction("exists", f"Codex usage hook already installed in {path}")
     path.write_text(new_text, encoding="utf-8")
     return HookAction("updated" if old_text is not None else "created", f"installed Codex usage hook in {path}")
+
+
+def install_codex_merge_hook(project_root: Path) -> HookAction:
+    """Install/update a project-local Codex PreToolUse gate for `gh pr merge`."""
+    codex_dir = project_root / ".codex"
+    path = codex_dir / "hooks.json"
+    data = _load_json(path)
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        hooks = {}
+        data["hooks"] = hooks
+
+    _merge_codex_pretooluse_hook(hooks, _codex_merge_hook_command())
+    data["hooks"] = hooks
+
+    codex_dir.mkdir(parents=True, exist_ok=True)
+    new_text = json.dumps(data, indent=2) + "\n"
+    old_text = path.read_text(encoding="utf-8") if path.exists() else None
+    if old_text == new_text:
+        return HookAction("exists", f"Codex pre-merge closure hook already installed in {path}")
+    path.write_text(new_text, encoding="utf-8")
+    return HookAction("updated" if old_text is not None else "created", f"installed Codex pre-merge closure hook in {path}")
+
+
+def install_codex_guard_hook(project_root: Path) -> HookAction:
+    """Install/update a project-local Codex PreToolUse guard for hosted PTY sessions."""
+    codex_dir = project_root / ".codex"
+    path = codex_dir / "hooks.json"
+    data = _load_json(path)
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        hooks = {}
+        data["hooks"] = hooks
+
+    _merge_codex_pretooluse_hook(hooks, _codex_guard_hook_command(), is_mine=_is_horus_guard_hook)
+    data["hooks"] = hooks
+
+    codex_dir.mkdir(parents=True, exist_ok=True)
+    new_text = json.dumps(data, indent=2) + "\n"
+    old_text = path.read_text(encoding="utf-8") if path.exists() else None
+    if old_text == new_text:
+        return HookAction("exists", f"Codex hosted-session guard hook already installed in {path}")
+    path.write_text(new_text, encoding="utf-8")
+    return HookAction("updated" if old_text is not None else "created", f"installed Codex hosted-session guard hook in {path}")
 
 
 # --------------------------------------------------------------------------- #
