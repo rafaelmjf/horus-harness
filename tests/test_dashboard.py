@@ -5,7 +5,7 @@ from pathlib import Path
 
 import json
 
-from horus import config, dashboard, initialize, launcher
+from horus import config, dashboard, initialize, launcher, overhead
 from horus.registry import Registry, SessionRecord
 
 
@@ -162,6 +162,62 @@ def test_project_detail_renders_sections(tmp_path, monkeypatch):
     html_out = dashboard.render_project(data)
     assert "Continuity health" in html_out
     assert "Roadmap" in html_out
+
+
+def test_project_detail_surfaces_token_overhead(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    reg = Registry.default()
+    reg.upsert(SessionRecord(session_id="codex-session", agent="codex", project=str(tmp_path), status="exited"))
+
+    monkeypatch.setattr(
+        dashboard.overhead,
+        "static_footprint",
+        lambda: [overhead.FootprintItem("managed block", 400, 100)],
+    )
+    monkeypatch.setattr(
+        dashboard.overhead,
+        "codex_overhead",
+        lambda root: overhead.UsageSummary(
+            "codex",
+            2,
+            1,
+            overhead.TokenUsage(total_tokens=300),
+            overhead.TokenUsage(total_tokens=120),
+        ),
+    )
+    monkeypatch.setattr(
+        dashboard.overhead,
+        "claude_overhead",
+        lambda root: overhead.UsageSummary(
+            "claude",
+            0,
+            0,
+            overhead.TokenUsage(),
+            overhead.TokenUsage(),
+        ),
+    )
+    monkeypatch.setattr(
+        dashboard.overhead,
+        "session_usages",
+        lambda records: [
+            overhead.SessionUsage(
+                "codex-session",
+                "codex",
+                str(tmp_path),
+                "exited",
+                2,
+                overhead.TokenUsage(total_tokens=300),
+                True,
+            )
+        ],
+    )
+
+    html_out = dashboard.render_project(dashboard.load_project(str(tmp_path)))
+    assert "Token overhead" in html_out
+    assert "upper-bound attribution" in html_out
+    assert "120" in html_out
+    assert "codex-session"[:8] in html_out
 
 
 def test_next_action_and_latest_surface(tmp_path, monkeypatch):
