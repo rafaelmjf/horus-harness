@@ -36,6 +36,7 @@ horus init [path]                 # scaffold .horus/ + managed AGENTS.md/CLAUDE.
 horus doctor [project|instructions|all]   # continuity + instruction-drift health checks
 horus upgrade-project             # report stale repo-local Horus projections
 horus upgrade-project --apply     # refresh managed blocks, skills, and hooks
+horus overhead                    # estimate Horus prompt footprint + observed token usage
 horus dashboard                   # local, read-only multi-project web view (127.0.0.1:8765)
 horus app                         # borderless animated companion; click opens dashboard
 horus session new "<title>"       # create a dated session summary from the template
@@ -98,6 +99,23 @@ horus doctor
 `upgrade-project` only touches Horus-managed/projection surfaces: the managed
 blocks in `AGENTS.md`/`CLAUDE.md`, bundled skills, and native hooks. It does not
 rewrite source files or author `.horus/` lane content.
+
+## Measuring Horus overhead
+
+To quantify the token cost Horus adds to a native-agent workflow:
+
+```sh
+horus overhead
+horus overhead --agent codex
+horus overhead --agent claude
+```
+
+The report has two parts: a rough static prompt footprint for Horus-managed
+instructions, skills, and hook prompts; and observed local usage from native
+agent logs. Observed attribution is intentionally labeled as an upper bound:
+when a turn touches Horus files or commands, the whole turn is counted as
+Horus-related because local logs do not expose the counterfactual cost of the
+same turn without Horus.
 
 `horus close` also performs a best-effort read of local Codex rollout telemetry
 from `$CODEX_HOME/sessions` when available. If the latest project turn is near

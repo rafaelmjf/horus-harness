@@ -24,6 +24,7 @@ from horus import (
     launch,
     launcher,
     native_hooks,
+    overhead,
     registry,
     routines,
     skills,
@@ -671,6 +672,43 @@ def cmd_upgrade_project(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_overhead(args: argparse.Namespace) -> int:
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
+    print(f"Horus token overhead estimate: {root}\n")
+    print("Static prompt footprint (rough estimate: chars / 4):")
+    for item in overhead.static_footprint():
+        print(f"  {item.estimated_tokens:5d} tokens  {item.name}")
+    print("\nObserved local usage (upper-bound attribution, not a counterfactual):")
+    summaries: list[overhead.UsageSummary] = []
+    if args.agent in ("all", "codex"):
+        home = Path(args.codex_home).expanduser() if args.codex_home else None
+        summaries.append(overhead.codex_overhead(root, home=home))
+    if args.agent in ("all", "claude"):
+        home = Path(args.claude_home).expanduser() if args.claude_home else None
+        summaries.append(overhead.claude_overhead(root, home=home))
+    for summary in summaries:
+        pct = _percent(summary.horus.total_tokens, summary.total.total_tokens)
+        print(
+            f"  {summary.agent}: {summary.horus_turns}/{summary.turns} Horus-related turns; "
+            f"{summary.horus.total_tokens}/{summary.total.total_tokens} raw tokens ({pct:.1f}%)"
+        )
+        if summary.horus_turns:
+            h = summary.horus
+            print(
+                "      "
+                f"input={h.input_tokens}, cached={h.cached_input_tokens + h.cache_read_input_tokens}, "
+                f"cache_write={h.cache_creation_input_tokens}, output={h.output_tokens}, "
+                f"reasoning={h.reasoning_output_tokens}"
+            )
+    return 0
+
+
+def _percent(part: int, total: int) -> float:
+    return (part / total * 100.0) if total else 0.0
+
+
 def cmd_app(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
@@ -831,6 +869,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_upgrade.add_argument("--no-skills", action="store_true", help="skip skill refresh")
     p_upgrade.add_argument("--no-instructions", action="store_true", help="skip AGENTS/CLAUDE managed-block refresh")
     p_upgrade.set_defaults(func=cmd_upgrade_project)
+
+    p_overhead = sub.add_parser("overhead", help="estimate Horus prompt and observed token overhead")
+    p_overhead.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_overhead.add_argument(
+        "--agent",
+        choices=("all", "claude", "codex"),
+        default="all",
+        help="which local agent logs to inspect (default: all)",
+    )
+    p_overhead.add_argument("--codex-home", help="CODEX_HOME to inspect (default: ambient ~/.codex)")
+    p_overhead.add_argument("--claude-home", help="Claude config dir to inspect (default: ambient ~/.claude)")
+    p_overhead.set_defaults(func=cmd_overhead)
 
     p_dash = sub.add_parser("dashboard", help="serve the read-only multi-project dashboard")
     p_dash.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
