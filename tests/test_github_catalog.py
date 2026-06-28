@@ -150,3 +150,50 @@ def test_cache_records_refresh_error_without_dropping_projects(tmp_path, monkeyp
     assert cached.projects[0].full_name == "rafaelmjf/demo"
     assert cached.error == "rate limited"
     assert cached.error_at
+
+
+def test_force_refresh_reports_success(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    project = github_catalog.RemoteProject(
+        owner="rafaelmjf",
+        name="demo",
+        full_name="rafaelmjf/demo",
+        url="https://github.com/rafaelmjf/demo",
+        clone_url="git@github.com:rafaelmjf/demo.git",
+        default_branch="main",
+        pushed_at="",
+    )
+    monkeypatch.setattr(github_catalog, "discover", lambda owner, **kw: [project])
+
+    result = github_catalog.force_refresh("rafaelmjf")
+
+    assert result.ok is True
+    assert result.count == 1
+    assert result.fetched_at
+
+
+def test_force_refresh_reports_failure_and_keeps_cached_count(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    project = github_catalog.RemoteProject(
+        owner="rafaelmjf",
+        name="demo",
+        full_name="rafaelmjf/demo",
+        url="https://github.com/rafaelmjf/demo",
+        clone_url="git@github.com:rafaelmjf/demo.git",
+        default_branch="main",
+        pushed_at="",
+    )
+    github_catalog.save_cache("rafaelmjf", [project])
+
+    def fail(owner, **kw):
+        raise RuntimeError("auth required")
+
+    monkeypatch.setattr(github_catalog, "discover", fail)
+
+    result = github_catalog.force_refresh("rafaelmjf")
+
+    assert result.ok is False
+    assert result.count == 1
+    assert "auth required" in result.error

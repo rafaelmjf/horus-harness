@@ -39,6 +39,7 @@ horus upgrade-project --apply     # refresh managed blocks, skills, and hooks
 horus overhead                    # estimate Horus prompt footprint + observed token usage
 horus dashboard                   # local, read-only multi-project web view (127.0.0.1:8765)
 horus discover github <owner> --save # show remote Horus repos for a GitHub user/org
+horus refresh github <owner>      # force-refresh a GitHub owner snapshot now
 horus config workspace-root ~/projects # where remote projects should be cloned
 horus start github:<owner>/<repo> # clone/register a remote Horus repo and show its resume prompt
 horus app                         # borderless animated companion; click opens dashboard
@@ -75,7 +76,9 @@ projects. Once a GitHub owner has been fetched successfully, Horus stores a
 machine-local snapshot under `~/.horus/github-cache/`; later dashboard loads can
 render that snapshot immediately with a last-refreshed note while live discovery
 refreshes the cache separately. If live refresh fails, the dashboard keeps showing
-the last successful snapshot and surfaces the latest error.
+the last successful snapshot and surfaces the latest error. Use the dashboard
+Refresh button, or run `horus refresh github <owner>` / `horus refresh github --all`,
+to force live discovery immediately.
 
 Set the machine-local workspace root once, then start any remote catalog entry:
 

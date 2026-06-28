@@ -178,6 +178,20 @@ def gather_remote_projects() -> tuple[list[github_catalog.RemoteProject], list[s
     return projects, errors, notes
 
 
+def force_refresh_remote(owner: str) -> tuple[list[github_catalog.RemoteProject], list[str], list[str]]:
+    local = config.load_projects()
+    result = github_catalog.force_refresh(owner, local_projects=local)
+    notes: list[str] = []
+    errors: list[str] = []
+    if result.ok:
+        when = f" at {result.fetched_at}" if result.fetched_at else ""
+        notes.append(f"{owner}: force-refresh updated {result.count} Horus-enabled repo(s){when}")
+    else:
+        errors.append(f"{owner}: force-refresh failed: {result.error}")
+    cached = github_catalog.load_cache(owner, local_projects=local)
+    return (cached.projects if cached else [], errors, notes)
+
+
 def _start_remote_refresh(owner: str, local_projects: list[str]) -> None:
     with _REMOTE_REFRESH_LOCK:
         if owner in _REMOTE_REFRESHING:
@@ -887,6 +901,21 @@ def _remote_project_card(p: github_catalog.RemoteProject) -> str:
     )
 
 
+def _refresh_forms() -> str:
+    owners = config.load_github_owners()
+    if not owners:
+        return ""
+    forms = []
+    for owner in owners:
+        forms.append(
+            "<form method='post' action='/github-refresh' style='display:inline-block;margin-right:8px'>"
+            f"<input type='hidden' name='owner' value='{html.escape(owner)}'>"
+            f"<button class='copy' type='submit'>Refresh {html.escape(owner)}</button>"
+            "</form>"
+        )
+    return "<div style='margin:0 0 12px'>" + "".join(forms) + "</div>"
+
+
 def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: list[str], notes: list[str] | None = None) -> str:
     if not projects and not errors and not notes:
         return (
@@ -903,7 +932,7 @@ def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: 
     if errors:
         err = "".join(f"<li>{html.escape(e)}</li>" for e in errors)
         cards = f"<div class='banner err'><strong>GitHub discovery issue</strong><ul>{err}</ul></div>{cards}"
-    return f"<div class='section'><h2>GitHub remote catalog</h2><div class='remote-grid'>{cards}</div></div>"
+    return f"<div class='section'><h2>GitHub remote catalog</h2>{_refresh_forms()}<div class='remote-grid'>{cards}</div></div>"
 
 
 def render_remote_catalog_placeholder() -> str:
@@ -1685,7 +1714,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
-        if parsed.path not in ("/launch", "/pty/input", "/pty/resize", "/pty/kill"):
+        if parsed.path not in ("/launch", "/github-refresh", "/pty/input", "/pty/resize", "/pty/kill"):
             self._send(_page("Not found", "<p>Not found.</p>"), 404)
             return
         if not self._same_origin():
@@ -1709,6 +1738,15 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/pty/kill":
             pty_host.host.kill(self._read_form().get("id", ""))
             self._no_content()
+            return
+        if parsed.path == "/github-refresh":
+            form = self._read_form()
+            owner = form.get("owner", "")
+            if owner not in config.load_github_owners():
+                self._send(render_remote_catalog([], [f"unknown GitHub owner: {owner}"]), 400)
+                return
+            projects, errors, notes = force_refresh_remote(owner)
+            self._send(render_remote_catalog(projects, errors, notes))
             return
 
         query = process_launch(self._read_form())
