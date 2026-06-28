@@ -428,7 +428,8 @@ def _active_class(active: bool) -> str:
 def _page(title: str, body: str, active: str = "projects", wide: bool = False, live: int = 0) -> str:
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
-        f"<title>{html.escape(title)}</title><style>{_STYLE}</style></head><body>"
+        f"<title>{html.escape(title)}</title><link rel='icon' href='/favicon.ico'>"
+        f"<style>{_STYLE}</style></head><body>"
         "<header><h1>Horus</h1>"
         "<div class='sub'>project continuity &amp; control panel</div>"
         f"{_nav(active, live)}</header>"
@@ -443,6 +444,11 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(function(){"
         "var o=btn.textContent;btn.textContent='Copied';"
         "setTimeout(function(){btn.textContent=o;},1200);});}"
+        "document.querySelectorAll('[data-horus-src]').forEach(function(el){"
+        "fetch(el.getAttribute('data-horus-src')).then(function(r){return r.text();})"
+        ".then(function(html){el.outerHTML=html;})"
+        ".catch(function(){el.innerHTML=\"<div class='banner err'>GitHub catalog failed to load.</div>\";});"
+        "});"
         "</script>"
         "</body></html>"
     )
@@ -858,6 +864,17 @@ def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: 
     return f"<div class='section'><h2>GitHub remote catalog</h2><div class='remote-grid'>{cards}</div></div>"
 
 
+def render_remote_catalog_placeholder() -> str:
+    if not config.load_github_owners():
+        return render_remote_catalog([], [])
+    return (
+        "<div id='github-catalog' class='section' data-horus-src='/github-catalog'>"
+        "<h2>GitHub remote catalog</h2>"
+        "<div class='card'><p class='muted'>Loading GitHub projects...</p></div>"
+        "</div>"
+    )
+
+
 _SESSION_STATUS_CLASS = {
     "running": "health-ok",
     "failed": "health-fail",
@@ -905,13 +922,11 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
 def render_index(
     projects: list[dict[str, Any]],
     sessions: list[registry.SessionRecord] | None = None,
-    remote_projects: list[github_catalog.RemoteProject] | None = None,
-    remote_errors: list[str] | None = None,
 ) -> str:
     records = sessions or []
     live = _live_count(records)
     sessions_card = render_sessions_card(records)
-    remote = render_remote_catalog(remote_projects or [], remote_errors or [])
+    remote = render_remote_catalog_placeholder()
     if not projects:
         body = (
             sessions_card
@@ -1498,8 +1513,11 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
         if parsed.path == "/":
+            self._send(render_index(gather_projects(), gather_sessions()))
+            return
+        if parsed.path == "/github-catalog":
             remote_projects, remote_errors = gather_remote_projects()
-            self._send(render_index(gather_projects(), gather_sessions(), remote_projects, remote_errors))
+            self._send(render_remote_catalog(remote_projects, remote_errors))
             return
         if parsed.path == "/sessions":
             recs = gather_sessions()
@@ -1529,6 +1547,12 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/assets/xterm/"):
             self._send_asset(parsed.path[len("/assets/xterm/"):])
             return
+        if parsed.path == "/favicon.ico":
+            self._send_package_asset("icon.ico", "image/x-icon")
+            return
+        if parsed.path == "/assets/icon.png":
+            self._send_package_asset("icon.png", "image/png")
+            return
         if parsed.path == "/project":
             projects = gather_projects()
             try:
@@ -1542,6 +1566,22 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(_page("Not found", "<p>Not found.</p>"), 404)
 
     _ASSET_TYPES = {".js": "application/javascript", ".css": "text/css"}
+
+    def _send_package_asset(self, name: str, content_type: str) -> None:
+        if "/" in name or "\\" in name or ".." in name:
+            self._send(_page("Not found", "<p>Not found.</p>"), 404)
+            return
+        try:
+            data = resources.files("horus").joinpath("assets", name).read_bytes()
+        except (FileNotFoundError, OSError, ModuleNotFoundError):
+            self._send(_page("Not found", "<p>Not found.</p>"), 404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "max-age=86400")
+        self.end_headers()
+        self.wfile.write(data)
 
     def _send_asset(self, name: str) -> None:
         """Serve a vendored xterm.js asset (local, no CDN). Name is a bare filename."""

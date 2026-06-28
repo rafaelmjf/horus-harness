@@ -168,12 +168,23 @@ def test_index_renders_remote_github_catalog():
         next_action="Clone and resume",
     )
 
-    html_out = dashboard.render_index([], remote_projects=[remote])
+    html_out = dashboard.render_remote_catalog([remote], [])
 
     assert "GitHub remote catalog" in html_out
     assert "rafaelmjf/demo" in html_out
     assert "remote only" in html_out
     assert "git clone git@github.com:rafaelmjf/demo.git" in html_out
+
+
+def test_index_uses_async_remote_catalog_placeholder(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+
+    html_out = dashboard.render_index([])
+
+    assert "GitHub remote catalog" in html_out
+    assert "data-horus-src='/github-catalog'" in html_out
+    assert "Loading GitHub projects" in html_out
 
 
 def test_project_detail_renders_sections(tmp_path, monkeypatch):

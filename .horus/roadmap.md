@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub can now act as a remote catalog for Horus-enabled repos not cloned on the current machine. Next priority is making remote catalog entries directly actionable with clone/register/start flows."
+current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub now loads as a non-blocking remote catalog for Horus-enabled repos not cloned on the current machine. Next priority is making remote catalog entries directly actionable with clone/register/start flows."
 next_action: "Add a first-class remote-project start command so a repo that only appears in the central view can be cloned, registered, refreshed, and opened from the CLI."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: add a first-class remote-project start command. Current state: `horus discover github <owner> --save` records GitHub owners, the dashboard shows remote Horus repos discovered via `gh`, and local clones are matched by normalized remote URL. Next step: implement a safe `horus start github:<owner>/<repo>` command that clones into a configured workspace root, registers the project, refreshes Horus projections if needed, and opens/resumes with the repo's next prompt."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: add a first-class remote-project start command. Current state: `horus discover github <owner> --save` records GitHub owners, the dashboard renders local projects immediately, loads the GitHub remote catalog asynchronously from `/github-catalog`, and local clones are matched by normalized remote URL. Next step: implement a safe `horus start github:<owner>/<repo>` command that clones into a configured workspace root, registers the project, refreshes Horus projections if needed, and opens/resumes with the repo's next prompt."
 last_updated: 2026-06-28
 ---
 
@@ -272,10 +272,20 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] Show saved remote Horus projects on the dashboard, including current focus,
   next action, local-clone match by normalized remote URL, and a clone/open command
   for remote-only projects. → features.md
+- [x] Make the dashboard render local projects immediately and load the GitHub
+  remote catalog asynchronously, so slow `gh`/network calls do not block the main
+  dashboard.
 - [ ] Add a safe clone/register/start command for remote-only entries:
   `horus start github:<owner>/<repo>` (or equivalent). It should clone into a
   configured workspace root, register the project, run `upgrade-project --apply`
   only on Horus-managed surfaces, and open/resume with the repo's `next_prompt`.
+- [ ] Cache the last successful GitHub catalog per owner locally, render cached
+  results instantly with a "last refreshed" timestamp, and refresh in the background.
+- [ ] Add a manual refresh action for the GitHub catalog, with clear error state
+  when `gh` auth, network access, or GitHub rate limits block discovery.
+- [ ] Avoid re-checking every repo on every refresh: use GitHub `pushedAt`/ETag-like
+  signals or a small per-repo cache so unchanged repos do not need repeated
+  `.horus/project.md` and `.horus/roadmap.md` reads.
 - [ ] Add workspace-root configuration for where remote projects should be cloned
   on each machine.
 - [ ] Add a dashboard POST action for the clone/register/start flow once the CLI
