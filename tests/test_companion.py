@@ -49,13 +49,25 @@ def test_singleton_lock_is_exclusive():
     again.close()
 
 
-def test_open_dashboard_prefers_app_window(monkeypatch):
+def test_open_dashboard_defaults_to_browser_tab(monkeypatch):
     calls = {}
     monkeypatch.setattr(companion, "_app_browser", lambda: ["FAKE.exe"])
     monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: calls.setdefault("cmd", cmd))
     monkeypatch.setattr(companion.webbrowser, "open", lambda *a, **k: calls.setdefault("tab", a))
 
     companion.open_dashboard("http://x")
+
+    assert "cmd" not in calls
+    assert calls["tab"][0] == "http://x"
+
+
+def test_open_dashboard_app_window_is_explicit(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(companion, "_app_browser", lambda: ["FAKE.exe"])
+    monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: calls.setdefault("cmd", cmd))
+    monkeypatch.setattr(companion.webbrowser, "open", lambda *a, **k: calls.setdefault("tab", a))
+
+    companion.open_dashboard("http://x", app_window=True)
 
     assert "tab" not in calls
     assert calls["cmd"][0] == "FAKE.exe" and "--app=http://x" in calls["cmd"]
@@ -66,7 +78,7 @@ def test_open_dashboard_supports_flatpak_argv(monkeypatch):
     monkeypatch.setattr(companion, "_app_browser", lambda: ["flatpak", "run", "com.google.Chrome"])
     monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: calls.setdefault("cmd", cmd))
 
-    companion.open_dashboard("http://x")
+    companion.open_dashboard("http://x", app_window=True)
 
     assert calls["cmd"] == [
         "flatpak",

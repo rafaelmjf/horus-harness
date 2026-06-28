@@ -854,6 +854,7 @@ def cmd_app(args: argparse.Namespace) -> int:
         port=args.port,
         start_dashboard=not args.no_dashboard,
         open_on_start=args.open,
+        app_window=args.app_window,
         usage_threshold=args.usage_threshold,
     )
 
@@ -1067,6 +1068,11 @@ def build_parser() -> argparse.ArgumentParser:
         p_app.add_argument("--port", type=int, default=8765, help="dashboard port (default: 8765)")
         p_app.add_argument("--no-dashboard", action="store_true", help="don't start the dashboard if it is offline")
         p_app.add_argument("--open", action="store_true", help="open the dashboard immediately")
+        p_app.add_argument(
+            "--app-window",
+            action="store_true",
+            help="open the dashboard in Chrome/Edge app-window mode instead of a normal browser tab",
+        )
         p_app.add_argument(
             "--no-detach",
             action="store_true",

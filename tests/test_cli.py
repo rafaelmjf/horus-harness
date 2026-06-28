@@ -349,6 +349,23 @@ def test_app_cli_dispatches_to_companion(tmp_path, monkeypatch):
     assert calls[0][0] == tmp_path.resolve()
     assert calls[0][1]["port"] == 9999
     assert calls[0][1]["start_dashboard"] is False
+    assert calls[0][1]["app_window"] is False
+
+
+def test_app_cli_can_request_app_window(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    calls = []
+
+    def fake_run(project_root, **kwargs):
+        calls.append((project_root, kwargs))
+        return 0
+
+    monkeypatch.setattr("horus.cli.companion.run_companion", fake_run)
+    monkeypatch.setattr("horus.cli.companion.relaunch_without_console", lambda: False)
+
+    assert main(["app", "--path", str(tmp_path), "--open", "--app-window"]) == 0
+    assert calls[0][1]["open_on_start"] is True
+    assert calls[0][1]["app_window"] is True
 
 
 def test_reconcile_cli_resolves_drift(tmp_path, monkeypatch):

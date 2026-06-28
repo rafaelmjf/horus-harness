@@ -206,10 +206,11 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] Replace the wing overlay with real transparent PNG animation frames generated
   from the mascot image; runtime remains Pillow-free.
 - [x] Clicking the mascot opens the dashboard at `http://127.0.0.1:8765`.
-- [x] Open the dashboard as a chromeless **app-mode window** (Edge/Chrome `--app=`),
-  not a browser tab, so it reads as a companion app (2026-06-25). `companion.open_dashboard`
-  prefers app-mode, falls back to a tab. Upgrade path: PySide/pywebview for a true
-  native window + taskbar identity.
+- [x] Open the dashboard from the mascot. Initial app-mode behavior shipped
+  2026-06-25; revised 2026-06-28 so lightweight Horus opens a normal browser tab
+  by default for clearer OS/taskbar identity, with `--app-window` retaining the
+  Chrome/Edge `--app=` mode as an explicit opt-in. Upgrade path: proper native
+  shell for a true window + taskbar identity.
 - [x] Fix console-window strobing on dashboard refresh (2026-06-25): `gitstate` git
   subprocesses now pass `CREATE_NO_WINDOW` on Windows (the overview fires many git
   calls per refresh).
@@ -566,10 +567,11 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
     (WinForms/WebView2 recursion crash) + slow (~4 s tab) on Win11; reverted to the Edge `--app`
     + Tk mascot shell. See decisions.md "pywebview Tried and Rejected" + history.md. The
     decision split the frontend into two tiers:
-  - [ ] **Lightweight tier (SHIPS NOW, via uv): Edge `--app` + Tk mascot** — fast, stable, zero
-    heavy deps; refreshed mascot art. **Accepts the lifecycle drawbacks for now** (closing the
-    dashboard window doesn't quit the app; 8765 server-leak + single-instance gaps remain). The
-    bidirectional close↔quit bind is explicitly *deferred to the proper app*, not solved here.
+  - [ ] **Lightweight tier (SHIPS NOW, via uv): browser tab + Tk mascot** — fast, stable, zero
+    heavy deps; refreshed mascot art; app-window mode remains opt-in. **Accepts the lifecycle
+    drawbacks for now** (closing the dashboard tab/window doesn't quit the app; the browser owns
+    taskbar identity). The bidirectional close↔quit bind is explicitly *deferred to the proper app*,
+    not solved here.
   - [ ] **Proper-app tier (PLANNED, separate downloadable package): a real native desktop app**
     that owns the window lifecycle + taskbar icon + tray. **Stack not chosen** — eval PySide6
     (all-Python, heavy) vs Electron (Node, polished) vs Tauri (tiny, Rust+SPA); trade-offs in
