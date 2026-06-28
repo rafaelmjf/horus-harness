@@ -256,12 +256,7 @@ def run_companion(
         root.attributes("-toolwindow", True)
     except tk.TclError:
         pass
-    transparent = "#ff00ff"
-    background = transparent
-    try:
-        root.attributes("-transparentcolor", transparent)
-    except tk.TclError:
-        background = "#0f1115"
+    background = "#0f1115"
     root.configure(bg=background)
 
     full_frames = [tk.PhotoImage(file=str(path)) for path in mascot_frame_paths()]
