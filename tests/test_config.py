@@ -27,15 +27,27 @@ def test_github_owner_registry_coexists_with_projects(tmp_path, monkeypatch):
     proj = tmp_path / "p1"
     proj.mkdir()
 
+    saved_root = config.set_workspace_root(tmp_path / "workspace")
     assert config.register_github_owner("rafaelmjf") is True
     assert config.register_github_owner("rafaelmjf") is False
     assert config.register_project(proj) is True
 
     assert config.load_github_owners() == ["rafaelmjf"]
     assert config._as_key(proj) in config.load_projects()
+    assert config.load_workspace_root() == saved_root
 
     assert config.unregister_project(proj) is True
     assert config.load_github_owners() == ["rafaelmjf"]
+    assert config.load_workspace_root() == saved_root
+
+
+def test_workspace_root_defaults_and_round_trips(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.load_workspace_root().endswith("/home/projects")
+
+    saved = config.set_workspace_root(tmp_path / "remote projects")
+    assert saved == (tmp_path / "remote projects").resolve().as_posix()
+    assert config.load_workspace_root() == saved
 
 
 def test_prune_removes_only_stale(tmp_path, monkeypatch):

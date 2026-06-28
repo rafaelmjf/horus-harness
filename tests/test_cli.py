@@ -2,8 +2,9 @@
 
 import json
 import os
+from pathlib import Path
 
-from horus import launcher, registry
+from horus import github_catalog, launcher, registry, remote_start, upgrade
 from horus.cli import main
 from horus.instructions import check_drift
 from horus.registry import Registry, SessionRecord
@@ -382,6 +383,61 @@ def test_app_cli_can_request_mascot_style(tmp_path, monkeypatch):
 
     assert main(["app", "--path", str(tmp_path), "--mascot-style", "layered"]) == 0
     assert calls[0][1]["mascot_style"] == "layered"
+
+
+def test_start_cli_runs_remote_start_and_prints_prompt(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    project = tmp_path / "workspace" / "demo"
+    result = remote_start.StartResult(
+        project=github_catalog.RemoteProject(
+            owner="rafaelmjf",
+            name="demo",
+            full_name="rafaelmjf/demo",
+            url="https://github.com/rafaelmjf/demo",
+            clone_url="git@github.com:rafaelmjf/demo.git",
+            default_branch="main",
+            pushed_at="2026-06-28T12:00:00Z",
+            next_prompt="Resume demo",
+        ),
+        path=project,
+        cloned=True,
+        registered=True,
+        upgrade_actions=[upgrade.UpgradeAction("updated", "refreshed")],
+    )
+    calls = []
+
+    def fake_start(target, **kwargs):
+        calls.append((target, kwargs))
+        return result
+
+    monkeypatch.setattr("horus.cli.remote_start.start_github_project", fake_start)
+
+    assert main(["start", "github:rafaelmjf/demo", "--workspace-root", str(tmp_path / "workspace")]) == 0
+
+    assert calls[0][0] == "github:rafaelmjf/demo"
+    assert calls[0][1]["workspace_root"] == Path(tmp_path / "workspace")
+    out = capsys.readouterr().out
+    assert "Cloned" in out
+    assert "Resume demo" in out
+    assert f'horus open "{project}"' in out
+
+
+def test_start_cli_requires_workspace_when_saving_root(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+
+    assert main(["start", "github:rafaelmjf/demo", "--set-workspace-root"]) == 2
+    assert "--set-workspace-root requires --workspace-root" in capsys.readouterr().out
+
+
+def test_config_workspace_root_cli_sets_and_prints(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    workspace = tmp_path / "projects"
+
+    assert main(["config", "workspace-root", str(workspace)]) == 0
+    assert workspace.resolve().as_posix() in capsys.readouterr().out
+
+    assert main(["config", "workspace-root"]) == 0
+    assert workspace.resolve().as_posix() in capsys.readouterr().out
 
 
 def test_reconcile_cli_resolves_drift(tmp_path, monkeypatch):

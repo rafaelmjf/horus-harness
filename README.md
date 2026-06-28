@@ -39,6 +39,8 @@ horus upgrade-project --apply     # refresh managed blocks, skills, and hooks
 horus overhead                    # estimate Horus prompt footprint + observed token usage
 horus dashboard                   # local, read-only multi-project web view (127.0.0.1:8765)
 horus discover github <owner> --save # show remote Horus repos for a GitHub user/org
+horus config workspace-root ~/projects # where remote projects should be cloned
+horus start github:<owner>/<repo> # clone/register a remote Horus repo and show its resume prompt
 horus app                         # borderless animated companion; click opens dashboard
 horus session new "<title>"       # create a dated session summary from the template
 horus close                       # verify continuity, Codex usage, and print the closure ritual
@@ -68,7 +70,20 @@ horus dashboard
 
 Remote repos appear when `.horus/project.md` is readable. The dashboard shows
 their current focus, next action, whether this machine already has a matching
-local clone, and a clone/open command for remote-only projects.
+local clone, and a `horus start github:<owner>/<repo>` command for remote-only
+projects.
+
+Set the machine-local workspace root once, then start any remote catalog entry:
+
+```sh
+horus config workspace-root ~/projects
+horus start github:<owner>/<repo>
+```
+
+`horus start` clones with `gh repo clone` when needed, refuses to overwrite an
+existing non-git destination, registers the local clone, refreshes Horus-managed
+project projections, and prints the repo's stored `next_prompt` plus the matching
+`horus open` command.
 
 ## Repo-local continuity
 

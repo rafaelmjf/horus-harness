@@ -839,7 +839,7 @@ def _remote_project_card(p: github_catalog.RemoteProject) -> str:
     if p.local_path:
         command = f"cd {p.local_path} && horus open"
     else:
-        command = f"git clone {p.clone_url} && cd {p.name} && horus init --yes && horus open"
+        command = f"horus start github:{p.full_name}"
     return (
         "<div class='remote-card'>"
         f"<h3><a href='{html.escape(p.url)}'>{html.escape(p.full_name)}</a></h3>"

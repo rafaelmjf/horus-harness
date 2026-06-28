@@ -56,6 +56,10 @@ def test_resolve_mascot_style_respects_explicit_choice():
     assert companion.resolve_mascot_style("layered", platform="win32") == "layered"
 
 
+def test_mascot_default_render_target_is_compact():
+    assert companion.MASCOT_TARGET_HEIGHT == 120
+
+
 def test_ensure_dashboard_does_not_spawn_when_live(monkeypatch):
     monkeypatch.setattr(companion, "dashboard_is_live", lambda url: True)
 

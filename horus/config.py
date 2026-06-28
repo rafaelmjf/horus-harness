@@ -48,23 +48,29 @@ def load_github_owners() -> list[str]:
     return [str(o) for o in owners]
 
 
+def load_workspace_root() -> str:
+    path = config_path()
+    if not path.exists():
+        return str((Path.home() / "projects").resolve())
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    root = data.get("workspace_root")
+    if isinstance(root, str) and root.strip():
+        return root
+    return str((Path.home() / "projects").resolve())
+
+
 def _as_key(path: Path) -> str:
     return path.resolve().as_posix()
 
 
 def _write_projects(projects: list[str]) -> None:
-    config_dir().mkdir(parents=True, exist_ok=True)
-    lines = ["# Horus user config", "projects = ["]
-    lines += [f'  "{p}",' for p in projects]
-    lines += ["]", "", "github_owners = ["]
-    lines += [f'  "{o}",' for o in load_github_owners()]
-    lines.append("]")
-    config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_config(projects, load_github_owners(), load_workspace_root())
 
 
-def _write_config(projects: list[str], github_owners: list[str]) -> None:
+def _write_config(projects: list[str], github_owners: list[str], workspace_root: str | None = None) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
-    lines = ["# Horus user config", "projects = ["]
+    root = workspace_root or load_workspace_root()
+    lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"', "", "projects = ["]
     lines += [f'  "{p}",' for p in projects]
     lines += ["]", "", "github_owners = ["]
     lines += [f'  "{o}",' for o in github_owners]
@@ -81,8 +87,15 @@ def register_github_owner(owner: str) -> bool:
     if key in existing:
         return False
     existing.append(key)
-    _write_config(load_projects(), existing)
+    _write_config(load_projects(), existing, load_workspace_root())
     return True
+
+
+def set_workspace_root(path: Path) -> str:
+    """Set the machine-local root where remote projects should be cloned."""
+    key = path.expanduser().resolve().as_posix()
+    _write_config(load_projects(), load_github_owners(), key)
+    return key
 
 
 def register_project(project_path: Path) -> bool:
