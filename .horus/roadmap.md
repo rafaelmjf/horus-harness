@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Token overhead now has both upper-bound attribution and a controlled A/B comparison path: `horus overhead --baseline` prints the strict recipe and can compare explicit with/without-Horus native session ids aggregate-only. Next priority is the known companion/dashboard lifecycle bug where orphaned dashboard servers can keep serving stale in-memory builds."
-next_action: "Fix the companion/dashboard lifecycle leak: detect or reuse an existing healthy `horus dashboard` on port 8765 before spawning, and ensure the companion reaps its dashboard child on exit."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: fix the companion/dashboard lifecycle leak. Current state: `horus app` has a mascot singleton on port 8764, but dashboard server processes on 8765 can leak and the first bound server keeps serving an old in-memory build. Implement reuse or single-instance detection for a healthy dashboard server before spawning, and make the companion terminate its dashboard child on exit. Keep the lightweight CLI/files workflow intact."
+current_focus: "The companion/dashboard lifecycle leak is hardened: duplicate `horus dashboard` binds refuse, the mascot reuses an already-live dashboard, and any dashboard child it owns is terminated, waited on, and killed if needed at exit. Next priority is enriching companion status signals beyond the basic close-check indicator."
+next_action: "Add richer companion UI status: usage threshold warnings, stale summaries, uncommitted continuity, hook trust/active indicators, and per-project switching."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: add richer companion UI status. Current state: the mascot is single-instance, opens/reuses the dashboard, and now reaps any dashboard child it owns; it has a basic close-check status indicator. Next step: surface useful local signals in the companion without making Horus required as a runtime — usage threshold warnings, stale summaries, uncommitted continuity, hook trust/active indicators, and per-project switching."
 last_updated: 2026-06-28
 ---
 
@@ -216,7 +216,7 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] Single-instance companion (2026-06-25): `acquire_singleton_lock` binds a fixed
   localhost port (8764) as a process-lifetime mutex; a second `horus app` exits
   instead of stacking another mascot. OS releases it on death (no stale-PID files).
-- [ ] **BUG: the dashboard *server* (8765) leaks — not covered by the singleton**
+- [x] **BUG: the dashboard *server* (8765) leaks — not covered by the singleton**
   (found 2026-06-25: 13 orphaned `horus dashboard` processes on one machine). The
   8764 mutex guards only the mascot; the dashboard subprocess has no single-instance
   guard and isn't reaped when the companion dies, so launches/restarts accumulate
@@ -225,6 +225,9 @@ dashboard and later becomes the place for continuity/status nudges.
   changes until every orphan is killed. Fix: before spawning, detect a healthy
   `horus dashboard` already on 8765 and reuse it (or make the server single-instance
   the same way), and have the companion terminate its dashboard child on exit.
+  Fixed 2026-06-28: duplicate dashboard binds refuse, the mascot reuses a live
+  dashboard before spawning, and `stop_dashboard` now terminates, waits, and kills
+  an owned child if it does not exit promptly. → features.md
 - [x] Add a minimal context menu: Open Dashboard, Run Close Check, Quit.
 - [x] Show a basic status indicator: neutral/ok, warning, needs-closure. Initial
   data can come from existing `doctor`/`close`/usage checks; no live registry yet.
@@ -246,7 +249,7 @@ dashboard and later becomes the place for continuity/status nudges.
   white regions such as the hat. (2026-06-25) `scripts/regen_mascot.py` defringes
   (peels near-white edge pixels touching transparency; interior whites survive)
   + drops keying specks. All 5 frames regenerated; runtime stays Pillow-free.
-- [ ] Later: surface native hook events, usage threshold warnings, stale summaries,
+- [ ] Surface native hook events, usage threshold warnings, stale summaries,
   uncommitted continuity, and per-project switching.
 
 - [x] `test_claude_usage.py::test_findings_ok_when_unavailable` non-hermeticity fixed

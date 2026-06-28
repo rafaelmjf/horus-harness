@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Horus token overhead now has both upper-bound attribution and a controlled A/B comparison path: `horus overhead --baseline` prints the recipe and can compare explicit with/without-Horus native session ids aggregate-only. Next priority is the known companion/dashboard lifecycle bug where orphaned dashboard servers can keep serving stale in-memory builds."
+current_focus: "The companion/dashboard lifecycle leak is hardened: duplicate `horus dashboard` binds refuse, the mascot reuses an already-live dashboard, and any dashboard child it owns is terminated, waited on, and killed if needed at exit. Next priority is enriching companion status signals beyond the basic close-check indicator."
 last_updated: 2026-06-28
 ---
 
