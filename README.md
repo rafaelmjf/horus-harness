@@ -38,6 +38,7 @@ horus upgrade-project             # report stale repo-local Horus projections
 horus upgrade-project --apply     # refresh managed blocks, skills, and hooks
 horus overhead                    # estimate Horus prompt footprint + observed token usage
 horus dashboard                   # local, read-only multi-project web view (127.0.0.1:8765)
+horus discover github <owner> --save # show remote Horus repos for a GitHub user/org
 horus app                         # borderless animated companion; click opens dashboard
 horus session new "<title>"       # create a dated session summary from the template
 horus close                       # verify continuity, Codex usage, and print the closure ritual
@@ -51,6 +52,23 @@ horus skill install --target all  # install/update bundled Claude Code + Codex s
 horus reconcile instructions      # deterministic AGENTS.md <-> CLAUDE.md managed-block sync
 horus forget <path> | horus prune # manage the dashboard's project registry
 ```
+
+## GitHub remote catalog
+
+The lightweight dashboard can also show Horus-enabled repos that are on GitHub
+but not cloned on this machine yet. It uses the authenticated `gh` CLI and treats
+GitHub as a remote catalog for durable `.horus/` files, not as a live session
+store:
+
+```sh
+gh auth login
+horus discover github <user-or-org> --save
+horus dashboard
+```
+
+Remote repos appear when `.horus/project.md` is readable. The dashboard shows
+their current focus, next action, whether this machine already has a matching
+local clone, and a clone/open command for remote-only projects.
 
 ## Repo-local continuity
 

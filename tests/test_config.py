@@ -22,6 +22,22 @@ def test_register_and_unregister(tmp_path, monkeypatch):
     assert config._as_key(proj) not in config.load_projects()
 
 
+def test_github_owner_registry_coexists_with_projects(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    proj = tmp_path / "p1"
+    proj.mkdir()
+
+    assert config.register_github_owner("rafaelmjf") is True
+    assert config.register_github_owner("rafaelmjf") is False
+    assert config.register_project(proj) is True
+
+    assert config.load_github_owners() == ["rafaelmjf"]
+    assert config._as_key(proj) in config.load_projects()
+
+    assert config.unregister_project(proj) is True
+    assert config.load_github_owners() == ["rafaelmjf"]
+
+
 def test_prune_removes_only_stale(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     live = tmp_path / "live"

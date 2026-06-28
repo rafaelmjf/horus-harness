@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "The companion/dashboard lifecycle leak is hardened: duplicate `horus dashboard` binds refuse, the mascot reuses an already-live dashboard, and any dashboard child it owns is terminated, waited on, and killed if needed at exit. Next priority is enriching companion status signals beyond the basic close-check indicator."
+current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub can now act as a remote catalog for Horus-enabled repos not cloned on the current machine. Next priority is making remote catalog entries directly actionable with clone/register/start flows."
 last_updated: 2026-06-28
 ---
 

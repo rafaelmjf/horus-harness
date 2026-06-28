@@ -20,6 +20,7 @@ from horus import (
     config,
     dashboard,
     gitstate,
+    github_catalog,
     initialize,
     launch,
     launcher,
@@ -129,6 +130,28 @@ def cmd_status(args: argparse.Namespace) -> int:
         else:
             sess = "no sessions"
         print(f"{p['name']}\n  git:  {git}\n  last: {sess}")
+    return 0
+
+
+def cmd_discover(args: argparse.Namespace) -> int:
+    if args.source != "github":
+        print(f"Unsupported discovery source: {args.source}")
+        return 2
+    if args.save:
+        created = config.register_github_owner(args.owner)
+        print(f"{'Added' if created else 'Already tracking'} GitHub owner: {args.owner}")
+    try:
+        projects = github_catalog.discover(args.owner, local_projects=config.load_projects(), limit=args.limit)
+    except RuntimeError as exc:
+        print(f"GitHub discovery failed: {exc}")
+        return 1
+    if not projects:
+        print(f"No Horus-enabled GitHub repos found for {args.owner}.")
+        return 0
+    for project in projects:
+        where = f"local: {project.local_path}" if project.local_path else f"remote: {project.clone_url}"
+        next_action = f" — {project.next_action}" if project.next_action else ""
+        print(f"{project.full_name} ({where}){next_action}")
     return 0
 
 
@@ -1029,6 +1052,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="print git freshness + latest session for all registered projects")
     p_status.set_defaults(func=cmd_status)
+
+    p_discover = sub.add_parser("discover", help="discover remote Horus projects")
+    p_discover.add_argument("source", choices=["github"], help="remote catalog source")
+    p_discover.add_argument("owner", help="GitHub user or org to scan")
+    p_discover.add_argument("--save", action="store_true", help="show this owner in the dashboard remote catalog")
+    p_discover.add_argument("--limit", type=int, default=100, help="maximum repos to scan (default: 100)")
+    p_discover.set_defaults(func=cmd_discover)
 
     for name in ("app", "mascot"):
         p_app = sub.add_parser(name, help="show the always-on-top Horus companion")

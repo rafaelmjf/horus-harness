@@ -922,3 +922,26 @@ Decision:
 Reasoning: this is not a separate OS/process-control mechanism. The hard part was already solved
 by the env-marker guard design; Codex only needed a project hook projection that matches its
 documented hook shape (`hooks.json`, `PreToolUse`, `Bash`, `commandWindows`).
+
+## 2026-06-28 - Cross-Computer View Starts As A Remote Catalog, Not A Runtime
+
+Horus should become useful across the user's Linux machine, VM, desktop, GitHub-backed projects,
+and non-git folders without making the lightweight `uv` tool pretend to be a distributed app.
+
+Decision:
+
+- Keep the lightweight CLI/repo tool file-first: it owns `.horus/`, local project registration,
+  local accounts, local launches, hooks, and closure checks.
+- Use GitHub as the first remote catalog for durable project memory: discover repos that expose
+  `.horus/project.md` and `.horus/roadmap.md`, show their focus/next action, and compare them to
+  local clones by normalized remote URL.
+- Treat the future proper app as an aggregator of machine observations, not a replacement for the
+  CLI. Git syncs project memory; Horus app syncs machine observations such as local paths, dirty
+  state, running sessions, account availability, and clone freshness.
+- Non-git / Google Drive projects will need explicit identity later; remote URL is enough only for
+  GitHub-backed projects.
+
+Reasoning: this gives a central-view feeling now for GitHub projects with no daemon, database, or
+new auth system beyond `gh`, while preserving the low-friction workflow the user is already
+dogfooding in native Claude/Codex windows. A heavier proper app remains justified for multi-machine
+snapshot aggregation, live session routing, and lifecycle ownership.

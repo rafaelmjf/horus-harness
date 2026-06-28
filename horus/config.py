@@ -37,6 +37,17 @@ def load_projects() -> list[str]:
     return [str(p) for p in projects]
 
 
+def load_github_owners() -> list[str]:
+    path = config_path()
+    if not path.exists():
+        return []
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    owners = data.get("github_owners", [])
+    if not isinstance(owners, list):
+        return []
+    return [str(o) for o in owners]
+
+
 def _as_key(path: Path) -> str:
     return path.resolve().as_posix()
 
@@ -45,8 +56,33 @@ def _write_projects(projects: list[str]) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
     lines = ["# Horus user config", "projects = ["]
     lines += [f'  "{p}",' for p in projects]
+    lines += ["]", "", "github_owners = ["]
+    lines += [f'  "{o}",' for o in load_github_owners()]
     lines.append("]")
     config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_config(projects: list[str], github_owners: list[str]) -> None:
+    config_dir().mkdir(parents=True, exist_ok=True)
+    lines = ["# Horus user config", "projects = ["]
+    lines += [f'  "{p}",' for p in projects]
+    lines += ["]", "", "github_owners = ["]
+    lines += [f'  "{o}",' for o in github_owners]
+    lines.append("]")
+    config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def register_github_owner(owner: str) -> bool:
+    """Add a GitHub user/org to the remote catalog. Returns True if newly added."""
+    key = owner.strip()
+    if not key:
+        return False
+    existing = load_github_owners()
+    if key in existing:
+        return False
+    existing.append(key)
+    _write_config(load_projects(), existing)
+    return True
 
 
 def register_project(project_path: Path) -> bool:

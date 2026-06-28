@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "The companion/dashboard lifecycle leak is hardened: duplicate `horus dashboard` binds refuse, the mascot reuses an already-live dashboard, and any dashboard child it owns is terminated, waited on, and killed if needed at exit. Next priority is enriching companion status signals beyond the basic close-check indicator."
-next_action: "Add richer companion UI status: usage threshold warnings, stale summaries, uncommitted continuity, hook trust/active indicators, and per-project switching."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: add richer companion UI status. Current state: the mascot is single-instance, opens/reuses the dashboard, and now reaps any dashboard child it owns; it has a basic close-check status indicator. Next step: surface useful local signals in the companion without making Horus required as a runtime — usage threshold warnings, stale summaries, uncommitted continuity, hook trust/active indicators, and per-project switching."
+current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub can now act as a remote catalog for Horus-enabled repos not cloned on the current machine. Next priority is making remote catalog entries directly actionable with clone/register/start flows."
+next_action: "Add a first-class remote-project start command so a repo that only appears in the central view can be cloned, registered, refreshed, and opened from the CLI."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: add a first-class remote-project start command. Current state: `horus discover github <owner> --save` records GitHub owners, the dashboard shows remote Horus repos discovered via `gh`, and local clones are matched by normalized remote URL. Next step: implement a safe `horus start github:<owner>/<repo>` command that clones into a configured workspace root, registers the project, refreshes Horus projections if needed, and opens/resumes with the repo's next prompt."
 last_updated: 2026-06-28
 ---
 
@@ -255,6 +255,34 @@ dashboard and later becomes the place for continuity/status nudges.
 - [x] `test_claude_usage.py::test_findings_ok_when_unavailable` non-hermeticity fixed
   (2026-06-25): the test now stubs `latest_usage` to `None`, so it no longer warns on a
   logged-in machine whose 5h window is over threshold.
+
+## Cross-machine central view - lightweight GitHub bridge
+
+> Goal: give the lightweight `uv` tool a central-view feeling for GitHub-backed
+> projects before building the proper multi-machine app. GitHub carries durable
+> `.horus/` project memory; local machines still own paths, accounts, running
+> sessions, and launch state. See decisions 2026-06-28 "Cross-Computer View Starts
+> As A Remote Catalog, Not A Runtime".
+
+- [x] Add a GitHub remote catalog using the authenticated `gh` CLI: discover repos
+  for a user/org that expose `.horus/project.md`, read `.horus/roadmap.md` when
+  present, and keep the integration dependency-free.
+- [x] Persist GitHub owners/orgs in local config via `horus discover github <owner>
+  --save` without clobbering locally registered project paths.
+- [x] Show saved remote Horus projects on the dashboard, including current focus,
+  next action, local-clone match by normalized remote URL, and a clone/open command
+  for remote-only projects. → features.md
+- [ ] Add a safe clone/register/start command for remote-only entries:
+  `horus start github:<owner>/<repo>` (or equivalent). It should clone into a
+  configured workspace root, register the project, run `upgrade-project --apply`
+  only on Horus-managed surfaces, and open/resume with the repo's `next_prompt`.
+- [ ] Add workspace-root configuration for where remote projects should be cloned
+  on each machine.
+- [ ] Add a dashboard POST action for the clone/register/start flow once the CLI
+  command is proven; keep the command visible as the fallback.
+- [ ] Later proper-app track: machine snapshot aggregation for non-local paths,
+  running sessions, account availability, dirty state, and non-git/Google Drive
+  projects with explicit project ids.
 
 ## MVP 2.5 - Git-aware multi-project overview (next)
 

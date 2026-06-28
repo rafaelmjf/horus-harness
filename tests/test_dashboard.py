@@ -5,7 +5,7 @@ from pathlib import Path
 
 import json
 
-from horus import config, dashboard, initialize, launcher, overhead
+from horus import config, dashboard, github_catalog, initialize, launcher, overhead
 from horus.registry import Registry, SessionRecord
 
 
@@ -153,6 +153,27 @@ def test_index_empty_state(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     html_out = dashboard.render_index([])
     assert "No projects registered" in html_out
+
+
+def test_index_renders_remote_github_catalog():
+    remote = github_catalog.RemoteProject(
+        owner="rafaelmjf",
+        name="demo",
+        full_name="rafaelmjf/demo",
+        url="https://github.com/rafaelmjf/demo",
+        clone_url="git@github.com:rafaelmjf/demo.git",
+        default_branch="main",
+        pushed_at="2026-06-28T12:00:00Z",
+        current_focus="Remote focus",
+        next_action="Clone and resume",
+    )
+
+    html_out = dashboard.render_index([], remote_projects=[remote])
+
+    assert "GitHub remote catalog" in html_out
+    assert "rafaelmjf/demo" in html_out
+    assert "remote only" in html_out
+    assert "git clone git@github.com:rafaelmjf/demo.git" in html_out
 
 
 def test_project_detail_renders_sections(tmp_path, monkeypatch):

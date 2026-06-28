@@ -30,6 +30,7 @@ from horus import (
     config,
     frontmatter,
     gitstate,
+    github_catalog,
     launch,
     markdown,
     overhead,
@@ -147,6 +148,18 @@ def gather_projects() -> list[dict[str, Any]]:
     return [load_project(p) for p in config.load_projects()]
 
 
+def gather_remote_projects() -> tuple[list[github_catalog.RemoteProject], list[str]]:
+    projects: list[github_catalog.RemoteProject] = []
+    errors: list[str] = []
+    local = config.load_projects()
+    for owner in config.load_github_owners():
+        try:
+            projects.extend(github_catalog.discover(owner, local_projects=local))
+        except RuntimeError as exc:
+            errors.append(f"{owner}: {exc}")
+    return projects, errors
+
+
 def _account_usage(alias: str, cred_path: Path | None) -> dict[str, Any]:
     report = claude_usage.latest_usage(cred_path=cred_path)
     reset = report.five_hour_resets_at if report else None
@@ -240,6 +253,11 @@ main { padding: 24px 28px; max-width: 1320px; }
        border-radius: 12px; padding: 14px 16px; }
 .col h2 { font-size: 17px; margin: 0 0 2px; }
 .col .why { color: #8a93a6; font-size: 13px; font-style: italic; margin: 0 0 10px; }
+.remote-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.remote-card { background: #151823; border: 1px solid #232733; border-radius: 10px; padding: 13px 15px; }
+.remote-card h3 { margin: 0 0 4px; font-size: 15px; }
+.remote-card .next-one { font-size: 13px; }
+.remote-card code { overflow-wrap: anywhere; }
 .box { background: #12141b; border: 1px solid #232733; border-radius: 8px; padding: 8px 12px; margin: 10px 0; }
 .box .lbl { display: block; font-size: 11px; letter-spacing: .5px; text-transform: uppercase;
             color: #8a93a6; margin-bottom: 5px; }
@@ -798,6 +816,48 @@ def _project_column(p: dict[str, Any], i: int) -> str:
     )
 
 
+def _remote_project_card(p: github_catalog.RemoteProject) -> str:
+    badge_class = "health-ok" if p.is_local else "health-warn"
+    badge_text = "cloned here" if p.is_local else "remote only"
+    focus = f"<p class='muted'>{html.escape(p.current_focus)}</p>" if p.current_focus else ""
+    next_action = (
+        "<div class='next'><span class='lbl'>NEXT</span>"
+        f"<div class='next-one'>{html.escape(_plain(p.next_action))}</div></div>"
+        if p.next_action
+        else ""
+    )
+    if p.local_path:
+        command = f"cd {p.local_path} && horus open"
+    else:
+        command = f"git clone {p.clone_url} && cd {p.name} && horus init --yes && horus open"
+    return (
+        "<div class='remote-card'>"
+        f"<h3><a href='{html.escape(p.url)}'>{html.escape(p.full_name)}</a></h3>"
+        f"<div class='badges'><span>{html.escape(p.default_branch)}</span>"
+        f"<span class='{badge_class}'>{badge_text}</span></div>"
+        f"{focus}{next_action}"
+        "<div class='resume'><span class='lbl'>Start here</span>"
+        f"<div class='resume-text'><code>{html.escape(command)}</code></div></div>"
+        "</div>"
+    )
+
+
+def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: list[str]) -> str:
+    if not projects and not errors:
+        return (
+            "<div class='section'><h2>GitHub remote catalog</h2>"
+            "<div class='card'><p class='muted'>No GitHub owners configured. Run "
+            "<code>horus discover github &lt;owner&gt; --save</code> to show remote Horus projects here.</p></div></div>"
+        )
+    cards = "".join(_remote_project_card(p) for p in projects)
+    if not cards:
+        cards = "<div class='card'><p class='muted'>No Horus-enabled remote repos found yet.</p></div>"
+    if errors:
+        err = "".join(f"<li>{html.escape(e)}</li>" for e in errors)
+        cards = f"<div class='banner err'><strong>GitHub discovery issue</strong><ul>{err}</ul></div>{cards}"
+    return f"<div class='section'><h2>GitHub remote catalog</h2><div class='remote-grid'>{cards}</div></div>"
+
+
 _SESSION_STATUS_CLASS = {
     "running": "health-ok",
     "failed": "health-fail",
@@ -842,20 +902,27 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
     )
 
 
-def render_index(projects: list[dict[str, Any]], sessions: list[registry.SessionRecord] | None = None) -> str:
+def render_index(
+    projects: list[dict[str, Any]],
+    sessions: list[registry.SessionRecord] | None = None,
+    remote_projects: list[github_catalog.RemoteProject] | None = None,
+    remote_errors: list[str] | None = None,
+) -> str:
     records = sessions or []
     live = _live_count(records)
     sessions_card = render_sessions_card(records)
+    remote = render_remote_catalog(remote_projects or [], remote_errors or [])
     if not projects:
         body = (
             sessions_card
             + "<div class='card'><h2>No projects registered</h2>"
             "<p class='muted'>Run <code>horus init</code> inside a project to "
             "register it here.</p></div>"
+            + remote
         )
         return _page("Horus", body, live=live)
     cols = "".join(_project_column(p, i) for i, p in enumerate(projects))
-    return _page("Horus", f"{sessions_card}<div class='columns'>{cols}</div>", live=live)
+    return _page("Horus", f"{sessions_card}<div class='columns'>{cols}</div>{remote}", live=live)
 
 
 def render_project(p: dict[str, Any]) -> str:
@@ -1431,7 +1498,8 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
         if parsed.path == "/":
-            self._send(render_index(gather_projects(), gather_sessions()))
+            remote_projects, remote_errors = gather_remote_projects()
+            self._send(render_index(gather_projects(), gather_sessions(), remote_projects, remote_errors))
             return
         if parsed.path == "/sessions":
             recs = gather_sessions()
