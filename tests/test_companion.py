@@ -18,6 +18,12 @@ def test_mascot_asset_is_packaged():
     assert path.is_file()
 
 
+def test_mascot_background_asset_is_packaged():
+    path = companion.mascot_background_path()
+    assert path.name == "background_egypt.png"
+    assert path.is_file()
+
+
 def test_mascot_animation_frames_are_packaged():
     paths = companion.mascot_frame_paths()
     assert [p.name for p in paths] == [
@@ -34,6 +40,20 @@ def test_mascot_background_sources_are_packaged():
     assert (assets / "background_egypt.png").is_file()
     assert (assets / "mascot_with_background.png").is_file()
     assert (assets / "mascot_without_background.png").is_file()
+
+
+def test_resolve_mascot_style_defaults_to_foreground_on_windows():
+    assert companion.resolve_mascot_style("auto", platform="win32") == "foreground"
+
+
+def test_resolve_mascot_style_defaults_to_layered_off_windows():
+    assert companion.resolve_mascot_style("auto", platform="linux") == "layered"
+    assert companion.resolve_mascot_style("auto", platform="darwin") == "layered"
+
+
+def test_resolve_mascot_style_respects_explicit_choice():
+    assert companion.resolve_mascot_style("foreground", platform="linux") == "foreground"
+    assert companion.resolve_mascot_style("layered", platform="win32") == "layered"
 
 
 def test_ensure_dashboard_does_not_spawn_when_live(monkeypatch):
