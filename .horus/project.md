@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub now supports non-blocking remote discovery, cached owner snapshots, and a first CLI start flow for cloning/registering remote-only Horus repos. Next priority is adding an explicit manual refresh action for the remote catalog."
+current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub now supports non-blocking remote discovery, cached owner snapshots, explicit force-refresh, and a first CLI start flow for cloning/registering remote-only Horus repos. Next priority is avoiding repeated GitHub file reads for unchanged repos."
 last_updated: 2026-06-28
 ---
 

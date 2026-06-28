@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from horus import github_catalog, launcher, registry, remote_start, upgrade
+from horus import config, github_catalog, launcher, registry, remote_start, upgrade
 from horus.cli import main
 from horus.instructions import check_drift
 from horus.registry import Registry, SessionRecord
@@ -427,6 +427,52 @@ def test_start_cli_requires_workspace_when_saving_root(tmp_path, monkeypatch, ca
 
     assert main(["start", "github:rafaelmjf/demo", "--set-workspace-root"]) == 2
     assert "--set-workspace-root requires --workspace-root" in capsys.readouterr().out
+
+
+def test_refresh_cli_refreshes_one_github_owner(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    calls = []
+
+    def fake_refresh(owner, **kwargs):
+        calls.append((owner, kwargs))
+        return github_catalog.RefreshResult(owner=owner, ok=True, count=2, fetched_at="2026-06-28T21:00:00+00:00")
+
+    monkeypatch.setattr("horus.cli.github_catalog.force_refresh", fake_refresh)
+
+    assert main(["refresh", "github", "rafaelmjf"]) == 0
+
+    assert calls[0][0] == "rafaelmjf"
+    assert "Refreshed rafaelmjf: 2 Horus-enabled repo" in capsys.readouterr().out
+
+
+def test_refresh_cli_refreshes_all_saved_github_owners(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    config.register_github_owner("one")
+    config.register_github_owner("two")
+    calls = []
+
+    def fake_refresh(owner, **kwargs):
+        calls.append(owner)
+        return github_catalog.RefreshResult(owner=owner, ok=True, count=1)
+
+    monkeypatch.setattr("horus.cli.github_catalog.force_refresh", fake_refresh)
+
+    assert main(["refresh", "github", "--all"]) == 0
+
+    assert calls == ["one", "two"]
+    out = capsys.readouterr().out
+    assert "Refreshed one" in out and "Refreshed two" in out
+
+
+def test_refresh_cli_returns_failure_on_refresh_error(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "horus.cli.github_catalog.force_refresh",
+        lambda owner, **kwargs: github_catalog.RefreshResult(owner=owner, ok=False, error="auth required"),
+    )
+
+    assert main(["refresh", "github", "rafaelmjf"]) == 1
+    assert "auth required" in capsys.readouterr().out
 
 
 def test_config_workspace_root_cli_sets_and_prints(tmp_path, monkeypatch, capsys):

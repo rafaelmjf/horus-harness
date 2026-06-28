@@ -156,6 +156,28 @@ def cmd_discover(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_refresh(args: argparse.Namespace) -> int:
+    if args.source != "github":
+        print(f"Unsupported refresh source: {args.source}")
+        return 2
+    owners = config.load_github_owners() if args.all else [args.owner]
+    owners = [o for o in owners if o]
+    if not owners:
+        print("No GitHub owner specified or saved. Use `horus refresh github <owner>` or `--all`.")
+        return 2
+    exit_code = 0
+    local = config.load_projects()
+    for owner in owners:
+        result = github_catalog.force_refresh(owner, local_projects=local, limit=args.limit)
+        if result.ok:
+            when = f" at {result.fetched_at}" if result.fetched_at else ""
+            print(f"Refreshed {owner}: {result.count} Horus-enabled repo(s){when}.")
+        else:
+            print(f"Refresh failed for {owner}: {result.error}")
+            exit_code = 1
+    return exit_code
+
+
 def cmd_start(args: argparse.Namespace) -> int:
     workspace = Path(args.workspace_root).expanduser() if args.workspace_root else None
     if args.set_workspace_root and workspace is None:
@@ -1106,6 +1128,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_discover.add_argument("--save", action="store_true", help="show this owner in the dashboard remote catalog")
     p_discover.add_argument("--limit", type=int, default=100, help="maximum repos to scan (default: 100)")
     p_discover.set_defaults(func=cmd_discover)
+
+    p_refresh = sub.add_parser("refresh", help="force-refresh remote cached data")
+    p_refresh.add_argument("source", choices=["github"], help="remote source to refresh")
+    p_refresh.add_argument("owner", nargs="?", help="GitHub user or org to refresh")
+    p_refresh.add_argument("--all", action="store_true", help="refresh all saved GitHub owners")
+    p_refresh.add_argument("--limit", type=int, default=100, help="maximum repos to scan per owner (default: 100)")
+    p_refresh.set_defaults(func=cmd_refresh)
 
     p_start = sub.add_parser("start", help="clone/register a remote Horus project and print its resume prompt")
     p_start.add_argument("target", help="remote target, e.g. github:owner/repo")

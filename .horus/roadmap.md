@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub now supports non-blocking remote discovery, cached owner snapshots, and a first CLI start flow for cloning/registering remote-only Horus repos. Next priority is adding an explicit manual refresh action for the remote catalog."
-next_action: "Add a force-refresh control for saved GitHub owners so the user can trigger live discovery on demand and see a clear success/error result without waiting for the background path."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: add a force-refresh control for saved GitHub owners. Current state: `horus discover github <owner> --save` records GitHub owners, `/github-catalog` loads asynchronously, local clones are matched by normalized remote URL, cached owner snapshots under `~/.horus/github-cache/` render immediately with a last-refreshed note while background refresh updates the cache, and `horus start github:<owner>/<repo>` clones/registers/refreshes remote-only repos. Next step: add a dashboard/CLI manual refresh action that forces live discovery, updates the cache, and reports clear success/error state."
+current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub now supports non-blocking remote discovery, cached owner snapshots, explicit force-refresh, and a first CLI start flow for cloning/registering remote-only Horus repos. Next priority is avoiding repeated GitHub file reads for unchanged repos."
+next_action: "Avoid re-reading `.horus/project.md` and `.horus/roadmap.md` from GitHub for repos whose `pushedAt` has not changed since the cached snapshot."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: avoid repeated GitHub file reads for unchanged repos. Current state: saved GitHub owners render cached snapshots immediately, background refresh and `horus refresh github <owner|--all>` can force live discovery, local clones are matched by normalized remote URL, and `horus start github:<owner>/<repo>` clones/registers/refreshes remote-only repos. Next step: use GitHub `pushedAt`/per-repo cache metadata so refresh can reuse cached `.horus/project.md` and `.horus/roadmap.md` data for repos that have not changed, reducing repeated `gh api contents/...` calls."
 last_updated: 2026-06-28
 ---
 
@@ -296,7 +296,7 @@ dashboard and later becomes the place for continuity/status nudges.
   matching `horus open` command.
 - [x] Cache the last successful GitHub catalog per owner locally, render cached
   results instantly with a "last refreshed" timestamp, and refresh in the background.
-- [ ] Add a manual refresh action for the GitHub catalog, with clear error state
+- [x] Add a manual refresh action for the GitHub catalog, with clear error state
   when `gh` auth, network access, or GitHub rate limits block discovery.
 - [ ] Avoid re-checking every repo on every refresh: use GitHub `pushedAt`/ETag-like
   signals or a small per-repo cache so unchanged repos do not need repeated

@@ -247,6 +247,64 @@ def test_remote_catalog_renders_cache_note_and_error():
     assert "GitHub discovery issue" in html_out
 
 
+def test_remote_catalog_renders_refresh_form_for_saved_owner(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+
+    html_out = dashboard.render_remote_catalog([], [], ["cached"])
+
+    assert "action='/github-refresh'" in html_out
+    assert "name='owner' value='rafaelmjf'" in html_out
+    assert "Refresh rafaelmjf" in html_out
+
+
+def test_force_refresh_remote_returns_cached_projects_and_note(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+    remote = github_catalog.RemoteProject(
+        owner="rafaelmjf",
+        name="demo",
+        full_name="rafaelmjf/demo",
+        url="https://github.com/rafaelmjf/demo",
+        clone_url="git@github.com:rafaelmjf/demo.git",
+        default_branch="main",
+        pushed_at="",
+    )
+    monkeypatch.setattr(
+        dashboard.github_catalog,
+        "force_refresh",
+        lambda owner, **kw: github_catalog.RefreshResult(owner=owner, ok=True, count=1, fetched_at="now"),
+    )
+    monkeypatch.setattr(
+        dashboard.github_catalog,
+        "load_cache",
+        lambda owner, **kw: github_catalog.CachedCatalog(owner=owner, projects=[remote], fetched_at="now"),
+    )
+
+    projects, errors, notes = dashboard.force_refresh_remote("rafaelmjf")
+
+    assert projects == [remote]
+    assert errors == []
+    assert "force-refresh updated 1" in notes[0]
+
+
+def test_force_refresh_remote_surfaces_error(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+    monkeypatch.setattr(
+        dashboard.github_catalog,
+        "force_refresh",
+        lambda owner, **kw: github_catalog.RefreshResult(owner=owner, ok=False, count=0, error="auth required"),
+    )
+    monkeypatch.setattr(dashboard.github_catalog, "load_cache", lambda owner, **kw: None)
+
+    projects, errors, notes = dashboard.force_refresh_remote("rafaelmjf")
+
+    assert projects == []
+    assert "force-refresh failed" in errors[0]
+    assert notes == []
+
+
 def test_index_uses_async_remote_catalog_placeholder(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     config.register_github_owner("rafaelmjf")

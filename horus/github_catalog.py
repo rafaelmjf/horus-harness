@@ -46,6 +46,15 @@ class CachedCatalog:
     error_at: str = ""
 
 
+@dataclass(frozen=True)
+class RefreshResult:
+    owner: str
+    ok: bool
+    count: int = 0
+    fetched_at: str = ""
+    error: str = ""
+
+
 def discover(owner: str, *, local_projects: list[str] | None = None, limit: int = 100) -> list[RemoteProject]:
     """Return Horus-enabled GitHub repos for `owner`.
 
@@ -100,6 +109,17 @@ def refresh_cache(owner: str, *, local_projects: list[str] | None = None, limit:
         raise
     save_cache(owner, projects)
     return projects
+
+
+def force_refresh(owner: str, *, local_projects: list[str] | None = None, limit: int = 100) -> RefreshResult:
+    """Refresh one owner and return a user-facing status object."""
+    try:
+        projects = refresh_cache(owner, local_projects=local_projects, limit=limit)
+    except RuntimeError as exc:
+        cached = load_cache(owner, local_projects=local_projects)
+        return RefreshResult(owner=owner, ok=False, count=len(cached.projects) if cached else 0, error=str(exc))
+    cached = load_cache(owner, local_projects=local_projects)
+    return RefreshResult(owner=owner, ok=True, count=len(projects), fetched_at=cached.fetched_at if cached else "")
 
 
 def load_cache(owner: str, *, local_projects: list[str] | None = None) -> CachedCatalog | None:
