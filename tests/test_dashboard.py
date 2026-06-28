@@ -183,6 +183,70 @@ def test_index_renders_remote_github_catalog():
     assert "horus start github:rafaelmjf/demo" in html_out
 
 
+def test_gather_remote_projects_uses_cache_and_starts_refresh(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+    remote = github_catalog.RemoteProject(
+        owner="rafaelmjf",
+        name="demo",
+        full_name="rafaelmjf/demo",
+        url="https://github.com/rafaelmjf/demo",
+        clone_url="git@github.com:rafaelmjf/demo.git",
+        default_branch="main",
+        pushed_at="",
+    )
+    refreshes = []
+    monkeypatch.setattr(
+        dashboard.github_catalog,
+        "load_cache",
+        lambda owner, **kw: github_catalog.CachedCatalog(
+            owner=owner,
+            projects=[remote],
+            fetched_at="2026-06-28T20:00:00+00:00",
+            error="auth failed",
+            error_at="2026-06-28T20:01:00+00:00",
+        ),
+    )
+    monkeypatch.setattr(dashboard, "_start_remote_refresh", lambda owner, local: refreshes.append((owner, local)))
+
+    projects, errors, notes = dashboard.gather_remote_projects()
+
+    assert projects == [remote]
+    assert "showing cached results" in notes[0]
+    assert "last refresh failed" in errors[0]
+    assert refreshes and refreshes[0][0] == "rafaelmjf"
+
+
+def test_gather_remote_projects_refreshes_live_when_no_cache(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+    remote = github_catalog.RemoteProject(
+        owner="rafaelmjf",
+        name="demo",
+        full_name="rafaelmjf/demo",
+        url="https://github.com/rafaelmjf/demo",
+        clone_url="git@github.com:rafaelmjf/demo.git",
+        default_branch="main",
+        pushed_at="",
+    )
+    monkeypatch.setattr(dashboard.github_catalog, "load_cache", lambda owner, **kw: None)
+    monkeypatch.setattr(dashboard.github_catalog, "refresh_cache", lambda owner, **kw: [remote])
+
+    projects, errors, notes = dashboard.gather_remote_projects()
+
+    assert projects == [remote]
+    assert errors == []
+    assert notes == []
+
+
+def test_remote_catalog_renders_cache_note_and_error():
+    html_out = dashboard.render_remote_catalog([], ["owner: failed"], ["owner: showing cached results"])
+
+    assert "GitHub catalog cache" in html_out
+    assert "showing cached results" in html_out
+    assert "GitHub discovery issue" in html_out
+
+
 def test_index_uses_async_remote_catalog_placeholder(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     config.register_github_owner("rafaelmjf")

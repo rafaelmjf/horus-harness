@@ -11,10 +11,11 @@ import base64
 import json
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from horus import frontmatter, gitstate
+from horus import config, frontmatter, gitstate
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,15 @@ class RemoteProject:
     @property
     def is_local(self) -> bool:
         return self.local_path is not None
+
+
+@dataclass(frozen=True)
+class CachedCatalog:
+    owner: str
+    projects: list[RemoteProject]
+    fetched_at: str
+    error: str = ""
+    error_at: str = ""
 
 
 def discover(owner: str, *, local_projects: list[str] | None = None, limit: int = 100) -> list[RemoteProject]:
@@ -79,6 +89,66 @@ def discover(owner: str, *, local_projects: list[str] | None = None, limit: int 
             )
         )
     return out
+
+
+def refresh_cache(owner: str, *, local_projects: list[str] | None = None, limit: int = 100) -> list[RemoteProject]:
+    """Discover live projects and persist the last successful owner snapshot."""
+    try:
+        projects = discover(owner, local_projects=local_projects, limit=limit)
+    except RuntimeError as exc:
+        record_cache_error(owner, str(exc))
+        raise
+    save_cache(owner, projects)
+    return projects
+
+
+def load_cache(owner: str, *, local_projects: list[str] | None = None) -> CachedCatalog | None:
+    path = _cache_path(owner)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    raw_projects = data.get("projects")
+    if not isinstance(raw_projects, list):
+        return None
+    local_by_remote = _local_projects_by_remote(local_projects or [])
+    projects = [_project_from_cache(owner, item, local_by_remote) for item in raw_projects if isinstance(item, dict)]
+    return CachedCatalog(
+        owner=owner,
+        projects=projects,
+        fetched_at=str(data.get("fetched_at") or ""),
+        error=str(data.get("error") or ""),
+        error_at=str(data.get("error_at") or ""),
+    )
+
+
+def save_cache(owner: str, projects: list[RemoteProject]) -> None:
+    path = _cache_path(owner)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "owner": owner,
+        "fetched_at": _now_iso(),
+        "projects": [_project_to_cache(p) for p in projects],
+    }
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def record_cache_error(owner: str, message: str) -> None:
+    path = _cache_path(owner)
+    data: dict[str, Any] = {"owner": owner, "projects": [], "fetched_at": ""}
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data.update(loaded)
+        except (OSError, json.JSONDecodeError):
+            pass
+    data["error"] = message
+    data["error_at"] = _now_iso()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _repo_list(owner: str, *, limit: int) -> list[dict[str, Any]]:
@@ -163,3 +233,49 @@ def _normalize_remote(url: str) -> str:
     if value.endswith(".git"):
         value = value[:-4]
     return value.rstrip("/")
+
+
+def _cache_path(owner: str) -> Path:
+    safe = "".join(c if c.isalnum() or c in ("-", "_", ".") else "_" for c in owner)
+    return config.config_dir() / "github-cache" / f"{safe}.json"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _project_to_cache(project: RemoteProject) -> dict[str, str]:
+    return {
+        "owner": project.owner,
+        "name": project.name,
+        "full_name": project.full_name,
+        "url": project.url,
+        "clone_url": project.clone_url,
+        "default_branch": project.default_branch,
+        "pushed_at": project.pushed_at,
+        "current_focus": project.current_focus,
+        "next_action": project.next_action,
+        "next_prompt": project.next_prompt,
+    }
+
+
+def _project_from_cache(owner: str, item: dict[str, Any], local_by_remote: dict[str, str]) -> RemoteProject:
+    url = str(item.get("url") or "")
+    clone_url = str(item.get("clone_url") or "")
+    remote_keys = {_normalize_remote(url), _normalize_remote(clone_url)}
+    remote_keys.discard("")
+    local_path = next((local_by_remote[k] for k in remote_keys if k in local_by_remote), None)
+    full_name = str(item.get("full_name") or "")
+    return RemoteProject(
+        owner=str(item.get("owner") or owner),
+        name=str(item.get("name") or full_name.rsplit("/", 1)[-1]),
+        full_name=full_name,
+        url=url,
+        clone_url=clone_url or url,
+        default_branch=str(item.get("default_branch") or "main"),
+        pushed_at=str(item.get("pushed_at") or ""),
+        current_focus=str(item.get("current_focus") or ""),
+        next_action=str(item.get("next_action") or ""),
+        next_prompt=str(item.get("next_prompt") or ""),
+        local_path=local_path,
+    )
