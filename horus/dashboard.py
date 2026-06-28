@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import html
 import re
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,9 @@ from horus import (
     routines,
 )
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
+
+_REMOTE_REFRESH_LOCK = threading.Lock()
+_REMOTE_REFRESHING: set[str] = set()
 
 
 def load_project(path_str: str) -> dict[str, Any]:
@@ -149,16 +153,47 @@ def gather_projects() -> list[dict[str, Any]]:
     return [load_project(p) for p in config.load_projects()]
 
 
-def gather_remote_projects() -> tuple[list[github_catalog.RemoteProject], list[str]]:
+def gather_remote_projects() -> tuple[list[github_catalog.RemoteProject], list[str], list[str]]:
     projects: list[github_catalog.RemoteProject] = []
     errors: list[str] = []
+    notes: list[str] = []
     local = config.load_projects()
     for owner in config.load_github_owners():
+        cached = github_catalog.load_cache(owner, local_projects=local)
+        if cached is not None:
+            projects.extend(cached.projects)
+            if cached.fetched_at:
+                notes.append(f"{owner}: showing cached results from {cached.fetched_at}; refreshing in background")
+            else:
+                notes.append(f"{owner}: showing cached results; refreshing in background")
+            if cached.error:
+                when = f" at {cached.error_at}" if cached.error_at else ""
+                errors.append(f"{owner}: last refresh failed{when}: {cached.error}")
+            _start_remote_refresh(owner, local)
+            continue
         try:
-            projects.extend(github_catalog.discover(owner, local_projects=local))
+            projects.extend(github_catalog.refresh_cache(owner, local_projects=local))
         except RuntimeError as exc:
             errors.append(f"{owner}: {exc}")
-    return projects, errors
+    return projects, errors, notes
+
+
+def _start_remote_refresh(owner: str, local_projects: list[str]) -> None:
+    with _REMOTE_REFRESH_LOCK:
+        if owner in _REMOTE_REFRESHING:
+            return
+        _REMOTE_REFRESHING.add(owner)
+
+    def refresh() -> None:
+        try:
+            github_catalog.refresh_cache(owner, local_projects=local_projects)
+        except RuntimeError:
+            pass
+        finally:
+            with _REMOTE_REFRESH_LOCK:
+                _REMOTE_REFRESHING.discard(owner)
+
+    threading.Thread(target=refresh, daemon=True).start()
 
 
 def _account_usage(alias: str, cred_path: Path | None) -> dict[str, Any]:
@@ -852,8 +887,8 @@ def _remote_project_card(p: github_catalog.RemoteProject) -> str:
     )
 
 
-def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: list[str]) -> str:
-    if not projects and not errors:
+def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: list[str], notes: list[str] | None = None) -> str:
+    if not projects and not errors and not notes:
         return (
             "<div class='section'><h2>GitHub remote catalog</h2>"
             "<div class='card'><p class='muted'>No GitHub owners configured. Run "
@@ -862,6 +897,9 @@ def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: 
     cards = "".join(_remote_project_card(p) for p in projects)
     if not cards:
         cards = "<div class='card'><p class='muted'>No Horus-enabled remote repos found yet.</p></div>"
+    if notes:
+        msg = "".join(f"<li>{html.escape(n)}</li>" for n in notes)
+        cards = f"<div class='banner ok'><strong>GitHub catalog cache</strong><ul>{msg}</ul></div>{cards}"
     if errors:
         err = "".join(f"<li>{html.escape(e)}</li>" for e in errors)
         cards = f"<div class='banner err'><strong>GitHub discovery issue</strong><ul>{err}</ul></div>{cards}"
@@ -1520,8 +1558,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(render_index(gather_projects(), gather_sessions()))
             return
         if parsed.path == "/github-catalog":
-            remote_projects, remote_errors = gather_remote_projects()
-            self._send(render_remote_catalog(remote_projects, remote_errors))
+            remote_projects, remote_errors, remote_notes = gather_remote_projects()
+            self._send(render_remote_catalog(remote_projects, remote_errors, remote_notes))
             return
         if parsed.path == "/sessions":
             recs = gather_sessions()

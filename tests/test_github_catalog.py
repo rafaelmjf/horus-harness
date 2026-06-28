@@ -97,3 +97,56 @@ def test_discover_reports_gh_failure(monkeypatch):
         assert "auth required" in str(exc)
     else:
         raise AssertionError("expected RuntimeError")
+
+
+def test_cache_round_trips_projects_and_recomputes_local_match(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    local = tmp_path / "demo"
+    local.mkdir()
+    project = github_catalog.RemoteProject(
+        owner="rafaelmjf",
+        name="demo",
+        full_name="rafaelmjf/demo",
+        url="https://github.com/rafaelmjf/demo",
+        clone_url="git@github.com:rafaelmjf/demo.git",
+        default_branch="main",
+        pushed_at="2026-06-28T12:00:00Z",
+        current_focus="Focus",
+        next_action="Next",
+        next_prompt="Prompt",
+        local_path="/old/machine/path",
+    )
+    monkeypatch.setattr(github_catalog.gitstate, "git_state", lambda root: {"remote_url": "git@github.com:rafaelmjf/demo.git"})
+
+    github_catalog.save_cache("rafaelmjf", [project])
+    cached = github_catalog.load_cache("rafaelmjf", local_projects=[str(local)])
+
+    assert cached is not None
+    assert cached.fetched_at
+    assert cached.error == ""
+    assert cached.projects[0].full_name == "rafaelmjf/demo"
+    assert cached.projects[0].local_path == str(local)
+
+
+def test_cache_records_refresh_error_without_dropping_projects(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    project = github_catalog.RemoteProject(
+        owner="rafaelmjf",
+        name="demo",
+        full_name="rafaelmjf/demo",
+        url="https://github.com/rafaelmjf/demo",
+        clone_url="git@github.com:rafaelmjf/demo.git",
+        default_branch="main",
+        pushed_at="",
+    )
+
+    github_catalog.save_cache("rafaelmjf", [project])
+    github_catalog.record_cache_error("rafaelmjf", "rate limited")
+    cached = github_catalog.load_cache("rafaelmjf")
+
+    assert cached is not None
+    assert cached.projects[0].full_name == "rafaelmjf/demo"
+    assert cached.error == "rate limited"
+    assert cached.error_at

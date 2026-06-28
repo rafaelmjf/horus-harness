@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub now supports non-blocking remote catalog discovery plus a first CLI start flow for cloning/registering remote-only Horus repos. Next priority is making that remote catalog feel instant and resilient with caching, refresh, and clearer error states."
-next_action: "Add owner-level remote snapshot caching so saved GitHub owners render their last successful results immediately with a last-refreshed timestamp while live refresh runs separately."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: add owner-level remote snapshot caching for saved GitHub owners. Current state: `horus discover github <owner> --save` records GitHub owners, `/github-catalog` loads asynchronously, local clones are matched by normalized remote URL, and `horus start github:<owner>/<repo>` clones remote-only repos into the configured workspace root, registers them, refreshes Horus-managed projections, and prints the repo's next prompt/open command. Next step: cache each saved owner's last successful remote-project result set with a last-refreshed timestamp, render cached results immediately, refresh in the background, and show clear stale/error states when `gh` auth/network/rate limits fail."
+current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub now supports non-blocking remote discovery, cached owner snapshots, and a first CLI start flow for cloning/registering remote-only Horus repos. Next priority is adding an explicit manual refresh action for the remote catalog."
+next_action: "Add a force-refresh control for saved GitHub owners so the user can trigger live discovery on demand and see a clear success/error result without waiting for the background path."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: add a force-refresh control for saved GitHub owners. Current state: `horus discover github <owner> --save` records GitHub owners, `/github-catalog` loads asynchronously, local clones are matched by normalized remote URL, cached owner snapshots under `~/.horus/github-cache/` render immediately with a last-refreshed note while background refresh updates the cache, and `horus start github:<owner>/<repo>` clones/registers/refreshes remote-only repos. Next step: add a dashboard/CLI manual refresh action that forces live discovery, updates the cache, and reports clear success/error state."
 last_updated: 2026-06-28
 ---
 
@@ -294,7 +294,7 @@ dashboard and later becomes the place for continuity/status nudges.
   configured workspace root, register the project, run `upgrade-project --apply`
   only on Horus-managed surfaces, and print the repo's `next_prompt` plus the
   matching `horus open` command.
-- [ ] Cache the last successful GitHub catalog per owner locally, render cached
+- [x] Cache the last successful GitHub catalog per owner locally, render cached
   results instantly with a "last refreshed" timestamp, and refresh in the background.
 - [ ] Add a manual refresh action for the GitHub catalog, with clear error state
   when `gh` auth, network access, or GitHub rate limits block discovery.

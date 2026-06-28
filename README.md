@@ -71,7 +71,11 @@ horus dashboard
 Remote repos appear when `.horus/project.md` is readable. The dashboard shows
 their current focus, next action, whether this machine already has a matching
 local clone, and a `horus start github:<owner>/<repo>` command for remote-only
-projects.
+projects. Once a GitHub owner has been fetched successfully, Horus stores a
+machine-local snapshot under `~/.horus/github-cache/`; later dashboard loads can
+render that snapshot immediately with a last-refreshed note while live discovery
+refreshes the cache separately. If live refresh fails, the dashboard keeps showing
+the last successful snapshot and surfaces the latest error.
 
 Set the machine-local workspace root once, then start any remote catalog entry:
 
