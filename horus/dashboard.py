@@ -24,6 +24,7 @@ from urllib.parse import parse_qs, quote_plus, urlparse
 from importlib import resources
 
 from horus import (
+    __version__,
     adapters,
     claude_usage,
     codex_usage,
@@ -426,9 +427,12 @@ def _active_class(active: bool) -> str:
 
 
 def _page(title: str, body: str, active: str = "projects", wide: bool = False, live: int = 0) -> str:
+    icon_key = html.escape(__version__, quote=True)
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
-        f"<title>{html.escape(title)}</title><link rel='icon' href='/favicon.ico'>"
+        f"<title>{html.escape(title)}</title>"
+        f"<link rel='icon' href='/favicon.ico?v={icon_key}' sizes='any'>"
+        f"<link rel='icon' type='image/png' href='/assets/icon.png?v={icon_key}'>"
         f"<style>{_STYLE}</style></head><body>"
         "<header><h1>Horus</h1>"
         "<div class='sub'>project continuity &amp; control panel</div>"
