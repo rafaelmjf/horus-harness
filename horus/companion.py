@@ -72,13 +72,20 @@ def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool =
     return DashboardProcess(url, True, process)
 
 
-def stop_dashboard(dashboard: DashboardProcess) -> None:
+def stop_dashboard(dashboard: DashboardProcess, *, timeout: float = 2.0) -> None:
     """Terminate a dashboard server *this* companion spawned, so it doesn't outlive
     the mascot and pile up as an orphan. No-op when the dashboard was reused (an
     existing one was already live) or none was started."""
     if dashboard.started and dashboard.process is not None:
         try:
             dashboard.process.terminate()
+            dashboard.process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                dashboard.process.kill()
+                dashboard.process.wait(timeout=timeout)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
         except OSError:
             pass
 

@@ -116,20 +116,52 @@ def test_stop_dashboard_terminates_only_spawned():
     class FakeProc:
         def __init__(self):
             self.terminated = False
+            self.waited = False
 
         def terminate(self):
             self.terminated = True
 
+        def wait(self, timeout=None):
+            self.waited = True
+
     spawned = FakeProc()
     companion.stop_dashboard(companion.DashboardProcess("http://x", True, spawned))
     assert spawned.terminated is True
+    assert spawned.waited is True
 
     reused = FakeProc()
     companion.stop_dashboard(companion.DashboardProcess("http://x", False, reused))
     assert reused.terminated is False  # reused/existing one is left alone
+    assert reused.waited is False
 
     # No process at all -> no crash.
     companion.stop_dashboard(companion.DashboardProcess("http://x", True, None))
+
+
+def test_stop_dashboard_kills_when_spawned_process_does_not_exit():
+    class FakeProc:
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+            self.waits = 0
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+        def wait(self, timeout=None):
+            self.waits += 1
+            if self.waits == 1:
+                raise subprocess.TimeoutExpired("horus dashboard", timeout)
+
+    proc = FakeProc()
+    companion.stop_dashboard(companion.DashboardProcess("http://x", True, proc), timeout=0.01)
+
+    assert proc.terminated is True
+    assert proc.killed is True
+    assert proc.waits == 2
 
 
 def test_relaunch_without_console_noop_off_windows(monkeypatch):
