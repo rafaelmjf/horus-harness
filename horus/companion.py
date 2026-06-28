@@ -132,10 +132,10 @@ def relaunch_without_console() -> bool:
     return True
 
 
-# Chromium app-mode (`--app=`) gives a chromeless standalone window — no tabs, no
-# address bar — so the dashboard reads as a companion app, not a browser tab. Edge
-# ships on Windows 11; Chrome is the fallback. PySide/pywebview is the upgrade path
-# if we later want a true native window + taskbar identity.
+# Chromium app-mode (`--app=`) remains available as an explicit opt-in. The
+# lightweight default is a normal browser tab, because Chrome/Edge app windows still
+# own the taskbar identity. PySide/pywebview/native shells are the upgrade path if
+# we later want a true native window + taskbar icon.
 def _flatpak_app(app_id: str) -> list[str] | None:
     flatpak = shutil.which("flatpak")
     if not flatpak:
@@ -181,8 +181,8 @@ def _app_browser() -> list[str] | None:
     return None
 
 
-def open_dashboard(url: str, *, app_window: bool = True) -> None:
-    """Open the dashboard. Prefers a chromeless app-mode window; falls back to a tab."""
+def open_dashboard(url: str, *, app_window: bool = False) -> None:
+    """Open the dashboard. Defaults to a normal browser tab for clear OS identity."""
     browser = _app_browser() if app_window else None
     if browser:
         kwargs: dict = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "stdin": subprocess.DEVNULL}
@@ -225,6 +225,7 @@ def run_companion(
     port: int = 8765,
     start_dashboard: bool = True,
     open_on_start: bool = False,
+    app_window: bool = False,
     usage_threshold: float = 90.0,
 ) -> int:
     try:
@@ -244,7 +245,7 @@ def run_companion(
 
     dashboard = ensure_dashboard(host, port, start=start_dashboard)
     if open_on_start:
-        open_dashboard(dashboard.url)
+        open_dashboard(dashboard.url, app_window=app_window)
 
     root = tk.Tk()
     root.title("Horus")
@@ -285,7 +286,7 @@ def run_companion(
         canvas.itemconfigure(status_item, fill=color)
 
     def open_action(_event: object | None = None) -> None:
-        open_dashboard(dashboard.url)
+        open_dashboard(dashboard.url, app_window=app_window)
 
     def close_check_action() -> None:
         level, message = run_close_check(project_root, threshold=usage_threshold)
