@@ -60,35 +60,20 @@ def floodfill_bg(im: Image.Image, thresh: int = 45) -> Image.Image:
 
 def _is_checker_bg(px: tuple[int, int, int, int]) -> bool:
     r, g, b, a = px
-    return a > 0 and max(r, g, b) - min(r, g, b) <= 10 and min(r, g, b) >= 175
+    # The source "transparent" export has a baked checkerboard in neutral grays
+    # around 189..241. Intentional mascot whites are 254..255 and must survive.
+    return a > 0 and max(r, g, b) - min(r, g, b) <= 10 and 175 <= min(r, g, b) <= 245
 
 
 def key_checkerboard_bg(im: Image.Image) -> Image.Image:
-    """Remove checkerboard-preview pixels connected to the border.
-
-    This preserves enclosed whites in the mascot while clearing the fake
-    transparency preview around it.
-    """
+    """Remove the baked checkerboard-preview pixels from the source export."""
     im = im.copy()
     px = im.load()
     w, h = im.size
-    stack: list[tuple[int, int]] = []
-    seen: set[tuple[int, int]] = set()
-    for x in range(w):
-        stack.append((x, 0))
-        stack.append((x, h - 1))
     for y in range(h):
-        stack.append((0, y))
-        stack.append((w - 1, y))
-    while stack:
-        x, y = stack.pop()
-        if (x, y) in seen or not (0 <= x < w and 0 <= y < h):
-            continue
-        seen.add((x, y))
-        if not _is_checker_bg(px[x, y]):
-            continue
-        px[x, y] = (0, 0, 0, 0)
-        stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+        for x in range(w):
+            if _is_checker_bg(px[x, y]):
+                px[x, y] = (0, 0, 0, 0)
     return im
 
 
@@ -136,6 +121,38 @@ def autocrop(im: Image.Image, pad: int = 6) -> Image.Image:
     return im
 
 
+def keep_largest_opaque_component(im: Image.Image) -> Image.Image:
+    """Drop tiny detached specks left by keying a screenshot-style source."""
+    im = im.copy()
+    px = im.load()
+    w, h = im.size
+    seen: set[tuple[int, int]] = set()
+    largest: set[tuple[int, int]] = set()
+    for y in range(h):
+        for x in range(w):
+            if (x, y) in seen or px[x, y][3] == 0:
+                continue
+            stack = [(x, y)]
+            seen.add((x, y))
+            component: set[tuple[int, int]] = set()
+            while stack:
+                cx, cy = stack.pop()
+                component.add((cx, cy))
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = cx + dx, cy + dy
+                    if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in seen and px[nx, ny][3] > 0:
+                        seen.add((nx, ny))
+                        stack.append((nx, ny))
+            if len(component) > len(largest):
+                largest = component
+
+    for y in range(h):
+        for x in range(w):
+            if px[x, y][3] > 0 and (x, y) not in largest:
+                px[x, y] = (0, 0, 0, 0)
+    return im
+
+
 def square_pad(im: Image.Image) -> Image.Image:
     """Center the art on a transparent square canvas (for a well-proportioned .ico)."""
     side = max(im.size)
@@ -149,7 +166,12 @@ def prepare(name: str) -> Image.Image:
 
 
 def prepare_foreground_mascot() -> Image.Image:
-    mascot = autocrop(key_checkerboard_bg(_load("mascot_without_background")), pad=6)
+    mascot = autocrop(keep_largest_opaque_component(key_checkerboard_bg(_load("mascot_without_background"))), pad=6)
+    if (ASSETS / "background_egypt.png").is_file():
+        background = _load("background_egypt")
+        target_h = int(background.height * 0.63)
+        target_w = int(mascot.width * (target_h / mascot.height))
+        mascot = mascot.resize((target_w, target_h), Image.Resampling.NEAREST)
     assert mascot.getpixel((0, 0))[3] == 0, "foreground mascot should have transparent corners"
     return mascot
 
