@@ -250,6 +250,12 @@ dashboard and later becomes the place for continuity/status nudges.
   white regions such as the hat. (2026-06-25) `scripts/regen_mascot.py` defringes
   (peels near-white edge pixels touching transparency; interior whites survive)
   + drops keying specks. All 5 frames regenerated; runtime stays Pillow-free.
+- [x] Replace transparent-window reliance with an opaque mascot card background
+  (2026-06-28): packaged runtime frames use `mascot_with_background.png`; the
+  background and split mascot source files are kept for future customization.
+- [ ] Low priority: add a configurable mascot background picker once the companion
+  shell has a clean settings surface and the source mascot has true alpha instead
+  of a baked checkerboard preview.
 - [ ] Surface native hook events, usage threshold warnings, stale summaries,
   uncommitted continuity, and per-project switching.
 

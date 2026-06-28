@@ -6,9 +6,16 @@ PNGs/ICO this writes. Run after dropping new source art into `horus/assets/`:
     python scripts/regen_mascot.py            # overwrite horus/assets/*
     python scripts/regen_mascot.py /tmp/out   # write elsewhere to preview
 
-Sources are the pixel-art `mascot.png` (full body) and `icon.png` (head/bust),
-exported on a **solid white background** (with a thin dark line along the top edge).
-The pipeline turns that into clean transparent-background art:
+Preferred runtime source is `mascot_with_background.png`, a precomposited mascot
+card. `background_egypt.png` and `mascot_without_background.png` are kept as source
+material for a future background picker, but the current "without background" export
+contains a baked checkerboard preview rather than true alpha, so it is not used for
+the packaged runtime frames yet.
+
+Legacy fallback sources are the pixel-art `mascot.png` (full body) and `icon.png`
+(head/bust), exported on a **solid white background** (with a thin dark line along
+the top edge). That fallback pipeline turns them into clean transparent-background
+art:
 
   * floodfill the white background from the borders → transparent. Seeded from the
     edges, so *interior* whites (belly, eye, the white face) survive — only the
@@ -49,6 +56,40 @@ def floodfill_bg(im: Image.Image, thresh: int = 45) -> Image.Image:
             ImageDraw.floodfill(im, seed, (0, 0, 0, 0), thresh=thresh)
         except (ValueError, IndexError):
             pass
+    return im
+
+
+def _is_checker_bg(px: tuple[int, int, int, int]) -> bool:
+    r, g, b, a = px
+    return a > 0 and max(r, g, b) - min(r, g, b) <= 10 and min(r, g, b) >= 175
+
+
+def key_checkerboard_bg(im: Image.Image) -> Image.Image:
+    """Remove checkerboard-preview pixels connected to the border.
+
+    This preserves enclosed whites in the mascot while clearing the fake
+    transparency preview around it.
+    """
+    im = im.copy()
+    px = im.load()
+    w, h = im.size
+    stack: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for x in range(w):
+        stack.append((x, 0))
+        stack.append((x, h - 1))
+    for y in range(h):
+        stack.append((0, y))
+        stack.append((w - 1, y))
+    while stack:
+        x, y = stack.pop()
+        if (x, y) in seen or not (0 <= x < w and 0 <= y < h):
+            continue
+        seen.add((x, y))
+        if not _is_checker_bg(px[x, y]):
+            continue
+        px[x, y] = (0, 0, 0, 0)
+        stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
     return im
 
 
@@ -108,17 +149,41 @@ def prepare(name: str) -> Image.Image:
     return autocrop(defringe(clear_dark_edges(floodfill_bg(_load(name)))))
 
 
+def prepare_layered_mascot() -> Image.Image:
+    mascot = autocrop(key_checkerboard_bg(_load("mascot_without_background")), pad=0)
+    background = _load("background_egypt")
+    target_h = int(background.height * 0.91)
+    target_w = int(mascot.width * (target_h / mascot.height))
+    mascot = mascot.resize((target_w, target_h), Image.Resampling.NEAREST)
+    canvas = background.copy()
+    x = (background.width - mascot.width) // 2
+    y = background.height - mascot.height - int(background.height * 0.035)
+    canvas.alpha_composite(mascot, (x, y))
+    return canvas
+
+
+def prepare_composited_mascot() -> Image.Image:
+    return _load("mascot_with_background")
+
+
 def main(out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     sampled_opaque = lambda im: sum(
         1 for y in range(0, im.height, 5) for x in range(0, im.width, 5) if im.getpixel((x, y))[3] > 0
     )
 
-    mascot = prepare("mascot")
-    # self-check: background gone (corners transparent) and the bird survived.
-    assert mascot.getpixel((0, 0))[3] == 0, "top-left corner is not transparent"
-    assert mascot.getpixel((0, mascot.height - 1))[3] == 0, "bottom-left corner is not transparent"
-    assert sampled_opaque(mascot) > 500, "the silhouette was eaten"
+    if (ASSETS / "mascot_with_background.png").is_file():
+        mascot = prepare_composited_mascot()
+        assert mascot.getpixel((0, 0))[3] == 255, "composited mascot should be opaque"
+    elif (ASSETS / "background_egypt.png").is_file() and (ASSETS / "mascot_without_background.png").is_file():
+        mascot = prepare_layered_mascot()
+        assert mascot.getpixel((0, 0))[3] == 255, "composited mascot should be opaque"
+    else:
+        mascot = prepare("mascot")
+        # self-check: background gone (corners transparent) and the bird survived.
+        assert mascot.getpixel((0, 0))[3] == 0, "top-left corner is not transparent"
+        assert mascot.getpixel((0, mascot.height - 1))[3] == 0, "bottom-left corner is not transparent"
+        assert sampled_opaque(mascot) > 500, "the silhouette was eaten"
 
     mascot.save(out_dir / "mascot.png")
     for frame in ("mascot_idle_0", "mascot_idle_1", "mascot_idle_2", "mascot_blink"):

@@ -29,6 +29,13 @@ def test_mascot_animation_frames_are_packaged():
     assert all(p.is_file() for p in paths)
 
 
+def test_mascot_background_sources_are_packaged():
+    assets = companion.mascot_asset_path().parent
+    assert (assets / "background_egypt.png").is_file()
+    assert (assets / "mascot_with_background.png").is_file()
+    assert (assets / "mascot_without_background.png").is_file()
+
+
 def test_ensure_dashboard_does_not_spawn_when_live(monkeypatch):
     monkeypatch.setattr(companion, "dashboard_is_live", lambda url: True)
 
