@@ -200,9 +200,23 @@ def mascot_asset_path() -> Path:
     return Path(str(resources.files("horus").joinpath("assets", "mascot.png")))
 
 
+def mascot_background_path() -> Path:
+    return Path(str(resources.files("horus").joinpath("assets", "background_egypt.png")))
+
+
 def mascot_frame_paths() -> list[Path]:
     names = ["mascot_idle_0.png", "mascot_idle_1.png", "mascot_idle_2.png", "mascot_blink.png"]
     return [Path(str(resources.files("horus").joinpath("assets", name))) for name in names]
+
+
+def resolve_mascot_style(style: str = "auto", *, platform: str | None = None) -> str:
+    """Resolve the platform default for the companion artwork style."""
+    if style not in {"auto", "foreground", "layered"}:
+        raise ValueError(f"unknown mascot style: {style}")
+    if style != "auto":
+        return style
+    actual_platform = platform or sys.platform
+    return "foreground" if actual_platform == "win32" else "layered"
 
 
 def run_close_check(project_root: Path, *, threshold: float = 90.0) -> tuple[str, str]:
@@ -226,6 +240,7 @@ def run_companion(
     start_dashboard: bool = True,
     open_on_start: bool = False,
     app_window: bool = False,
+    mascot_style: str = "auto",
     usage_threshold: float = 90.0,
 ) -> int:
     try:
@@ -256,20 +271,31 @@ def run_companion(
         root.attributes("-toolwindow", True)
     except tk.TclError:
         pass
-    background = "#0f1115"
+    style = resolve_mascot_style(mascot_style)
+    transparent_background = "#ff00ff" if style == "foreground" else "#0f1115"
+    background = transparent_background
     root.configure(bg=background)
+    if style == "foreground":
+        try:
+            root.attributes("-transparentcolor", transparent_background)
+        except tk.TclError:
+            pass
 
     full_frames = [tk.PhotoImage(file=str(path)) for path in mascot_frame_paths()]
+    full_background = tk.PhotoImage(file=str(mascot_background_path())) if style == "layered" else None
     scale = max(1, max(frame.height() for frame in full_frames) // 180)
     mascot_frames = [frame.subsample(scale, scale) for frame in full_frames]
-    width = max(frame.width() for frame in mascot_frames)
-    height = max(frame.height() for frame in mascot_frames)
+    mascot_background = full_background.subsample(scale, scale) if full_background is not None else None
+    width = max([frame.width() for frame in mascot_frames] + ([mascot_background.width()] if mascot_background else []))
+    height = max([frame.height() for frame in mascot_frames] + ([mascot_background.height()] if mascot_background else []))
     root.geometry(f"{width}x{height}+80+80")
 
     canvas = tk.Canvas(root, width=width, height=height, bg=background, highlightthickness=0, bd=0)
     canvas.pack()
 
     menu = tk.Menu(root, tearoff=0)
+    if mascot_background is not None:
+        canvas.create_image(width // 2, height // 2, image=mascot_background)
     mascot_item = canvas.create_image(width // 2, height // 2, image=mascot_frames[0])
     status_item = canvas.create_rectangle(width - 18, height - 18, width - 8, height - 8, fill="#57d39a", outline="#ffffff")
     canvas.create_text(width - 13, height - 13, text="", fill="#ffffff")

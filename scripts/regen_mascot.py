@@ -6,11 +6,10 @@ PNGs/ICO this writes. Run after dropping new source art into `horus/assets/`:
     python scripts/regen_mascot.py            # overwrite horus/assets/*
     python scripts/regen_mascot.py /tmp/out   # write elsewhere to preview
 
-Preferred runtime source is `mascot_with_background.png`, a precomposited mascot
-card. `background_egypt.png` and `mascot_without_background.png` are kept as source
-material for a future background picker, but the current "without background" export
-contains a baked checkerboard preview rather than true alpha, so it is not used for
-the packaged runtime frames yet.
+Preferred runtime source is `mascot_without_background.png`, keyed into a real
+transparent foreground from its baked checkerboard preview. `background_egypt.png`
+is packaged separately so Linux can layer a static card behind the animated bird;
+Windows can keep the transparent foreground-only mascot by default.
 
 Legacy fallback sources are the pixel-art `mascot.png` (full body) and `icon.png`
 (head/bust), exported on a **solid white background** (with a thin dark line along
@@ -24,8 +23,8 @@ art:
   * defringe — peel the light anti-aliased halo left around the silhouette.
   * autocrop to the content + a small pad, so the bird fills the small mascot window.
 
-The mascot's idle frames are currently identical to the base (the companion animates
-with a gentle CSS bob; the old wing-flap was retired with the previous art). Drop a
+The mascot's idle frames are currently identical to the base (the companion bobs the
+foreground layer; the old wing-flap was retired with the previous art). Drop a
 distinct blink/wing variant here and wire it in if a richer idle is wanted later.
 """
 
@@ -149,6 +148,12 @@ def prepare(name: str) -> Image.Image:
     return autocrop(defringe(clear_dark_edges(floodfill_bg(_load(name)))))
 
 
+def prepare_foreground_mascot() -> Image.Image:
+    mascot = autocrop(key_checkerboard_bg(_load("mascot_without_background")), pad=6)
+    assert mascot.getpixel((0, 0))[3] == 0, "foreground mascot should have transparent corners"
+    return mascot
+
+
 def prepare_layered_mascot() -> Image.Image:
     mascot = autocrop(key_checkerboard_bg(_load("mascot_without_background")), pad=0)
     background = _load("background_egypt")
@@ -162,22 +167,15 @@ def prepare_layered_mascot() -> Image.Image:
     return canvas
 
 
-def prepare_composited_mascot() -> Image.Image:
-    return _load("mascot_with_background")
-
-
 def main(out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     sampled_opaque = lambda im: sum(
         1 for y in range(0, im.height, 5) for x in range(0, im.width, 5) if im.getpixel((x, y))[3] > 0
     )
 
-    if (ASSETS / "mascot_with_background.png").is_file():
-        mascot = prepare_composited_mascot()
-        assert mascot.getpixel((0, 0))[3] == 255, "composited mascot should be opaque"
-    elif (ASSETS / "background_egypt.png").is_file() and (ASSETS / "mascot_without_background.png").is_file():
-        mascot = prepare_layered_mascot()
-        assert mascot.getpixel((0, 0))[3] == 255, "composited mascot should be opaque"
+    if (ASSETS / "mascot_without_background.png").is_file():
+        mascot = prepare_foreground_mascot()
+        assert sampled_opaque(mascot) > 500, "the foreground silhouette was eaten"
     else:
         mascot = prepare("mascot")
         # self-check: background gone (corners transparent) and the bird survived.

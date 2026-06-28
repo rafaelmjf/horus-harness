@@ -855,6 +855,7 @@ def cmd_app(args: argparse.Namespace) -> int:
         start_dashboard=not args.no_dashboard,
         open_on_start=args.open,
         app_window=args.app_window,
+        mascot_style=args.mascot_style,
         usage_threshold=args.usage_threshold,
     )
 
@@ -1072,6 +1073,12 @@ def build_parser() -> argparse.ArgumentParser:
             "--app-window",
             action="store_true",
             help="open the dashboard in Chrome/Edge app-window mode instead of a normal browser tab",
+        )
+        p_app.add_argument(
+            "--mascot-style",
+            choices=("auto", "foreground", "layered"),
+            default="auto",
+            help="mascot artwork style: auto uses foreground on Windows and layered on other desktops",
         )
         p_app.add_argument(
             "--no-detach",
