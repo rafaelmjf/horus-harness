@@ -180,7 +180,7 @@ def test_index_renders_remote_github_catalog():
     assert "GitHub remote catalog" in html_out
     assert "rafaelmjf/demo" in html_out
     assert "remote only" in html_out
-    assert "git clone git@github.com:rafaelmjf/demo.git" in html_out
+    assert "horus start github:rafaelmjf/demo" in html_out
 
 
 def test_index_uses_async_remote_catalog_placeholder(tmp_path, monkeypatch):

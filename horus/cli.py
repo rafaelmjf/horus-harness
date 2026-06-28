@@ -27,6 +27,7 @@ from horus import (
     native_hooks,
     overhead,
     registry,
+    remote_start,
     routines,
     skills,
     templates,
@@ -153,6 +154,50 @@ def cmd_discover(args: argparse.Namespace) -> int:
         next_action = f" — {project.next_action}" if project.next_action else ""
         print(f"{project.full_name} ({where}){next_action}")
     return 0
+
+
+def cmd_start(args: argparse.Namespace) -> int:
+    workspace = Path(args.workspace_root).expanduser() if args.workspace_root else None
+    if args.set_workspace_root and workspace is None:
+        print("Remote start failed: --set-workspace-root requires --workspace-root")
+        return 2
+    if args.set_workspace_root and workspace is not None:
+        saved = config.set_workspace_root(workspace)
+        workspace = Path(saved)
+        print(f"Workspace root set to: {saved}")
+    try:
+        result = remote_start.start_github_project(args.target, workspace_root=workspace, limit=args.limit)
+    except (RuntimeError, ValueError) as exc:
+        print(f"Remote start failed: {exc}")
+        return 1
+
+    print(f"{'Cloned' if result.cloned else 'Using local clone'}: {result.path}")
+    print(f"{'Registered' if result.registered else 'Already registered'} in Horus project registry.")
+    updated = [a for a in result.upgrade_actions if a.status in {"created", "updated"}]
+    skipped = [a for a in result.upgrade_actions if a.status == "skipped"]
+    if updated:
+        print(f"Refreshed {len(updated)} Horus-managed projection(s).")
+    if skipped:
+        print(f"Skipped {len(skipped)} unowned projection(s).")
+    if result.project.next_prompt:
+        print("\nNext prompt:")
+        print(result.project.next_prompt)
+    elif result.project.next_action:
+        print("\nNext action:")
+        print(result.project.next_action)
+    print(f"\nOpen it with: horus open \"{result.path}\"")
+    return 0
+
+
+def cmd_config(args: argparse.Namespace) -> int:
+    if args.config_cmd == "workspace-root":
+        if args.path:
+            print(config.set_workspace_root(Path(args.path)))
+        else:
+            print(config.load_workspace_root())
+        return 0
+    print(f"Unsupported config command: {args.config_cmd}")
+    return 2
 
 
 def cmd_sessions(args: argparse.Namespace) -> int:
@@ -1061,6 +1106,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_discover.add_argument("--save", action="store_true", help="show this owner in the dashboard remote catalog")
     p_discover.add_argument("--limit", type=int, default=100, help="maximum repos to scan (default: 100)")
     p_discover.set_defaults(func=cmd_discover)
+
+    p_start = sub.add_parser("start", help="clone/register a remote Horus project and print its resume prompt")
+    p_start.add_argument("target", help="remote target, e.g. github:owner/repo")
+    p_start.add_argument("--workspace-root", help="clone root for remote projects (default: configured root or ~/projects)")
+    p_start.add_argument(
+        "--set-workspace-root",
+        action="store_true",
+        help="save --workspace-root as the machine-local default before starting",
+    )
+    p_start.add_argument("--limit", type=int, default=100, help="maximum owner repos to scan when resolving GitHub target")
+    p_start.set_defaults(func=cmd_start)
+
+    p_config = sub.add_parser("config", help="inspect or update machine-local Horus config")
+    config_sub = p_config.add_subparsers(dest="config_cmd", required=True)
+    p_workspace = config_sub.add_parser("workspace-root", help="show or set the remote clone workspace root")
+    p_workspace.add_argument("path", nargs="?", help="new workspace root")
+    p_workspace.set_defaults(func=cmd_config)
 
     for name in ("app", "mascot"):
         p_app = sub.add_parser(name, help="show the always-on-top Horus companion")

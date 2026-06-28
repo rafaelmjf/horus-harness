@@ -26,6 +26,7 @@ class DashboardProcess(NamedTuple):
 # ponytail: if some unrelated process grabs this port, we'd wrongly think a
 # companion is running — picked an uncommon port to make that unlikely.
 SINGLETON_PORT = 8764
+MASCOT_TARGET_HEIGHT = 120
 
 
 def acquire_singleton_lock(port: int = SINGLETON_PORT) -> socket.socket | None:
@@ -283,7 +284,7 @@ def run_companion(
 
     full_frames = [tk.PhotoImage(file=str(path)) for path in mascot_frame_paths()]
     full_background = tk.PhotoImage(file=str(mascot_background_path())) if style == "layered" else None
-    scale = max(1, max(frame.height() for frame in full_frames) // 180)
+    scale = max(1, max(frame.height() for frame in full_frames) // MASCOT_TARGET_HEIGHT)
     mascot_frames = [frame.subsample(scale, scale) for frame in full_frames]
     mascot_background = full_background.subsample(scale, scale) if full_background is not None else None
     width = max([frame.width() for frame in mascot_frames] + ([mascot_background.width()] if mascot_background else []))
