@@ -109,6 +109,8 @@ horus overhead
 horus overhead --sessions
 horus overhead --agent codex
 horus overhead --agent claude
+horus overhead --baseline
+horus overhead --baseline --without-horus codex:<A_SESSION> --with-horus codex:<B_SESSION>
 ```
 
 The report has two parts: a rough static prompt footprint for Horus-managed
@@ -123,6 +125,15 @@ logs by session id and reports per tracked-session token totals where the native
 app exposes a matching id. Claude sessions and headless Codex sessions can match;
 interactive Codex PTYs may show as unmatched because Codex does not accept
 Horus's preassigned session id.
+
+For a controlled incremental-cost estimate, run `horus overhead --baseline`.
+The recipe is intentionally strict: run the same task on the same repo commit,
+account, model, and permission posture once without Horus projection and once
+with the normal Horus-enabled project. Then pass only the native session ids via
+`--without-horus` and `--with-horus`. If the clean run happened in a separate
+clone, add `--without-horus-path /path/to/clean-copy`. The comparison stays
+aggregate-only: matched sessions, turn counts, token totals, and delta. It does
+not print transcript content.
 
 `horus close` also performs a best-effort read of local Codex rollout telemetry
 from `$CODEX_HOME/sessions` when available. If the latest project turn is near

@@ -676,6 +676,8 @@ def cmd_overhead(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
         return 2
+    if args.baseline:
+        return _cmd_overhead_baseline(args, root)
     print(f"Horus token overhead estimate: {root}\n")
     print("Static prompt footprint (rough estimate: chars / 4):")
     for item in overhead.static_footprint():
@@ -723,6 +725,92 @@ def cmd_overhead(args: argparse.Namespace) -> int:
                 f"{row.turns} turn(s), {row.total.total_tokens} raw tokens"
             )
     return 0
+
+
+def _parse_baseline_session(value: str, *, default_agent: str) -> tuple[str, str]:
+    if ":" in value:
+        agent, session_id = value.split(":", 1)
+        agent = agent.strip().lower()
+    else:
+        agent, session_id = default_agent, value
+    session_id = session_id.strip()
+    if agent not in ("claude", "codex") or not session_id:
+        raise argparse.ArgumentTypeError("expected SESSION_ID or AGENT:SESSION_ID where AGENT is claude or codex")
+    return agent, session_id
+
+
+def _baseline_recipe() -> str:
+    return """Controlled A/B baseline recipe:
+  1. Use the same repo, commit, account, model, permission posture, and task prompt.
+  2. Run A without Horus projection: no .horus context, no Horus-managed instruction block, no Horus hooks.
+  3. Run B with the normal Horus-enabled project.
+  4. Capture only the native session ids, then compare them:
+     horus overhead --baseline --without-horus codex:<A_SESSION> --with-horus codex:<B_SESSION>
+     Add --without-horus-path /path/to/clean-copy if A ran in a separate clone.
+
+The comparison is aggregate-only: Horus reports matched sessions, turns, tokens, and delta; it does not print transcript content."""
+
+
+def _cmd_overhead_baseline(args: argparse.Namespace, root: Path) -> int:
+    print(f"Horus controlled A/B token baseline: {root}\n")
+    print(_baseline_recipe())
+    default_agent = "" if args.agent == "all" else args.agent
+    try:
+        without_specs = [_parse_baseline_session(v, default_agent=default_agent) for v in args.without_horus]
+        with_specs = [_parse_baseline_session(v, default_agent=default_agent) for v in args.with_horus]
+    except argparse.ArgumentTypeError as exc:
+        print(f"\nerror: {exc}")
+        return 2
+    if not without_specs and not with_specs:
+        return 0
+    if not without_specs or not with_specs:
+        print("\nerror: pass at least one --without-horus and one --with-horus session id to compare.")
+        return 2
+
+    codex_home = Path(args.codex_home).expanduser() if args.codex_home else None
+    claude_home = Path(args.claude_home).expanduser() if args.claude_home else None
+    without_root = Path(args.without_horus_path).resolve() if args.without_horus_path else root
+    with_root = Path(args.with_horus_path).resolve() if args.with_horus_path else root
+    comparison = overhead.baseline_comparison(
+        without_specs,
+        with_specs,
+        root,
+        without_project_root=without_root,
+        with_project_root=with_root,
+        codex_home=codex_home,
+        claude_home=claude_home,
+    )
+
+    print("\nObserved aggregate comparison:")
+    _print_baseline_group(comparison.without_horus)
+    _print_baseline_group(comparison.with_horus)
+    delta = comparison.incremental
+    base = comparison.without_horus.total.total_tokens
+    pct = _percent(delta.total_tokens, base)
+    print(f"  incremental: {delta.total_tokens} raw tokens ({pct:+.1f}% vs without Horus)")
+    print(
+        "      "
+        f"input={delta.input_tokens}, cached={delta.cached_input_tokens + delta.cache_read_input_tokens}, "
+        f"cache_write={delta.cache_creation_input_tokens}, output={delta.output_tokens}, "
+        f"reasoning={delta.reasoning_output_tokens}"
+    )
+
+    unmatched = [s for g in (comparison.without_horus, comparison.with_horus) for s in g.sessions if not s.matched]
+    return 1 if unmatched else 0
+
+
+def _print_baseline_group(group: overhead.BaselineGroup) -> None:
+    matched = sum(1 for s in group.sessions if s.matched)
+    print(
+        f"  {group.label}: {matched}/{len(group.sessions)} session(s) matched; "
+        f"{group.turns} turn(s), {group.total.total_tokens} raw tokens"
+    )
+    for row in group.sessions:
+        sid = row.session_id[:8]
+        if row.matched:
+            print(f"      {row.agent} {sid}: {row.turns} turn(s), {row.total.total_tokens} raw tokens")
+        else:
+            print(f"      {row.agent} {sid}: {row.note}")
 
 
 def _percent(part: int, total: int) -> float:
@@ -904,6 +992,33 @@ def build_parser() -> argparse.ArgumentParser:
         "--sessions",
         action="store_true",
         help="also report per tracked-session token usage by joining local logs on session id",
+    )
+    p_overhead.add_argument(
+        "--baseline",
+        action="store_true",
+        help="print/run the controlled A/B baseline recipe for with-vs-without Horus session ids",
+    )
+    p_overhead.add_argument(
+        "--without-horus",
+        action="append",
+        default=[],
+        metavar="AGENT:SESSION",
+        help="native baseline session id to compare (repeatable; AGENT may be omitted when --agent is claude/codex)",
+    )
+    p_overhead.add_argument(
+        "--with-horus",
+        action="append",
+        default=[],
+        metavar="AGENT:SESSION",
+        help="Horus-enabled session id to compare (repeatable; AGENT may be omitted when --agent is claude/codex)",
+    )
+    p_overhead.add_argument(
+        "--without-horus-path",
+        help="project root used by --without-horus sessions when they ran in a separate clean clone",
+    )
+    p_overhead.add_argument(
+        "--with-horus-path",
+        help="project root used by --with-horus sessions (default: --path)",
     )
     p_overhead.set_defaults(func=cmd_overhead)
 

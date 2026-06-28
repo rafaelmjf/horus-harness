@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Token overhead is now visible in the dashboard project detail page: static prompt estimate, observed upper-bound Horus-related usage, and tracked-session totals where native logs expose matching session ids. Attribution remains explicitly upper-bound, not counterfactual. Project upgrade/refresh and Linux desktop smoke are already validated. Next priority: controlled A/B baseline measurement."
-next_action: "Add a controlled A/B baseline recipe or command for comparable tasks with and without Horus so the overhead estimate can move beyond upper-bound attribution."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: add controlled A/B baseline measurement for token overhead. Current state: `horus overhead` reports static prompt footprint, project-level observed Claude/Codex usage, per tracked-session totals via `--sessions`, and the dashboard project detail page surfaces those aggregates. Next step: design a baseline recipe/command for comparable tasks with and without Horus so we can estimate incremental cost. Keep output aggregate-only; do not print transcript content."
+current_focus: "Token overhead now has both upper-bound attribution and a controlled A/B comparison path: `horus overhead --baseline` prints the strict recipe and can compare explicit with/without-Horus native session ids aggregate-only. Next priority is the known companion/dashboard lifecycle bug where orphaned dashboard servers can keep serving stale in-memory builds."
+next_action: "Fix the companion/dashboard lifecycle leak: detect or reuse an existing healthy `horus dashboard` on port 8765 before spawning, and ensure the companion reaps its dashboard child on exit."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: fix the companion/dashboard lifecycle leak. Current state: `horus app` has a mascot singleton on port 8764, but dashboard server processes on 8765 can leak and the first bound server keeps serving an old in-memory build. Implement reuse or single-instance detection for a healthy dashboard server before spawning, and make the companion terminate its dashboard child on exit. Keep the lightweight CLI/files workflow intact."
 last_updated: 2026-06-28
 ---
 
@@ -183,7 +183,7 @@ Phase 3 — portability (started with direct Codex skill projection):
   logs by session id and report per tracked-session token totals when a matching
   Claude/Codex session id exists. Interactive Codex PTYs can remain unmatched because
   Codex does not accept Horus's preassigned id.
-- [ ] Add a controlled comparison mode or baseline recipe for "same task without Horus"
+- [x] Add a controlled comparison mode or baseline recipe for "same task without Horus"
   so the estimate can move from upper-bound attribution toward measured incremental cost.
 - [x] Surface the current project/session overhead report in the dashboard project detail page:
   static footprint, observed upper-bound usage by agent, and tracked-session rows. → features.md

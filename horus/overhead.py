@@ -51,6 +51,28 @@ class SessionUsage(NamedTuple):
     note: str = ""
 
 
+class BaselineSession(NamedTuple):
+    session_id: str
+    agent: str
+    turns: int
+    total: TokenUsage
+    matched: bool
+    note: str = ""
+
+
+class BaselineGroup(NamedTuple):
+    label: str
+    sessions: list[BaselineSession]
+    turns: int
+    total: TokenUsage
+
+
+class BaselineComparison(NamedTuple):
+    without_horus: BaselineGroup
+    with_horus: BaselineGroup
+    incremental: TokenUsage
+
+
 _HORUS_MARKERS = (
     "horus",
     ".horus",
@@ -270,6 +292,64 @@ def session_usages(
     return out
 
 
+def baseline_comparison(
+    without_horus: list[tuple[str, str]],
+    with_horus: list[tuple[str, str]],
+    project_root: Path,
+    *,
+    without_project_root: Path | None = None,
+    with_project_root: Path | None = None,
+    codex_home: Path | None = None,
+    claude_home: Path | None = None,
+) -> BaselineComparison:
+    """Aggregate explicit A/B session ids without surfacing transcript content."""
+    without_root = without_project_root or project_root
+    with_root = with_project_root or project_root
+    without_group = _baseline_group(
+        "without Horus", without_horus, without_root, codex_home=codex_home, claude_home=claude_home
+    )
+    with_group = _baseline_group(
+        "with Horus", with_horus, with_root, codex_home=codex_home, claude_home=claude_home
+    )
+    return BaselineComparison(
+        without_group,
+        with_group,
+        _subtract_usage(with_group.total, without_group.total),
+    )
+
+
+def _baseline_group(
+    label: str,
+    specs: list[tuple[str, str]],
+    project_root: Path,
+    *,
+    codex_home: Path | None,
+    claude_home: Path | None,
+) -> BaselineGroup:
+    rows: list[BaselineSession] = []
+    turns_total = 0
+    usage_total = TokenUsage()
+    for agent, session_id in specs:
+        result: tuple[int, TokenUsage] | None
+        if agent == "codex":
+            result = codex_session_usage(session_id, project_root, home=codex_home)
+            note = "no matching Codex rollout session id"
+        elif agent == "claude":
+            result = claude_session_usage(session_id, project_root, home=claude_home)
+            note = "no matching Claude project log session id"
+        else:
+            result = None
+            note = "unsupported agent"
+        if result is None:
+            rows.append(BaselineSession(session_id, agent, 0, TokenUsage(), False, note))
+            continue
+        turns, usage = result
+        turns_total += turns
+        usage_total = _add_usage(usage_total, usage)
+        rows.append(BaselineSession(session_id, agent, turns, usage, True))
+    return BaselineGroup(label, rows, turns_total, usage_total)
+
+
 def _codex_rollouts(home: Path) -> list[Path]:
     sessions = home / "sessions"
     if not sessions.is_dir():
@@ -381,4 +461,16 @@ def _add_usage(a: TokenUsage, b: TokenUsage) -> TokenUsage:
         output_tokens=a.output_tokens + b.output_tokens,
         reasoning_output_tokens=a.reasoning_output_tokens + b.reasoning_output_tokens,
         total_tokens=a.total_tokens + b.total_tokens,
+    )
+
+
+def _subtract_usage(a: TokenUsage, b: TokenUsage) -> TokenUsage:
+    return TokenUsage(
+        input_tokens=a.input_tokens - b.input_tokens,
+        cached_input_tokens=a.cached_input_tokens - b.cached_input_tokens,
+        cache_creation_input_tokens=a.cache_creation_input_tokens - b.cache_creation_input_tokens,
+        cache_read_input_tokens=a.cache_read_input_tokens - b.cache_read_input_tokens,
+        output_tokens=a.output_tokens - b.output_tokens,
+        reasoning_output_tokens=a.reasoning_output_tokens - b.reasoning_output_tokens,
+        total_tokens=a.total_tokens - b.total_tokens,
     )

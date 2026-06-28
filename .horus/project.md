@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "The dashboard now surfaces Horus token overhead on each project detail page: static prompt estimate, observed upper-bound Horus-related usage, and tracked-session totals where native logs expose matching session ids. Attribution remains explicitly upper-bound, not counterfactual. Project upgrade/refresh and Linux desktop smoke are already validated; next priority is controlled A/B baseline measurement for comparable work with and without Horus."
+current_focus: "Horus token overhead now has both upper-bound attribution and a controlled A/B comparison path: `horus overhead --baseline` prints the recipe and can compare explicit with/without-Horus native session ids aggregate-only. Next priority is the known companion/dashboard lifecycle bug where orphaned dashboard servers can keep serving stale in-memory builds."
 last_updated: 2026-06-28
 ---
 
