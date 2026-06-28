@@ -172,6 +172,127 @@ def test_session_usages_reports_unmatched_interactive_codex(tmp_path):
     assert "no matching Codex" in rows[0].note
 
 
+def test_baseline_comparison_aggregates_explicit_sessions(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    home = tmp_path / "codex"
+    _write_jsonl(
+        home / "sessions" / "2026" / "06" / "28" / "rollout-a.jsonl",
+        _codex_meta("without-session", project),
+        _codex_turn(project),
+        _codex_tokens(100, input_tokens=80, output_tokens=20),
+    )
+    _write_jsonl(
+        home / "sessions" / "2026" / "06" / "28" / "rollout-b.jsonl",
+        _codex_meta("with-session", project),
+        _codex_turn(project),
+        _codex_tokens(140, input_tokens=110, output_tokens=30),
+    )
+
+    comparison = overhead.baseline_comparison(
+        [("codex", "without-session")],
+        [("codex", "with-session")],
+        project,
+        codex_home=home,
+    )
+
+    assert comparison.without_horus.total.total_tokens == 100
+    assert comparison.with_horus.total.total_tokens == 140
+    assert comparison.incremental.total_tokens == 40
+    assert comparison.incremental.input_tokens == 30
+
+
+def test_overhead_baseline_cli_reports_recipe_only(tmp_path, capsys):
+    project = tmp_path / "project"
+    project.mkdir()
+
+    rc = main(["overhead", "--path", str(project), "--baseline"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Controlled A/B baseline recipe" in out
+    assert "transcript content" in out
+
+
+def test_overhead_baseline_cli_reports_aggregate_delta(tmp_path, capsys):
+    project = tmp_path / "project"
+    project.mkdir()
+    codex_home = tmp_path / "codex"
+    _write_jsonl(
+        codex_home / "sessions" / "2026" / "06" / "28" / "rollout-a.jsonl",
+        _codex_meta("plain-session", project),
+        _codex_turn(project),
+        _codex_tokens(90),
+    )
+    _write_jsonl(
+        codex_home / "sessions" / "2026" / "06" / "28" / "rollout-b.jsonl",
+        _codex_meta("horus-session", project),
+        _codex_turn(project),
+        _codex_tokens(120),
+    )
+
+    rc = main([
+        "overhead",
+        "--path",
+        str(project),
+        "--agent",
+        "codex",
+        "--codex-home",
+        str(codex_home),
+        "--baseline",
+        "--without-horus",
+        "plain-session",
+        "--with-horus",
+        "horus-session",
+    ])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Observed aggregate comparison" in out
+    assert "without Horus: 1/1 session(s) matched; 1 turn(s), 90 raw tokens" in out
+    assert "with Horus: 1/1 session(s) matched; 1 turn(s), 120 raw tokens" in out
+    assert "incremental: 30 raw tokens" in out
+
+
+def test_overhead_baseline_cli_accepts_separate_without_horus_path(tmp_path, capsys):
+    clean = tmp_path / "clean"
+    horus_project = tmp_path / "with-horus"
+    clean.mkdir()
+    horus_project.mkdir()
+    codex_home = tmp_path / "codex"
+    _write_jsonl(
+        codex_home / "sessions" / "2026" / "06" / "28" / "rollout-a.jsonl",
+        _codex_meta("clean-session", clean),
+        _codex_turn(clean),
+        _codex_tokens(70),
+    )
+    _write_jsonl(
+        codex_home / "sessions" / "2026" / "06" / "28" / "rollout-b.jsonl",
+        _codex_meta("horus-session", horus_project),
+        _codex_turn(horus_project),
+        _codex_tokens(100),
+    )
+
+    rc = main([
+        "overhead",
+        "--path",
+        str(horus_project),
+        "--agent",
+        "codex",
+        "--codex-home",
+        str(codex_home),
+        "--baseline",
+        "--without-horus-path",
+        str(clean),
+        "--without-horus",
+        "clean-session",
+        "--with-horus",
+        "horus-session",
+    ])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "without Horus: 1/1 session(s) matched; 1 turn(s), 70 raw tokens" in out
+    assert "with Horus: 1/1 session(s) matched; 1 turn(s), 100 raw tokens" in out
+
+
 def test_overhead_cli_reports_both_agents(tmp_path, capsys):
     project = tmp_path / "project"
     project.mkdir()
