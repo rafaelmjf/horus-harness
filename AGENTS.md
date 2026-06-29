@@ -43,6 +43,17 @@ After work that contributes to the project state, close the session by invoking 
   content from the session; they never rewrite the lanes for you.
 - Do not store secrets or full transcripts in `.horus/`.
 
+Working discipline (every session, whether or not the work is delegated):
+
+- **Reproduce the gate; never trust the report.** Re-run the build/tests/check yourself
+  and watch it pass before calling work done — whether a worker did it or you did. A
+  confident "tests pass" is not evidence.
+- **Bound each step to a green, committed-and-pushed checkpoint**, so there is always a
+  clean resume point and nothing half-finished stranded only on this machine.
+- **Put safety in the code, not the reviewer.** Guards and invariants prevent the
+  dangerous class of bug; review — human or model — misses things, so it is a help, not
+  a guarantee.
+
 Instruction synchronization:
 
 - Keep this shared Horus-managed block aligned with the matching block in `CLAUDE.md`.

@@ -10,7 +10,7 @@ description: >-
   at closure.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Horus execution supervision
 
@@ -25,6 +25,33 @@ plan without turning `.horus/` into a transcript or a second issue tracker.
 - A phase should be delegated to a native worker/subagent and reviewed before the
   next phase starts.
 - A worker returned a note under `.horus/temp/` that needs supervisor review.
+
+## Deciding to delegate (volume × ambiguity × runtime)
+
+Delegation — spinning a *separate* worker agent/session to implement a phase — is a
+judgment call, not a default. Decide on implementation **volume** and **ambiguity**,
+then weigh what delegation actually buys on *this* runtime:
+
+| Situation | Approach |
+|---|---|
+| High volume, low ambiguity, clear gate (scaffolding, repetitive edits, mechanical refactor with tests) | Delegate, then reproduce the gate. Buys context hygiene + (on a tiered runtime) a cheaper implementation model. |
+| Integrity/security-sensitive surface (guarded writes, schema, auth) | Delegating is fine, but keep an independent review *and* reproduce the gate yourself. |
+| Small, or ambiguous/exploratory, or debugging/investigation | Stay inline — orchestration overhead and judgment loss dominate. |
+| Work where the *user* is the real reviewer (visual/UI) | Delegate the build; the user's eyeball is the gate, not a code-read. |
+
+Runtime matters — name it in `delegation_basis`:
+
+- A frontier *supervisor* + cheaper *worker* tiers (e.g. Claude Opus + Sonnet/Haiku)
+  gains **both** context hygiene and a cheaper tier, so its bar to delegate is lower.
+- A single strong model (e.g. GPT-5.5 in Codex) gains **mostly context hygiene**, so its
+  bar is higher — staying inline is often right unless the volume would flood the
+  context window.
+
+Be honest about review: in practice most supervisor reviews just confirm green, and a
+review is **not** a safety guarantee. The durable safeguards are model-independent (the
+working-discipline rules in the managed block): reproduce the gate yourself, bound each
+pass to a green committed-and-pushed checkpoint, and put safety in the code (guards),
+not the reviewer.
 
 ## Steps
 

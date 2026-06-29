@@ -68,7 +68,7 @@ description: >-
   first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Consolidate Horus continuity
 
@@ -135,13 +135,18 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
      `last_updated` on touched lanes. Author the next step for a *cold* reader — name
      it, point at `.horus/`.
-   - **Recommend the execution mode for the NEXT.** If the next step is small,
-     single-surface, low-risk, or mostly continuity/docs, set `execution_recommendation:
-     "continue-as-is — <why>"`. If it is multi-phase, cross-module, risky, or benefits
-     from supervisor/worker review, set `execution_recommendation: "plan-execution —
-     <why>"` and create/update `execution.md` before implementation starts. The reason
-     must be local to the planning agent/runtime; do not imply delegation is cheaper
-     merely because a standard worker tier exists.
+   - **Recommend the execution mode for the NEXT.** Decide on implementation
+     **volume × ambiguity**, not vibes: set `execution_recommendation:
+     "continue-as-is — <why>"` for small, ambiguous/exploratory, debugging, or
+     mostly-continuity work; set `"plan-execution — <why>"` for high-volume,
+     low-ambiguity work with a clear gate (and create/update `execution.md` before
+     implementation starts). The `<why>` must name what delegation buys *on this
+     runtime* — a frontier supervisor + cheaper worker tiers (e.g. Opus + Sonnet/Haiku)
+     gains context hygiene AND a cheaper tier; a single strong model (e.g. GPT-5.5)
+     gains mostly context hygiene, so its bar is higher. Do not imply delegation is
+     cheaper merely because a standard worker tier exists, and do not sell
+     supervisor review as the safeguard (reproduce the gate / bound checkpoints /
+     safety-in-code are the durable ones).
    - **When a worker handoff exists** in `.horus/temp/`, use it as evidence, not as
      truth: the supervisor reviews the diff/tests, then distills accepted facts into
      durable lanes and updates `execution.md`.
@@ -313,7 +318,7 @@ description: >-
   at closure.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Horus execution supervision
 
@@ -328,6 +333,33 @@ plan without turning `.horus/` into a transcript or a second issue tracker.
 - A phase should be delegated to a native worker/subagent and reviewed before the
   next phase starts.
 - A worker returned a note under `.horus/temp/` that needs supervisor review.
+
+## Deciding to delegate (volume × ambiguity × runtime)
+
+Delegation — spinning a *separate* worker agent/session to implement a phase — is a
+judgment call, not a default. Decide on implementation **volume** and **ambiguity**,
+then weigh what delegation actually buys on *this* runtime:
+
+| Situation | Approach |
+|---|---|
+| High volume, low ambiguity, clear gate (scaffolding, repetitive edits, mechanical refactor with tests) | Delegate, then reproduce the gate. Buys context hygiene + (on a tiered runtime) a cheaper implementation model. |
+| Integrity/security-sensitive surface (guarded writes, schema, auth) | Delegating is fine, but keep an independent review *and* reproduce the gate yourself. |
+| Small, or ambiguous/exploratory, or debugging/investigation | Stay inline — orchestration overhead and judgment loss dominate. |
+| Work where the *user* is the real reviewer (visual/UI) | Delegate the build; the user's eyeball is the gate, not a code-read. |
+
+Runtime matters — name it in `delegation_basis`:
+
+- A frontier *supervisor* + cheaper *worker* tiers (e.g. Claude Opus + Sonnet/Haiku)
+  gains **both** context hygiene and a cheaper tier, so its bar to delegate is lower.
+- A single strong model (e.g. GPT-5.5 in Codex) gains **mostly context hygiene**, so its
+  bar is higher — staying inline is often right unless the volume would flood the
+  context window.
+
+Be honest about review: in practice most supervisor reviews just confirm green, and a
+review is **not** a safety guarantee. The durable safeguards are model-independent (the
+working-discipline rules in the managed block): reproduce the gate yourself, bound each
+pass to a green committed-and-pushed checkpoint, and put safety in the code (guards),
+not the reviewer.
 
 ## Steps
 
@@ -411,10 +443,10 @@ note written by the supervisor after doing the work does not satisfy the workflo
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 5, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 6, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 2, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 2, _INFER_SKILL),
-    Skill("horus-execution", 3, _EXECUTION_SKILL),
+    Skill("horus-execution", 4, _EXECUTION_SKILL),
 )
 
 
