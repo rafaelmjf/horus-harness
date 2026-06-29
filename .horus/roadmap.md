@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Track A (surface + onboard untracked GitHub repos) and the full workflow-policy track (C-min config/helper + C-full dashboard Settings panel) are shipped. Track A + C-min landed via PR #37; C-full follows on its own branch. Only B (read-only artifact-staleness badge) and two deferred refinements remain on this feature."
-next_action: "Implement phase B when ready: a per-clone 'Horus artifacts outdated' badge computed from `upgrade.upgrade_project(apply=False)` (no mutation on render), surfacing the `horus upgrade-project --apply` command on each local project card. Independent of the other tracks; specified in `.horus/execution.md`."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. The GitHub-onboarding + workflow-policy feature is mostly shipped: Track A + C-min (PR #37) and the C-full dashboard Settings panel are merged/landed. Remaining in `.horus/execution.md`: phase B (read-only per-clone artifact-staleness badge via `upgrade.upgrade_project(apply=False)`; no mutation on render) plus deferred refinements (project the `[workflow]` policy into the managed instruction block; per-project policy override). Decisions in decisions.md 2026-06-29 'GitHub Onboarding + Workflow Policy'."
-execution_recommendation: "plan-execution - B is a bounded phase already in execution.md; continue the supervisor/worker workflow."
+current_focus: "The GitHub-onboarding + workflow-policy feature is fully shipped: untracked-repo discovery/onboard/ignore + dashboard Not-tracked UI (Track A), the configurable branch→PR→auto-merge workflow policy + Settings panel (C-min + C-full), and the per-project artifact-staleness badge (B). All merged (PRs #37/#38/#39). Only two optional deferred refinements remain on this feature; no active execution plan."
+next_action: "Pick the next priority. Open candidates: (a) the two optional deferred workflow-policy refinements — project the `[workflow]` policy into the managed instruction block (AGENTS.md/CLAUDE.md), and a per-project git-synced policy override; (b) the still-open `horus-execution` pilot tuning findings (known-failing baseline in worker briefs is already partly applied via execution.md; the status-vocabulary skill text is not); (c) an unrelated roadmap item (e.g. Context Cache cold/expired behavior, MVP2.5 fetch-all)."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. The GitHub-onboarding + workflow-policy feature shipped end-to-end (PRs #37/#38/#39; see features.md rows and decisions.md 2026-06-29 'GitHub Onboarding + Workflow Policy'). No active execution plan. Choose the next priority with the user: optional deferred workflow-policy refinements (managed-instruction projection of the policy; per-project override), the open pilot tuning-findings task, or an unrelated roadmap item."
+execution_recommendation: "continue-as-is - no active plan; the remaining items are small/optional. Pick one with the user and decide its mode then."
 last_updated: 2026-06-29
 ---
 
@@ -53,10 +53,10 @@ last_updated: 2026-06-29
 > installed CLI's projected artifacts (skills, hooks, managed block). `horus doctor` /
 > `horus upgrade-project` already detect/refresh this; surface it passively on the dashboard.
 
-- [ ] Per **local/cloned** project, call `upgrade.upgrade_project(root, apply=False)`
-  read-only on dashboard load and show an **"⚠ Horus artifacts outdated"** badge with the
-  `horus upgrade-project --apply` command when any non-skip action exists. Remote-only
-  (uncloned) projects can't be checked → no badge. Keeps the no-mutation-on-render invariant.
+- [x] B (2026-06-29) — `load_project` computes staleness read-only via
+  `upgrade.upgrade_project(root, apply=False)` (stale ⇔ any `would-update` action, guarded so
+  a projection check never breaks render); overview card shows a "⚠ artifacts outdated" pill
+  and the detail page shows the `horus upgrade-project --apply` command. → features.md
 - [ ] Later: a one-click **Apply upgrade** POST button (CLI proven first).
 
 ## Workflow policy + settings panel (Track C) - branch→PR→auto-merge default

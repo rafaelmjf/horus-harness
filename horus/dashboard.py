@@ -42,6 +42,7 @@ from horus import (
     remote_start,
     roadmap,
     routines,
+    upgrade,
 )
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
@@ -73,6 +74,8 @@ def load_project(path_str: str) -> dict[str, Any]:
         "history_body": "",
         "sessions": [],
         "findings": [],
+        "artifacts_stale": False,
+        "artifacts_stale_count": 0,
         "next_action": "",
         "execution_recommendation": "",
         "latest": None,
@@ -158,6 +161,16 @@ def load_project(path_str: str) -> dict[str, Any]:
         {"level": f.level, "message": f.message}
         for f in check_project(root) + codex_usage.usage_findings(root)
     ]
+
+    try:
+        actions = upgrade.upgrade_project(root, apply=False)
+        stale = [a for a in actions if a.status == "would-update"]
+        data["artifacts_stale"] = bool(stale)
+        data["artifacts_stale_count"] = len(stale)
+    except Exception:
+        # never let a projection check break the dashboard render
+        data["artifacts_stale"] = False
+
     return data
 
 
@@ -954,9 +967,15 @@ def _features_buckets_html(p: dict[str, Any]) -> str:
 def _project_column(p: dict[str, Any], i: int) -> str:
     missing = "" if p["exists"] else " <span class='health-fail'>(no .horus/)</span>"
     why = f"<p class='why'>{html.escape(p['tagline'])}</p>" if p["tagline"] else ""
+    _artifacts_pill = (
+        "<span class='health-warn' title='Run: horus upgrade-project --apply'>&#9888; artifacts outdated</span>"
+        if p["artifacts_stale"]
+        else ""
+    )
     pills = (
         f"<div class='badges'><span>status: {html.escape(p['status']) or 'unknown'}</span>"
-        f"<span>{len(p['sessions'])} session(s)</span> {_git_badge(p)} {_health_summary(p['findings'])}</div>"
+        f"<span>{len(p['sessions'])} session(s)</span> {_git_badge(p)} {_health_summary(p['findings'])}"
+        f"{_artifacts_pill}</div>"
     )
     last = f"<div class='box'><span class='lbl'>Last session summary</span>{_last_session_summary_html(p)}</div>"
     roadmap = (
@@ -1238,6 +1257,13 @@ def render_project(p: dict[str, Any]) -> str:
         )
 
     parts.append(_git_html(p))
+    if p["artifacts_stale"]:
+        _count = html.escape(str(p["artifacts_stale_count"]))
+        parts.append(
+            f"<div class='card'><span class='health-warn'>&#9888; Horus artifacts outdated</span>"
+            f" &mdash; {_count} item(s) behind the installed CLI."
+            f" Run: <code>horus upgrade-project --apply</code></div>"
+        )
     parts.append(_project_cache_html(p["path"]))
     parts.append(_project_overhead_html(p["path"]))
     parts.append(_latest_session_card(p))

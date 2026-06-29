@@ -8,6 +8,7 @@ import json
 
 from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, overhead
 from horus.registry import Registry, SessionRecord
+from horus.upgrade import UpgradeAction
 
 
 def _init(tmp_path, monkeypatch):
@@ -1227,3 +1228,135 @@ def test_settings_post_persists_and_redirects(tmp_path, monkeypatch):
     assert "value='manual' selected" in html_out
     assert "value='review' selected" in html_out
     assert "banner ok" in html_out
+
+
+# ---------------------------------------------------------------------------
+# Phase B: per-project artifacts staleness badge
+# ---------------------------------------------------------------------------
+
+def test_load_project_artifacts_stale_when_would_update(tmp_path, monkeypatch):
+    """load_project sets artifacts_stale=True and count when upgrade returns a would-update action."""
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    monkeypatch.setattr(
+        dashboard.upgrade,
+        "upgrade_project",
+        lambda root, **kw: [
+            UpgradeAction("would-update", "would refresh CLAUDE.md managed block"),
+            UpgradeAction("would-update", "would refresh AGENTS.md managed block"),
+            UpgradeAction("exists", "horus-consolidate (claude): up to date (v1)"),
+        ],
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["artifacts_stale"] is True
+    assert data["artifacts_stale_count"] == 2
+
+
+def test_load_project_artifacts_not_stale_when_exists_or_skipped(tmp_path, monkeypatch):
+    """load_project sets artifacts_stale=False when upgrade returns only exists/skipped."""
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    monkeypatch.setattr(
+        dashboard.upgrade,
+        "upgrade_project",
+        lambda root, **kw: [
+            UpgradeAction("exists", "CLAUDE.md managed block is current"),
+            UpgradeAction("skipped", "AGENTS.md has no Horus managed block"),
+        ],
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["artifacts_stale"] is False
+    assert data["artifacts_stale_count"] == 0
+
+
+def test_load_project_artifacts_stale_false_when_upgrade_raises(tmp_path, monkeypatch):
+    """load_project does not crash and yields artifacts_stale=False when upgrade_project raises."""
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    def _boom(root, **kw):
+        raise RuntimeError("simulated projection failure")
+
+    monkeypatch.setattr(dashboard.upgrade, "upgrade_project", _boom)
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["artifacts_stale"] is False
+
+
+def test_project_column_renders_artifacts_badge_when_stale(tmp_path, monkeypatch):
+    """_project_column includes the artifacts-outdated pill when artifacts_stale is True."""
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    monkeypatch.setattr(
+        dashboard.upgrade,
+        "upgrade_project",
+        lambda root, **kw: [UpgradeAction("would-update", "would refresh CLAUDE.md managed block")],
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["artifacts_stale"] is True
+
+    html_out = dashboard._project_column(data, 0)
+    assert "artifacts outdated" in html_out
+    assert "&#9888;" in html_out
+    assert "horus upgrade-project --apply" in html_out
+
+
+def test_project_column_omits_artifacts_badge_when_fresh(tmp_path, monkeypatch):
+    """_project_column does NOT include the artifacts-outdated pill when artifacts_stale is False."""
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    monkeypatch.setattr(
+        dashboard.upgrade,
+        "upgrade_project",
+        lambda root, **kw: [UpgradeAction("exists", "CLAUDE.md managed block is current")],
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["artifacts_stale"] is False
+
+    html_out = dashboard._project_column(data, 0)
+    assert "artifacts outdated" not in html_out
+
+
+def test_render_project_shows_upgrade_command_when_stale(tmp_path, monkeypatch):
+    """render_project includes the upgrade command note when artifacts_stale is True."""
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    monkeypatch.setattr(
+        dashboard.upgrade,
+        "upgrade_project",
+        lambda root, **kw: [
+            UpgradeAction("would-update", "would refresh CLAUDE.md managed block"),
+            UpgradeAction("would-update", "would refresh AGENTS.md managed block"),
+        ],
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    html_out = dashboard.render_project(data)
+    assert "artifacts outdated" in html_out
+    assert "horus upgrade-project --apply" in html_out
+    assert "2" in html_out  # count of stale items
+
+
+def test_render_project_omits_upgrade_command_when_fresh(tmp_path, monkeypatch):
+    """render_project does NOT include the upgrade command note when artifacts_stale is False."""
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    monkeypatch.setattr(
+        dashboard.upgrade,
+        "upgrade_project",
+        lambda root, **kw: [UpgradeAction("exists", "CLAUDE.md managed block is current")],
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    html_out = dashboard.render_project(data)
+    assert "horus upgrade-project --apply" not in html_out
