@@ -13,7 +13,7 @@ description: >-
   first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Consolidate Horus continuity
 
@@ -80,13 +80,18 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
      `last_updated` on touched lanes. Author the next step for a *cold* reader — name
      it, point at `.horus/`.
-   - **Recommend the execution mode for the NEXT.** If the next step is small,
-     single-surface, low-risk, or mostly continuity/docs, set `execution_recommendation:
-     "continue-as-is — <why>"`. If it is multi-phase, cross-module, risky, or benefits
-     from supervisor/worker review, set `execution_recommendation: "plan-execution —
-     <why>"` and create/update `execution.md` before implementation starts. The reason
-     must be local to the planning agent/runtime; do not imply delegation is cheaper
-     merely because a standard worker tier exists.
+   - **Recommend the execution mode for the NEXT.** Decide on implementation
+     **volume × ambiguity**, not vibes: set `execution_recommendation:
+     "continue-as-is — <why>"` for small, ambiguous/exploratory, debugging, or
+     mostly-continuity work; set `"plan-execution — <why>"` for high-volume,
+     low-ambiguity work with a clear gate (and create/update `execution.md` before
+     implementation starts). The `<why>` must name what delegation buys *on this
+     runtime* — a frontier supervisor + cheaper worker tiers (e.g. Opus + Sonnet/Haiku)
+     gains context hygiene AND a cheaper tier; a single strong model (e.g. GPT-5.5)
+     gains mostly context hygiene, so its bar is higher. Do not imply delegation is
+     cheaper merely because a standard worker tier exists, and do not sell
+     supervisor review as the safeguard (reproduce the gate / bound checkpoints /
+     safety-in-code are the durable ones).
    - **When a worker handoff exists** in `.horus/temp/`, use it as evidence, not as
      truth: the supervisor reviews the diff/tests, then distills accepted facts into
      durable lanes and updates `execution.md`.

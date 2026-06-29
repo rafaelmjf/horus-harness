@@ -139,7 +139,8 @@ def test_execution_prompt_uses_roadmap_and_target(tmp_path, monkeypatch, capsys)
     assert "Codex subagents" in out
     assert "testing model separation" in out
     assert "do not implement the delegated phase in the supervisor context" in out
-    assert "choose direct work when" in out
+    assert "volume × ambiguity" in out  # decision rubric drives the recommendation
+    assert "stay inline for small" in out
     assert "delegation_basis" in out
     assert "worker_tier` alone is only a tier hint" in out
 

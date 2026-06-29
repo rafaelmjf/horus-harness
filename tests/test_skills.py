@@ -50,7 +50,7 @@ def test_expected_skills_registered():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 3
+    assert execution.version == 4
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -58,6 +58,9 @@ def test_execution_skill_requires_real_delegation_for_model_separation():
     assert "worker_tier` is only the intended tier **if delegated**" in execution.content
     assert "A handoff" in execution.content
     assert "written by the supervisor after doing the work" in execution.content
+    # v4: the volume × ambiguity × runtime delegation rubric + honest review caveat.
+    assert "volume × ambiguity" in execution.content
+    assert "safety guarantee" in execution.content  # honest review caveat
     assert "does not satisfy the workflow test" in execution.content
 
 

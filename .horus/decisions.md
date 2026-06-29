@@ -1,5 +1,34 @@
 # Decisions
 
+## 2026-06-29 - Delegation Is a Runtime-Aware Judgment Call; Disciplines Are Universal
+
+The implement-vs-delegate decision (`execution_recommendation` / `delegation_basis`) is
+keyed to **volume × ambiguity × runtime**, not a default and not "the supervisor reviews
+the worker's code":
+
+- Delegate high-volume/low-ambiguity/clear-gate work (then reproduce the gate); stay
+  inline for small/ambiguous/exploratory/debugging work; for integrity/security surfaces
+  keep an independent review + reproduce the gate; for visual/UI the *user* is the gate.
+- Runtime sets the bar: a frontier supervisor + cheaper worker tiers (Opus +
+  Sonnet/Haiku) gains context hygiene AND a cheaper tier (lower bar); a single strong
+  model (GPT-5.5 in Codex) gains mostly context hygiene (higher bar). `delegation_basis`
+  must name what delegation buys *here*.
+
+Separately, three **model-independent disciplines** were lifted into the managed
+instruction block so they apply to every session (not just plan-execution): reproduce
+the gate / bound each pass to a green committed-and-pushed checkpoint / put safety in the
+code (guards), not the reviewer.
+
+Reasoning: from the user's comparison of a Codex(GPT-5.5) session and a Claude
+Opus/Sonnet-duet session, the split's real wins were context hygiene + cost + bounded
+checkpoints — not code review (most reviews just confirmed green; review is not a safety
+guarantee). Encoding the rubric stops post-hoc "delegate because a worker tier exists"
+justification; encoding the disciplines puts the durable safeguards where they apply
+regardless of orchestration. Implemented in `_SHARED_BODY`, `_EXECUTION_SKILL` (v4),
+`horus-consolidate` (v6), `execution_md`, `execution_supervisor_prompt`, `CLOSURE_PROMPT`;
+runtime-neutral with worked examples so it survives Horus's cross-tool reach. See
+history.md and the `delegation-decision-heuristic` memory.
+
 ## 2026-06-29 - Owned Dashboard Window Is Default Only Where the Raise Is Reliable
 
 The mascot opens the dashboard as a dedicated Chromium app window (`--user-data-dir`

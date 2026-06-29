@@ -53,6 +53,17 @@ After work that contributes to the project state, close the session by invoking 
   content from the session; they never rewrite the lanes for you.
 - Do not store secrets or full transcripts in `.horus/`.
 
+Working discipline (every session, whether or not the work is delegated):
+
+- **Reproduce the gate; never trust the report.** Re-run the build/tests/check yourself
+  and watch it pass before calling work done — whether a worker did it or you did. A
+  confident "tests pass" is not evidence.
+- **Bound each step to a green, committed-and-pushed checkpoint**, so there is always a
+  clean resume point and nothing half-finished stranded only on this machine.
+- **Put safety in the code, not the reviewer.** Guards and invariants prevent the
+  dangerous class of bug; review — human or model — misses things, so it is a help, not
+  a guarantee.
+
 Instruction synchronization:
 
 - Keep this shared Horus-managed block aligned with the matching block in `{other}`.
@@ -170,6 +181,25 @@ the next substantial feature starts; distill finished work into `roadmap.md`,
 `features.md`, `decisions.md`, and `history.md` rather than preserving this as a
 timeline.
 
+## Delegation decision (volume × ambiguity × runtime)
+
+Delegation is a judgment call, not a default. Decide on implementation **volume** and
+**ambiguity**, then weigh what delegation buys on *this* runtime:
+
+| Situation | Approach |
+|---|---|
+| High volume, low ambiguity, clear gate (scaffolding, repetitive edits, mechanical refactor) | Delegate, then reproduce the gate |
+| Integrity/security-sensitive (guarded writes, schema, auth) | Delegate is fine — keep an independent review + reproduce the gate |
+| Small, ambiguous/exploratory, or debugging | Stay inline — orchestration overhead and judgment loss dominate |
+| Work where the *user* is the real reviewer (visual/UI) | Delegate the build; the user's eyeball is the gate |
+
+Runtime matters: a frontier supervisor + cheaper worker tiers (Opus + Sonnet/Haiku)
+gains context hygiene **and** a cheaper tier; a single strong model (GPT-5.5) gains
+mostly context hygiene, so its bar to delegate is higher. Record the call per phase in
+`delegation_basis`. Review is not a safety guarantee — the durable safeguards are to
+reproduce the gate, bound each pass to a green committed checkpoint, and put safety in
+the code (guards), not the reviewer.
+
 ## Model Policy
 
 Use tiers instead of hard-coded model names. Resolve them locally per agent,
@@ -268,11 +298,16 @@ Supervisor workflow:
 
 1. Confirm whether `.horus/roadmap.md` `execution_recommendation` still applies.
 2. If it says `plan-execution`, first decide whether execution planning is actually
-   warranted for this agent/runtime. Execution is optional: choose direct work when
-   delegation overhead is likely higher than the benefit.
+   warranted for this agent/runtime. Decide on implementation volume × ambiguity:
+   delegate high-volume/low-ambiguity/clear-gate work; stay inline for small,
+   ambiguous, exploratory, or debugging work. Weigh what delegation buys here — a
+   frontier supervisor + cheaper worker tiers gain context hygiene AND a cheaper tier,
+   a single strong model gains mostly context hygiene (higher bar to delegate).
 3. For each phase, record mode (`direct`, `delegated`, or `test-delegation`),
-   worker tier if delegated, and `delegation_basis` (economics/risk/context split).
-   `worker_tier` alone is only a tier hint, not a cost justification.
+   worker tier if delegated, and `delegation_basis` (volume/ambiguity + what delegation
+   buys on this runtime). `worker_tier` alone is only a tier hint, not a cost
+   justification. Review is not a safety guarantee: reproduce the gate yourself, bound
+   each pass to a green committed checkpoint, and put safety in the code, not the review.
 4. Delegate only bounded phases. Keep the supervisor on planning, review, final
    acceptance, and durable `.horus/` updates.
    If the user is testing model separation and no native worker/subagent is available,
@@ -457,10 +492,11 @@ them — keep each current at every close:
    - `next_action`: the single best next step, one imperative line.
    - `next_prompt`: a paste-into-a-fresh-session prompt to resume it (cold reader: name
      the step + point at .horus/).
-   - `execution_recommendation`: analyze the NEXT and choose `continue-as-is` for
-     direct work or `plan-execution` when `execution.md` + worker/subagents should be used.
-     If recommending `plan-execution`, include why delegation is likely worth its
-     overhead for the current agent/runtime; otherwise choose direct work.
+   - `execution_recommendation`: judge the NEXT on volume × ambiguity — `continue-as-is`
+     for small/ambiguous/exploratory/debugging work, `plan-execution` for high-volume,
+     low-ambiguity work with a clear gate. State what delegation buys on this runtime
+     (context hygiene, and a cheaper tier only if the runtime has one); don't sell
+     supervisor review as the safeguard.
    - tick the roadmap checkboxes for what this session did.
 4. execution.md: when `execution_recommendation` is `plan-execution`, create/update
    the active phased plan before starting implementation, including a per-phase
