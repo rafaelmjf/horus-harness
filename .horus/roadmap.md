@@ -299,6 +299,17 @@ dashboard and later becomes the place for continuity/status nudges.
   Fixed 2026-06-28: duplicate dashboard binds refuse, the mascot reuses a live
   dashboard before spawning, and `stop_dashboard` now terminates, waits, and kills
   an owned child if it does not exit promptly. → features.md
+- [ ] **Residual gap (found 2026-06-29): a stale/orphaned dashboard survives Quit and is
+  reused forever.** The 2026-06-28 fix only reaps the dashboard child the *current* mascot
+  owns. A dashboard process from an earlier launch (e.g. one orphaned before the fix, or by a
+  crash) is not owned by a freshly-opened mascot — and because startup *reuses* any live
+  server on 8765, the new mascot adopts the orphan instead of spawning its own, so it never
+  owns a child to reap, and Quit leaves the orphan running. The orphan keeps serving its old
+  in-memory build across quit/reopen cycles (observed live: PID from 06-26 still on 8765 after
+  3 days + multiple quit/reopen; manually killed). Fix options: on startup, verify a reused
+  server reports the current `__version__` (and replace it if stale); and/or on Quit, reap any
+  `horus dashboard` on 8765 even if not the owned child (guard against killing a user's
+  manually-started one). Relates to the MVP5 "decouple session-host lifecycle" item.
 - [x] Add a minimal context menu: Open Dashboard, Run Close Check, Quit.
 - [x] Show a basic status indicator: neutral/ok, warning, needs-closure. Initial
   data can come from existing `doctor`/`close`/usage checks; no live registry yet.
