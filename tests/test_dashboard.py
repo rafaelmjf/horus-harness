@@ -649,12 +649,14 @@ def test_process_account_add_maps_isolated_account_dirs(tmp_path, monkeypatch):
     assert dashboard.process_account_add({
         "agent": "claude", "alias": "personal", "path": str(tmp_path / "claude-personal"),
     }) == "account=added"
-    assert config.load_account_config_dirs()["personal"] == str(tmp_path / "claude-personal")
+    # Config-dir paths are stored forward-slashed (clean TOML on Windows); compare
+    # path-normalized so the assertion holds on every OS.
+    assert Path(config.load_account_config_dirs()["personal"]) == (tmp_path / "claude-personal")
 
     assert dashboard.process_account_add({
         "agent": "codex", "alias": "codex-personal", "path": str(tmp_path / "codex-personal"),
     }) == "account=added"
-    assert config.load_account_codex_homes()["codex-personal"] == str(tmp_path / "codex-personal")
+    assert Path(config.load_account_codex_homes()["codex-personal"]) == (tmp_path / "codex-personal")
 
 
 def test_process_account_login_derives_dir_and_launches_claude(tmp_path, monkeypatch):
