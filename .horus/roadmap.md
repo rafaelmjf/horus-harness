@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub now supports non-blocking remote discovery, cached owner snapshots, explicit force-refresh, and a first CLI start flow for cloning/registering remote-only Horus repos. Next priority is avoiding repeated GitHub file reads for unchanged repos."
-next_action: "Avoid re-reading `.horus/project.md` and `.horus/roadmap.md` from GitHub for repos whose `pushedAt` has not changed since the cached snapshot."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: avoid repeated GitHub file reads for unchanged repos. Current state: saved GitHub owners render cached snapshots immediately, background refresh and `horus refresh github <owner|--all>` can force live discovery, local clones are matched by normalized remote URL, and `horus start github:<owner>/<repo>` clones/registers/refreshes remote-only repos. Next step: use GitHub `pushedAt`/per-repo cache metadata so refresh can reuse cached `.horus/project.md` and `.horus/roadmap.md` data for repos that have not changed, reducing repeated `gh api contents/...` calls."
-last_updated: 2026-06-28
+current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view, but the next session should first evaluate OmniAgent as a possibly overlapping open-source agent/OAuth runner and decide whether Horus should integrate with it, defer to it for execution/auth, or sharpen its own scope around project continuity and cross-machine visibility."
+next_action: "Analyze OmniAgent and produce a recommendation: integrate, interoperate, defer execution/auth to it, or keep Horus separate with a clearer continuity/cross-machine scope."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: research OmniAgent, the open-source tool the user mentioned as overlapping with Horus around multi-agent OAuth/flexible agent use. Compare it to Horus's current scope and recent work: repo-local `.horus` continuity, dashboard, companion, GitHub remote catalog/cache/force-refresh, and native Claude/Codex hooks/skills. Recommend whether Horus should integrate with OmniAgent, interoperate at boundaries, defer execution/auth to it, or stay separate while sharpening Horus around project continuity, roadmap/next-action visibility, cross-machine project inventory, and native-app closure workflows. Capture concrete implications for the roadmap and architecture split."
+last_updated: 2026-06-29
 ---
 
 # Roadmap

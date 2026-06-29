@@ -1,8 +1,8 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view: the CLI remains file-first and native-app-first, while GitHub now supports non-blocking remote discovery, cached owner snapshots, explicit force-refresh, and a first CLI start flow for cloning/registering remote-only Horus repos. Next priority is avoiding repeated GitHub file reads for unchanged repos."
-last_updated: 2026-06-28
+current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view, but the next session should first evaluate OmniAgent as a possibly overlapping open-source agent/OAuth runner and decide whether Horus should integrate with it, defer to it for execution/auth, or sharpen its own scope around project continuity and cross-machine visibility."
+last_updated: 2026-06-29
 ---
 
 # Horus Harness
