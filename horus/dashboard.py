@@ -39,6 +39,7 @@ from horus import (
     overhead,
     pty_host,
     registry,
+    remote_start,
     roadmap,
     routines,
 )
@@ -201,6 +202,22 @@ def force_refresh_remote(owner: str) -> tuple[list[github_catalog.RemoteProject]
         errors.append(f"{owner}: force-refresh failed: {result.error}")
     cached = github_catalog.load_cache(owner, local_projects=local)
     return (cached.projects if cached else [], errors, notes)
+
+
+def gather_untracked_repos() -> tuple[list[github_catalog.UntrackedRepo], list[github_catalog.UntrackedRepo]]:
+    """Return (visible, hidden) untracked repos from the on-disk cache for all configured owners.
+
+    Does NOT trigger a network refresh — the existing ``gather_remote_projects`` background
+    refresh already repopulates the cache (including untracked).  This reads what is already
+    on disk so the render stays fast.
+    """
+    local = config.load_projects()
+    all_untracked: list[github_catalog.UntrackedRepo] = []
+    for owner in config.load_github_owners():
+        cached = github_catalog.load_cache(owner, local_projects=local)
+        if cached is not None:
+            all_untracked.extend(cached.untracked)
+    return github_catalog.filter_ignored(all_untracked)
 
 
 def _start_remote_refresh(owner: str, local_projects: list[str]) -> None:
@@ -995,12 +1012,70 @@ def _refresh_forms() -> str:
     return "<div style='margin:0 0 12px'>" + "".join(forms) + "</div>"
 
 
-def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: list[str], notes: list[str] | None = None) -> str:
-    if not projects and not errors and not notes:
+def _untracked_card(u: github_catalog.UntrackedRepo) -> str:
+    badge_class = "health-warn" if u.is_local else "muted"
+    badge_text = "cloned, not initialized" if u.is_local else "remote only"
+    description = f"<p class='muted'>{html.escape(u.description)}</p>" if u.description else ""
+    onboard_form = (
+        "<form method='post' action='/github-onboard' style='display:inline-block;margin-right:8px'>"
+        f"<input type='hidden' name='target' value='{html.escape(u.full_name)}'>"
+        "<button class='copy' type='submit'>Onboard</button>"
+        "</form>"
+    )
+    ignore_form = (
+        "<form method='post' action='/github-ignore' style='display:inline-block'>"
+        f"<input type='hidden' name='target' value='{html.escape(u.full_name)}'>"
+        "<button class='copy' type='submit'>Ignore</button>"
+        "</form>"
+    )
+    return (
+        "<div class='remote-card'>"
+        f"<h3><a href='{html.escape(u.url)}'>{html.escape(u.full_name)}</a></h3>"
+        f"<div class='badges'><span>{html.escape(u.default_branch)}</span>"
+        f"<span class='{badge_class}'>{badge_text}</span></div>"
+        f"{description}"
+        f"<div style='margin-top:8px'>{onboard_form}{ignore_form}</div>"
+        "</div>"
+    )
+
+
+def _hidden_row(u: github_catalog.UntrackedRepo) -> str:
+    unignore_form = (
+        "<form method='post' action='/github-unignore' style='display:inline-block;margin-left:8px'>"
+        f"<input type='hidden' name='target' value='{html.escape(u.full_name)}'>"
+        "<button class='copy' type='submit'>Unignore</button>"
+        "</form>"
+    )
+    return (
+        f"<div style='padding:4px 0'>{html.escape(u.full_name)}{unignore_form}</div>"
+    )
+
+
+def render_remote_catalog(
+    projects: list[github_catalog.RemoteProject],
+    errors: list[str],
+    notes: list[str] | None = None,
+    untracked: list[github_catalog.UntrackedRepo] | None = None,
+    hidden: list[github_catalog.UntrackedRepo] | None = None,
+) -> str:
+    _untracked = untracked or []
+    _hidden = hidden or []
+    if not projects and not errors and not notes and not _untracked and not _hidden:
+        # Distinguish between "no owners configured" and "owners set but nothing found".
+        if not config.load_github_owners():
+            return (
+                "<div class='section'><h2>GitHub remote catalog</h2>"
+                "<div class='card health-warn'>"
+                "<p><strong>No GitHub owner configured on this machine.</strong></p>"
+                "<p class='muted'>GitHub owners and workspace paths are per-machine and are not"
+                " git-synced, so a fresh machine always starts empty.</p>"
+                "<p class='muted'>Run <code>horus discover github &lt;owner&gt; --save</code>"
+                " to add an owner and see your remote projects here.</p>"
+                "</div></div>"
+            )
         return (
             "<div class='section'><h2>GitHub remote catalog</h2>"
-            "<div class='card'><p class='muted'>No GitHub owners configured. Run "
-            "<code>horus discover github &lt;owner&gt; --save</code> to show remote Horus projects here.</p></div></div>"
+            "<div class='card'><p class='muted'>No Horus-enabled remote repos found yet.</p></div></div>"
         )
     cards = "".join(_remote_project_card(p) for p in projects)
     if not cards:
@@ -1011,7 +1086,33 @@ def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: 
     if errors:
         err = "".join(f"<li>{html.escape(e)}</li>" for e in errors)
         cards = f"<div class='banner err'><strong>GitHub discovery issue</strong><ul>{err}</ul></div>{cards}"
-    return f"<div class='section'><h2>GitHub remote catalog</h2>{_refresh_forms()}<div class='remote-grid'>{cards}</div></div>"
+    horus_grid = f"<div class='remote-grid'>{cards}</div>"
+
+    untracked_section = ""
+    if _untracked:
+        untracked_cards = "".join(_untracked_card(u) for u in _untracked)
+        untracked_section = (
+            f"<h2>Not tracked ({len(_untracked)})</h2>"
+            f"<div class='remote-grid'>{untracked_cards}</div>"
+        )
+
+    hidden_section = ""
+    if _hidden:
+        hidden_rows = "".join(_hidden_row(u) for u in _hidden)
+        hidden_section = (
+            f"<details><summary>Hidden ({len(_hidden)})</summary>"
+            f"<div style='padding:8px 0'>{hidden_rows}</div>"
+            "</details>"
+        )
+
+    return (
+        f"<div class='section'><h2>GitHub remote catalog</h2>"
+        f"{_refresh_forms()}"
+        f"{horus_grid}"
+        f"{untracked_section}"
+        f"{hidden_section}"
+        "</div>"
+    )
 
 
 def render_remote_catalog_placeholder() -> str:
@@ -1698,7 +1799,11 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/github-catalog":
             remote_projects, remote_errors, remote_notes = gather_remote_projects()
-            self._send(render_remote_catalog(remote_projects, remote_errors, remote_notes))
+            visible_untracked, hidden_untracked = gather_untracked_repos()
+            self._send(render_remote_catalog(
+                remote_projects, remote_errors, remote_notes,
+                untracked=visible_untracked, hidden=hidden_untracked,
+            ))
             return
         if parsed.path == "/sessions":
             recs = gather_sessions()
@@ -1824,7 +1929,16 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
-        if parsed.path not in ("/launch", "/github-refresh", "/pty/input", "/pty/resize", "/pty/kill"):
+        if parsed.path not in (
+            "/launch",
+            "/github-refresh",
+            "/github-onboard",
+            "/github-ignore",
+            "/github-unignore",
+            "/pty/input",
+            "/pty/resize",
+            "/pty/kill",
+        ):
             self._send(_page("Not found", "<p>Not found.</p>"), 404)
             return
         if not self._same_origin():
@@ -1856,7 +1970,67 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(render_remote_catalog([], [f"unknown GitHub owner: {owner}"]), 400)
                 return
             projects, errors, notes = force_refresh_remote(owner)
-            self._send(render_remote_catalog(projects, errors, notes))
+            visible_untracked, hidden_untracked = gather_untracked_repos()
+            self._send(render_remote_catalog(
+                projects, errors, notes,
+                untracked=visible_untracked, hidden=hidden_untracked,
+            ))
+            return
+        if parsed.path == "/github-ignore":
+            form = self._read_form()
+            target = form.get("target", "")
+            config.ignore_repo(target)
+            projects, errors, notes = gather_remote_projects()
+            visible_untracked, hidden_untracked = gather_untracked_repos()
+            self._send(render_remote_catalog(
+                projects, errors, notes,
+                untracked=visible_untracked, hidden=hidden_untracked,
+            ))
+            return
+        if parsed.path == "/github-unignore":
+            form = self._read_form()
+            target = form.get("target", "")
+            config.unignore_repo(target)
+            projects, errors, notes = gather_remote_projects()
+            visible_untracked, hidden_untracked = gather_untracked_repos()
+            self._send(render_remote_catalog(
+                projects, errors, notes,
+                untracked=visible_untracked, hidden=hidden_untracked,
+            ))
+            return
+        if parsed.path == "/github-onboard":
+            form = self._read_form()
+            target = form.get("target", "")
+            owner = target.split("/")[0] if "/" in target else target
+            if owner not in config.load_github_owners():
+                projects, errors, notes = gather_remote_projects()
+                visible_untracked, hidden_untracked = gather_untracked_repos()
+                self._send(render_remote_catalog(
+                    projects,
+                    errors + [f"refusing to onboard untrusted repo: {target}"],
+                    notes,
+                    untracked=visible_untracked,
+                    hidden=hidden_untracked,
+                ), 400)
+                return
+            onboard_notes: list[str] = []
+            onboard_errors: list[str] = []
+            try:
+                result = remote_start.onboard_github_project(f"github:{target}")
+                integ = result.integration
+                if integ.ok:
+                    detail = f" (PR: {integ.pr_url})" if getattr(integ, "pr_url", None) else ""
+                    onboard_notes.append(f"Onboarded {target} successfully.{detail}")
+                else:
+                    onboard_notes.append(f"Onboarded {target} (integration incomplete: {integ.detail}).")
+            except (RuntimeError, ValueError) as exc:
+                onboard_errors.append(f"Onboard failed for {target}: {exc}")
+            projects, errors, notes = gather_remote_projects()
+            visible_untracked, hidden_untracked = gather_untracked_repos()
+            self._send(render_remote_catalog(
+                projects, errors + onboard_errors, notes + onboard_notes,
+                untracked=visible_untracked, hidden=hidden_untracked,
+            ))
             return
 
         query = process_launch(self._read_form())

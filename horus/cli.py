@@ -143,17 +143,20 @@ def cmd_discover(args: argparse.Namespace) -> int:
         created = config.register_github_owner(args.owner)
         print(f"{'Added' if created else 'Already tracking'} GitHub owner: {args.owner}")
     try:
-        projects = github_catalog.discover(args.owner, local_projects=config.load_projects(), limit=args.limit)
+        result = github_catalog.discover(args.owner, local_projects=config.load_projects(), limit=args.limit)
     except RuntimeError as exc:
         print(f"GitHub discovery failed: {exc}")
         return 1
+    projects = result.projects
     if not projects:
         print(f"No Horus-enabled GitHub repos found for {args.owner}.")
-        return 0
-    for project in projects:
-        where = f"local: {project.local_path}" if project.local_path else f"remote: {project.clone_url}"
-        next_action = f" — {project.next_action}" if project.next_action else ""
-        print(f"{project.full_name} ({where}){next_action}")
+    else:
+        for project in projects:
+            where = f"local: {project.local_path}" if project.local_path else f"remote: {project.clone_url}"
+            next_action = f" — {project.next_action}" if project.next_action else ""
+            print(f"{project.full_name} ({where}){next_action}")
+    if result.untracked:
+        print(f"(plus {len(result.untracked)} untracked repos)")
     return 0
 
 
@@ -208,6 +211,32 @@ def cmd_start(args: argparse.Namespace) -> int:
     elif result.project.next_action:
         print("\nNext action:")
         print(result.project.next_action)
+    print(f"\nOpen it with: horus open \"{result.path}\"")
+    return 0
+
+
+def cmd_onboard(args: argparse.Namespace) -> int:
+    workspace = Path(args.workspace_root).expanduser() if getattr(args, "workspace_root", None) else None
+    try:
+        result = remote_start.onboard_github_project(args.target, workspace_root=workspace, limit=args.limit)
+    except (RuntimeError, ValueError) as exc:
+        print(f"Onboard failed: {exc}")
+        return 1
+
+    print(f"{'Cloned' if result.cloned else 'Using local clone'}: {result.path}")
+    created = [a for a in result.init_actions if a.status in {"created", "updated"}]
+    print(f"Initialized {len(created)} Horus file(s).")
+    print(f"{'Registered' if result.registered else 'Already registered'} in Horus project registry.")
+
+    integ = result.integration
+    if integ.ok:
+        print(f"Integration: {integ.detail}")
+        if integ.pr_url:
+            print(f"PR: {integ.pr_url}")
+    else:
+        print(f"warning: integration did not complete — {integ.detail}")
+        print(f"  Manual follow-up: cd \"{result.path}\" and push/open a PR manually.")
+
     print(f"\nOpen it with: horus open \"{result.path}\"")
     return 0
 
@@ -1013,6 +1042,75 @@ def _skill_nudge(root: Path) -> None:
         )
 
 
+def cmd_workflow(args: argparse.Namespace) -> int:
+    """Show or update the git-integration workflow policy."""
+    # Collect only the keys the user actually passed (each is None when absent).
+    integration = getattr(args, "integration", None)
+    commit = getattr(args, "commit_policy", None)
+    merge = getattr(args, "merge", None)
+
+    # --show (or bare invocation with no flags): just print.
+    if integration is None and commit is None and merge is None:
+        policy = config.load_workflow_policy()
+        for k, v in policy.items():
+            print(f"{k} = {v}")
+        return 0
+
+    # At least one key to set.
+    try:
+        policy = config.set_workflow_policy(
+            integration=integration,
+            commit=commit,
+            merge=merge,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}")
+        return 1
+
+    print("Workflow policy updated:")
+    for k, v in policy.items():
+        print(f"  {k} = {v}")
+    return 0
+
+
+def cmd_ignore(args: argparse.Namespace) -> int:
+    """Manage the per-machine repo ignore list."""
+    if args.list:
+        repos = config.load_ignored_repos()
+        if not repos:
+            print("No ignored repos.")
+        else:
+            for r in repos:
+                print(r)
+        return 0
+    if not args.repo:
+        print("error: specify a repo (owner/repo) or use --list to show ignored repos.")
+        return 2
+    # Strip a leading ``github:`` prefix exactly as _normalize_ignored_repo does.
+    raw = args.repo
+    key = raw.strip()
+    if key.lower().startswith("github:"):
+        key = key[len("github:"):]
+    if config.ignore_repo(key):
+        print(f"Ignoring {key}")
+    else:
+        print(f"Already ignored: {key}")
+    return 0
+
+
+def cmd_unignore(args: argparse.Namespace) -> int:
+    """Remove a repo from the per-machine ignore list."""
+    raw = args.repo
+    key = raw.strip()
+    if key.lower().startswith("github:"):
+        key = key[len("github:"):]
+    if config.unignore_repo(key):
+        print(f"Unignored {key}")
+    else:
+        print(f"Was not ignored: {key}")
+    return 0
+
+
 def cmd_consolidate(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
@@ -1209,6 +1307,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_start.add_argument("--limit", type=int, default=100, help="maximum owner repos to scan when resolving GitHub target")
     p_start.set_defaults(func=cmd_start)
+
+    p_onboard = sub.add_parser(
+        "onboard",
+        help="initialize Horus in an untracked GitHub repo (clone → horus init → PR via policy)",
+    )
+    p_onboard.add_argument("target", help="GitHub repo to onboard, e.g. github:owner/repo")
+    p_onboard.add_argument(
+        "--workspace-root",
+        help="clone root for the repo if it has no local path (default: configured root or ~/projects)",
+    )
+    p_onboard.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="maximum owner repos to scan when resolving the GitHub target (default: 100)",
+    )
+    p_onboard.set_defaults(func=cmd_onboard)
 
     p_config = sub.add_parser("config", help="inspect or update machine-local Horus config")
     config_sub = p_config.add_subparsers(dest="config_cmd", required=True)
@@ -1457,6 +1572,63 @@ def build_parser() -> argparse.ArgumentParser:
         help="canonical source file (default: agents)",
     )
     p_recon.set_defaults(func=cmd_reconcile)
+
+    p_workflow = sub.add_parser(
+        "workflow",
+        help="show or update the git-integration workflow policy",
+    )
+    p_workflow.add_argument(
+        "--show",
+        action="store_true",
+        help="print the current policy (default when no flags given)",
+    )
+    p_workflow.add_argument(
+        "--integration",
+        choices=list(config.WORKFLOW_CHOICES["integration"]),
+        default=None,
+        help="integration mode (default: branch-pr-automerge)",
+    )
+    p_workflow.add_argument(
+        "--commit",
+        dest="commit_policy",
+        choices=list(config.WORKFLOW_CHOICES["commit"]),
+        default=None,
+        help="commit mode: auto (default) or manual",
+    )
+    p_workflow.add_argument(
+        "--merge",
+        choices=list(config.WORKFLOW_CHOICES["merge"]),
+        default=None,
+        help="merge mode: auto (default) or review",
+    )
+    p_workflow.set_defaults(func=cmd_workflow)
+
+    p_ignore = sub.add_parser(
+        "ignore",
+        help="manage the per-machine repo ignore list (hides repos from the dashboard remote catalog)",
+    )
+    p_ignore.add_argument(
+        "repo",
+        nargs="?",
+        default=None,
+        help="repo full-name to ignore, e.g. owner/repo or github:owner/repo",
+    )
+    p_ignore.add_argument(
+        "--list",
+        action="store_true",
+        help="list currently ignored repos instead of adding one",
+    )
+    p_ignore.set_defaults(func=cmd_ignore)
+
+    p_unignore = sub.add_parser(
+        "unignore",
+        help="remove a repo from the per-machine ignore list",
+    )
+    p_unignore.add_argument(
+        "repo",
+        help="repo full-name to un-ignore, e.g. owner/repo or github:owner/repo",
+    )
+    p_unignore.set_defaults(func=cmd_unignore)
 
     return parser
 
