@@ -77,10 +77,14 @@ def test_gather_sessions_reconciles(tmp_path, monkeypatch):
     assert len(records) == 1 and records[0].status == "orphaned"  # pid-less running -> orphaned
 
 
-def test_render_index_includes_sessions_card(tmp_path, monkeypatch):
+def test_render_index_has_accounts_strip_and_no_control(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     page = dashboard.render_index([], dashboard.gather_sessions())
-    assert "Live sessions" in page
+    # Control tab retired: no nav link, no live-session cockpit card.
+    assert ">Control</a>" not in page
+    assert "Live sessions" not in page
+    # Account usage now loads on the main tab (async strip).
+    assert "data-horus-src='/accounts-panel'" in page
 
 
 def test_page_links_cache_busted_favicon(tmp_path, monkeypatch):
@@ -98,60 +102,19 @@ def test_control_usage_color_and_ring_by_threshold():
     assert ">--<" in dashboard._ring(None)  # unknown usage -> gray, no fill
 
 
-def test_control_tab_offline_empty_states(tmp_path, monkeypatch):
-    _init(tmp_path, monkeypatch)
-    # No credentials under tmp HOME -> no network, empty accounts; no registry -> no live cards.
-    accounts = dashboard.gather_accounts()
-    assert accounts == []
-    page = dashboard.render_control([], accounts, dashboard.gather_sessions())
-    assert "No Claude login detected" in page
-    assert "No windowed sessions" in page  # registry-tracked OS-window sessions
-    assert "No in-app terminals yet" in page  # the integrated terminal panel
-    assert "class=\"active\"" in page  # Control nav highlighted
+def test_accounts_strip_renders_usage_and_add_wizard():
+    accounts = [{"alias": "work", "agent": "claude", "five_pct": 62.0, "week_pct": 20.0,
+                 "five_reset": "2026-06-26 18:00", "week_reset": ""}]
+    strip = dashboard._accounts_strip(accounts)
+    assert "<div class='section'>" in strip and "Accounts" in strip
+    assert "work" in strip and "62%" in strip  # usage ring
+    assert "action='/account-login'" in strip  # add-account wizard present
+    # The retired per-account in-app launcher is gone from the strip.
+    assert "value='app'" not in strip
 
 
-def test_control_live_session_card_uses_account_usage(tmp_path, monkeypatch):
-    _init(tmp_path, monkeypatch)
-    proj = tmp_path / "demo"
-    proj.mkdir()
-    initialize.init_project(proj, assume_yes=True)
-    reg = Registry.default()
-    reg.upsert(SessionRecord(
-        session_id="abcdef123456", agent="claude", project=str(proj),
-        account="work", pid=os.getpid(), status="running",  # live pid -> stays "running"
-    ))
-    accounts = [{"alias": "work", "five_pct": 62.0, "week_pct": 20.0, "five_reset": "2026-06-26 18:00"}]
-    records = dashboard.gather_sessions()
-    page = dashboard.render_control(dashboard.gather_projects(), accounts, records)
-    # Account ring + the live card's bar both reflect the real percent.
-    assert "demo" in page and "work" in page
-    assert "5h limit 62%" in page          # session card bar label from the matched account
-    assert "horus open" in page            # launch command in the projects panel
-    assert "1 live" in page                # header live-session indicator
-    assert "horus focus abcdef12" in page          # raise-the-running-window shortcut
-    assert "claude --resume abcdef123456" in page  # reopen-in-a-new-window shortcut
-
-    # The indicator rides in the header, so it shows on the index too.
-    idx = dashboard.render_index(dashboard.gather_projects(), records)
-    assert "1 live" in idx and "class='live-badge'" in idx
-
-
-def test_live_indicator_absent_when_nothing_running(tmp_path, monkeypatch):
-    _init(tmp_path, monkeypatch)
-    assert dashboard._live_count([]) == 0
-    # The CSS rule mentions .live-badge; the rendered anchor does not exist with no live sessions.
-    assert "class='live-badge'" not in dashboard.render_index([], [])
-
-
-def test_control_session_card_only_when_running(tmp_path, monkeypatch):
-    _init(tmp_path, monkeypatch)
-    reg = Registry.default()
-    reg.upsert(SessionRecord(
-        session_id="dead0001", agent="claude", project="/p",
-        account="work", pid=None, status="running",  # pid-less -> reconciles to orphaned
-    ))
-    page = dashboard.render_control([], [], dashboard.gather_sessions())
-    assert "No windowed sessions" in page  # orphaned is not "live"
+def test_accounts_strip_empty_state():
+    assert "No agent account detected" in dashboard._accounts_strip([])
 
 
 def test_dashboard_server_is_single_instance():
@@ -601,33 +564,24 @@ def test_dashboard_surfaces_execution_plan(tmp_path, monkeypatch):
     assert "ready-for-review" in det
 
 
-def test_control_tab_renders_launch_controls(tmp_path, monkeypatch):
+def test_project_detail_renders_launch_controls(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     proj = tmp_path / "demo"
     proj.mkdir()
     initialize.init_project(proj, assume_yes=True)
-    accounts = [{"alias": "work", "five_pct": 60.0, "week_pct": 10.0, "five_reset": None}]
-    page = dashboard.render_control(dashboard.gather_projects(), accounts, [])
+    p = dashboard.load_project(str(proj))
+    page = dashboard.render_project(p, index=0)
 
-    # Project play -> a POST form with account select + fresh/resume radios.
+    # Start-a-session lives on the project detail page now (work-pickup model).
+    assert "Start a session" in page
     assert "method='post' action='/launch'" in page
     assert "name='mode' value='fresh'" in page and "name='mode' value='resume'" in page
-    assert "<select name='account'>" in page and ">work</option>" in page
-    # In-app terminal is the primary action; OS window is the demoted secondary.
-    assert "value='app'>&#9654; Open terminal in app" in page
-    assert "value='window'" in page and "separate OS window" in page
-    # Permission posture is selectable at launch (default + bypass available).
+    assert "<select name='account'>" in page
+    # Native-window launch is the action; the retired in-app PTY target is gone.
+    assert "value='window'" in page and "Open in a native window" in page
+    assert "value='app'" not in page
     assert "<select name='posture'>" in page
-    assert "value='default' selected" in page and "value='full-auto'>Bypass all prompts" in page
-    # Account row -> a one-click fresh-session button.
-    assert "+ session" in page
-    assert "action='/account-alias'" in page
-    assert "Save alias" in page
-    assert "Add account" in page
-    # Add-account is now the login-driven wizard (no manual config path).
-    assert "action='/account-login'" in page
-    assert "Add &amp; sign in" in page
-    # Copy-the-command path is still offered as a secondary option.
+    # Copy-the-command path is still offered as a fallback.
     assert "horus open" in page
 
 
@@ -800,7 +754,7 @@ def test_onboard_handoff_offers_account_chooser_and_launch():
 
 def test_onboard_handoff_without_accounts_points_to_wizard():
     html = dashboard.render_onboard_handoff("demo", 3, "/work/demo", [])
-    assert "Add account" in html and "/control" in html
+    assert "Accounts section" in html  # points at the main-tab accounts strip (Control retired)
     assert "action='/launch'" not in html  # nothing to launch as yet
 
 

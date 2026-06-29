@@ -433,10 +433,6 @@ nav { margin-top: 10px; display: flex; gap: 18px; align-items: center; }
 nav a { color: #8a93a6; font-size: 13px; padding-bottom: 4px; border-bottom: 2px solid transparent; }
 nav a.active { color: #e6e6e6; border-bottom-color: #6db3f2; }
 nav a:hover { text-decoration: none; color: #e6e6e6; }
-nav a.live-badge { margin-left: auto; color: #57d39a; font-size: 12px; padding: 2px 11px;
-                   border: 1px solid #1f5138; background: #15281d; border-radius: 999px; }
-nav a.live-badge:hover { border-color: #2e7d52; }
-.live-dot { animation: livepulse 1.6s ease-in-out infinite; }
 @keyframes livepulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 .control { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
 main.wide { max-width: none; }
@@ -500,8 +496,8 @@ button.linkbtn:hover { color: #b9c2d0; }
 .xterm-host { height: 420px; }
 .xterm-host .xterm { height: 100%; }
 /* Action buttons: green = refresh/upgrade (go), red = remove completely, neutral = keep. */
-button.btn-go { font: inherit; font-size: 12px; cursor: pointer; color: #04130b;
-    background: #57d39a; border: 1px solid #57d39a; border-radius: 6px; padding: 4px 12px; font-weight: 600; }
+button.btn-go { font: inherit; font-size: 11px; cursor: pointer; color: #04130b;
+    background: #57d39a; border: 1px solid #57d39a; border-radius: 999px; padding: 1px 9px; font-weight: 600; }
 button.btn-go:hover { background: #6fe0ac; }
 button.btn-danger { font: inherit; font-size: 12px; cursor: pointer; color: #fff0f1;
     background: #b1404f; border: 1px solid #c9505f; border-radius: 6px; padding: 4px 12px; font-weight: 600; }
@@ -523,19 +519,15 @@ def _live_count(records: list[registry.SessionRecord]) -> int:
 
 
 def _nav(active: str, live: int = 0) -> str:
-    links = [("/", "Projects", "projects"), ("/control", "Control", "control"), ("/settings", "Settings", "settings")]
+    # Control (the session cockpit) was retired — its useful bits (account usage,
+    # start/resume) now live on the Projects tab. ``live`` is accepted for call
+    # compatibility but no longer renders a badge.
+    links = [("/", "Projects", "projects"), ("/settings", "Settings", "settings")]
     items = "".join(
         f"<a href='{href}'{_active_class(key == active)}>{label}</a>"
         for href, label, key in links
     )
-    badge = ""
-    if live:
-        s = "" if live == 1 else "s"
-        badge = (
-            f"<a href='/control' class='live-badge' title='{live} live native session{s} running'>"
-            f"<span class='live-dot'>&#9679;</span> {live} live</a>"
-        )
-    return f"<nav>{items}{badge}</nav>"
+    return f"<nav>{items}</nav>"
 
 
 def _active_class(active: bool) -> str:
@@ -1260,12 +1252,17 @@ def render_index(
 ) -> str:
     records = sessions or []
     live = _live_count(records)
-    sessions_card = render_sessions_card(records)
+    # Account usage loads async (it hits the OAuth /usage endpoint) so it never blocks
+    # the main page; the loader swaps this placeholder for the rendered strip.
+    accounts_strip = (
+        "<div class='section' data-horus-src='/accounts-panel'><h2>Accounts</h2>"
+        "<div class='card'><p class='muted'>Loading account usage&hellip;</p></div></div>"
+    )
     remote = render_remote_catalog_placeholder()
     if not projects:
         body = (
             notice
-            + sessions_card
+            + accounts_strip
             + "<div class='card'><h2>No projects registered</h2>"
             "<p class='muted'>Run <code>horus init</code> inside a project to "
             "register it here.</p></div>"
@@ -1273,7 +1270,7 @@ def render_index(
         )
         return _page("Horus", body, live=live)
     cols = "".join(_project_column(p, i) for i, p in enumerate(projects))
-    return _page("Horus", f"{notice}{sessions_card}<div class='columns'>{cols}</div>{remote}", live=live)
+    return _page("Horus", f"{notice}{accounts_strip}<div class='columns'>{cols}</div>{remote}", live=live)
 
 
 def render_project(p: dict[str, Any], *, index: int | None = None, notice: str = "") -> str:
@@ -1288,6 +1285,13 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
         _latest_html(p),
         _progress_html(p, href="#roadmap"),
     ]
+
+    if index is not None:
+        aliases = [{"alias": a} for a in sorted(_known_aliases())]
+        parts.append(
+            "<div class='section'><h2>Start a session</h2><div class='card'>"
+            f"{_project_launch_form(index, p, aliases)}</div></div>"
+        )
 
     if p["current_focus"]:
         parts.append(
@@ -1506,6 +1510,47 @@ def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
     return f"<div class='card'><h2>Accounts</h2>{''.join(rows)}{add_form}</div>"
 
 
+def _accounts_strip(accounts: list[dict[str, Any]]) -> str:
+    """Main-tab accounts/usage strip: usage rings + weekly bar + alias editing + the
+    add-account wizard. A lean cousin of ``_accounts_panel`` without the per-account
+    in-app session launcher (the cockpit was retired). Returned as a full ``section`` so
+    the async loader can swap it in via ``outerHTML``."""
+    add_form = _account_add_form()
+    if not accounts:
+        return (
+            "<div class='section'><h2>Accounts</h2><div class='card'>"
+            "<p class='muted' style='font-size:13px'>No agent account detected. Run "
+            "<code>claude</code> / <code>codex login</code> to sign in, or add an isolated "
+            "account below.</p>"
+            f"{add_form}</div></div>"
+        )
+    rows = []
+    for a in accounts:
+        agent = a.get("agent", "claude")
+        badge_color = "#4a9eff" if agent == "claude" else "#9b7fe8"
+        badge = (
+            f"<span style='font-size:10px;font-weight:600;letter-spacing:.4px;"
+            f"text-transform:uppercase;color:{badge_color};margin-left:4px'>{html.escape(agent)}</span>"
+        )
+        reset = (
+            f"<div class='muted' style='font-size:11px'>5h resets {html.escape(a['five_reset'])}</div>"
+            if a.get("five_reset")
+            else ""
+        )
+        week_bar = ""
+        if a.get("week_pct") is not None:
+            label = f"Weekly {a['week_pct']:.0f}%"
+            if a.get("week_reset"):
+                label += f" · resets {a['week_reset']}"
+            week_bar = _usage_bar(a["week_pct"], label)
+        rows.append(
+            f"<div class='acct'>{_ring(a['five_pct'])}"
+            f"<div><div class='who'>{html.escape(a['alias'])}{badge}</div>{reset}"
+            f"{_account_alias_form(a)}</div></div>{week_bar}"
+        )
+    return f"<div class='section'><h2>Accounts</h2><div class='card'>{''.join(rows)}{add_form}</div></div>"
+
+
 def _account_alias_form(account: dict[str, Any]) -> str:
     alias = account.get("alias", "")
     agent = account.get("agent", "claude")
@@ -1574,8 +1619,11 @@ _POSTURE_OPTIONS = "".join(
 
 
 def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[str, Any]]) -> str:
-    """Pick an account + fresh-or-resume, then launch (POST). Mirrors the sketch's
-    "select acc and select fresh session or resume" flow on the project play button."""
+    """Pick an account + fresh-or-resume, then start a session in a native window (POST).
+
+    Work-pickup model: a fresh window rehydrates from `.horus/` (resume injects the
+    continuity prompt). The in-app PTY target was retired with the cockpit; the copy-a-
+    command fallback remains for any other launcher."""
     opts = "<option value=''>ambient (logged-in)</option>" + "".join(
         f"<option value='{html.escape(a['alias'], quote=True)}'>{html.escape(a['alias'])}</option>"
         for a in accounts
@@ -1589,11 +1637,9 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
         "<label><input type='radio' name='mode' value='fresh' checked> Fresh session</label>"
         "<label><input type='radio' name='mode' value='resume'> Resume (inject continuity prompt)</label>"
         "</div>"
-        "<button class='start primary' type='submit' name='target' value='app'>"
-        "&#9654; Open terminal in app</button>"
-        "<button class='linkbtn' type='submit' name='target' value='window' "
-        "title='Open the real claude TUI in its own OS console window'>"
-        "or open in a separate OS window &#10697;</button>"
+        "<button class='start primary' type='submit' name='target' value='window' "
+        "title='Open the real claude/codex TUI in its own OS window'>"
+        "&#9654; Open in a native window</button>"
         "</form>"
         "<details class='or-cmds'><summary>&#8230; or copy a terminal command</summary>"
         f"<div class='launch-body'>{_launch_cmds(project['path'], accounts)}</div></details>"
@@ -1605,7 +1651,7 @@ def render_onboard_handoff(
 ) -> str:
     """Post-Onboard handoff: a start-work CTA for the just-tracked project, with an
     account-alias chooser for the first session. Bridges "repo onboarded" → "working on
-    it" so the user doesn't have to hunt the new project down on the Control tab.
+    it" so the user doesn't have to hunt the new project down.
 
     ``accounts`` only needs an ``alias`` per entry (no usage rings here)."""
     if project_index is None:
@@ -1614,9 +1660,9 @@ def render_onboard_handoff(
         body = _project_launch_form(project_index, {"name": name, "path": project_path}, accounts)
     else:
         body = (
-            "<p class='muted'>No agent account is set up yet. Add one under "
-            "<a href='/control'>Control &rarr; Add account</a> (it opens a sign-in terminal), "
-            "then start a session here.</p>"
+            "<p class='muted'>No agent account is set up yet. Add one from the Accounts "
+            "section on the Projects tab (it opens a sign-in terminal), then start a "
+            "session here.</p>"
         )
     return (
         f"<div class='banner ok'><strong>Onboarded {html.escape(name)} &mdash; start working on it"
@@ -2053,6 +2099,11 @@ def process_offboard(form: dict[str, str], *, projects: list[str] | None = None)
     return "/?offboarded=" + quote_plus(name) + ("&purged=1" if purge else "")
 
 
+def _notice(params: dict[str, list[str]]) -> str:
+    """Unified post-redirect banner: project actions (upgrade/offboard) + launch/account."""
+    return _project_action_banner(params) or _launch_notice(params)
+
+
 def _project_action_banner(params: dict[str, list[str]]) -> str:
     """Banner for upgrade/offboard POST redirects (index + project pages)."""
     if "upgraded" in params:
@@ -2162,7 +2213,7 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/":
             self._send(render_index(
                 gather_projects(), gather_sessions(),
-                notice=_project_action_banner(parse_qs(parsed.query)),
+                notice=_notice(parse_qs(parsed.query)),
             ))
             return
         if parsed.path == "/github-catalog":
@@ -2178,11 +2229,13 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(_page("Horus — sessions", render_sessions_card(recs), live=_live_count(recs)))
             return
         if parsed.path == "/control":
-            notice = _launch_notice(parse_qs(parsed.query))
-            self._send(render_control(
-                gather_projects(), gather_accounts(), gather_sessions(),
-                notice, pty_host.host.terminals(),
-            ))
+            # Control (the session cockpit) was retired; its useful bits moved to the
+            # Projects tab. Redirect old links/bookmarks there.
+            self._redirect("/")
+            return
+        if parsed.path == "/accounts-panel":
+            # Async fragment for the main-tab accounts/usage strip (network — loaded lazily).
+            self._send(_accounts_strip(gather_accounts()))
             return
         if parsed.path == "/pty/stream":
             term_id = parse_qs(parsed.query).get("id", [""])[0]
@@ -2227,7 +2280,7 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             self._send(render_project(
                 project, index=idx,
-                notice=_project_action_banner(parse_qs(parsed.query)),
+                notice=_notice(parse_qs(parsed.query)),
             ))
             return
         self._send(_page("Not found", "<p>Not found.</p>"), 404)
@@ -2354,13 +2407,13 @@ class _Handler(BaseHTTPRequestHandler):
             self._redirect(process_offboard(self._read_form()))
             return
         if parsed.path == "/account-add":
-            self._redirect(f"/control?{process_account_add(self._read_form())}")
+            self._redirect(f"/?{process_account_add(self._read_form())}")
             return
         if parsed.path == "/account-login":
-            self._redirect(f"/control?{process_account_login(self._read_form())}")
+            self._redirect(f"/?{process_account_login(self._read_form())}")
             return
         if parsed.path == "/account-alias":
-            self._redirect(f"/control?{process_account_alias(self._read_form())}")
+            self._redirect(f"/?{process_account_alias(self._read_form())}")
             return
         if parsed.path == "/pty/input":
             # Keystrokes from an xterm tab → the PTY. Bytes are UTF-8 of the data field.
@@ -2451,9 +2504,12 @@ class _Handler(BaseHTTPRequestHandler):
             ))
             return
 
-        query = process_launch(self._read_form())
-        # 303 -> GET /control so a refresh doesn't re-submit the launch (PRG pattern).
-        self._redirect(f"/control?{query}")
+        form = self._read_form()
+        query = process_launch(form)
+        # PRG: redirect back to the project detail page (or the index for an account-only
+        # session) so a refresh doesn't re-submit the launch.
+        raw = (form.get("project") or "").strip()
+        self._redirect(f"/project?i={raw}&{query}" if raw.isdigit() else f"/?{query}")
 
     def log_message(self, *args: Any) -> None:  # silence default stderr logging
         pass

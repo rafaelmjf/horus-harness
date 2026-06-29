@@ -1,5 +1,24 @@
 # Decisions
 
+## 2026-06-30 - Retire the Control Cockpit; Consolidate Into the Projects Tab
+
+The Control tab (live-session hosting, in-app PTY terminals, windowed oversight) is
+retired. Its useful bits move to the Projects tab: account **usage** rings load as an
+async strip on the index, and **start-fresh / resume-from-prompt** lives on each project
+detail page (native-window launch, work-pickup model). The cockpit code
+(`render_control`, `_terminal_panel`, `pty_host`, `/pty/*`) stays **dormant** (unrouted)
+for later deletion; `horus run`/`open` CLI remain.
+
+Reasoning: this completes the Omnigent freeze-the-cockpit decision — session
+hosting/orchestration is the exact surface we cede to Omnigent. And the cockpit's
+session-tracking only ever covered sessions **Horus itself launched** (in-app PTYs were
+never registered; terminal/native-app sessions were never in scope), so the live view
+showed only a sliver and felt useless. That's a fundamental ceiling, not a bug. The real
+"see all my sessions" want is **transcript-discovery** — reading the JSONL/rollouts the
+native apps already write (read-only, no hosting) — which fits the memory/observability
+plane and is recorded in roadmap as the right path (deferred, not built yet). Usage loads
+async so the main page never blocks on the OAuth `/usage` call.
+
 ## 2026-06-29 - Offboard Keeps `.horus/` By Default; Purge Is Opt-In
 
 `horus offboard` (and its dashboard card) removes Horus's *projected* artifacts — the

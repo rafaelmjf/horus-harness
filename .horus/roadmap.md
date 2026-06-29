@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "Project lifecycle in the dashboard: one-click upgrade (green) for stale artifacts and offload on both the detail page and each overview card (a `<details>` reveal at the end of the card) offering Keep-files vs Remove-completely (red). `horus offboard` CLI keeps `.horus/` by default, purges only on explicit opt-in. 498 tests green. No active execution plan."
+current_focus: "Retired the Control cockpit (nav link, live-badge, in-app PTY/windowed oversight) — completes the Omnigent freeze-the-cockpit decision. Folded its useful bits into the Projects tab: account usage rings load async on the index, and start-fresh/resume (native-window, work-pickup) lives on each project detail page. Cockpit/pty code left dormant pending deletion; `horus run`/`open` CLI remain. Session-visibility for sessions-Horus-didn't-start is now explicitly the deferred transcript-discovery path. 496 tests green. No active execution plan."
 next_action: "Resume polishing Horus for the user's use case. Open small items: (a) the pilot tuning finding — phase status vocabulary (`planned/delegated/accepted/blocked`) in the horus-execution skill + execution.md template; or (b) the two deferred workflow-policy refinements (project `[workflow]` into the managed block; per-project git-synced override)."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Last session shipped the one-click upgrade button + project offboard (CLI + dashboard 'Manage Horus integration' card; keeps `.horus/` by default, `--purge` to delete) — see features.md. Resume polishing Horus for the use case: pick the phase status-vocabulary pilot finding or the deferred workflow-policy refinements with the user. Before building any substantial capability, skim `research/` for an existing-tool guardrail."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Last session RETIRED the Control cockpit (see decisions.md 2026-06-30 'Retire the Control Cockpit') — account usage + start/resume now live on the Projects tab; cockpit/pty code is dormant pending deletion. If session visibility comes up, the chosen path is the deferred read-only transcript-discovery (roadmap MVP4, promoted). Resume polishing for the use case: phase status-vocabulary pilot finding, or the deferred workflow-policy refinements. Before building any substantial capability, skim `research/` for an existing-tool guardrail."
 execution_recommendation: "continue-as-is - small, low-ambiguity doc/skill polish; high judgment, low volume → inline beats delegation."
-last_updated: 2026-06-29
+last_updated: 2026-06-30
 ---
 
 # Roadmap
@@ -553,8 +553,15 @@ dashboard and later becomes the place for continuity/status nudges.
 
 ## MVP 4 - Unified in-app terminal (the cockpit)
 
-> Shipped this milestone: the Control tab launches real sessions and hosts them as
-> in-app terminals (the real agent TUI under a PTY, rendered with xterm.js). Decided
+> **RETIRED 2026-06-30** (see decisions.md "Retire the Control Cockpit"): the Control tab
+> + in-app PTY cockpit is removed from the UI — it overlaps the orchestration surface we
+> cede to Omnigent, and it only ever tracked Horus-launched sessions. The code
+> (`render_control`, `_terminal_panel`, `pty_host`, `/pty/*`) is left dormant pending
+> deletion; `horus run`/`open` CLI remain. Account usage + start/resume moved to the
+> Projects tab. The history below is kept for context.
+>
+> Originally shipped this milestone: the Control tab launches real sessions and hosts them
+> as in-app terminals (the real agent TUI under a PTY, rendered with xterm.js). Decided
 > 2026-06-26: keep the viewer in Horus (not a VS Code extension), local + persistent +
 > re-attachable, cross-platform PTY. See features.md for the capabilities and
 > decisions.md ("Unified in-app terminal", "Cross-platform PTY") for the why.
@@ -601,8 +608,12 @@ Deferred (noted as future direction, low value for now):
 - [ ] **Monitor sessions Horus did NOT start** (read-only) — discover foreign `claude`/`codex`
   sessions from the transcripts they already write (`~/.claude/projects/<slug>/<uuid>.jsonl`;
   Codex rollouts already read by `codex_usage`), surfacing project/last-activity/message-count.
-  Plus a "continue this here" bridge via `claude --resume <id>` into a Horus-owned PTY. Cannot
-  *attach/drive* a foreign PTY — observe only. Optional process-scan layer (cwd→project) wants psutil.
+  **PROMOTED 2026-06-30** as THE session-visibility path now that the Control cockpit is
+  retired: this read-only transcript-discovery (no hosting) is what shows *all* sessions
+  regardless of how they started — the thing the cockpit's Horus-only live view never could.
+  Surface it on the Projects tab (per-project recent sessions). Deferred for now, but it's
+  the chosen approach. (Drop the old "continue into a Horus-owned PTY" bridge — no cockpit.)
+  Optional process-scan layer (cwd→project) wants psutil.
 - [ ] Literal OS-level drag gestures / re-dock automation (pop-out covers the practical need).
 - [ ] Register in-app PTY terminals in the registry so `horus sessions` / usage cards see them.
 
