@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Planned three feature tracks for managing GitHub-tracked projects from the dashboard: (A) onboard untracked repos with opt-out ignore, (B) flag stale Horus-projected artifacts, (C) a configurable branch→PR→auto-merge workflow policy + settings panel. A phased `execution.md` is drafted and awaiting user review before any implementation starts."
-next_action: "User to review the drafted `.horus/execution.md` (GitHub onboarding + workflow policy, phases C-min → A1 → A2 → A3 → A4 → C-full, with B independent). Do NOT start implementation until the plan is approved; then begin phase C-min (the `[workflow]` config + policy resolver + branch→PR→auto-merge helper that onboard and closure both consume)."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. A phased plan is drafted in `.horus/execution.md` for three tracks (see roadmap sections 'GitHub project onboarding', 'Dashboard artifact-staleness flag', 'Workflow policy + settings panel'). It is AWAITING USER REVIEW — confirm the plan/ordering with the user before delegating any phase. Approved start point is phase C-min. Decisions already locked (decisions.md 2026-06-29 'GitHub Onboarding + Workflow Policy'): untracked repos shown opt-out; ignore list + github_owners are per-machine with a blank-owner dashboard warning; default integration is branch→PR→auto-merge-unless-review; agent-instruction projection and per-project policy override are deferred."
-execution_recommendation: "plan-execution - multi-phase, cross-module work (config, github_catalog, CLI, dashboard POST surface) with a clear supervisor/worker split; execution.md is drafted. Start only after user review."
+current_focus: "Track A (surface + onboard untracked GitHub repos with opt-out ignore) and the C-min workflow-policy foundation shipped via PR #37 (5 phases through the horus-execution workflow). Remaining on this feature: C-full (dashboard Settings panel to edit the policy) and B (read-only artifact-staleness badge), both awaiting a go-ahead."
+next_action: "Implement the two remaining GitHub-onboarding phases when ready: C-full (a Settings panel in the UI, POST + same-origin/loopback guard, to edit the `[workflow]` policy) and B (a per-clone 'Horus artifacts outdated' badge computed from `upgrade.upgrade_project(apply=False)`). Both are specified in `.horus/execution.md`."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. PR #37 (C-min + A1–A4: workflow policy + untracked-repo onboarding/ignore) is merged to main. Remaining phases are in `.horus/execution.md`: C-full (dashboard Settings panel editing the `[workflow]` policy) and B (read-only per-project artifact-staleness badge via `upgrade.upgrade_project(apply=False)`). Plus deferred refinements (managed-instruction projection of the policy; per-project policy override). Decisions in decisions.md 2026-06-29 'GitHub Onboarding + Workflow Policy'."
+execution_recommendation: "plan-execution - C-full and B are bounded phases already in execution.md; continue the supervisor/worker workflow for each."
 last_updated: 2026-06-29
 ---
 
@@ -37,20 +37,15 @@ last_updated: 2026-06-29
 > catalog never shows it. Surface untracked repos so they can be onboarded in one action,
 > while letting the user permanently hide repos they don't care about (old projects).
 
-- [ ] A1 — `discover()` returns a second bucket of **untracked** repos (no `.horus/project.md`
-  on the default branch) instead of silently dropping them; extend the per-repo `pushedAt`
-  cache to remember the "not a Horus repo" verdict so unchanged repos are not re-checked.
-  A brand-new repo has no cache entry, so it always surfaces on the next discovery.
-- [ ] A2 — per-machine **ignore list** in `~/.horus/config.toml` (`ignored_repos`), opt-out
-  model (everything shows until ignored); CLI to add/remove; discovery + dashboard filter it
-  into a collapsed "Hidden (N)" sublist. Plus a dashboard **"no GitHub owner configured"
-  warning/CTA** when `github_owners` is blank.
-- [ ] A3 — `horus onboard github:owner/repo`: clone into `workspace_root` if not already
-  cloned → `horus init` → integrate via the Track C workflow policy (default branch→PR→
-  auto-merge) so onboarding never leaves a local-only `.horus/`. Reuse `cmd_start` + init.
-- [ ] A4 — dashboard **"Not tracked (N)"** section with per-repo **Onboard** / **Ignore**
-  buttons over the existing same-origin-guarded, loopback-only POST surface; opt-out only,
-  never bulk. Manual **Refresh** drives re-discovery so newly created repos appear.
+- [x] A1 (2026-06-29, PR #37) — `discover()` returns `DiscoveryResult(projects, untracked)`;
+  repos without `.horus/project.md` are classified as `UntrackedRepo`, and the per-repo
+  `pushedAt` cache remembers the not-Horus verdict so unchanged repos skip the `gh api` check. → features.md
+- [x] A2 (2026-06-29, PR #37) — per-machine `ignored_repos` + `horus ignore [--list]` /
+  `horus unignore` + `github_catalog.filter_ignored()`; dashboard blank-owner CTA. → features.md
+- [x] A3 (2026-06-29, PR #37) — `horus onboard github:owner/repo`: clone → `horus init` →
+  integrate via the workflow policy so onboarding never leaves a local-only `.horus/`. → features.md
+- [x] A4 (2026-06-29, PR #37) — dashboard "Not tracked (N)" + collapsed "Hidden (N)" with
+  Onboard / Ignore / Unignore POST endpoints (owner-validated, same-origin guarded). → features.md
 
 ## Dashboard artifact-staleness flag (Track B) - independent, small
 
@@ -71,12 +66,12 @@ last_updated: 2026-06-29
 > Avoids "forgot to push, stuck local-only". This automates what was done by hand in the
 > 2026-06-29 onboarding session.
 
-- [ ] C-min — `[workflow]` config (per-machine default): `integration =
-  branch-pr-automerge | branch-pr-review | direct-push | local-only`, `commit = auto|manual`,
-  `merge = auto|review`. A policy resolver + a reusable branch→PR→(auto-)merge helper that
-  **both** `horus onboard` and `horus close --commit` consume. (Build before A3.)
+- [x] C-min (2026-06-29, PR #37) — `[workflow]` config (`integration`/`commit`/`merge`) +
+  resolver + reusable `horus/integration.py` helper (branch→PR→auto-merge / review / direct-push /
+  local-only) + `horus workflow` CLI. First real consumer is `horus onboard` (A3); the
+  `close --commit` wiring was deferred from this phase to keep the foundation low-risk. → features.md
 - [ ] C-full — dashboard **Settings panel** (POST endpoint, same-origin + loopback guard)
-  with checkboxes to edit the policy.
+  with checkboxes to edit the policy. (Remaining; `execution.md`.)
 - [ ] Deferred refinement: project the policy into the managed instruction block
   (AGENTS.md/CLAUDE.md) so the in-session agent adopts the same default for its own code
   work (Horus can only directly own its own commits — onboard + closure).
