@@ -1,5 +1,39 @@
 # Decisions
 
+## 2026-06-29 - Execution-Workflow Pilot: Findings + GitHub Incremental-Refresh Heuristic
+
+First real pilot of the `horus-execution` supervisor/worker workflow. The supervisor
+(frontier) planned `execution.md`, delegated one bounded phase to a standard-tier worker
+(implement incremental GitHub catalog refresh), required a `.horus/temp/1A.md` handoff,
+reviewed the diff + tests, accepted, and distilled here. The loop worked end-to-end.
+
+Shipped capability (the pilot's vehicle): `discover()` takes an optional `prior` cache
+snapshot keyed by `full_name`; when a repo's live `pushedAt` equals the cached
+`pushed_at` (both non-empty) it skips both `.horus/` `gh api` reads and reuses the cached
+focus/next-action/next-prompt, while still recomputing volatile fields (url, branch,
+pushed_at, local match). `refresh_cache()` builds the prior map from the on-disk cache.
+
+- **Heuristic is deliberately conservative.** `pushedAt` reflects *any* push, so an
+  unrelated commit re-fetches `.horus/`. Chosen over content-hashing/ETag bookkeeping
+  because it errs toward freshness, needs no new cache fields, and leaves the cache
+  format unchanged. A web-UI `.horus/` edit also bumps `pushedAt`, so edits aren't missed.
+
+Workflow-tuning findings (the actual deliverable — the roadmap NEXT asked to tune from
+observed friction):
+
+1. **Hand workers the known pre-existing test-failure baseline.** The worker spent effort
+   diagnosing whether a red `test_config` test was its fault (it wasn't — a non-portable
+   forward-slash path assertion on Windows, `config.py` untouched). The supervisor brief /
+   handoff template should state known-failing tests so a non-green suite isn't ambiguous.
+2. **Name a small phase status vocabulary** (`planned/delegated/accepted/blocked`) in the
+   `horus-execution` skill + `execution.md` template; the table had a `review` column but
+   no "accepted" status, so acceptance had to be improvised.
+3. **The handoff template's "Suggested Durable Horus Updates" section paid off** — it
+   gave the supervisor a ready routing list for this closure. Keep it.
+
+Implication: the NEXT step folds findings 1–2 into the bundled skill text and the
+`execution.md` scaffold (small, single-surface — `continue-as-is`).
+
 ## 2026-06-29 - Project Execution Via Prompts, Skills, And Handoffs First
 
 Project the new execution workflow into Claude/Codex through `horus execution`

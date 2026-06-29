@@ -55,12 +55,24 @@ class RefreshResult:
     error: str = ""
 
 
-def discover(owner: str, *, local_projects: list[str] | None = None, limit: int = 100) -> list[RemoteProject]:
+def discover(
+    owner: str,
+    *,
+    local_projects: list[str] | None = None,
+    limit: int = 100,
+    prior: dict[str, "RemoteProject"] | None = None,
+) -> list[RemoteProject]:
     """Return Horus-enabled GitHub repos for `owner`.
 
     A repo is considered Horus-enabled when `.horus/project.md` is readable. The
     roadmap file is optional; older Horus projects can still appear with just the
     project focus.
+
+    When `prior` is supplied (a dict keyed by ``full_name``), any repo whose
+    ``pushedAt`` matches the cached entry is returned from the cache without making
+    the two ``gh api`` calls for ``.horus/`` files.  This dramatically reduces API
+    calls on incremental refreshes.  Repos with a changed or absent ``pushedAt``
+    always fall through to the full fetch path.
     """
     repos = _repo_list(owner, limit=limit)
     local_by_remote = _local_projects_by_remote(local_projects or [])
@@ -70,18 +82,42 @@ def discover(owner: str, *, local_projects: list[str] | None = None, limit: int 
         if not full_name:
             continue
         branch = _default_branch(repo)
-        project_text = _repo_file(full_name, ".horus/project.md", branch)
-        if project_text is None:
-            continue
-        roadmap_text = _repo_file(full_name, ".horus/roadmap.md", branch) or ""
-        project_doc = frontmatter.parse(project_text)
-        roadmap_doc = frontmatter.parse(roadmap_text)
+        live_pushed_at = str(repo.get("pushedAt") or "")
         clone_url = str(repo.get("sshUrl") or repo.get("url") or "")
         url = str(repo.get("url") or "")
         remote_keys = {_normalize_remote(url), _normalize_remote(clone_url)}
         remote_keys.discard("")
         local_path = next((local_by_remote[k] for k in remote_keys if k in local_by_remote), None)
         name = str(repo.get("name") or full_name.rsplit("/", 1)[-1])
+
+        # Fast path: reuse cached .horus/ content when pushedAt is unchanged.
+        if prior is not None and full_name in prior:
+            cached_entry = prior[full_name]
+            if cached_entry.pushed_at and cached_entry.pushed_at == live_pushed_at:
+                out.append(
+                    RemoteProject(
+                        owner=owner,
+                        name=name,
+                        full_name=full_name,
+                        url=url,
+                        clone_url=clone_url or url,
+                        default_branch=branch,
+                        pushed_at=live_pushed_at,
+                        current_focus=cached_entry.current_focus,
+                        next_action=cached_entry.next_action,
+                        next_prompt=cached_entry.next_prompt,
+                        local_path=local_path,
+                    )
+                )
+                continue
+
+        # Full fetch path: read .horus/ files from GitHub.
+        project_text = _repo_file(full_name, ".horus/project.md", branch)
+        if project_text is None:
+            continue
+        roadmap_text = _repo_file(full_name, ".horus/roadmap.md", branch) or ""
+        project_doc = frontmatter.parse(project_text)
+        roadmap_doc = frontmatter.parse(roadmap_text)
         out.append(
             RemoteProject(
                 owner=owner,
@@ -90,7 +126,7 @@ def discover(owner: str, *, local_projects: list[str] | None = None, limit: int 
                 url=url,
                 clone_url=clone_url or url,
                 default_branch=branch,
-                pushed_at=str(repo.get("pushedAt") or ""),
+                pushed_at=live_pushed_at,
                 current_focus=str(project_doc.front_matter.get("current_focus", "")),
                 next_action=str(roadmap_doc.front_matter.get("next_action", "")),
                 next_prompt=str(roadmap_doc.front_matter.get("next_prompt", "")),
@@ -101,9 +137,18 @@ def discover(owner: str, *, local_projects: list[str] | None = None, limit: int 
 
 
 def refresh_cache(owner: str, *, local_projects: list[str] | None = None, limit: int = 100) -> list[RemoteProject]:
-    """Discover live projects and persist the last successful owner snapshot."""
+    """Discover live projects and persist the last successful owner snapshot.
+
+    Builds a ``prior`` map from the existing on-disk cache so that repos whose
+    ``pushedAt`` has not changed since the last refresh skip the two ``gh api``
+    content calls in :func:`discover`.
+    """
+    existing = load_cache(owner)
+    prior: dict[str, RemoteProject] | None = (
+        {p.full_name: p for p in existing.projects} if existing is not None else None
+    )
     try:
-        projects = discover(owner, local_projects=local_projects, limit=limit)
+        projects = discover(owner, local_projects=local_projects, limit=limit, prior=prior)
     except RuntimeError as exc:
         record_cache_error(owner, str(exc))
         raise
