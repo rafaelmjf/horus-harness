@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "The `horus-execution` supervisor/worker workflow has been piloted end-to-end on a real feature (incremental GitHub catalog refresh shipped via one delegated worker phase). The pilot surfaced two concrete workflow-tuning findings; the next step is to fold them back into the skill + handoff template."
-next_action: "Apply the two execution-workflow pilot findings: (1) the supervisor brief / handoff template should carry the known pre-existing test-failure baseline so a worker does not misattribute an unrelated red test to its own change; (2) define a small phase status vocabulary (planned/delegated/accepted/blocked) in the `horus-execution` skill and the `execution.md` template so the phase table reads consistently."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. The `horus-execution` pilot is done: it shipped incremental GitHub catalog refresh (`discover()` now skips `.horus/` `gh api` reads for repos whose `pushedAt` is unchanged; `refresh_cache()` passes the prior cache) and validated the supervisor→worker→handoff→review loop. Immediate task: fold the two pilot findings (recorded in decisions.md 2026-06-29 'Execution-Workflow Pilot') into the bundled `horus-execution` skill text (`horus/skills.py` + `.claude/skills/` + `.agents/skills/`) and the `execution.md` handoff scaffold/template: (1) supervisor brief carries the known-failing test baseline; (2) a `planned/delegated/accepted/blocked` status vocabulary. Small, docs/skill-text scope across templates — continue-as-is."
-execution_recommendation: "continue-as-is - the next step is small, single-surface skill/template text edits (no cross-module logic), so no execution.md or worker delegation is needed."
+current_focus: "Planned three feature tracks for managing GitHub-tracked projects from the dashboard: (A) onboard untracked repos with opt-out ignore, (B) flag stale Horus-projected artifacts, (C) a configurable branch→PR→auto-merge workflow policy + settings panel. A phased `execution.md` is drafted and awaiting user review before any implementation starts."
+next_action: "User to review the drafted `.horus/execution.md` (GitHub onboarding + workflow policy, phases C-min → A1 → A2 → A3 → A4 → C-full, with B independent). Do NOT start implementation until the plan is approved; then begin phase C-min (the `[workflow]` config + policy resolver + branch→PR→auto-merge helper that onboard and closure both consume)."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. A phased plan is drafted in `.horus/execution.md` for three tracks (see roadmap sections 'GitHub project onboarding', 'Dashboard artifact-staleness flag', 'Workflow policy + settings panel'). It is AWAITING USER REVIEW — confirm the plan/ordering with the user before delegating any phase. Approved start point is phase C-min. Decisions already locked (decisions.md 2026-06-29 'GitHub Onboarding + Workflow Policy'): untracked repos shown opt-out; ignore list + github_owners are per-machine with a blank-owner dashboard warning; default integration is branch→PR→auto-merge-unless-review; agent-instruction projection and per-project policy override are deferred."
+execution_recommendation: "plan-execution - multi-phase, cross-module work (config, github_catalog, CLI, dashboard POST surface) with a clear supervisor/worker split; execution.md is drafted. Start only after user review."
 last_updated: 2026-06-29
 ---
 
@@ -27,7 +27,61 @@ last_updated: 2026-06-29
 - [x] Add gitignored `.horus/temp/` for fleeting worker/subagent handoff notes.
 - [x] Surface `execution.md` on the project dashboard and teach `horus consolidate` to flag temp handoff notes.
 - [x] Design native Claude/Codex projection: supervisor prompt, worker handoff template, model-tier mapping, and optional subagent definitions.
-- [x] Pilot `horus-execution` on a real phased Horus feature and tune the workflow from observed friction (2026-06-29): shipped incremental GitHub catalog refresh via one delegated worker phase; loop worked end-to-end. Two tuning findings recorded in decisions.md → now the NEXT.
+- [x] Pilot `horus-execution` on a real phased Horus feature and tune the workflow from observed friction (2026-06-29): shipped incremental GitHub catalog refresh via one delegated worker phase; loop worked end-to-end. Two tuning findings recorded in decisions.md.
+- [ ] Apply the two pilot tuning findings (deferred behind the GitHub-onboarding tracks): (1) supervisor brief / handoff template carries the known pre-existing test-failure baseline; (2) a small phase status vocabulary (`planned/delegated/accepted/blocked`) in the `horus-execution` skill + `execution.md` template. Small `continue-as-is` task; see decisions.md 2026-06-29 "Execution-Workflow Pilot".
+
+## GitHub project onboarding (Track A) - show + onboard untracked repos
+
+> Decided 2026-06-29 (see decisions.md "GitHub Onboarding + Workflow Policy").
+> Motivation: a fresh repo like `agentic-gym-coach` has no committed `.horus/`, so the
+> catalog never shows it. Surface untracked repos so they can be onboarded in one action,
+> while letting the user permanently hide repos they don't care about (old projects).
+
+- [ ] A1 — `discover()` returns a second bucket of **untracked** repos (no `.horus/project.md`
+  on the default branch) instead of silently dropping them; extend the per-repo `pushedAt`
+  cache to remember the "not a Horus repo" verdict so unchanged repos are not re-checked.
+  A brand-new repo has no cache entry, so it always surfaces on the next discovery.
+- [ ] A2 — per-machine **ignore list** in `~/.horus/config.toml` (`ignored_repos`), opt-out
+  model (everything shows until ignored); CLI to add/remove; discovery + dashboard filter it
+  into a collapsed "Hidden (N)" sublist. Plus a dashboard **"no GitHub owner configured"
+  warning/CTA** when `github_owners` is blank.
+- [ ] A3 — `horus onboard github:owner/repo`: clone into `workspace_root` if not already
+  cloned → `horus init` → integrate via the Track C workflow policy (default branch→PR→
+  auto-merge) so onboarding never leaves a local-only `.horus/`. Reuse `cmd_start` + init.
+- [ ] A4 — dashboard **"Not tracked (N)"** section with per-repo **Onboard** / **Ignore**
+  buttons over the existing same-origin-guarded, loopback-only POST surface; opt-out only,
+  never bulk. Manual **Refresh** drives re-discovery so newly created repos appear.
+
+## Dashboard artifact-staleness flag (Track B) - independent, small
+
+> Decided 2026-06-29. Horus is in rapid development, so tracked projects drift behind the
+> installed CLI's projected artifacts (skills, hooks, managed block). `horus doctor` /
+> `horus upgrade-project` already detect/refresh this; surface it passively on the dashboard.
+
+- [ ] Per **local/cloned** project, call `upgrade.upgrade_project(root, apply=False)`
+  read-only on dashboard load and show an **"⚠ Horus artifacts outdated"** badge with the
+  `horus upgrade-project --apply` command when any non-skip action exists. Remote-only
+  (uncloned) projects can't be checked → no badge. Keeps the no-mutation-on-render invariant.
+- [ ] Later: a one-click **Apply upgrade** POST button (CLI proven first).
+
+## Workflow policy + settings panel (Track C) - branch→PR→auto-merge default
+
+> Decided 2026-06-29. Default integration policy for Horus-driven git actions across all
+> tracked projects: feature branch → PR → auto-merge unless flagged for user review.
+> Avoids "forgot to push, stuck local-only". This automates what was done by hand in the
+> 2026-06-29 onboarding session.
+
+- [ ] C-min — `[workflow]` config (per-machine default): `integration =
+  branch-pr-automerge | branch-pr-review | direct-push | local-only`, `commit = auto|manual`,
+  `merge = auto|review`. A policy resolver + a reusable branch→PR→(auto-)merge helper that
+  **both** `horus onboard` and `horus close --commit` consume. (Build before A3.)
+- [ ] C-full — dashboard **Settings panel** (POST endpoint, same-origin + loopback guard)
+  with checkboxes to edit the policy.
+- [ ] Deferred refinement: project the policy into the managed instruction block
+  (AGENTS.md/CLAUDE.md) so the in-session agent adopts the same default for its own code
+  work (Horus can only directly own its own commits — onboard + closure).
+- [ ] Deferred refinement: per-project policy override stored in git-synced `.horus/`
+  (e.g. "this repo always needs review"); start with the per-machine default only.
 
 ## MVP 0 - Project Continuity Skeleton
 

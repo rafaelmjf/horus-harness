@@ -1,5 +1,42 @@
 # Decisions
 
+## 2026-06-29 - GitHub Onboarding + Workflow Policy
+
+Planning a dashboard surface for managing GitHub-tracked projects, prompted by a real gap:
+a fresh repo (`agentic-gym-coach`) had no committed `.horus/`, so Horus's catalog — which
+intentionally lists only Horus-enabled repos — never showed it. Three tracks (roadmap:
+"GitHub project onboarding", "Dashboard artifact-staleness flag", "Workflow policy +
+settings panel"). Locked calls:
+
+- **Untracked repos are shown opt-out.** Discovery surfaces repos without `.horus/project.md`
+  as a separate "Not tracked" bucket; the user hides ones they don't care about (old
+  projects) via a per-machine ignore list. Default-show matches "I just want to hide the old
+  ones". A brand-new repo has no verdict-cache entry, so it always surfaces on next discovery
+  — no permanent silent hiding.
+- **Discovery cost is bounded by caching the verdict.** Classifying every repo costs a `gh
+  api` call; the `pushedAt` cache (shipped 2026-06-29) is extended to also remember the
+  "not a Horus repo" verdict so unchanged repos are not re-checked.
+- **Per-machine config, with a blank-owner warning.** `github_owners` and `ignored_repos`
+  stay per-machine (config is not git-synced by design). When `github_owners` is blank the
+  dashboard shows a "configure a GitHub owner" warning/CTA — the one onboarding-clarity fix
+  pulled forward; broader onboarding polish is deferred.
+- **Default integration policy: branch → PR → auto-merge unless review.** Horus-driven git
+  actions (`horus onboard`, `horus close --commit`) follow a configurable workflow policy so
+  onboarding never leaves a local-only `.horus/` (the "forgot to push" worry). This automates
+  exactly the branch→PR→merge done by hand this session. Policy is per-machine config now
+  (`[workflow]`), editable from a dashboard Settings panel.
+- **"All work" has a boundary.** Horus can own the policy for *its own* commits; the
+  in-session agent's code work is steered only indirectly, by projecting the policy into the
+  managed instruction block (AGENTS.md/CLAUDE.md). That projection and a per-project
+  git-synced override are **deferred** — MVP is the per-machine default applied to Horus's
+  own actions.
+- **Build order avoids a throwaway:** a minimal `[workflow]` resolver (C-min) ships before
+  `horus onboard` (A3) so onboard consumes the real policy from day one; the Settings UI
+  (C-full) and Track B (read-only staleness badge, independent) follow.
+
+This is queued as a phased `execution.md` plan, **drafted and awaiting user review before
+any implementation** — itself the second run of the `horus-execution` workflow.
+
 ## 2026-06-29 - Execution-Workflow Pilot: Findings + GitHub Incremental-Refresh Heuristic
 
 First real pilot of the `horus-execution` supervisor/worker workflow. The supervisor
