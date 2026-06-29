@@ -1,8 +1,8 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Dashboard account controls are in place and the dashboard startup path was repaired: the companion now verifies/restarts a dead dashboard before opening it, while POSIX dashboard restarts can rebind the port cleanly."
-last_updated: 2026-06-29
+current_focus: "Dashboard refocused on continuity: the Control session-cockpit was retired (completing the Omnigent freeze-the-cockpit stance), with account usage + start/resume folded into the Projects tab. Project lifecycle is rounded out (onboard / one-click upgrade / offboard). Horus stays the durable memory plane; orchestration is ceded to Omnigent."
+last_updated: 2026-06-30
 ---
 
 # Horus Harness
