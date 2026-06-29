@@ -14,10 +14,10 @@ the next substantial feature starts; distill finished work into `roadmap.md`,
 `features.md`, `decisions.md`, and `history.md` rather than preserving this as a
 timeline.
 
-> **STATUS: ACTIVE — phases C-min → A1 → A2 → A3 → A4 all ACCEPTED (2026-06-29).**
-> Track A (surface + onboard untracked repos) and the C-min policy foundation are complete.
-> **C-full** (Settings panel UI) and **B** (artifact-staleness badge) remain `planned` for a
-> later go-ahead. PR #37 covers C-min→A4.
+> **STATUS: ACTIVE — C-min → A1 → A2 → A3 → A4 (PR #37, merged) and C-full all ACCEPTED.**
+> Track A + the full workflow-policy track (C-min config/helper + C-full Settings panel) are
+> complete. Only **B** (read-only artifact-staleness badge, independent) and the two deferred
+> refinements remain `planned`.
 
 ## Active Feature
 
@@ -61,7 +61,7 @@ can be slotted in anytime. Status vocabulary: `planned` → `delegated` → `acc
 | A2 | accepted | low | standard | A1 | `.horus/temp/A2.md` | ✅ ignore list config + CLI + `filter_ignored` helper + blank-owner CTA; 424 pass / 1 baseline |
 | A3 | accepted | hard | standard | C-min, A1 | `.horus/temp/A3.md` | ✅ `horus onboard github:owner/repo` clone→init→integrate via policy; 434 pass / 1 baseline |
 | A4 | accepted | moderate | standard | A2, A3 | `.horus/temp/A4.md` | ✅ Not-tracked/Hidden sections + Onboard/Ignore/Unignore POST (owner-validated); 450 pass / 1 baseline |
-| C-full | planned | moderate | standard | C-min | `.horus/temp/C-full.md` | Settings panel POST writes `[workflow]`; guard tested |
+| C-full | accepted | moderate | standard | C-min | `.horus/temp/C-full.md` | ✅ `/settings` page (nav + `render_settings`) + same-origin POST writes `[workflow]` (PRG); 456 pass / 1 baseline |
 | B | planned | low | standard | — | `.horus/temp/B.md` | read-only badge from `upgrade_project(apply=False)`; no mutation on render |
 
 ### Phase detail

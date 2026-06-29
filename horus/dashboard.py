@@ -485,7 +485,7 @@ def _live_count(records: list[registry.SessionRecord]) -> int:
 
 
 def _nav(active: str, live: int = 0) -> str:
-    links = [("/", "Projects", "projects"), ("/control", "Control", "control")]
+    links = [("/", "Projects", "projects"), ("/control", "Control", "control"), ("/settings", "Settings", "settings")]
     items = "".join(
         f"<a href='{href}'{_active_class(key == active)}>{label}</a>"
         for href, label, key in links
@@ -1170,6 +1170,34 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
     )
 
 
+def render_settings(policy: dict[str, str], *, saved: bool = False) -> str:
+    """Return the inner body HTML for the /settings page (workflow policy editor)."""
+    _labels = {"integration": "Integration", "commit": "Commit", "merge": "Merge"}
+    banner = "<div class='banner ok'>Settings saved.</div>" if saved else ""
+    selects = []
+    for key, label in _labels.items():
+        opts = "".join(
+            f"<option value='{html.escape(v, quote=True)}'"
+            f"{' selected' if v == policy.get(key) else ''}>{html.escape(v)}</option>"
+            for v in config.WORKFLOW_CHOICES[key]
+        )
+        selects.append(
+            f"<label>{html.escape(label)}<select name='{html.escape(key, quote=True)}'>{opts}</select></label>"
+        )
+    controls = "".join(selects)
+    return (
+        f"{banner}"
+        "<div class='card'>"
+        "<h2>Workflow policy</h2>"
+        "<p class='muted'>Default git-integration policy for Horus-driven actions "
+        "(onboard, closure commits). This setting is <strong>per-machine</strong> — "
+        "it is not git-synced.</p>"
+        f"<form method='post' action='/settings'>{controls}"
+        "<button type='submit'>Save</button>"
+        "</form></div>"
+    )
+
+
 def render_index(
     projects: list[dict[str, Any]],
     sessions: list[registry.SessionRecord] | None = None,
@@ -1839,6 +1867,16 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/assets/icon.png":
             self._send_package_asset("icon.png", "image/png")
             return
+        if parsed.path == "/settings":
+            saved = parse_qs(parsed.query).get("saved") == ["1"]
+            recs = gather_sessions()
+            self._send(_page(
+                "Horus — settings",
+                render_settings(config.load_workflow_policy(), saved=saved),
+                active="settings",
+                live=_live_count(recs),
+            ))
+            return
         if parsed.path == "/project":
             projects = gather_projects()
             try:
@@ -1931,6 +1969,7 @@ class _Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path not in (
             "/launch",
+            "/settings",
             "/github-refresh",
             "/github-onboard",
             "/github-ignore",
@@ -1945,6 +1984,21 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(_page("Forbidden", "<p>Cross-origin request refused.</p>"), 403)
             return
 
+        if parsed.path == "/settings":
+            form = self._read_form()
+            try:
+                config.set_workflow_policy(
+                    integration=form.get("integration") or None,
+                    commit=form.get("commit") or None,
+                    merge=form.get("merge") or None,
+                )
+            except ValueError:
+                pass  # invalid value from a non-form client — ignore and redirect
+            self.send_response(303)
+            self.send_header("Location", "/settings?saved=1")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if parsed.path == "/pty/input":
             # Keystrokes from an xterm tab → the PTY. Bytes are UTF-8 of the data field.
             form = self._read_form()
