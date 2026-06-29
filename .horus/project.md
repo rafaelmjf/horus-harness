@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Dashboard account controls are now in place: the Control tab can map new isolated Claude/Codex login dirs, rename generated account aliases, and GitHub untracked-repo cards clarify that Onboard uses `gh` auth while agent account choice happens when launching work."
+current_focus: "Dashboard account controls are in place and the dashboard startup path was repaired: the companion now verifies/restarts a dead dashboard before opening it, while POSIX dashboard restarts can rebind the port cleanly."
 last_updated: 2026-06-29
 ---
 

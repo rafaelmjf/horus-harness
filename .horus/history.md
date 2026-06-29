@@ -1,6 +1,6 @@
 ---
 status: active
-last_updated: 2026-06-28
+last_updated: 2026-06-29
 ---
 
 # History — bumps in the road
@@ -8,6 +8,18 @@ last_updated: 2026-06-28
 Curated, durable context: the problems that bit us and the lessons that shaped the
 design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
 just the war stories worth carrying forward.
+
+## A live companion is not proof the dashboard server is live
+
+The dashboard stopped opening even though `horus app --open` was still running. The companion
+process had outlived the dashboard child it spawned, so opening the app sent the browser to
+`127.0.0.1:8765` with no listener. A separate restart wrinkle made this harder to reason
+about: disabling `allow_reuse_address` everywhere prevented duplicate Windows dashboard binds,
+but on POSIX it can also block a clean restart while the old socket is in `TIME_WAIT`.
+**Lessons:** (1) before opening a local dashboard URL, probe the HTTP server, not just the
+companion process; (2) if a companion owns the dashboard child, a click/open action should
+repair a dead child by restarting it; (3) single-instance socket policy is OS-specific —
+Windows needs duplicate-bind protection, POSIX needs port reuse for clean restarts.
 
 ## A worker handoff file can fake delegation if the supervisor writes it after doing the work
 
