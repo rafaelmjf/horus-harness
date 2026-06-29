@@ -71,6 +71,20 @@ def shlex_quote(value: str) -> str:
     return shlex.quote(value)
 
 
+def login_argv_env(agent: str, config_dir_path: str) -> tuple[list[str], dict[str, str]]:
+    """Native-CLI command + env that runs an interactive login isolated to
+    ``config_dir_path``.
+
+    Claude prompts for sign-in automatically when its config dir holds no credentials,
+    so launching ``claude`` in a fresh ``CLAUDE_CONFIG_DIR`` lands the user in the login
+    flow; Codex has an explicit ``codex login`` driven by ``CODEX_HOME``."""
+    if agent == "claude":
+        return ["claude"], {"CLAUDE_CONFIG_DIR": config_dir_path}
+    if agent == "codex":
+        return ["codex", "login"], {"CODEX_HOME": config_dir_path}
+    raise ValueError(f"unknown agent: {agent}")
+
+
 def _descendant_pids(pid: int) -> set[int]:
     """The pid and all its descendants (Windows, via a Toolhelp snapshot).
 

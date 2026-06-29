@@ -402,11 +402,14 @@ def test_app_cli_dispatches_to_companion(tmp_path, monkeypatch):
     # Don't re-exec under pythonw.exe during the test; exercise inline dispatch.
     monkeypatch.setattr("horus.cli.companion.relaunch_without_console", lambda: False)
 
+    from horus import companion
+
     assert main(["app", "--path", str(tmp_path), "--port", "9999", "--no-dashboard"]) == 0
     assert calls[0][0] == tmp_path.resolve()
     assert calls[0][1]["port"] == 9999
     assert calls[0][1]["start_dashboard"] is False
-    assert calls[0][1]["app_window"] is False
+    # No mode flag → platform default (owned on Windows, tab elsewhere).
+    assert calls[0][1]["open_mode"] == companion.resolve_open_mode()
     assert calls[0][1]["mascot_style"] == "auto"
 
 
@@ -423,7 +426,22 @@ def test_app_cli_can_request_app_window(tmp_path, monkeypatch):
 
     assert main(["app", "--path", str(tmp_path), "--open", "--app-window"]) == 0
     assert calls[0][1]["open_on_start"] is True
-    assert calls[0][1]["app_window"] is True
+    assert calls[0][1]["open_mode"] == "owned"  # --app-window forces owned on any platform
+
+
+def test_app_cli_tab_flag_forces_tab(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    calls = []
+
+    def fake_run(project_root, **kwargs):
+        calls.append((project_root, kwargs))
+        return 0
+
+    monkeypatch.setattr("horus.cli.companion.run_companion", fake_run)
+    monkeypatch.setattr("horus.cli.companion.relaunch_without_console", lambda: False)
+
+    assert main(["app", "--path", str(tmp_path), "--open", "--tab"]) == 0
+    assert calls[0][1]["open_mode"] == "tab"  # --tab forces a browser tab on any platform
 
 
 def test_app_cli_can_request_mascot_style(tmp_path, monkeypatch):

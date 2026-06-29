@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Usage→closure hook hardened (2026-06-29): it no longer overrides an explicit user command and closure always pushes to remote. UserPromptSubmit injects advisory context that defers to the user's request; Stop asks the user (close now vs push ahead) instead of force-closing; both use `horus close --commit --push`. The held next priority is the post-Onboard account handoff."
-next_action: "Build the post-Onboard account handoff: after Onboard succeeds, show the newly tracked project with an account-alias chooser for the first agent session."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. The usage→closure hook was just hardened (see decisions.md / history.md 2026-06-29 'Usage hook ...'): it defers to explicit commands and always pushes — no further action there. Resume the held priority: tighten the post-Onboard handoff so a newly tracked project immediately offers a start-work CTA with an account-alias choice (Control -> Accounts already maps isolated Claude/Codex login dirs + aliases). Note two pre-existing Windows path-assertion test failures (test_config + test_dashboard account-dir) flagged as a separate task."
-execution_recommendation: "continue-as-is - small dashboard flow polish across existing onboarding and launch surfaces; no active execution plan or worker delegation needed."
+current_focus: "Shipped four dashboard UX items (2026-06-29): Windows console-flash suppressed on gh/git children; the mascot opens an owned, reused/raised dashboard window (default on Windows, `--tab`/`--app-window` overrides); the Add-account form is a login-driven wizard (no manual config path); and a successful Onboard now shows a start-work CTA with an account-alias chooser. No active execution plan."
+next_action: "Pick the next priority: (a) the two deferred workflow-policy refinements — project the `[workflow]` policy into the managed instruction block, and a per-project git-synced policy override; or (b) fix the two pre-existing Windows path-assertion test failures (test_config workspace-root + test_dashboard account-dir; background-task chip exists)."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Last session shipped four dashboard UX items (see features.md companion + account-controls rows and decisions.md 2026-06-29 'Owned Dashboard Window ...' / 'Account Setup Is Login-Driven'): console-flash fix, owned dashboard window with reuse/focus, login-driven account wizard, post-Onboard start-work CTA. NOTE: items 1-2 (console flash, window reuse/focus) are Windows-runtime/visual behaviors verified only by unit tests — confirm with a real `horus app` run on the desktop. No active execution plan. Choose the next priority with the user: deferred workflow-policy refinements, or fix the two pre-existing Windows path-assertion tests (chip already filed)."
+execution_recommendation: "continue-as-is - the remaining items are small/independent; no phased plan or worker delegation needed."
 last_updated: 2026-06-29
 ---
 
@@ -304,7 +304,15 @@ dashboard and later becomes the place for continuity/status nudges.
   shell for a true window + taskbar identity.
 - [x] Fix console-window strobing on dashboard refresh (2026-06-25): `gitstate` git
   subprocesses now pass `CREATE_NO_WINDOW` on Windows (the overview fires many git
-  calls per refresh).
+  calls per refresh). Extended 2026-06-29: the same `_NO_WINDOW` flag now covers the
+  two `gh` calls in `github_catalog.py` (the open/refresh flash the user saw) and
+  `integration._run` (onboard's git/gh) — the console-less server no longer pops a
+  transient console per child.
+- [x] Owned dashboard window with reuse/focus (2026-06-29): mascot opens a dedicated
+  Chromium app window (`--user-data-dir`); a later click raises the existing window
+  instead of stacking a tab, and quit closes it. Default on Windows (where the raise is
+  reliable); `--tab`/`--app-window` override. See features.md (companion row) +
+  decisions.md "Owned Dashboard Window …". Partial progress on the MVP5 lifecycle bind.
 - [x] Single-instance companion (2026-06-25): `acquire_singleton_lock` binds a fixed
   localhost port (8764) as a process-lifetime mutex; a second `horus app` exits
   instead of stacking another mascot. OS releases it on death (no stale-PID files).
@@ -405,8 +413,11 @@ dashboard and later becomes the place for continuity/status nudges.
   is unchanged, reusing cached fields; `refresh_cache()` passes the prior cache. → features.md
 - [x] Add workspace-root configuration for where remote projects should be cloned
   on each machine (`horus config workspace-root [PATH]`, default `~/projects`).
-- [ ] Add a dashboard POST action for the clone/register/start flow once the CLI
-  command is proven; keep the command visible as the fallback.
+- [x] Add a dashboard POST action for the clone/register/start flow once the CLI
+  command is proven; keep the command visible as the fallback. (2026-06-29) Onboard is a
+  POST; on success a post-Onboard handoff CTA (`render_onboard_handoff`) offers an
+  account-alias chooser + fresh/resume launch for the new project, or points to the
+  login-driven account wizard when no account exists. → features.md
 - [ ] Later proper-app track: machine snapshot aggregation for non-local paths,
   running sessions, account availability, dirty state, and non-git/Google Drive
   projects with explicit project ids.

@@ -1014,13 +1014,14 @@ def cmd_app(args: argparse.Namespace) -> int:
         # Re-spawned under pythonw.exe so no console window lingers; the detached
         # child carries the GUI from here.
         return 0
+    open_mode = companion.resolve_open_mode(app_window=args.app_window, tab=args.tab)
     return companion.run_companion(
         root,
         host=args.host,
         port=args.port,
         start_dashboard=not args.no_dashboard,
         open_on_start=args.open,
-        app_window=args.app_window,
+        open_mode=open_mode,
         mascot_style=args.mascot_style,
         usage_threshold=args.usage_threshold,
     )
@@ -1348,7 +1349,14 @@ def build_parser() -> argparse.ArgumentParser:
         p_app.add_argument(
             "--app-window",
             action="store_true",
-            help="open the dashboard in Chrome/Edge app-window mode instead of a normal browser tab",
+            help="force the owned Chrome/Edge app window (dedicated profile; reused/raised on click) "
+                 "even off Windows",
+        )
+        p_app.add_argument(
+            "--tab",
+            action="store_true",
+            help="force a normal browser tab instead of the owned app window "
+                 "(owned is the default on Windows; tab is the default elsewhere)",
         )
         p_app.add_argument(
             "--mascot-style",

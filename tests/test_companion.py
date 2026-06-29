@@ -107,6 +107,7 @@ def test_open_dashboard_app_window_is_explicit(monkeypatch):
 def test_open_dashboard_supports_flatpak_argv(monkeypatch):
     calls = {}
     monkeypatch.setattr(companion, "_app_browser", lambda: ["flatpak", "run", "com.google.Chrome"])
+    monkeypatch.setattr(companion, "dashboard_profile_dir", lambda: Path("/profile"))
     monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: calls.setdefault("cmd", cmd))
 
     companion.open_dashboard("http://x", app_window=True)
@@ -116,8 +117,62 @@ def test_open_dashboard_supports_flatpak_argv(monkeypatch):
         "run",
         "com.google.Chrome",
         "--app=http://x",
+        f"--user-data-dir={Path('/profile')}",  # dedicated profile = a trackable, reusable instance
         "--window-size=1200,760",
     ]
+
+
+def test_resolve_open_mode_defaults_owned_on_windows_tab_elsewhere():
+    # Owned is the default only where we can reliably raise the window (Windows).
+    assert companion.resolve_open_mode(platform="win32") == "owned"
+    assert companion.resolve_open_mode(platform="linux") == "tab"
+    assert companion.resolve_open_mode(platform="darwin") == "tab"
+
+
+def test_resolve_open_mode_flags_win():
+    # --tab beats everything; --app-window forces owned even off Windows.
+    assert companion.resolve_open_mode(tab=True, platform="win32") == "tab"
+    assert companion.resolve_open_mode(app_window=True, tab=True, platform="win32") == "tab"
+    assert companion.resolve_open_mode(app_window=True, platform="linux") == "owned"
+
+
+def test_reuse_or_open_raises_live_owned_window_instead_of_spawning(monkeypatch):
+    raised = {}
+
+    class _Live:
+        pid = 4321
+
+        def poll(self):
+            return None  # still running
+
+    monkeypatch.setattr(companion, "raise_dashboard_window", lambda p: raised.setdefault("pid", p.pid))
+    monkeypatch.setattr(
+        companion, "open_dashboard",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not spawn a duplicate")),
+    )
+
+    live = _Live()
+    out = companion.reuse_or_open_dashboard("http://x", live, app_window=True)
+
+    assert out is live and raised["pid"] == 4321
+
+
+def test_reuse_or_open_spawns_when_owned_window_is_dead(monkeypatch):
+    opened = {}
+
+    class _Dead:
+        def poll(self):
+            return 0  # exited
+
+    def _fake_open(url, **k):
+        opened["url"] = url
+        return "new"
+
+    monkeypatch.setattr(companion, "open_dashboard", _fake_open)
+
+    out = companion.reuse_or_open_dashboard("http://x", _Dead(), app_window=True)
+
+    assert out == "new" and opened["url"] == "http://x"
 
 
 def test_open_dashboard_falls_back_to_tab(monkeypatch):
