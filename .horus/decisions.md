@@ -1,5 +1,92 @@
 # Decisions
 
+## 2026-06-29 - Onboarding Uses GitHub Auth; Work Uses Agent Account Aliases
+
+Dashboard onboarding of an untracked GitHub repository should not imply a Claude or
+Codex account choice. `horus onboard github:owner/repo` clones, initializes `.horus/`,
+and integrates through GitHub using this machine's `gh` login. The Claude/Codex account
+only matters when starting the first work session on that project.
+
+Reasoning:
+
+- The user wanted to onboard a repo with a new agent account that was not logged in yet,
+  but the existing Onboard button did not say which account it would use.
+- There are two separate auth domains: GitHub clone/PR auth (`gh`) and native agent
+  account isolation (`CLAUDE_CONFIG_DIR` / `CODEX_HOME`).
+- Binding Onboard to an agent account would add premature coupling: a repo can be cloned
+  and initialized before the desired Claude/Codex account has logged in.
+
+Implication: Control -> Accounts now exposes local account mapping and alias editing in
+the UI. Untracked GitHub cards clarify that Onboard uses `gh`; the next dashboard polish
+should make the post-Onboard launch/resume CTA offer an account-alias choice for the first
+work session.
+
+## 2026-06-29 - Execution Plans Must Justify Delegation Per Agent
+
+`execution.md` may recommend a worker tier, but that tier is only meaningful **if**
+the planning agent decides to delegate. It must not be read as "standard worker means
+delegation is cheaper" or "execution planning is mandatory."
+
+Reasoning:
+
+- The intended product shape is: the model that crafts the execution plan decides the
+  execution mode. It may choose direct work, delegated work, or a deliberate
+  model-separation test.
+- The correct decision can differ by agent/runtime. Claude's Opus/Sonnet economics,
+  Codex's model/tooling costs, available subagent surfaces, latency, and review overhead
+  are not interchangeable.
+- Delegation has real overhead: worker prompt/context, handoff writing, supervisor review,
+  and possible duplicated codebase reading. It should be justified by economics, risk
+  isolation, context splitting, parallelism, or an explicit workflow test.
+
+Implication: `execution.md` now carries `delegation_basis`, and the phase table records
+`mode` (`direct`, `delegated`, or `test-delegation`) separately from `worker_tier`.
+`horus-execution` v3 and the generated supervisor prompt make this explicit.
+
+## 2026-06-29 - Resume Uses A Generated Minimum-Context Handoff
+
+Fresh Horus sessions should start from a generated compact handoff (`horus resume`)
+instead of asking the agent to read all `.horus/` lanes immediately.
+
+Reasoning:
+
+- The user observed that a simple "read `.horus` files" startup prompt consumed about
+  11% of context before any feature work began.
+- The minimum safe handoff is much smaller: fetch/prune first, verify branch state,
+  then load current focus, next action, execution recommendation/status, and latest
+  session pointer.
+- Deeper lanes still matter, but they should be lazy-loaded only when the task needs
+  product boundaries, shipped capability status, durable decisions, historical lessons,
+  or active execution handoffs.
+- Centralizing this in `routines.resume_prompt()` keeps CLI (`horus resume`), dashboard
+  resume cards, and `horus start` consistent.
+
+Implication: future resume/onboarding surfaces should reuse `horus resume` semantics;
+if a more compact machine-readable form is needed, add a separate `--json` or
+frontmatter-only mode rather than returning to "read every lane first."
+
+## 2026-06-29 - Execution Workflow Tests Require Real Delegation
+
+When the user is explicitly testing the frontier-supervisor / standard-worker workflow,
+"delegated" means a distinct worker/subagent/session actually implemented the phase and
+left a handoff note. A supervisor-written handoff after the supervisor did the work does
+not satisfy the test.
+
+Reasoning:
+
+- The phase 1A dashboard Ignore/Unignore fix was implemented correctly, but it was done
+  inside the supervising Codex session. That validated the product fix, not the intended
+  model-tier workflow.
+- The `horus-execution` skill said to use workers "when useful" and to delegate bounded
+  phases, but did not make real delegation a hard gate when workflow validation itself
+  was the point.
+- `horus-execution` v2 and the generated supervisor prompt now say: if model separation
+  is being tested, the supervisor must not implement delegated work itself; if no native
+  worker/subagent can be spawned, stop and report that the test cannot proceed faithfully.
+
+Implication: phase 1B must either run through a real standard-tier worker/subagent and
+frontier review, or stop before implementation.
+
 ## 2026-06-29 - GitHub Onboarding + Workflow Policy
 
 Planning a dashboard surface for managing GitHub-tracked projects, prompted by a real gap:

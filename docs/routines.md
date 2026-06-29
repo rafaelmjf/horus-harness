@@ -113,7 +113,10 @@ horus execution handoff 1A
 supervisor frame. Claude should map it onto project subagents when useful; Codex
 should map it onto subagents or project custom agents when useful. Both keep the
 frontier/standard/economy model tiers symbolic so each machine can resolve them to
-current local model availability.
+current local model availability. Execution planning is optional: the planning
+agent should choose direct work when delegation overhead is unlikely to pay for
+it, and fill `delegation_basis` when it does delegate. `worker_tier` is only the
+tier to use if delegated, not a cost justification by itself.
 
 `handoff` creates `.horus/temp/<phase>.md`. The worker fills it with changed files,
 behavior, tests, risks, and suggested durable Horus updates. The supervisor reviews
@@ -123,6 +126,8 @@ the diff and tests before accepting the note as evidence.
 
 - Use this only when `roadmap.md` `execution_recommendation` calls for
   `plan-execution`, or when the user explicitly asks for phased/subagent work.
+- Do not treat `plan-execution` as mandatory delegation. The planning agent can still
+  choose direct phases when that is more economical for the active agent/runtime.
 - Keep `.horus/execution.md` fluid for the active roadmap item. Replace it when the
   next substantial item starts.
 - Keep `.horus/temp/` gitignored and local. Do not store full transcripts or

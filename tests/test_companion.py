@@ -146,6 +146,9 @@ def test_ensure_dashboard_spawns_horus_dashboard(monkeypatch):
         def __init__(self, cmd, **kwargs):
             calls.append((cmd, kwargs))
 
+        def poll(self):
+            return None
+
     monkeypatch.setattr(companion, "dashboard_is_live", lambda url: False)
     monkeypatch.setattr(subprocess, "Popen", FakePopen)
 
@@ -153,6 +156,25 @@ def test_ensure_dashboard_spawns_horus_dashboard(monkeypatch):
 
     assert result.started is True
     assert calls[0][0] == [sys.executable, "-m", "horus", "dashboard", "--host", "127.0.0.1", "--port", "9999"]
+
+
+def test_ensure_dashboard_for_open_restarts_dead_spawned_dashboard(monkeypatch):
+    events = []
+    current = companion.DashboardProcess("http://127.0.0.1:8765", True, object())
+    restarted = companion.DashboardProcess("http://127.0.0.1:8765", True, object())
+
+    monkeypatch.setattr(companion, "dashboard_is_live", lambda url: False)
+    monkeypatch.setattr(companion, "stop_dashboard", lambda dashboard: events.append(("stop", dashboard)))
+    monkeypatch.setattr(
+        companion,
+        "ensure_dashboard",
+        lambda host, port, *, start=True: events.append(("ensure", host, port, start)) or restarted,
+    )
+
+    result = companion.ensure_dashboard_for_open(current)
+
+    assert result is restarted
+    assert events == [("stop", current), ("ensure", "127.0.0.1", 8765, True)]
 
 
 def test_stop_dashboard_terminates_only_spawned():

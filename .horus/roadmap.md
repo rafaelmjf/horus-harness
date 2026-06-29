@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "The GitHub-onboarding + workflow-policy feature is fully shipped: untracked-repo discovery/onboard/ignore + dashboard Not-tracked UI (Track A), the configurable branch→PR→auto-merge workflow policy + Settings panel (C-min + C-full), and the per-project artifact-staleness badge (B). All merged (PRs #37/#38/#39). Only two optional deferred refinements remain on this feature; no active execution plan."
-next_action: "Pick the next priority. Open candidates: (a) the two optional deferred workflow-policy refinements — project the `[workflow]` policy into the managed instruction block (AGENTS.md/CLAUDE.md), and a per-project git-synced policy override; (b) the still-open `horus-execution` pilot tuning findings (known-failing baseline in worker briefs is already partly applied via execution.md; the status-vocabulary skill text is not); (c) an unrelated roadmap item (e.g. Context Cache cold/expired behavior, MVP2.5 fetch-all)."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. The GitHub-onboarding + workflow-policy feature shipped end-to-end (PRs #37/#38/#39; see features.md rows and decisions.md 2026-06-29 'GitHub Onboarding + Workflow Policy'). No active execution plan. Choose the next priority with the user: optional deferred workflow-policy refinements (managed-instruction projection of the policy; per-project override), the open pilot tuning-findings task, or an unrelated roadmap item."
-execution_recommendation: "continue-as-is - no active plan; the remaining items are small/optional. Pick one with the user and decide its mode then."
+current_focus: "Dashboard account controls are in place and the dashboard startup path was repaired: the companion now verifies/restarts a dead dashboard before opening it, while POSIX dashboard restarts can rebind the port cleanly."
+next_action: "Build the post-Onboard account handoff: after Onboard succeeds, show the newly tracked project with an account-alias chooser for the first agent session."
+next_prompt: "Resume Horus with `horus resume` for the minimum-context handoff. FIRST `git fetch --all --prune` and verify branch state from the remote. Recent work shipped dashboard account controls and repaired dashboard startup: Control -> Accounts can add isolated Claude/Codex login-dir mappings and rename generated aliases; untracked GitHub cards clarify `gh` vs Claude/Codex auth; the companion now verifies/restarts a dead dashboard before opening it, and POSIX dashboard restarts can rebind the port cleanly. Next, tighten the post-Onboard handoff so a newly tracked project immediately offers a start-work CTA with an account alias choice."
+execution_recommendation: "continue-as-is - small dashboard flow polish across existing onboarding and launch surfaces; no active execution plan or worker delegation needed."
 last_updated: 2026-06-29
 ---
 
@@ -29,6 +29,11 @@ last_updated: 2026-06-29
 - [x] Design native Claude/Codex projection: supervisor prompt, worker handoff template, model-tier mapping, and optional subagent definitions.
 - [x] Pilot `horus-execution` on a real phased Horus feature and tune the workflow from observed friction (2026-06-29): shipped incremental GitHub catalog refresh via one delegated worker phase; loop worked end-to-end. Two tuning findings recorded in decisions.md.
 - [ ] Apply the two pilot tuning findings (deferred behind the GitHub-onboarding tracks): (1) supervisor brief / handoff template carries the known pre-existing test-failure baseline; (2) a small phase status vocabulary (`planned/delegated/accepted/blocked`) in the `horus-execution` skill + `execution.md` template. Small `continue-as-is` task; see decisions.md 2026-06-29 "Execution-Workflow Pilot".
+- [ ] Later, consolidate the execution-workflow evals across Codex and Claude once both have been exercised on comparable real tasks. Do **not** do this first: useful comparison needs a little more instrumentation and a stable enough workflow contract. Capture whether each planner chose direct work, delegated work, or a model-separation test, plus the `delegation_basis`, review/rework, and rough token/time cost.
+
+## Documentation Website
+
+- [ ] Deferred until the product surface is somewhat more stable: add a lightweight documentation website for Horus concepts, setup, workflows, and native Claude/Codex integration. This is increasingly valuable as the project grows, but it adds maintenance overhead; prefer improving README/help text and stabilizing command surfaces first.
 
 ## GitHub project onboarding (Track A) - show + onboard untracked repos
 
@@ -46,6 +51,22 @@ last_updated: 2026-06-29
   integrate via the workflow policy so onboarding never leaves a local-only `.horus/`. → features.md
 - [x] A4 (2026-06-29, PR #37) — dashboard "Not tracked (N)" + collapsed "Hidden (N)" with
   Onboard / Ignore / Unignore POST endpoints (owner-validated, same-origin guarded). → features.md
+- [x] A5 (2026-06-29) — dashboard untracked cards clarify the account boundary: Onboard
+  uses this machine's `gh` GitHub login for clone/PR integration; Claude/Codex account
+  choice happens when launching work on the project. → features.md
+- [ ] A6 — after a dashboard Onboard succeeds, surface the newly tracked project with an
+  explicit start-work CTA and account-alias choice so onboarding naturally flows into
+  "start work with this account."
+
+## Dashboard account management
+
+- [x] Add Control -> Accounts UI for mapping a new isolated Claude/Codex login directory
+  to an alias, matching the existing `horus account --set-dir` / `--set-codex-home`
+  behavior. → features.md
+- [x] Add inline alias editing so generated aliases like `acct-9a7671` can become
+  friendly names such as `personal`; persist both the local account mapping rename and,
+  when the logged-in identifier is discoverable from the configured native CLI home, the
+  identifier→alias mapping. → features.md
 
 ## Dashboard artifact-staleness flag (Track B) - independent, small
 

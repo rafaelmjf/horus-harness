@@ -123,6 +123,96 @@ def _read(hdir: Path, name: str) -> str | None:
     return path.read_text(encoding="utf-8") if path.is_file() else None
 
 
+def resume_context(root: Path) -> dict[str, str]:
+    """Small, read-only handoff for a fresh session.
+
+    This is intentionally narrower than "read every .horus lane": enough current
+    state to resume safely, with lazy-load instructions layered on top by
+    :func:`resume_prompt`.
+    """
+    hdir = horus_dir(root)
+    if not hdir.is_dir():
+        raise FileNotFoundError(f"no {HORUS_DIR}/ directory at {root}")
+
+    context = {
+        "project": root.name,
+        "current_focus": "",
+        "next_action": "",
+        "next_prompt": "",
+        "execution_recommendation": "",
+        "execution_status": "",
+        "latest_session": "",
+    }
+
+    project_md = _read(hdir, "project.md")
+    if project_md is not None:
+        doc = frontmatter.parse(project_md)
+        context["current_focus"] = str(doc.front_matter.get("current_focus", "")).strip()
+
+    roadmap_md = _read(hdir, "roadmap.md")
+    if roadmap_md is not None:
+        doc = frontmatter.parse(roadmap_md)
+        fm = doc.front_matter
+        context["next_action"] = str(fm.get("next_action", "")).strip()
+        context["next_prompt"] = str(fm.get("next_prompt", "")).strip()
+        context["execution_recommendation"] = str(fm.get("execution_recommendation", "")).strip()
+
+    execution_md = _read(hdir, "execution.md")
+    if execution_md is not None:
+        doc = frontmatter.parse(execution_md)
+        context["execution_status"] = str(doc.front_matter.get("status", "")).strip()
+
+    sessions = recent_sessions(root, limit=1)
+    if sessions:
+        doc = frontmatter.parse(sessions[0].read_text(encoding="utf-8"))
+        date_text = str(doc.front_matter.get("date", "")).strip()
+        summary = str(doc.front_matter.get("summary", "")).strip()
+        bits = [sessions[0].name]
+        if date_text:
+            bits.append(date_text)
+        if summary:
+            bits.append(summary)
+        context["latest_session"] = " - ".join(bits)
+
+    return context
+
+
+def resume_prompt(root: Path) -> str:
+    """Prompt for resuming a project without front-loading every Horus lane."""
+    info = resume_context(root)
+    project = info["project"]
+    current_focus = info["current_focus"] or "(not set)"
+    next_action = info["next_action"] or "(not set)"
+    execution_recommendation = info["execution_recommendation"] or "(not set)"
+    execution_status = info["execution_status"] or "(not set)"
+    latest_session = info["latest_session"] or "(none)"
+    next_prompt = info["next_prompt"]
+    continuation = next_prompt or f"Continue with the next action above on the {project} project."
+
+    return f"""Resume the {project} project.
+
+Before trusting local state:
+1. Run `git fetch --all --prune`.
+2. Verify the current branch against `origin/<branch>` before acting on local refs or old Horus prose.
+
+Minimum Horus state already loaded:
+- `current_focus`: {current_focus}
+- `next_action`: {next_action}
+- `execution_recommendation`: {execution_recommendation}
+- `execution_status`: {execution_status}
+- `latest_session`: {latest_session}
+
+Do not read every `.horus/` lane up front. Lazy-load only what this task needs:
+- Read `.horus/execution.md` only if the work uses phased worker handoffs or `execution_recommendation` says `plan-execution`.
+- Read `.horus/project.md` only for broader product scope or constraints.
+- Read `.horus/features.md`, `.horus/decisions.md`, and `.horus/history.md` only when shipped capability status, durable rules, or prior lessons matter.
+- Read the latest `.horus/sessions/` summary only if local-only details from the previous session are needed.
+
+Continue with this authored handoff:
+{continuation}
+"""
+
+
 # --------------------------------------------------------------------------- #
 # consolidate
 # --------------------------------------------------------------------------- #

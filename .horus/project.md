@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "The `horus-execution` supervisor/worker workflow has been piloted end-to-end on a real feature (incremental GitHub catalog refresh shipped via one delegated worker phase). The pilot surfaced two concrete workflow-tuning findings; the next step is to fold them back into the skill + handoff template."
+current_focus: "Dashboard account controls are in place and the dashboard startup path was repaired: the companion now verifies/restarts a dead dashboard before opening it, while POSIX dashboard restarts can rebind the port cleanly."
 last_updated: 2026-06-29
 ---
 

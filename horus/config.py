@@ -329,6 +329,26 @@ def set_account_alias(identifier: str, alias: str) -> None:
     _write_accounts(accts["aliases"], accts["config_dirs"], accts["codex_homes"])
 
 
+def rename_account_alias(old_alias: str, new_alias: str, *, identifier: str | None = None) -> None:
+    """Rename a public alias and carry any isolated account mappings with it.
+
+    ``identifier`` is optional because an isolated account may be configured before
+    that account has logged in locally. When present, persist the identifier->alias
+    mapping too so future session summaries use the friendly name.
+    """
+    accts = _load_accounts()
+    if identifier:
+        accts["aliases"][identifier] = new_alias
+    for ident, alias in list(accts["aliases"].items()):
+        if alias == old_alias:
+            accts["aliases"][ident] = new_alias
+    if old_alias in accts["config_dirs"]:
+        accts["config_dirs"][new_alias] = accts["config_dirs"].pop(old_alias)
+    if old_alias in accts["codex_homes"]:
+        accts["codex_homes"][new_alias] = accts["codex_homes"].pop(old_alias)
+    _write_accounts(accts["aliases"], accts["config_dirs"], accts["codex_homes"])
+
+
 def set_account_config_dir(alias: str, config_dir_path: str) -> None:
     """Map an account alias to its ``CLAUDE_CONFIG_DIR`` (persisted locally)."""
     accts = _load_accounts()
