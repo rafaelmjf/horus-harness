@@ -716,6 +716,55 @@ def test_login_notice_messages():
     assert "could not open" in dashboard._launch_notice({"login_error": ["boom"]})
 
 
+def _scaffolded_project(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True, no_input=True)
+    return proj
+
+
+def test_process_upgrade_project_applies_and_redirects(tmp_path, monkeypatch):
+    _scaffolded_project(tmp_path, monkeypatch)
+    out = dashboard.process_upgrade_project({"project": "0"})
+    assert out.startswith("/project?i=0&upgraded=")
+
+
+def test_process_upgrade_project_unknown_index(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    assert dashboard.process_upgrade_project({"project": "9"}).startswith("/?upgrade_error=")
+
+
+def test_process_offboard_default_keeps_horus_and_unregisters(tmp_path, monkeypatch):
+    proj = _scaffolded_project(tmp_path, monkeypatch)
+    out = dashboard.process_offboard({"project": "0"})
+    assert out.startswith("/?offboarded=")
+    assert "purged=1" not in out
+    assert config._as_key(proj) not in config.load_projects()  # unregistered
+    assert (proj / ".horus").is_dir()  # memory kept
+
+
+def test_process_offboard_purge_removes_horus(tmp_path, monkeypatch):
+    proj = _scaffolded_project(tmp_path, monkeypatch)
+    out = dashboard.process_offboard({"project": "0", "purge": "1"})
+    assert out.startswith("/?offboarded=") and "purged=1" in out
+    assert not (proj / ".horus").exists()
+
+
+def test_process_offboard_unknown_index(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    assert dashboard.process_offboard({"project": "9"}).startswith("/?offboard_error=")
+
+
+def test_project_action_banner_messages():
+    assert "Refreshed Horus artifacts" in dashboard._project_action_banner({"upgraded": ["3"]})
+    assert "Upgrade failed" in dashboard._project_action_banner({"upgrade_error": ["x"]})
+    assert "Removed Horus" in dashboard._project_action_banner({"offboarded": ["demo"]})
+    assert "deleted" in dashboard._project_action_banner({"offboarded": ["demo"], "purged": ["1"]})
+    assert "kept" in dashboard._project_action_banner({"offboarded": ["demo"]})
+    assert dashboard._project_action_banner({}) == ""
+
+
 def test_onboard_handoff_offers_account_chooser_and_launch():
     html = dashboard.render_onboard_handoff(
         "demo", 3, "/work/demo", [{"alias": "personal"}, {"alias": "work"}],
@@ -1510,7 +1559,9 @@ def test_project_column_renders_artifacts_badge_when_stale(tmp_path, monkeypatch
     html_out = dashboard._project_column(data, 0)
     assert "artifacts outdated" in html_out
     assert "&#9888;" in html_out
-    assert "horus upgrade-project --apply" in html_out
+    # The pill now carries a one-click refresh button (POST upgrade by index).
+    assert "action='/upgrade-project'" in html_out
+    assert "name='project' value='0'" in html_out
 
 
 def test_project_column_omits_artifacts_badge_when_fresh(tmp_path, monkeypatch):

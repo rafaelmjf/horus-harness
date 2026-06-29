@@ -26,6 +26,7 @@ from horus import (
     launch,
     launcher,
     native_hooks,
+    offboard,
     overhead,
     registry,
     remote_start,
@@ -861,6 +862,24 @@ def cmd_upgrade_project(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_offboard(args: argparse.Namespace) -> int:
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
+    actions = offboard.offboard_project(root, apply=args.apply, purge=args.purge)
+    mode = "Offboarding" if args.apply else "Checking offboard (dry run)"
+    print(f"{mode} Horus from {root}\n")
+    for action in actions:
+        print(f"  [{action.status}] {action.message}")
+    if not args.apply:
+        pending = [a for a in actions if a.status == "would-remove"]
+        if pending:
+            extra = "" if args.purge else " Add `--purge` to also delete `.horus/`."
+            print(f"\nDry run only. Re-run with `--apply` to remove these.{extra}")
+            return 1
+    return 0
+
+
 def cmd_overhead(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
@@ -1238,6 +1257,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_upgrade.add_argument("--no-skills", action="store_true", help="skip skill refresh")
     p_upgrade.add_argument("--no-instructions", action="store_true", help="skip AGENTS/CLAUDE managed-block refresh")
     p_upgrade.set_defaults(func=cmd_upgrade_project)
+
+    p_offboard = sub.add_parser(
+        "offboard",
+        help="remove Horus's projected artifacts from a project (inverse of init)",
+    )
+    p_offboard.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_offboard.add_argument("--apply", action="store_true", help="perform the removal (default is dry-run/report)")
+    p_offboard.add_argument(
+        "--purge",
+        action="store_true",
+        help="also delete the .horus/ lanes (the durable memory); kept by default",
+    )
+    p_offboard.set_defaults(func=cmd_offboard)
 
     p_overhead = sub.add_parser("overhead", help="estimate Horus prompt and observed token overhead")
     p_overhead.add_argument("--path", default=".", help="project root (default: cwd)")
