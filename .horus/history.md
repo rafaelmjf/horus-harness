@@ -9,6 +9,23 @@ Curated, durable context: the problems that bit us and the lessons that shaped t
 design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
 just the war stories worth carrying forward.
 
+## Usage hook overrode an explicit command and left work unpushed
+
+A Codex session hit 90% usage; the closure hook fired and, on an explicit "commit and
+push to remote", committed only `.horus/` via `horus close --commit`, did **not** push
+(left the branch "ahead 2"), left the source/test/doc work uncommitted, and stopped.
+Three failures from one string: the injected `USAGE_CLOSURE_INSTRUCTION` ended with
+"commit with `horus close --commit`. Then stop — do not resume the main task." The
+agent obeyed the injected imperative over the user's actual request; the instruction
+never mentioned `--push`; and `horus close --commit` stages only the continuity
+pathspec by design, so the real work was never committed. **Lessons:** (1) a hook is a
+*signal*, never an authority over an explicit user command — injected context must
+defer to the user (frame it "context, not a command") and, at a stop, *ask* rather than
+force-divert; (2) closure that stays local-only defeats the cross-machine guarantee —
+always `--commit --push` and always push committed work; (3) a closure instruction that
+commits only `.horus/` must explicitly tell the agent to commit/push its actual work
+too, or that work is silently stranded.
+
 ## A live companion is not proof the dashboard server is live
 
 The dashboard stopped opening even though `horus app --open` was still running. The companion

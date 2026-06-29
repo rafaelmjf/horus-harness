@@ -91,7 +91,8 @@ def static_footprint() -> list[FootprintItem]:
     """Prompt/template surfaces Horus projects into native agents."""
     items: list[tuple[str, str]] = [
         ("managed instruction block", templates.shared_block("AGENTS.md")),
-        ("usage closure instruction", templates.USAGE_CLOSURE_INSTRUCTION),
+        ("usage closure prompt", templates.USAGE_CLOSURE_PROMPT),
+        ("usage closure advisory", templates.USAGE_CLOSURE_ADVISORY),
         ("merge closure instruction", templates.MERGE_CLOSURE_INSTRUCTION),
         ("hosted-session restart guard instruction", templates.HOSTED_RESTART_INSTRUCTION),
         ("consolidate routine prompt", templates.CONSOLIDATE_PROMPT),

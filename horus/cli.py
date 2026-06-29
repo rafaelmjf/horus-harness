@@ -737,16 +737,19 @@ def _usage_check_claude(args: argparse.Namespace) -> int:
         return 0
     native_hooks.mark_closure_fired(session_id)
 
-    instruction = templates.USAGE_CLOSURE_INSTRUCTION
     event = hook_input.get("hook_event_name", "Stop")
     if event == "UserPromptSubmit":
-        # Pre-task: inject the closure directive as context BEFORE the agent starts the
-        # requested work, so an over-budget session closes instead of beginning it.
+        # Pre-task: inject usage *context* before the agent acts on the user's prompt.
+        # Advisory only — it must defer to the user's explicit request (and push), never
+        # replace it with a closure-only commit.
         print(json.dumps({
-            "hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": instruction}
+            "hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": templates.USAGE_CLOSURE_ADVISORY,
+            }
         }))
-    else:  # Stop: block the stop and feed the directive back as the next instruction.
-        print(json.dumps({"decision": "block", "reason": instruction}))
+    else:  # Stop: block the stop and ask the user how to proceed (close now vs push ahead).
+        print(json.dumps({"decision": "block", "reason": templates.USAGE_CLOSURE_PROMPT}))
     return 0
 
 
@@ -770,17 +773,16 @@ def cmd_usage_check(args: argparse.Namespace) -> int:
             return 0
         native_hooks.mark_closure_fired(session_id)
 
-        instruction = templates.USAGE_CLOSURE_INSTRUCTION
         event = hook_input.get("hook_event_name") or hook_input.get("hookEventName") or "Stop"
         if event == "UserPromptSubmit":
             print(json.dumps({
                 "hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
-                    "additionalContext": instruction,
+                    "additionalContext": templates.USAGE_CLOSURE_ADVISORY,
                 }
             }))
         else:
-            print(json.dumps({"decision": "block", "reason": instruction}))
+            print(json.dumps({"decision": "block", "reason": templates.USAGE_CLOSURE_PROMPT}))
         return 0
     healthy = _print_findings(findings)
     return 0 if healthy else 1
