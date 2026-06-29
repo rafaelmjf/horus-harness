@@ -818,3 +818,40 @@ def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):
     data = dashboard.load_project(str(tmp_path))
     assert data["next_action"] == ""
     assert "roadmap complete" in dashboard.render_project(data)
+
+
+def test_remote_catalog_shows_blank_owner_warning_when_no_owners_configured(tmp_path, monkeypatch):
+    """When no GitHub owner is configured, render_remote_catalog shows a CTA, not a bare empty state."""
+    _init(tmp_path, monkeypatch)
+    # Ensure no owners are registered (fresh home dir).
+    assert config.load_github_owners() == []
+
+    html_out = dashboard.render_remote_catalog([], [])
+
+    assert "GitHub remote catalog" in html_out
+    assert "No GitHub owner configured" in html_out
+    assert "horus discover github" in html_out
+    assert "per-machine" in html_out or "not git-synced" in html_out or "fresh machine" in html_out
+
+
+def test_remote_catalog_no_owner_warning_absent_when_owners_set(tmp_path, monkeypatch):
+    """When at least one owner is configured, the blank-owner CTA must NOT appear."""
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+
+    # Render with an empty project list (owner configured but no repos fetched yet).
+    html_out = dashboard.render_remote_catalog([], [])
+
+    assert "No GitHub owner configured" not in html_out
+    assert "No Horus-enabled remote repos found yet." in html_out
+
+
+def test_render_remote_catalog_placeholder_shows_warning_when_no_owners(tmp_path, monkeypatch):
+    """render_remote_catalog_placeholder delegates to render_remote_catalog when no owners."""
+    _init(tmp_path, monkeypatch)
+    assert config.load_github_owners() == []
+
+    html_out = dashboard.render_remote_catalog_placeholder()
+
+    assert "No GitHub owner configured" in html_out
+    assert "data-horus-src='/github-catalog'" not in html_out

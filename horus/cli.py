@@ -1047,6 +1047,44 @@ def cmd_workflow(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ignore(args: argparse.Namespace) -> int:
+    """Manage the per-machine repo ignore list."""
+    if args.list:
+        repos = config.load_ignored_repos()
+        if not repos:
+            print("No ignored repos.")
+        else:
+            for r in repos:
+                print(r)
+        return 0
+    if not args.repo:
+        print("error: specify a repo (owner/repo) or use --list to show ignored repos.")
+        return 2
+    # Strip a leading ``github:`` prefix exactly as _normalize_ignored_repo does.
+    raw = args.repo
+    key = raw.strip()
+    if key.lower().startswith("github:"):
+        key = key[len("github:"):]
+    if config.ignore_repo(key):
+        print(f"Ignoring {key}")
+    else:
+        print(f"Already ignored: {key}")
+    return 0
+
+
+def cmd_unignore(args: argparse.Namespace) -> int:
+    """Remove a repo from the per-machine ignore list."""
+    raw = args.repo
+    key = raw.strip()
+    if key.lower().startswith("github:"):
+        key = key[len("github:"):]
+    if config.unignore_repo(key):
+        print(f"Unignored {key}")
+    else:
+        print(f"Was not ignored: {key}")
+    return 0
+
+
 def cmd_consolidate(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
@@ -1521,6 +1559,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="merge mode: auto (default) or review",
     )
     p_workflow.set_defaults(func=cmd_workflow)
+
+    p_ignore = sub.add_parser(
+        "ignore",
+        help="manage the per-machine repo ignore list (hides repos from the dashboard remote catalog)",
+    )
+    p_ignore.add_argument(
+        "repo",
+        nargs="?",
+        default=None,
+        help="repo full-name to ignore, e.g. owner/repo or github:owner/repo",
+    )
+    p_ignore.add_argument(
+        "--list",
+        action="store_true",
+        help="list currently ignored repos instead of adding one",
+    )
+    p_ignore.set_defaults(func=cmd_ignore)
+
+    p_unignore = sub.add_parser(
+        "unignore",
+        help="remove a repo from the per-machine ignore list",
+    )
+    p_unignore.add_argument(
+        "repo",
+        help="repo full-name to un-ignore, e.g. owner/repo or github:owner/repo",
+    )
+    p_unignore.set_defaults(func=cmd_unignore)
 
     return parser
 

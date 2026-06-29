@@ -88,16 +88,22 @@ def _write_config(
     github_owners: list[str],
     workspace_root: str | None = None,
     workflow: dict[str, str] | None = None,
+    ignored_repos: list[str] | None = None,
 ) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
     root = workspace_root or load_workspace_root()
     # Preserve the current workflow policy when the caller doesn't supply one.
     if workflow is None:
         workflow = load_workflow_policy()
+    # Preserve the current ignored-repos list when the caller doesn't supply one.
+    if ignored_repos is None:
+        ignored_repos = load_ignored_repos()
     lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"', "", "projects = ["]
     lines += [f'  "{p}",' for p in projects]
     lines += ["]", "", "github_owners = ["]
     lines += [f'  "{o}",' for o in github_owners]
+    lines += ["]", "", "ignored_repos = ["]
+    lines += [f'  "{r}",' for r in ignored_repos]
     lines.append("]")
     # [workflow] table goes at the end so it doesn't accidentally swallow the
     # top-level keys above it in a strict TOML parse (tables extend until the
@@ -125,6 +131,49 @@ def set_workspace_root(path: Path) -> str:
     key = path.expanduser().resolve().as_posix()
     _write_config(load_projects(), load_github_owners(), key)
     return key
+
+
+def load_ignored_repos() -> list[str]:
+    """Return the per-machine list of repo full-names (``owner/repo``) to hide."""
+    path = config_path()
+    if not path.exists():
+        return []
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    repos = data.get("ignored_repos", [])
+    if not isinstance(repos, list):
+        return []
+    return [str(r) for r in repos]
+
+
+def _normalize_ignored_repo(full_name: str) -> str:
+    """Strip whitespace and a leading ``github:`` prefix; return the normalized key."""
+    key = full_name.strip()
+    if key.lower().startswith("github:"):
+        key = key[len("github:"):]
+    return key
+
+
+def ignore_repo(full_name: str) -> bool:
+    """Add a repo full-name to the per-machine ignore list. Returns True if newly added."""
+    key = _normalize_ignored_repo(full_name)
+    if not key:
+        return False
+    existing = load_ignored_repos()
+    if key in existing:
+        return False
+    existing.append(key)
+    _write_config(load_projects(), load_github_owners(), load_workspace_root(), ignored_repos=existing)
+    return True
+
+
+def unignore_repo(full_name: str) -> bool:
+    """Remove a repo full-name from the per-machine ignore list. Returns True if it was present."""
+    key = _normalize_ignored_repo(full_name)
+    existing = load_ignored_repos()
+    if key not in existing:
+        return False
+    _write_config(load_projects(), load_github_owners(), load_workspace_root(), ignored_repos=[r for r in existing if r != key])
+    return True
 
 
 def load_workflow_policy() -> dict[str, str]:

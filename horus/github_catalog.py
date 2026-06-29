@@ -470,3 +470,26 @@ def _untracked_from_cache(owner: str, item: dict[str, Any], local_by_remote: dic
         description=str(item.get("description") or ""),
         local_path=local_path,
     )
+
+
+def filter_ignored(
+    repos: list[Any],
+    ignored: list[str] | None = None,
+) -> tuple[list[Any], list[Any]]:
+    """Partition *repos* (``RemoteProject`` or ``UntrackedRepo``, both have
+    ``.full_name``) into ``(visible, hidden)`` by the ignored full-name set.
+
+    *ignored* defaults to ``config.load_ignored_repos()``.  Matching is
+    case-insensitive, since GitHub ``owner/repo`` casing can vary.
+    """
+    if ignored is None:
+        ignored = config.load_ignored_repos()
+    ignored_lower = {r.lower() for r in ignored}
+    visible: list[Any] = []
+    hidden: list[Any] = []
+    for repo in repos:
+        if repo.full_name.lower() in ignored_lower:
+            hidden.append(repo)
+        else:
+            visible.append(repo)
+    return visible, hidden

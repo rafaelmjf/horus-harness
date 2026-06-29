@@ -997,10 +997,21 @@ def _refresh_forms() -> str:
 
 def render_remote_catalog(projects: list[github_catalog.RemoteProject], errors: list[str], notes: list[str] | None = None) -> str:
     if not projects and not errors and not notes:
+        # Distinguish between "no owners configured" and "owners set but nothing found".
+        if not config.load_github_owners():
+            return (
+                "<div class='section'><h2>GitHub remote catalog</h2>"
+                "<div class='card health-warn'>"
+                "<p><strong>No GitHub owner configured on this machine.</strong></p>"
+                "<p class='muted'>GitHub owners and workspace paths are per-machine and are not"
+                " git-synced, so a fresh machine always starts empty.</p>"
+                "<p class='muted'>Run <code>horus discover github &lt;owner&gt; --save</code>"
+                " to add an owner and see your remote projects here.</p>"
+                "</div></div>"
+            )
         return (
             "<div class='section'><h2>GitHub remote catalog</h2>"
-            "<div class='card'><p class='muted'>No GitHub owners configured. Run "
-            "<code>horus discover github &lt;owner&gt; --save</code> to show remote Horus projects here.</p></div></div>"
+            "<div class='card'><p class='muted'>No Horus-enabled remote repos found yet.</p></div></div>"
         )
     cards = "".join(_remote_project_card(p) for p in projects)
     if not cards:
