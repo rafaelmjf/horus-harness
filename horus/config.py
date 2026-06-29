@@ -13,6 +13,22 @@ import hashlib
 import tomllib
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Workflow policy constants
+# ---------------------------------------------------------------------------
+
+WORKFLOW_DEFAULTS: dict[str, str] = {
+    "integration": "branch-pr-automerge",
+    "commit": "auto",
+    "merge": "auto",
+}
+
+WORKFLOW_CHOICES: dict[str, tuple[str, ...]] = {
+    "integration": ("branch-pr-automerge", "branch-pr-review", "direct-push", "local-only"),
+    "commit": ("auto", "manual"),
+    "merge": ("auto", "review"),
+}
+
 
 def config_dir() -> Path:
     return Path.home() / ".horus"
@@ -67,14 +83,27 @@ def _write_projects(projects: list[str]) -> None:
     _write_config(projects, load_github_owners(), load_workspace_root())
 
 
-def _write_config(projects: list[str], github_owners: list[str], workspace_root: str | None = None) -> None:
+def _write_config(
+    projects: list[str],
+    github_owners: list[str],
+    workspace_root: str | None = None,
+    workflow: dict[str, str] | None = None,
+) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
     root = workspace_root or load_workspace_root()
+    # Preserve the current workflow policy when the caller doesn't supply one.
+    if workflow is None:
+        workflow = load_workflow_policy()
     lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"', "", "projects = ["]
     lines += [f'  "{p}",' for p in projects]
     lines += ["]", "", "github_owners = ["]
     lines += [f'  "{o}",' for o in github_owners]
     lines.append("]")
+    # [workflow] table goes at the end so it doesn't accidentally swallow the
+    # top-level keys above it in a strict TOML parse (tables extend until the
+    # next table header or EOF).
+    lines += ["", "[workflow]"]
+    lines += [f'{k} = "{v}"' for k, v in workflow.items()]
     config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -96,6 +125,56 @@ def set_workspace_root(path: Path) -> str:
     key = path.expanduser().resolve().as_posix()
     _write_config(load_projects(), load_github_owners(), key)
     return key
+
+
+def load_workflow_policy() -> dict[str, str]:
+    """Return the three workflow policy keys, falling back to defaults for any
+    missing or invalid values.
+
+    Keys: ``integration``, ``commit``, ``merge``.
+    """
+    path = config_path()
+    if not path.exists():
+        return dict(WORKFLOW_DEFAULTS)
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return dict(WORKFLOW_DEFAULTS)
+    raw = data.get("workflow") or {}
+    if not isinstance(raw, dict):
+        return dict(WORKFLOW_DEFAULTS)
+    policy: dict[str, str] = {}
+    for key, default in WORKFLOW_DEFAULTS.items():
+        value = raw.get(key, default)
+        if not isinstance(value, str) or value not in WORKFLOW_CHOICES[key]:
+            value = default
+        policy[key] = value
+    return policy
+
+
+def set_workflow_policy(
+    *,
+    integration: str | None = None,
+    commit: str | None = None,
+    merge: str | None = None,
+) -> dict[str, str]:
+    """Update the provided workflow policy keys, persist, and return the new
+    full policy.
+
+    Raises ``ValueError`` for any value that is not in the allowed set for its
+    key.
+    """
+    updates = {"integration": integration, "commit": commit, "merge": merge}
+    for key, value in updates.items():
+        if value is not None and value not in WORKFLOW_CHOICES[key]:
+            allowed = ", ".join(WORKFLOW_CHOICES[key])
+            raise ValueError(f"Invalid workflow {key!r} value {value!r}. Allowed: {allowed}")
+    current = load_workflow_policy()
+    for key, value in updates.items():
+        if value is not None:
+            current[key] = value
+    _write_config(load_projects(), load_github_owners(), load_workspace_root(), workflow=current)
+    return current
 
 
 def register_project(project_path: Path) -> bool:

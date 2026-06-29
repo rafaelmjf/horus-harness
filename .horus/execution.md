@@ -55,8 +55,8 @@ can be slotted in anytime. Status vocabulary: `planned` → `delegated` → `acc
 
 | phase | status | difficulty | worker_tier | depends on | handoff_note | review gate |
 |---|---|---|---|---|---|---|
-| C-min | delegated | moderate | standard | — | `.horus/temp/C-min.md` | resolver + helper unit-tested; no live push in tests |
-| A1 | planned | moderate | standard | C-min (none, parallel-ok) | `.horus/temp/A1.md` | untracked bucket + verdict cache; `gh` mocked; full suite green |
+| C-min | accepted | moderate | standard | — | `.horus/temp/C-min.md` | ✅ 33 tests; integration.py + `[workflow]` config + `horus workflow` CLI; full suite green (1 known baseline) |
+| A1 | delegated | moderate | standard | — | `.horus/temp/A1.md` | untracked bucket + verdict cache; `gh` mocked; full suite green |
 | A2 | planned | low | standard | A1 | `.horus/temp/A2.md` | ignore round-trips config; blank-owner warning rendered |
 | A3 | planned | hard | standard | C-min, A1 | `.horus/temp/A3.md` | onboard clone/init/integrate; dry-run path tested without real GitHub |
 | A4 | planned | moderate | standard | A2, A3 | `.horus/temp/A4.md` | Not-tracked section + POST endpoints; same-origin/loopback guard tested |
@@ -67,10 +67,12 @@ can be slotted in anytime. Status vocabulary: `planned` → `delegated` → `acc
 
 - **C-min — workflow policy foundation.** Add a `[workflow]` section to
   `~/.horus/config.toml` (`integration`, `commit`, `merge`) with a loader + resolver in
-  `config.py`, and a reusable integration helper (branch → commit → push → `gh pr create` →
-  `gh pr merge --auto`, or stop at PR for review mode; `local-only`/`direct-push` paths too).
-  Pure/mocked unit tests only — **no real GitHub calls in the suite.** Wire `horus close
-  --commit` to consult the policy (smallest real consumer to prove the helper).
+  `config.py`, and a reusable integration helper module (branch → commit → push →
+  `gh pr create` → `gh pr merge --auto`, or stop at PR for review mode; `local-only`/
+  `direct-push` paths too). Pure/mocked unit tests only — **no real GitHub calls in the
+  suite.** Expose via a `horus workflow` show/set CLI command (the testable consumer).
+  Supervisor refinement (2026-06-29): do **not** rewire the proven `close --commit` path in
+  this phase — the first real git consumer is `horus onboard` (A3); keeps the foundation low-risk.
 - **A1 — untracked discovery + verdict cache.** `discover()` returns Horus projects *and* a
   second list of untracked repos; extend the per-repo cache to store the not-Horus verdict
   keyed by `pushedAt` so unchanged repos skip the `gh api` check. New/changed repos always

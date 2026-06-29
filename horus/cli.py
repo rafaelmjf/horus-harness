@@ -1013,6 +1013,37 @@ def _skill_nudge(root: Path) -> None:
         )
 
 
+def cmd_workflow(args: argparse.Namespace) -> int:
+    """Show or update the git-integration workflow policy."""
+    # Collect only the keys the user actually passed (each is None when absent).
+    integration = getattr(args, "integration", None)
+    commit = getattr(args, "commit_policy", None)
+    merge = getattr(args, "merge", None)
+
+    # --show (or bare invocation with no flags): just print.
+    if integration is None and commit is None and merge is None:
+        policy = config.load_workflow_policy()
+        for k, v in policy.items():
+            print(f"{k} = {v}")
+        return 0
+
+    # At least one key to set.
+    try:
+        policy = config.set_workflow_policy(
+            integration=integration,
+            commit=commit,
+            merge=merge,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}")
+        return 1
+
+    print("Workflow policy updated:")
+    for k, v in policy.items():
+        print(f"  {k} = {v}")
+    return 0
+
+
 def cmd_consolidate(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
@@ -1457,6 +1488,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="canonical source file (default: agents)",
     )
     p_recon.set_defaults(func=cmd_reconcile)
+
+    p_workflow = sub.add_parser(
+        "workflow",
+        help="show or update the git-integration workflow policy",
+    )
+    p_workflow.add_argument(
+        "--show",
+        action="store_true",
+        help="print the current policy (default when no flags given)",
+    )
+    p_workflow.add_argument(
+        "--integration",
+        choices=list(config.WORKFLOW_CHOICES["integration"]),
+        default=None,
+        help="integration mode (default: branch-pr-automerge)",
+    )
+    p_workflow.add_argument(
+        "--commit",
+        dest="commit_policy",
+        choices=list(config.WORKFLOW_CHOICES["commit"]),
+        default=None,
+        help="commit mode: auto (default) or manual",
+    )
+    p_workflow.add_argument(
+        "--merge",
+        choices=list(config.WORKFLOW_CHOICES["merge"]),
+        default=None,
+        help="merge mode: auto (default) or review",
+    )
+    p_workflow.set_defaults(func=cmd_workflow)
 
     return parser
 
