@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Track A (surface + onboard untracked GitHub repos with opt-out ignore) and the C-min workflow-policy foundation shipped via PR #37 (5 phases through the horus-execution workflow). Remaining on this feature: C-full (dashboard Settings panel to edit the policy) and B (read-only artifact-staleness badge), both awaiting a go-ahead."
-next_action: "Implement the two remaining GitHub-onboarding phases when ready: C-full (a Settings panel in the UI, POST + same-origin/loopback guard, to edit the `[workflow]` policy) and B (a per-clone 'Horus artifacts outdated' badge computed from `upgrade.upgrade_project(apply=False)`). Both are specified in `.horus/execution.md`."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. PR #37 (C-min + A1–A4: workflow policy + untracked-repo onboarding/ignore) is merged to main. Remaining phases are in `.horus/execution.md`: C-full (dashboard Settings panel editing the `[workflow]` policy) and B (read-only per-project artifact-staleness badge via `upgrade.upgrade_project(apply=False)`). Plus deferred refinements (managed-instruction projection of the policy; per-project policy override). Decisions in decisions.md 2026-06-29 'GitHub Onboarding + Workflow Policy'."
-execution_recommendation: "plan-execution - C-full and B are bounded phases already in execution.md; continue the supervisor/worker workflow for each."
+current_focus: "Track A (surface + onboard untracked GitHub repos) and the full workflow-policy track (C-min config/helper + C-full dashboard Settings panel) are shipped. Track A + C-min landed via PR #37; C-full follows on its own branch. Only B (read-only artifact-staleness badge) and two deferred refinements remain on this feature."
+next_action: "Implement phase B when ready: a per-clone 'Horus artifacts outdated' badge computed from `upgrade.upgrade_project(apply=False)` (no mutation on render), surfacing the `horus upgrade-project --apply` command on each local project card. Independent of the other tracks; specified in `.horus/execution.md`."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. The GitHub-onboarding + workflow-policy feature is mostly shipped: Track A + C-min (PR #37) and the C-full dashboard Settings panel are merged/landed. Remaining in `.horus/execution.md`: phase B (read-only per-clone artifact-staleness badge via `upgrade.upgrade_project(apply=False)`; no mutation on render) plus deferred refinements (project the `[workflow]` policy into the managed instruction block; per-project policy override). Decisions in decisions.md 2026-06-29 'GitHub Onboarding + Workflow Policy'."
+execution_recommendation: "plan-execution - B is a bounded phase already in execution.md; continue the supervisor/worker workflow."
 last_updated: 2026-06-29
 ---
 
@@ -70,8 +70,8 @@ last_updated: 2026-06-29
   resolver + reusable `horus/integration.py` helper (branch→PR→auto-merge / review / direct-push /
   local-only) + `horus workflow` CLI. First real consumer is `horus onboard` (A3); the
   `close --commit` wiring was deferred from this phase to keep the foundation low-risk. → features.md
-- [ ] C-full — dashboard **Settings panel** (POST endpoint, same-origin + loopback guard)
-  with checkboxes to edit the policy. (Remaining; `execution.md`.)
+- [x] C-full (2026-06-29) — dashboard `/settings` page (nav tab + `render_settings`) with a
+  `<select>` per policy key, saved via a same-origin-guarded POST (PRG redirect). → features.md
 - [ ] Deferred refinement: project the policy into the managed instruction block
   (AGENTS.md/CLAUDE.md) so the in-session agent adopts the same default for its own code
   work (Horus can only directly own its own commits — onboard + closure).

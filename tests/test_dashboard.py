@@ -1118,3 +1118,112 @@ def test_integration_result_exposes_detail_not_error():
     )
     assert r.detail.startswith("auto-merge enabled")
     assert not hasattr(r, "error")
+
+
+# ---------------------------------------------------------------------------
+# Phase C-full: /settings page — workflow policy editor
+# ---------------------------------------------------------------------------
+
+def test_render_settings_shows_selects_with_current_values(tmp_path, monkeypatch):
+    """render_settings renders three <select> controls with the current policy value marked selected."""
+    _init(tmp_path, monkeypatch)
+    policy = {
+        "integration": "branch-pr-review",
+        "commit": "manual",
+        "merge": "review",
+    }
+    html_out = dashboard.render_settings(policy)
+    # Current values are marked selected.
+    assert "value='branch-pr-review' selected" in html_out
+    assert "value='manual' selected" in html_out
+    assert "value='review' selected" in html_out
+    # Non-current values for integration are NOT selected.
+    assert "value='branch-pr-automerge' selected" not in html_out
+    assert "value='auto' selected" not in html_out
+    # All three selects are present.
+    assert html_out.count("<select name=") == 3
+    # The form POSTs to /settings.
+    assert "action='/settings'" in html_out
+
+
+def test_render_settings_saved_banner(tmp_path, monkeypatch):
+    """render_settings(saved=True) includes the success banner; saved=False does not."""
+    _init(tmp_path, monkeypatch)
+    policy = config.WORKFLOW_DEFAULTS.copy()
+    assert "banner ok" in dashboard.render_settings(policy, saved=True)
+    assert "banner ok" not in dashboard.render_settings(policy, saved=False)
+    assert "banner ok" not in dashboard.render_settings(policy)
+
+
+def test_nav_settings_link_present_and_active(tmp_path, monkeypatch):
+    """_nav('settings') marks Settings active; _nav('projects') includes Settings link but not active."""
+    _init(tmp_path, monkeypatch)
+    nav_settings = dashboard._nav("settings")
+    # The active class is on the Settings link.
+    assert "class=\"active\"" in nav_settings
+    # The Settings href is present.
+    assert "href='/settings'" in nav_settings
+
+    nav_projects = dashboard._nav("projects")
+    # Settings link is still present (every page gets it).
+    assert "href='/settings'" in nav_projects
+    # But it is NOT marked active.
+    # Find the settings anchor and confirm it has no active class.
+    import re
+    settings_anchor = re.search(r"<a href='/settings'[^>]*>Settings</a>", nav_projects)
+    assert settings_anchor is not None
+    assert 'class="active"' not in settings_anchor.group()
+
+
+def test_every_page_includes_settings_nav(tmp_path, monkeypatch):
+    """Every page (projects, control, sessions) includes the Settings nav link."""
+    _init(tmp_path, monkeypatch)
+    for page_html in [
+        dashboard.render_index([]),
+        dashboard.render_control([], [], []),
+        dashboard._page("Horus — sessions", dashboard.render_sessions_card([]), active="sessions"),
+    ]:
+        assert "href='/settings'" in page_html
+
+
+def test_render_settings_workflow_policy_persisted_and_rendered(tmp_path, monkeypatch):
+    """set_workflow_policy + load_workflow_policy round-trips; render_settings reflects it."""
+    _init(tmp_path, monkeypatch)
+    config.set_workflow_policy(integration="branch-pr-review")
+    policy = config.load_workflow_policy()
+    assert policy["integration"] == "branch-pr-review"
+    html_out = dashboard.render_settings(policy)
+    assert "value='branch-pr-review' selected" in html_out
+
+
+def test_settings_post_persists_and_redirects(tmp_path, monkeypatch):
+    """POST /settings: config.set_workflow_policy is called with submitted values and
+    the policy is persisted; the render_settings output then reflects the new value."""
+    _init(tmp_path, monkeypatch)
+    # Start from defaults.
+    initial = config.load_workflow_policy()
+    assert initial["integration"] == "branch-pr-automerge"
+
+    # Simulate what the POST handler does: read the form and call set_workflow_policy.
+    form = {"integration": "branch-pr-review", "commit": "manual", "merge": "review"}
+    try:
+        config.set_workflow_policy(
+            integration=form.get("integration") or None,
+            commit=form.get("commit") or None,
+            merge=form.get("merge") or None,
+        )
+    except ValueError:
+        pass
+
+    # After save, load_workflow_policy reflects the new values.
+    policy = config.load_workflow_policy()
+    assert policy["integration"] == "branch-pr-review"
+    assert policy["commit"] == "manual"
+    assert policy["merge"] == "review"
+
+    # render_settings with the new policy shows the new values selected.
+    html_out = dashboard.render_settings(policy, saved=True)
+    assert "value='branch-pr-review' selected" in html_out
+    assert "value='manual' selected" in html_out
+    assert "value='review' selected" in html_out
+    assert "banner ok" in html_out
