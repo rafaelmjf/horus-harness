@@ -1593,8 +1593,11 @@ def _account_launch_form(alias: str, agent: str = "claude") -> str:
 
 
 def _launch_cmds(project_path: str, accounts: list[dict[str, Any]]) -> str:
-    """Copyable real launch commands: ambient first, then one per known account."""
-    cmds = [f'horus open "{project_path}"']
+    """Copyable real launch commands: Claude + Codex (ambient), then one per known account."""
+    cmds = [
+        f'horus open "{project_path}"',
+        f'horus open "{project_path}" --agent codex',
+    ]
     cmds += [f'horus open "{project_path}" --account {a["alias"]}' for a in accounts]
     return "".join(
         f"<div class='cmd'><code>{html.escape(c)}</code>"
@@ -1631,6 +1634,9 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
     return (
         "<form class='launch-form' method='post' action='/launch'>"
         f"<input type='hidden' name='project' value='{i}'>"
+        "<label>Agent <select name='agent'>"
+        "<option value='claude'>Claude Code</option><option value='codex'>Codex</option>"
+        "</select></label>"
         f"<label>Account <select name='account'>{opts}</select></label>"
         f"<label>Permissions <select name='posture'>{_POSTURE_OPTIONS}</select></label>"
         "<div class='modes'>"
@@ -1638,8 +1644,8 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
         "<label><input type='radio' name='mode' value='resume'> Resume (inject continuity prompt)</label>"
         "</div>"
         "<button class='start primary' type='submit' name='target' value='window' "
-        "title='Open the real claude/codex TUI in its own OS window'>"
-        "&#9654; Open in a native window</button>"
+        "title='Open the real claude/codex TUI in its own OS terminal window'>"
+        "&#9654; Open in a terminal window</button>"
         "</form>"
         "<details class='or-cmds'><summary>&#8230; or copy a terminal command</summary>"
         f"<div class='launch-body'>{_launch_cmds(project['path'], accounts)}</div></details>"

@@ -577,12 +577,35 @@ def test_project_detail_renders_launch_controls(tmp_path, monkeypatch):
     assert "method='post' action='/launch'" in page
     assert "name='mode' value='fresh'" in page and "name='mode' value='resume'" in page
     assert "<select name='account'>" in page
-    # Native-window launch is the action; the retired in-app PTY target is gone.
-    assert "value='window'" in page and "Open in a native window" in page
-    assert "value='app'" not in page
+    # Either agent can be launched in a native terminal window (not the Python TUI).
+    assert "<select name='agent'>" in page
+    assert ">Claude Code</option>" in page and ">Codex</option>" in page
+    assert "value='window'" in page and "Open in a terminal window" in page
+    assert "value='app'" not in page  # retired in-app PTY target
     assert "<select name='posture'>" in page
-    # Copy-the-command path is still offered as a fallback.
-    assert "horus open" in page
+    # Copy-the-command fallback offers Claude + Codex.
+    assert "horus open" in page and "--agent codex" in page
+
+
+def test_process_launch_window_routes_selected_agent(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    captured = {}
+
+    def fake_launch(**kwargs):
+        captured.update(kwargs)
+        from horus.launch import LaunchResult
+        return LaunchResult(ok=True, agent=kwargs["agent"], project=kwargs["project_dir"], session_id="sid12345")
+
+    monkeypatch.setattr(dashboard.launch, "launch_interactive", fake_launch)
+    query = dashboard.process_launch(
+        {"project": "0", "mode": "fresh", "agent": "codex", "target": "window"},
+        projects=[str(proj)], known_aliases=set(),
+    )
+    assert query.startswith("launched=")
+    assert captured["agent"] == "codex"  # the chosen agent reaches the launcher
 
 
 def test_launch_notice_banner():
