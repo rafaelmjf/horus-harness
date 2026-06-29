@@ -7,6 +7,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 import webbrowser
 from importlib import resources
 from pathlib import Path, PureWindowsPath
@@ -53,6 +54,17 @@ def dashboard_is_live(url: str, *, timeout: float = 0.25) -> bool:
         return False
 
 
+def _wait_dashboard_live(url: str, process: subprocess.Popen[str], *, timeout: float = 2.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if dashboard_is_live(url):
+            return True
+        if process.poll() is not None:
+            return False
+        time.sleep(0.05)
+    return dashboard_is_live(url)
+
+
 def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool = True) -> DashboardProcess:
     url = dashboard_url(host, port)
     if dashboard_is_live(url) or not start:
@@ -70,7 +82,26 @@ def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool =
         [sys.executable, "-m", "horus", "dashboard", "--host", host, "--port", str(port)],
         **kwargs,
     )
+    _wait_dashboard_live(url, process)
     return DashboardProcess(url, True, process)
+
+
+def ensure_dashboard_for_open(
+    current: DashboardProcess,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    start: bool = True,
+) -> DashboardProcess:
+    """Return a live dashboard before opening the browser.
+
+    The companion can outlive the dashboard child it spawned. A click/open should
+    repair that state instead of sending the browser to a dead localhost URL.
+    """
+    if dashboard_is_live(current.url) or not start:
+        return current
+    stop_dashboard(current)
+    return ensure_dashboard(host, port, start=start)
 
 
 def stop_dashboard(dashboard: DashboardProcess, *, timeout: float = 2.0) -> None:
@@ -261,6 +292,7 @@ def run_companion(
 
     dashboard = ensure_dashboard(host, port, start=start_dashboard)
     if open_on_start:
+        dashboard = ensure_dashboard_for_open(dashboard, host=host, port=port, start=start_dashboard)
         open_dashboard(dashboard.url, app_window=app_window)
 
     root = tk.Tk()
@@ -308,6 +340,8 @@ def run_companion(
         canvas.itemconfigure(status_item, fill=color)
 
     def open_action(_event: object | None = None) -> None:
+        nonlocal dashboard
+        dashboard = ensure_dashboard_for_open(dashboard, host=host, port=port, start=start_dashboard)
         open_dashboard(dashboard.url, app_window=app_window)
 
     def close_check_action() -> None:

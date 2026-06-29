@@ -48,6 +48,19 @@ def test_expected_skills_registered():
     assert {"horus-consolidate", "horus-distill-history", "horus-infer", "horus-execution"} <= names
 
 
+def test_execution_skill_requires_real_delegation_for_model_separation():
+    execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
+    assert execution.version == 3
+    assert "testing model separation" in execution.content
+    assert "do not implement" in execution.content
+    assert "the delegated phase in the supervisor context" in execution.content
+    assert "delegation_basis" in execution.content
+    assert "worker_tier` is only the intended tier **if delegated**" in execution.content
+    assert "A handoff" in execution.content
+    assert "written by the supervisor after doing the work" in execution.content
+    assert "does not satisfy the workflow test" in execution.content
+
+
 def test_missing_or_stale_and_findings(tmp_path):
     assert skills.missing_or_stale(tmp_path) == list(skills.SKILLS)
     assert any(f.level == "warn" for f in skills.skill_findings(tmp_path))

@@ -84,7 +84,9 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      single-surface, low-risk, or mostly continuity/docs, set `execution_recommendation:
      "continue-as-is — <why>"`. If it is multi-phase, cross-module, risky, or benefits
      from supervisor/worker review, set `execution_recommendation: "plan-execution —
-     <why>"` and create/update `execution.md` before implementation starts.
+     <why>"` and create/update `execution.md` before implementation starts. The reason
+     must be local to the planning agent/runtime; do not imply delegation is cheaper
+     merely because a standard worker tier exists.
    - **When a worker handoff exists** in `.horus/temp/`, use it as evidence, not as
      truth: the supervisor reviews the diff/tests, then distills accepted facts into
      durable lanes and updates `execution.md`.

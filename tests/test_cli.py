@@ -137,6 +137,11 @@ def test_execution_prompt_uses_roadmap_and_target(tmp_path, monkeypatch, capsys)
     assert "Target agent: codex" in out
     assert "Implement phase routing" in out
     assert "Codex subagents" in out
+    assert "testing model separation" in out
+    assert "do not implement the delegated phase in the supervisor context" in out
+    assert "choose direct work when" in out
+    assert "delegation_basis" in out
+    assert "worker_tier` alone is only a tier hint" in out
 
 
 def test_execution_handoff_creates_temp_note_and_refuses_clobber(tmp_path, monkeypatch, capsys):
@@ -456,6 +461,7 @@ def test_start_cli_runs_remote_start_and_prints_prompt(tmp_path, monkeypatch, ca
         return result
 
     monkeypatch.setattr("horus.cli.remote_start.start_github_project", fake_start)
+    monkeypatch.setattr("horus.cli.routines.resume_prompt", lambda path: "Resume the cloned demo project.")
 
     assert main(["start", "github:rafaelmjf/demo", "--workspace-root", str(tmp_path / "workspace")]) == 0
 
@@ -463,7 +469,8 @@ def test_start_cli_runs_remote_start_and_prints_prompt(tmp_path, monkeypatch, ca
     assert calls[0][1]["workspace_root"] == Path(tmp_path / "workspace")
     out = capsys.readouterr().out
     assert "Cloned" in out
-    assert "Resume demo" in out
+    assert "Resume prompt:" in out
+    assert "Resume the cloned demo project." in out
     assert f'horus open "{project}"' in out
 
 
@@ -472,6 +479,31 @@ def test_start_cli_requires_workspace_when_saving_root(tmp_path, monkeypatch, ca
 
     assert main(["start", "github:rafaelmjf/demo", "--set-workspace-root"]) == 2
     assert "--set-workspace-root requires --workspace-root" in capsys.readouterr().out
+
+
+def test_resume_cli_prints_minimum_context_handoff(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    (tmp_path / ".horus" / "project.md").write_text(
+        '---\ncurrent_focus: "Tighten resume flow"\n---\n# Project\n',
+        encoding="utf-8",
+    )
+    (tmp_path / ".horus" / "roadmap.md").write_text(
+        '---\nnext_action: "Ship horus resume"\nnext_prompt: "Implement the resume command."\n'
+        'execution_recommendation: "plan-execution - small cross-surface change"\n---\n# Roadmap\n',
+        encoding="utf-8",
+    )
+    (tmp_path / ".horus" / "execution.md").write_text(
+        '---\nstatus: active\n---\n# Execution\n',
+        encoding="utf-8",
+    )
+
+    assert main(["resume", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "git fetch --all --prune" in out
+    assert "`current_focus`: Tighten resume flow" in out
+    assert "`execution_status`: active" in out
+    assert "Implement the resume command." in out
 
 
 def test_refresh_cli_refreshes_one_github_owner(tmp_path, monkeypatch, capsys):

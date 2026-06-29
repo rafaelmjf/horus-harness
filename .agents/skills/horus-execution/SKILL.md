@@ -10,7 +10,7 @@ description: >-
   at closure.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 3 -->
 
 # Horus execution supervision
 
@@ -21,6 +21,7 @@ plan without turning `.horus/` into a transcript or a second issue tracker.
 
 - `roadmap.md` has `execution_recommendation: "plan-execution - ..."` or similar.
 - The user asks to divide a substantial feature into phases.
+- The user is explicitly testing or requesting supervisor/worker model separation.
 - A phase should be delegated to a native worker/subagent and reviewed before the
   next phase starts.
 - A worker returned a note under `.horus/temp/` that needs supervisor review.
@@ -46,12 +47,24 @@ plan without turning `.horus/` into a transcript or a second issue tracker.
    Use the printed prompt as the supervisor frame for this project and agent.
 
 3. **Plan or refresh `execution.md`.** Keep it current for the active roadmap item:
-   phases, status, difficulty, model tier, handoff note path, and review gate. Replace
-   it when the next substantial roadmap item starts. Do not archive a timeline there.
+   phases, status, difficulty, mode, model tier, delegation basis, handoff note path,
+   and review gate. Replace it when the next substantial roadmap item starts. Do not
+   archive a timeline there.
+
+   Execution is optional. The planning agent decides whether to use direct work,
+   delegated work, or a model-separation test for the current agent/runtime. A phase's
+   `worker_tier` is only the intended tier **if delegated**; it is not proof that
+   delegation is cheaper. Fill `delegation_basis` with the actual reason: expected
+   economics, risk isolation, context splitting, parallelism, or "not worth delegating".
+   Different agents may reasonably choose differently.
 
 4. **Delegate bounded phases only.** Ask native workers/subagents to implement one
    phase at a time. Use cheaper/faster tiers only for clear, narrow work; keep
    frontier-tier reasoning for architecture, risky review, and final acceptance.
+   If the user is testing model separation, this is a hard gate: do not implement
+   the delegated phase in the supervisor context. If a native worker/subagent cannot
+   be spawned from the current environment, stop and tell the user that the test
+   cannot proceed faithfully here.
 
 5. **Require a handoff note.** Before a worker returns, create or ask it to create:
 
@@ -71,14 +84,22 @@ plan without turning `.horus/` into a transcript or a second issue tracker.
 
 - Claude Code: use project subagents for bounded worker/reviewer roles when useful.
   Keep Opus/frontier-equivalent work on supervision and review; use Sonnet/standard-
-  equivalent workers for narrow implementation phases.
+  equivalent workers for narrow implementation phases. Claude's cost/latency/review
+  tradeoffs may differ from Codex; record the local rationale.
 - Codex: use subagents or project custom agents for bounded workers/reviewers when
   useful. Map frontier to strong/high-reasoning supervision, standard to worker
-  implementation, and economy to mechanical continuity or formatting updates.
+  implementation, and economy to mechanical continuity or formatting updates. Codex's
+  cost/latency/review tradeoffs may differ from Claude; record the local rationale.
+
+When the goal is to validate the workflow itself, "delegated" means a distinct worker
+agent/session/model actually did the implementation and left a handoff note. A handoff
+note written by the supervisor after doing the work does not satisfy the workflow test.
 
 ## Boundaries
 
 - Do not force `execution.md` onto small single-agent tasks.
+- Do not delegate just because a table has `worker_tier: standard`; require an explicit
+  `delegation_basis` or keep the work direct.
 - Do not commit `.horus/temp/` worker notes; they are local, fleeting evidence.
 - Do not trust worker notes blindly. Verify the diff and test result before updating
   durable lanes.

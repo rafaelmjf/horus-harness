@@ -205,13 +205,18 @@ def cmd_start(args: argparse.Namespace) -> int:
         print(f"Refreshed {len(updated)} Horus-managed projection(s).")
     if skipped:
         print(f"Skipped {len(skipped)} unowned projection(s).")
-    if result.project.next_prompt:
-        print("\nNext prompt:")
-        print(result.project.next_prompt)
-    elif result.project.next_action:
-        print("\nNext action:")
-        print(result.project.next_action)
+    print("\nResume prompt:")
+    print(routines.resume_prompt(result.path))
     print(f"\nOpen it with: horus open \"{result.path}\"")
+    return 0
+
+
+def cmd_resume(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    if not (root / HORUS_DIR).is_dir():
+        print(f"No {HORUS_DIR}/ here (run `horus init` first).")
+        return 1
+    print(routines.resume_prompt(root))
     return 0
 
 
@@ -1409,6 +1414,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="initial prompt to seed the interactive session (default: fresh, unseeded)",
     )
     p_open.set_defaults(func=cmd_open)
+
+    p_resume = sub.add_parser("resume", help="print the minimum-context fresh-session handoff for this project")
+    p_resume.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_resume.set_defaults(func=cmd_resume)
 
     p_session = sub.add_parser("session", help="create a new session summary from the template")
     session_sub = p_session.add_subparsers(dest="session_cmd", required=True)

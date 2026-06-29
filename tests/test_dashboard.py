@@ -1,8 +1,11 @@
 """Tests for dashboard data gathering and HTML rendering (no socket)."""
 
 import os
+import sys
 from pathlib import Path
 from datetime import datetime, timezone
+from io import BytesIO
+from urllib.parse import urlencode
 
 import json
 
@@ -14,6 +17,39 @@ from horus.upgrade import UpgradeAction
 def _init(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def _post(path: str, form: dict[str, str], *, origin: str | None = None) -> dict[str, object]:
+    body = urlencode(form).encode("utf-8")
+    handler = object.__new__(dashboard._Handler)
+    handler.path = path
+    handler.headers = {
+        "Content-Length": str(len(body)),
+        "Host": "127.0.0.1:8765",
+    }
+    if origin is not None:
+        handler.headers["Origin"] = origin
+    handler.rfile = BytesIO(body)
+    handler.wfile = BytesIO()
+
+    response: dict[str, object] = {"headers": []}
+
+    def send_response(status: int) -> None:
+        response["status"] = status
+
+    def send_header(key: str, value: str) -> None:
+        response["headers"].append((key, value))  # type: ignore[index]
+
+    def end_headers() -> None:
+        response["ended"] = True
+
+    handler.send_response = send_response  # type: ignore[method-assign]
+    handler.send_header = send_header  # type: ignore[method-assign]
+    handler.end_headers = end_headers  # type: ignore[method-assign]
+
+    dashboard._Handler.do_POST(handler)
+    response["body"] = handler.wfile.getvalue().decode("utf-8")
+    return response
 
 
 def test_render_sessions_card_empty():
@@ -120,8 +156,9 @@ def test_control_session_card_only_when_running(tmp_path, monkeypatch):
 
 def test_dashboard_server_is_single_instance():
     # The leak fix: only one dashboard may hold a port. Default ThreadingHTTPServer
-    # allows address reuse (multiple binds on Windows); ours must not.
-    assert dashboard._SingleInstanceServer.allow_reuse_address is False
+    # allows duplicate binds on Windows; POSIX keeps reuse enabled so a clean restart
+    # is not blocked by TIME_WAIT after the previous dashboard exits.
+    assert dashboard._SingleInstanceServer.allow_reuse_address is (sys.platform != "win32")
 
 
 def test_serve_refuses_when_port_already_bound(monkeypatch, capsys):
@@ -431,8 +468,28 @@ def test_next_action_and_latest_surface(tmp_path, monkeypatch):
     html_out = dashboard.render_index([data])
     assert "NEXT" in html_out
     assert "Wire the adapter contract" in html_out  # authored, highlighted
+    assert "Recommended mode:" in html_out
+    assert "Craft execution.md + delegate bounded tasks" in html_out
     assert "plan-execution" in html_out
     assert "Newer change" in html_out
+
+
+def test_next_action_direct_mode_hint(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    (tmp_path / ".horus" / "roadmap.md").write_text(
+        '---\nstatus: active\nnext_action: "Fix one dashboard label"\n'
+        'execution_recommendation: "continue-as-is - small single-surface fix"\n---\n'
+        "# Roadmap\n",
+        encoding="utf-8",
+    )
+
+    html_out = dashboard.render_index([dashboard.load_project(str(tmp_path))])
+
+    assert "Fix one dashboard label" in html_out
+    assert "Recommended mode:" in html_out
+    assert "Proceed directly with the frontier model" in html_out
+    assert "small single-surface fix" in html_out
 
 
 def test_resume_prompt_prefers_written_then_falls_back(tmp_path, monkeypatch):
@@ -440,14 +497,22 @@ def test_resume_prompt_prefers_written_then_falls_back(tmp_path, monkeypatch):
     initialize.init_project(tmp_path, assume_yes=True)
     data = dashboard.load_project(str(tmp_path))
 
-    # No next_prompt set -> generic paste-able fallback naming the project + next step.
+    # No next_prompt set -> generated minimum-context handoff with lazy-load instructions.
     fallback = dashboard._resume_prompt_text(data)
-    assert tmp_path.name in fallback and ".horus/" in fallback
+    assert tmp_path.name in fallback
+    assert "git fetch --all --prune" in fallback
+    assert "Do not read every `.horus/` lane up front." in fallback
     assert "horus session new" not in fallback  # not a CLI trigger
 
-    # Authored next_prompt wins, and renders with a copy button.
-    data["next_prompt"] = "Paste me into Claude to resume."
-    assert dashboard._resume_prompt_text(data) == "Paste me into Claude to resume."
+    # Authored next_prompt from roadmap.md is carried inside the generated handoff.
+    (tmp_path / ".horus" / "roadmap.md").write_text(
+        '---\nstatus: active\nnext_prompt: "Paste me into Claude to resume."\n---\n# Roadmap\n',
+        encoding="utf-8",
+    )
+    data = dashboard.load_project(str(tmp_path))
+    resumed = dashboard._resume_prompt_text(data)
+    assert "Paste me into Claude to resume." in resumed
+    assert "Continue with this authored handoff:" in resumed
     idx = dashboard.render_index([data])
     assert "Resume prompt" in idx and "horusCopy(this)" in idx and "Paste me into Claude" in idx
 
@@ -556,6 +621,10 @@ def test_control_tab_renders_launch_controls(tmp_path, monkeypatch):
     assert "value='default' selected" in page and "value='full-auto'>Bypass all prompts" in page
     # Account row -> a one-click fresh-session button.
     assert "+ session" in page
+    assert "action='/account-alias'" in page
+    assert "Save alias" in page
+    assert "Add account" in page
+    assert "action='/account-add'" in page
     # Copy-the-command path is still offered as a secondary option.
     assert "horus open" in page
 
@@ -567,7 +636,46 @@ def test_launch_notice_banner():
     assert "Launch failed" in err and "unknown account" in err and "banner err" in err
     tab = dashboard._launch_notice({"tab": ["app-1"]})
     assert "terminal panel" in tab and "banner ok" in tab
+    assert "Account mapping added" in dashboard._launch_notice({"account": ["added"]})
+    assert "Account alias updated" in dashboard._launch_notice({"account": ["alias"]})
     assert dashboard._launch_notice({}) == ""
+
+
+def test_process_account_add_maps_isolated_account_dirs(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+
+    assert dashboard.process_account_add({
+        "agent": "claude", "alias": "personal", "path": str(tmp_path / "claude-personal"),
+    }) == "account=added"
+    assert config.load_account_config_dirs()["personal"] == str(tmp_path / "claude-personal")
+
+    assert dashboard.process_account_add({
+        "agent": "codex", "alias": "codex-personal", "path": str(tmp_path / "codex-personal"),
+    }) == "account=added"
+    assert config.load_account_codex_homes()["codex-personal"] == str(tmp_path / "codex-personal")
+
+
+def test_process_account_alias_renames_generated_alias_and_mapping(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    old = config.alias_for("acct@example.com")
+    assert old is not None
+    claude_dir = tmp_path / "claude-old"
+    claude_dir.mkdir()
+    (claude_dir / ".claude.json").write_text(
+        json.dumps({"oauthAccount": {"emailAddress": "acct@example.com"}}),
+        encoding="utf-8",
+    )
+    config.set_account_config_dir(old, str(claude_dir))
+
+    assert dashboard.process_account_alias({
+        "agent": "claude",
+        "old_alias": old,
+        "alias": "personal",
+    }) == "account=alias"
+
+    assert config.load_account_aliases()["acct@example.com"] == "personal"
+    assert "personal" in config.load_account_config_dirs()
+    assert old not in config.load_account_config_dirs()
 
 
 def test_process_launch_in_app_opens_pty_terminal(tmp_path, monkeypatch):
@@ -664,8 +772,9 @@ def test_process_launch_resume_injects_continuity_prompt(tmp_path, monkeypatch):
         projects=[str(proj)], known_aliases=set(),
     )
     assert query.startswith("launched=")
-    # The resume prompt (project name + read-.horus instruction) is seeded into the session.
-    assert "demo" in captured["argv"][-1] and ".horus/" in captured["argv"][-1]
+    # The minimum-context resume handoff is seeded into the session.
+    assert "demo" in captured["argv"][-1]
+    assert "git fetch --all --prune" in captured["argv"][-1]
 
 
 def test_process_launch_rejects_unknown_project_and_account(tmp_path, monkeypatch):
@@ -893,6 +1002,9 @@ def test_render_remote_catalog_untracked_section(tmp_path, monkeypatch):
     assert "action='/github-ignore'" in html_out
     assert "Onboard" in html_out
     assert "Ignore" in html_out
+    assert "this machine's" in html_out
+    assert "gh</code> GitHub login" in html_out
+    assert "Claude/Codex account choice" in html_out
 
 
 def test_render_remote_catalog_untracked_badge_local(tmp_path, monkeypatch):
@@ -1035,35 +1147,48 @@ def test_config_unignore_repo_removes_from_list(tmp_path, monkeypatch):
     assert "rafaelmjf/some-app" not in config.load_ignored_repos()
 
 
-def test_post_github_ignore_calls_ignore_repo(tmp_path, monkeypatch):
-    """POST /github-ignore calls config.ignore_repo with the target."""
+def test_post_github_ignore_redirects_and_persists_trusted_target(tmp_path, monkeypatch):
+    """POST /github-ignore uses PRG so a browser does not land on a raw catalog fragment."""
     _init(tmp_path, monkeypatch)
     config.register_github_owner("rafaelmjf")
 
-    calls = []
-    original_ignore = config.ignore_repo
+    # The ignore path should not perform expensive catalog rendering or session/launch work.
+    monkeypatch.setattr(dashboard, "gather_remote_projects", lambda: (_ for _ in ()).throw(AssertionError("rendered catalog")))
+    monkeypatch.setattr(dashboard, "process_launch", lambda form: (_ for _ in ()).throw(AssertionError("launched session")))
 
-    def fake_ignore(full_name):
-        calls.append(full_name)
-        return original_ignore(full_name)
+    response = _post("/github-ignore", {"target": "rafaelmjf/some-app"}, origin="http://127.0.0.1:8765")
 
-    monkeypatch.setattr(config, "ignore_repo", fake_ignore)
-    monkeypatch.setattr(dashboard.github_catalog, "load_cache", lambda owner, **kw: None)
-    monkeypatch.setattr(dashboard.github_catalog, "refresh_cache", lambda owner, **kw: [])
-
-    # Call gather_remote_projects path indirectly through the render path.
-    # We test the wiring by calling ignore_repo directly and verifying the ignore list.
-    config.ignore_repo("rafaelmjf/some-app")
+    assert response["status"] == 303
+    assert ("Location", "/#github-catalog") in response["headers"]
+    assert response["body"] == ""
     assert "rafaelmjf/some-app" in config.load_ignored_repos()
-    assert len(calls) >= 1
 
 
-def test_post_github_unignore_calls_unignore_repo(tmp_path, monkeypatch):
-    """POST /github-unignore removes the target from the ignore list."""
+def test_post_github_unignore_redirects_and_removes_trusted_target(tmp_path, monkeypatch):
+    """POST /github-unignore uses the same browser-safe PRG path."""
     _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
     config.ignore_repo("rafaelmjf/some-app")
-    config.unignore_repo("rafaelmjf/some-app")
+
+    response = _post("/github-unignore", {"target": "rafaelmjf/some-app"})
+
+    assert response["status"] == 303
+    assert ("Location", "/#github-catalog") in response["headers"]
     assert "rafaelmjf/some-app" not in config.load_ignored_repos()
+
+
+def test_post_github_ignore_rejects_malformed_or_untrusted_target(tmp_path, monkeypatch):
+    """Ignore/unignore targets must be owner/repo names under configured GitHub owners."""
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+
+    malformed = _post("/github-ignore", {"target": "not-a-full-name"})
+    untrusted = _post("/github-ignore", {"target": "evil/some-app"})
+
+    assert malformed["status"] == 303
+    assert untrusted["status"] == 303
+    assert "not-a-full-name" not in config.load_ignored_repos()
+    assert "evil/some-app" not in config.load_ignored_repos()
 
 
 def test_post_github_onboard_rejects_untrusted_owner(tmp_path, monkeypatch):

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import html
 import re
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -251,13 +252,14 @@ def _start_remote_refresh(owner: str, local_projects: list[str]) -> None:
     threading.Thread(target=refresh, daemon=True).start()
 
 
-def _account_usage(alias: str, cred_path: Path | None) -> dict[str, Any]:
+def _account_usage(alias: str, cred_path: Path | None, *, config_dir: Path | None = None) -> dict[str, Any]:
     report = claude_usage.latest_usage(cred_path=cred_path)
     reset = report.five_hour_resets_at if report else None
     week_reset = report.seven_day_resets_at if report else None
     return {
         "agent": "claude",
         "alias": alias,
+        "mapped_path": str(config_dir) if config_dir else "",
         "five_pct": report.five_hour_percent if report else None,
         "week_pct": report.seven_day_percent if report else None,
         "five_reset": claude_usage._fmt_reset(reset) if reset else None,
@@ -280,6 +282,7 @@ def _codex_account_usage(alias: str, home: Path | None) -> dict[str, Any]:
     return {
         "agent": "codex",
         "alias": alias,
+        "mapped_path": str(home) if home else "",
         "five_pct": report.primary_percent if report else None,
         "week_pct": report.secondary_percent if report else None,
         "five_reset": codex_usage._fmt_reset(reset) if reset is not None else None,
@@ -302,7 +305,8 @@ def gather_accounts() -> list[dict[str, Any]]:
 
     # --- Claude accounts ---
     for alias, d in sorted(config.load_account_config_dirs().items()):
-        out.append(_account_usage(alias, Path(d) / ".credentials.json"))
+        cfg = Path(d)
+        out.append(_account_usage(alias, cfg / ".credentials.json", config_dir=cfg))
         seen.add(alias)
     ambient_claude = config.alias_for(claude_usage.current_account())
     if ambient_claude and ambient_claude not in seen:
@@ -363,6 +367,9 @@ main { padding: 24px 28px; max-width: 1320px; }
 .feat-buckets .idea li { color: #b9a6e0; } .feat-buckets .prog li { color: #e6c35c; }
 .feat-buckets .ship li { color: #57d39a; }
 .next-one { font-size: 14px; margin: 5px 0 7px; color: #eaf6ee; }
+.next-mode { margin-top: 7px; font-size: 12px; color: #cdd6e4; }
+.next-mode strong { color: #57d39a; font-weight: 600; }
+.next-mode .why { color: #8a93a6; }
 .checklist { list-style: none; padding-left: 0; margin: 4px 0 2px; }
 .checklist li { font-size: 12px; margin: 3px 0; color: #b9c2d0; overflow-wrap: anywhere; }
 .summary-scroll { max-height: 200px; overflow: auto; margin-top: 4px; font-size: 13px; }
@@ -458,6 +465,9 @@ form.launch-form .modes { display: flex; flex-direction: column; gap: 3px; }
 form.launch-form .modes label { display: flex; align-items: center; gap: 6px; }
 button.start { font: inherit; cursor: pointer; }
 form.acct-launch { margin-left: auto; }
+.acct-edit { margin-top: 4px; display: flex; gap: 5px; align-items: center; }
+.acct-edit input { width: 118px; min-width: 0; background: #0b0d12; color: #e6e6e6;
+                   border: 1px solid #284058; border-radius: 5px; padding: 3px 5px; font-size: 12px; }
 .or-cmds { margin-top: 6px; }
 .or-cmds > summary { cursor: pointer; font-size: 11px; color: #8a93a6; list-style: none; }
 .or-cmds > summary::-webkit-details-marker { display: none; }
@@ -855,11 +865,7 @@ def _single_next_html(p: dict[str, Any]) -> str:
     """Highlight the ONE authored next action (roadmap.md next_action)."""
     text = _best_next_text(p)
     recommendation = (p.get("execution_recommendation") or "").strip()
-    rec_html = (
-        f"<div class='progress-label'>execution: {html.escape(_plain(recommendation))}</div>"
-        if recommendation
-        else ""
-    )
+    rec_html = _execution_recommendation_html(recommendation)
     if text:
         return (
             "<div class='next'><span class='lbl'>NEXT</span>"
@@ -870,21 +876,27 @@ def _single_next_html(p: dict[str, Any]) -> str:
     return "<div class='next'><span class='lbl'>NEXT</span><div class='next-one muted'>not set — author <code>next_action</code> in roadmap.md at closure</div></div>"
 
 
-def _resume_prompt_text(p: dict[str, Any]) -> str:
-    """The natural-language prompt to resume this project in a fresh Claude/Codex session.
-
-    Authored by the closure skill into roadmap.md `next_prompt`. When absent, fall back
-    to a generic paste-able prompt built from the next step (display convenience only).
-    """
-    written = (p.get("next_prompt") or "").strip()
-    if written:
-        return written
-    nxt = _best_next_text(p)
-    base = (
-        f"Continue work on the {p['name']} project. First read .horus/ for context "
-        f"(project.md, roadmap.md, decisions.md, and the latest .horus/sessions/ summary)."
+def _execution_recommendation_html(recommendation: str) -> str:
+    rec = _plain(recommendation).strip()
+    if not rec:
+        return ""
+    low = rec.lower()
+    if "plan-execution" in low:
+        mode = "Craft execution.md + delegate bounded tasks"
+    elif "continue-as-is" in low:
+        mode = "Proceed directly with the frontier model"
+    else:
+        mode = "Planner should choose direct vs delegated"
+    return (
+        "<div class='next-mode'><strong>Recommended mode:</strong> "
+        f"{html.escape(mode)}"
+        f"<div class='why'>{html.escape(rec)}</div></div>"
     )
-    return f"{base} Then start on the next step: {nxt}" if nxt else base
+
+
+def _resume_prompt_text(p: dict[str, Any]) -> str:
+    """The paste-able fresh-session handoff for this project."""
+    return routines.resume_prompt(Path(p["path"]))
 
 
 def _resume_html(p: dict[str, Any]) -> str:
@@ -1053,6 +1065,9 @@ def _untracked_card(u: github_catalog.UntrackedRepo) -> str:
         f"<div class='badges'><span>{html.escape(u.default_branch)}</span>"
         f"<span class='{badge_class}'>{badge_text}</span></div>"
         f"{description}"
+        "<p class='muted' style='font-size:12px'>Onboard uses this machine's "
+        "<code>gh</code> GitHub login for clone/PR; Claude/Codex account choice happens "
+        "when you launch work on the project.</p>"
         f"<div style='margin-top:8px'>{onboard_form}{ignore_form}</div>"
         "</div>"
     )
@@ -1374,12 +1389,14 @@ def _usage_bar(pct: float | None, label: str) -> str:
 
 
 def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
+    add_form = _account_add_form()
     if not accounts:
         return (
             "<div class='card'><h2>Accounts</h2>"
             "<p class='muted' style='font-size:13px'>No Claude login detected. Run "
             "<code>claude</code> to sign in, or map isolated accounts with "
-            "<code>horus account --set-dir</code>.</p></div>"
+            "<code>horus account --set-dir</code>.</p>"
+            f"{add_form}</div>"
         )
     rows = []
     for a in accounts:
@@ -1403,11 +1420,41 @@ def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
             week_bar = _usage_bar(a["week_pct"], label)
         rows.append(
             f"<div class='acct'>{_ring(a['five_pct'])}"
-            f"<div><div class='who'>{html.escape(a['alias'])}{badge}</div>{reset}</div>"
+            f"<div><div class='who'>{html.escape(a['alias'])}{badge}</div>{reset}"
+            f"{_account_alias_form(a)}</div>"
             f"{_account_launch_form(a['alias'], agent)}</div>"
             f"{week_bar}"
         )
-    return f"<div class='card'><h2>Accounts</h2>{''.join(rows)}</div>"
+    return f"<div class='card'><h2>Accounts</h2>{''.join(rows)}{add_form}</div>"
+
+
+def _account_alias_form(account: dict[str, Any]) -> str:
+    alias = account.get("alias", "")
+    agent = account.get("agent", "claude")
+    return (
+        "<form class='acct-edit' method='post' action='/account-alias'>"
+        f"<input type='hidden' name='agent' value='{html.escape(agent, quote=True)}'>"
+        f"<input type='hidden' name='old_alias' value='{html.escape(alias, quote=True)}'>"
+        f"<input name='alias' value='{html.escape(alias, quote=True)}' aria-label='Account alias'>"
+        "<button class='copy' type='submit'>Save alias</button>"
+        "</form>"
+    )
+
+
+def _account_add_form() -> str:
+    return (
+        "<details class='or-cmds'><summary>Add account</summary>"
+        "<form class='launch-form' method='post' action='/account-add'>"
+        "<label>Agent <select name='agent'>"
+        "<option value='claude'>Claude</option><option value='codex'>Codex</option>"
+        "</select></label>"
+        "<label>Alias <input name='alias' placeholder='personal'></label>"
+        "<label>Config path <input name='path' placeholder='~/.claude-personal or ~/.codex-personal'></label>"
+        "<button class='start primary' type='submit'>Add account</button>"
+        "<p class='muted' style='font-size:12px;margin:0'>This maps an isolated local login directory. "
+        "Sign in with the native CLI using that directory before launching work from it.</p>"
+        "</form></details>"
+    )
 
 
 def _account_launch_form(alias: str, agent: str = "claude") -> str:
@@ -1587,6 +1634,10 @@ def _launch_notice(params: dict[str, list[str]]) -> str:
         )
     if "error" in params:
         return f"<div class='banner err'>Launch failed: {html.escape(params['error'][0])}</div>"
+    if params.get("account") == ["added"]:
+        return "<div class='banner ok'>Account mapping added.</div>"
+    if params.get("account") == ["alias"]:
+        return "<div class='banner ok'>Account alias updated.</div>"
     return ""
 
 
@@ -1768,6 +1819,44 @@ def _known_aliases() -> set[str]:
     return aliases
 
 
+def _identifier_for_alias(agent: str, alias: str) -> str | None:
+    for identifier, mapped_alias in config.load_account_aliases().items():
+        if mapped_alias == alias:
+            return identifier
+    if agent == "codex":
+        home = config.load_account_codex_homes().get(alias)
+        identifier = codex_usage.current_account(Path(home)) if home else codex_usage.current_account()
+        return identifier if config.alias_for(identifier) == alias else None
+    cfg = config.load_account_config_dirs().get(alias)
+    identifier = claude_usage.current_account(Path(cfg) / ".claude.json") if cfg else claude_usage.current_account()
+    return identifier if config.alias_for(identifier) == alias else None
+
+
+def process_account_alias(form: dict[str, str]) -> str:
+    agent = (form.get("agent") or "claude").strip()
+    old_alias = (form.get("old_alias") or "").strip()
+    new_alias = (form.get("alias") or "").strip()
+    identifier = _identifier_for_alias(agent, old_alias) if old_alias else None
+    if old_alias and new_alias:
+        config.rename_account_alias(old_alias, new_alias, identifier=identifier)
+    return "account=alias"
+
+
+def process_account_add(form: dict[str, str]) -> str:
+    agent = (form.get("agent") or "claude").strip()
+    alias = (form.get("alias") or "").strip()
+    path = (form.get("path") or "").strip()
+    if not alias or not path:
+        return "error=" + quote_plus("account alias and path are required")
+    if agent == "codex":
+        config.set_account_codex_home(alias, path)
+    elif agent == "claude":
+        config.set_account_config_dir(alias, path)
+    else:
+        return "error=" + quote_plus("unknown account agent")
+    return "account=added"
+
+
 def process_launch(
     form: dict[str, str],
     *,
@@ -1845,6 +1934,16 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
         self.wfile.write(encoded)
+
+    def _redirect(self, location: str) -> None:
+        self.send_response(303)
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def _valid_github_catalog_target(self, target: str) -> bool:
+        owner, sep, name = target.partition("/")
+        return bool(owner and sep and name) and owner in config.load_github_owners()
 
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
@@ -1996,6 +2095,8 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path not in (
             "/launch",
             "/settings",
+            "/account-add",
+            "/account-alias",
             "/github-refresh",
             "/github-onboard",
             "/github-ignore",
@@ -2024,6 +2125,12 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Location", "/settings?saved=1")
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if parsed.path == "/account-add":
+            self._redirect(f"/control?{process_account_add(self._read_form())}")
+            return
+        if parsed.path == "/account-alias":
+            self._redirect(f"/control?{process_account_alias(self._read_form())}")
             return
         if parsed.path == "/pty/input":
             # Keystrokes from an xterm tab → the PTY. Bytes are UTF-8 of the data field.
@@ -2059,24 +2166,16 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/github-ignore":
             form = self._read_form()
             target = form.get("target", "")
-            config.ignore_repo(target)
-            projects, errors, notes = gather_remote_projects()
-            visible_untracked, hidden_untracked = gather_untracked_repos()
-            self._send(render_remote_catalog(
-                projects, errors, notes,
-                untracked=visible_untracked, hidden=hidden_untracked,
-            ))
+            if self._valid_github_catalog_target(target):
+                config.ignore_repo(target)
+            self._redirect("/#github-catalog")
             return
         if parsed.path == "/github-unignore":
             form = self._read_form()
             target = form.get("target", "")
-            config.unignore_repo(target)
-            projects, errors, notes = gather_remote_projects()
-            visible_untracked, hidden_untracked = gather_untracked_repos()
-            self._send(render_remote_catalog(
-                projects, errors, notes,
-                untracked=visible_untracked, hidden=hidden_untracked,
-            ))
+            if self._valid_github_catalog_target(target):
+                config.unignore_repo(target)
+            self._redirect("/#github-catalog")
             return
         if parsed.path == "/github-onboard":
             form = self._read_form()
@@ -2115,23 +2214,18 @@ class _Handler(BaseHTTPRequestHandler):
 
         query = process_launch(self._read_form())
         # 303 -> GET /control so a refresh doesn't re-submit the launch (PRG pattern).
-        self.send_response(303)
-        self.send_header("Location", f"/control?{query}")
-        self.send_header("Content-Length", "0")
-        self.end_headers()
+        self._redirect(f"/control?{query}")
 
     def log_message(self, *args: Any) -> None:  # silence default stderr logging
         pass
 
 
 class _SingleInstanceServer(ThreadingHTTPServer):
-    # One dashboard per port. ``ThreadingHTTPServer`` defaults ``allow_reuse_address``
-    # to True; on Windows SO_REUSEADDR lets *multiple* sockets bind the same port at
-    # once, so every ``horus dashboard`` invocation used to bind 8765 and the OS routed
-    # requests to an arbitrary (often stale) one — which left the UI showing an old
-    # in-memory build. False makes a second bind fail fast, so a duplicate launch
-    # refuses instead of piling up.
-    allow_reuse_address = False
+    # One dashboard per port. On Windows, SO_REUSEADDR lets multiple sockets bind the
+    # same port, so disable it there to prevent duplicate stale dashboards. POSIX needs
+    # reuse enabled so a cleanly stopped dashboard can restart while the old socket is
+    # still in TIME_WAIT.
+    allow_reuse_address = sys.platform != "win32"
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:

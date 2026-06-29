@@ -42,6 +42,7 @@ horus discover github <owner> --save # show remote Horus repos for a GitHub user
 horus refresh github <owner>      # force-refresh a GitHub owner snapshot now
 horus config workspace-root ~/projects # where remote projects should be cloned
 horus start github:<owner>/<repo> # clone/register a remote Horus repo and show its resume prompt
+horus resume                      # print the minimum-context fresh-session handoff for this project
 horus app                         # borderless animated companion; click opens dashboard
 horus session new "<title>"       # create a dated session summary from the template
 horus close                       # verify continuity, Codex usage, and print the closure ritual
@@ -91,8 +92,11 @@ horus start github:<owner>/<repo>
 
 `horus start` clones with `gh repo clone` when needed, refuses to overwrite an
 existing non-git destination, registers the local clone, refreshes Horus-managed
-project projections, and prints the repo's stored `next_prompt` plus the matching
-`horus open` command.
+project projections, and prints a generated minimum-context resume handoff plus
+the matching `horus open` command. `horus resume` prints the same handoff for any
+local Horus project: fetch-first, verify branch state, load only the current
+frontmatter/next step up front, and lazy-load the deeper lanes only if the task
+needs them.
 
 ## Repo-local continuity
 

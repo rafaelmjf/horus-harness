@@ -159,6 +159,7 @@ current_feature: ""
 supervisor_tier: frontier
 worker_tier: standard
 continuity_tier: economy
+delegation_basis: ""
 last_updated: {date}
 ---
 
@@ -174,6 +175,11 @@ timeline.
 Use tiers instead of hard-coded model names. Resolve them locally per agent,
 account, and current model availability.
 
+`worker_tier` is the intended tier **if** a phase is delegated; it is not a claim
+that delegation is cheaper or mandatory. The planning agent must fill
+`delegation_basis` with the reason to delegate or the reason to keep the work direct
+for this agent/runtime. Different agents may reasonably choose differently.
+
 | tier | Intended use | Examples |
 |---|---|---|
 | economy | mechanical continuity updates, formatting, small docs from explicit notes | maintainer |
@@ -182,9 +188,9 @@ account, and current model availability.
 
 ## Active Phases
 
-| phase | status | difficulty | worker_tier | handoff_note | review |
-|---|---|---|---|---|---|
-| 1A | planned | S2 | standard | `.horus/temp/1A.md` | frontier |
+| phase | status | difficulty | mode | worker_tier | delegation_basis | handoff_note | review |
+|---|---|---|---|---|---|---|---|
+| 1A | planned | S2 | direct-or-delegate | standard-if-delegated | why delegation is worth/not worth it here | `.horus/temp/1A.md` | frontier |
 
 ## Worker Handoff Contract
 
@@ -221,18 +227,29 @@ def execution_supervisor_prompt(
         native = (
             "Use Claude Code project subagents when the phase can be bounded. Prefer "
             "a frontier model for planning/review, a standard model for implementation "
-            "phases, and an economy model only for mechanical continuity updates."
+            "phases, and an economy model only for mechanical continuity updates. "
+            "Claude may make a different direct-vs-delegated call than Codex; record "
+            "the local rationale in delegation_basis. "
+            "When the user is testing model separation, this is mandatory: do not "
+            "implement the delegated phase in the supervisor context."
         )
     elif target == "codex":
         native = (
             "Use Codex subagents or project custom agents when the phase can be bounded. "
             "Codex custom agents may live under .codex/agents/; steer model and reasoning "
-            "effort per phase instead of hard-coding global defaults."
+            "effort per phase instead of hard-coding global defaults. Codex may make a "
+            "different direct-vs-delegated call than Claude; record the local rationale "
+            "in delegation_basis. When the user is "
+            "testing model separation, this is mandatory: do not implement the delegated "
+            "phase in the supervisor context."
         )
     else:
         native = (
             "Use native subagents/workers when the phase can be bounded. Resolve the "
-            "frontier/standard/economy tiers locally for the active agent."
+            "frontier/standard/economy tiers locally for the active agent. When the "
+            "planning agent chooses delegation, record the local rationale in "
+            "delegation_basis. When the user is testing model separation, this is "
+            "mandatory: do not implement the delegated phase in the supervisor context."
         )
 
     return f"""Horus execution supervisor prompt
@@ -250,14 +267,20 @@ Read `.horus/project.md`, `.horus/roadmap.md`, `.horus/features.md`,
 Supervisor workflow:
 
 1. Confirm whether `.horus/roadmap.md` `execution_recommendation` still applies.
-2. If it says `plan-execution`, update `.horus/execution.md` with a small phase table:
-   phase id, status, difficulty, worker tier, handoff note path, and review gate.
-3. Delegate only bounded phases. Keep the supervisor on planning, review, final
+2. If it says `plan-execution`, first decide whether execution planning is actually
+   warranted for this agent/runtime. Execution is optional: choose direct work when
+   delegation overhead is likely higher than the benefit.
+3. For each phase, record mode (`direct`, `delegated`, or `test-delegation`),
+   worker tier if delegated, and `delegation_basis` (economics/risk/context split).
+   `worker_tier` alone is only a tier hint, not a cost justification.
+4. Delegate only bounded phases. Keep the supervisor on planning, review, final
    acceptance, and durable `.horus/` updates.
-4. Instruct each worker to write a handoff note under `.horus/temp/` using
+   If the user is testing model separation and no native worker/subagent is available,
+   stop and report that the workflow test cannot proceed faithfully here.
+5. Instruct each worker to write a handoff note under `.horus/temp/` using
    `horus execution handoff <phase>` before returning.
-5. Review the worker diff, tests, and handoff note before marking a phase accepted.
-6. Distill durable outcomes into roadmap/features/decisions/history at closure; keep
+6. Review the worker diff, tests, and handoff note before marking a phase accepted.
+7. Distill durable outcomes into roadmap/features/decisions/history at closure; keep
    `.horus/execution.md` fluid and replace it for the next substantial roadmap item.
 
 Native projection:
@@ -436,9 +459,12 @@ them — keep each current at every close:
      the step + point at .horus/).
    - `execution_recommendation`: analyze the NEXT and choose `continue-as-is` for
      direct work or `plan-execution` when `execution.md` + worker/subagents should be used.
+     If recommending `plan-execution`, include why delegation is likely worth its
+     overhead for the current agent/runtime; otherwise choose direct work.
    - tick the roadmap checkboxes for what this session did.
 4. execution.md: when `execution_recommendation` is `plan-execution`, create/update
-   the active phased plan before starting implementation; otherwise leave it idle/unchanged.
+   the active phased plan before starting implementation, including a per-phase
+   `delegation_basis`; otherwise leave it idle/unchanged.
 5. features.md: add a Shipped row for any capability shipped this session.
 6. execution.md: if there is an active phased plan, update phase/review status from
    accepted worker handoff notes in .horus/temp/.
