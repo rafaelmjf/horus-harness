@@ -499,6 +499,19 @@ button.linkbtn:hover { color: #b9c2d0; }
 .term-bar .popout { margin: 0; }
 .xterm-host { height: 420px; }
 .xterm-host .xterm { height: 100%; }
+/* Action buttons: green = refresh/upgrade (go), red = remove completely, neutral = keep. */
+button.btn-go { font: inherit; font-size: 12px; cursor: pointer; color: #04130b;
+    background: #57d39a; border: 1px solid #57d39a; border-radius: 6px; padding: 4px 12px; font-weight: 600; }
+button.btn-go:hover { background: #6fe0ac; }
+button.btn-danger { font: inherit; font-size: 12px; cursor: pointer; color: #fff0f1;
+    background: #b1404f; border: 1px solid #c9505f; border-radius: 6px; padding: 4px 12px; font-weight: 600; }
+button.btn-danger:hover { background: #c64d5d; }
+button.btn-keep { font: inherit; font-size: 12px; cursor: pointer; color: #cdd6e4;
+    background: #232733; border: 1px solid #3a4250; border-radius: 6px; padding: 4px 12px; }
+button.btn-keep:hover { background: #2c3140; }
+details.offload { margin: 12px 0 2px; border-top: 1px solid #232733; padding-top: 10px; }
+details.offload > summary { cursor: pointer; color: #8a93a6; font-size: 12px; }
+details.offload .offload-actions { display: flex; gap: 8px; margin-top: 8px; }
 """
 
 _LEVEL_CLASS = {"ok": "health-ok", "warn": "health-warn", "fail": "health-fail"}
@@ -983,10 +996,10 @@ def _project_column(p: dict[str, Any], i: int) -> str:
     why = f"<p class='why'>{html.escape(p['tagline'])}</p>" if p["tagline"] else ""
     _artifacts_pill = (
         "<span class='health-warn'>&#9888; artifacts outdated</span>"
-        "<form method='post' action='/upgrade-project' style='display:inline;margin-left:4px'>"
+        "<form method='post' action='/upgrade-project' style='display:inline;margin-left:6px'>"
         f"<input type='hidden' name='project' value='{i}'>"
-        "<button class='copy' type='submit' title='Refresh Horus artifacts to the installed version'>"
-        "refresh</button></form>"
+        "<button class='btn-go' type='submit' title='Refresh Horus artifacts to the installed version'>"
+        "Refresh</button></form>"
         if p["artifacts_stale"]
         else ""
     )
@@ -1004,7 +1017,8 @@ def _project_column(p: dict[str, Any], i: int) -> str:
     )
     return (
         f"<div class='col'><h2><a href='/project?i={i}'>{html.escape(p['name'])}</a>{missing}</h2>"
-        f"{why}{pills}{last}{roadmap}{_features_buckets_html(p)}</div>"
+        f"{why}{pills}{last}{roadmap}{_features_buckets_html(p)}"
+        f"{_offload_control(i, compact=True)}</div>"
     )
 
 
@@ -1364,7 +1378,7 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
         )
 
     if index is not None:
-        parts.append(_offboard_card(index))
+        parts.append(_offload_control(index))
 
     return _page(f"Horus - {p['name']}", "".join(parts), live=_live_count(gather_sessions()))
 
@@ -1374,33 +1388,47 @@ def _upgrade_button(index: int) -> str:
     return (
         " <form method='post' action='/upgrade-project' style='display:inline'>"
         f"<input type='hidden' name='project' value='{index}'>"
-        "<button class='start primary' type='submit' "
+        "<button class='btn-go' type='submit' "
         "title='Refresh Horus-managed artifacts to the installed version'>Refresh now</button>"
         "</form>"
     )
 
 
-def _offboard_card(index: int) -> str:
-    """Danger-zone card: remove Horus's projected artifacts (+ unregister), optionally
-    purging the .horus/ memory. The confirm wording adapts to the purge checkbox."""
-    confirm = (
-        "this.purge.checked ? "
-        "&quot;Delete ALL Horus files INCLUDING the .horus/ memory? This cannot be undone.&quot; : "
-        "&quot;Remove Horus integration from this project? (the .horus/ memory is kept)&quot;"
-    )
-    return (
-        "<div class='section'><h2>Manage Horus integration</h2>"
-        "<div class='card'>"
-        "<p class='muted'>Offboarding removes Horus's projected artifacts (the AGENTS/CLAUDE "
-        "managed block, the bundled skills, and the Claude/Codex hooks) and unregisters this "
-        "project. The <code>.horus/</code> lanes are <strong>kept</strong> unless you tick purge.</p>"
-        f"<form method='post' action='/offboard' onsubmit='return confirm({confirm})'>"
+def _offload_control(index: int, *, compact: bool = False) -> str:
+    """Offload a project: two explicit choices — *Keep files* (remove the projected
+    artifacts + unregister, keep `.horus/`) or *Remove completely* (also delete
+    `.horus/`). ``compact`` renders a `<details>` reveal for the overview card; the full
+    form renders a labelled section for the detail page.
+    """
+    keep_form = (
+        "<form method='post' action='/offboard' style='display:inline' "
+        "onsubmit='return confirm(\"Remove Horus integration but KEEP the .horus/ files?\")'>"
         f"<input type='hidden' name='project' value='{index}'>"
-        "<label style='display:block;margin:6px 0'>"
-        "<input type='checkbox' name='purge' value='1'> also delete the <code>.horus/</code> "
-        "memory (irreversible)</label>"
-        "<button class='linkbtn' type='submit'>Remove Horus from this project</button>"
-        "</form></div></div>"
+        "<button class='btn-keep' type='submit'>Keep files</button></form>"
+    )
+    remove_form = (
+        "<form method='post' action='/offboard' style='display:inline' "
+        "onsubmit='return confirm(\"Delete EVERYTHING including the .horus/ memory? "
+        "This cannot be undone.\")'>"
+        f"<input type='hidden' name='project' value='{index}'>"
+        "<input type='hidden' name='purge' value='1'>"
+        "<button class='btn-danger' type='submit'>Remove completely</button></form>"
+    )
+    actions = f"<div class='offload-actions'>{keep_form}{remove_form}</div>"
+    if compact:
+        return (
+            "<details class='offload'><summary>Offload project</summary>"
+            "<p class='muted' style='font-size:12px;margin:8px 0 0'>Keep files removes the Horus "
+            "integration but leaves <code>.horus/</code>; Remove completely deletes it too.</p>"
+            f"{actions}</details>"
+        )
+    return (
+        "<div class='section'><h2>Manage Horus integration</h2><div class='card'>"
+        "<p class='muted'>Offload this project. <strong>Keep files</strong> removes the projected "
+        "artifacts (managed block, skills, hooks) and unregisters it but leaves the "
+        "<code>.horus/</code> memory; <strong>Remove completely</strong> also deletes "
+        "<code>.horus/</code> (irreversible).</p>"
+        f"{actions}</div></div>"
     )
 
 

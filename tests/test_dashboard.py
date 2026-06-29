@@ -756,6 +756,29 @@ def test_process_offboard_unknown_index(tmp_path, monkeypatch):
     assert dashboard.process_offboard({"project": "9"}).startswith("/?offboard_error=")
 
 
+def test_offload_control_offers_keep_and_remove_completely():
+    compact = dashboard._offload_control(2, compact=True)
+    assert "<details class='offload'>" in compact  # reveal-on-click, not prominent
+    assert "Keep files" in compact and "Remove completely" in compact
+    assert "btn-keep" in compact and "btn-danger" in compact  # neutral keep, red remove
+    assert "name='purge' value='1'" in compact  # remove-completely purges
+    assert compact.count("action='/offboard'") == 2
+    assert "name='project' value='2'" in compact
+
+    full = dashboard._offload_control(2, compact=False)
+    assert "Manage Horus integration" in full and "btn-danger" in full
+
+
+def test_project_column_has_offload_control_at_end(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path / "proj", assume_yes=True, no_input=True)
+    p = dashboard.load_project(str(tmp_path / "proj"))
+    col = dashboard._project_column(p, 0)
+    assert "<details class='offload'>" in col
+    # The offload control sits at the end of the card (after the Roadmap box).
+    assert col.rindex("offload") > col.rindex("Roadmap")
+
+
 def test_project_action_banner_messages():
     assert "Refreshed Horus artifacts" in dashboard._project_action_banner({"upgraded": ["3"]})
     assert "Upgrade failed" in dashboard._project_action_banner({"upgrade_error": ["x"]})
@@ -1559,9 +1582,10 @@ def test_project_column_renders_artifacts_badge_when_stale(tmp_path, monkeypatch
     html_out = dashboard._project_column(data, 0)
     assert "artifacts outdated" in html_out
     assert "&#9888;" in html_out
-    # The pill now carries a one-click refresh button (POST upgrade by index).
+    # The pill now carries a one-click GREEN refresh button (POST upgrade by index).
     assert "action='/upgrade-project'" in html_out
     assert "name='project' value='0'" in html_out
+    assert "btn-go" in html_out  # green = more visible
 
 
 def test_project_column_omits_artifacts_badge_when_fresh(tmp_path, monkeypatch):
