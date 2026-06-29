@@ -29,7 +29,11 @@ Before substantial work, read the `.horus/` lanes (each stays in its lane):
 - `features.md` — capability ledger (shipped / in-progress / planned packages).
 - `decisions.md` — durable rules and their reasoning.
 - `history.md` — carried-forward lessons ("bumps in the road").
+- `execution.md` — optional active execution plan: phases, model-tier routing,
+  supervisor/worker handoffs, and review gates for the current roadmap item.
 - Review recent local session summaries in `.horus/sessions/` when available.
+- Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
+  is active; distill only the durable results upward.
 
 After work that contributes to the project state, close the session by invoking the
 `horus-consolidate` skill and folding in this session's context:
@@ -38,7 +42,13 @@ After work that contributes to the project state, close the session by invoking 
   `horus session new "<title>"`, then write what actually happened — not just a date).
 - Keep facts in their lane: open action points in `roadmap.md`, shipped/planned
   capabilities in `features.md`, durable rules in `decisions.md`, lessons in
-  `history.md`. Don't maintain the same fact in two files.
+  `history.md`, active phase coordination in `execution.md`. Don't maintain the
+  same fact in two files.
+- Implementation workers may write brief phase handoff notes under `.horus/temp/`;
+  the supervising agent reviews those notes and updates the durable lanes.
+- When authoring `roadmap.md` `next_action`, also set `execution_recommendation`
+  to say whether the next step should use `execution.md` + worker/subagents or
+  continue as a direct single-agent task.
 - `horus consolidate` / `horus close` are signal + verification only — you supply the
   content from the session; they never rewrite the lanes for you.
 - Do not store secrets or full transcripts in `.horus/`.
@@ -93,6 +103,7 @@ status: active
 current_focus: "Describe the current focus here."
 next_action: ""
 next_prompt: ""
+execution_recommendation: "continue-as-is"
 last_updated: {date}
 ---
 
@@ -141,6 +152,177 @@ Status: **Shipped** · **In progress** · **Planned**
 """
 
 
+def execution_md(date: str) -> str:
+    return f"""---
+status: idle
+current_feature: ""
+supervisor_tier: frontier
+worker_tier: standard
+continuity_tier: economy
+last_updated: {date}
+---
+
+# Execution Plan
+
+Fluid, optional plan for the currently active roadmap item. Replace this when
+the next substantial feature starts; distill finished work into `roadmap.md`,
+`features.md`, `decisions.md`, and `history.md` rather than preserving this as a
+timeline.
+
+## Model Policy
+
+Use tiers instead of hard-coded model names. Resolve them locally per agent,
+account, and current model availability.
+
+| tier | Intended use | Examples |
+|---|---|---|
+| economy | mechanical continuity updates, formatting, small docs from explicit notes | maintainer |
+| standard | narrow implementation phases with tests | worker |
+| frontier | planning, architecture, risky review, final acceptance | supervisor |
+
+## Active Phases
+
+| phase | status | difficulty | worker_tier | handoff_note | review |
+|---|---|---|---|---|---|
+| 1A | planned | S2 | standard | `.horus/temp/1A.md` | frontier |
+
+## Worker Handoff Contract
+
+Implementation workers should write a brief note in `.horus/temp/` when a phase
+finishes. Keep it factual and reviewable:
+
+- changed files / behavior;
+- tests run and result;
+- risks or follow-ups;
+- suggested durable `.horus/` updates.
+
+The supervisor reviews the diff and the handoff, then updates the durable lanes.
+
+Useful commands:
+
+- `horus execution prompt --target codex` prints a supervisor prompt shaped for
+  Codex subagents/custom agents.
+- `horus execution prompt --target claude` prints the Claude Code equivalent.
+- `horus execution handoff 1A` creates `.horus/temp/1A.md` for a worker note.
+"""
+
+
+def execution_supervisor_prompt(
+    *,
+    target: str,
+    project: str,
+    next_action: str,
+    execution_recommendation: str,
+    execution_status: str,
+    current_feature: str,
+) -> str:
+    """Return a target-aware prompt for supervising a phased execution plan."""
+    if target == "claude":
+        native = (
+            "Use Claude Code project subagents when the phase can be bounded. Prefer "
+            "a frontier model for planning/review, a standard model for implementation "
+            "phases, and an economy model only for mechanical continuity updates."
+        )
+    elif target == "codex":
+        native = (
+            "Use Codex subagents or project custom agents when the phase can be bounded. "
+            "Codex custom agents may live under .codex/agents/; steer model and reasoning "
+            "effort per phase instead of hard-coding global defaults."
+        )
+    else:
+        native = (
+            "Use native subagents/workers when the phase can be bounded. Resolve the "
+            "frontier/standard/economy tiers locally for the active agent."
+        )
+
+    return f"""Horus execution supervisor prompt
+
+Project: {project}
+Target agent: {target}
+Roadmap NEXT: {next_action or "(not set)"}
+Execution recommendation: {execution_recommendation or "(not set)"}
+Execution status: {execution_status or "(unknown)"}
+Current feature: {current_feature or "(not set)"}
+
+Read `.horus/project.md`, `.horus/roadmap.md`, `.horus/features.md`,
+`.horus/decisions.md`, `.horus/history.md`, and `.horus/execution.md`.
+
+Supervisor workflow:
+
+1. Confirm whether `.horus/roadmap.md` `execution_recommendation` still applies.
+2. If it says `plan-execution`, update `.horus/execution.md` with a small phase table:
+   phase id, status, difficulty, worker tier, handoff note path, and review gate.
+3. Delegate only bounded phases. Keep the supervisor on planning, review, final
+   acceptance, and durable `.horus/` updates.
+4. Instruct each worker to write a handoff note under `.horus/temp/` using
+   `horus execution handoff <phase>` before returning.
+5. Review the worker diff, tests, and handoff note before marking a phase accepted.
+6. Distill durable outcomes into roadmap/features/decisions/history at closure; keep
+   `.horus/execution.md` fluid and replace it for the next substantial roadmap item.
+
+Native projection:
+
+{native}
+
+Worker handoff contract:
+
+- changed files and behavior;
+- tests run and result;
+- risks, assumptions, or follow-ups;
+- suggested durable `.horus/` updates.
+"""
+
+
+def execution_handoff_note(
+    *,
+    phase: str,
+    title: str,
+    date: str,
+    agent: str,
+    model_tier: str,
+) -> str:
+    return f"""---
+phase: {phase}
+title: "{title}"
+date: {date}
+agent: {agent}
+model_tier: {model_tier}
+status: in-progress
+---
+
+# Phase {phase} Handoff
+
+## Scope
+
+- Assigned phase:
+- Out of scope:
+
+## Changed Files
+
+- 
+
+## Behavior
+
+- 
+
+## Tests
+
+- Not run yet.
+
+## Risks / Follow-ups
+
+- 
+
+## Suggested Durable Horus Updates
+
+- roadmap.md:
+- features.md:
+- decisions.md:
+- history.md:
+- execution.md:
+"""
+
+
 def history_md(date: str) -> str:
     return f"""---
 status: active
@@ -171,8 +353,12 @@ installed. Read this first.
 - `decisions.md` — durable decisions / rules to follow and their reasoning, dated.
 - `history.md` — curated bumps in the road: problems that bit us and the lessons
   that shaped the design. Relevant context, **not** a timeline and **not** open issues.
+- `execution.md` — optional active execution plan for the current roadmap item:
+  phase breakdown, model-tier routing, worker handoff notes, and review gates.
 - `sessions/` — local session summaries (gitignored; per-machine context that
   distills into the files above).
+- `temp/` — gitignored scratch notes from implementation workers/subagents. These
+  are fleeting handoffs for the supervisor, not durable project memory.
 
 **This is the single concise source of "what is this, and what's next."** If the
 project already has rich docs (README, a status/roadmap file, and anything they
@@ -184,8 +370,8 @@ Keep each lane in its lane; run `horus consolidate` to route facts to the right
 file, prune what's done, and distill session summaries upward.
 
 Durable state (`project.md` / `roadmap.md` / `features.md` / `decisions.md` /
-`history.md`) is committed and travels via git; session summaries stay local per
-machine.
+`history.md` / `execution.md`) is committed and travels via git; session summaries
+and temp worker notes stay local per machine.
 
 These files are scaffolded by `horus init` and maintained by the agents working in
 this repo. A future `horus infer` will populate them automatically (LLM-based).
@@ -248,10 +434,16 @@ them — keep each current at every close:
    - `next_action`: the single best next step, one imperative line.
    - `next_prompt`: a paste-into-a-fresh-session prompt to resume it (cold reader: name
      the step + point at .horus/).
+   - `execution_recommendation`: analyze the NEXT and choose `continue-as-is` for
+     direct work or `plan-execution` when `execution.md` + worker/subagents should be used.
    - tick the roadmap checkboxes for what this session did.
-4. features.md: add a Shipped row for any capability shipped this session.
-5. decisions.md: record durable decisions + reasoning. Bump `last_updated` on lanes you touched.
-6. Instructions: keep the AGENTS.md / CLAUDE.md shared blocks aligned
+4. execution.md: when `execution_recommendation` is `plan-execution`, create/update
+   the active phased plan before starting implementation; otherwise leave it idle/unchanged.
+5. features.md: add a Shipped row for any capability shipped this session.
+6. execution.md: if there is an active phased plan, update phase/review status from
+   accepted worker handoff notes in .horus/temp/.
+7. decisions.md: record durable decisions + reasoning. Bump `last_updated` on lanes you touched.
+8. Instructions: keep the AGENTS.md / CLAUDE.md shared blocks aligned
    (`horus doctor instructions` / `horus reconcile instructions`). Don't edit source as part of closure.
 
 Verify: `horus close --check` must pass (it fails while any dashboard field above is stale).

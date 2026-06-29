@@ -8,7 +8,7 @@ from horus import routines
 def _mk_fresh(
     root: Path, *, session_date="2026-06-26T10:00:00", proj_updated="2026-06-26",
     road_updated="2026-06-26", next_action="Build the Codex adapter", next_prompt="Resume: build Codex adapter",
-    current_focus="Shipping the terminal", shipped=(),
+    execution_recommendation="continue-as-is — narrow implementation", current_focus="Shipping the terminal", shipped=(),
 ):
     """A .horus/ with frontmatter + one session, for exercising freshness_signals."""
     hdir = root / ".horus"
@@ -22,6 +22,7 @@ def _mk_fresh(
     )
     (hdir / "roadmap.md").write_text(
         f"---\nstatus: active\nnext_action: \"{next_action}\"\nnext_prompt: \"{next_prompt}\"\n"
+        f"execution_recommendation: \"{execution_recommendation}\"\n"
         f"last_updated: {road_updated}\n---\n# Roadmap\n",
         encoding="utf-8",
     )
@@ -52,10 +53,11 @@ def test_freshness_flags_stale_lanes(tmp_path):
 
 
 def test_freshness_flags_empty_next_and_focus(tmp_path):
-    _mk_fresh(tmp_path, next_action="", next_prompt="", current_focus="")
+    _mk_fresh(tmp_path, next_action="", next_prompt="", execution_recommendation="", current_focus="")
     msgs = [m for lvl, m in _levels(routines.freshness_signals(tmp_path)) if lvl == "warn"]
     assert any("next_action is empty" in m for m in msgs)
     assert any("next_prompt is empty" in m for m in msgs)
+    assert any("execution_recommendation is empty" in m for m in msgs)
     assert any("current_focus is empty" in m for m in msgs)
 
 
@@ -147,6 +149,15 @@ def test_consolidate_counts_done_and_sessions(tmp_path):
     msgs = " ".join(f.message for f in findings)
     assert "done roadmap item" in msgs
     assert "session summary(ies) to distill" in msgs
+
+
+def test_consolidate_counts_temp_worker_notes(tmp_path):
+    hdir = _mk_horus(tmp_path)
+    (hdir / "temp").mkdir()
+    (hdir / "temp" / "1A.md").write_text("# phase 1A handoff\n", encoding="utf-8")
+    findings = routines.consolidate_signals(tmp_path)
+    msgs = " ".join(f.message for f in findings)
+    assert "temp worker handoff note(s) to review/distill" in msgs
 
 
 def test_consolidate_fails_without_horus(tmp_path):

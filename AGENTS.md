@@ -19,7 +19,11 @@ Before substantial work, read the `.horus/` lanes (each stays in its lane):
 - `features.md` — capability ledger (shipped / in-progress / planned packages).
 - `decisions.md` — durable rules and their reasoning.
 - `history.md` — carried-forward lessons ("bumps in the road").
+- `execution.md` — optional active execution plan: phases, model-tier routing,
+  supervisor/worker handoffs, and review gates for the current roadmap item.
 - Review recent local session summaries in `.horus/sessions/` when available.
+- Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
+  is active; distill only the durable results upward.
 
 After work that contributes to the project state, close the session by invoking the
 `horus-consolidate` skill and folding in this session's context:
@@ -28,7 +32,13 @@ After work that contributes to the project state, close the session by invoking 
   `horus session new "<title>"`, then write what actually happened — not just a date).
 - Keep facts in their lane: open action points in `roadmap.md`, shipped/planned
   capabilities in `features.md`, durable rules in `decisions.md`, lessons in
-  `history.md`. Don't maintain the same fact in two files.
+  `history.md`, active phase coordination in `execution.md`. Don't maintain the
+  same fact in two files.
+- Implementation workers may write brief phase handoff notes under `.horus/temp/`;
+  the supervising agent reviews those notes and updates the durable lanes.
+- When authoring `roadmap.md` `next_action`, also set `execution_recommendation`
+  to say whether the next step should use `execution.md` + worker/subagents or
+  continue as a direct single-agent task.
 - `horus consolidate` / `horus close` are signal + verification only — you supply the
   content from the session; they never rewrite the lanes for you.
 - Do not store secrets or full transcripts in `.horus/`.
@@ -43,4 +53,3 @@ Instruction synchronization:
 
 - Prefer small, explicit edits.
 - Keep the project lightweight and shaped around current user needs.
-

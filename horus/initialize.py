@@ -13,13 +13,18 @@ from pathlib import Path
 from typing import NamedTuple
 
 from horus import config, skills, templates
-from horus.continuity import HORUS_DIR, SESSIONS_DIR
+from horus.continuity import HORUS_DIR, SESSIONS_DIR, TEMP_DIR
 from horus.instructions import extract_block
 
 # Session summaries are ignored via a .gitignore co-located inside .horus/,
 # keeping a tracked .gitkeep so the directory travels with the repo.
-GITIGNORE_MARKER = "sessions/*.md"
-GITIGNORE_BLOCK = "sessions/*.md\n!sessions/.gitkeep\n"
+GITIGNORE_RULES = (
+    "sessions/*.md",
+    "!sessions/.gitkeep",
+    "temp/*",
+    "!temp/.gitkeep",
+)
+GITIGNORE_BLOCK = "\n".join(GITIGNORE_RULES) + "\n"
 
 # (filename, document title, the *other* file it cross-references, agent-notes heading)
 _INSTRUCTION_FILES = (
@@ -66,6 +71,7 @@ def init_project(
     hdir = project_root / HORUS_DIR
     hdir.mkdir(parents=True, exist_ok=True)
     (hdir / SESSIONS_DIR).mkdir(parents=True, exist_ok=True)
+    (hdir / TEMP_DIR).mkdir(parents=True, exist_ok=True)
 
     actions.append(
         _write_if_missing(
@@ -97,6 +103,13 @@ def init_project(
     )
     actions.append(
         _write_if_missing(
+            hdir / "execution.md",
+            templates.execution_md(today),
+            f"{HORUS_DIR}/execution.md",
+        )
+    )
+    actions.append(
+        _write_if_missing(
             hdir / "decisions.md",
             templates.decisions_md(),
             f"{HORUS_DIR}/decisions.md",
@@ -114,6 +127,13 @@ def init_project(
             hdir / SESSIONS_DIR / ".gitkeep",
             "",
             f"{HORUS_DIR}/{SESSIONS_DIR}/.gitkeep",
+        )
+    )
+    actions.append(
+        _write_if_missing(
+            hdir / TEMP_DIR / ".gitkeep",
+            "",
+            f"{HORUS_DIR}/{TEMP_DIR}/.gitkeep",
         )
     )
 
@@ -147,14 +167,15 @@ def _ensure_gitignore(horus_dir_path: Path) -> Action:
     path = horus_dir_path / ".gitignore"
     if not path.exists():
         path.write_text(GITIGNORE_BLOCK, encoding="utf-8")
-        return Action("created", f"created {HORUS_DIR}/.gitignore ignoring session summaries")
+        return Action("created", f"created {HORUS_DIR}/.gitignore ignoring session summaries and temp notes")
     text = path.read_text(encoding="utf-8")
     lines = {line.strip() for line in text.splitlines()}
-    if GITIGNORE_MARKER in lines:
-        return Action("exists", f"{HORUS_DIR}/.gitignore already ignores session summaries")
+    missing = [rule for rule in GITIGNORE_RULES if rule not in lines]
+    if not missing:
+        return Action("exists", f"{HORUS_DIR}/.gitignore already ignores session summaries and temp notes")
     sep = "" if text.endswith("\n") or text == "" else "\n"
-    path.write_text(text + sep + GITIGNORE_BLOCK, encoding="utf-8")
-    return Action("updated", f"{HORUS_DIR}/.gitignore: added session-summary ignore rules")
+    path.write_text(text + sep + "\n".join(missing) + "\n", encoding="utf-8")
+    return Action("updated", f"{HORUS_DIR}/.gitignore: added missing temp/session ignore rules")
 
 
 def _ensure_instruction_file(

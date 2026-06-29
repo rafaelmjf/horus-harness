@@ -17,14 +17,19 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     assert (tmp_path / ".horus" / "roadmap.md").exists()
     assert (tmp_path / ".horus" / "decisions.md").exists()
     assert (tmp_path / ".horus" / "features.md").exists()
+    assert (tmp_path / ".horus" / "execution.md").exists()
     assert (tmp_path / ".horus" / "history.md").exists()
     assert (tmp_path / ".horus" / "sessions").is_dir()
     assert (tmp_path / ".horus" / "sessions" / ".gitkeep").exists()
+    assert (tmp_path / ".horus" / "temp").is_dir()
+    assert (tmp_path / ".horus" / "temp" / ".gitkeep").exists()
     assert (tmp_path / "AGENTS.md").exists()
     assert (tmp_path / "CLAUDE.md").exists()
     gitignore = (tmp_path / ".horus" / ".gitignore").read_text(encoding="utf-8")
     assert "sessions/*.md" in gitignore
     assert "!sessions/.gitkeep" in gitignore
+    assert "temp/*" in gitignore
+    assert "!temp/.gitkeep" in gitignore
     assert not (tmp_path / ".gitignore").exists()  # no root .gitignore managed
     assert any(s == "created" for s in statuses.values())
 
@@ -43,6 +48,9 @@ def test_init_is_idempotent(tmp_path, monkeypatch):
     # gitignore must not gain a duplicate rule.
     assert (tmp_path / ".horus" / ".gitignore").read_text(encoding="utf-8").count(
         "sessions/*.md"
+    ) == 1
+    assert (tmp_path / ".horus" / ".gitignore").read_text(encoding="utf-8").count(
+        "temp/*"
     ) == 1
 
 

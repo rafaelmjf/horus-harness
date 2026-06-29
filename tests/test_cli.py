@@ -119,6 +119,51 @@ def test_session_new_records_alias_not_email(tmp_path, monkeypatch):
     assert "account: acct-" in text          # aliased instead
 
 
+def test_execution_prompt_uses_roadmap_and_target(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    (tmp_path / ".horus" / "roadmap.md").write_text(
+        '---\nnext_action: "Implement phase routing"\n'
+        'execution_recommendation: "plan-execution - cross-module work"\n---\n# Roadmap\n',
+        encoding="utf-8",
+    )
+    (tmp_path / ".horus" / "execution.md").write_text(
+        '---\nstatus: active\ncurrent_feature: "Phase routing"\n---\n# Execution\n',
+        encoding="utf-8",
+    )
+
+    assert main(["execution", "prompt", "--path", str(tmp_path), "--target", "codex"]) == 0
+    out = capsys.readouterr().out
+    assert "Target agent: codex" in out
+    assert "Implement phase routing" in out
+    assert "Codex subagents" in out
+
+
+def test_execution_handoff_creates_temp_note_and_refuses_clobber(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+
+    rc = main([
+        "execution", "handoff", "1A",
+        "--path", str(tmp_path),
+        "--title", "First phase",
+        "--agent", "sonnet-worker",
+        "--model-tier", "standard",
+    ])
+
+    assert rc == 0
+    note = tmp_path / ".horus" / "temp" / "1A.md"
+    assert note.is_file()
+    text = note.read_text(encoding="utf-8")
+    assert "phase: 1A" in text
+    assert 'title: "First phase"' in text
+    assert "agent: sonnet-worker" in text
+    assert "model_tier: standard" in text
+
+    assert main(["execution", "handoff", "1A", "--path", str(tmp_path)]) == 1
+    assert "Already exists" in capsys.readouterr().out
+
+
 def test_session_new_uses_configured_alias(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     from horus import claude_usage, config

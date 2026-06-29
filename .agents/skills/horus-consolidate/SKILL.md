@@ -13,7 +13,7 @@ description: >-
   first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 5 -->
 
 # Consolidate Horus continuity
 
@@ -46,8 +46,12 @@ finish:
 
 - `project.md` → `current_focus` (frontmatter): the one-line "where things are now".
 - `roadmap.md` → `next_action` (the single NEXT) and `next_prompt` (the resume prompt).
+- `roadmap.md` → `execution_recommendation`: analyze the NEXT and say whether to
+  continue directly or prepare `execution.md` + worker/subagents.
 - `roadmap.md` → the checkbox states behind the progress bar (mark what this session did).
 - `features.md` → a row for anything **shipped this session** (Planned/In-progress → Shipped).
+- `execution.md` → active phase status and supervisor/worker handoff state, when this
+  session was part of a phased execution plan.
 - `last_updated` frontmatter on every lane you touched (bump to today).
 
 `horus close --check` is the gate: it fails (non-zero) while any of these is stale,
@@ -61,8 +65,9 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
    gospel — and most belong to the backlog job (Step 5), not this close.
 
 2. **Read the lanes.** Read `.horus/project.md`, `roadmap.md`, `features.md`,
-   `decisions.md`, `history.md`, and the newest `sessions/*.md`. If `docs/routines.md`
-   exists it holds the full routing contract; otherwise this skill is authoritative.
+   `decisions.md`, `history.md`, optional `execution.md`, and the newest
+   `sessions/*.md` / `temp/*.md` handoff notes. If `docs/routines.md` exists it
+   holds the full routing contract; otherwise this skill is authoritative.
 
 3. **Per-session close — record this session** (`.horus/**` only; never source,
    `AGENTS.md`, or `CLAUDE.md`):
@@ -75,14 +80,23 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
      `last_updated` on touched lanes. Author the next step for a *cold* reader — name
      it, point at `.horus/`.
+   - **Recommend the execution mode for the NEXT.** If the next step is small,
+     single-surface, low-risk, or mostly continuity/docs, set `execution_recommendation:
+     "continue-as-is — <why>"`. If it is multi-phase, cross-module, risky, or benefits
+     from supervisor/worker review, set `execution_recommendation: "plan-execution —
+     <why>"` and create/update `execution.md` before implementation starts.
+   - **When a worker handoff exists** in `.horus/temp/`, use it as evidence, not as
+     truth: the supervisor reviews the diff/tests, then distills accepted facts into
+     durable lanes and updates `execution.md`.
 
 4. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
    `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`. If
    `history.md` has grown into a verbatim log, that's a `horus-distill-history` job —
-   flag it, don't fix it here.
+   flag it, don't fix it here. `execution.md` is fluid active coordination; archive
+   or replace it when the roadmap item is done.
 
 5. **Backlog consolidation — ONLY when explicitly asked.** Distill old `sessions/*.md`
-   into the lanes then remove them; move historical done items into `features.md` and
+   and stale `temp/*.md` handoff notes into the lanes then remove them; move historical done items into `features.md` and
    **prune** them from `roadmap.md`; **de-duplicate** roadmap↔features overlaps by
    keeping action points in `roadmap.md` and status in `features.md`, with a literal
    `→ features.md` / `action points → roadmap.md` cross-reference each way (that

@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view, but the next session should first evaluate OmniAgent as a possibly overlapping open-source agent/OAuth runner and decide whether Horus should integrate with it, defer to it for execution/auth, or sharpen its own scope around project continuity and cross-machine visibility."
+current_focus: "Horus now projects the optional execution workflow into native Claude/Codex use through `horus execution` prompts, worker handoff notes, and a bundled `horus-execution` skill. The next step is to pilot it on a real phased feature and tune the workflow from that run."
 last_updated: 2026-06-29
 ---
 

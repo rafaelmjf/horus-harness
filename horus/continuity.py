@@ -13,6 +13,7 @@ COMMITTED_FILES = ("project.md", "roadmap.md", "decisions.md")
 # Structure-v2 lanes: recommended, warn-if-missing so pre-v2 repos migrate gently.
 RECOMMENDED_FILES = ("features.md", "history.md")
 SESSIONS_DIR = "sessions"
+TEMP_DIR = "temp"
 
 
 class Finding(NamedTuple):

@@ -45,7 +45,7 @@ def test_write_skill_skips_unversioned_without_force(tmp_path):
 
 def test_expected_skills_registered():
     names = {s.name for s in skills.SKILLS}
-    assert {"horus-consolidate", "horus-distill-history", "horus-infer"} <= names
+    assert {"horus-consolidate", "horus-distill-history", "horus-infer", "horus-execution"} <= names
 
 
 def test_missing_or_stale_and_findings(tmp_path):

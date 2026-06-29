@@ -27,6 +27,7 @@ from importlib import resources
 from horus import (
     __version__,
     adapters,
+    cache_status,
     claude_usage,
     codex_usage,
     config,
@@ -63,6 +64,8 @@ def load_project(path_str: str) -> dict[str, Any]:
         "project_body": "",
         "roadmap_body": "",
         "features_body": "",
+        "execution_body": "",
+        "execution_status": "",
         "feature_counts": {"shipped": 0, "in_progress": 0, "planned": 0},
         "feature_items": {"shipped": [], "in_progress": [], "planned": []},
         "decisions_body": "",
@@ -70,6 +73,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         "sessions": [],
         "findings": [],
         "next_action": "",
+        "execution_recommendation": "",
         "latest": None,
         "latest_body": "",
         "progress": {"done": 0, "total": 0, "pct": 0},
@@ -94,6 +98,7 @@ def load_project(path_str: str) -> dict[str, Any]:
             data["current_focus"] = doc.front_matter.get("current_focus", "")
         data["next_prompt"] = doc.front_matter.get("next_prompt", "")
         data["next_action"] = doc.front_matter.get("next_action", "")
+        data["execution_recommendation"] = doc.front_matter.get("execution_recommendation", "")
         data["roadmap_body"] = doc.body
 
     features_md = hdir / "features.md"
@@ -102,6 +107,12 @@ def load_project(path_str: str) -> dict[str, Any]:
         data["features_body"] = doc.body
         data["feature_items"] = routines.feature_items(doc.body)
         data["feature_counts"] = {k: len(v) for k, v in data["feature_items"].items()}
+
+    execution_md = hdir / "execution.md"
+    if execution_md.is_file():
+        doc = frontmatter.parse(execution_md.read_text(encoding="utf-8"))
+        data["execution_body"] = doc.body
+        data["execution_status"] = doc.front_matter.get("status", "")
 
     decisions_md = hdir / "decisions.md"
     if decisions_md.is_file():
@@ -356,6 +367,7 @@ main { padding: 24px 28px; max-width: 1320px; }
 .metric { background: #12141b; border: 1px solid #232733; border-radius: 8px; padding: 9px 11px; }
 .metric .num { display: block; font-size: 18px; color: #eaf6ee; font-weight: 600; }
 .metric .lbl { display: block; font-size: 11px; color: #8a93a6; text-transform: uppercase; letter-spacing: .4px; }
+.metric .sub { display: block; font-size: 12px; color: #8a93a6; margin-top: 2px; }
 .session-body { background: #12141b; border: 1px solid #232733; border-left: 3px solid #6db3f2;
                 border-radius: 8px; padding: 4px 16px; }
 .session-body .meta { color: #8a93a6; font-size: 12px; }
@@ -615,6 +627,18 @@ def _fmt_int(value: int) -> str:
     return f"{value:,}"
 
 
+def _fmt_duration(seconds: float) -> str:
+    total = max(0, int(seconds))
+    if total < 60:
+        return f"{total}s"
+    minutes = total // 60
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    rem = minutes % 60
+    return f"{hours}h {rem}m" if rem else f"{hours}h"
+
+
 def _project_overhead_html(project_path: str) -> str:
     """Aggregate-only token overhead card for one project detail view."""
     root = Path(project_path).resolve()
@@ -674,6 +698,55 @@ def _project_overhead_html(project_path: str) -> str:
         "<div class='section' id='overhead'><h2>Token overhead</h2>"
         "<p class='muted'>Aggregate-only local estimate. Observed usage is upper-bound attribution, not a counterfactual.</p>"
         f"{metrics}{usage_table}{session_table}</div>"
+    )
+
+
+def _project_cache_html(project_path: str) -> str:
+    """Prompt-cache freshness estimate for one project detail view."""
+    try:
+        statuses = cache_status.project_cache_status(Path(project_path))
+    except Exception as exc:
+        return (
+            "<div class='section'><h2>Context cache</h2>"
+            f"<div class='card'><span class='health-warn'>unavailable:</span> {html.escape(str(exc))}</div></div>"
+        )
+
+    if not statuses:
+        return (
+            "<div class='section'><h2>Context cache</h2>"
+            "<div class='card'><p class='muted'>No local Claude/Codex cache signal for this project yet.</p></div></div>"
+        )
+
+    cards = "".join(_cache_metric(s) for s in statuses)
+    return (
+        "<div class='section' id='context-cache'><h2>Context cache</h2>"
+        "<p class='muted'>Local estimate from native token logs. Likely cold after 5 minutes; "
+        "expired after 60 minutes of no project turns.</p>"
+        f"<div class='metric-grid'>{cards}</div></div>"
+    )
+
+
+def _cache_metric(status: cache_status.CacheStatus) -> str:
+    state = status.state()
+    cls = "health-ok" if state == "warm" else ("health-fail" if state == "expired" else "health-warn")
+    age = _fmt_duration(status.age_seconds())
+    ttl = _fmt_duration(status.seconds_until_expiry())
+    cache_bits = []
+    if status.cached_input_tokens:
+        cache_bits.append(f"cached {_fmt_int(status.cached_input_tokens)}")
+    if status.cache_read_input_tokens:
+        cache_bits.append(f"read {_fmt_int(status.cache_read_input_tokens)}")
+    if status.cache_creation_input_tokens:
+        cache_bits.append(f"write {_fmt_int(status.cache_creation_input_tokens)}")
+    cache_text = ", ".join(cache_bits) if cache_bits else "no cache tokens in last turn"
+    ttl_text = "expired" if state == "expired" else f"{ttl} until 60m"
+    return (
+        "<div class='metric'>"
+        f"<span class='lbl'>{html.escape(status.agent)}</span>"
+        f"<span class='num {cls}'>{html.escape(state)}</span>"
+        f"<span class='sub'>last turn {age} ago · {ttl_text}</span>"
+        f"<span class='sub'>{html.escape(cache_text)} · total {_fmt_int(status.total_tokens)}</span>"
+        "</div>"
     )
 
 
@@ -751,10 +824,16 @@ def _best_next_text(p: dict[str, Any]) -> str:
 def _single_next_html(p: dict[str, Any]) -> str:
     """Highlight the ONE authored next action (roadmap.md next_action)."""
     text = _best_next_text(p)
+    recommendation = (p.get("execution_recommendation") or "").strip()
+    rec_html = (
+        f"<div class='progress-label'>execution: {html.escape(_plain(recommendation))}</div>"
+        if recommendation
+        else ""
+    )
     if text:
         return (
             "<div class='next'><span class='lbl'>NEXT</span>"
-            f"<div class='next-one'>{html.escape(_plain(text))}</div></div>"
+            f"<div class='next-one'>{html.escape(_plain(text))}</div>{rec_html}</div>"
         )
     if p["progress"]["total"] and p["progress"]["done"] == p["progress"]["total"]:
         return "<div class='next done'><span class='lbl'>NEXT</span> &#10003; roadmap complete</div>"
@@ -1030,6 +1109,7 @@ def render_project(p: dict[str, Any]) -> str:
         )
 
     parts.append(_git_html(p))
+    parts.append(_project_cache_html(p["path"]))
     parts.append(_project_overhead_html(p["path"]))
     parts.append(_latest_session_card(p))
 
@@ -1050,6 +1130,17 @@ def render_project(p: dict[str, Any]) -> str:
             heading += f" <span class='muted' style='font-size:13px'>({pr['done']}/{pr['total']} done)</span>"
         parts.append(
             f"<div class='section' id='roadmap'><h2>{heading}</h2>{_breakdown_html(p)}</div>"
+        )
+
+    if p["execution_body"]:
+        status = (
+            f" <span class='muted' style='font-size:13px'>({html.escape(p['execution_status'])})</span>"
+            if p["execution_status"]
+            else ""
+        )
+        parts.append(
+            f"<div class='section' id='execution'><h2>Execution plan{status}</h2>"
+            f"{markdown.render(p['execution_body'])}</div>"
         )
 
     if p["features_body"]:
@@ -1260,6 +1351,25 @@ def _control_session_card(rec: registry.SessionRecord, accounts: list[dict[str, 
             if pct is None and cu.primary_percent is not None:
                 pct = cu.primary_percent
 
+    cache_line = ""
+    try:
+        if rec.agent == "codex":
+            cs = cache_status.latest_codex_cache_status(Path(rec.project))
+        elif rec.agent == "claude":
+            cs = cache_status.latest_claude_cache_status(Path(rec.project))
+        else:
+            cs = None
+    except Exception:
+        cs = None
+    if cs is not None:
+        state = cs.state()
+        cls = "health-ok" if state == "warm" else ("health-fail" if state == "expired" else "health-warn")
+        cache_line = (
+            f"<div class='progress-label'>cache <span class='{cls}'>{html.escape(state)}</span> "
+            f"&middot; last turn {_fmt_duration(cs.age_seconds())} ago "
+            f"&middot; {_fmt_int(cs.cache_tokens)} cache tokens</div>"
+        )
+
     label_bits.append(f"5h limit {pct:.0f}%" if pct is not None else "usage unknown")
     if acct and acct.get("five_reset"):
         label_bits.append(f"resets {acct['five_reset']}")
@@ -1274,7 +1384,7 @@ def _control_session_card(rec: registry.SessionRecord, accounts: list[dict[str, 
         f"<div class='scard'><div class='scard-h'>"
         f"<span class='scard-t'>{html.escape(Path(rec.project).name)}</span>"
         f"<span class='pill'>{html.escape(rec.account or 'ambient')}</span></div>"
-        f"{meta}{_usage_bar(pct, ' · '.join(label_bits))}{context_line}"
+        f"{meta}{_usage_bar(pct, ' · '.join(label_bits))}{context_line}{cache_line}"
         f"{_reopen_html(rec)}"
         f"<div class='muted' style='font-size:11px;margin-top:8px'>session "
         f"<code>{html.escape(rec.session_id[:8])}</code> &middot; updated {html.escape(rec.updated_at)}</div>"

@@ -1,3 +1,5 @@
 sessions/*.md
 !sessions/.gitkeep
 
+temp/*
+!temp/.gitkeep

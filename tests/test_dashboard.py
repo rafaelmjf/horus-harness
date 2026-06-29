@@ -2,10 +2,11 @@
 
 import os
 from pathlib import Path
+from datetime import datetime, timezone
 
 import json
 
-from horus import config, dashboard, github_catalog, initialize, launcher, overhead
+from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, overhead
 from horus.registry import Registry, SessionRecord
 
 
@@ -381,13 +382,37 @@ def test_project_detail_surfaces_token_overhead(tmp_path, monkeypatch):
     assert "codex-session"[:8] in html_out
 
 
+def test_project_detail_surfaces_context_cache(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    monkeypatch.setattr(
+        dashboard.cache_status,
+        "project_cache_status",
+        lambda root: [
+            cache_status.CacheStatus(
+                "codex",
+                datetime.now(timezone.utc),
+                tmp_path / "rollout.jsonl",
+                cached_input_tokens=1200,
+                total_tokens=2000,
+            )
+        ],
+    )
+
+    html_out = dashboard.render_project(dashboard.load_project(str(tmp_path)))
+    assert "Context cache" in html_out
+    assert "warm" in html_out
+    assert "cached 1,200" in html_out
+
+
 def test_next_action_and_latest_surface(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)
 
     # The single NEXT is agent-authored (roadmap.md next_action), not inferred.
     (tmp_path / ".horus" / "roadmap.md").write_text(
-        '---\nstatus: active\nnext_action: "Wire the adapter contract"\n---\n'
+        '---\nstatus: active\nnext_action: "Wire the adapter contract"\n'
+        'execution_recommendation: "plan-execution — cross-module work"\n---\n'
         "# Roadmap\n\n- [ ] First task.\n",
         encoding="utf-8",
     )
@@ -405,6 +430,7 @@ def test_next_action_and_latest_surface(tmp_path, monkeypatch):
     html_out = dashboard.render_index([data])
     assert "NEXT" in html_out
     assert "Wire the adapter contract" in html_out  # authored, highlighted
+    assert "plan-execution" in html_out
     assert "Newer change" in html_out
 
 
@@ -487,6 +513,26 @@ def test_dashboard_surfaces_features_and_history(tmp_path, monkeypatch):
     # New column layout: features show as named buckets (Idea / In progress / Shipped).
     assert "Main features" in idx and "Widget engine" in idx
     assert "Last session summary" in idx
+
+
+def test_dashboard_surfaces_execution_plan(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    (tmp_path / ".horus" / "execution.md").write_text(
+        "---\nstatus: active\nlast_updated: 2026-06-29\n---\n"
+        "# Execution Plan\n\n## Active Phases\n\n"
+        "| phase | status | worker_tier |\n|---|---|---|\n| 1A | ready-for-review | standard |\n",
+        encoding="utf-8",
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["execution_status"] == "active"
+    assert "ready-for-review" in data["execution_body"]
+
+    det = dashboard.render_project(data)
+    assert "id='execution'" in det
+    assert "Execution plan" in det
+    assert "ready-for-review" in det
 
 
 def test_control_tab_renders_launch_controls(tmp_path, monkeypatch):

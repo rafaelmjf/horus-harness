@@ -19,6 +19,7 @@ from horus import (
     codex_usage,
     config,
     dashboard,
+    frontmatter,
     gitstate,
     github_catalog,
     initialize,
@@ -363,6 +364,11 @@ def _slugify(text: str) -> str:
     return slug or "session"
 
 
+def _phase_filename(text: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", text).strip("-._")
+    return slug or "phase"
+
+
 def cmd_session(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     sessions = root / HORUS_DIR / SESSIONS_DIR
@@ -394,6 +400,63 @@ def cmd_session(args: argparse.Namespace) -> int:
     )
     print(f"Created {path}")
     return 0
+
+
+def _read_horus_doc(root: Path, name: str) -> frontmatter.Document:
+    path = root / HORUS_DIR / name
+    if not path.is_file():
+        return frontmatter.Document({}, "")
+    return frontmatter.parse(path.read_text(encoding="utf-8"))
+
+
+def cmd_execution(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    hdir = root / HORUS_DIR
+    if not hdir.is_dir():
+        print(f"No {HORUS_DIR}/ here (run `horus init` first).")
+        return 1
+
+    if args.execution_cmd == "prompt":
+        roadmap_doc = _read_horus_doc(root, "roadmap.md")
+        execution_doc = _read_horus_doc(root, "execution.md")
+        print(
+            templates.execution_supervisor_prompt(
+                target=args.target,
+                project=root.name,
+                next_action=roadmap_doc.front_matter.get("next_action", ""),
+                execution_recommendation=roadmap_doc.front_matter.get("execution_recommendation", ""),
+                execution_status=execution_doc.front_matter.get("status", ""),
+                current_feature=execution_doc.front_matter.get("current_feature", ""),
+            )
+        )
+        return 0
+
+    if args.execution_cmd == "handoff":
+        temp_dir = hdir / "temp"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        path = temp_dir / f"{_phase_filename(args.phase)}.md"
+        if path.exists() and not args.force:
+            print(f"Already exists: {path} (use --force to overwrite)")
+            return 1
+
+        execution_doc = _read_horus_doc(root, "execution.md")
+        model_tier = args.model_tier or execution_doc.front_matter.get("worker_tier", "") or "standard"
+        title = args.title or f"Phase {args.phase}"
+        path.write_text(
+            templates.execution_handoff_note(
+                phase=args.phase,
+                title=title,
+                date=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                agent=args.agent,
+                model_tier=model_tier,
+            ),
+            encoding="utf-8",
+        )
+        print(f"Created {path}")
+        return 0
+
+    print(f"Unsupported execution command: {args.execution_cmd}")
+    return 2
 
 
 def cmd_account(args: argparse.Namespace) -> int:
@@ -1241,6 +1304,30 @@ def build_parser() -> argparse.ArgumentParser:
     p_session_new.add_argument("--account", default=None, help="account tag (default: auto-detect the logged-in Claude account)")
     p_session_new.add_argument("--environment", default="host")
     p_session_new.set_defaults(func=cmd_session)
+
+    p_execution = sub.add_parser("execution", help="work with the optional .horus/execution.md plan")
+    execution_sub = p_execution.add_subparsers(dest="execution_cmd", required=True)
+    p_execution_prompt = execution_sub.add_parser("prompt", help="print a target-aware supervisor prompt")
+    p_execution_prompt.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_execution_prompt.add_argument(
+        "--target",
+        choices=("generic", "claude", "codex"),
+        default="generic",
+        help="agent target to shape the prompt for (default: generic)",
+    )
+    p_execution_prompt.set_defaults(func=cmd_execution)
+
+    p_execution_handoff = execution_sub.add_parser(
+        "handoff",
+        help="create a .horus/temp/ worker handoff note for one phase",
+    )
+    p_execution_handoff.add_argument("phase", help="phase id, e.g. 1A")
+    p_execution_handoff.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_execution_handoff.add_argument("--title", default="", help="human-readable phase title")
+    p_execution_handoff.add_argument("--agent", default="worker", help="worker agent label")
+    p_execution_handoff.add_argument("--model-tier", default="", help="frontier | standard | economy")
+    p_execution_handoff.add_argument("--force", action="store_true", help="overwrite an existing handoff note")
+    p_execution_handoff.set_defaults(func=cmd_execution)
 
     p_account = sub.add_parser("account", help="show the detected agent account, alias, and isolation dir")
     p_account.add_argument("--agent", default="claude", help="which agent's account to inspect (default: claude)")

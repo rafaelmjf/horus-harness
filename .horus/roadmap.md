@@ -1,12 +1,33 @@
 ---
 status: active
-current_focus: "Horus is moving from a purely local continuity dashboard toward a lightweight central view, but the next session should first evaluate OmniAgent as a possibly overlapping open-source agent/OAuth runner and decide whether Horus should integrate with it, defer to it for execution/auth, or sharpen its own scope around project continuity and cross-machine visibility."
-next_action: "Analyze OmniAgent and produce a recommendation: integrate, interoperate, defer execution/auth to it, or keep Horus separate with a clearer continuity/cross-machine scope."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: research OmniAgent, the open-source tool the user mentioned as overlapping with Horus around multi-agent OAuth/flexible agent use. Compare it to Horus's current scope and recent work: repo-local `.horus` continuity, dashboard, companion, GitHub remote catalog/cache/force-refresh, and native Claude/Codex hooks/skills. Recommend whether Horus should integrate with OmniAgent, interoperate at boundaries, defer execution/auth to it, or stay separate while sharpening Horus around project continuity, roadmap/next-action visibility, cross-machine project inventory, and native-app closure workflows. Capture concrete implications for the roadmap and architecture split."
+current_focus: "Horus now projects the optional execution workflow into native Claude/Codex use through `horus execution` prompts, worker handoff notes, and a bundled `horus-execution` skill. The next step is to pilot it on a real phased feature and tune the workflow from that run."
+next_action: "Pilot `horus-execution` on a real phased Horus feature: create an execution plan, delegate one bounded worker phase, review its `.horus/temp/` handoff, and adjust the workflow only where the pilot shows friction."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: pilot the new execution workflow on a real phased Horus feature. This session shipped `horus execution prompt --target claude|codex`, `horus execution handoff <phase>`, the bundled `horus-execution` skill for `.claude/skills` and `.agents/skills`, docs, tests, and the design decision to project via prompts/skills/handoffs before generating native agent config files. Start by choosing a bounded next Horus feature, updating `.horus/execution.md`, then delegate one phase and review the `.horus/temp/` handoff."
+execution_recommendation: "plan-execution - the next step is explicitly a pilot of the supervisor/worker workflow and should start by updating execution.md."
 last_updated: 2026-06-29
 ---
 
 # Roadmap
+
+## Strategy - Omnigent Boundary
+
+- [x] Research Omnigent/OmniAgent overlap and decide the product boundary: interoperate later, but keep Horus separate and continuity-first.
+- [ ] Draft an Omnigent interop spec with explicit non-goals: no embedded Omnigent server, no dependency on its auth/runner, no migration of `.horus` lanes into Omnigent DB state.
+- [ ] Consider a tiny export/import command after the spec: `horus export omnigent` could produce an agent/context bundle or MCP-facing project-state tool from `.horus/`; a later optional reader could show linked Omnigent session ids in the Horus dashboard.
+
+## Context Cache Visibility
+
+- [x] Add a dashboard context-cache estimate for Claude/Codex projects using local native token logs.
+- [x] Surface cache freshness on live session cards where local telemetry exists.
+- [ ] Decide active behavior for cold/expired sessions: companion warning, launch-flow warning, native hook/statusline projection, or dashboard-only.
+
+## Execution Planning Workflow
+
+- [x] Add `.horus/execution.md` as a tracked, fluid active execution plan for phased/subagent work.
+- [x] Add gitignored `.horus/temp/` for fleeting worker/subagent handoff notes.
+- [x] Surface `execution.md` on the project dashboard and teach `horus consolidate` to flag temp handoff notes.
+- [x] Design native Claude/Codex projection: supervisor prompt, worker handoff template, model-tier mapping, and optional subagent definitions.
+- [ ] Pilot `horus-execution` on a real phased Horus feature and tune the workflow from observed friction.
 
 ## MVP 0 - Project Continuity Skeleton
 

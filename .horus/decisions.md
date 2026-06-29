@@ -1,5 +1,67 @@
 # Decisions
 
+## 2026-06-29 - Project Execution Via Prompts, Skills, And Handoffs First
+
+Project the new execution workflow into Claude/Codex through `horus execution`
+prompts, structured `.horus/temp/` worker notes, and a bundled `horus-execution`
+skill before generating native agent configuration files.
+
+Reasoning:
+
+- Claude and Codex already have native subagent/custom-agent surfaces, but users may
+  have personal/project agent configs that Horus should not overwrite or own by
+  default.
+- A target-aware supervisor prompt plus a worker handoff template gives the main
+  value immediately: phase discipline, model-tier routing, and reviewable worker
+  output.
+- Keeping model tiers symbolic (`frontier`, `standard`, `economy`) avoids baking
+  transient model names into durable project files while still letting each local
+  agent resolve the tier to current availability.
+- Native agent-file generation can be added later if the pilot shows repeated
+  boilerplate and a clear safe ownership boundary.
+
+Implication: `horus-execution` is an opt-in supervisor skill. It tells agents when
+to use subagents/workers, but durable lane updates still happen only after
+supervisor review.
+
+## 2026-06-29 - `execution.md` Is A Fluid Active Plan, Temp Notes Are Worker Handoffs
+
+Add `.horus/execution.md` as an optional tracked lane for the currently active phased implementation plan, and `.horus/temp/` as a gitignored scratch area for worker/subagent handoff notes.
+
+Reasoning:
+
+- Large features often benefit from a stronger supervisor model decomposing the work and cheaper/faster worker models implementing isolated phases.
+- The implementation worker has the freshest context about files changed, tests run, surprises, and risks, so it should write a factual phase handoff note.
+- Durable Horus lanes still need review and routing judgement; the supervisor should distill accepted worker notes into `roadmap.md`, `features.md`, `decisions.md`, `history.md`, and session summaries.
+- `execution.md` should stay fluid and replaceable when the next roadmap item starts. It is not a changelog or durable history.
+
+Implication: workers may update `.horus/temp/*.md`; supervisors own durable lane updates. Future native Claude/Codex projection should consume this file without making phased subagent execution mandatory for simple tasks.
+
+## 2026-06-29 - Every NEXT Carries An Execution Recommendation
+
+When an agent authors `roadmap.md` `next_action`, it must also author `execution_recommendation`.
+
+Reasoning:
+
+- The decision to use direct single-agent work versus a phased supervisor/worker plan belongs at the handoff point, before the next session starts.
+- Keeping the recommendation in `roadmap.md` frontmatter makes it visible with the NEXT without forcing every project or task to fill `execution.md`.
+- `execution.md` should be created or refreshed only when the recommendation is to plan execution; simple or low-risk tasks can explicitly stay `continue-as-is`.
+
+Implication: `horus close --check` treats a missing recommendation as stale continuity, and the dashboard shows the recommendation beside NEXT.
+
+## 2026-06-29 - Omnigent Is An Interop Target, Not Horus's Core
+
+Keep Horus separate from Omnigent/OmniAgent rather than integrating it as a dependency or deferring Horus's core to it.
+
+Reasoning:
+
+- Omnigent is already a broad meta-harness: server + runner, WebSocket-hosted sessions, multi-user collaboration, policies, sandboxes, DB-backed session state, agent YAML, and many native harness bridges.
+- Competing with that execution/auth/policy surface would pull Horus away from its strongest differentiator: durable repo-local project continuity that native Claude/Codex sessions can use even when Horus is not running.
+- Horus should keep wrapping official CLIs where needed, but only to serve continuity, closure, dashboard visibility, project inventory, and cross-machine pickup.
+- The useful boundary is interop, not replacement: Horus can export `.horus` state to Omnigent as project context/tools, and may later display Omnigent session metadata when configured, while Omnigent owns orchestration/auth/sandboxing for sessions started through it.
+
+Implication: future specs should avoid "build a general agent harness" unless the feature directly advances Horus continuity. If a user wants shared live multi-agent sessions, Omnigent is the likely host; Horus should make that host better informed by `.horus` state.
+
 ## 2026-06-24 - Project-First Product Shape
 
 Horus should be project-centric rather than Telegram-first.

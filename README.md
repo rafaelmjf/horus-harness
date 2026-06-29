@@ -48,6 +48,8 @@ horus close                       # verify continuity, Codex usage, and print th
 horus close --usage-threshold 90  # warn when Codex context or rate-limit usage reaches a percent
 horus usage check                 # check the same native-app usage signal directly
 horus hook install --target codex --kind all # install Codex usage/merge/guard hooks
+horus execution prompt --target codex # print a supervisor prompt for phased work
+horus execution handoff 1A        # create .horus/temp/1A.md worker note
 horus consolidate                 # route/prune/distill .horus lanes; prints the agent ritual
 horus distill-history             # compress a large log into curated history.md
 horus infer                       # bootstrap/refresh .horus from canonical docs; prints the ritual
@@ -101,13 +103,21 @@ project projections, and prints the repo's stored `next_prompt` plus the matchin
   features.md     # shipped / in-progress / planned capability ledger
   decisions.md    # durable decisions + reasoning
   history.md      # curated lessons / "bumps in the road"
+  execution.md    # optional active execution plan for phased/subagent work
   sessions/       # local session summaries (gitignored by default)
+  temp/           # fleeting worker/subagent handoff notes (gitignored)
 ```
 
 `AGENTS.md` and `CLAUDE.md` stay native; Horus only syncs the marked
 `<!-- HORUS:BEGIN shared-instructions -->` block and detects drift elsewhere.
 Horus project skills are scaffolded for both Claude Code (`.claude/skills`) and
 Codex (`.agents/skills`).
+
+When `roadmap.md` recommends `plan-execution`, use `horus execution prompt
+--target claude|codex` to frame the supervisor session and `horus execution
+handoff <phase>` to create the worker note each native subagent should fill before
+review. The temp handoff stays local; accepted outcomes are distilled into the
+durable lanes during closure.
 
 ## Adding Horus to a project
 

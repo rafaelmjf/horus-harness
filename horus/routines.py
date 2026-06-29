@@ -16,6 +16,7 @@ from horus import frontmatter, roadmap, templates
 from horus.continuity import (
     HORUS_DIR,
     RECOMMENDED_FILES,
+    TEMP_DIR,
     Finding,
     horus_dir,
     recent_sessions,
@@ -206,10 +207,24 @@ def consolidate_signals(root: Path, *, overlap_threshold: float = 0.5) -> list[F
         findings.append(Finding(
             "warn", f"{len(sessions)} session summary(ies) to distill into the lanes"
         ))
+    temp_notes = _temp_notes(root)
+    if temp_notes:
+        findings.append(Finding(
+            "warn", f"{len(temp_notes)} temp worker handoff note(s) to review/distill"
+        ))
 
     if not any(f.level in ("warn", "fail") for f in findings):
         findings.append(Finding("ok", "lanes look consolidated — no routing/pruning candidates"))
     return findings
+
+
+def _temp_notes(root: Path) -> list[Path]:
+    temp = horus_dir(root) / TEMP_DIR
+    if not temp.is_dir():
+        return []
+    files = [p for p in temp.glob("*.md") if p.is_file()]
+    files.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
+    return files
 
 
 # --------------------------------------------------------------------------- #
@@ -281,6 +296,11 @@ def freshness_signals(root: Path) -> list[Finding]:
         if not (fm.get("next_prompt") or "").strip():
             findings.append(Finding(
                 "warn", "roadmap.md next_prompt is empty — the dashboard's resume prompt is blank; author it"
+            ))
+        if not (fm.get("execution_recommendation") or "").strip():
+            findings.append(Finding(
+                "warn",
+                "roadmap.md execution_recommendation is empty — analyze whether the NEXT needs execution.md/subagents",
             ))
 
     pj = _read(hdir, "project.md")

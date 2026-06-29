@@ -42,7 +42,9 @@ the routine that makes a multi-lane structure honest — without it, `roadmap.md
 | `features.md` | **capability ledger**: shipped / in-progress / planned *packages* | tasks/chores, the *why* |
 | `decisions.md` | durable rules + reasoning, dated | open questions, status |
 | `history.md` | curated lessons / "bumps in the road" | a timeline, open issues |
+| `execution.md` | optional active plan for the current roadmap item: phases, model-tier routing, worker handoffs, review gates | durable capability ledger, long-term history |
 | `sessions/` | local ephemeral per-machine context | anything durable not yet distilled upward |
+| `temp/` | gitignored worker/subagent handoff notes for active execution | durable state, secrets, full transcripts |
 
 ### Routing rules (the contract)
 
@@ -58,17 +60,20 @@ the routine that makes a multi-lane structure honest — without it, `roadmap.md
    restating it. No fact is maintained in two places.
 4. **Prune.** Remove done/obsolete roadmap items (they live in features/history/git
    now). Drop session summaries whose content has been fully distilled upward.
-5. **Distill sessions.** Fold durable content from `sessions/*.md` into
-   project/roadmap/features/decisions/history, then mark/remove the session.
+5. **Distill sessions and worker notes.** Fold durable content from `sessions/*.md`
+   and accepted `.horus/temp/*.md` handoffs into project/roadmap/features/decisions/
+   history/execution, then mark/remove the local note when it has served its purpose.
 6. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
    `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`.
+   `execution.md` is allowed to be fluid and replaced when the next roadmap item starts.
 
 ### Deterministic pre-pass (Horus, Python)
 
 Reads the lanes and reports, without mutating anything:
 
-- **Lane presence** — which of the 6 lanes exist; missing recommended lanes
-  (`features.md`, `history.md`).
+- **Lane presence** — which core lanes exist; missing recommended durable lanes
+  (`features.md`, `history.md`) are migration warnings. `execution.md` is optional
+  and scaffolded for active plan workflows, not required for every project.
 - **Overlap candidates** — roadmap item text vs. `features.md` row text, matched on
   a normalized token-overlap heuristic; each hit is a candidate for rule 3. A roadmap
   item that already points back at `features.md` is treated as a *reconciled* split
@@ -76,7 +81,8 @@ Reads the lanes and reports, without mutating anything:
   so an in-progress/planned item legitimately in both lanes stops warning once split.
 - **Done-but-unshipped** — roadmap items marked done (`[x]`) whose text has no
   corresponding `features.md` row (candidate for rule 1).
-- **Sessions to distill** — session summaries present (candidates for rule 5).
+- **Sessions / temp notes to distill** — session summaries and worker handoff notes
+  present (candidates for rule 5).
 - **Staleness** — `last_updated` age and lane mtimes.
 
 ### Emitted prompt
@@ -85,6 +91,43 @@ A consolidation ritual addressed to the in-loop agent: the routing rules above, 
 computed signals, and the edit-scope/idempotency/no-invent constraints. The agent
 performs the edits; re-running the pre-pass afterward should show the candidates
 resolved.
+
+---
+
+## `execution`
+
+Prepare and supervise an optional phased implementation plan for the current
+roadmap item. This routine is intentionally lighter than `consolidate`: it gives
+the native Claude/Codex supervisor a prompt and gives workers a structured local
+handoff note, but it does not run an agent by itself.
+
+### Commands
+
+```sh
+horus execution prompt --target claude
+horus execution prompt --target codex
+horus execution handoff 1A
+```
+
+`prompt` reads `roadmap.md` and `execution.md`, then prints a target-aware
+supervisor frame. Claude should map it onto project subagents when useful; Codex
+should map it onto subagents or project custom agents when useful. Both keep the
+frontier/standard/economy model tiers symbolic so each machine can resolve them to
+current local model availability.
+
+`handoff` creates `.horus/temp/<phase>.md`. The worker fills it with changed files,
+behavior, tests, risks, and suggested durable Horus updates. The supervisor reviews
+the diff and tests before accepting the note as evidence.
+
+### Boundaries
+
+- Use this only when `roadmap.md` `execution_recommendation` calls for
+  `plan-execution`, or when the user explicitly asks for phased/subagent work.
+- Keep `.horus/execution.md` fluid for the active roadmap item. Replace it when the
+  next substantial item starts.
+- Keep `.horus/temp/` gitignored and local. Do not store full transcripts or
+  secrets there.
+- Distill accepted outcomes back through `horus-consolidate`.
 
 ---
 
