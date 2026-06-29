@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-06-29 - Offboard Keeps `.horus/` By Default; Purge Is Opt-In
+
+`horus offboard` (and its dashboard card) removes Horus's *projected* artifacts — the
+AGENTS/CLAUDE managed block, the bundled skills, the Claude/Codex hooks — and unregisters
+the project, but **keeps the `.horus/` lanes by default**. Deleting them requires an
+explicit `--purge` (CLI) or the purge checkbox (UI).
+
+Reasoning: `.horus/` is the project's durable, git-committed memory and the most
+irreversible thing to delete; the default offboard should be reversible (re-onboarding
+re-projects the artifacts from the surviving lanes). Offboard also defaults to a dry-run
+(`--apply` to perform it), like `upgrade-project`, because it's destructive. Hook removal
+is surgical — non-Horus hooks in `.claude/settings.json` / `.codex/hooks.json` are
+preserved.
+
 ## 2026-06-29 - Prior-Art Guardrails Live In `research/`
 
 Before building a substantial capability, check whether a mature tool already solves it

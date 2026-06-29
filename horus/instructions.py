@@ -63,6 +63,21 @@ def replace_block(text: str, new_block: str) -> str:
     return text.replace(current.raw, new_block, 1)
 
 
+def remove_block(text: str) -> tuple[str, bool]:
+    """Remove the managed block (markers included) from ``text`` — the inverse of
+    ``replace_block``, used by offboarding. Content outside the block is preserved;
+    the gap left behind is collapsed so the file doesn't gain a run of blank lines.
+
+    Returns ``(new_text, removed)``; ``removed`` is False when no block was present.
+    """
+    current = extract_block(text)
+    if not current.found:
+        return text, False
+    new = text.replace(current.raw, "", 1)
+    new = re.sub(r"\n{3,}", "\n\n", new).strip()
+    return (new + "\n" if new else ""), True
+
+
 class ReconcileResult(NamedTuple):
     status: str  # "synced" | "already-aligned" | "no-source-block"
     new_target_text: str | None

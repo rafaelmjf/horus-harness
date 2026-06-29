@@ -347,6 +347,91 @@ def install_claude_guard_hook(project_root: Path) -> HookAction:
 
 
 # --------------------------------------------------------------------------- #
+# Removal (offboarding) — strip Horus hook handlers, keep everything else
+# --------------------------------------------------------------------------- #
+
+def _is_any_horus_hook(handler: Any) -> bool:
+    return _is_horus_usage_hook(handler) or _is_horus_merge_hook(handler) or _is_horus_guard_hook(handler)
+
+
+def _strip_horus_hooks(hooks: dict[str, Any]) -> int:
+    """Remove every Horus hook handler from a hooks dict in place (any event), drop
+    groups left empty, and remove events left with no groups. Returns the count removed.
+    Non-Horus hooks are preserved untouched."""
+    removed = 0
+    for event in list(hooks.keys()):
+        groups = hooks.get(event)
+        if not isinstance(groups, list):
+            continue
+        new_groups: list[Any] = []
+        for group in groups:
+            if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+                new_groups.append(group)
+                continue
+            kept = [h for h in group["hooks"] if not _is_any_horus_hook(h)]
+            removed += len(group["hooks"]) - len(kept)
+            if kept:
+                group["hooks"] = kept
+                new_groups.append(group)
+        if new_groups:
+            hooks[event] = new_groups
+        else:
+            del hooks[event]
+    return removed
+
+
+def file_has_horus_hooks(path: Path) -> bool:
+    """True if ``path`` (a Claude settings.json or Codex hooks.json) contains any Horus
+    hook handler. Used for offboard dry-run reporting."""
+    data = _load_json(path)
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return False
+    for groups in hooks.values():
+        if not isinstance(groups, list):
+            continue
+        for group in groups:
+            if isinstance(group, dict) and isinstance(group.get("hooks"), list):
+                if any(_is_any_horus_hook(h) for h in group["hooks"]):
+                    return True
+    return False
+
+
+def _remove_hooks_file(path: Path, label: str) -> HookAction:
+    if not path.exists():
+        return HookAction("absent", f"no {label} hooks file at {path}")
+    data = _load_json(path)
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return HookAction("absent", f"no {label} hooks to remove in {path}")
+    n = _strip_horus_hooks(hooks)
+    if n == 0:
+        return HookAction("absent", f"no Horus {label} hooks present in {path}")
+    if not hooks:
+        data.pop("hooks", None)  # leave other settings intact; drop only an emptied hooks map
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return HookAction("removed", f"removed {n} Horus {label} hook handler(s) from {path}")
+
+
+def remove_claude_hooks(project_root: Path) -> HookAction:
+    """Strip Horus hooks from ``.claude/settings.json`` (keeps non-Horus settings/hooks)."""
+    return _remove_hooks_file(project_root / ".claude" / "settings.json", "Claude")
+
+
+def remove_codex_hooks(project_root: Path) -> HookAction:
+    """Strip Horus hooks from ``.codex/hooks.json`` (keeps non-Horus hooks)."""
+    return _remove_hooks_file(project_root / ".codex" / "hooks.json", "Codex")
+
+
+def claude_settings_path(project_root: Path) -> Path:
+    return project_root / ".claude" / "settings.json"
+
+
+def codex_hooks_path(project_root: Path) -> Path:
+    return project_root / ".codex" / "hooks.json"
+
+
+# --------------------------------------------------------------------------- #
 # Per-session closure sentinel (fire the closure injection once per session)
 # --------------------------------------------------------------------------- #
 

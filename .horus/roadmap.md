@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Established a `research/` prior-art guardrail folder (catches drift into problems a mature tool already solves) and saved the Omnigent evaluation there (Codex + Claude analyses converged: Databricks OSS meta-harness with no project-memory → Horus stays the memory plane, Omnigent an optional execution plane; not adopting now). Seeded entries: omnigent, rulesync, pywebview. Back to polishing Horus for the use case — no Omnigent implementation planned."
+current_focus: "Rounded out project lifecycle in the dashboard: a one-click upgrade button for stale artifacts (POST /upgrade-project) and a clean offboard path (`horus offboard` CLI + a 'Manage Horus integration' card) that removes projected artifacts + unregisters, keeping `.horus/` by default and purging only on explicit opt-in. 496 tests green. No active execution plan."
 next_action: "Resume polishing Horus for the user's use case. Open small items: (a) the pilot tuning finding — phase status vocabulary (`planned/delegated/accepted/blocked`) in the horus-execution skill + execution.md template; or (b) the two deferred workflow-policy refinements (project `[workflow]` into the managed block; per-project git-synced override)."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Last session set up the `research/` prior-art guardrail folder (see decisions.md 2026-06-29 'Prior-Art Guardrails Live In research/') and saved the Omnigent evaluation (research/omnigent.md) — strategy is: Horus = memory plane, Omnigent = optional execution plane, NOT adopting now, no implementation scheduled. Resume polishing Horus for the use case: pick the phase status-vocabulary pilot finding or the deferred workflow-policy refinements with the user. Before building any substantial capability, skim research/ for an existing-tool guardrail."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Last session shipped the one-click upgrade button + project offboard (CLI + dashboard 'Manage Horus integration' card; keeps `.horus/` by default, `--purge` to delete) — see features.md. Resume polishing Horus for the use case: pick the phase status-vocabulary pilot finding or the deferred workflow-policy refinements with the user. Before building any substantial capability, skim `research/` for an existing-tool guardrail."
 execution_recommendation: "continue-as-is - small, low-ambiguity doc/skill polish; high judgment, low volume → inline beats delegation."
 last_updated: 2026-06-29
 ---
@@ -81,7 +81,13 @@ last_updated: 2026-06-29
   `upgrade.upgrade_project(root, apply=False)` (stale ⇔ any `would-update` action, guarded so
   a projection check never breaks render); overview card shows a "⚠ artifacts outdated" pill
   and the detail page shows the `horus upgrade-project --apply` command. → features.md
-- [ ] Later: a one-click **Apply upgrade** POST button (CLI proven first).
+- [x] (2026-06-29) One-click **Apply upgrade** POST button: same-origin `/upgrade-project`
+  (apply `upgrade_project` by index) → "Refresh now" on the detail page's stale card +
+  a "refresh" button on the overview pill. → features.md
+- [x] (2026-06-29) **Offboard** — `horus offboard` CLI + a dashboard "Manage Horus
+  integration" card: removes projected artifacts (managed block, skills, hooks) +
+  unregisters; keeps `.horus/` by default, `--purge`/checkbox deletes it. Dry-run default.
+  → features.md
 
 ## Workflow policy + settings panel (Track C) - branch→PR→auto-merge default
 

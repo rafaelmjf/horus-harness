@@ -38,6 +38,7 @@ from horus import (
     launch,
     launcher,
     markdown,
+    offboard,
     overhead,
     pty_host,
     registry,
@@ -981,7 +982,11 @@ def _project_column(p: dict[str, Any], i: int) -> str:
     missing = "" if p["exists"] else " <span class='health-fail'>(no .horus/)</span>"
     why = f"<p class='why'>{html.escape(p['tagline'])}</p>" if p["tagline"] else ""
     _artifacts_pill = (
-        "<span class='health-warn' title='Run: horus upgrade-project --apply'>&#9888; artifacts outdated</span>"
+        "<span class='health-warn'>&#9888; artifacts outdated</span>"
+        "<form method='post' action='/upgrade-project' style='display:inline;margin-left:4px'>"
+        f"<input type='hidden' name='project' value='{i}'>"
+        "<button class='copy' type='submit' title='Refresh Horus artifacts to the installed version'>"
+        "refresh</button></form>"
         if p["artifacts_stale"]
         else ""
     )
@@ -1236,6 +1241,8 @@ def render_settings(policy: dict[str, str], *, saved: bool = False) -> str:
 def render_index(
     projects: list[dict[str, Any]],
     sessions: list[registry.SessionRecord] | None = None,
+    *,
+    notice: str = "",
 ) -> str:
     records = sessions or []
     live = _live_count(records)
@@ -1243,7 +1250,8 @@ def render_index(
     remote = render_remote_catalog_placeholder()
     if not projects:
         body = (
-            sessions_card
+            notice
+            + sessions_card
             + "<div class='card'><h2>No projects registered</h2>"
             "<p class='muted'>Run <code>horus init</code> inside a project to "
             "register it here.</p></div>"
@@ -1251,11 +1259,12 @@ def render_index(
         )
         return _page("Horus", body, live=live)
     cols = "".join(_project_column(p, i) for i, p in enumerate(projects))
-    return _page("Horus", f"{sessions_card}<div class='columns'>{cols}</div>{remote}", live=live)
+    return _page("Horus", f"{notice}{sessions_card}<div class='columns'>{cols}</div>{remote}", live=live)
 
 
-def render_project(p: dict[str, Any]) -> str:
+def render_project(p: dict[str, Any], *, index: int | None = None, notice: str = "") -> str:
     parts = [
+        notice,
         "<p class='back'><a href='/'>&larr; all projects</a></p>",
         f"<h1 style='margin-top:6px'>{html.escape(p['name'])}</h1>",
         f"<div class='badges'><span>status: {html.escape(p['status']) or 'unknown'}</span>"
@@ -1275,10 +1284,12 @@ def render_project(p: dict[str, Any]) -> str:
     parts.append(_git_html(p))
     if p["artifacts_stale"]:
         _count = html.escape(str(p["artifacts_stale_count"]))
+        _btn = _upgrade_button(index) if index is not None else (
+            " Run: <code>horus upgrade-project --apply</code>"
+        )
         parts.append(
             f"<div class='card'><span class='health-warn'>&#9888; Horus artifacts outdated</span>"
-            f" &mdash; {_count} item(s) behind the installed CLI."
-            f" Run: <code>horus upgrade-project --apply</code></div>"
+            f" &mdash; {_count} item(s) behind the installed CLI.{_btn}</div>"
         )
     parts.append(_project_cache_html(p["path"]))
     parts.append(_project_overhead_html(p["path"]))
@@ -1352,7 +1363,45 @@ def render_project(p: dict[str, Any]) -> str:
             f"<div class='section'><h2>Project brief</h2>{markdown.render(p['project_body'])}</div>"
         )
 
+    if index is not None:
+        parts.append(_offboard_card(index))
+
     return _page(f"Horus - {p['name']}", "".join(parts), live=_live_count(gather_sessions()))
+
+
+def _upgrade_button(index: int) -> str:
+    """A one-click 'apply upgrade-project' button (same-origin POST, project by index)."""
+    return (
+        " <form method='post' action='/upgrade-project' style='display:inline'>"
+        f"<input type='hidden' name='project' value='{index}'>"
+        "<button class='start primary' type='submit' "
+        "title='Refresh Horus-managed artifacts to the installed version'>Refresh now</button>"
+        "</form>"
+    )
+
+
+def _offboard_card(index: int) -> str:
+    """Danger-zone card: remove Horus's projected artifacts (+ unregister), optionally
+    purging the .horus/ memory. The confirm wording adapts to the purge checkbox."""
+    confirm = (
+        "this.purge.checked ? "
+        "&quot;Delete ALL Horus files INCLUDING the .horus/ memory? This cannot be undone.&quot; : "
+        "&quot;Remove Horus integration from this project? (the .horus/ memory is kept)&quot;"
+    )
+    return (
+        "<div class='section'><h2>Manage Horus integration</h2>"
+        "<div class='card'>"
+        "<p class='muted'>Offboarding removes Horus's projected artifacts (the AGENTS/CLAUDE "
+        "managed block, the bundled skills, and the Claude/Codex hooks) and unregisters this "
+        "project. The <code>.horus/</code> lanes are <strong>kept</strong> unless you tick purge.</p>"
+        f"<form method='post' action='/offboard' onsubmit='return confirm({confirm})'>"
+        f"<input type='hidden' name='project' value='{index}'>"
+        "<label style='display:block;margin:6px 0'>"
+        "<input type='checkbox' name='purge' value='1'> also delete the <code>.horus/</code> "
+        "memory (irreversible)</label>"
+        "<button class='linkbtn' type='submit'>Remove Horus from this project</button>"
+        "</form></div></div>"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -1940,6 +1989,58 @@ def _project_index(path: Path) -> int | None:
     return None
 
 
+def _project_by_index(form: dict[str, str], projects: list[str] | None) -> tuple[Path | None, int | None]:
+    """Resolve a project POST by its index into the registered list (same safety model
+    as /launch — never an arbitrary path)."""
+    projects = config.load_projects() if projects is None else projects
+    raw = (form.get("project") or "").strip()
+    try:
+        idx = int(raw)
+        return Path(projects[idx]), idx
+    except (ValueError, IndexError):
+        return None, None
+
+
+def process_upgrade_project(form: dict[str, str], *, projects: list[str] | None = None) -> str:
+    """Apply `upgrade-project` to a registered project (by index). Returns a redirect
+    location back to the project detail page with a result count."""
+    root, idx = _project_by_index(form, projects)
+    if root is None:
+        return "/?upgrade_error=" + quote_plus("unknown project")
+    actions = upgrade.upgrade_project(root, apply=True)
+    updated = sum(1 for a in actions if a.status in ("updated", "created"))
+    return f"/project?i={idx}&upgraded={updated}"
+
+
+def process_offboard(form: dict[str, str], *, projects: list[str] | None = None) -> str:
+    """Offboard a registered project (by index): remove projected artifacts + unregister,
+    purging `.horus/` only when the purge box is ticked. Redirects to the overview (the
+    project is no longer registered, so its index is gone)."""
+    root, _ = _project_by_index(form, projects)
+    if root is None:
+        return "/?offboard_error=" + quote_plus("unknown project")
+    purge = (form.get("purge") or "").strip().lower() in ("1", "true", "on", "yes")
+    name = root.name
+    offboard.offboard_project(root, apply=True, purge=purge)
+    return "/?offboarded=" + quote_plus(name) + ("&purged=1" if purge else "")
+
+
+def _project_action_banner(params: dict[str, list[str]]) -> str:
+    """Banner for upgrade/offboard POST redirects (index + project pages)."""
+    if "upgraded" in params:
+        n = html.escape(params["upgraded"][0])
+        return f"<div class='banner ok'>Refreshed Horus artifacts &mdash; {n} item(s) updated.</div>"
+    if "upgrade_error" in params:
+        return f"<div class='banner err'>Upgrade failed: {html.escape(params['upgrade_error'][0])}</div>"
+    if "offboarded" in params:
+        name = html.escape(params["offboarded"][0])
+        extra = " and deleted its <code>.horus/</code> memory" if "purged" in params else " (<code>.horus/</code> kept)"
+        return f"<div class='banner ok'>Removed Horus from {name}{extra}.</div>"
+    if "offboard_error" in params:
+        return f"<div class='banner err'>Offboard failed: {html.escape(params['offboard_error'][0])}</div>"
+    return ""
+
+
 def process_launch(
     form: dict[str, str],
     *,
@@ -2031,7 +2132,10 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
         if parsed.path == "/":
-            self._send(render_index(gather_projects(), gather_sessions()))
+            self._send(render_index(
+                gather_projects(), gather_sessions(),
+                notice=_project_action_banner(parse_qs(parsed.query)),
+            ))
             return
         if parsed.path == "/github-catalog":
             remote_projects, remote_errors, remote_notes = gather_remote_projects()
@@ -2093,7 +2197,10 @@ class _Handler(BaseHTTPRequestHandler):
             except (ValueError, IndexError):
                 self._send(_page("Not found", "<p>Unknown project.</p>"), 404)
                 return
-            self._send(render_project(project))
+            self._send(render_project(
+                project, index=idx,
+                notice=_project_action_banner(parse_qs(parsed.query)),
+            ))
             return
         self._send(_page("Not found", "<p>Not found.</p>"), 404)
 
@@ -2178,6 +2285,8 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path not in (
             "/launch",
             "/settings",
+            "/upgrade-project",
+            "/offboard",
             "/account-add",
             "/account-login",
             "/account-alias",
@@ -2209,6 +2318,12 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header("Location", "/settings?saved=1")
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if parsed.path == "/upgrade-project":
+            self._redirect(process_upgrade_project(self._read_form()))
+            return
+        if parsed.path == "/offboard":
+            self._redirect(process_offboard(self._read_form()))
             return
         if parsed.path == "/account-add":
             self._redirect(f"/control?{process_account_add(self._read_form())}")
