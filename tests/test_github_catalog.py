@@ -71,13 +71,16 @@ next_prompt: "Resume the thing"
         lambda root: {"remote_url": "git@github.com:rafaelmjf/demo.git"},
     )
 
-    projects = github_catalog.discover("rafaelmjf", local_projects=[str(local)])
+    result = github_catalog.discover("rafaelmjf", local_projects=[str(local)])
 
-    assert len(projects) == 1
-    assert projects[0].full_name == "rafaelmjf/demo"
-    assert projects[0].current_focus == "Build the thing"
-    assert projects[0].next_action == "Do the next thing"
-    assert projects[0].local_path == str(local)
+    assert len(result.projects) == 1
+    assert result.projects[0].full_name == "rafaelmjf/demo"
+    assert result.projects[0].current_focus == "Build the thing"
+    assert result.projects[0].next_action == "Do the next thing"
+    assert result.projects[0].local_path == str(local)
+    # plain repo (no .horus/project.md) should appear in untracked
+    assert len(result.untracked) == 1
+    assert result.untracked[0].full_name == "rafaelmjf/plain"
 
 
 def test_discover_reports_gh_failure(monkeypatch):
@@ -164,7 +167,11 @@ def test_force_refresh_reports_success(tmp_path, monkeypatch):
         default_branch="main",
         pushed_at="",
     )
-    monkeypatch.setattr(github_catalog, "discover", lambda owner, **kw: [project])
+    monkeypatch.setattr(
+        github_catalog,
+        "discover",
+        lambda owner, **kw: github_catalog.DiscoveryResult(projects=[project], untracked=[]),
+    )
 
     result = github_catalog.force_refresh("rafaelmjf")
 
@@ -253,13 +260,13 @@ def test_discover_skips_horus_reads_when_pushed_at_unchanged(monkeypatch):
     monkeypatch.setattr(github_catalog.gitstate, "git_state", lambda root: None)
 
     prior = {_CACHED_PRIOR.full_name: _CACHED_PRIOR}
-    projects = github_catalog.discover("rafaelmjf", prior=prior)
+    result = github_catalog.discover("rafaelmjf", prior=prior)
 
     # No .horus/ content calls must have been made.
     assert horus_calls == [], f"Unexpected .horus/ API calls: {horus_calls}"
 
-    assert len(projects) == 1
-    p = projects[0]
+    assert len(result.projects) == 1
+    p = result.projects[0]
     assert p.full_name == "rafaelmjf/demo"
     assert p.current_focus == "Cached focus"
     assert p.next_action == "Cached action"
@@ -315,10 +322,10 @@ next_prompt: "Fresh prompt"
 
     # Prior entry has the OLD pushedAt.
     prior = {_CACHED_PRIOR.full_name: _CACHED_PRIOR}
-    projects = github_catalog.discover("rafaelmjf", prior=prior)
+    result = github_catalog.discover("rafaelmjf", prior=prior)
 
-    assert len(projects) == 1
-    p = projects[0]
+    assert len(result.projects) == 1
+    p = result.projects[0]
     assert p.current_focus == "Fresh focus"
     assert p.next_action == "Fresh action"
     assert p.next_prompt == "Fresh prompt"
@@ -335,9 +342,9 @@ def test_refresh_cache_passes_prior_from_existing_cache(tmp_path, monkeypatch):
 
     received_prior: list[dict | None] = []
 
-    def fake_discover(owner, *, local_projects=None, limit=100, prior=None):
+    def fake_discover(owner, *, local_projects=None, limit=100, prior=None, prior_untracked=None):
         received_prior.append(prior)
-        return [_CACHED_PRIOR]
+        return github_catalog.DiscoveryResult(projects=[_CACHED_PRIOR], untracked=[])
 
     monkeypatch.setattr(github_catalog, "discover", fake_discover)
 
@@ -355,9 +362,9 @@ def test_refresh_cache_passes_none_prior_when_no_cache(tmp_path, monkeypatch):
 
     received_prior: list[dict | None] = []
 
-    def fake_discover(owner, *, local_projects=None, limit=100, prior=None):
+    def fake_discover(owner, *, local_projects=None, limit=100, prior=None, prior_untracked=None):
         received_prior.append(prior)
-        return []
+        return github_catalog.DiscoveryResult(projects=[], untracked=[])
 
     monkeypatch.setattr(github_catalog, "discover", fake_discover)
 
@@ -365,3 +372,268 @@ def test_refresh_cache_passes_none_prior_when_no_cache(tmp_path, monkeypatch):
 
     assert len(received_prior) == 1
     assert received_prior[0] is None
+
+
+# ---------------------------------------------------------------------------
+# Phase A1: untracked-repo discovery + verdict cache
+# ---------------------------------------------------------------------------
+
+_REPO_LIST_WITH_UNTRACKED = json.dumps([
+    {
+        "name": "horus-project",
+        "nameWithOwner": "rafaelmjf/horus-project",
+        "url": "https://github.com/rafaelmjf/horus-project",
+        "sshUrl": "git@github.com:rafaelmjf/horus-project.git",
+        "defaultBranchRef": {"name": "main"},
+        "pushedAt": "2026-06-28T10:00:00Z",
+        "description": "A Horus project",
+    },
+    {
+        "name": "plain-repo",
+        "nameWithOwner": "rafaelmjf/plain-repo",
+        "url": "https://github.com/rafaelmjf/plain-repo",
+        "sshUrl": "git@github.com:rafaelmjf/plain-repo.git",
+        "defaultBranchRef": {"name": "main"},
+        "pushedAt": "2026-06-28T11:00:00Z",
+        "description": "Just a plain repo",
+    },
+])
+
+_HORUS_PROJECT_MD = """---
+current_focus: "A1 focus"
+---
+"""
+_HORUS_ROADMAP_MD = """---
+next_action: "A1 action"
+next_prompt: "A1 prompt"
+---
+"""
+
+
+def _make_fake_run_with_untracked(horus_repo_name: str = "horus-project"):
+    """Return a fake subprocess.run that serves one Horus project and one plain repo."""
+
+    def fake_run(cmd, **kwargs):
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+
+        result = Result()
+        if cmd[:3] == ["gh", "repo", "list"]:
+            result.stdout = _REPO_LIST_WITH_UNTRACKED
+            return result
+        if f"repos/rafaelmjf/{horus_repo_name}/contents/.horus/project.md" in " ".join(cmd):
+            result.stdout = _content(_HORUS_PROJECT_MD)
+            return result
+        if f"repos/rafaelmjf/{horus_repo_name}/contents/.horus/roadmap.md" in " ".join(cmd):
+            result.stdout = _content(_HORUS_ROADMAP_MD)
+            return result
+        # Any other .horus/ check → 404
+        result.returncode = 1
+        result.stderr = "not found"
+        return result
+
+    return fake_run
+
+
+def test_discover_returns_untracked_repos_in_second_bucket(monkeypatch):
+    """Repos without .horus/project.md appear in result.untracked with description."""
+    monkeypatch.setattr(github_catalog.subprocess, "run", _make_fake_run_with_untracked())
+    monkeypatch.setattr(github_catalog.gitstate, "git_state", lambda root: None)
+
+    result = github_catalog.discover("rafaelmjf")
+
+    assert len(result.projects) == 1
+    assert result.projects[0].full_name == "rafaelmjf/horus-project"
+
+    assert len(result.untracked) == 1
+    u = result.untracked[0]
+    assert u.full_name == "rafaelmjf/plain-repo"
+    assert u.description == "Just a plain repo"
+    assert u.pushed_at == "2026-06-28T11:00:00Z"
+
+
+def test_discover_untracked_fast_path_skips_api_call(monkeypatch):
+    """When prior_untracked has a matching pushed_at, no gh api .horus/ call is made."""
+    api_calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+
+        result = Result()
+        if cmd[:3] == ["gh", "repo", "list"]:
+            result.stdout = _REPO_LIST_WITH_UNTRACKED
+            return result
+        if f"repos/rafaelmjf/horus-project/contents/.horus/project.md" in " ".join(cmd):
+            result.stdout = _content(_HORUS_PROJECT_MD)
+            return result
+        if f"repos/rafaelmjf/horus-project/contents/.horus/roadmap.md" in " ".join(cmd):
+            result.stdout = _content(_HORUS_ROADMAP_MD)
+            return result
+        # Track any content API call for plain-repo
+        if "contents/.horus/" in " ".join(cmd) and "plain-repo" in " ".join(cmd):
+            api_calls.append(cmd)
+        result.returncode = 1
+        result.stderr = "not found"
+        return result
+
+    monkeypatch.setattr(github_catalog.subprocess, "run", fake_run)
+    monkeypatch.setattr(github_catalog.gitstate, "git_state", lambda root: None)
+
+    prior_untracked = {
+        "rafaelmjf/plain-repo": github_catalog.UntrackedRepo(
+            owner="rafaelmjf",
+            name="plain-repo",
+            full_name="rafaelmjf/plain-repo",
+            url="https://github.com/rafaelmjf/plain-repo",
+            clone_url="git@github.com:rafaelmjf/plain-repo.git",
+            default_branch="main",
+            pushed_at="2026-06-28T11:00:00Z",
+            description="Just a plain repo",
+        )
+    }
+
+    result = github_catalog.discover("rafaelmjf", prior_untracked=prior_untracked)
+
+    # No API calls should have been made for plain-repo's .horus/ files
+    assert api_calls == [], f"Unexpected API calls for untracked repo: {api_calls}"
+
+    assert len(result.untracked) == 1
+    assert result.untracked[0].full_name == "rafaelmjf/plain-repo"
+    assert result.untracked[0].description == "Just a plain repo"
+
+
+def test_discover_untracked_changed_pushed_at_rechecks_and_can_promote(monkeypatch):
+    """Changed pushedAt on a previously-untracked repo triggers full fetch.
+
+    If .horus/project.md now exists, the repo moves to .projects.
+    """
+    # Repo list returns a NEWER pushedAt than what's cached as untracked
+    updated_repo_list = json.dumps([
+        {
+            "name": "plain-repo",
+            "nameWithOwner": "rafaelmjf/plain-repo",
+            "url": "https://github.com/rafaelmjf/plain-repo",
+            "sshUrl": "git@github.com:rafaelmjf/plain-repo.git",
+            "defaultBranchRef": {"name": "main"},
+            "pushedAt": "2026-06-29T09:00:00Z",  # newer than cached
+            "description": "Now a Horus project",
+        },
+    ])
+
+    def fake_run(cmd, **kwargs):
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+
+        result = Result()
+        if cmd[:3] == ["gh", "repo", "list"]:
+            result.stdout = updated_repo_list
+            return result
+        if "repos/rafaelmjf/plain-repo/contents/.horus/project.md" in " ".join(cmd):
+            result.stdout = _content(_HORUS_PROJECT_MD)
+            return result
+        if "repos/rafaelmjf/plain-repo/contents/.horus/roadmap.md" in " ".join(cmd):
+            result.stdout = _content(_HORUS_ROADMAP_MD)
+            return result
+        result.returncode = 1
+        result.stderr = "not found"
+        return result
+
+    monkeypatch.setattr(github_catalog.subprocess, "run", fake_run)
+    monkeypatch.setattr(github_catalog.gitstate, "git_state", lambda root: None)
+
+    # Old cached verdict says it was untracked at the old pushedAt
+    prior_untracked = {
+        "rafaelmjf/plain-repo": github_catalog.UntrackedRepo(
+            owner="rafaelmjf",
+            name="plain-repo",
+            full_name="rafaelmjf/plain-repo",
+            url="https://github.com/rafaelmjf/plain-repo",
+            clone_url="git@github.com:rafaelmjf/plain-repo.git",
+            default_branch="main",
+            pushed_at="2026-06-28T11:00:00Z",  # old — mismatch triggers re-check
+            description="Just a plain repo",
+        )
+    }
+
+    result = github_catalog.discover("rafaelmjf", prior_untracked=prior_untracked)
+
+    # Repo promoted to projects because it now has .horus/project.md
+    assert len(result.projects) == 1
+    assert result.projects[0].full_name == "rafaelmjf/plain-repo"
+    assert result.projects[0].current_focus == "A1 focus"
+    assert len(result.untracked) == 0
+
+
+def test_cache_round_trips_untracked_and_recomputes_local_path(tmp_path, monkeypatch):
+    """save_cache + load_cache persists untracked repos; local_path is recomputed on load."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    local = tmp_path / "plain-repo"
+    local.mkdir()
+
+    untracked = github_catalog.UntrackedRepo(
+        owner="rafaelmjf",
+        name="plain-repo",
+        full_name="rafaelmjf/plain-repo",
+        url="https://github.com/rafaelmjf/plain-repo",
+        clone_url="git@github.com:rafaelmjf/plain-repo.git",
+        default_branch="main",
+        pushed_at="2026-06-28T11:00:00Z",
+        description="Just a plain repo",
+        local_path="/old/machine/path",
+    )
+
+    monkeypatch.setattr(
+        github_catalog.gitstate,
+        "git_state",
+        lambda root: {"remote_url": "git@github.com:rafaelmjf/plain-repo.git"},
+    )
+
+    github_catalog.save_cache("rafaelmjf", [], [untracked])
+    cached = github_catalog.load_cache("rafaelmjf", local_projects=[str(local)])
+
+    assert cached is not None
+    assert len(cached.untracked) == 1
+    u = cached.untracked[0]
+    assert u.full_name == "rafaelmjf/plain-repo"
+    assert u.description == "Just a plain repo"
+    assert u.pushed_at == "2026-06-28T11:00:00Z"
+    # local_path recomputed from local_projects — not the stale cached value
+    assert u.local_path == str(local)
+
+
+def test_cache_without_untracked_key_loads_as_empty(tmp_path, monkeypatch):
+    """Older cache files without the 'untracked' key load as empty list (backward compat)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    # Write a cache file in the old format (no 'untracked' key)
+    project = github_catalog.RemoteProject(
+        owner="rafaelmjf",
+        name="demo",
+        full_name="rafaelmjf/demo",
+        url="https://github.com/rafaelmjf/demo",
+        clone_url="git@github.com:rafaelmjf/demo.git",
+        default_branch="main",
+        pushed_at="2026-06-28T12:00:00Z",
+    )
+    github_catalog.save_cache("rafaelmjf", [project])
+
+    # Manually remove the 'untracked' key to simulate an old cache file
+    path = github_catalog._cache_path("rafaelmjf")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data.pop("untracked", None)
+    path.write_text(json.dumps(data) + "\n", encoding="utf-8")
+
+    cached = github_catalog.load_cache("rafaelmjf")
+    assert cached is not None
+    assert cached.untracked == []
+    assert len(cached.projects) == 1

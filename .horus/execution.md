@@ -56,8 +56,8 @@ can be slotted in anytime. Status vocabulary: `planned` → `delegated` → `acc
 | phase | status | difficulty | worker_tier | depends on | handoff_note | review gate |
 |---|---|---|---|---|---|---|
 | C-min | accepted | moderate | standard | — | `.horus/temp/C-min.md` | ✅ 33 tests; integration.py + `[workflow]` config + `horus workflow` CLI; full suite green (1 known baseline) |
-| A1 | delegated | moderate | standard | — | `.horus/temp/A1.md` | untracked bucket + verdict cache; `gh` mocked; full suite green |
-| A2 | planned | low | standard | A1 | `.horus/temp/A2.md` | ignore round-trips config; blank-owner warning rendered |
+| A1 | accepted | moderate | standard | — | `.horus/temp/A1.md` | ✅ `DiscoveryResult(projects, untracked)` + verdict cache; caught extra caller `remote_start.py`; 401 pass / 1 baseline |
+| A2 | delegated | low | standard | A1 | `.horus/temp/A2.md` | ignore round-trips config; blank-owner warning rendered |
 | A3 | planned | hard | standard | C-min, A1 | `.horus/temp/A3.md` | onboard clone/init/integrate; dry-run path tested without real GitHub |
 | A4 | planned | moderate | standard | A2, A3 | `.horus/temp/A4.md` | Not-tracked section + POST endpoints; same-origin/loopback guard tested |
 | C-full | planned | moderate | standard | C-min | `.horus/temp/C-full.md` | Settings panel POST writes `[workflow]`; guard tested |

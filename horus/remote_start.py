@@ -31,8 +31,8 @@ def parse_github_target(target: str) -> tuple[str, str]:
 
 def start_github_project(target: str, *, workspace_root: Path | None = None, limit: int = 100) -> StartResult:
     owner, repo = parse_github_target(target)
-    projects = github_catalog.discover(owner, local_projects=config.load_projects(), limit=limit)
-    project = next((p for p in projects if p.full_name.lower() == f"{owner}/{repo}".lower()), None)
+    result = github_catalog.discover(owner, local_projects=config.load_projects(), limit=limit)
+    project = next((p for p in result.projects if p.full_name.lower() == f"{owner}/{repo}".lower()), None)
     if project is None:
         raise RuntimeError(f"no Horus-enabled GitHub repo found for {owner}/{repo}")
 

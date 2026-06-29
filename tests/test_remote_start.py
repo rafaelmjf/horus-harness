@@ -36,7 +36,11 @@ def test_start_github_project_clones_registers_and_upgrades(tmp_path, monkeypatc
         return Result()
 
     registered = []
-    monkeypatch.setattr(remote_start.github_catalog, "discover", lambda owner, **kw: [_remote()])
+    monkeypatch.setattr(
+        remote_start.github_catalog,
+        "discover",
+        lambda owner, **kw: github_catalog.DiscoveryResult(projects=[_remote()], untracked=[]),
+    )
     monkeypatch.setattr(remote_start.subprocess, "run", fake_run)
     monkeypatch.setattr(remote_start.config, "load_projects", lambda: [])
     monkeypatch.setattr(remote_start.config, "register_project", lambda path: registered.append(path) or True)
@@ -60,7 +64,11 @@ def test_start_github_project_reuses_existing_local_clone(tmp_path, monkeypatch)
     (project / ".horus").mkdir(parents=True)
     registered = []
 
-    monkeypatch.setattr(remote_start.github_catalog, "discover", lambda owner, **kw: [_remote(str(project))])
+    monkeypatch.setattr(
+        remote_start.github_catalog,
+        "discover",
+        lambda owner, **kw: github_catalog.DiscoveryResult(projects=[_remote(str(project))], untracked=[]),
+    )
     monkeypatch.setattr(remote_start.config, "load_projects", lambda: [str(project)])
     monkeypatch.setattr(remote_start.config, "register_project", lambda path: registered.append(path) or False)
     monkeypatch.setattr(remote_start.upgrade, "upgrade_project", lambda path, apply: [])
@@ -74,7 +82,11 @@ def test_start_github_project_reuses_existing_local_clone(tmp_path, monkeypatch)
 
 def test_start_github_project_refuses_non_git_destination(tmp_path, monkeypatch):
     (tmp_path / "demo").mkdir()
-    monkeypatch.setattr(remote_start.github_catalog, "discover", lambda owner, **kw: [_remote()])
+    monkeypatch.setattr(
+        remote_start.github_catalog,
+        "discover",
+        lambda owner, **kw: github_catalog.DiscoveryResult(projects=[_remote()], untracked=[]),
+    )
     monkeypatch.setattr(remote_start.config, "load_projects", lambda: [])
 
     with pytest.raises(RuntimeError, match="destination already exists"):

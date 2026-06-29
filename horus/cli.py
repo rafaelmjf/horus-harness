@@ -143,17 +143,20 @@ def cmd_discover(args: argparse.Namespace) -> int:
         created = config.register_github_owner(args.owner)
         print(f"{'Added' if created else 'Already tracking'} GitHub owner: {args.owner}")
     try:
-        projects = github_catalog.discover(args.owner, local_projects=config.load_projects(), limit=args.limit)
+        result = github_catalog.discover(args.owner, local_projects=config.load_projects(), limit=args.limit)
     except RuntimeError as exc:
         print(f"GitHub discovery failed: {exc}")
         return 1
+    projects = result.projects
     if not projects:
         print(f"No Horus-enabled GitHub repos found for {args.owner}.")
-        return 0
-    for project in projects:
-        where = f"local: {project.local_path}" if project.local_path else f"remote: {project.clone_url}"
-        next_action = f" — {project.next_action}" if project.next_action else ""
-        print(f"{project.full_name} ({where}){next_action}")
+    else:
+        for project in projects:
+            where = f"local: {project.local_path}" if project.local_path else f"remote: {project.clone_url}"
+            next_action = f" — {project.next_action}" if project.next_action else ""
+            print(f"{project.full_name} ({where}){next_action}")
+    if result.untracked:
+        print(f"(plus {len(result.untracked)} untracked repos)")
     return 0
 
 
