@@ -215,6 +215,32 @@ def cmd_start(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_onboard(args: argparse.Namespace) -> int:
+    workspace = Path(args.workspace_root).expanduser() if getattr(args, "workspace_root", None) else None
+    try:
+        result = remote_start.onboard_github_project(args.target, workspace_root=workspace, limit=args.limit)
+    except (RuntimeError, ValueError) as exc:
+        print(f"Onboard failed: {exc}")
+        return 1
+
+    print(f"{'Cloned' if result.cloned else 'Using local clone'}: {result.path}")
+    created = [a for a in result.init_actions if a.status in {"created", "updated"}]
+    print(f"Initialized {len(created)} Horus file(s).")
+    print(f"{'Registered' if result.registered else 'Already registered'} in Horus project registry.")
+
+    integ = result.integration
+    if integ.ok:
+        print(f"Integration: {integ.detail}")
+        if integ.pr_url:
+            print(f"PR: {integ.pr_url}")
+    else:
+        print(f"warning: integration did not complete — {integ.detail}")
+        print(f"  Manual follow-up: cd \"{result.path}\" and push/open a PR manually.")
+
+    print(f"\nOpen it with: horus open \"{result.path}\"")
+    return 0
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     if args.config_cmd == "workspace-root":
         if args.path:
@@ -1281,6 +1307,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_start.add_argument("--limit", type=int, default=100, help="maximum owner repos to scan when resolving GitHub target")
     p_start.set_defaults(func=cmd_start)
+
+    p_onboard = sub.add_parser(
+        "onboard",
+        help="initialize Horus in an untracked GitHub repo (clone → horus init → PR via policy)",
+    )
+    p_onboard.add_argument("target", help="GitHub repo to onboard, e.g. github:owner/repo")
+    p_onboard.add_argument(
+        "--workspace-root",
+        help="clone root for the repo if it has no local path (default: configured root or ~/projects)",
+    )
+    p_onboard.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="maximum owner repos to scan when resolving the GitHub target (default: 100)",
+    )
+    p_onboard.set_defaults(func=cmd_onboard)
 
     p_config = sub.add_parser("config", help="inspect or update machine-local Horus config")
     config_sub = p_config.add_subparsers(dest="config_cmd", required=True)
