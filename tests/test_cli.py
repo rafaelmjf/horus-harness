@@ -299,10 +299,13 @@ def test_usage_check_cli_warns_and_codex_stop_hook_blocks_with_json(tmp_path, mo
     assert main(["usage", "check", "--path", str(tmp_path), "--threshold", "90", "--hook"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["decision"] == "block"
-    assert "horus-consolidate" in payload["reason"]
+    reason = payload["reason"]
+    assert "horus-consolidate" in reason
+    assert "ASK" in reason or "ask the user" in reason  # prompt, don't force-close
+    assert "horus close --commit --push" in reason  # closure always pushes
 
 
-def test_codex_userpromptsubmit_hook_injects_context(tmp_path, monkeypatch, capsys):
+def test_codex_userpromptsubmit_hook_defers_to_user(tmp_path, monkeypatch, capsys):
     import io
 
     _home(tmp_path, monkeypatch)
@@ -319,7 +322,10 @@ def test_codex_userpromptsubmit_hook_injects_context(tmp_path, monkeypatch, caps
     payload = json.loads(capsys.readouterr().out)
     hso = payload["hookSpecificOutput"]
     assert hso["hookEventName"] == "UserPromptSubmit"
-    assert "horus-consolidate" in hso["additionalContext"]
+    ctx = hso["additionalContext"]
+    assert "horus-consolidate" in ctx
+    assert "context, not a command" in ctx  # defer to the user's request
+    assert "horus close --commit --push" in ctx
 
 
 def test_hook_install_codex_cli(tmp_path, monkeypatch):
@@ -652,10 +658,16 @@ def test_claude_hook_injects_closure_over_threshold(tmp_path, monkeypatch, capsy
     assert rc == 0
     payload = json.loads(out.strip())
     assert payload["decision"] == "block"
-    assert "horus-consolidate" in payload["reason"]  # drives the context-aware skill
+    reason = payload["reason"]
+    assert "horus-consolidate" in reason  # drives the context-aware skill
+    # Stop must PROMPT the user (close vs push ahead), not force a closure/stop.
+    assert "ASK" in reason or "ask the user" in reason
+    assert "do not resume the main task" not in reason
+    # Closure always reaches the remote.
+    assert "horus close --commit --push" in reason
 
 
-def test_claude_hook_userpromptsubmit_injects_context(tmp_path, monkeypatch, capsys):
+def test_claude_hook_userpromptsubmit_defers_to_user(tmp_path, monkeypatch, capsys):
     rc, out = _claude_hook_run(
         monkeypatch, tmp_path, capsys, percent=92.0, threshold=90,
         stdin='{"session_id":"u1","hook_event_name":"UserPromptSubmit"}',
@@ -664,7 +676,10 @@ def test_claude_hook_userpromptsubmit_injects_context(tmp_path, monkeypatch, cap
     payload = json.loads(out.strip())
     ctx = payload["hookSpecificOutput"]["additionalContext"]
     assert payload["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
-    assert "horus-consolidate" in ctx  # diverts the agent to closure before the task
+    assert "horus-consolidate" in ctx  # still offers the context-aware skill
+    # Advisory must defer to the user's explicit request, not override it.
+    assert "context, not a command" in ctx
+    assert "horus close --commit --push" in ctx
 
 
 def test_claude_hook_quiet_under_threshold(tmp_path, monkeypatch, capsys):

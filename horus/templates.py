@@ -478,17 +478,40 @@ is a SEPARATE pass — only when asked, not every close.
 """
 
 
-USAGE_CLOSURE_INSTRUCTION = (
-    "You are close to your 5-hour usage limit and risk being cut off mid-task. Stop the "
-    "current work now and close the session cleanly so nothing in your head is lost. "
-    "Use the horus-consolidate skill — it can see THIS conversation, which a file-only "
-    "script cannot — and fold the session's *context* into .horus, not just what files "
-    "changed: the decisions made and why, what shipped, dead ends worth remembering, "
-    "and the next step. Concretely: (1) run the horus-consolidate skill to update the "
-    ".horus lanes from this session's context (the skill uses `horus consolidate` for "
-    "signals, but you supply the context a script can't); (2) write a concise handover "
-    "summary under `.horus/sessions/` with what shipped and the next step; (3) commit "
-    "with `horus close --commit`. Then stop — do not resume the main task."
+# Two usage-closure injections, by hook event. The hook must never override an
+# explicit user instruction or strand work local-only (see decisions.md / history.md
+# "Usage hook overrode an explicit command + left work unpushed"). So:
+#   - UserPromptSubmit -> ADVISORY: context only; do what the user asked (incl. push).
+#   - Stop             -> PROMPT:   ask the user (close now vs push ahead), then wait.
+# Both always reach the remote: closure uses `horus close --commit --push`, and any
+# committed work must be pushed so another machine never resumes from stale state.
+
+USAGE_CLOSURE_ADVISORY = (
+    "[Horus usage advisory — context, not a command] You are near your 5-hour usage "
+    "limit and could be cut off soon. This note is background; the user's message is "
+    "what you must act on. Carry out their request FULLY — and if it involves "
+    "committing or finishing work, \"fully\" includes pushing committed work to its "
+    "remote so nothing is stranded only on this machine. Do NOT replace or narrow "
+    "their request with a continuity-only closure, and do NOT stop without doing what "
+    "they asked. Afterwards you MAY briefly note the usage level and offer to run the "
+    "closure ritual (the horus-consolidate skill to fold this session's context into "
+    ".horus, then `horus close --commit --push`) so continuity is captured before any "
+    "cut-off — but only if they want it."
+)
+
+
+USAGE_CLOSURE_PROMPT = (
+    "[Horus usage check] You are near your 5-hour usage limit and could be cut off "
+    "mid-task. Do NOT unilaterally stop or force a closure. Instead, ASK the user how "
+    "to proceed and then wait for their answer, offering two clear options: (a) run "
+    "the closure ritual NOW — use the horus-consolidate skill (it can see THIS "
+    "conversation, which a file-only script cannot) to fold the session's decisions, "
+    "what shipped, dead ends, and the next step into .horus, then "
+    "`horus close --commit --push`; or (b) push ahead with the current work for now. "
+    "Whichever they choose, first make sure any committed work is actually pushed to "
+    "its remote — leaving commits local-only risks resuming from stale state on "
+    "another machine. If there is uncommitted work, say so when you ask, so the user "
+    "can decide with that in mind."
 )
 
 

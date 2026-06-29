@@ -1,5 +1,33 @@
 # Decisions
 
+## 2026-06-29 - Usage Hook Advises and Asks; It Never Overrides a Command or Strands Work
+
+The usage→closure hook must never override an explicit user instruction, and closure
+must always reach the remote. Split the single injected instruction into two
+event-appropriate texts in `templates.py`:
+
+- `USAGE_CLOSURE_ADVISORY` (UserPromptSubmit): framed as *context, not a command* —
+  carry out the user's request FULLY (incl. pushing committed work); only *offer*
+  closure afterward. Never replace/narrow the request with a continuity-only commit.
+- `USAGE_CLOSURE_PROMPT` (Stop): do not force a closure or unilaterally stop — **ask
+  the user** (run closure now vs push ahead) and wait for their answer.
+
+Both always use `horus close --commit --push`, and tell the agent to push any
+committed work.
+
+Reasoning: in a live Codex session at 90% usage, the old instruction
+("commit with `horus close --commit`. Then stop — do not resume the main task.")
+caused three compounding failures — the agent obeyed the injected imperative over an
+explicit "commit and push", committed only `.horus/` (the continuity pathspec), never
+pushed (left "ahead 2"), and abandoned uncommitted source work. A hook is a *signal*,
+not an authority over the user; and continuity that stays local-only defeats the
+cross-machine guarantee Horus exists to provide.
+
+Decisions taken with the user: prompt-the-user is the default (no `block`/`off` config
+knob added); the "always push" guarantee is instruction-level only (no change to
+`horus close --commit` CLI semantics). See history.md "Usage hook overrode an explicit
+command and left work unpushed".
+
 ## 2026-06-29 - Onboarding Uses GitHub Auth; Work Uses Agent Account Aliases
 
 Dashboard onboarding of an untracked GitHub repository should not imply a Claude or
