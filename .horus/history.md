@@ -9,6 +9,17 @@ Curated, durable context: the problems that bit us and the lessons that shaped t
 design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
 just the war stories worth carrying forward.
 
+## A worker handoff file can fake delegation if the supervisor writes it after doing the work
+
+The first dashboard follow-up phase under the new execution workflow fixed a real bug, but
+it did **not** actually test the frontier/standard split: the supervising session created
+the phase handoff and then implemented/reviewed the work itself. The terminal made this
+ambiguous, and the user correctly challenged whether a standard worker had actually run.
+**Lesson:** when workflow validation is the goal, "delegated" must be observable: a distinct
+worker/subagent/session does the implementation and leaves the note. If the current
+environment cannot spawn one, the supervisor should stop instead of simulating the workflow.
+`horus-execution` v2 now makes this a hard gate for model-separation tests.
+
 ## ctypes silently truncated 64-bit handles; only live-exercise caught it
 
 `horus focus` (raise a session's window) used `ctypes.windll.user32`/`kernel32` without

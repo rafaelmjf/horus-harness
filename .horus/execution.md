@@ -4,6 +4,7 @@ current_feature: ""
 supervisor_tier: frontier
 worker_tier: standard
 continuity_tier: economy
+delegation_basis: ""
 last_updated: 2026-06-29
 ---
 
@@ -14,22 +15,29 @@ the next substantial feature starts; distill finished work into `roadmap.md`,
 `features.md`, `decisions.md`, and `history.md` rather than preserving this as a
 timeline.
 
-Current state: no active execution plan. The **GitHub onboarding + workflow policy**
-feature completed on 2026-06-29 — all planned phases shipped and merged:
+Current state: no active execution plan. The dashboard follow-up completed on
+2026-06-29 and was distilled into the durable lanes:
 
-- Track A (A1–A4) + C-min — PR #37; C-full — PR #38; B — PR #39.
-- See `features.md` (GitHub untracked-repo onboarding; Horus workflow policy +
-  integration helper; Dashboard artifact-staleness badge) and decisions.md
-  2026-06-29 "GitHub Onboarding + Workflow Policy".
+- Phase 1A fixed GitHub Ignore/Unignore POST UX: trusted `owner/repo` validation +
+  `303 Location: /#github-catalog` PRG, with tests.
+- Phase 1A also exposed a workflow failure: the supervisor implemented delegated work.
+  `horus-execution` v2 now makes real delegation mandatory when model separation is
+  being tested.
+- Phase 1B then validated the corrected workflow: a real standard-tier worker
+  implemented `horus resume`, the dashboard/start integration, tests, and a handoff
+  note; the frontier supervisor reviewed and accepted it.
 
-Only the two **deferred refinements** remain as open roadmap items (optional): project
-the `[workflow]` policy into the managed instruction block, and a per-project git-synced
-policy override. Replace this file when the next substantial phased feature starts.
+Replace this file when the next substantial phased feature starts.
 
 ## Model Policy
 
 Use tiers instead of hard-coded model names. Resolve them locally per agent,
 account, and current model availability.
+
+`worker_tier` is the intended tier **if** a phase is delegated; it is not a claim
+that delegation is cheaper or mandatory. The planning agent must fill
+`delegation_basis` with the reason to delegate or the reason to keep the work direct
+for this agent/runtime. Different agents may reasonably choose differently.
 
 | tier | Intended use | Examples |
 |---|---|---|
@@ -39,8 +47,8 @@ account, and current model availability.
 
 ## Active Phases
 
-| phase | status | difficulty | worker_tier | handoff_note | review |
-|---|---|---|---|---|---|
+| phase | status | difficulty | mode | worker_tier | delegation_basis | handoff_note | review |
+|---|---|---|---|---|---|---|---|
 
 ## Worker Handoff Contract
 

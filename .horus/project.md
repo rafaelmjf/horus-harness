@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "The `horus-execution` supervisor/worker workflow has been piloted end-to-end on a real feature (incremental GitHub catalog refresh shipped via one delegated worker phase). The pilot surfaced two concrete workflow-tuning findings; the next step is to fold them back into the skill + handoff template."
+current_focus: "Dashboard account controls are now in place: the Control tab can map new isolated Claude/Codex login dirs, rename generated account aliases, and GitHub untracked-repo cards clarify that Onboard uses `gh` auth while agent account choice happens when launching work."
 last_updated: 2026-06-29
 ---
 
