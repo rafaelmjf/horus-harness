@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Encoded a runtime-aware delegation rubric (volume × ambiguity × runtime) into the horus-execution (v4) + horus-consolidate (v6) skills, execution.md template, supervisor prompt, and closure prompt; lifted three model-independent disciplines (reproduce-the-gate, bounded committed-and-pushed checkpoint, safety-in-code) into the managed instruction block. Re-projected via upgrade-project; 484 tests green; instruction drift clean. Also fixed the two prior Windows path-assertion test failures (PR #43). No active execution plan."
-next_action: "Pick the next priority: (a) the remaining pilot tuning finding — a small phase status vocabulary (`planned/delegated/accepted/blocked`) in the horus-execution skill + execution.md template; or (b) the two deferred workflow-policy refinements (project `[workflow]` into the managed block; per-project git-synced override)."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Last session encoded the delegation rubric + universal disciplines (see decisions.md 2026-06-29 'Delegation Is a Runtime-Aware Judgment Call' and the delegation-decision-heuristic memory) and fixed the Windows path-assertion tests. No active execution plan. Choose the next priority with the user: the phase status-vocabulary pilot finding, or the deferred workflow-policy refinements (managed-block policy projection; per-project override)."
-execution_recommendation: "continue-as-is - the remaining items are small, low-ambiguity doc/skill edits; high judgment, low volume → inline beats delegation here."
+current_focus: "Established a `research/` prior-art guardrail folder (catches drift into problems a mature tool already solves) and saved the Omnigent evaluation there (Codex + Claude analyses converged: Databricks OSS meta-harness with no project-memory → Horus stays the memory plane, Omnigent an optional execution plane; not adopting now). Seeded entries: omnigent, rulesync, pywebview. Back to polishing Horus for the use case — no Omnigent implementation planned."
+next_action: "Resume polishing Horus for the user's use case. Open small items: (a) the pilot tuning finding — phase status vocabulary (`planned/delegated/accepted/blocked`) in the horus-execution skill + execution.md template; or (b) the two deferred workflow-policy refinements (project `[workflow]` into the managed block; per-project git-synced override)."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Last session set up the `research/` prior-art guardrail folder (see decisions.md 2026-06-29 'Prior-Art Guardrails Live In research/') and saved the Omnigent evaluation (research/omnigent.md) — strategy is: Horus = memory plane, Omnigent = optional execution plane, NOT adopting now, no implementation scheduled. Resume polishing Horus for the use case: pick the phase status-vocabulary pilot finding or the deferred workflow-policy refinements with the user. Before building any substantial capability, skim research/ for an existing-tool guardrail."
+execution_recommendation: "continue-as-is - small, low-ambiguity doc/skill polish; high judgment, low volume → inline beats delegation."
 last_updated: 2026-06-29
 ---
 
@@ -11,9 +11,12 @@ last_updated: 2026-06-29
 
 ## Strategy - Omnigent Boundary
 
-- [x] Research Omnigent/OmniAgent overlap and decide the product boundary: interoperate later, but keep Horus separate and continuity-first.
-- [ ] Draft an Omnigent interop spec with explicit non-goals: no embedded Omnigent server, no dependency on its auth/runner, no migration of `.horus` lanes into Omnigent DB state.
-- [ ] Consider a tiny export/import command after the spec: `horus export omnigent` could produce an agent/context bundle or MCP-facing project-state tool from `.horus/`; a later optional reader could show linked Omnigent session ids in the Horus dashboard.
+> Full evaluation + drift-triggers live in `research/omnigent.md` (the prior-art
+> guardrail). Distilled rule in decisions.md "Omnigent Is An Interop Target".
+
+- [x] Research Omnigent/OmniAgent overlap and decide the product boundary: interoperate later, but keep Horus separate and continuity-first. **Extended 2026-06-29** (Databricks backing; confirmed no project-memory; two-planes division) → `research/omnigent.md`.
+- [x] Draft an Omnigent interop boundary (non-goals + division of planes): captured as direction in `research/omnigent.md` — no embedded server, no dependency on its auth/runner, no migration of `.horus` lanes into its DB; Horus = memory plane, Omnigent = optional execution plane. Not scheduled for implementation.
+- [ ] (Direction only, not scheduled) First interop seam = a `horus mcp` continuity server any MCP client can read (Omnigent the first consumer); then a thin `horus export omnigent` bundle; dashboard session read-back optional. Revisit only if/when actually adopting Omnigent.
 
 ## Context Cache Visibility
 
