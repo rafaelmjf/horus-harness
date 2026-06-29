@@ -66,14 +66,18 @@ def load_github_owners() -> list[str]:
 
 
 def load_workspace_root() -> str:
+    # Forward-slashed for consistency with set_workspace_root / _write_config (which
+    # store `.as_posix()`); otherwise the default and a round-tripped value differ by
+    # separator on Windows. Path() reads either back fine.
+    default = (Path.home() / "projects").resolve().as_posix()
     path = config_path()
     if not path.exists():
-        return str((Path.home() / "projects").resolve())
+        return default
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     root = data.get("workspace_root")
     if isinstance(root, str) and root.strip():
         return root
-    return str((Path.home() / "projects").resolve())
+    return default
 
 
 def _as_key(path: Path) -> str:
