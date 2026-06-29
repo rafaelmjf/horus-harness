@@ -10,6 +10,7 @@ TOML escaping and work on Windows.
 from __future__ import annotations
 
 import hashlib
+import re
 import tomllib
 from pathlib import Path
 
@@ -361,6 +362,17 @@ def set_account_codex_home(alias: str, codex_home_path: str) -> None:
     accts = _load_accounts()
     accts["codex_homes"][alias] = codex_home_path
     _write_accounts(accts["aliases"], accts["config_dirs"], accts["codex_homes"])
+
+
+def account_login_dir(agent: str, alias: str) -> str:
+    """Standard isolated login directory for ``agent``/``alias`` under ``~/.horus``.
+
+    The account-setup wizard derives this instead of asking the user for a path: the
+    directory is created and populated by the native CLI's own login flow. Returns a
+    forward-slashed string for the same reason ``_write_accounts`` does (clean TOML on
+    Windows; ``Path`` reads it back fine everywhere)."""
+    safe = re.sub(r"[^A-Za-z0-9_-]", "-", alias.strip()) or "default"
+    return (config_dir() / "accounts" / f"{agent}-{safe}").as_posix()
 
 
 def alias_for(identifier: str | None) -> str | None:

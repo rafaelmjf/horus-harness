@@ -1,5 +1,39 @@
 # Decisions
 
+## 2026-06-29 - Owned Dashboard Window Is Default Only Where the Raise Is Reliable
+
+The mascot opens the dashboard as a dedicated Chromium app window (`--user-data-dir`
+under `~/.horus/dashboard-profile`) so Horus owns a trackable instance it can reuse
+(raise the existing window on the next click) and close on quit — instead of stacking a
+new browser tab each click. But this is the **default only on Windows**; other desktops
+keep the plain browser tab. A `--tab` flag forces a tab anywhere; `--app-window` forces
+owned anywhere.
+
+Reasoning: the user asked for tab reuse but conditioned switching the default on
+*identical cross-OS behavior*. Investigation showed two distinct guarantees:
+- **No duplicate window** — cross-OS: poll the tracked `Popen`; if alive, don't spawn.
+- **Raise/focus the existing window** — NOT cross-OS: `SetForegroundWindow` works on
+  Windows (`launcher.focus_window_for_pid`), but Wayland exposes no programmatic raise
+  and X11/macOS need fragile external tools. `webbrowser.open` also ignores its `new=`
+  arg on Windows (OS default browser opens a new tab regardless), so plain tabs can't be
+  deduped at all.
+
+So owned-window is the default where the full behavior (incl. raise) holds — Windows —
+and stays opt-in elsewhere, honoring "otherwise keep as is." This also advances the
+MVP5 "owned, killable dashboard window" lifecycle goal (quit now closes the owned
+window). The proper native app remains the path to full cross-OS window lifecycle.
+
+## 2026-06-29 - Account Setup Is Login-Driven, Not Path-Entry
+
+Adding an agent account no longer asks the user for a config-dir path. The wizard takes
+agent + alias, derives an isolated dir (`~/.horus/accounts/<agent>-<alias>`), records the
+mapping, and opens the native CLI's own login (`claude` / `codex login`) with
+`CLAUDE_CONFIG_DIR`/`CODEX_HOME` set — so the directory is created and populated by the
+sign-in itself. Reasoning: the old form exposed an implementation detail (the isolation
+dir) and required a separate manual sign-in step; users expect "add account → log in".
+The mapping is recorded up front so the account appears immediately; if the convenience
+terminal can't open (headless POSIX) the mapping still stands with a clear notice.
+
 ## 2026-06-29 - Usage Hook Advises and Asks; It Never Overrides a Command or Strands Work
 
 The usage→closure hook must never override an explicit user instruction, and closure

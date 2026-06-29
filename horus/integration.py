@@ -20,11 +20,16 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from horus import config as _config
+
+# Keep git/gh children from flashing a console when the caller (e.g. the
+# console-less dashboard server) spawns them on Windows. See gitstate._NO_WINDOW.
+_NO_WINDOW = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if sys.platform == "win32" else {}
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +46,7 @@ def _run(cmd: list[str], cwd: Any) -> subprocess.CompletedProcess:
         cwd=str(cwd),
         capture_output=True,
         text=True,
+        **_NO_WINDOW,
     )
 
 

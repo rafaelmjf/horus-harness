@@ -10,12 +10,18 @@ from __future__ import annotations
 import base64
 import json
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from horus import config, frontmatter, gitstate
+
+# Suppress the transient console window each `gh.exe` child would otherwise pop:
+# the dashboard server runs console-less, so a console subprocess gets a fresh one.
+# Mirrors gitstate._NO_WINDOW (git calls already do this).
+_NO_WINDOW = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if sys.platform == "win32" else {}
 
 
 @dataclass(frozen=True)
@@ -325,6 +331,7 @@ def _repo_list(owner: str, *, limit: int) -> list[dict[str, Any]]:
             text=True,
             capture_output=True,
             check=False,
+            **_NO_WINDOW,
         )
     except OSError as exc:
         raise RuntimeError(f"gh repo list failed: {exc}") from exc
@@ -344,6 +351,7 @@ def _repo_file(full_name: str, path: str, branch: str) -> str | None:
             text=True,
             capture_output=True,
             check=False,
+            **_NO_WINDOW,
         )
     except OSError:
         return None

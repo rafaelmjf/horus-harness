@@ -36,6 +36,7 @@ from horus import (
     gitstate,
     github_catalog,
     launch,
+    launcher,
     markdown,
     overhead,
     pty_host,
@@ -1444,15 +1445,15 @@ def _account_alias_form(account: dict[str, Any]) -> str:
 def _account_add_form() -> str:
     return (
         "<details class='or-cmds'><summary>Add account</summary>"
-        "<form class='launch-form' method='post' action='/account-add'>"
+        "<form class='launch-form' method='post' action='/account-login'>"
         "<label>Agent <select name='agent'>"
         "<option value='claude'>Claude</option><option value='codex'>Codex</option>"
         "</select></label>"
-        "<label>Alias <input name='alias' placeholder='personal'></label>"
-        "<label>Config path <input name='path' placeholder='~/.claude-personal or ~/.codex-personal'></label>"
-        "<button class='start primary' type='submit'>Add account</button>"
-        "<p class='muted' style='font-size:12px;margin:0'>This maps an isolated local login directory. "
-        "Sign in with the native CLI using that directory before launching work from it.</p>"
+        "<label>Alias <input name='alias' placeholder='personal' required></label>"
+        "<button class='start primary' type='submit'>Add &amp; sign in</button>"
+        "<p class='muted' style='font-size:12px;margin:0'>Creates an isolated login directory "
+        "under <code>~/.horus/accounts/</code> and opens a terminal to sign in &mdash; no path to "
+        "enter. The directory is filled by the login itself.</p>"
         "</form></details>"
     )
 
@@ -1519,6 +1520,30 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
         "</form>"
         "<details class='or-cmds'><summary>&#8230; or copy a terminal command</summary>"
         f"<div class='launch-body'>{_launch_cmds(project['path'], accounts)}</div></details>"
+    )
+
+
+def render_onboard_handoff(
+    name: str, project_index: int | None, project_path: str, accounts: list[dict[str, Any]]
+) -> str:
+    """Post-Onboard handoff: a start-work CTA for the just-tracked project, with an
+    account-alias chooser for the first session. Bridges "repo onboarded" → "working on
+    it" so the user doesn't have to hunt the new project down on the Control tab.
+
+    ``accounts`` only needs an ``alias`` per entry (no usage rings here)."""
+    if project_index is None:
+        return ""  # couldn't locate the freshly-registered project; skip the CTA
+    if accounts:
+        body = _project_launch_form(project_index, {"name": name, "path": project_path}, accounts)
+    else:
+        body = (
+            "<p class='muted'>No agent account is set up yet. Add one under "
+            "<a href='/control'>Control &rarr; Add account</a> (it opens a sign-in terminal), "
+            "then start a session here.</p>"
+        )
+    return (
+        f"<div class='banner ok'><strong>Onboarded {html.escape(name)} &mdash; start working on it"
+        f"</strong><div class='launch-body'>{body}</div></div>"
     )
 
 
@@ -1638,6 +1663,18 @@ def _launch_notice(params: dict[str, list[str]]) -> str:
         return "<div class='banner ok'>Account mapping added.</div>"
     if params.get("account") == ["alias"]:
         return "<div class='banner ok'>Account alias updated.</div>"
+    if params.get("account") == ["login-started"]:
+        return (
+            "<div class='banner ok'>Account created &mdash; a terminal opened to sign in. "
+            "Complete the login there; the account is ready to launch once it shows a usage "
+            "ring.</div>"
+        )
+    if "login_error" in params:
+        return (
+            "<div class='banner err'>Account mapped, but the login terminal could not open: "
+            f"{html.escape(params['login_error'][0])}. Sign in manually with the native CLI "
+            "using the mapped directory.</div>"
+        )
     return ""
 
 
@@ -1855,6 +1892,52 @@ def process_account_add(form: dict[str, str]) -> str:
     else:
         return "error=" + quote_plus("unknown account agent")
     return "account=added"
+
+
+def process_account_login(form: dict[str, str], *, launch_login: Any = None) -> str:
+    """Account-setup wizard: derive an isolated login dir, record the mapping, and open
+    a terminal running the native CLI's login so the *user* fills the dir by signing in.
+    No path is asked for — that was the friction this replaces.
+
+    ``launch_login`` is injectable for tests; it defaults to ``launcher.open_terminal``."""
+    agent = (form.get("agent") or "claude").strip()
+    alias = (form.get("alias") or "").strip()
+    if not alias:
+        return "error=" + quote_plus("account alias is required")
+    if agent not in ("claude", "codex"):
+        return "error=" + quote_plus("unknown account agent")
+
+    login_dir = config.account_login_dir(agent, alias)
+    # Map the alias now so the account shows in the panel immediately; the login
+    # populates the directory with credentials.
+    if agent == "codex":
+        config.set_account_codex_home(alias, login_dir)
+    else:
+        config.set_account_config_dir(alias, login_dir)
+
+    launch_login = launch_login or launcher.open_terminal
+    try:
+        Path(login_dir).mkdir(parents=True, exist_ok=True)
+        argv, env = launcher.login_argv_env(agent, login_dir)
+        launch_login(argv, Path.home(), env)
+    except (OSError, ValueError) as exc:
+        # The mapping stands; only the convenience terminal failed (e.g. headless POSIX).
+        return "account=mapped&login_error=" + quote_plus(str(exc))
+    return "account=login-started"
+
+
+def _project_index(path: Path) -> int | None:
+    """Index of ``path`` in the registered-projects list — the address ``/launch``
+    uses — or None if it isn't registered. Match on resolved paths so slash/case
+    differences don't miss it."""
+    target = str(Path(path).resolve())
+    for i, p in enumerate(config.load_projects()):
+        try:
+            if str(Path(p).resolve()) == target:
+                return i
+        except OSError:
+            continue
+    return None
 
 
 def process_launch(
@@ -2096,6 +2179,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/launch",
             "/settings",
             "/account-add",
+            "/account-login",
             "/account-alias",
             "/github-refresh",
             "/github-onboard",
@@ -2128,6 +2212,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/account-add":
             self._redirect(f"/control?{process_account_add(self._read_form())}")
+            return
+        if parsed.path == "/account-login":
+            self._redirect(f"/control?{process_account_login(self._read_form())}")
             return
         if parsed.path == "/account-alias":
             self._redirect(f"/control?{process_account_alias(self._read_form())}")
@@ -2194,6 +2281,7 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             onboard_notes: list[str] = []
             onboard_errors: list[str] = []
+            handoff = ""
             try:
                 result = remote_start.onboard_github_project(f"github:{target}")
                 integ = result.integration
@@ -2202,11 +2290,19 @@ class _Handler(BaseHTTPRequestHandler):
                     onboard_notes.append(f"Onboarded {target} successfully.{detail}")
                 else:
                     onboard_notes.append(f"Onboarded {target} (integration incomplete: {integ.detail}).")
+                if result.registered:
+                    # Post-Onboard handoff: offer a start-work CTA for the new project.
+                    handoff = render_onboard_handoff(
+                        result.path.name,
+                        _project_index(result.path),
+                        str(result.path),
+                        [{"alias": a} for a in sorted(_known_aliases())],
+                    )
             except (RuntimeError, ValueError) as exc:
                 onboard_errors.append(f"Onboard failed for {target}: {exc}")
             projects, errors, notes = gather_remote_projects()
             visible_untracked, hidden_untracked = gather_untracked_repos()
-            self._send(render_remote_catalog(
+            self._send(handoff + render_remote_catalog(
                 projects, errors + onboard_errors, notes + onboard_notes,
                 untracked=visible_untracked, hidden=hidden_untracked,
             ))

@@ -213,19 +213,95 @@ def _app_browser() -> list[str] | None:
     return None
 
 
-def open_dashboard(url: str, *, app_window: bool = False) -> None:
-    """Open the dashboard. Defaults to a normal browser tab for clear OS identity."""
+def dashboard_profile_dir() -> Path:
+    """Dedicated Chromium profile for the owned dashboard window.
+
+    A separate ``--user-data-dir`` gives Horus its *own* browser instance: a window
+    we can track by PID and reuse/raise on the next click instead of spawning a fresh
+    tab in the user's everyday browser each time — and one we can close on quit without
+    touching their main browser."""
+    return Path.home() / ".horus" / "dashboard-profile"
+
+
+def _app_window_argv(browser: list[str], url: str) -> list[str]:
+    return [
+        *browser,
+        f"--app={url}",
+        f"--user-data-dir={dashboard_profile_dir()}",
+        "--window-size=1200,760",
+    ]
+
+
+def resolve_open_mode(*, app_window: bool = False, tab: bool = False, platform: str | None = None) -> str:
+    """How the companion opens the dashboard: ``"owned"`` (dedicated app window we
+    reuse) or ``"tab"`` (a normal browser tab).
+
+    Owned is the default *only where we can reliably bring the window back to the
+    front* on a later click — Windows, via ``launcher.focus_window_for_pid``. Off
+    Windows there's no dependable cross-desktop raise (Wayland has no API), so the
+    plain tab stays the default there. Explicit flags win: ``--tab`` forces a tab,
+    ``--app-window`` forces owned."""
+    if tab:
+        return "tab"
+    if app_window:
+        return "owned"
+    return "owned" if (platform or sys.platform) == "win32" else "tab"
+
+
+def open_dashboard(url: str, *, app_window: bool = False) -> subprocess.Popen[str] | None:
+    """Open the dashboard. Owned app-window mode launches a dedicated, trackable
+    Chromium instance and returns its process (so the caller can reuse/raise/close it);
+    tab mode opens a normal browser tab and returns None."""
     browser = _app_browser() if app_window else None
     if browser:
         kwargs: dict = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "stdin": subprocess.DEVNULL}
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
         try:
-            subprocess.Popen([*browser, f"--app={url}", "--window-size=1200,760"], **kwargs)
-            return
+            return subprocess.Popen(_app_window_argv(browser, url), **kwargs)
         except OSError:
             pass
     webbrowser.open(url, new=2)
+    return None
+
+
+def raise_dashboard_window(process: subprocess.Popen[str] | None) -> bool:
+    """Best-effort: bring the owned dashboard window to the front. Full on Windows
+    (``focus_window_for_pid``); a no-op elsewhere — but even there we never spawn a
+    duplicate, the existing window simply stays put."""
+    if process is None or process.poll() is not None:
+        return False
+    from horus import launcher
+    return launcher.focus_window_for_pid(process.pid)
+
+
+def reuse_or_open_dashboard(
+    url: str, process: subprocess.Popen[str] | None, *, app_window: bool = False
+) -> subprocess.Popen[str] | None:
+    """Reuse an already-open owned window (raise it) instead of opening a duplicate;
+    otherwise open a fresh one. Tab mode tracks nothing, so it always opens."""
+    if app_window and process is not None and process.poll() is None:
+        raise_dashboard_window(process)
+        return process
+    return open_dashboard(url, app_window=app_window)
+
+
+def stop_browser(process: subprocess.Popen[str] | None, *, timeout: float = 2.0) -> None:
+    """Close the owned dashboard window when the companion quits, so it doesn't linger
+    as a stale window. Safe because the dedicated profile is Horus's own instance — it
+    never touches the user's everyday browser. No-op in tab mode (process is None)."""
+    if process is None or process.poll() is not None:
+        return
+    try:
+        process.terminate()
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+        except OSError:
+            pass
+    except OSError:
+        pass
 
 
 def mascot_asset_path() -> Path:
@@ -271,7 +347,7 @@ def run_companion(
     port: int = 8765,
     start_dashboard: bool = True,
     open_on_start: bool = False,
-    app_window: bool = False,
+    open_mode: str = "tab",
     mascot_style: str = "auto",
     usage_threshold: float = 90.0,
 ) -> int:
@@ -290,10 +366,12 @@ def run_companion(
         print("Horus companion already running; not starting another.")
         return 0
 
+    owned = open_mode == "owned"
+    browser_proc: subprocess.Popen[str] | None = None
     dashboard = ensure_dashboard(host, port, start=start_dashboard)
     if open_on_start:
         dashboard = ensure_dashboard_for_open(dashboard, host=host, port=port, start=start_dashboard)
-        open_dashboard(dashboard.url, app_window=app_window)
+        browser_proc = open_dashboard(dashboard.url, app_window=owned)
 
     root = tk.Tk()
     root.title("Horus")
@@ -340,9 +418,10 @@ def run_companion(
         canvas.itemconfigure(status_item, fill=color)
 
     def open_action(_event: object | None = None) -> None:
-        nonlocal dashboard
+        nonlocal dashboard, browser_proc
         dashboard = ensure_dashboard_for_open(dashboard, host=host, port=port, start=start_dashboard)
-        open_dashboard(dashboard.url, app_window=app_window)
+        # Reuse the owned window (raise it) instead of stacking another tab/window.
+        browser_proc = reuse_or_open_dashboard(dashboard.url, browser_proc, app_window=owned)
 
     def close_check_action() -> None:
         level, message = run_close_check(project_root, threshold=usage_threshold)
@@ -405,6 +484,8 @@ def run_companion(
     try:
         root.mainloop()
     finally:
-        # Don't leave the dashboard server running once the mascot is gone.
+        # Don't leave the dashboard server — or our owned dashboard window — running
+        # once the mascot is gone. (Owned-window close is safe: dedicated profile.)
+        stop_browser(browser_proc)
         stop_dashboard(dashboard)
     return 0

@@ -624,7 +624,9 @@ def test_control_tab_renders_launch_controls(tmp_path, monkeypatch):
     assert "action='/account-alias'" in page
     assert "Save alias" in page
     assert "Add account" in page
-    assert "action='/account-add'" in page
+    # Add-account is now the login-driven wizard (no manual config path).
+    assert "action='/account-login'" in page
+    assert "Add &amp; sign in" in page
     # Copy-the-command path is still offered as a secondary option.
     assert "horus open" in page
 
@@ -653,6 +655,83 @@ def test_process_account_add_maps_isolated_account_dirs(tmp_path, monkeypatch):
         "agent": "codex", "alias": "codex-personal", "path": str(tmp_path / "codex-personal"),
     }) == "account=added"
     assert config.load_account_codex_homes()["codex-personal"] == str(tmp_path / "codex-personal")
+
+
+def test_process_account_login_derives_dir_and_launches_claude(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    captured = {}
+
+    def fake_login(argv, cwd, env):
+        captured["argv"], captured["cwd"], captured["env"] = argv, cwd, env
+        return 4242
+
+    out = dashboard.process_account_login({"agent": "claude", "alias": "personal"}, launch_login=fake_login)
+
+    assert out == "account=login-started"
+    expected = config.account_login_dir("claude", "personal")
+    # No path was supplied by the user — it was derived and the mapping recorded.
+    assert config.load_account_config_dirs()["personal"] == expected
+    assert captured["argv"] == ["claude"]
+    assert captured["env"]["CLAUDE_CONFIG_DIR"] == expected
+    assert Path(expected).is_dir()  # created so the login writes credentials into it
+
+
+def test_process_account_login_codex_uses_codex_login(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    captured = {}
+    out = dashboard.process_account_login(
+        {"agent": "codex", "alias": "work"},
+        launch_login=lambda argv, cwd, env: captured.update(argv=argv, env=env),
+    )
+    assert out == "account=login-started"
+    expected = config.account_login_dir("codex", "work")
+    assert config.load_account_codex_homes()["work"] == expected
+    assert captured["argv"] == ["codex", "login"]
+    assert captured["env"]["CODEX_HOME"] == expected
+
+
+def test_process_account_login_requires_alias(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    out = dashboard.process_account_login({"agent": "claude", "alias": ""}, launch_login=lambda *a: None)
+    assert out.startswith("error=")
+
+
+def test_process_account_login_maps_even_when_terminal_fails(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+
+    def boom(argv, cwd, env):
+        raise OSError("no graphical display detected")
+
+    out = dashboard.process_account_login({"agent": "claude", "alias": "headless"}, launch_login=boom)
+
+    # Mapping stands; only the convenience terminal failed.
+    assert out.startswith("account=mapped&login_error=")
+    assert "headless" in config.load_account_config_dirs()
+
+
+def test_login_notice_messages():
+    assert "sign in" in dashboard._launch_notice({"account": ["login-started"]})
+    assert "could not open" in dashboard._launch_notice({"login_error": ["boom"]})
+
+
+def test_onboard_handoff_offers_account_chooser_and_launch():
+    html = dashboard.render_onboard_handoff(
+        "demo", 3, "/work/demo", [{"alias": "personal"}, {"alias": "work"}],
+    )
+    assert "start working on it" in html
+    assert "action='/launch'" in html
+    assert "value='3'" in html  # launch posts the new project's index
+    assert "personal" in html and "work" in html  # account-alias chooser
+
+
+def test_onboard_handoff_without_accounts_points_to_wizard():
+    html = dashboard.render_onboard_handoff("demo", 3, "/work/demo", [])
+    assert "Add account" in html and "/control" in html
+    assert "action='/launch'" not in html  # nothing to launch as yet
+
+
+def test_onboard_handoff_skips_when_project_not_located():
+    assert dashboard.render_onboard_handoff("demo", None, "/work/demo", [{"alias": "x"}]) == ""
 
 
 def test_process_account_alias_renames_generated_alias_and_mapping(tmp_path, monkeypatch):
