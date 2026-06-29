@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-06-29 - Prior-Art Guardrails Live In `research/`
+
+Before building a substantial capability, check whether a mature tool already solves it
+better — and if so, prefer interop/adopt over reinventing. The `research/` folder holds
+those evaluations: per tool, where it overlaps Horus, the verdict (build / cede / interop
+/ adopt), and **drift triggers** (concrete signals you're about to rebuild it). `research/`
+holds the evidence; this lane holds the distilled rule.
+
+Reasoning: Horus is deliberately lightweight and continuity-first, but as it's refined,
+feature ideas drift — and some drift straight into territory a tool like Omnigent (agent
+orchestration) or rulesync (cross-tool rule projection) already owns. The guardrail
+catches that early. Seeded with `research/omnigent.md`, `research/rulesync.md`,
+`research/pywebview.md`; add an entry after researching any new tool.
+
 ## 2026-06-29 - Delegation Is a Runtime-Aware Judgment Call; Disciplines Are Universal
 
 The implement-vs-delegate decision (`execution_recommendation` / `delegation_basis`) is
@@ -310,6 +324,19 @@ Reasoning:
 - The useful boundary is interop, not replacement: Horus can export `.horus` state to Omnigent as project context/tools, and may later display Omnigent session metadata when configured, while Omnigent owns orchestration/auth/sandboxing for sessions started through it.
 
 Implication: future specs should avoid "build a general agent harness" unless the feature directly advances Horus continuity. If a user wants shared live multi-agent sessions, Omnigent is the likely host; Horus should make that host better informed by `.horus` state.
+
+Update 2026-06-29 (extended research → `research/omnigent.md`): Omnigent is now a
+**Databricks** open-source project ("Kubernetes for agents"), and a direct read of its
+README/blog **confirms it has no project-memory concept** (sessions are server/DB-backed,
+ephemeral by design) — so the continuity wedge is orthogonal, not contested. Sharper
+stance: Horus = durable **memory plane**, Omnigent = optional **execution plane**; don't
+build a second control plane, and **freeze further MVP3/4 cockpit expansion** rather than
+grow a weaker Omnigent. Its `Polly` orchestrator already implements the `execution.md`
+supervisor/worker model, so it can be an opt-in per-task execution backend. First interop
+seam (direction only, not scheduled): expose `.horus/` as a `horus mcp` continuity server
+any MCP client can read — Omnigent is the first consumer, not a special case. Resume model
+is **work-pickup** (rehydrate from `.horus/`), so Horus never needs Omnigent's always-on
+server.
 
 ## 2026-06-24 - Project-First Product Shape
 
