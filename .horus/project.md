@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Horus now projects the optional execution workflow into native Claude/Codex use through `horus execution` prompts, worker handoff notes, and a bundled `horus-execution` skill. The next step is to pilot it on a real phased feature and tune the workflow from that run."
+current_focus: "The `horus-execution` supervisor/worker workflow has been piloted end-to-end on a real feature (incremental GitHub catalog refresh shipped via one delegated worker phase). The pilot surfaced two concrete workflow-tuning findings; the next step is to fold them back into the skill + handoff template."
 last_updated: 2026-06-29
 ---
 

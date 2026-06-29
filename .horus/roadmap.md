@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Horus now projects the optional execution workflow into native Claude/Codex use through `horus execution` prompts, worker handoff notes, and a bundled `horus-execution` skill. The next step is to pilot it on a real phased feature and tune the workflow from that run."
-next_action: "Pilot `horus-execution` on a real phased Horus feature: create an execution plan, delegate one bounded worker phase, review its `.horus/temp/` handoff, and adjust the workflow only where the pilot shows friction."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Immediate task: pilot the new execution workflow on a real phased Horus feature. This session shipped `horus execution prompt --target claude|codex`, `horus execution handoff <phase>`, the bundled `horus-execution` skill for `.claude/skills` and `.agents/skills`, docs, tests, and the design decision to project via prompts/skills/handoffs before generating native agent config files. Start by choosing a bounded next Horus feature, updating `.horus/execution.md`, then delegate one phase and review the `.horus/temp/` handoff."
-execution_recommendation: "plan-execution - the next step is explicitly a pilot of the supervisor/worker workflow and should start by updating execution.md."
+current_focus: "The `horus-execution` supervisor/worker workflow has been piloted end-to-end on a real feature (incremental GitHub catalog refresh shipped via one delegated worker phase). The pilot surfaced two concrete workflow-tuning findings; the next step is to fold them back into the skill + handoff template."
+next_action: "Apply the two execution-workflow pilot findings: (1) the supervisor brief / handoff template should carry the known pre-existing test-failure baseline so a worker does not misattribute an unrelated red test to its own change; (2) define a small phase status vocabulary (planned/delegated/accepted/blocked) in the `horus-execution` skill and the `execution.md` template so the phase table reads consistently."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. The `horus-execution` pilot is done: it shipped incremental GitHub catalog refresh (`discover()` now skips `.horus/` `gh api` reads for repos whose `pushedAt` is unchanged; `refresh_cache()` passes the prior cache) and validated the supervisor→worker→handoff→review loop. Immediate task: fold the two pilot findings (recorded in decisions.md 2026-06-29 'Execution-Workflow Pilot') into the bundled `horus-execution` skill text (`horus/skills.py` + `.claude/skills/` + `.agents/skills/`) and the `execution.md` handoff scaffold/template: (1) supervisor brief carries the known-failing test baseline; (2) a `planned/delegated/accepted/blocked` status vocabulary. Small, docs/skill-text scope across templates — continue-as-is."
+execution_recommendation: "continue-as-is - the next step is small, single-surface skill/template text edits (no cross-module logic), so no execution.md or worker delegation is needed."
 last_updated: 2026-06-29
 ---
 
@@ -27,7 +27,7 @@ last_updated: 2026-06-29
 - [x] Add gitignored `.horus/temp/` for fleeting worker/subagent handoff notes.
 - [x] Surface `execution.md` on the project dashboard and teach `horus consolidate` to flag temp handoff notes.
 - [x] Design native Claude/Codex projection: supervisor prompt, worker handoff template, model-tier mapping, and optional subagent definitions.
-- [ ] Pilot `horus-execution` on a real phased Horus feature and tune the workflow from observed friction.
+- [x] Pilot `horus-execution` on a real phased Horus feature and tune the workflow from observed friction (2026-06-29): shipped incremental GitHub catalog refresh via one delegated worker phase; loop worked end-to-end. Two tuning findings recorded in decisions.md → now the NEXT.
 
 ## MVP 0 - Project Continuity Skeleton
 
@@ -319,9 +319,9 @@ dashboard and later becomes the place for continuity/status nudges.
   results instantly with a "last refreshed" timestamp, and refresh in the background.
 - [x] Add a manual refresh action for the GitHub catalog, with clear error state
   when `gh` auth, network access, or GitHub rate limits block discovery.
-- [ ] Avoid re-checking every repo on every refresh: use GitHub `pushedAt`/ETag-like
-  signals or a small per-repo cache so unchanged repos do not need repeated
-  `.horus/project.md` and `.horus/roadmap.md` reads.
+- [x] Avoid re-checking every repo on every refresh (2026-06-29): `discover()` takes a
+  `prior` cache snapshot and skips both `.horus/` `gh api` reads when a repo's `pushedAt`
+  is unchanged, reusing cached fields; `refresh_cache()` passes the prior cache. → features.md
 - [x] Add workspace-root configuration for where remote projects should be cloned
   on each machine (`horus config workspace-root [PATH]`, default `~/projects`).
 - [ ] Add a dashboard POST action for the clone/register/start flow once the CLI

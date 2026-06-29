@@ -14,8 +14,12 @@ the next substantial feature starts; distill finished work into `roadmap.md`,
 `features.md`, `decisions.md`, and `history.md` rather than preserving this as a
 timeline.
 
-Current state: no active execution plan. The next pilot should replace this file
-with the selected feature's phases before delegating worker/subagent work.
+Current state: no active execution plan. The `horus-execution` pilot completed on
+2026-06-29 (shipped incremental GitHub catalog refresh via one delegated worker phase;
+findings distilled into decisions.md "Execution-Workflow Pilot"). The next roadmap NEXT
+(fold the pilot's tuning findings into the skill + this template) is `continue-as-is`,
+so it does not need a phased plan here. Replace this file when the next substantial
+phased feature starts.
 
 ## Model Policy
 
