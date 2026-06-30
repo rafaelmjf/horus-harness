@@ -1021,7 +1021,7 @@ def test_accounts_panel_renders_weekly_bar_with_reset(tmp_path, monkeypatch):
         "five_reset": "2026-06-26 22:22", "week_reset": "2026-06-28 15:34",
     }]
     page = dashboard.render_control(dashboard.gather_projects(), accounts, [])
-    assert "class='usagebar'" in page       # full-width weekly bar
+    assert "class='track-bar'" in page       # full-width weekly bar (sumi-e track)
     assert "width:69%" in page               # proportional fill = used%
     assert "Weekly 69%" in page
     assert "resets 2026-06-28 15:34" in page  # weekly reset date shown

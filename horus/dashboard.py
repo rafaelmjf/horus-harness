@@ -450,7 +450,7 @@ svg.ring text { font-family: -apple-system, Segoe UI, sans-serif; font-weight: 6
 .scard-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .scard-t { font-size: 16px; font-weight: 600; }
 .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #232733; color: #b9c2d0; }
-.usagebar { height: 8px; background: #232733; border-radius: 4px; overflow: hidden; margin: 12px 0 4px; }
+.usagebar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 12px 0 4px; }
 .usagebar > span { display: block; height: 100%; }
 form.launch-form { margin: 8px 0 4px; display: flex; flex-direction: column; gap: 8px; }
 form.launch-form label { font-size: 12px; color: #b9c2d0; }
@@ -1736,10 +1736,10 @@ def _usage_bar(pct: float | None, label: str) -> str:
     if pct is not None:
         v = max(0.0, min(100.0, pct))
         color = "var(--seal)" if v >= 80 else "var(--ink-3)" if v >= 35 else "var(--border-strong)"
-        fill = f"<span style='width:{v:.0f}%;background:{color}'></span>"
+        fill = f"<i style='width:{v:.0f}%;background:{color}'></i>"
     return (
         f"<div class='wbar mini'><div class='lab'><b>{html.escape(label)}</b></div>"
-        f"<div class='usagebar'>{fill}</div></div>"
+        f"<div class='track-bar'>{fill}</div></div>"
     )
 
 
