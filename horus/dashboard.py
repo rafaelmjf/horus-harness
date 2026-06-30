@@ -1456,22 +1456,10 @@ def _footer_html() -> str:
     )
 
 
-def render_index(
-    projects: list[dict[str, Any]],
-    sessions: list[registry.SessionRecord] | None = None,
-    *,
-    notice: str = "",
-) -> str:
-    records = sessions or []
-    live = _live_count(records)
-    accounts_placeholder = (
-        "<div class='section rail' data-horus-src='/accounts-panel'>"
-        "<details class='acct-panel' open><summary><span class='eyebrow'>Usage</span>"
-        "<h3>Accounts</h3><span class='chev'>&#9656;</span></summary>"
-        "<div class='acct-c'><p class='muted' style='margin:0'>Loading account usage...</p></div>"
-        "</details></div>"
-    )
-    remote = render_remote_catalog_placeholder()
+def _projects_section_html(projects: list[dict[str, Any]]) -> str:
+    """Greeting + needs-attention pill + the project card grid. Heavy: it needs the
+    full gather_projects() data (~1.2s), so the index loads it lazily via
+    /projects-grid while the shell paints immediately."""
     launch_aliases = [{"alias": a} for a in sorted(_known_aliases())]
     cards = "".join(_project_column(p, i, launch_aliases) for i, p in enumerate(projects))
     if not cards:
@@ -1494,8 +1482,7 @@ def render_index(
         )
     count = len(projects)
     plural = "project" if count == 1 else "projects"
-    body_html = (
-        f"{notice}<div class='wrap ov-shell'>{accounts_placeholder}<div class='ov-col'>"
+    return (
         "<div class='greet'><div class='gtext'><span class='eyebrow'>Cockpit</span>"
         f"<h2>{count} {plural} under watch</h2>"
         "<span class='meta'>local projects - tracked on this machine</span></div>"
@@ -1503,6 +1490,39 @@ def render_index(
         "<div class='shead'><span class='eyebrow'>Under watch</span><h2>Projects</h2>"
         "<span class='meta'>local projects - tracked on this machine</span></div>"
         f"<div class='grid'>{cards}</div>"
+    )
+
+
+def render_index(
+    projects: list[dict[str, Any]],
+    sessions: list[registry.SessionRecord] | None = None,
+    *,
+    notice: str = "",
+    defer: bool = False,
+) -> str:
+    records = sessions or []
+    live = _live_count(records)
+    accounts_placeholder = (
+        "<div class='section rail' data-horus-src='/accounts-panel'>"
+        "<details class='acct-panel' open><summary><span class='eyebrow'>Usage</span>"
+        "<h3>Accounts</h3><span class='chev'>&#9656;</span></summary>"
+        "<div class='acct-c'><p class='muted' style='margin:0'>Loading account usage...</p></div>"
+        "</details></div>"
+    )
+    remote = render_remote_catalog_placeholder()
+    if defer:
+        # Paint instantly: the project section needs the ~1.2s gather_projects(), so
+        # load it via the shared fetch loader as a sibling of the remote catalog.
+        projects_part = (
+            "<div data-horus-src='/projects-grid'><div class='greet'><div class='gtext'>"
+            "<span class='eyebrow'>Cockpit</span><h2 class='muted'>Loading projects&hellip;</h2>"
+            "</div></div></div>"
+        )
+    else:
+        projects_part = _projects_section_html(projects)
+    body_html = (
+        f"{notice}<div class='wrap ov-shell'>{accounts_placeholder}<div class='ov-col'>"
+        f"{projects_part}"
         f"<div class='band tight'>{remote}</div>"
         "</div></div>"
         f"{_footer_html()}"
@@ -2552,9 +2572,11 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
         if parsed.path == "/":
+            # Paint the shell immediately; the project grid (gather_projects ~1.2s)
+            # loads async via /projects-grid, like the accounts strip and catalog.
             self._send(render_index(
-                gather_projects(), gather_sessions(),
-                notice=_notice(parse_qs(parsed.query)),
+                [], gather_sessions(),
+                notice=_notice(parse_qs(parsed.query)), defer=True,
             ))
             return
         if parsed.path == "/github-catalog":
@@ -2577,6 +2599,11 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/accounts-panel":
             # Async fragment for the main-tab accounts/usage strip (network — loaded lazily).
             self._send(_accounts_strip(gather_accounts()))
+            return
+        if parsed.path == "/projects-grid":
+            # Async fragment for the index project section (greeting + grid); carries
+            # the ~1.2s gather_projects cost off the initial paint.
+            self._send(_projects_section_html(gather_projects()))
             return
         if parsed.path in ("/project-overhead", "/project-cache"):
             # Heavy per-project panels (session-log parsing) loaded lazily so the
