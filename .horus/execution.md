@@ -1,43 +1,34 @@
 ---
-status: idle
-current_feature: ""
+status: active
+current_feature: "Continuity-model + dashboard refinement: async perf, lane discipline (decisions/roadmap/history), bake into skills, reflow lanes, dashboard render-to-match"
 supervisor_tier: frontier
 worker_tier: standard
 continuity_tier: economy
-delegation_basis: ""
-last_updated: 2026-06-29
+delegation_basis: "Single frontier agent, gated per phase (user's choice). Phases 2-4 are interconnected continuity-model design — coherence favors one mind, stay direct. Only the mechanical Codex skill-mirror in phase 3 is a delegation candidate. Phases 1 & 5 are UI/perf where the user's eyeball is the real gate."
+last_updated: 2026-06-30
 ---
 
 # Execution Plan
 
-Fluid, optional plan for the currently active roadmap item. Replace this when
-the next substantial feature starts; distill finished work into `roadmap.md`,
-`features.md`, `decisions.md`, and `history.md` rather than preserving this as a
-timeline.
+Active phased plan for refining Horus's continuity model and the dashboard. Born
+from the dashboard-redesign review (PR #51): opening a project takes ~6.5s (token
+overhead ~4s + context-cache ~2.5s of JSONL parsing — NOT markdown rendering, which
+is ~3ms), and the `decisions.md`/`roadmap.md`/`history.md` lanes have drifted into
+long logs that tax both the dashboard and every native session's context.
 
-Current state: no active execution plan. The dashboard follow-up completed on
-2026-06-29 and was distilled into the durable lanes:
+Goal: make the dashboard paint fast, and make the lanes short, current, and
+readable — with the discipline baked into the skills/templates that generate them
+(Claude + Codex), not just hand-fixed once.
 
-- Phase 1A fixed GitHub Ignore/Unignore POST UX: trusted `owner/repo` validation +
-  `303 Location: /#github-catalog` PRG, with tests.
-- Phase 1A also exposed a workflow failure: the supervisor implemented delegated work.
-  `horus-execution` v2 now makes real delegation mandatory when model separation is
-  being tested.
-- Phase 1B then validated the corrected workflow: a real standard-tier worker
-  implemented `horus resume`, the dashboard/start integration, tests, and a handoff
-  note; the frontier supervisor reviewed and accepted it.
+## PR split
 
-Replace this file when the next substantial phased feature starts.
+- **PR #51 (`feat/dashboard-sumi-e-redesign`)**: phases 1 and 5 (dashboard perf + render).
+- **New branch (from `main` after #51 lands, or off #51)**: phases 2-4
+  (lane discipline spec + skills/templates/instructions + reflow Horus's own lanes).
 
 ## Model Policy
 
-Use tiers instead of hard-coded model names. Resolve them locally per agent,
-account, and current model availability.
-
-`worker_tier` is the intended tier **if** a phase is delegated; it is not a claim
-that delegation is cheaper or mandatory. The planning agent must fill
-`delegation_basis` with the reason to delegate or the reason to keep the work direct
-for this agent/runtime. Different agents may reasonably choose differently.
+Tiers, resolved locally per agent/account/availability.
 
 | tier | Intended use | Examples |
 |---|---|---|
@@ -49,28 +40,32 @@ for this agent/runtime. Different agents may reasonably choose differently.
 
 | phase | status | difficulty | mode | worker_tier | delegation_basis | handoff_note | review |
 |---|---|---|---|---|---|---|---|
+| 1-dashboard-perf | todo | medium | direct | — | UI/perf; frontier judgment + user is gate; small surface. PR #51. | — | project page paints <1s (heavy panels async); full suite green |
+| 2-lane-discipline-spec | todo | medium | direct | — | Design that drives phases 3-4; must be coherent → one mind. New branch. | — | decisions/roadmap/history target shapes agreed with user |
+| 3-bake-skills | todo | high | direct (Codex-mirror delegable) | standard | Interconnected (skill + templates + managed block) stays direct; mechanical `.agents/skills` mirror is the only delegation candidate. | — | horus-consolidate + templates + CLAUDE/AGENTS block consistent and mirrored to .claude/.agents; doctor + suite green |
+| 4-reflow-lanes | todo | medium | direct | — | Judgment over Horus's own content; not mechanical. | — | this repo's decisions/roadmap/history match the spec; `horus close --check` + doctor green |
+| 5-dashboard-render | todo | medium | direct | — | UI; user's eyeball is the gate. PR #51. | — | roadmap top/open-only inline, history → open-in-editor link, decisions curated + open-full button; suite green; user confirms |
+
+## Notes carried into the plan
+
+- Perf is the two log-parsing panels, confirmed by measurement (overhead ~4s,
+  cache ~2.5s, markdown ~3ms). Fix = async-load those panels (the `data-horus-src`
+  + `fetch` pattern the accounts strip already uses); deeper log-parse optimization
+  is a possible follow-up, not required for the paint win.
+- Lane discipline target (phase 2 will firm this up): **decisions.md** = short,
+  topic-grouped, current-and-relevant rule bullets (not a dated log); **roadmap.md**
+  = top/open items, completed condensed/archived; **history.md** = the narrative
+  detail/lessons, and *not* loaded inline on the dashboard.
+- "Open lane in editor" (phase 5): the dashboard is local-only, so the server can
+  open a lane's raw `.md` via the OS default handler (`os.startfile` on Windows);
+  guard it as a local, same-origin action by project/lane, never an arbitrary path.
 
 ## Worker Handoff Contract
 
-Implementation workers should write a brief note in `.horus/temp/` when a phase
-finishes. Keep it factual and reviewable:
+If any phase is delegated (only the phase-3 Codex mirror is a candidate), the worker
+writes `.horus/temp/<phase>.md` via `horus execution handoff <phase>`: changed files,
+behavior, tests run + result, risks, suggested durable `.horus/` updates. The
+supervisor reproduces the gate and reviews the diff before marking accepted.
 
-- changed files / behavior;
-- tests run and result;
-- risks or follow-ups;
-- suggested durable `.horus/` updates.
-
-**Supervisor brief convention (pilot finding 2026-06-29):** each worker brief states the
-**known pre-existing test-failure baseline** so a worker does not misattribute an unrelated
-red test to its own change. Current known-failing baseline:
-`tests/test_config.py::test_workspace_root_defaults_and_round_trips` (non-portable
-forward-slash path assertion on Windows; unrelated — a fix is queued as a separate task).
-
-The supervisor reviews the diff and the handoff, then updates the durable lanes.
-
-Useful commands:
-
-- `horus execution prompt --target codex` prints a supervisor prompt shaped for
-  Codex subagents/custom agents.
-- `horus execution prompt --target claude` prints the Claude Code equivalent.
-- `horus execution handoff <phase>` creates `.horus/temp/<phase>.md` for a worker note.
+**Known pre-existing test baseline:** none currently red — full suite is 502 green as
+of 2026-06-30; do not misattribute a new red to an unrelated cause.
