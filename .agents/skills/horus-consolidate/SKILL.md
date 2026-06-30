@@ -13,7 +13,7 @@ description: >-
   first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Consolidate Horus continuity
 
@@ -72,10 +72,12 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
 3. **Per-session close — record this session** (`.horus/**` only; never source,
    `AGENTS.md`, or `CLAUDE.md`):
 
-   - **Record fresh context.** Decisions + *why*, lessons/dead-ends, and capabilities
-     shipped *this session* that aren't on disk yet → `decisions.md` / `history.md` /
-     `features.md` (a Shipped row for each capability). This is the content only you
-     can supply — it's in the conversation, not the files.
+   - **Record fresh context.** Decisions, lessons/dead-ends, and capabilities shipped
+     *this session* that aren't on disk yet. A decision splits in two: the **rule**
+     (concise, under its topic) goes in `decisions.md`, dropping any rule it supersedes;
+     the ***why*** and dead ends go in `history.md` ("Decision rationale"). Capabilities
+     → a Shipped row in `features.md`. This is the content only you can supply — it's in
+     the conversation, not the files.
    - **Update the dashboard contract** (the checklist above): refresh `current_focus`,
      `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
      `last_updated` on touched lanes. Author the next step for a *cold* reader — name
@@ -97,10 +99,14 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      durable lanes and updates `execution.md`.
 
 4. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
-   `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`. If
-   `history.md` has grown into a verbatim log, that's a `horus-distill-history` job —
-   flag it, don't fix it here. `execution.md` is fluid active coordination; archive
-   or replace it when the roadmap item is done.
+   `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`.
+   `decisions.md` is **concise current rules grouped by topic, not a dated log** — if
+   it has drifted into long dated entries, collapse superseded ones to the rule that
+   won and move the rationale to `history.md` (backlog pass, Step 5). Keep `roadmap.md`
+   on top/open action points; condense long completed lists. If `history.md` has grown
+   into a verbatim log, that's a `horus-distill-history` job — flag it, don't fix it
+   here. `execution.md` is fluid active coordination; archive or replace it when the
+   roadmap item is done.
 
 5. **Backlog consolidation — ONLY when explicitly asked.** Distill old `sessions/*.md`
    and stale `temp/*.md` handoff notes into the lanes then remove them; move historical done items into `features.md` and

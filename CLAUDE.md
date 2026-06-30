@@ -17,8 +17,8 @@ Before substantial work, read the `.horus/` lanes (each stays in its lane):
 - `project.md` — vision, shape, boundaries, current focus.
 - `roadmap.md` — open action points (the *what's next*).
 - `features.md` — capability ledger (shipped / in-progress / planned packages).
-- `decisions.md` — durable rules and their reasoning.
-- `history.md` — carried-forward lessons ("bumps in the road").
+- `decisions.md` — concise current rules, grouped by topic (not a log).
+- `history.md` — bumps in the road + the rationale behind the decisions.
 - `execution.md` — optional active execution plan: phases, model-tier routing,
   supervisor/worker handoffs, and review gates for the current roadmap item.
 - Review recent local session summaries in `.horus/sessions/` when available.
@@ -31,9 +31,9 @@ After work that contributes to the project state, close the session by invoking 
 - Add a concise session summary under `.horus/sessions/` (scaffold with
   `horus session new "<title>"`, then write what actually happened — not just a date).
 - Keep facts in their lane: open action points in `roadmap.md`, shipped/planned
-  capabilities in `features.md`, durable rules in `decisions.md`, lessons in
-  `history.md`, active phase coordination in `execution.md`. Don't maintain the
-  same fact in two files.
+  capabilities in `features.md`, concise current rules in `decisions.md`, rationale
+  and lessons in `history.md`, active phase coordination in `execution.md`. Don't
+  maintain the same fact in two files.
 - Implementation workers may write brief phase handoff notes under `.horus/temp/`;
   the supervising agent reviews those notes and updates the durable lanes.
 - When authoring `roadmap.md` `next_action`, also set `execution_recommendation`

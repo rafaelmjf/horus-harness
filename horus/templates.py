@@ -27,8 +27,8 @@ Before substantial work, read the `.horus/` lanes (each stays in its lane):
 - `project.md` — vision, shape, boundaries, current focus.
 - `roadmap.md` — open action points (the *what's next*).
 - `features.md` — capability ledger (shipped / in-progress / planned packages).
-- `decisions.md` — durable rules and their reasoning.
-- `history.md` — carried-forward lessons ("bumps in the road").
+- `decisions.md` — concise current rules, grouped by topic (not a log).
+- `history.md` — bumps in the road + the rationale behind the decisions.
 - `execution.md` — optional active execution plan: phases, model-tier routing,
   supervisor/worker handoffs, and review gates for the current roadmap item.
 - Review recent local session summaries in `.horus/sessions/` when available.
@@ -41,9 +41,9 @@ After work that contributes to the project state, close the session by invoking 
 - Add a concise session summary under `.horus/sessions/` (scaffold with
   `horus session new "<title>"`, then write what actually happened — not just a date).
 - Keep facts in their lane: open action points in `roadmap.md`, shipped/planned
-  capabilities in `features.md`, durable rules in `decisions.md`, lessons in
-  `history.md`, active phase coordination in `execution.md`. Don't maintain the
-  same fact in two files.
+  capabilities in `features.md`, concise current rules in `decisions.md`, rationale
+  and lessons in `history.md`, active phase coordination in `execution.md`. Don't
+  maintain the same fact in two files.
 - Implementation workers may write brief phase handoff notes under `.horus/temp/`;
   the supervising agent reviews those notes and updates the durable lanes.
 - When authoring `roadmap.md` `next_action`, also set `execution_recommendation`
@@ -387,12 +387,17 @@ status: active
 last_updated: {date}
 ---
 
-# History — bumps in the road
+# History — bumps in the road & decision rationale
 
 Curated, durable context: the problems that bit us and the lessons that shaped the
-design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
-just the war stories worth carrying forward. Compress a large existing changelog
-into this curated subset with `horus distill-history`.
+design, plus the **rationale behind the rules** in `decisions.md` (which stays
+concise — the *why* and the dead ends live here). **Not** a timeline and **not** open
+issues (those live in `roadmap.md`). Compress a large existing changelog into this
+curated subset with `horus distill-history`.
+
+## Bumps in the road
+
+## Decision rationale
 """
 
 
@@ -408,9 +413,11 @@ installed. Read this first.
   pruned when done. The *what's next*, not a completed log.
 - `features.md` — the **capability ledger**: complete packages tracked
   shipped / in-progress / planned. A capability, not a task — distinct from roadmap.
-- `decisions.md` — durable decisions / rules to follow and their reasoning, dated.
-- `history.md` — curated bumps in the road: problems that bit us and the lessons
-  that shaped the design. Relevant context, **not** a timeline and **not** open issues.
+- `decisions.md` — concise **current rules**, grouped by topic. Not a dated log;
+  superseded decisions are dropped and the rationale lives in `history.md`.
+- `history.md` — curated bumps in the road (problems that bit us + the lessons) **and
+  the rationale behind the decisions**. Relevant context, **not** a timeline and
+  **not** open issues.
 - `execution.md` — optional active execution plan for the current roadmap item:
   phase breakdown, model-tier routing, worker handoff notes, and review gates.
 - `sessions/` — local session summaries (gitignored; per-machine context that
@@ -437,9 +444,16 @@ this repo. A future `horus infer` will populate them automatically (LLM-based).
 
 
 def decisions_md() -> str:
-    return """# Decisions
+    return """# Decisions — current rules
 
-Durable decisions and their reasoning. Dated entries. No ephemeral chatter.
+Durable rules in force, **grouped by topic** and kept concise: a few words of rule
+plus a terse why. This is the *current* state, not a log — drop superseded decisions
+(keep only the rule that won) and put the narrative rationale and dead ends in
+`history.md`. Read top-to-bottom in a few seconds.
+
+## <Topic>
+
+- **<rule in a few words>** — <terse why>. ↳ history.md for the full rationale.
 """
 
 
@@ -504,7 +518,9 @@ them — keep each current at every close:
 5. features.md: add a Shipped row for any capability shipped this session.
 6. execution.md: if there is an active phased plan, update phase/review status from
    accepted worker handoff notes in .horus/temp/.
-7. decisions.md: record durable decisions + reasoning. Bump `last_updated` on lanes you touched.
+7. decisions.md: record a durable decision as a concise rule under its topic (drop any
+   rule it supersedes); put the rationale/dead-ends in history.md. Bump `last_updated`
+   on lanes you touched.
 8. Instructions: keep the AGENTS.md / CLAUDE.md shared blocks aligned
    (`horus doctor instructions` / `horus reconcile instructions`). Don't edit source as part of closure.
 
@@ -589,9 +605,14 @@ Never invent status, dates, or versions; when intent is unclear, leave it and fl
    features.md, keep the *action points* in roadmap.md and the *capability status* in
    features.md, each pointing at the other. No fact maintained in two places.
 3. Prune: drop done/obsolete roadmap items (they live in features/history/git now).
+   Keep roadmap focused on top/open action points; condense or archive long completed
+   lists rather than letting them grow.
 4. Distill sessions: fold durable content from sessions/*.md into the lanes, then
    remove or mark the distilled summary.
-5. Keep lanes pure: no tasks in features.md; no shipped packages lingering in
+5. Decisions discipline: decisions.md is concise current rules grouped by topic — NOT
+   a dated log. Collapse superseded decisions to the rule that won, and move the
+   narrative rationale / dead ends to history.md (a "Decision rationale" section).
+6. Keep lanes pure: no tasks in features.md; no shipped packages lingering in
    roadmap.md; no open issues in history.md; no changelog in project.md.
 
 Re-run `horus consolidate` afterward; the candidates above should be resolved.
