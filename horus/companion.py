@@ -7,11 +7,12 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import webbrowser
 from importlib import resources
 from pathlib import Path, PureWindowsPath
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -387,11 +388,27 @@ def run_companion(
         return 0
 
     owned = open_mode == "owned"
-    browser_proc: subprocess.Popen[str] | None = None
-    dashboard = ensure_dashboard(host, port, start=start_dashboard)
-    if open_on_start:
-        dashboard = ensure_dashboard_for_open(dashboard, host=host, port=port, start=start_dashboard)
-        browser_proc = open_dashboard(dashboard.url, app_window=owned)
+    # Lock-guarded shared handles so the background pre-warm thread, the mascot
+    # click, and the shutdown path agree on the dashboard process + browser window.
+    state: dict[str, Any] = {"dashboard": None, "browser_proc": None}
+    state_lock = threading.Lock()
+
+    def ensure_open(open_browser: bool) -> None:
+        """Spawn/locate the dashboard and optionally open (or raise) its window.
+        Idempotent and safe from the pre-warm thread or the mascot click."""
+        with state_lock:
+            dash = state["dashboard"] or ensure_dashboard(host, port, start=start_dashboard)
+            if open_browser:
+                dash = ensure_dashboard_for_open(dash, host=host, port=port, start=start_dashboard)
+                state["browser_proc"] = reuse_or_open_dashboard(
+                    dash.url, state["browser_proc"], app_window=owned
+                )
+            state["dashboard"] = dash
+
+    # Pre-warm off the critical path: the mascot window appears immediately instead
+    # of blocking on the dashboard coming live and (when pre-warming) the browser's
+    # cold launch. The click handler reuses whatever this set up.
+    threading.Thread(target=lambda: ensure_open(open_browser=open_on_start), daemon=True).start()
 
     root = tk.Tk()
     root.title("Horus")
@@ -438,10 +455,9 @@ def run_companion(
         canvas.itemconfigure(status_item, fill=color)
 
     def open_action(_event: object | None = None) -> None:
-        nonlocal dashboard, browser_proc
-        dashboard = ensure_dashboard_for_open(dashboard, host=host, port=port, start=start_dashboard)
-        # Reuse the owned window (raise it) instead of stacking another tab/window.
-        browser_proc = reuse_or_open_dashboard(dashboard.url, browser_proc, app_window=owned)
+        # Reuse the owned window (raise it) instead of stacking another tab/window;
+        # ensure_open handles the not-yet-pre-warmed case too.
+        ensure_open(open_browser=True)
 
     def close_check_action() -> None:
         level, message = run_close_check(project_root, threshold=usage_threshold)
@@ -506,6 +522,7 @@ def run_companion(
     finally:
         # Don't leave the dashboard server — or our owned dashboard window — running
         # once the mascot is gone. (Owned-window close is safe: dedicated profile.)
-        stop_browser(browser_proc)
-        stop_dashboard(dashboard)
+        with state_lock:
+            stop_browser(state["browser_proc"])
+            stop_dashboard(state["dashboard"])
     return 0

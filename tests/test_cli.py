@@ -425,8 +425,8 @@ def test_app_cli_can_request_app_window(tmp_path, monkeypatch):
     monkeypatch.setattr("horus.cli.companion.run_companion", fake_run)
     monkeypatch.setattr("horus.cli.companion.relaunch_without_console", lambda: False)
 
-    assert main(["app", "--path", str(tmp_path), "--open", "--app-window"]) == 0
-    assert calls[0][1]["open_on_start"] is True
+    assert main(["app", "--path", str(tmp_path), "--app-window"]) == 0
+    assert calls[0][1]["open_on_start"] is True  # pre-warm is the default now
     assert calls[0][1]["open_mode"] == "owned"  # --app-window forces owned on any platform
 
 
@@ -441,8 +441,23 @@ def test_app_cli_tab_flag_forces_tab(tmp_path, monkeypatch):
     monkeypatch.setattr("horus.cli.companion.run_companion", fake_run)
     monkeypatch.setattr("horus.cli.companion.relaunch_without_console", lambda: False)
 
-    assert main(["app", "--path", str(tmp_path), "--open", "--tab"]) == 0
+    assert main(["app", "--path", str(tmp_path), "--tab"]) == 0
     assert calls[0][1]["open_mode"] == "tab"  # --tab forces a browser tab on any platform
+
+
+def test_app_cli_no_open_keeps_mascot_only(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    calls = []
+
+    def fake_run(project_root, **kwargs):
+        calls.append((project_root, kwargs))
+        return 0
+
+    monkeypatch.setattr("horus.cli.companion.run_companion", fake_run)
+    monkeypatch.setattr("horus.cli.companion.relaunch_without_console", lambda: False)
+
+    assert main(["app", "--path", str(tmp_path), "--no-open"]) == 0
+    assert calls[0][1]["open_on_start"] is False  # --no-open opts out of pre-warm
 
 
 def test_app_cli_can_request_mascot_style(tmp_path, monkeypatch):

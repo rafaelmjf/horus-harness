@@ -1039,7 +1039,7 @@ def cmd_app(args: argparse.Namespace) -> int:
         host=args.host,
         port=args.port,
         start_dashboard=not args.no_dashboard,
-        open_on_start=args.open,
+        open_on_start=not args.no_open,
         open_mode=open_mode,
         mascot_style=args.mascot_style,
         usage_threshold=args.usage_threshold,
@@ -1377,7 +1377,7 @@ def build_parser() -> argparse.ArgumentParser:
         p_app.add_argument("--host", default="127.0.0.1", help="dashboard host (default: 127.0.0.1)")
         p_app.add_argument("--port", type=int, default=8765, help="dashboard port (default: 8765)")
         p_app.add_argument("--no-dashboard", action="store_true", help="don't start the dashboard if it is offline")
-        p_app.add_argument("--open", action="store_true", help="open the dashboard immediately")
+        p_app.add_argument("--no-open", action="store_true", help="just show the mascot; don't pre-open the dashboard window during startup")
         p_app.add_argument(
             "--app-window",
             action="store_true",
