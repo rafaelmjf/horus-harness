@@ -3,11 +3,13 @@ status: active
 last_updated: 2026-06-30
 ---
 
-# History — bumps in the road
+# History — bumps in the road & decision rationale
 
 Curated, durable context: the problems that bit us and the lessons that shaped the
-design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
-just the war stories worth carrying forward.
+design (the "bumps" below), plus the **rationale behind the rules** in `decisions.md`
+(which stays concise — the *why* lives here). **Not** a timeline and **not** open issues
+(those live in `roadmap.md`). Most decisions' rationale is already a bump below; the
+foundational whys that aren't are collected under "Decision rationale" at the end.
 
 ## Windows virtualenv `pythonw.exe` wrappers are not the whole process tree
 
@@ -267,3 +269,47 @@ companion needs explicit Linux desktop/Tk prerequisites or a graceful fallback. 
 cross-platform is not just avoiding Windows-only imports — hook command strings, terminal
 environment, process launch semantics, test runners, and GUI dependencies all need live Linux
 smokes before calling a feature portable.
+
+## Decision rationale
+
+The non-obvious *why* behind rules in `decisions.md` that aren't already a bump above.
+
+- **Why memory-plane, not a second control plane (Omnigent).** Omnigent is a broad
+  meta-harness (server + runner, hosted sessions, DB-backed state, policies, sandboxes).
+  Competing on that surface would pull Horus off its differentiator — durable repo-local
+  continuity usable when Horus isn't running. A direct read of Omnigent's README confirmed
+  it has **no project-memory concept** (sessions are ephemeral, server/DB-backed), so the
+  continuity wedge is orthogonal, not contested. Hence: memory plane (Horus) + optional
+  execution plane (Omnigent), interop via `.horus/`, not replacement. Full eval in
+  `research/omnigent.md`.
+- **Why the delegation rubric is volume × ambiguity × runtime, not "review the worker."**
+  From comparing a Codex(GPT-5.5) session with a Claude Opus/Sonnet-duet session, the
+  split's real wins were context hygiene + cost + bounded checkpoints — *not* code review
+  (most reviews just confirmed green; review is not a safety guarantee). Encoding the
+  rubric stops post-hoc "delegate because a worker tier exists" justification; lifting the
+  three disciplines into the managed block puts the durable safeguards where they apply
+  regardless of orchestration.
+- **Why the cockpit was retired, not fixed.** Its session-tracking only ever covered
+  sessions Horus itself launched (in-app PTYs were never registered; native/terminal
+  sessions were never in scope), so the live view showed a sliver and felt useless — a
+  fundamental ceiling, not a bug. The real "see all my sessions" want is transcript
+  discovery (reading the JSONL/rollouts the native apps already write), which fits the
+  memory plane and is the right path (unscheduled).
+- **Why decisions/roadmap/history are separate lanes with a routine owning routing.** A
+  multi-list structure (open action points vs shipped capabilities vs current rules vs
+  rationale) only stays honest if a routine (`consolidate`) routes facts and flags
+  overlap — human discipline drifts. Designing against a real long-running project
+  (fabric) surfaced the failure modes blank templates hide (roadmap/features duplication,
+  giant-log onboarding).
+- **Why Apache-2.0 over MIT.** Permissive with an explicit patent grant and clearer terms;
+  as sole copyright holder, relicensing/commercializing future versions stays possible —
+  loosening later is easy, tightening is hard, so a permissive default keeps optionality.
+- **Why PyPI Trusted Publishing.** OIDC on a published Release means no long-lived token
+  stored anywhere, matching the project's security posture; `uv` build/publish; publish
+  real working code (a stronger anti-squatting claim than a stub).
+- **2026-06-30 decisions.md reflow.** The file had drifted into 68 dated narrative entries
+  (~1,300 lines) — a decision *journal*, taxing every session's context. Distilled into
+  concise topic-grouped current rules; superseded decisions collapsed to the rule that
+  won; rationale already living here kept, foundational whys added above. The full dated
+  log remains in git (pre-reflow commit). **Lesson:** decisions.md is current rules, not a
+  log — the `horus-consolidate` skill (v7) now enforces that routing so it doesn't re-drift.
