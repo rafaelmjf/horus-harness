@@ -636,7 +636,7 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "document.querySelectorAll('[data-horus-src]').forEach(function(el){"
         "fetch(el.getAttribute('data-horus-src')).then(function(r){return r.text();})"
         ".then(function(html){el.outerHTML=html;})"
-        ".catch(function(){el.innerHTML=\"<div class='banner err'>GitHub catalog failed to load.</div>\";});"
+        ".catch(function(){el.innerHTML=\"<div class='banner err'>This section failed to load.</div>\";});"
         "});"
         "</script>"
         "</body></html>"
@@ -1639,14 +1639,33 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
             "<div class='panel'><div class='ph'><span class='eyebrow'>Roadmap details</span></div>"
             f"{_breakdown_html(p)}</div>"
         )
-    main_parts.append(_project_overhead_html(p["path"]).replace("class='section'", "class='panel'"))
+    if index is not None:
+        # Heavy: parses Claude/Codex session logs (~seconds). Load it lazily so the
+        # page paints immediately; the shared fetch loader swaps in the real panel.
+        main_parts.append(
+            f"<div class='panel' data-horus-src='/project-overhead?i={idx}'>"
+            "<div class='ph'><span class='eyebrow'>Token overhead</span></div>"
+            "<p class='muted' style='font-size:12.5px'>Loading&hellip;</p></div>"
+        )
+    else:
+        main_parts.append(_project_overhead_html(p["path"]).replace("class='section'", "class='panel'"))
+    if index is not None:
+        cache_panel = (
+            f"<div class='panel' data-horus-src='/project-cache?i={idx}'>"
+            "<div class='ph'><span class='eyebrow'>Context cache</span></div>"
+            "<p class='muted' style='font-size:12.5px'>Loading&hellip;</p></div>"
+        )
+    else:
+        cache_panel = (
+            "<div class='panel'><div class='ph'><span class='eyebrow'>Context cache</span></div>"
+            f"{_cache_sidebar_panel(p['path'])}</div>"
+        )
     sidebar = (
         "<div class='col'><div class='panel sticky'><h3>"
         f"{_eye_glyph()}Start a session</h3>"
         "<p class='muted' style='font-size:12.5px;margin:0 0 16px'>Launch an attended CLI against this repo.</p>"
         f"{_project_launch_form(idx, p, aliases)}</div>"
-        "<div class='panel'><div class='ph'><span class='eyebrow'>Context cache</span></div>"
-        f"{_cache_sidebar_panel(p['path'])}</div>"
+        f"{cache_panel}"
         "<div class='panel'><div class='ph'><span class='eyebrow'>Last session</span></div>"
         f"{_latest_session_panel_html(p)}</div>"
         "<div class='panel'><div class='ph'><span class='eyebrow'>Manage Horus integration</span></div>"
@@ -2549,6 +2568,24 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/accounts-panel":
             # Async fragment for the main-tab accounts/usage strip (network — loaded lazily).
             self._send(_accounts_strip(gather_accounts()))
+            return
+        if parsed.path in ("/project-overhead", "/project-cache"):
+            # Heavy per-project panels (session-log parsing) loaded lazily so the
+            # detail page paints immediately. Project addressed by index, never path.
+            projects = gather_projects()
+            try:
+                idx = int(parse_qs(parsed.query).get("i", ["?"])[0])
+                path = projects[idx]["path"]
+            except (ValueError, IndexError):
+                self._send("<div class='panel'><p class='muted'>Unknown project.</p></div>", 404)
+                return
+            if parsed.path == "/project-overhead":
+                self._send(_project_overhead_html(path).replace("class='section'", "class='panel'"))
+            else:
+                self._send(
+                    "<div class='panel'><div class='ph'><span class='eyebrow'>Context cache</span></div>"
+                    f"{_cache_sidebar_panel(path)}</div>"
+                )
             return
         if parsed.path == "/pty/stream":
             term_id = parse_qs(parsed.query).get("id", [""])[0]
