@@ -544,12 +544,12 @@ def test_progress_links_to_roadmap_breakdown(tmp_path, monkeypatch):
     idx = dashboard.render_index([data])
     assert "/project?i=0#roadmap" in idx
 
-    # Detail: anchored roadmap with grouped open/completed breakdown.
+    # Detail: anchored roadmap shows open items; completed live in the file only.
     det = dashboard.render_project(data)
     assert "id='roadmap'" in det
     assert "Open &amp; in progress (2)" in det
-    assert "Completed (1)" in det
-    assert "todo one" in det and "doing two" in det and "shipped" in det
+    assert "todo one" in det and "doing two" in det
+    assert "Completed (1)" not in det  # completed items kept out of the dashboard now
 
 
 def test_dashboard_surfaces_features_and_history(tmp_path, monkeypatch):
@@ -567,10 +567,13 @@ def test_dashboard_surfaces_features_and_history(tmp_path, monkeypatch):
     data = dashboard.load_project(str(tmp_path))
     assert data["feature_counts"]["shipped"] == 1
 
-    det = dashboard.render_project(data)
+    det = dashboard.render_project(data, index=0)
     assert "id='features'" in det and "Widget engine" in det
-    assert "id='history'" in det and "the big outage" in det
     assert "<table>" in det  # capability ledger rendered as a table
+    # History is no longer inline-rendered (it only grows); a note + editor link instead.
+    assert "the big outage" not in det
+    assert "History holds the full rationale" in det
+    assert "/open-lane" in det  # open-in-editor affordance present on the detail page
 
     idx = dashboard.render_index([data])
     # New column layout: features show as named buckets (Idea / In progress / Shipped).
@@ -780,14 +783,13 @@ def test_offload_control_offers_keep_and_remove_completely():
     assert "Manage Horus integration" in full and "btn-danger" in full
 
 
-def test_project_column_has_offload_control_at_end(tmp_path, monkeypatch):
+def test_project_column_keeps_offload_off_overview_cards(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path / "proj", assume_yes=True, no_input=True)
     p = dashboard.load_project(str(tmp_path / "proj"))
     col = dashboard._project_column(p, 0)
-    assert "<details class='offload'>" in col
-    # The offload control sits at the end of the card (after the Roadmap box).
-    assert col.rindex("offload") > col.rindex("Roadmap")
+    assert "<details class='offload'>" not in col
+    assert "moved to the project detail page" in col
 
 
 def test_project_action_banner_messages():
@@ -1022,7 +1024,7 @@ def test_accounts_panel_renders_weekly_bar_with_reset(tmp_path, monkeypatch):
         "five_reset": "2026-06-26 22:22", "week_reset": "2026-06-28 15:34",
     }]
     page = dashboard.render_control(dashboard.gather_projects(), accounts, [])
-    assert "class='usagebar'" in page       # full-width weekly bar
+    assert "class='track-bar'" in page       # full-width weekly bar (sumi-e track)
     assert "width:69%" in page               # proportional fill = used%
     assert "Weekly 69%" in page
     assert "resets 2026-06-28 15:34" in page  # weekly reset date shown
@@ -1180,7 +1182,7 @@ def test_render_remote_catalog_untracked_badge_local(tmp_path, monkeypatch):
     html_out = dashboard.render_remote_catalog([], [], untracked=[u])
 
     assert "cloned, not initialized" in html_out
-    assert "health-warn" in html_out
+    assert "badge seal" in html_out
 
 
 def test_render_remote_catalog_untracked_badge_remote(tmp_path, monkeypatch):
@@ -1202,7 +1204,7 @@ def test_render_remote_catalog_hidden_section(tmp_path, monkeypatch):
 
     html_out = dashboard.render_remote_catalog([], [], hidden=[u])
 
-    assert "<details>" in html_out
+    assert "<details class='fold'>" in html_out
     assert "Hidden" in html_out
     assert "rafaelmjf/hidden-app" in html_out
     assert "action='/github-unignore'" in html_out

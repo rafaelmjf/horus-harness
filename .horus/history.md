@@ -1,6 +1,6 @@
 ---
 status: active
-last_updated: 2026-06-29
+last_updated: 2026-06-30
 ---
 
 # History — bumps in the road
@@ -8,6 +8,17 @@ last_updated: 2026-06-29
 Curated, durable context: the problems that bit us and the lessons that shaped the
 design. **Not** a timeline and **not** open issues (those live in `roadmap.md`) —
 just the war stories worth carrying forward.
+
+## Windows virtualenv `pythonw.exe` wrappers are not the whole process tree
+
+The mascot/dashboard lifecycle looked fixed because `stop_dashboard()` terminated and
+waited on the `Popen` handle it created. On Windows under a virtualenv, that handle can
+be only the venv `pythonw.exe` launcher; the real base-Python `pythonw.exe -m horus
+dashboard` remains as a child and keeps port 8765 alive after the mascot quits. The same
+wrapper pattern appears for the companion itself. **Lesson:** when Horus owns a
+windowless Windows child, reap the process tree (`taskkill /T /F` for this lightweight
+tier), not just the immediate `Popen` process. A real smoke should spawn a dashboard,
+stop it, and verify the port has no listener.
 
 ## Usage hook overrode an explicit command and left work unpushed
 

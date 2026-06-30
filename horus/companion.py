@@ -7,11 +7,12 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import webbrowser
 from importlib import resources
 from pathlib import Path, PureWindowsPath
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -104,22 +105,51 @@ def ensure_dashboard_for_open(
     return ensure_dashboard(host, port, start=start)
 
 
+def _terminate_process_tree(process: subprocess.Popen[str], *, timeout: float = 2.0) -> None:
+    """Terminate ``process`` and any children it spawned.
+
+    Windows virtualenv launchers can leave the real ``pythonw.exe`` child alive if
+    only the immediate ``Popen`` handle is terminated. ``taskkill /T`` is the
+    platform tool that reaps that whole tree; other platforms keep the previous
+    direct terminate/kill behavior.
+    """
+    if sys.platform == "win32" and getattr(process, "pid", None):
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                timeout=timeout,
+                check=False,
+            )
+            try:
+                process.wait(timeout=timeout)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            return
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    try:
+        process.terminate()
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+            process.wait(timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    except OSError:
+        pass
+
+
 def stop_dashboard(dashboard: DashboardProcess, *, timeout: float = 2.0) -> None:
     """Terminate a dashboard server *this* companion spawned, so it doesn't outlive
     the mascot and pile up as an orphan. No-op when the dashboard was reused (an
     existing one was already live) or none was started."""
     if dashboard.started and dashboard.process is not None:
-        try:
-            dashboard.process.terminate()
-            dashboard.process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            try:
-                dashboard.process.kill()
-                dashboard.process.wait(timeout=timeout)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-        except OSError:
-            pass
+        _terminate_process_tree(dashboard.process, timeout=timeout)
 
 
 def relaunch_without_console() -> bool:
@@ -292,16 +322,7 @@ def stop_browser(process: subprocess.Popen[str] | None, *, timeout: float = 2.0)
     never touches the user's everyday browser. No-op in tab mode (process is None)."""
     if process is None or process.poll() is not None:
         return
-    try:
-        process.terminate()
-        process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        try:
-            process.kill()
-        except OSError:
-            pass
-    except OSError:
-        pass
+    _terminate_process_tree(process, timeout=timeout)
 
 
 def mascot_asset_path() -> Path:
@@ -367,11 +388,27 @@ def run_companion(
         return 0
 
     owned = open_mode == "owned"
-    browser_proc: subprocess.Popen[str] | None = None
-    dashboard = ensure_dashboard(host, port, start=start_dashboard)
-    if open_on_start:
-        dashboard = ensure_dashboard_for_open(dashboard, host=host, port=port, start=start_dashboard)
-        browser_proc = open_dashboard(dashboard.url, app_window=owned)
+    # Lock-guarded shared handles so the background pre-warm thread, the mascot
+    # click, and the shutdown path agree on the dashboard process + browser window.
+    state: dict[str, Any] = {"dashboard": None, "browser_proc": None}
+    state_lock = threading.Lock()
+
+    def ensure_open(open_browser: bool) -> None:
+        """Spawn/locate the dashboard and optionally open (or raise) its window.
+        Idempotent and safe from the pre-warm thread or the mascot click."""
+        with state_lock:
+            dash = state["dashboard"] or ensure_dashboard(host, port, start=start_dashboard)
+            if open_browser:
+                dash = ensure_dashboard_for_open(dash, host=host, port=port, start=start_dashboard)
+                state["browser_proc"] = reuse_or_open_dashboard(
+                    dash.url, state["browser_proc"], app_window=owned
+                )
+            state["dashboard"] = dash
+
+    # Pre-warm off the critical path: the mascot window appears immediately instead
+    # of blocking on the dashboard coming live and (when pre-warming) the browser's
+    # cold launch. The click handler reuses whatever this set up.
+    threading.Thread(target=lambda: ensure_open(open_browser=open_on_start), daemon=True).start()
 
     root = tk.Tk()
     root.title("Horus")
@@ -418,10 +455,9 @@ def run_companion(
         canvas.itemconfigure(status_item, fill=color)
 
     def open_action(_event: object | None = None) -> None:
-        nonlocal dashboard, browser_proc
-        dashboard = ensure_dashboard_for_open(dashboard, host=host, port=port, start=start_dashboard)
-        # Reuse the owned window (raise it) instead of stacking another tab/window.
-        browser_proc = reuse_or_open_dashboard(dashboard.url, browser_proc, app_window=owned)
+        # Reuse the owned window (raise it) instead of stacking another tab/window;
+        # ensure_open handles the not-yet-pre-warmed case too.
+        ensure_open(open_browser=True)
 
     def close_check_action() -> None:
         level, message = run_close_check(project_root, threshold=usage_threshold)
@@ -486,6 +522,7 @@ def run_companion(
     finally:
         # Don't leave the dashboard server — or our owned dashboard window — running
         # once the mascot is gone. (Owned-window close is safe: dedicated profile.)
-        stop_browser(browser_proc)
-        stop_dashboard(dashboard)
+        with state_lock:
+            stop_browser(state["browser_proc"])
+            stop_dashboard(state["dashboard"])
     return 0

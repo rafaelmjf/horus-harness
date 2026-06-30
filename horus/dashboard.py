@@ -15,7 +15,9 @@ known set, and the POST is same-origin-guarded (the server binds loopback only).
 from __future__ import annotations
 
 import html
+import os
 import re
+import subprocess
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -178,7 +180,16 @@ def load_project(path_str: str) -> dict[str, Any]:
 
 
 def gather_projects() -> list[dict[str, Any]]:
-    return [load_project(p) for p in config.load_projects()]
+    paths = config.load_projects()
+    if len(paths) <= 1:
+        return [load_project(p) for p in paths]
+    # load_project is I/O-bound per project (git subprocesses, file reads,
+    # read-only staleness check). Run them concurrently so the index isn't N
+    # sequential ~235ms git_state calls. Order is preserved by executor.map.
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=min(8, len(paths))) as pool:
+        return list(pool.map(load_project, paths))
 
 
 def gather_remote_projects() -> tuple[list[github_catalog.RemoteProject], list[str], list[str]]:
@@ -378,11 +389,11 @@ main { padding: 24px 28px; max-width: 1320px; }
 .summary-scroll p, .summary-scroll li { margin: 4px 0; }
 .resume { margin-top: 8px; }
 .resume-head { display: flex; align-items: center; justify-content: space-between; }
-.resume-text { font-size: 12px; color: #cdd6e4; background: #0b0d12; border: 1px solid #232733;
+.resume-text { font-size: 12px; color: var(--ink-2); background: var(--bg-2); border: 1px solid var(--border);
                border-radius: 6px; padding: 7px 9px; margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.copy { font-size: 11px; color: #6db3f2; background: #0b0d12; border: 1px solid #284058;
+.copy { font-size: 11px; color: var(--seal); background: var(--bg-2); border: 1px solid var(--border-strong);
         border-radius: 6px; padding: 2px 9px; cursor: pointer; }
-.copy:hover { background: #16202b; }
+.copy:hover { background: var(--raised); }
 .card { background: #151823; border: 1px solid #232733; border-radius: 10px;
         padding: 16px 18px; margin: 0 0 14px; }
 .card h2 { margin: 0 0 4px; font-size: 16px; }
@@ -414,8 +425,8 @@ main { padding: 24px 28px; max-width: 1320px; }
 .bar > span { display: block; height: 100%; background: #57d39a; }
 .progress-label { font-size: 12px; color: #8a93a6; }
 .progress-label a { color: #8a93a6; text-decoration: underline dotted; }
-details.tasks { margin: 8px 0; border: 1px solid #232733; border-radius: 8px; padding: 6px 12px; background: #12141b; }
-details.tasks summary { cursor: pointer; font-size: 13px; color: #b9c2d0; }
+details.tasks { margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--panel-2); }
+details.tasks summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
 details.tasks ul { margin: 8px 0 4px; }
 details.tasks li { list-style: none; margin-left: -16px; }
 .t-done { color: #8a93a6; } .t-done .mk { color: #57d39a; }
@@ -423,8 +434,8 @@ details.tasks li { list-style: none; margin-left: -16px; }
 .t-sec { color: #8a93a6; font-size: 12px; }
 ul { padding-left: 22px; } li.task { list-style: none; margin-left: -16px; }
 li.done { color: #8a93a6; } li.partial { color: #e6c35c; }
-pre { background: #0b0d12; padding: 12px; border-radius: 8px; overflow-x: auto; }
-code { background: #0b0d12; padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--bg-2); padding: 12px; border-radius: 8px; overflow-x: auto; }
+code { background: var(--bg-2); padding: 1px 5px; border-radius: 4px; }
 .section { margin-top: 26px; }
 .back { font-size: 13px; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
@@ -442,10 +453,7 @@ svg.ring text { font-family: -apple-system, Segoe UI, sans-serif; font-weight: 6
 .proj-row { display: flex; justify-content: space-between; align-items: center;
             padding: 8px 0; border-bottom: 1px solid #1c1f2a; }
 .proj-row:last-child { border-bottom: 0; }
-details.launch > summary { list-style: none; cursor: pointer; color: #57d39a; font-size: 13px;
-            padding: 2px 9px; border: 1px solid #1f5138; border-radius: 6px; background: #15281d; }
-details.launch > summary::-webkit-details-marker { display: none; }
-.launch-body { margin-top: 8px; }
+/* launch disclosure summary + .launch-body are styled by the sumi-e block below */
 .cmd { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
 .cmd code { flex: 1; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .sessions-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); }
@@ -453,7 +461,7 @@ details.launch > summary::-webkit-details-marker { display: none; }
 .scard-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .scard-t { font-size: 16px; font-weight: 600; }
 .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #232733; color: #b9c2d0; }
-.usagebar { height: 8px; background: #232733; border-radius: 4px; overflow: hidden; margin: 12px 0 4px; }
+.usagebar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 12px 0 4px; }
 .usagebar > span { display: block; height: 100%; }
 form.launch-form { margin: 8px 0 4px; display: flex; flex-direction: column; gap: 8px; }
 form.launch-form label { font-size: 12px; color: #b9c2d0; }
@@ -471,8 +479,9 @@ button.start { font: inherit; cursor: pointer; }
 .or-cmds > summary { cursor: pointer; font-size: 11px; color: #8a93a6; list-style: none; }
 .or-cmds > summary::-webkit-details-marker { display: none; }
 .banner { border-radius: 8px; padding: 9px 13px; margin: 0 0 16px; font-size: 13px; }
-.banner.ok { background: #15281d; border: 1px solid #1f5138; color: #aee9c8; }
-.banner.err { background: #2e1b1b; border: 1px solid #5c2a2a; color: #f0b3b3; }
+.banner.ok { background: var(--go-soft); border: 1px solid color-mix(in srgb, var(--go) 32%, transparent); color: var(--ink-2); }
+.banner.ok strong { color: var(--go); }
+.banner.err { background: var(--seal-soft); border: 1px solid var(--seal-line); color: var(--seal); }
 button.start.primary { width: 100%; text-align: center; padding: 7px 10px; font-size: 13px; }
 button.linkbtn { display: block; margin: 6px 0 0; padding: 0; background: none; border: none;
             color: #8a93a6; font: inherit; font-size: 11px; cursor: pointer; text-decoration: underline dotted; }
@@ -497,9 +506,7 @@ button.linkbtn:hover { color: #b9c2d0; }
 .xterm-host { height: 420px; }
 .xterm-host .xterm { height: 100%; }
 /* Action buttons: green = refresh/upgrade (go), red = remove completely, neutral = keep. */
-button.btn-go { font: inherit; font-size: 11px; cursor: pointer; color: #04130b;
-    background: #57d39a; border: 1px solid #57d39a; border-radius: 999px; padding: 1px 9px; font-weight: 600; }
-button.btn-go:hover { background: #6fe0ac; }
+/* legacy pill btn-go removed; .btn + .btn-go (sumi-e) own this now */
 button.btn-danger { font: inherit; font-size: 12px; cursor: pointer; color: #fff0f1;
     background: #b1404f; border: 1px solid #c9505f; border-radius: 6px; padding: 4px 12px; font-weight: 600; }
 button.btn-danger:hover { background: #c64d5d; }
@@ -509,6 +516,63 @@ button.btn-keep:hover { background: #2c3140; }
 details.offload { margin: 12px 0 2px; border-top: 1px solid #232733; padding-top: 10px; }
 details.offload > summary { cursor: pointer; color: #8a93a6; font-size: 12px; }
 details.offload .offload-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+/* Sumi-e dashboard redesign. Server-rendered, no external assets, tiny vanilla JS. */
+:root{
+  --bg:#15161a; --bg-2:#0e0f12; --panel:#1d1e23; --panel-2:#191a1f; --raised:#26272d;
+  --border:#2f3036; --border-strong:#3e3f47; --hairline:#25262b;
+  --ink:#eeeeef; --ink-2:#abacb2; --ink-3:#7c7d84; --ink-faint:#5b5c62;
+  --seal:#df524a; --seal-strong:#c83f38; --seal-soft:rgba(223,82,74,.13); --seal-line:rgba(223,82,74,.45);
+  --go:#62b18c; --go-soft:rgba(98,177,140,.13); --claude:#d98a6a; --codex:#7fb0e6;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px -14px rgba(0,0,0,.65);
+  --shadow-lift:0 2px 4px rgba(0,0,0,.45),0 18px 44px -18px rgba(0,0,0,.7);
+  --r-sm:7px; --r-md:11px; --r-lg:16px; --r-pill:999px;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --maxw:1320px; --t-fast:140ms cubic-bezier(.4,0,.2,1); --t-soft:280ms cubic-bezier(.16,.84,.44,1);
+}
+.skin-light{
+  --bg:#f1f2f2; --bg-2:#e4e6e6; --panel:#ffffff; --panel-2:#f5f6f6; --raised:#ffffff;
+  --border:#e3e5e5; --border-strong:#cdd0d0; --hairline:#edefef;
+  --ink:#181a1a; --ink-2:#4d5252; --ink-3:#787d7d; --ink-faint:#9aa0a0;
+  --seal:#d8362b; --seal-strong:#b62a20; --seal-soft:rgba(216,54,43,.085); --seal-line:rgba(216,54,43,.4);
+  --go:#2f8c5d; --go-soft:rgba(47,140,93,.10); --claude:#bf5d39; --codex:#3f72a6;
+  --shadow:0 1px 2px rgba(40,38,32,.08),0 10px 26px -16px rgba(40,38,32,.32);
+  --shadow-lift:0 2px 6px rgba(40,38,32,.12),0 22px 48px -22px rgba(40,38,32,.4);
+}
+html,body{margin:0}
+body{
+  font:14.5px/1.5 var(--sans); background:var(--bg); color:var(--ink);
+  -webkit-font-smoothing:antialiased; letter-spacing:.1px;
+}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(1200px 540px at 78% -8%, color-mix(in srgb,var(--seal) 7%, transparent), transparent 60%)}
+a{color:var(--seal);text-decoration:none} a:hover{color:var(--seal-strong);text-decoration:none}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
+.eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.mono{font-family:var(--mono)} .muted{color:var(--ink-3)}
+#welcome{position:absolute;opacity:0;pointer-events:none}.welcome{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:24px;background:color-mix(in srgb,var(--bg-2) 80%, transparent);backdrop-filter:blur(8px)}#welcome:checked~.welcome,body.welcome-seen .welcome{display:none}.welcome-card{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lift);padding:28px;max-width:360px;text-align:center}.welcome-card .wm{height:152px;width:auto;image-rendering:pixelated;display:block;margin:6px auto 4px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}.skin-light .welcome-card .wm{filter:drop-shadow(0 6px 14px rgba(40,38,32,.22))}.welcome-card h3{margin:6px 0 8px;font-size:22px;font-weight:600;letter-spacing:.02em}.welcome-card p{margin:0 0 22px;font-size:13.5px;color:var(--ink-2);line-height:1.6}.welcome-card .btn{padding:11px 22px;font-size:14px}
+header.top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--bg) 86%, transparent);backdrop-filter:saturate(1.1) blur(12px);border-bottom:1px solid var(--hairline);padding:0}
+.top-in{display:flex;align-items:center;gap:22px;height:64px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}.sun-mark{width:26px;height:26px;border-radius:50%;flex:none;background:radial-gradient(circle at 38% 35%, color-mix(in srgb,var(--seal) 78%, #fff 34%), var(--seal) 64%, var(--seal-strong) 100%)}
+.wordmark{display:flex;flex-direction:column;line-height:1.05}.wordmark b{font-size:17px;font-weight:600;letter-spacing:.36em;text-transform:uppercase;padding-left:.36em}.wordmark small{font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+nav.tabs{display:flex;gap:4px;margin:0 0 0 6px}nav.tabs a{color:var(--ink-2);font-weight:500;padding:8px 14px;border-radius:var(--r-sm);border:1px solid transparent;position:relative;transition:color var(--t-fast),background var(--t-fast)}nav.tabs a:hover{color:var(--ink);background:var(--panel-2)}nav.tabs a .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--seal);margin-right:7px;vertical-align:middle;opacity:0}nav.tabs a.active{color:var(--ink)}nav.tabs a.active .dot{opacity:1}
+.top-right{margin-left:auto}.skin-btn{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;border:1px solid var(--border);background:var(--panel);border-radius:var(--r-pill);padding:6px 12px;font-size:12.5px;color:var(--ink-2)}.skin-btn:hover{border-color:var(--border-strong);color:var(--ink)}#skin{position:absolute;opacity:0;pointer-events:none}.skin-btn .sun{display:none}.skin-light .skin-btn .sun{display:inline}.skin-light .skin-btn .moon{display:none}
+main{padding:0;max-width:none}.band{padding:30px 0}.band.tight{padding:20px 0}.ov-shell{display:grid;grid-template-columns:300px minmax(0,1fr);gap:30px;align-items:start;padding-top:26px;padding-bottom:8px}@media(max-width:1000px){.ov-shell{grid-template-columns:1fr}}.rail{position:sticky;top:84px;align-self:start;display:flex;flex-direction:column}@media(max-width:1000px){.rail{position:static}}.ov-col{min-width:0;display:flex;flex-direction:column}.greet{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin:0 0 6px}.greet .gtext{flex:1;min-width:240px;display:flex;flex-direction:column;gap:3px}.greet h2{font-size:22px;font-weight:600;margin:2px 0 0;letter-spacing:.01em}.shead{display:flex;align-items:baseline;gap:14px;margin:14px 0 16px}.shead h2{font-size:20px;font-weight:600;margin:0}.shead .meta{margin-left:auto;color:var(--ink-3);font-size:12.5px}
+.attn-pill{display:inline-flex;align-items:center;gap:13px;background:var(--seal-soft);border:1px solid var(--seal-line);border-radius:var(--r-md);padding:11px 17px}.attn-pill .n{font-size:26px;font-weight:600;color:var(--seal);line-height:1}.attn-pill .lab{display:flex;flex-direction:column;line-height:1.3}.attn-pill .lab b{font-size:13px;color:var(--ink);font-weight:600}.attn-pill .lab span{font-size:12px;color:var(--ink-3)}
+.acct-panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}.acct-panel>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:15px 18px}.acct-panel>summary::-webkit-details-marker{display:none}.acct-panel>summary h3{margin:0;font-size:14.5px}.acct-panel>summary .chev{margin-left:auto;color:var(--ink-3);transition:transform var(--t-fast);font-size:11px}.acct-panel[open]>summary{border-bottom:1px solid var(--hairline)}.acct-panel[open]>summary .chev{transform:rotate(90deg)}
+.acct-c{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:10px 16px;align-items:center;padding:16px 20px;border-bottom:1px solid var(--hairline)}.acct-row{display:contents}.ring-wrap{position:relative;width:46px;height:46px;flex:none}.ring{width:46px;height:46px;transform:rotate(-90deg)}.ring .track{fill:none;stroke:var(--border);stroke-width:3.4}.ring .meter{fill:none;stroke-width:3.4;stroke-linecap:round}.ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;font-family:var(--mono)}.acct-row .info{min-width:0}.alias-edit{display:flex;align-items:center;gap:4px}.alias-in{font:inherit;font-size:13.5px;font-weight:600;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:5px;padding:2px 5px;width:100%;max-width:150px}.alias-in:hover{border-color:var(--border)}.alias-in:focus{outline:none;border-color:var(--seal);background:var(--panel-2);box-shadow:0 0 0 2px var(--seal-soft)}.icon-btn{flex:none;width:23px;height:23px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;background:transparent;color:var(--ink-3);border-radius:5px;cursor:pointer;font-size:12px;opacity:0}.alias-edit:hover .icon-btn,.alias-in:focus+.icon-btn{opacity:1}.icon-btn:hover{background:var(--go-soft);color:var(--go)}
+.prov-line{display:flex;align-items:center;gap:7px;margin-top:3px;padding-left:5px}.tag-prov{font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;padding:2px 7px;border-radius:4px;background:color-mix(in srgb,var(--claude) 15%,transparent);color:var(--claude);border:1px solid color-mix(in srgb,var(--claude) 34%,transparent)}.tag-prov.codex{background:color-mix(in srgb,var(--codex) 15%,transparent);color:var(--codex);border-color:color-mix(in srgb,var(--codex) 34%,transparent)}.when2{font-size:11px;color:var(--ink-faint)}
+.mini-session{flex:none;width:27px;height:27px;border-radius:7px;font-size:17px;line-height:1;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);background:var(--panel-2);color:var(--ink-2);cursor:pointer}.mini-session:hover{background:var(--raised);color:var(--ink);border-color:var(--border-strong)}.wbar.mini{grid-column:1/-1;margin-top:0}.wbar .lab{font-size:11px;margin-bottom:4px;color:var(--ink-3);display:flex;gap:8px}.wbar .lab b{color:var(--ink-2)}.track-bar{height:6px;border-radius:var(--r-pill);background:var(--border);overflow:hidden}.track-bar>i{display:block;height:100%;border-radius:var(--r-pill)}.acct-foot2{padding:14px 18px;display:flex;flex-direction:column;gap:12px}.remove-pop>summary{list-style:none;cursor:pointer;font-size:12.5px;color:var(--ink-3);display:inline-flex;align-items:center;gap:7px}.remove-pop>summary::-webkit-details-marker{display:none}.remove-pop>summary:hover{color:var(--seal)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(372px,1fr));gap:18px}.pcard{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 18px 16px;display:flex;flex-direction:column;gap:14px;transition:transform var(--t-soft),box-shadow var(--t-soft),border-color var(--t-fast)}.pcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift);border-color:var(--border-strong);cursor:pointer}.card-link{position:absolute;inset:0;z-index:0;border-radius:var(--r-lg)}.pcard>*:not(.card-link){position:relative;z-index:1}.pc-head{display:flex;align-items:flex-start;gap:12px}.pc-title{min-width:0}.pc-title h3{margin:0;font-size:16.5px;font-weight:600}.pc-title h3 a{color:var(--ink)}.pc-sub{display:flex;align-items:center;gap:9px;margin-top:5px;flex-wrap:wrap;font-size:12px}.branch{font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}.pc-health{margin-left:auto;flex:none}.health-dot{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2);font-weight:500}.health-dot i{width:9px;height:9px;border-radius:50%;background:var(--go);box-shadow:0 0 0 3px var(--go-soft)}.health-dot.warn i{background:var(--seal);box-shadow:0 0 0 3px var(--seal-soft)}.health-dot.plan i{background:var(--ink-3);box-shadow:0 0 0 3px var(--panel-2)}.pc-open{flex:none;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;border:1px solid transparent;color:var(--ink-3);font-size:15px}.pcard:hover .pc-open{color:var(--ink);border-color:var(--border);background:var(--panel-2)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:500;padding:3px 9px;border-radius:var(--r-pill);background:var(--panel-2);border:1px solid var(--border);color:var(--ink-2);white-space:nowrap}.badge.seal,.badge.warn{color:var(--seal);border-color:var(--seal-line);background:var(--seal-soft)}.badge .gd{width:6px;height:6px;border-radius:50%;background:var(--ink-3)}.statline{display:flex;gap:8px;flex-wrap:wrap}
+.glyph{width:17px;height:12px;color:var(--seal);flex:none}.next{position:relative;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-md);padding:13px 15px 13px 16px;overflow:hidden;margin:0}.next::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--seal)}.next .nh{display:flex;align-items:center;gap:8px;margin-bottom:6px}.next .nh .glyph{width:17px;height:12px;color:var(--seal);flex:none}.next .nh b{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-2);font-weight:700}.next p,.next-one{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink)}.next .mode,.next-mode{margin-top:9px;padding-top:9px;border-top:1px solid var(--hairline);font-size:12.5px;color:var(--ink-2)}.next .mode b,.next-mode strong{color:var(--ink);font-weight:600}.next .hint,.next-mode .why{display:block;margin-top:3px;font-style:italic;color:var(--ink-3);font-size:12px}.next.empty{border:1px dashed var(--border-strong)}.next.empty::before{background:var(--border-strong)}.next.empty .nh b,.next.empty .nh .glyph,.next.empty p{color:var(--ink-3)}
+.feat{display:flex;flex-direction:column;gap:9px}.feat .feat-head{font-size:11.5px;color:var(--ink-3)}.feat .road-stat a{color:inherit;text-decoration:none}.feat .road-stat a:hover{color:var(--seal)}.feat .fbar{display:flex;height:7px;border-radius:var(--r-pill);overflow:hidden;background:var(--border)}.feat .fbar i{display:block;height:100%}.feat .fbar i.s{background:var(--ink)}.feat .fbar i.p{background:var(--ink-3)}.feat .fbar i.q{background:var(--border-strong)}.feat .fk{display:flex;gap:16px;font-size:12px;flex-wrap:wrap}.feat .fk span{display:flex;align-items:center;gap:6px;color:var(--ink-3)}.feat .fk b{color:var(--ink);font-weight:600}.feat .fk i{width:8px;height:8px;border-radius:2px}.dot-s{background:var(--ink)}.dot-p{background:var(--ink-3)}.dot-q{background:var(--border-strong)}.recap{font-size:12.5px;color:var(--ink-2);line-height:1.5}.recap .when{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);display:block;margin-bottom:3px}.recap.none{color:var(--ink-faint);font-style:italic}.pc-foot{display:block;border-top:1px solid var(--hairline);padding-top:13px}.pc-actions{display:flex;gap:9px}.pc-actions .btn{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--panel);color:var(--ink);padding:8px 13px;line-height:1}.btn:hover{border-color:var(--border-strong);background:var(--raised)}.btn.sm{padding:6px 10px;font-size:12px}.btn.block{width:100%}.btn-go{background:var(--ink)!important;border-color:var(--ink)!important;color:var(--panel)!important}.btn-seal{background:var(--seal);border-color:var(--seal);color:#fff}.btn-warn{background:var(--seal-soft);border-color:var(--seal-line);color:var(--seal)}.btn-danger{background:transparent!important;border-color:var(--seal-line)!important;color:var(--seal)!important}.btn-ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
+details.launch,details.disc{border:1px solid var(--border);border-radius:var(--r-md);background:var(--panel-2);overflow:hidden;margin-top:11px}details.launch>summary,details.disc>summary{list-style:none;cursor:pointer;padding:11px 14px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:9px;color:var(--ink-2)}details.launch>summary::-webkit-details-marker,details.disc>summary::-webkit-details-marker{display:none}details.launch[open]>summary,details.disc[open]>summary{border-bottom:1px solid var(--hairline);color:var(--ink)}.disc-body,.launch-body{padding:14px}.lform{display:grid;gap:11px}.frow{display:flex;gap:10px;flex-wrap:wrap}.field{flex:1 1 150px;min-width:0}.field label{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;font-weight:600}select,.field input[type=text],.field input:not([type]){width:100%;font:inherit;font-size:13px;background:var(--panel);color:var(--ink);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px}.intent-row{display:flex;gap:10px}.intent-row .btn{flex:1}
+details.fold{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);overflow:hidden;margin-top:0}details.fold+details.fold{margin-top:18px}details.fold>summary{list-style:none;cursor:pointer;padding:18px 22px;display:flex;align-items:center;gap:12px}details.fold>summary::-webkit-details-marker{display:none}details.fold>summary .chev{color:var(--ink-3);transition:transform var(--t-fast)}details.fold[open]>summary{border-bottom:1px solid var(--hairline)}details.fold[open]>summary .chev{transform:rotate(90deg)}details.fold>summary h2{margin:0;font-size:18px;font-weight:600}details.fold>summary .count{color:var(--ink-3);font-size:13px}.fold-body{padding:22px}.repogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}.repo{border:1px solid var(--border);border-radius:var(--r-md);background:var(--panel-2);padding:15px}.repo h3,.repo h4{margin:0 0 9px;font-size:14px;font-weight:600}.repo p{margin:0 0 11px;font-size:12.5px;color:var(--ink-3);line-height:1.45}.repo .meta,.repo .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.detail-top{display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-top:8px}.crumb{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-3);margin-bottom:14px}.detail-top h1{margin:0;font-size:28px;font-weight:600}.detail-top .sub{display:flex;gap:10px;align-items:center;margin-top:9px;flex-wrap:wrap}.detail-top .right{margin-left:auto;display:flex;gap:9px;align-items:center;flex-wrap:wrap}.dlayout{display:grid;grid-template-columns:1fr 360px;gap:22px;margin-top:26px;align-items:start}@media(max-width:1080px){.dlayout{grid-template-columns:1fr}}.col{display:flex;flex-direction:column;gap:18px;min-width:0;max-width:none;flex:initial;padding:0;background:transparent;border:0}.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px;min-width:0}.panel.sticky{position:sticky;top:84px}.panel .ph{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}.panel .ph .x{margin-left:auto;font-size:12px;color:var(--ink-3)}.panel table{display:block;max-width:100%;overflow-x:auto}.panel th,.panel td{white-space:nowrap}.lead{font-size:14.5px;line-height:1.6;color:var(--ink)}.buckets{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}@media(max-width:640px){.buckets{grid-template-columns:1fr}}.bucket .bh{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--ink-3);margin-bottom:11px;padding-bottom:9px;border-bottom:1px solid var(--hairline)}.bucket .bh .n{margin-left:auto}.bucket ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}.bucket li{font-size:13px;line-height:1.4;color:var(--ink-2);padding-left:15px;position:relative}.bucket li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:var(--border-strong)}.bucket.ship li{color:var(--ink)}.bucket.ship li::before{background:var(--ink)}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:14px}.metric{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px}.metric .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:600}.metric .v{font-size:22px;font-weight:600;margin-top:6px}.roadprog{display:flex;align-items:center;gap:12px;margin-top:12px}.roadprog .track-bar{flex:1}.roadprog .pct{font-family:var(--mono);font-size:12px;color:var(--ink-2);white-space:nowrap}.roadprog .pct a{color:inherit;text-decoration:none}.roadprog .pct a:hover{color:var(--seal)}.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px}.kv dt{color:var(--ink-3)}.kv dd{margin:0;color:var(--ink)}
+.settings-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:22px;max-width:920px}.sfield label{display:block;font-size:13.5px;font-weight:600;margin-bottom:6px}.sfield .desc{font-size:12.5px;color:var(--ink-3);margin:0 0 10px;line-height:1.45}.settings-actions{display:flex;gap:10px;margin-top:22px}
+footer{border-top:1px solid var(--hairline);margin-top:40px;padding:26px 0}.foot-in{display:flex;align-items:center;gap:14px;color:var(--ink-faint);font-size:12.5px}.eye{width:26px;height:17px;color:var(--ink-faint)}
 """
 
 _LEVEL_CLASS = {"ok": "health-ok", "warn": "health-warn", "fail": "health-fail"}
@@ -524,11 +588,16 @@ def _nav(active: str, live: int = 0) -> str:
     # start/resume) now live on the Projects tab. ``live`` is accepted for call
     # compatibility but no longer renders a badge.
     links = [("/", "Projects", "projects"), ("/settings", "Settings", "settings")]
-    items = "".join(
-        f"<a href='{href}'{_active_class(key == active)}>{label}</a>"
-        for href, label, key in links
-    )
-    return f"<nav>{items}</nav>"
+    out = []
+    for href, label, key in links:
+        if key == active:
+            out.append(
+                f"<a class=\"active\" href='{href}'><span class='dot'></span>{label}</a>"
+            )
+        else:
+            out.append(f"<a href='{href}'>{label}</a>")
+    items = "".join(out)
+    return f"<nav class='tabs'>{items}</nav>"
 
 
 def _active_class(active: bool) -> str:
@@ -539,15 +608,33 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
     icon_key = html.escape(__version__, quote=True)
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         f"<title>{html.escape(title)}</title>"
         f"<link rel='icon' href='/favicon.ico?v={icon_key}' sizes='any'>"
         f"<link rel='icon' type='image/png' href='/assets/icon.png?v={icon_key}'>"
-        f"<style>{_STYLE}</style></head><body>"
-        "<header><h1>Horus</h1>"
-        "<div class='sub'>project continuity &amp; control panel</div>"
-        f"{_nav(active, live)}</header>"
+        f"<style>{_STYLE}</style>"
+        "<script>try{if(localStorage.getItem('horus_skin')!=='dark')document.documentElement.classList.add('skin-light')}catch(e){document.documentElement.classList.add('skin-light')}</script>"
+        "</head><body>"
+        "<input type='checkbox' id='skin' onclick=\"var l=document.documentElement.classList.toggle('skin-light');try{localStorage.setItem('horus_skin',l?'light':'dark')}catch(e){};this.checked=l\">"
+        "<input type='checkbox' id='welcome'>"
+        "<div class='welcome'><div class='welcome-card'>"
+        f"<img class='wm' src='/assets/mascot.png?v={icon_key}' alt=''>"
+        "<h3>Horus is watching</h3>"
+        "<p>Project continuity, account usage, and the next action are gathered here.</p>"
+        "<label class='btn btn-seal' for='welcome' onclick=\"sessionStorage.setItem('horusWelcome','1')\">Enter the dashboard</label>"
+        "</div></div>"
+        "<script>if(sessionStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');document.getElementById('welcome').checked=true;}</script>"
+        "<header class='top'><div class='wrap top-in'><div class='brand'>"
+        "<span class='sun-mark' aria-hidden='true'></span>"
+        "<div class='wordmark'><b>Horus</b><small>project continuity &amp; control panel</small></div>"
+        "</div>"
+        f"{_nav(active, live)}"
+        "<div class='top-right'><label class='skin-btn' for='skin'>"
+        "<span class='moon'>&#9687; Dark</span><span class='sun'>&#9686; Light</span></label></div>"
+        "</div></header>"
         f"<main{' class=\"wide\"' if wide else ''}>{body}</main>"
         "<script>"
+        "if(sessionStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');}"
         "function horusCopy(btn){"
         "var t=btn.closest('.resume').querySelector('.resume-text').textContent;"
         "navigator.clipboard.writeText(t).then(function(){"
@@ -560,7 +647,7 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "document.querySelectorAll('[data-horus-src]').forEach(function(el){"
         "fetch(el.getAttribute('data-horus-src')).then(function(r){return r.text();})"
         ".then(function(html){el.outerHTML=html;})"
-        ".catch(function(){el.innerHTML=\"<div class='banner err'>GitHub catalog failed to load.</div>\";});"
+        ".catch(function(){el.innerHTML=\"<div class='banner err'>This section failed to load.</div>\";});"
         "});"
         "</script>"
         "</body></html>"
@@ -575,6 +662,28 @@ def _health_summary(findings: list[dict[str, Any]]) -> str:
     if warns:
         return f"<span class='health-warn'>&#9679; {warns} warning(s)</span>"
     return "<span class='health-ok'>&#9679; healthy</span>"
+
+
+def _health_dot(p: dict[str, Any]) -> str:
+    fails = sum(1 for f in p["findings"] if f["level"] == "fail")
+    warns = sum(1 for f in p["findings"] if f["level"] == "warn")
+    status = (p.get("status") or "").lower()
+    if fails or warns or p.get("artifacts_stale"):
+        n = fails + warns + (1 if p.get("artifacts_stale") else 0)
+        label = f"{n} warning" if n == 1 else f"{n} warnings"
+        return f"<span class='health-dot warn'><i></i>{label}</span>"
+    if status == "planning":
+        return "<span class='health-dot plan'><i></i>planning</span>"
+    return "<span class='health-dot'><i></i>healthy</span>"
+
+
+def _eye_glyph(filled: bool = True) -> str:
+    pupil = "<circle cx='25' cy='18.5' r='5.5' fill='currentColor'/>" if filled else ""
+    return (
+        "<svg class='glyph' viewBox='0 0 64 40' fill='none'>"
+        "<path d='M4 20 Q24 7 47 17 Q26 31 4 20Z' stroke='currentColor' stroke-width='3'/>"
+        f"{pupil}</svg>"
+    )
 
 
 def _plain(text: str) -> str:
@@ -814,6 +923,18 @@ def _latest_session_card(p: dict[str, Any]) -> str:
     )
 
 
+def _road_progress_html(p: dict[str, Any], href: str | None = None) -> str:
+    pr = p["progress"]
+    if not pr["total"]:
+        return ""
+    label = f"{pr['done']}/{pr['total']} · {pr['pct']}%"
+    label_html = f"<a href='{href}'>{html.escape(label)}</a>" if href else html.escape(label)
+    return (
+        "<div class='roadprog'><span class='muted' style='font-size:12px'>roadmap</span>"
+        f"<div class='track-bar'><i style='width:{pr['pct']}%;background:var(--ink-3)'></i></div>"
+        f"<span class='pct'>{label_html}</span></div>"
+    )
+
 def _progress_html(p: dict[str, Any], href: str | None = None) -> str:
     pr = p["progress"]
     if not pr["total"]:
@@ -838,8 +959,12 @@ def _task_li(t: dict[str, Any]) -> str:
     )
 
 
-def _breakdown_html(p: dict[str, Any]) -> str:
-    """The items behind the progress count: open/in-progress and completed, grouped."""
+def _breakdown_html(p: dict[str, Any], *, completed: bool = True) -> str:
+    """The items behind the progress count: open/in-progress and (optionally) completed.
+
+    The dashboard passes ``completed=False`` to keep the detail page focused on
+    open work — completed items only grow and live in the file (open it to see all).
+    """
     tasks = p["tasks"]
     if not tasks:
         return markdown.render(p["roadmap_body"]) if p["roadmap_body"] else ""
@@ -852,7 +977,9 @@ def _breakdown_html(p: dict[str, Any]) -> str:
             f"<details class='tasks' open><summary>Open &amp; in progress ({len(open_tasks)})</summary>"
             f"<ul>{items}</ul></details>"
         )
-    if done_tasks:
+    elif completed:
+        out.append("<p class='muted' style='font-size:13px'>No open roadmap items.</p>")
+    if completed and done_tasks:
         items = "".join(_task_li(t) for t in done_tasks)
         out.append(
             f"<details class='tasks'><summary>Completed ({len(done_tasks)})</summary>"
@@ -876,12 +1003,20 @@ def _single_next_html(p: dict[str, Any]) -> str:
     rec_html = _execution_recommendation_html(recommendation)
     if text:
         return (
-            "<div class='next'><span class='lbl'>NEXT</span>"
-            f"<div class='next-one'>{html.escape(_plain(text))}</div>{rec_html}</div>"
+            "<div class='next'><div class='nh'>"
+            f"{_eye_glyph()}<b>NEXT ACTION</b></div>"
+            f"<p>{html.escape(_plain(text))}</p>{rec_html}</div>"
         )
     if p["progress"]["total"] and p["progress"]["done"] == p["progress"]["total"]:
-        return "<div class='next done'><span class='lbl'>NEXT</span> &#10003; roadmap complete</div>"
-    return "<div class='next'><span class='lbl'>NEXT</span><div class='next-one muted'>not set — author <code>next_action</code> in roadmap.md at closure</div></div>"
+        return (
+            "<div class='next empty'><div class='nh'>"
+            f"{_eye_glyph(False)}<b>NEXT ACTION</b></div><p>roadmap complete</p></div>"
+        )
+    return (
+        "<div class='next empty'><div class='nh'>"
+        f"{_eye_glyph(False)}<b>NEXT ACTION</b></div>"
+        "<p>not set - author <code>next_action</code> in roadmap.md at closure</p></div>"
+    )
 
 
 def _execution_recommendation_html(recommendation: str) -> str:
@@ -898,7 +1033,7 @@ def _execution_recommendation_html(recommendation: str) -> str:
     return (
         "<div class='next-mode'><strong>Recommended mode:</strong> "
         f"{html.escape(mode)}"
-        f"<div class='why'>{html.escape(rec)}</div></div>"
+        f"<span class='why'>{html.escape(rec)}</span></div>"
     )
 
 
@@ -984,47 +1119,91 @@ def _features_buckets_html(p: dict[str, Any]) -> str:
     )
 
 
-def _project_column(p: dict[str, Any], i: int, aliases: list[dict[str, Any]] | None = None) -> str:
-    missing = "" if p["exists"] else " <span class='health-fail'>(no .horus/)</span>"
-    why = f"<p class='why'>{html.escape(p['tagline'])}</p>" if p["tagline"] else ""
-    _artifacts_pill = (
-        "<span class='health-warn'>&#9888; artifacts outdated</span>"
-        "<form method='post' action='/upgrade-project' style='display:inline;margin-left:6px'>"
-        f"<input type='hidden' name='project' value='{i}'>"
-        "<button class='btn-go' type='submit' title='Refresh Horus artifacts to the installed version'>"
-        "Refresh</button></form>"
-        if p["artifacts_stale"]
-        else ""
-    )
-    pills = (
-        f"<div class='badges'><span>status: {html.escape(p['status']) or 'unknown'}</span>"
-        f"<span>{len(p['sessions'])} session(s)</span> {_git_badge(p)} {_health_summary(p['findings'])}"
-        f"{_artifacts_pill}</div>"
-    )
-    last = f"<div class='box'><span class='lbl'>Last session summary</span>{_last_session_summary_html(p)}</div>"
-    roadmap = (
-        "<div class='box'><span class='lbl'>Roadmap</span>"
-        f"{_single_next_html(p)}{_resume_html(p)}"
-        f"{_progress_html(p, href=f'/project?i={i}#roadmap')}"
-        f"{_remaining_items_html(p)}</div>"
-    )
-    launch = (
-        "<details class='launch'><summary>&#9654; Start a session</summary>"
-        f"<div class='launch-body'>{_project_launch_form(i, p, aliases or [])}</div></details>"
-    )
+def _features_summary_html(p: dict[str, Any], road_href: str | None = None) -> str:
+    fc = p["feature_counts"]
+    total = sum(fc.values())
+    pr = p.get("progress") or {}
+    road = ""
+    if pr.get("total"):
+        rlabel = f"roadmap {pr['pct']}%"
+        rinner = f"<a href='{road_href}'>{html.escape(rlabel)}</a>" if road_href else html.escape(rlabel)
+        road = f"<div class='feat-head'><span class='road-stat'>{rinner}</span></div>"
+    if not total:
+        # No features ledger yet — still surface the roadmap stat if there is one.
+        return f"<div class='feat'>{road}</div>" if road else ""
+    shipped = fc["shipped"] / total * 100
+    progress = fc["in_progress"] / total * 100
+    planned = max(0.0, 100.0 - shipped - progress)
     return (
-        f"<div class='col'><h2><a href='/project?i={i}'>{html.escape(p['name'])}</a>{missing}</h2>"
-        f"{why}{pills}{last}{roadmap}{_features_buckets_html(p)}{launch}"
-        f"{_offload_control(i, compact=True)}</div>"
+        "<div class='feat'>"
+        + road
+        + "<div class='fbar'>"
+        f"<i class='s' style='width:{shipped:.0f}%'></i>"
+        f"<i class='p' style='width:{progress:.0f}%'></i>"
+        f"<i class='q' style='width:{planned:.0f}%'></i></div>"
+        "<div class='fk'>"
+        f"<span><i class='dot-s'></i><b>{fc['shipped']}</b> shipped</span>"
+        f"<span><i class='dot-p'></i><b>{fc['in_progress']}</b> in progress</span>"
+        f"<span><i class='dot-q'></i><b>{fc['planned']}</b> planned</span>"
+        "</div></div>"
     )
 
+
+def _project_column(p: dict[str, Any], i: int, aliases: list[dict[str, Any]] | None = None) -> str:
+    missing = "" if p["exists"] else " <span class='badge seal'>no .horus/</span>"
+    git = p.get("git") or {}
+    branch = html.escape(git.get("branch") or "-")
+    rel = html.escape((git.get("commit") or {}).get("rel") or "")
+    git_bits = f"<span class='branch'>branch {branch}</span>"
+    if rel:
+        git_bits += f"<span class='muted'>- {rel}</span>"
+    status_badges = [f"<span class='badge'>status {html.escape(p['status']) or 'unknown'}</span>", f"<span class='badge'><b class='mono'>{len(p['sessions'])}</b>&nbsp;sessions</span>"]
+    if p.get("artifacts_stale"):
+        status_badges.append("<span class='badge seal'><span class='gd'></span>&#9888; artifacts outdated</span>")
+    if git.get("dirty"):
+        status_badges.append("<span class='badge warn'><span class='gd'></span>uncommitted</span>")
+    if p.get("findings"):
+        warns = len([f for f in p["findings"] if f.get("level") in ("warn", "fail")])
+        if warns:
+            status_badges.append(f"<span class='badge warn'><span class='gd'></span>{warns} warnings</span>")
+    latest = p.get("latest")
+    if latest:
+        summary = html.escape(latest.get("summary") or _session_summary_excerpt(p.get("latest_body", "")) or "(no summary)")
+        recap = f"<div class='recap'><span class='when'>last session - {html.escape(latest.get('date', ''))}</span>{summary}</div>"
+    else:
+        recap = "<div class='recap none'>No sessions yet.</div>"
+    refresh = ""
+    if p.get("artifacts_stale"):
+        refresh = (
+            "<form method='post' action='/upgrade-project' style='display:inline'>"
+            f"<input type='hidden' name='project' value='{i}'>"
+            "<button class='btn btn-warn' type='submit'>Refresh artifacts</button></form>"
+        )
+    return (
+        "<article class='pcard'>"
+        f"<a class='card-link' href='/project?i={i}' aria-label='Open project'></a>"
+        "<div class='pc-head'><div class='pc-title'>"
+        f"<h3><a href='/project?i={i}'>{html.escape(p['name'])}</a>{missing}</h3>"
+        f"<div class='pc-sub'>{git_bits}</div></div>"
+        f"<div class='pc-health'>{_health_dot(p)}</div><a class='pc-open' href='/project?i={i}' title='Open project' aria-label='Open project'>&#8599;</a></div>"
+        f"<div class='statline'>{''.join(status_badges)}</div>"
+        f"{_single_next_html(p)}<div hidden><span>Last session summary</span>{_resume_html(p)}{_remaining_items_html(p)}{_features_buckets_html(p)}</div>"
+        f"{_features_summary_html(p, road_href=f'/project?i={i}#roadmap')}{recap}"
+        "<div class='pc-foot'>"
+        f"<div class='pc-actions'>{refresh}</div>"
+        "<details class='launch'><summary><span class='chev'>&#9656;</span>Start a session</summary>"
+        f"<div class='launch-body'>{_project_launch_form(i, p, aliases or [])}</div></details>"
+        "<!-- Offload controls moved to the project detail page by the redesign. -->"
+        "</div></article>"
+    )
 
 def _remote_project_card(p: github_catalog.RemoteProject) -> str:
-    badge_class = "health-ok" if p.is_local else "health-warn"
+    badge_class = "badge" if p.is_local else "badge seal"
     badge_text = "cloned here" if p.is_local else "remote only"
     focus = f"<p class='muted'>{html.escape(p.current_focus)}</p>" if p.current_focus else ""
     next_action = (
-        "<div class='next'><span class='lbl'>NEXT</span>"
+        "<div class='next'>"
+        "<div class='nh'>" + _eye_glyph() + "<b>NEXT ACTION</b></div>"
         f"<div class='next-one'>{html.escape(_plain(p.next_action))}</div></div>"
         if p.next_action
         else ""
@@ -1034,9 +1213,9 @@ def _remote_project_card(p: github_catalog.RemoteProject) -> str:
     else:
         command = f"horus start github:{p.full_name}"
     return (
-        "<div class='remote-card'>"
+        "<div class='repo'>"
         f"<h3><a href='{html.escape(p.url)}'>{html.escape(p.full_name)}</a></h3>"
-        f"<div class='badges'><span>{html.escape(p.default_branch)}</span>"
+        f"<div class='meta'><span class='branch'>{html.escape(p.default_branch)}</span>"
         f"<span class='{badge_class}'>{badge_text}</span></div>"
         f"{focus}{next_action}"
         "<div class='resume'><span class='lbl'>Start here</span>"
@@ -1054,32 +1233,32 @@ def _refresh_forms() -> str:
         forms.append(
             "<form method='post' action='/github-refresh' style='display:inline-block;margin-right:8px'>"
             f"<input type='hidden' name='owner' value='{html.escape(owner)}'>"
-            f"<button class='copy' type='submit'>Refresh {html.escape(owner)}</button>"
+            f"<button class='btn sm btn-warn' type='submit'>Refresh {html.escape(owner)}</button>"
             "</form>"
         )
     return "<div style='margin:0 0 12px'>" + "".join(forms) + "</div>"
 
 
 def _untracked_card(u: github_catalog.UntrackedRepo) -> str:
-    badge_class = "health-warn" if u.is_local else "muted"
+    badge_class = "badge seal" if u.is_local else "badge"
     badge_text = "cloned, not initialized" if u.is_local else "remote only"
     description = f"<p class='muted'>{html.escape(u.description)}</p>" if u.description else ""
     onboard_form = (
         "<form method='post' action='/github-onboard' style='display:inline-block;margin-right:8px'>"
         f"<input type='hidden' name='target' value='{html.escape(u.full_name)}'>"
-        "<button class='copy' type='submit'>Onboard</button>"
+        "<button class='btn sm btn-seal' type='submit'>Onboard</button>"
         "</form>"
     )
     ignore_form = (
         "<form method='post' action='/github-ignore' style='display:inline-block'>"
         f"<input type='hidden' name='target' value='{html.escape(u.full_name)}'>"
-        "<button class='copy' type='submit'>Ignore</button>"
+        "<button class='btn sm' type='submit'>Ignore</button>"
         "</form>"
     )
     return (
-        "<div class='remote-card'>"
+        "<div class='repo'>"
         f"<h3><a href='{html.escape(u.url)}'>{html.escape(u.full_name)}</a></h3>"
-        f"<div class='badges'><span>{html.escape(u.default_branch)}</span>"
+        f"<div class='meta'><span class='branch'>{html.escape(u.default_branch)}</span>"
         f"<span class='{badge_class}'>{badge_text}</span></div>"
         f"{description}"
         "<p class='muted' style='font-size:12px'>Onboard uses this machine's "
@@ -1094,7 +1273,7 @@ def _hidden_row(u: github_catalog.UntrackedRepo) -> str:
     unignore_form = (
         "<form method='post' action='/github-unignore' style='display:inline-block;margin-left:8px'>"
         f"<input type='hidden' name='target' value='{html.escape(u.full_name)}'>"
-        "<button class='copy' type='submit'>Unignore</button>"
+        "<button class='btn sm' type='submit'>Unignore</button>"
         "</form>"
     )
     return (
@@ -1115,54 +1294,61 @@ def render_remote_catalog(
         # Distinguish between "no owners configured" and "owners set but nothing found".
         if not config.load_github_owners():
             return (
-                "<div class='section'><h2>GitHub remote catalog</h2>"
-                "<div class='card health-warn'>"
+                "<details class='fold' id='github-catalog'><summary><span class='chev'>&#9656;</span>"
+                "<h2>GitHub remote catalog</h2><span class='count'>0</span></summary><div class='fold-body'>"
+                "<div class='repo'>"
                 "<p><strong>No GitHub owner configured on this machine.</strong></p>"
                 "<p class='muted'>GitHub owners and workspace paths are per-machine and are not"
                 " git-synced, so a fresh machine always starts empty.</p>"
                 "<p class='muted'>Run <code>horus discover github &lt;owner&gt; --save</code>"
                 " to add an owner and see your remote projects here.</p>"
-                "</div></div>"
+                "</div></div></details>"
             )
         return (
-            "<div class='section'><h2>GitHub remote catalog</h2>"
-            "<div class='card'><p class='muted'>No Horus-enabled remote repos found yet.</p></div></div>"
+            "<details class='fold' id='github-catalog'><summary><span class='chev'>&#9656;</span>"
+            "<h2>GitHub remote catalog</h2><span class='count'>0</span></summary><div class='fold-body'>"
+            "<div class='repo'><p class='muted'>No Horus-enabled remote repos found yet.</p></div>"
+            "</div></details>"
         )
     cards = "".join(_remote_project_card(p) for p in projects)
     if not cards:
-        cards = "<div class='card'><p class='muted'>No Horus-enabled remote repos found yet.</p></div>"
+        cards = "<div class='repo'><p class='muted'>No Horus-enabled remote repos found yet.</p></div>"
     if notes:
         msg = "".join(f"<li>{html.escape(n)}</li>" for n in notes)
         cards = f"<div class='banner ok'><strong>GitHub catalog cache</strong><ul>{msg}</ul></div>{cards}"
     if errors:
         err = "".join(f"<li>{html.escape(e)}</li>" for e in errors)
         cards = f"<div class='banner err'><strong>GitHub discovery issue</strong><ul>{err}</ul></div>{cards}"
-    horus_grid = f"<div class='remote-grid'>{cards}</div>"
+    horus_grid = f"<div class='repogrid'>{cards}</div>"
 
     untracked_section = ""
     if _untracked:
         untracked_cards = "".join(_untracked_card(u) for u in _untracked)
         untracked_section = (
-            f"<h2>Not tracked ({len(_untracked)})</h2>"
-            f"<div class='remote-grid'>{untracked_cards}</div>"
+            f"<details class='fold' open><summary><span class='chev'>&#9656;</span>"
+            f"<h2>Not tracked</h2><span class='count'>{len(_untracked)}</span></summary>"
+            f"<div class='fold-body'><div class='repogrid'>{untracked_cards}</div></div></details>"
         )
 
     hidden_section = ""
     if _hidden:
         hidden_rows = "".join(_hidden_row(u) for u in _hidden)
         hidden_section = (
-            f"<details><summary>Hidden ({len(_hidden)})</summary>"
-            f"<div style='padding:8px 0'>{hidden_rows}</div>"
+            f"<details class='fold'><summary><span class='chev'>&#9656;</span>"
+            f"<h2>Hidden</h2><span class='count'>{len(_hidden)}</span></summary>"
+            f"<div class='fold-body'>{hidden_rows}</div>"
             "</details>"
         )
 
     return (
-        f"<div class='section'><h2>GitHub remote catalog</h2>"
+        f"<details class='fold' id='github-catalog'><summary><span class='chev'>&#9656;</span>"
+        f"<h2>GitHub remote catalog</h2><span class='count'>{len(projects)}</span>"
+        "<span class='grow'></span></summary><div class='fold-body'>"
         f"{_refresh_forms()}"
         f"{horus_grid}"
+        "</div></details>"
         f"{untracked_section}"
         f"{hidden_section}"
-        "</div>"
     )
 
 
@@ -1170,10 +1356,11 @@ def render_remote_catalog_placeholder() -> str:
     if not config.load_github_owners():
         return render_remote_catalog([], [])
     return (
-        "<div id='github-catalog' class='section' data-horus-src='/github-catalog'>"
-        "<h2>GitHub remote catalog</h2>"
-        "<div class='card'><p class='muted'>Loading GitHub projects...</p></div>"
-        "</div>"
+        "<details id='github-catalog' class='fold' data-horus-src='/github-catalog' open>"
+        "<summary><span class='chev'>&#9656;</span><h2>GitHub remote catalog</h2>"
+        "<span class='count'>loading</span></summary>"
+        "<div class='fold-body'><div class='repo'><p class='muted'>Loading GitHub projects...</p></div></div>"
+        "</details>"
     )
 
 
@@ -1221,31 +1408,96 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
     )
 
 
+
 def render_settings(policy: dict[str, str], *, saved: bool = False) -> str:
     """Return the inner body HTML for the /settings page (workflow policy editor)."""
-    _labels = {"integration": "Integration", "commit": "Commit", "merge": "Merge"}
+    labels = {
+        "integration": ("Integration", "How Horus-driven git actions land: PR, direct push, or local only."),
+        "commit": ("Commit", "Whether Horus may create its own continuity/onboarding commits."),
+        "merge": ("Merge", "Whether PRs are auto-merged or held for review."),
+    }
     banner = "<div class='banner ok'>Settings saved.</div>" if saved else ""
-    selects = []
-    for key, label in _labels.items():
+    fields = []
+    for key, (label, desc) in labels.items():
         opts = "".join(
             f"<option value='{html.escape(v, quote=True)}'"
             f"{' selected' if v == policy.get(key) else ''}>{html.escape(v)}</option>"
             for v in config.WORKFLOW_CHOICES[key]
         )
-        selects.append(
-            f"<label>{html.escape(label)}<select name='{html.escape(key, quote=True)}'>{opts}</select></label>"
+        fields.append(
+            "<div class='sfield'>"
+            f"<label>{html.escape(label)}</label>"
+            f"<p class='desc'>{html.escape(desc)}</p>"
+            f"<select name='{html.escape(key, quote=True)}'>{opts}</select></div>"
         )
-    controls = "".join(selects)
+    fields.extend([
+        "<div class='sfield'><label>Theme</label><p class='desc'>Default appearance. Light is the default; the header toggle changes it too. Stored in this browser.</p>"
+        "<select id='theme-sel' onchange=\"try{localStorage.setItem('horus_skin',this.value)}catch(e){};document.documentElement.classList.toggle('skin-light',this.value==='light')\">"
+        "<option value='light'>Light</option><option value='dark'>Dark</option></select></div>",
+        "<div class='sfield'><label>Default agent</label><p class='desc'>Pre-selected when starting a session.</p><select disabled><option>Choose at launch</option></select></div>",
+        "<div class='sfield'><label>Account ID display</label><p class='desc'>Locked by product policy; raw IDs are never shown.</p><select disabled><option>Friendly aliases only</option></select></div>",
+        "<div class='sfield'><label>Context loading</label><p class='desc'>Keep startup light and load lanes as needed.</p><select disabled><option>Lazy</option></select></div>",
+    ])
+    inner = (
+        f"{banner}<section class='band'><div class='wrap'>"
+        "<div class='shead'><span class='eyebrow'>Configuration</span><h2>Settings</h2>"
+        "<span class='meta'>workflow policy applies to Horus-driven actions</span></div>"
+        "<div class='panel' style='max-width:980px'>"
+        "<form method='post' action='/settings'>"
+        f"<div class='settings-form'>{''.join(fields)}</div>"
+        "<div class='settings-actions'><button class='btn btn-seal' type='submit'>Save</button>"
+        "<a class='btn' href='/'>Cancel</a></div>"
+        "</form></div></div></section>"
+        "<script>try{document.getElementById('theme-sel').value=(localStorage.getItem('horus_skin')==='dark')?'dark':'light'}catch(e){}</script>"
+        f"{_footer_html()}"
+    )
+    return inner
+
+def _footer_html() -> str:
     return (
-        f"{banner}"
-        "<div class='card'>"
-        "<h2>Workflow policy</h2>"
-        "<p class='muted'>Default git-integration policy for Horus-driven actions "
-        "(onboard, closure commits). This setting is <strong>per-machine</strong> — "
-        "it is not git-synced.</p>"
-        f"<form method='post' action='/settings'>{controls}"
-        "<button type='submit'>Save</button>"
-        "</form></div>"
+        "<footer><div class='wrap foot-in'>"
+        "<svg class='eye' viewBox='0 0 64 40' fill='none'>"
+        "<path d='M4 20 Q24 7 47 17 Q26 31 4 20Z' stroke='currentColor' stroke-width='2'/>"
+        "<circle cx='25' cy='18.5' r='4' fill='var(--seal)'/></svg>"
+        "Horus runs locally - single user - subscription auth only - deliberately lightweight"
+        "</div></footer>"
+    )
+
+
+def _projects_section_html(projects: list[dict[str, Any]]) -> str:
+    """Greeting + needs-attention pill + the project card grid. Heavy: it needs the
+    full gather_projects() data (~1.2s), so the index loads it lazily via
+    /projects-grid while the shell paints immediately."""
+    launch_aliases = [{"alias": a} for a in sorted(_known_aliases())]
+    cards = "".join(_project_column(p, i, launch_aliases) for i, p in enumerate(projects))
+    if not cards:
+        cards = (
+            "<div class='panel'><h3>No projects registered</h3>"
+            "<p class='muted'>Run <code>horus init</code> inside a project to register it here.</p></div>"
+        )
+    attention = next((p for p in projects if p.get("artifacts_stale") or p.get("findings")), None)
+    if attention:
+        idx = projects.index(attention)
+        issue = "artifacts outdated" if attention.get("artifacts_stale") else "continuity warning"
+        attn = (
+            f"<a class='attn-pill' href='/project?i={idx}'><span class='n'>1</span>"
+            f"<span class='lab'><b>Needs attention</b><span>{html.escape(attention['name'])} - {issue}</span></span></a>"
+        )
+    else:
+        attn = (
+            "<span class='attn-pill'><span class='n'>0</span>"
+            "<span class='lab'><b>Needs attention</b><span>all tracked projects calm</span></span></span>"
+        )
+    count = len(projects)
+    plural = "project" if count == 1 else "projects"
+    return (
+        "<div class='greet'><div class='gtext'><span class='eyebrow'>Cockpit</span>"
+        f"<h2>{count} {plural} under watch</h2>"
+        "<span class='meta'>local projects - tracked on this machine</span></div>"
+        f"{attn}</div>"
+        "<div class='shead'><span class='eyebrow'>Under watch</span><h2>Projects</h2>"
+        "<span class='meta'>local projects - tracked on this machine</span></div>"
+        f"<div class='grid'>{cards}</div>"
     )
 
 
@@ -1254,143 +1506,285 @@ def render_index(
     sessions: list[registry.SessionRecord] | None = None,
     *,
     notice: str = "",
+    defer: bool = False,
 ) -> str:
     records = sessions or []
     live = _live_count(records)
-    # Account usage loads async (it hits the OAuth /usage endpoint) so it never blocks
-    # the main page; the loader swaps this placeholder for the rendered strip.
-    accounts_strip = (
-        "<div class='section' data-horus-src='/accounts-panel'><h2>Accounts</h2>"
-        "<div class='card'><p class='muted'>Loading account usage&hellip;</p></div></div>"
+    accounts_placeholder = (
+        "<div class='section rail' data-horus-src='/accounts-panel'>"
+        "<details class='acct-panel' open><summary><span class='eyebrow'>Usage</span>"
+        "<h3>Accounts</h3><span class='chev'>&#9656;</span></summary>"
+        "<div class='acct-c'><p class='muted' style='margin:0'>Loading account usage...</p></div>"
+        "</details></div>"
     )
     remote = render_remote_catalog_placeholder()
-    if not projects:
-        body = (
-            notice
-            + accounts_strip
-            + "<div class='card'><h2>No projects registered</h2>"
-            "<p class='muted'>Run <code>horus init</code> inside a project to "
-            "register it here.</p></div>"
-            + remote
+    if defer:
+        # Paint instantly: the project section needs the ~1.2s gather_projects(), so
+        # load it via the shared fetch loader as a sibling of the remote catalog.
+        projects_part = (
+            "<div data-horus-src='/projects-grid'><div class='greet'><div class='gtext'>"
+            "<span class='eyebrow'>Cockpit</span><h2 class='muted'>Loading projects&hellip;</h2>"
+            "</div></div></div>"
         )
-        return _page("Horus", body, live=live)
-    launch_aliases = [{"alias": a} for a in sorted(_known_aliases())]
-    cols = "".join(_project_column(p, i, launch_aliases) for i, p in enumerate(projects))
-    return _page("Horus", f"{notice}{accounts_strip}<div class='columns'>{cols}</div>{remote}", live=live)
+    else:
+        projects_part = _projects_section_html(projects)
+    body_html = (
+        f"{notice}<div class='wrap ov-shell'>{accounts_placeholder}<div class='ov-col'>"
+        f"{projects_part}"
+        f"<div class='band tight'>{remote}</div>"
+        "</div></div>"
+        f"{_footer_html()}"
+    )
+    return _page("Horus", body_html, live=live)
+
+def _feature_buckets_detail_html(p: dict[str, Any]) -> str:
+    items = p.get("feature_items") or {}
+    labels = (("Planned", "planned", ""), ("In progress", "in_progress", "prog"), ("Shipped", "shipped", "ship"))
+    buckets = []
+    for label, key, cls in labels:
+        vals = items.get(key, [])[:8]
+        lis = "".join(f"<li>{html.escape(v)}</li>" for v in vals) or "<li class='muted'>No entries yet</li>"
+        dot = "dot-q" if key == "planned" else "dot-p" if key == "in_progress" else "dot-s"
+        buckets.append(
+            f"<div class='bucket {cls}'><div class='bh'><i class='{dot}'></i>{html.escape(label)}"
+            f"<span class='n'>{len(items.get(key, []))}</span></div><ul>{lis}</ul></div>"
+        )
+    return "<div class='buckets'>" + "".join(buckets) + "</div>"
+
+
+def _latest_session_panel_html(p: dict[str, Any]) -> str:
+    latest = p.get("latest")
+    if not latest:
+        return "<p class='lead' style='font-size:13.5px'>No sessions yet.</p>"
+    text = latest.get("summary") or _session_summary_excerpt(p.get("latest_body", "")) or "(no summary)"
+    return (
+        f"<p class='lead' style='font-size:13.5px'>{html.escape(text)}</p>"
+        "<dl class='kv' style='margin-top:14px'>"
+        f"<dt>Date</dt><dd>{html.escape(latest.get('date', ''))}</dd>"
+        f"<dt>Agent</dt><dd>{html.escape(latest.get('agent', '') or '-')}</dd>"
+        f"<dt>Account</dt><dd>{html.escape(latest.get('account', '') or '-')}</dd>"
+        f"<dt>Status</dt><dd>{html.escape(latest.get('status', '') or '-')}</dd>"
+        "</dl>"
+    )
+
+
+def _cache_sidebar_panel(project_path: str) -> str:
+    try:
+        statuses = cache_status.project_cache_status(Path(project_path))
+    except Exception as exc:
+        return f"<p class='muted'>Context cache unavailable: {html.escape(str(exc))}</p>"
+    if not statuses:
+        return "<p class='muted'>No local Claude/Codex cache signal for this project yet.</p>"
+    cards = []
+    for s in statuses[:2]:
+        cache_bits = []
+        if s.cached_input_tokens:
+            cache_bits.append(f"cached {_fmt_int(s.cached_input_tokens)}")
+        if s.cache_read_input_tokens:
+            cache_bits.append(f"read {_fmt_int(s.cache_read_input_tokens)}")
+        if s.cache_creation_input_tokens:
+            cache_bits.append(f"write {_fmt_int(s.cache_creation_input_tokens)}")
+        cache_text = ", ".join(cache_bits) if cache_bits else "no cache tokens in last turn"
+        cards.append(
+            "<div class='metric'>"
+            f"<div class='k'>{html.escape(s.agent)}</div>"
+            f"<div class='v'>{html.escape(s.state())}</div>"
+            f"<div class='muted' style='font-size:12px'>last turn {_fmt_duration(s.age_seconds())} ago</div>"
+            f"<div class='muted' style='font-size:12px'>{html.escape(cache_text)}</div>"
+            "</div>"
+        )
+    return "<div class='metrics'>" + "".join(cards) + "</div>"
+
+
+def _manage_integration_panel(index: int, stale: bool) -> str:
+    refresh = (
+        "<form method='post' action='/upgrade-project'>"
+        f"<input type='hidden' name='project' value='{index}'>"
+        "<button class='btn btn-warn block' type='submit'>Refresh artifacts</button></form>"
+        if stale else ""
+    )
+    keep_form = (
+        "<form method='post' action='/offboard' onsubmit='return confirm(\"Remove Horus integration but KEEP the .horus/ files?\")'>"
+        f"<input type='hidden' name='project' value='{index}'>"
+        "<button class='btn block' type='submit'>Stop tracking - keep .horus/ files</button></form>"
+    )
+    remove_form = (
+        "<form method='post' action='/offboard' onsubmit='return confirm(\"Delete EVERYTHING including the .horus/ memory? This cannot be undone.\")'>"
+        f"<input type='hidden' name='project' value='{index}'>"
+        "<input type='hidden' name='purge' value='1'>"
+        "<button class='btn btn-danger block' type='submit'>Remove completely (delete .horus/)</button></form>"
+    )
+    return f"<div class='lform'>{refresh}{keep_form}{remove_form}</div>"
 
 
 def render_project(p: dict[str, Any], *, index: int | None = None, notice: str = "") -> str:
-    parts = [
-        notice,
-        "<p class='back'><a href='/'>&larr; all projects</a></p>",
-        f"<h1 style='margin-top:6px'>{html.escape(p['name'])}</h1>",
-        f"<div class='badges'><span>status: {html.escape(p['status']) or 'unknown'}</span>"
-        f"{_health_summary(p['findings'])}</div>",
-        _single_next_html(p),
-        _resume_html(p),
-        _latest_html(p),
-        _progress_html(p, href="#roadmap"),
+    idx = 0 if index is None else index
+    git = p.get("git") or {}
+    branch = html.escape(git.get("branch") or "-")
+    git_state = "clean" if not git.get("dirty") else "uncommitted"
+    status_badges = (
+        f"<span class='branch'>branch {branch}</span>"
+        f"<span class='muted'>- {git_state}</span>"
+        f"{_health_dot(p)}"
+        f"<span class='badge'>status {html.escape(p['status']) or 'unknown'}</span>"
+        f"<span class='badge'><b class='mono'>{len(p['sessions'])}</b>&nbsp;sessions</span>"
+    )
+    refresh = _upgrade_button(idx) if p.get("artifacts_stale") and index is not None else ""
+    aliases = [{"alias": a} for a in sorted(_known_aliases())]
+    focus = html.escape(p.get("current_focus") or p.get("tagline") or "No current focus recorded yet.")
+    roadmap_progress = _road_progress_html(p, href="#roadmap")
+    main_parts = [
+        "<div class='panel'><div class='ph'><span class='eyebrow'>Current focus</span><span class='x mono'>.horus/project.md</span></div>"
+        f"<p class='lead'>{focus}</p></div>",
+        "<div class='panel' id='roadmap'><div class='ph'><span class='eyebrow'>Roadmap - next</span><span class='x mono'>.horus/roadmap.md</span></div>"
+        f"{_single_next_html(p)}{roadmap_progress}</div>",
+        "<div class='panel' id='features'><div class='ph'><span class='eyebrow'>Features ledger</span><span class='x mono'>.horus/features.md</span></div>"
+        f"{_feature_buckets_detail_html(p)}</div>",
     ]
-
-    if index is not None:
-        aliases = [{"alias": a} for a in sorted(_known_aliases())]
-        parts.append(
-            "<div class='section'><h2>Start a session</h2><div class='card'>"
-            f"{_project_launch_form(index, p, aliases)}</div></div>"
+    if p.get("artifacts_stale"):
+        main_parts.append(
+            "<div class='panel'><div class='ph'><span class='eyebrow'>Artifacts outdated</span></div>"
+            f"<p class='lead' style='font-size:13.5px'>&#9888; artifacts outdated - {html.escape(str(p.get('artifacts_stale_count', 0)))} item(s) behind the installed CLI. "
+            "Run <code>horus upgrade-project --apply</code> or use Refresh artifacts.</p></div>"
         )
-
-    if p["current_focus"]:
-        parts.append(
-            f"<div class='card'><strong>Current focus:</strong> "
-            f"{html.escape(p['current_focus'])}</div>"
-        )
-
-    parts.append(_git_html(p))
-    if p["artifacts_stale"]:
-        _count = html.escape(str(p["artifacts_stale_count"]))
-        _btn = _upgrade_button(index) if index is not None else (
-            " Run: <code>horus upgrade-project --apply</code>"
-        )
-        parts.append(
-            f"<div class='card'><span class='health-warn'>&#9888; Horus artifacts outdated</span>"
-            f" &mdash; {_count} item(s) behind the installed CLI.{_btn}</div>"
-        )
-    parts.append(_project_cache_html(p["path"]))
-    parts.append(_project_overhead_html(p["path"]))
-    parts.append(_latest_session_card(p))
-
-    # Continuity health
     rows = "".join(
-        f"<tr><td class='{_LEVEL_CLASS.get(f['level'], '')}'>{f['level']}</td>"
+        f"<tr><td class='{_LEVEL_CLASS.get(f['level'], '')}'>{html.escape(f['level'])}</td>"
         f"<td>{html.escape(f['message'])}</td></tr>"
         for f in p["findings"]
+    ) or "<tr><td>ok</td><td>healthy</td></tr>"
+    main_parts.append(
+        "<div class='panel'><div class='ph'><span class='eyebrow'>Continuity health</span></div>"
+        f"<table>{rows}</table></div>"
     )
-    parts.append(
-        f"<div class='section'><h2>Continuity health</h2><table>{rows}</table></div>"
-    )
-
-    if p["tasks"] or p["roadmap_body"]:
-        pr = p["progress"]
-        heading = "Roadmap"
-        if pr["total"]:
-            heading += f" <span class='muted' style='font-size:13px'>({pr['done']}/{pr['total']} done)</span>"
-        parts.append(
-            f"<div class='section' id='roadmap'><h2>{heading}</h2>{_breakdown_html(p)}</div>"
+    if p.get("decisions_body") or p.get("history_body"):
+        decisions_part = ""
+        if p.get("decisions_body") and index is not None:
+            decisions_part = (
+                "<details class='tasks'><summary>Durable decisions</summary>"
+                f"{markdown.render(p.get('decisions_body', ''))}</details>"
+                f"<div style='margin-top:8px'>{_open_lane_button(idx, 'decisions', 'Open decisions.md')}</div>"
+            )
+        elif p.get("decisions_body"):
+            decisions_part = (
+                "<details class='tasks' open><summary>Durable decisions</summary>"
+                f"{markdown.render(p.get('decisions_body', ''))}</details>"
+            )
+        history_part = ""
+        if p.get("history_body"):
+            # History grows without bound and holds the full rationale; keep it out of
+            # the dashboard render and offer an editor link instead.
+            note = "<p class='muted' style='font-size:13px;margin:0 0 8px'>History holds the full rationale and bumps in the road. It grows over time, so it's kept out of the dashboard."
+            note += " Open it in your editor for the detail.</p>" if index is not None else "</p>"
+            history_part = note + (_open_lane_button(idx, "history", "Open history.md") if index is not None else "")
+        main_parts.append(
+            "<div class='panel'><div class='ph'><span class='eyebrow'>Decisions &amp; history</span>"
+            "<span class='x mono'>.horus/decisions.md - history.md</span></div>"
+            f"{decisions_part}{history_part}</div>"
         )
-
-    if p["execution_body"]:
-        status = (
-            f" <span class='muted' style='font-size:13px'>({html.escape(p['execution_status'])})</span>"
-            if p["execution_status"]
-            else ""
-        )
-        parts.append(
-            f"<div class='section' id='execution'><h2>Execution plan{status}</h2>"
+    if p.get("execution_body"):
+        main_parts.append(
+            "<div class='panel' id='execution'><div class='ph'><span class='eyebrow'>Execution plan</span>"
+            "<span class='x mono'>.horus/execution.md</span></div>"
             f"{markdown.render(p['execution_body'])}</div>"
         )
-
-    if p["features_body"]:
-        fc = p["feature_counts"]
-        sub = f" <span class='muted' style='font-size:13px'>({fc['shipped']} shipped)</span>" if fc["shipped"] else ""
-        parts.append(
-            f"<div class='section' id='features'><h2>Features{sub}</h2>"
-            f"{markdown.render(p['features_body'])}</div>"
+    if p.get("roadmap_body"):
+        open_btn = (
+            f"<div style='margin-top:10px'>{_open_lane_button(idx, 'roadmap', 'Open roadmap.md')}</div>"
+            if index is not None else ""
         )
-
-    if p["sessions"]:
-        srows = "".join(
-            f"<tr><td>{html.escape(s['date'])}</td><td>{html.escape(s['agent'])}</td>"
-            f"<td>{html.escape(s['account'])}</td>"
-            f"<td>{html.escape(s['status'])}</td><td>{html.escape(s['summary'])}</td></tr>"
-            for s in p["sessions"]
+        main_parts.append(
+            "<div class='panel'><div class='ph'><span class='eyebrow'>Roadmap details</span>"
+            "<span class='x mono'>open items</span></div>"
+            f"{_breakdown_html(p, completed=False)}{open_btn}</div>"
         )
-        parts.append(
-            "<div class='section'><h2>Recent sessions</h2>"
-            "<table><tr><th>date</th><th>agent</th><th>account</th><th>status</th><th>summary</th></tr>"
-            f"{srows}</table></div>"
-        )
-
-    if p["decisions_body"]:
-        parts.append(
-            f"<div class='section'><h2>Decisions</h2>{markdown.render(p['decisions_body'])}</div>"
-        )
-
-    if p["history_body"]:
-        parts.append(
-            "<div class='section' id='history'><h2>History</h2>"
-            "<details class='tasks'><summary>bumps in the road</summary>"
-            f"{markdown.render(p['history_body'])}</details></div>"
-        )
-
-    if p["project_body"]:
-        parts.append(
-            f"<div class='section'><h2>Project brief</h2>{markdown.render(p['project_body'])}</div>"
-        )
-
     if index is not None:
-        parts.append(_offload_control(index))
+        # Heavy: parses Claude/Codex session logs (~seconds). Load it lazily so the
+        # page paints immediately; the shared fetch loader swaps in the real panel.
+        main_parts.append(
+            f"<div class='panel' data-horus-src='/project-overhead?i={idx}'>"
+            "<div class='ph'><span class='eyebrow'>Token overhead</span></div>"
+            "<p class='muted' style='font-size:12.5px'>Loading&hellip;</p></div>"
+        )
+    else:
+        main_parts.append(_project_overhead_html(p["path"]).replace("class='section'", "class='panel'"))
+    if index is not None:
+        cache_panel = (
+            f"<div class='panel' data-horus-src='/project-cache?i={idx}'>"
+            "<div class='ph'><span class='eyebrow'>Context cache</span></div>"
+            "<p class='muted' style='font-size:12.5px'>Loading&hellip;</p></div>"
+        )
+    else:
+        cache_panel = (
+            "<div class='panel'><div class='ph'><span class='eyebrow'>Context cache</span></div>"
+            f"{_cache_sidebar_panel(p['path'])}</div>"
+        )
+    sidebar = (
+        "<div class='col'><div class='panel sticky'><h3>"
+        f"{_eye_glyph()}Start a session</h3>"
+        "<p class='muted' style='font-size:12.5px;margin:0 0 16px'>Launch an attended CLI against this repo.</p>"
+        f"{_project_launch_form(idx, p, aliases)}</div>"
+        f"{cache_panel}"
+        "<div class='panel'><div class='ph'><span class='eyebrow'>Last session</span></div>"
+        f"{_latest_session_panel_html(p)}</div>"
+        "<div class='panel'><div class='ph'><span class='eyebrow'>Manage Horus integration</span></div>"
+        f"{_manage_integration_panel(idx, bool(p.get('artifacts_stale'))) if index is not None else ''}</div></div>"
+    )
+    body = (
+        f"{notice}<section class='band'><div class='wrap'>"
+        f"<div class='crumb'><a href='/'>Projects</a><span>/</span><span class='mono'>{html.escape(p['name'])}</span></div>"
+        "<div class='detail-top'><div>"
+        f"<h1>{html.escape(p['name'])}</h1><div class='sub'>{status_badges}</div></div>"
+        f"<div class='right'>{refresh}<a class='btn' href='/'>Back</a></div></div>"
+        f"<div class='dlayout'><div class='col'>{''.join(main_parts)}</div>{sidebar}</div>"
+        "</div></section>"
+        f"{_footer_html()}"
+    )
+    return _page(f"Horus - {p['name']}", body, live=_live_count(gather_sessions()))
 
-    return _page(f"Horus - {p['name']}", "".join(parts), live=_live_count(gather_sessions()))
+_LANE_FILES = {
+    "project": "project.md", "roadmap": "roadmap.md", "features": "features.md",
+    "decisions": "decisions.md", "history": "history.md", "execution": "execution.md",
+}
+
+
+def _open_in_editor(path: Path) -> None:
+    """Open a local lane file in the OS default handler. Best-effort; the dashboard
+    is local-only, so this runs on the user's own machine."""
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(path))  # type: ignore[attr-defined]  # noqa: S606
+        elif sys.platform == "darwin":
+            subprocess.run(["open", str(path)], check=False)
+        else:
+            subprocess.run(["xdg-open", str(path)], check=False)
+    except OSError:
+        pass
+
+
+def _open_lane_button(index: int, lane: str, label: str) -> str:
+    """A same-origin POST button that opens one `.horus/<lane>.md` in the editor."""
+    return (
+        "<form method='post' action='/open-lane' style='display:inline'>"
+        f"<input type='hidden' name='project' value='{index}'>"
+        f"<input type='hidden' name='lane' value='{html.escape(lane, quote=True)}'>"
+        f"<button class='btn sm' type='submit'>{html.escape(label)}</button></form>"
+    )
+
+
+def process_open_lane(form: dict[str, list[str]]) -> str:
+    """Open a project's lane file in the OS editor; addressed by index, lane allow-listed."""
+    try:
+        idx = int(form.get("project", [""])[0])
+        project = config.load_projects()[idx]
+    except (ValueError, IndexError):
+        return "/"
+    lane = form.get("lane", [""])[0]
+    fname = _LANE_FILES.get(lane)
+    if fname:
+        path = Path(project) / HORUS_DIR / fname
+        if path.is_file():
+            _open_in_editor(path)
+    return f"/project?i={idx}"
 
 
 def _upgrade_button(index: int) -> str:
@@ -1398,7 +1792,7 @@ def _upgrade_button(index: int) -> str:
     return (
         " <form method='post' action='/upgrade-project' style='display:inline'>"
         f"<input type='hidden' name='project' value='{index}'>"
-        "<button class='btn-go' type='submit' "
+        "<button class='btn btn-go' type='submit' "
         "title='Refresh Horus-managed artifacts to the installed version'>Refresh now</button>"
         "</form>"
     )
@@ -1453,18 +1847,22 @@ def _usage_color(pct: float) -> str:
 def _ring(pct: float | None) -> str:
     """Small donut showing a usage percent; gray when unknown (offline/no token)."""
     if pct is None:
-        color, dash, txt = "#3a4151", 0.0, "--"
+        color, dash, txt = "var(--border)", 0.0, "--"
     else:
         v = max(0.0, min(100.0, pct))
-        color, dash, txt = _usage_color(v), v, f"{v:.0f}%"
+        if v >= 80:
+            color = "var(--seal)"
+        elif v >= 35:
+            color = "var(--ink-3)"
+        else:
+            color = "var(--border-strong)"
+        dash, txt = v, f"{v:.0f}%"
     return (
-        "<svg class='ring' viewBox='0 0 40 40' width='42' height='42'>"
-        "<circle cx='20' cy='20' r='16' fill='none' stroke='#232733' stroke-width='4'/>"
-        f"<circle cx='20' cy='20' r='16' fill='none' stroke='{color}' stroke-width='4' "
-        f"pathLength='100' stroke-dasharray='{dash:.0f} 100' stroke-linecap='round' "
-        "transform='rotate(-90 20 20)'/>"
-        f"<text x='20' y='24' text-anchor='middle' font-size='11' fill='#e6e6e6'>{txt}</text>"
-        "</svg>"
+        "<div class='ring-wrap'><svg class='ring' viewBox='0 0 40 40'>"
+        "<circle class='track' cx='20' cy='20' r='17' pathLength='100'/>"
+        f"<circle class='meter' cx='20' cy='20' r='17' pathLength='100' stroke='{color}' "
+        f"stroke-dasharray='{dash:.0f} 100'/>"
+        f"</svg><span class='ring-num'>{txt}</span></div>"
     )
 
 
@@ -1472,8 +1870,12 @@ def _usage_bar(pct: float | None, label: str) -> str:
     fill = ""
     if pct is not None:
         v = max(0.0, min(100.0, pct))
-        fill = f"<span style='width:{v:.0f}%;background:{_usage_color(v)}'></span>"
-    return f"<div class='usagebar'>{fill}</div><div class='progress-label'>{html.escape(label)}</div>"
+        color = "var(--seal)" if v >= 80 else "var(--ink-3)" if v >= 35 else "var(--border-strong)"
+        fill = f"<i style='width:{v:.0f}%;background:{color}'></i>"
+    return (
+        f"<div class='wbar mini'><div class='lab'><b>{html.escape(label)}</b></div>"
+        f"<div class='track-bar'>{fill}</div></div>"
+    )
 
 
 def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
@@ -1516,103 +1918,102 @@ def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
     return f"<div class='card'><h2>Accounts</h2>{''.join(rows)}{add_form}</div>"
 
 
+
 def _accounts_strip(accounts: list[dict[str, Any]]) -> str:
-    """Main-tab accounts/usage strip: usage rings + weekly bar + alias editing + the
-    add-account wizard. A lean cousin of ``_accounts_panel`` without the per-account
-    in-app session launcher (the cockpit was retired). Returned as a full ``section`` so
-    the async loader can swap it in via ``outerHTML``."""
+    """Sticky overview accounts rail: usage rings, alias editing, add/remove, launch."""
     add_form = _account_add_form()
+    shell_start = (
+        "<div class='section'><div class='rail'><details class='acct-panel' open>"
+        "<summary><span class='eyebrow'>Usage</span><h3>Accounts</h3><span class='chev'>&#9656;</span></summary>"
+    )
+    shell_end = (
+        "</details><p class='muted' style='font-size:11.5px;margin:13px 4px 0;line-height:1.5'>"
+        "Subscription auth only - friendly aliases shown, never raw account emails or IDs.</p></div></div>"
+    )
     if not accounts:
         return (
-            "<div class='section'><h2>Accounts</h2><div class='card'>"
-            "<p class='muted' style='font-size:13px'>No agent account detected. Run "
-            "<code>claude</code> / <code>codex login</code> to sign in, or add an isolated "
-            "account below.</p>"
-            f"{add_form}</div></div>"
+            shell_start
+            + "<div class='acct-c'><p class='muted' style='font-size:13px;margin:0'>No agent account detected. Run "
+            "<code>claude</code> / <code>codex login</code>, or add an isolated account below.</p></div>"
+            f"<div class='acct-foot2'>{add_form}</div>"
+            + shell_end
         )
+
     rows = []
     for a in accounts:
         agent = a.get("agent", "claude")
-        badge_color = "#4a9eff" if agent == "claude" else "#9b7fe8"
-        badge = (
-            f"<span style='font-size:10px;font-weight:600;letter-spacing:.4px;"
-            f"text-transform:uppercase;color:{badge_color};margin-left:4px'>{html.escape(agent)}</span>"
-        )
-        reset = (
-            f"<div class='muted' style='font-size:11px'>5h resets {html.escape(a['five_reset'])}</div>"
-            if a.get("five_reset")
-            else ""
-        )
+        provider_cls = " codex" if agent == "codex" else ""
+        provider = "Codex" if agent == "codex" else "Claude"
+        reset = f"<span class='when2'>5h resets {html.escape(a['five_reset'])}</span>" if a.get("five_reset") else ""
         week_bar = ""
         if a.get("week_pct") is not None:
             label = f"Weekly {a['week_pct']:.0f}%"
             if a.get("week_reset"):
-                label += f" · resets {a['week_reset']}"
+                label += f" - resets {a['week_reset']}"
             week_bar = _usage_bar(a["week_pct"], label)
-        actions = (
-            f"<div class='acct-actions'>{_account_launch_form(a['alias'], agent)}"
-            f"{_account_remove_form(a['alias'])}</div>"
-        )
         rows.append(
-            f"<div class='acct'>{_ring(a['five_pct'])}"
-            f"<div><div class='who'>{html.escape(a['alias'])}{badge}</div>{reset}"
-            f"{_account_alias_form(a)}</div>{actions}</div>{week_bar}"
+            "<div class='acct-c'><div class='acct-row'>"
+            f"{_ring(a['five_pct'])}<div class='info'>{_account_alias_form(a)}"
+            f"<div class='prov-line'><span class='tag-prov{provider_cls}'>{provider}</span>{reset}</div></div>"
+            f"{_account_launch_form(a['alias'], agent)}</div>{week_bar}</div>"
         )
-    return f"<div class='section'><h2>Accounts</h2><div class='card'>{''.join(rows)}{add_form}</div></div>"
+    remove = (
+        "<details class='remove-pop'><summary><span class='chev'>&#9656;</span>Remove an account</summary>"
+        "<div class='menu'>" + "".join(_account_remove_form(a["alias"]) for a in accounts) + "</div></details>"
+    )
+    return shell_start + "".join(rows) + f"<div class='acct-foot2'>{add_form}{remove}</div>" + shell_end
 
 
 def _account_alias_form(account: dict[str, Any]) -> str:
     alias = account.get("alias", "")
     agent = account.get("agent", "claude")
     return (
-        "<form class='acct-edit' method='post' action='/account-alias'>"
+        "<form class='alias-edit' method='post' action='/account-alias'>"
         f"<input type='hidden' name='agent' value='{html.escape(agent, quote=True)}'>"
         f"<input type='hidden' name='old_alias' value='{html.escape(alias, quote=True)}'>"
-        f"<input name='alias' value='{html.escape(alias, quote=True)}' aria-label='Account alias'>"
-        "<button class='copy' type='submit'>Save alias</button>"
+        f"<input class='alias-in' name='alias' value='{html.escape(alias, quote=True)}' aria-label='Account alias'>"
+        "<button class='icon-btn' type='submit' title='Save alias'>&#10003;</button>"
         "</form>"
     )
 
 
 def _account_add_form() -> str:
     return (
-        "<details class='or-cmds'><summary>Add account</summary>"
-        "<form class='launch-form' method='post' action='/account-login'>"
-        "<label>Agent <select name='agent'>"
+        "<details class='disc'><summary><span class='chev'>&#9656;</span>+ Add account</summary>"
+        "<form class='lform disc-body' method='post' action='/account-login'>"
+        "<div class='field'><label>Agent</label><select name='agent'>"
         "<option value='claude'>Claude</option><option value='codex'>Codex</option>"
-        "</select></label>"
-        "<label>Alias <input name='alias' placeholder='personal' required></label>"
-        "<button class='start primary' type='submit'>Add &amp; sign in</button>"
+        "</select></div>"
+        "<div class='field'><label>Alias</label><input name='alias' placeholder='personal' required></div>"
+        "<button class='btn btn-go block' type='submit'>Add &amp; sign in</button>"
         "<p class='muted' style='font-size:12px;margin:0'>Creates an isolated login directory "
-        "under <code>~/.horus/accounts/</code> and opens a terminal to sign in &mdash; no path to "
+        "under <code>~/.horus/accounts/</code> and opens a terminal to sign in - no path to "
         "enter. The directory is filled by the login itself.</p>"
         "</form></details>"
     )
 
 
 def _account_launch_form(alias: str, agent: str = "claude") -> str:
-    """One-click "fresh session as this account" — opens the agent's TUI in a native
-    OS terminal (home dir; no project context)."""
+    """One-click fresh session as this account in a native OS terminal."""
     return (
         "<form class='acct-launch' method='post' action='/launch' style='display:inline'>"
         f"<input type='hidden' name='account' value='{html.escape(alias, quote=True)}'>"
         f"<input type='hidden' name='agent' value='{html.escape(agent, quote=True)}'>"
         "<input type='hidden' name='mode' value='fresh'>"
-        "<button class='start' type='submit' name='target' value='window' "
-        "title='Open a fresh session as this account in a native terminal'>+ session</button></form>"
+        "<button class='mini-session' type='submit' name='target' value='window' "
+        "title='+ session - open a fresh session as this account in a native terminal'>+</button></form>"
     )
 
 
 def _account_remove_form(alias: str) -> str:
-    """Forget an account (unmaps it from Horus; the login dir on disk is left intact)."""
+    """Forget an account mapping; login dir on disk is left intact."""
     return (
-        "<form method='post' action='/account-remove' style='display:inline' "
-        "onsubmit='return confirm(\"Remove this account from Horus? (its login files are "
-        "left on disk)\")'>"
+        "<form method='post' action='/account-remove' style='display:block' "
+        "onsubmit='return confirm(\"Remove this account from Horus? (its login files are left on disk)\")'>"
         f"<input type='hidden' name='alias' value='{html.escape(alias, quote=True)}'>"
-        "<button class='btn-danger' type='submit' title='Forget this account'>remove</button></form>"
+        "<button class='btn btn-danger block' type='submit' title='Forget this account'>"
+        f"{html.escape(alias)} <span class='x'>remove</span></button></form>"
     )
-
 
 def _launch_cmds(project_path: str, accounts: list[dict[str, Any]]) -> str:
     """Copyable real launch commands: Claude + Codex (ambient), then one per known account."""
@@ -1643,36 +2044,31 @@ _POSTURE_OPTIONS = "".join(
 )
 
 
-def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[str, Any]]) -> str:
-    """Pick an account + fresh-or-resume, then start a session in a native window (POST).
 
-    Work-pickup model: a fresh window rehydrates from `.horus/` (resume injects the
-    continuity prompt). The in-app PTY target was retired with the cockpit; the copy-a-
-    command fallback remains for any other launcher."""
-    opts = "<option value=''>ambient (logged-in)</option>" + "".join(
+def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[str, Any]]) -> str:
+    """Pick agent/account/posture and launch fresh or resume in a native window."""
+    opts = "<option value=''>ambient</option>" + "".join(
         f"<option value='{html.escape(a['alias'], quote=True)}'>{html.escape(a['alias'])}</option>"
         for a in accounts
     )
     return (
-        "<form class='launch-form' method='post' action='/launch'>"
+        "<form class='lform' method='post' action='/launch'>"
         f"<input type='hidden' name='project' value='{i}'>"
-        "<label>Agent <select name='agent'>"
+        "<input type='hidden' name='target' value='window'><span hidden>Open in a terminal window</span>"
+        "<div class='frow'>"
+        "<div class='field'><label>Agent</label><select name='agent'>"
         "<option value='claude'>Claude Code</option><option value='codex'>Codex</option>"
-        "</select></label>"
-        f"<label>Account <select name='account'>{opts}</select></label>"
-        f"<label>Permissions <select name='posture'>{_POSTURE_OPTIONS}</select></label>"
-        "<div class='modes'>"
-        "<label><input type='radio' name='mode' value='fresh' checked> Fresh session</label>"
-        "<label><input type='radio' name='mode' value='resume'> Resume (inject continuity prompt)</label>"
+        "</select></div>"
+        f"<div class='field'><label>Account</label><select name='account'>{opts}</select></div>"
         "</div>"
-        "<button class='start primary' type='submit' name='target' value='window' "
-        "title='Open the real claude/codex TUI in its own OS terminal window'>"
-        "&#9654; Open in a terminal window</button>"
+        f"<div class='field'><label>Permission posture</label><select name='posture'>{_POSTURE_OPTIONS}</select></div>"
+        "<div class='intent-row'>"
+        "<button class='btn btn-go' type='submit' name='mode' value='resume'>&#9656; Resume - next action</button>"
+        "<button class='btn' type='submit' name='mode' value='fresh'>Fresh session</button>"
+        "</div>"
+        f"<div hidden>{_launch_cmds(project['path'], accounts)}</div>"
         "</form>"
-        "<details class='or-cmds'><summary>&#8230; or copy a terminal command</summary>"
-        f"<div class='launch-body'>{_launch_cmds(project['path'], accounts)}</div></details>"
     )
-
 
 def render_onboard_handoff(
     name: str, project_index: int | None, project_path: str, accounts: list[dict[str, Any]]
@@ -2251,9 +2647,11 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
         if parsed.path == "/":
+            # Paint the shell immediately; the project grid (gather_projects ~1.2s)
+            # loads async via /projects-grid, like the accounts strip and catalog.
             self._send(render_index(
-                gather_projects(), gather_sessions(),
-                notice=_notice(parse_qs(parsed.query)),
+                [], gather_sessions(),
+                notice=_notice(parse_qs(parsed.query)), defer=True,
             ))
             return
         if parsed.path == "/github-catalog":
@@ -2277,6 +2675,29 @@ class _Handler(BaseHTTPRequestHandler):
             # Async fragment for the main-tab accounts/usage strip (network — loaded lazily).
             self._send(_accounts_strip(gather_accounts()))
             return
+        if parsed.path == "/projects-grid":
+            # Async fragment for the index project section (greeting + grid); carries
+            # the ~1.2s gather_projects cost off the initial paint.
+            self._send(_projects_section_html(gather_projects()))
+            return
+        if parsed.path in ("/project-overhead", "/project-cache"):
+            # Heavy per-project panels (session-log parsing) loaded lazily so the
+            # detail page paints immediately. Project addressed by index, never path.
+            projects = gather_projects()
+            try:
+                idx = int(parse_qs(parsed.query).get("i", ["?"])[0])
+                path = projects[idx]["path"]
+            except (ValueError, IndexError):
+                self._send("<div class='panel'><p class='muted'>Unknown project.</p></div>", 404)
+                return
+            if parsed.path == "/project-overhead":
+                self._send(_project_overhead_html(path).replace("class='section'", "class='panel'"))
+            else:
+                self._send(
+                    "<div class='panel'><div class='ph'><span class='eyebrow'>Context cache</span></div>"
+                    f"{_cache_sidebar_panel(path)}</div>"
+                )
+            return
         if parsed.path == "/pty/stream":
             term_id = parse_qs(parsed.query).get("id", [""])[0]
             self._stream_sse(term_id)
@@ -2299,6 +2720,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/assets/icon.png":
             self._send_package_asset("icon.png", "image/png")
+            return
+        if parsed.path == "/assets/mascot.png":
+            self._send_package_asset("mascot.png", "image/png")
             return
         if parsed.path == "/settings":
             saved = parse_qs(parsed.query).get("saved") == ["1"]
@@ -2408,6 +2832,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/settings",
             "/upgrade-project",
             "/offboard",
+            "/open-lane",
             "/account-add",
             "/account-login",
             "/account-alias",
@@ -2446,6 +2871,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/offboard":
             self._redirect(process_offboard(self._read_form()))
+            return
+        if parsed.path == "/open-lane":
+            self._redirect(process_open_lane(self._read_form()))
             return
         if parsed.path == "/account-add":
             self._redirect(f"/?{process_account_add(self._read_form())}")

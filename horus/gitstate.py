@@ -34,37 +34,51 @@ def git_state(root: Path, *, timeout: float = 3.0) -> dict[str, Any] | None:
             )
         except (OSError, subprocess.SubprocessError):
             return None
-        return r.stdout.strip() if r.returncode == 0 else None
+        return r.stdout if r.returncode == 0 else None
 
-    if run("rev-parse", "--is-inside-work-tree") != "true":
+    # One status call yields branch, upstream, ahead/behind, AND dirty, and doubles
+    # as the work-tree gate (non-zero outside a repo). Collapsing the old 7 git
+    # subprocesses to 3 matters most on Windows, where process spawn dominates.
+    status = run("status", "--porcelain=v2", "--branch")
+    if status is None:
         return None
+
+    branch = "?"
+    upstream: str | None = None
+    behind = ahead = None
+    dirty = False
+    for line in status.splitlines():
+        if line.startswith("# branch.head "):
+            head = line[len("# branch.head "):].strip()
+            branch = head if head and head != "(detached)" else "?"
+        elif line.startswith("# branch.upstream "):
+            upstream = line[len("# branch.upstream "):].strip() or None
+        elif line.startswith("# branch.ab "):
+            parts = line[len("# branch.ab "):].split()
+            try:  # format: "+<ahead> -<behind>"
+                ahead = int(parts[0].lstrip("+"))
+                behind = int(parts[1].lstrip("-"))
+            except (IndexError, ValueError):
+                pass
+        elif line and not line.startswith("#"):
+            dirty = True  # any non-header line is a changed/untracked entry
 
     commit: dict[str, str] = {}
     last = run("log", "-1", f"--format=%h{_US}%cr{_US}%s")
     if last:
-        parts = last.split(_US)
+        parts = last.strip().split(_US)
         if len(parts) == 3:
             commit = {"hash": parts[0], "rel": parts[1], "subject": parts[2]}
 
-    upstream = run("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
-    behind = ahead = None
-    if upstream:
-        counts = run("rev-list", "--left-right", "--count", f"{upstream}...HEAD")
-        if counts:
-            try:
-                b, a = counts.split()
-                behind, ahead = int(b), int(a)
-            except ValueError:
-                pass
-
+    remote = run("remote", "get-url", "origin")
     return {
-        "branch": run("rev-parse", "--abbrev-ref", "HEAD") or "?",
+        "branch": branch,
         "commit": commit,
-        "dirty": bool(run("status", "--porcelain")),
+        "dirty": dirty,
         "upstream": upstream,
         "behind": behind,
         "ahead": ahead,
-        "remote_url": run("remote", "get-url", "origin"),
+        "remote_url": remote.strip() if remote else None,
     }
 
 
