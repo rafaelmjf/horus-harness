@@ -178,7 +178,16 @@ def load_project(path_str: str) -> dict[str, Any]:
 
 
 def gather_projects() -> list[dict[str, Any]]:
-    return [load_project(p) for p in config.load_projects()]
+    paths = config.load_projects()
+    if len(paths) <= 1:
+        return [load_project(p) for p in paths]
+    # load_project is I/O-bound per project (git subprocesses, file reads,
+    # read-only staleness check). Run them concurrently so the index isn't N
+    # sequential ~235ms git_state calls. Order is preserved by executor.map.
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=min(8, len(paths))) as pool:
+        return list(pool.map(load_project, paths))
 
 
 def gather_remote_projects() -> tuple[list[github_catalog.RemoteProject], list[str], list[str]]:

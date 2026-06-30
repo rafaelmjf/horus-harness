@@ -56,6 +56,12 @@ Tiers, resolved locally per agent/account/availability.
   topic-grouped, current-and-relevant rule bullets (not a dated log); **roadmap.md**
   = top/open items, completed condensed/archived; **history.md** = the narrative
   detail/lessons, and *not* loaded inline on the dashboard.
+- Index perf: `gather_projects` was 5 sequential `load_project` calls (~2s); now
+  parallelized across a thread pool → ~1.3s. **Remaining lever (queued follow-up):**
+  `gitstate.git_state` fires ~7 git subprocesses per project; collapsing to ~3
+  (`git status --porcelain=v2 --branch` gives branch+upstream+ahead/behind+dirty in
+  one call) would roughly halve it and help the detail page (405ms) too. Deferred —
+  it's a gitstate.py rewrite (CLI-shared, own tests), not a quick inline edit.
 - "Open lane in editor" (phase 5): the dashboard is local-only, so the server can
   open a lane's raw `.md` via the OS default handler (`os.startfile` on Windows);
   guard it as a local, same-origin action by project/lane, never an arbitrary path.
