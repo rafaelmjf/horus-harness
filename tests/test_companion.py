@@ -284,6 +284,28 @@ def test_stop_dashboard_kills_when_spawned_process_does_not_exit():
     assert proc.waits == 2
 
 
+def test_stop_dashboard_reaps_windows_process_tree(monkeypatch):
+    calls = []
+
+    class FakeProc:
+        pid = 1234
+
+        def wait(self, timeout=None):
+            calls.append(("wait", timeout))
+
+    def fake_run(cmd, **kwargs):
+        calls.append(("run", cmd, kwargs))
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(companion.subprocess, "run", fake_run)
+
+    companion.stop_dashboard(companion.DashboardProcess("http://x", True, FakeProc()), timeout=0.5)
+
+    assert calls[0][0] == "run"
+    assert calls[0][1] == ["taskkill", "/PID", "1234", "/T", "/F"]
+    assert calls[1] == ("wait", 0.5)
+
+
 def test_relaunch_without_console_noop_off_windows(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     assert companion.relaunch_without_console() is False

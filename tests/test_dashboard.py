@@ -780,14 +780,13 @@ def test_offload_control_offers_keep_and_remove_completely():
     assert "Manage Horus integration" in full and "btn-danger" in full
 
 
-def test_project_column_has_offload_control_at_end(tmp_path, monkeypatch):
+def test_project_column_keeps_offload_off_overview_cards(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path / "proj", assume_yes=True, no_input=True)
     p = dashboard.load_project(str(tmp_path / "proj"))
     col = dashboard._project_column(p, 0)
-    assert "<details class='offload'>" in col
-    # The offload control sits at the end of the card (after the Roadmap box).
-    assert col.rindex("offload") > col.rindex("Roadmap")
+    assert "<details class='offload'>" not in col
+    assert "moved to the project detail page" in col
 
 
 def test_project_action_banner_messages():
@@ -1180,7 +1179,7 @@ def test_render_remote_catalog_untracked_badge_local(tmp_path, monkeypatch):
     html_out = dashboard.render_remote_catalog([], [], untracked=[u])
 
     assert "cloned, not initialized" in html_out
-    assert "health-warn" in html_out
+    assert "badge seal" in html_out
 
 
 def test_render_remote_catalog_untracked_badge_remote(tmp_path, monkeypatch):
@@ -1202,7 +1201,7 @@ def test_render_remote_catalog_hidden_section(tmp_path, monkeypatch):
 
     html_out = dashboard.render_remote_catalog([], [], hidden=[u])
 
-    assert "<details>" in html_out
+    assert "<details class='fold'>" in html_out
     assert "Hidden" in html_out
     assert "rafaelmjf/hidden-app" in html_out
     assert "action='/github-unignore'" in html_out

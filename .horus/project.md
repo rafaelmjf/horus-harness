@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Dashboard refocused on continuity: the Control session-cockpit was retired (completing the Omnigent freeze-the-cockpit stance), with account usage + start/resume folded into the Projects tab. Project lifecycle is rounded out (onboard / one-click upgrade / offboard). Horus stays the durable memory plane; orchestration is ceded to Omnigent."
+current_focus: "Dashboard redesign from the Claude design handoff is implemented and tightened in the stdlib-rendered dashboard: sumi-e shell, welcome overlay, sticky account rail, redesigned project cards, fold-style catalog sections, two-column project detail, and settings form. The Windows companion opens the owned app window by default and now reaps spawned dashboard/browser process trees on quit. Control remains retired; Horus stays the durable memory plane while launch/account actions keep using existing POST endpoints."
 last_updated: 2026-06-30
 ---
 

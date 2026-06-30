@@ -1,0 +1,1169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horus — project continuity & control panel</title>
+<!--
+  HORUS DASHBOARD — single self-contained mockup
+  ------------------------------------------------------------------
+  Server-renderable plain HTML. One inline <style>. System fonts only.
+  No CDN, no external assets, no framework. Tiny vanilla JS only
+  (clipboard copy + the async-load comment is left where fetch() goes).
+  Theme toggle and overview/detail/settings routing are pure CSS.
+
+  PALETTE — "Horus Ink" (sumi-e: ink ground / washi paper, one vermilion seal)
+  - The vermilion --seal is the falcon's gaze: it marks identity AND the
+    single most-important thing on screen (the NEXT action, destructive intent).
+  - Status keeps its semantic roles but muted & refined so the seal stays loud:
+      go/healthy/shipped = sage green   in-progress = ochre amber
+      info/links = slate blue           danger/attention = the seal vermilion
+  - Both themes derive from CSS custom properties under [data-skin]; re-theme
+    by editing the :root / .skin-light blocks only.
+-->
+<style>
+/* ============================== TOKENS ============================== */
+:root{
+  /* sumi ink ground (dark) — neutral warm-grey, no blue cast */
+  --bg:#15161a;
+  --bg-2:#0e0f12;
+  --panel:#1d1e23;
+  --panel-2:#191a1f;
+  --raised:#26272d;
+  --border:#2f3036;
+  --border-strong:#3e3f47;
+  --hairline:#25262b;
+
+  --ink:#eeeeef;
+  --ink-2:#abacb2;
+  --ink-3:#7c7d84;
+  --ink-faint:#5b5c62;
+
+  --seal:#df524a;          /* vermilion seal — the one contrast colour */
+  --seal-strong:#c83f38;
+  --seal-soft:rgba(223,82,74,.13);
+  --seal-line:rgba(223,82,74,.45);
+
+  --go:#62b18c;            /* shipped / healthy (muted wash) */
+  --go-soft:rgba(98,177,140,.13);
+  --warn:#cda156;          /* in-progress / warning */
+  --warn-soft:rgba(205,161,86,.13);
+  --info:#df524a;          /* links = seal red (sumi-e: no blue) */
+  --info-soft:rgba(223,82,74,.13);
+  --claude:#d98a6a;        /* provider chips only — Claude warm */
+  --codex:#7fb0e6;         /* provider chips only — Codex blue */
+
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px -14px rgba(0,0,0,.65);
+  --shadow-lift:0 2px 4px rgba(0,0,0,.45), 0 18px 44px -18px rgba(0,0,0,.7);
+  --r-sm:7px; --r-md:11px; --r-lg:16px; --r-pill:999px;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --maxw:1320px;
+  --t-fast:140ms cubic-bezier(.4,0,.2,1);
+  --t-soft:280ms cubic-bezier(.16,.84,.44,1);
+}
+/* washi paper (light) */
+.skin-light{
+  /* sumi-e light — white paper, ink greys, one red seal (no beige) */
+  --bg:#f1f2f2;
+  --bg-2:#e4e6e6;
+  --panel:#ffffff;
+  --panel-2:#f5f6f6;
+  --raised:#ffffff;
+  --border:#e3e5e5;
+  --border-strong:#cdd0d0;
+  --hairline:#edefef;
+
+  --ink:#181a1a;
+  --ink-2:#4d5252;
+  --ink-3:#787d7d;
+  --ink-faint:#9aa0a0;
+
+  --seal:#d8362b;
+  --seal-strong:#b62a20;
+  --seal-soft:rgba(216,54,43,.085);
+  --seal-line:rgba(216,54,43,.4);
+
+  --go:#2f8c5d;  --go-soft:rgba(47,140,93,.10);
+  --warn:#a87d1c; --warn-soft:rgba(168,125,28,.10);
+  --info:#d8362b; --info-soft:rgba(216,54,43,.085);
+  --claude:#bf5d39; --codex:#3f72a6;
+
+  --shadow:0 1px 2px rgba(40,38,32,.08), 0 10px 26px -16px rgba(40,38,32,.32);
+  --shadow-lift:0 2px 6px rgba(40,38,32,.12), 0 22px 48px -22px rgba(40,38,32,.4);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:var(--sans);
+  background:
+    radial-gradient(1200px 540px at 78% -8%, color-mix(in srgb,var(--seal) 7%, transparent), transparent 60%),
+    var(--bg);
+  color:var(--ink);
+  font-size:14.5px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  letter-spacing:.1px;
+}
+a{color:var(--info);text-decoration:none}
+a:hover{color:var(--seal)}
+::selection{background:var(--seal-soft)}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
+
+/* eyebrow / overline label */
+.eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.mono{font-family:var(--mono)}
+.muted{color:var(--ink-3)}
+
+/* ============================== HEADER ============================== */
+header.top{
+  position:sticky;top:0;z-index:40;
+  background:color-mix(in srgb,var(--bg) 86%, transparent);
+  backdrop-filter:saturate(1.1) blur(12px);
+  border-bottom:1px solid var(--hairline);
+}
+.top-in{display:flex;align-items:center;gap:22px;height:64px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.eye{width:40px;height:26px;flex:none;color:var(--ink)}
+.mascot{height:46px;width:auto;flex:none;image-rendering:pixelated;filter:drop-shadow(0 2px 5px rgba(0,0,0,.45))}
+.skin-light .mascot{filter:drop-shadow(0 2px 5px rgba(40,38,32,.22))}
+.mascot-lg{height:104px;width:auto;image-rendering:pixelated;flex:none;filter:drop-shadow(0 3px 8px rgba(0,0,0,.4))}
+.wordmark{display:flex;flex-direction:column;line-height:1.05}
+.wordmark b{font-size:17px;font-weight:600;letter-spacing:.36em;text-transform:uppercase;padding-left:.36em}
+.wordmark small{font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+nav.tabs{display:flex;gap:4px;margin-left:6px}
+nav.tabs a{
+  color:var(--ink-2);font-weight:500;padding:8px 14px;border-radius:var(--r-sm);
+  border:1px solid transparent;position:relative;transition:color var(--t-fast),background var(--t-fast);
+}
+nav.tabs a:hover{color:var(--ink);background:var(--panel-2)}
+nav.tabs a .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--seal);
+  margin-right:7px;vertical-align:middle;opacity:0;transition:opacity var(--t-fast)}
+/* active tab via :has routing */
+body:not(:has(#settings:target)) .t-projects{color:var(--ink)}
+body:not(:has(#settings:target)) .t-projects .dot{opacity:1}
+body:has(#settings:target) .t-settings{color:var(--ink)}
+body:has(#settings:target) .t-settings .dot{opacity:1}
+
+.top-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+
+/* CSS-only theme toggle */
+#skin{position:absolute;opacity:0;pointer-events:none}
+.skin-btn{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+  border:1px solid var(--border);background:var(--panel);border-radius:var(--r-pill);
+  padding:6px 12px;font-size:12.5px;color:var(--ink-2);transition:border-color var(--t-fast)}
+.skin-btn:hover{border-color:var(--border-strong);color:var(--ink)}
+.skin-btn .sun{display:none}.skin-btn .moon{display:inline}
+.skin-light .skin-btn .sun{display:inline}.skin-light .skin-btn .moon{display:none}
+
+/* ============================== BUTTONS ============================== */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  font:inherit;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;
+  border-radius:var(--r-sm);border:1px solid var(--border);background:var(--panel);
+  color:var(--ink);padding:8px 13px;transition:all var(--t-fast);line-height:1}
+.btn:hover{border-color:var(--border-strong);background:var(--raised)}
+.btn:active{transform:translateY(1px)}
+.btn.sm{padding:6px 10px;font-size:12px}
+.btn.block{width:100%}
+.btn-go{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.btn-go:hover{background:var(--ink-2);border-color:var(--ink-2)}
+.btn-seal{background:var(--seal);border-color:var(--seal);color:#fff}
+.btn-seal:hover{background:var(--seal-strong);border-color:var(--seal-strong)}
+.btn-warn{background:var(--seal-soft);border-color:var(--seal-line);color:var(--seal)}
+.btn-warn:hover{background:color-mix(in srgb,var(--seal) 15%,transparent);border-color:var(--seal)}
+.btn-danger{background:transparent;border-color:var(--seal-line);color:var(--seal)}
+.btn-danger:hover{background:var(--seal-soft);border-color:var(--seal)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
+.btn-ghost:hover{background:var(--panel-2);color:var(--ink)}
+
+/* ============================== BADGES / PILLS ============================== */
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:500;
+  padding:3px 9px;border-radius:var(--r-pill);background:var(--panel-2);
+  border:1px solid var(--border);color:var(--ink-2);white-space:nowrap}
+.badge .gd{width:6px;height:6px;border-radius:50%;background:var(--ink-3)}
+.badge.go{color:var(--ink-2);border-color:var(--border);background:var(--panel-2)}
+.badge.go .gd{background:var(--ink-3)}
+.badge.warn{color:var(--seal);border-color:var(--seal-line);background:var(--seal-soft)}
+.badge.warn .gd{background:var(--seal)}
+.badge.seal{color:var(--seal);border-color:var(--seal-line);background:var(--seal-soft)}
+.badge.seal .gd{background:var(--seal)}
+.badge .mono{font-size:11px}
+.branch{font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
+
+/* ============================== PAGE ROUTING ============================== */
+.page{display:none}
+#overview{display:block}
+body:has(#detail:target) #overview,
+body:has(#settings:target) #overview{display:none}
+#detail:target,#settings:target{display:block}
+section.band{padding:30px 0}
+section.band.tight{padding:20px 0}
+
+/* section heading */
+.shead{display:flex;align-items:baseline;gap:14px;margin:0 0 16px}
+.shead h2{font-size:20px;font-weight:600;letter-spacing:.01em;margin:0}
+.shead .meta{margin-left:auto;color:var(--ink-3);font-size:12.5px}
+
+/* ============================== COCKPIT STRIP ============================== */
+.cockpit{display:flex;gap:14px;flex-wrap:wrap;margin-top:18px}
+.stat{flex:1 1 0;min-width:148px;background:var(--panel);border:1px solid var(--border);
+  border-radius:var(--r-md);padding:14px 16px;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden}
+.stat .k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.stat .v{font-size:27px;font-weight:600;letter-spacing:-.01em;line-height:1}
+.stat .sub{font-size:12px;color:var(--ink-3)}
+.stat.attn{border-color:var(--seal-line)}
+.stat.attn .v{color:var(--seal)}
+.stat.attn::after{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--seal)}
+
+/* ============================== ACCOUNTS ============================== */
+.accounts{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:6px 4px}
+.acct{display:grid;grid-template-columns:46px 1fr auto;gap:16px;align-items:center;
+  padding:16px 20px;border-bottom:1px solid var(--hairline)}
+.acct:last-child{border-bottom:none}
+.ring{width:46px;height:46px;transform:rotate(-90deg)}
+.ring .track{fill:none;stroke:var(--border);stroke-width:3.4}
+.ring .meter{fill:none;stroke-width:3.4;stroke-linecap:round;transition:stroke-dasharray var(--t-soft)}
+.ring-wrap{position:relative;width:46px;height:46px}
+.ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:11.5px;font-weight:600;font-family:var(--mono)}
+.acct-main{min-width:0}
+.acct-id{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.acct-id b{font-size:14.5px;font-weight:600}
+.tag-prov{font-size:10px;letter-spacing:.16em;font-weight:700;padding:2px 7px;border-radius:4px;
+  background:color-mix(in srgb,var(--claude) 15%,transparent);color:var(--claude);border:1px solid color-mix(in srgb,var(--claude) 34%,transparent)}
+.tag-prov.codex{background:color-mix(in srgb,var(--codex) 15%,transparent);color:var(--codex);border-color:color-mix(in srgb,var(--codex) 34%,transparent)}
+.acct-when{font-size:12px;color:var(--ink-3);margin-left:2px}
+.alias{display:flex;align-items:center;gap:8px;margin-top:9px}
+.alias input{font:inherit;font-size:12.5px;background:var(--panel-2);color:var(--ink);
+  border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 9px;width:160px}
+.alias input:focus{outline:none;border-color:var(--seal);box-shadow:0 0 0 3px var(--seal-soft)}
+.wbar{margin-top:11px}
+.wbar .lab{font-size:11.5px;color:var(--ink-3);margin-bottom:5px;display:flex;gap:8px}
+.wbar .lab b{color:var(--ink-2);font-weight:600}
+.track-bar{height:6px;border-radius:var(--r-pill);background:var(--border);overflow:hidden}
+.track-bar > i{display:block;height:100%;border-radius:var(--r-pill)}
+.acct-act{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.acct-foot{display:flex;align-items:center;gap:12px;padding:14px 20px}
+
+/* ============================== PROJECT GRID ============================== */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(372px,1fr));gap:18px}
+.pcard{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:18px 18px 16px;display:flex;flex-direction:column;gap:14px;transition:transform var(--t-soft),box-shadow var(--t-soft),border-color var(--t-fast)}
+.pcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift);border-color:var(--border-strong)}
+.pc-head{display:flex;align-items:flex-start;gap:12px}
+.pc-title{min-width:0}
+.pc-title h3{margin:0;font-size:16.5px;font-weight:600;letter-spacing:.01em}
+.pc-title h3 a{color:var(--ink)}
+.pc-title h3 a:hover{color:var(--seal)}
+.pc-sub{display:flex;align-items:center;gap:9px;margin-top:5px;flex-wrap:wrap;font-size:12px}
+.pc-health{margin-left:auto;flex:none}
+.health-dot{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2);font-weight:500}
+.health-dot i{width:9px;height:9px;border-radius:50%;background:var(--go);box-shadow:0 0 0 3px var(--go-soft)}
+.health-dot.warn i{background:var(--seal);box-shadow:0 0 0 3px var(--seal-soft)}
+.health-dot.plan i{background:var(--ink-3);box-shadow:0 0 0 3px var(--panel-2)}
+
+.statline{display:flex;gap:8px;flex-wrap:wrap}
+
+/* NEXT callout — the falcon's gaze */
+.next{position:relative;background:var(--panel-2);border:1px solid var(--border);
+  border-radius:var(--r-md);padding:13px 15px 13px 16px;overflow:hidden}
+.next::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--seal)}
+.next .nh{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.next .nh .glyph{width:17px;height:12px;color:var(--seal);flex:none}
+.next .nh b{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-2);font-weight:700}
+.next p{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink)}
+.next .mode{margin-top:9px;padding-top:9px;border-top:1px solid var(--hairline);font-size:12.5px;color:var(--ink-2)}
+.next .mode b{color:var(--ink);font-weight:600}
+.next .mode .hint{display:block;margin-top:3px;font-style:italic;color:var(--ink-3);font-size:12px}
+.next.empty{background:var(--panel-2);border:1px dashed var(--border-strong)}
+.next.empty::before{background:var(--border-strong)}
+.next.empty .nh b,.next.empty .nh .glyph{color:var(--ink-3)}
+.next.empty p{color:var(--ink-3)}
+
+/* features mini ledger */
+.feat{display:flex;flex-direction:column;gap:9px}
+.feat .fbar{display:flex;height:7px;border-radius:var(--r-pill);overflow:hidden;background:var(--border)}
+.feat .fbar i{display:block;height:100%}
+.feat .fbar i.s{background:var(--ink)}
+.feat .fbar i.p{background:var(--ink-3)}
+.feat .fbar i.q{background:var(--border-strong)}
+.feat .fk{display:flex;gap:16px;font-size:12px}
+.feat .fk span{display:flex;align-items:center;gap:6px;color:var(--ink-3)}
+.feat .fk span b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.feat .fk i{width:8px;height:8px;border-radius:2px}
+.dot-s{background:var(--ink)}.dot-p{background:var(--ink-3)}.dot-q{background:var(--border-strong)}
+
+.recap{font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.recap .when{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);display:block;margin-bottom:3px}
+.recap.none{color:var(--ink-faint);font-style:italic}
+
+.pc-foot{display:flex;gap:9px;margin-top:2px;border-top:1px solid var(--hairline);padding-top:13px}
+.pc-foot .btn{flex:1}
+
+/* disclosures */
+details.disc{border:1px solid var(--border);border-radius:var(--r-md);background:var(--panel-2);overflow:hidden}
+details.disc > summary{list-style:none;cursor:pointer;padding:11px 14px;font-size:13px;font-weight:500;
+  display:flex;align-items:center;gap:9px;color:var(--ink-2);transition:color var(--t-fast)}
+details.disc > summary::-webkit-details-marker{display:none}
+details.disc > summary:hover{color:var(--ink)}
+details.disc > summary .chev{transition:transform var(--t-fast);color:var(--ink-3);font-size:11px}
+details.disc[open] > summary .chev{transform:rotate(90deg)}
+details.disc[open] > summary{border-bottom:1px solid var(--hairline);color:var(--ink)}
+.disc-body{padding:14px}
+.disc.go > summary{color:var(--ink-2)}
+.disc.danger > summary:hover{color:var(--seal)}
+
+/* launch form (compact) */
+.lform{display:grid;gap:11px;grid-template-columns:minmax(0,1fr);min-width:0}
+.frow{display:flex;gap:10px;flex-wrap:wrap}
+.field{flex:1 1 150px;min-width:0}
+.field label{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;font-weight:600}
+select,.field input[type=text]{width:100%;font:inherit;font-size:13px;background:var(--panel);color:var(--ink);
+  border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;cursor:pointer}
+select:focus,.field input:focus{outline:none;border-color:var(--seal);box-shadow:0 0 0 3px var(--seal-soft)}
+.cmd{display:flex;align-items:center;gap:10px;background:var(--bg-2);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:10px 12px;font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+.cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;color:var(--ink);scrollbar-width:thin}
+.cmd .pfx{color:var(--seal)}
+.copy{flex:none;font-family:var(--sans);font-size:11.5px;border:1px solid var(--border);background:var(--panel);
+  color:var(--ink-2);border-radius:5px;padding:4px 9px;cursor:pointer;transition:all var(--t-fast)}
+.copy:hover{border-color:var(--border-strong);color:var(--ink)}
+.copy.done{color:var(--go);border-color:color-mix(in srgb,var(--go) 40%,transparent)}
+
+/* segmented radio (fresh/resume, posture) */
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;background:var(--panel)}
+.seg label{padding:7px 13px;font-size:12.5px;color:var(--ink-2);cursor:pointer;transition:all var(--t-fast);border-right:1px solid var(--border)}
+.seg label:last-child{border-right:none}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg input:checked + label{background:var(--seal);color:#fff}
+
+/* collapsible big sections */
+details.fold{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);overflow:hidden;margin-top:0}
+details.fold > summary{list-style:none;cursor:pointer;padding:18px 22px;display:flex;align-items:center;gap:12px}
+details.fold > summary::-webkit-details-marker{display:none}
+details.fold > summary h2{margin:0;font-size:18px;font-weight:600}
+details.fold > summary .chev{color:var(--ink-3);transition:transform var(--t-fast)}
+details.fold[open] > summary{border-bottom:1px solid var(--hairline)}
+details.fold[open] > summary .chev{transform:rotate(90deg)}
+details.fold > summary .count{color:var(--ink-3);font-size:13px;font-weight:500}
+details.fold > summary .grow{margin-left:auto;display:flex;gap:10px;align-items:center}
+.fold-body{padding:22px}
+
+/* mini repo cards */
+.repogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.repo{border:1px solid var(--border);border-radius:var(--r-md);background:var(--panel-2);padding:15px}
+.repo h4{margin:0 0 9px;font-size:14px}
+.repo h4 a{color:var(--info)}
+.repo .meta{display:flex;gap:7px;margin-bottom:10px;flex-wrap:wrap}
+.repo p{margin:0 0 11px;font-size:12.5px;color:var(--ink-3);line-height:1.45}
+.repo .acts{display:flex;gap:8px}
+.repo.cache{background:var(--go-soft);border-color:color-mix(in srgb,var(--go) 30%,transparent)}
+.repo.cache h4{color:var(--go)}
+.repo.cache p{color:var(--ink-2)}
+
+/* ============================== DETAIL PAGE ============================== */
+.detail-top{display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-top:8px}
+.crumb{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-3);margin-bottom:14px}
+.crumb a{color:var(--ink-3)}.crumb a:hover{color:var(--seal)}
+.detail-top h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.01em}
+.detail-top .sub{display:flex;gap:10px;align-items:center;margin-top:9px;flex-wrap:wrap}
+.detail-top .right{margin-left:auto;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+
+.dlayout{display:grid;grid-template-columns:1fr 360px;gap:22px;margin-top:26px;align-items:start}
+@media(max-width:1080px){.dlayout{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px;min-width:0}
+.panel.sticky{position:sticky;top:84px}
+.panel h3{margin:0 0 4px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:9px}
+.panel .ph{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+.panel .ph .eyebrow{margin:0}
+.panel .ph .x{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.lead{font-size:14.5px;line-height:1.6;color:var(--ink)}
+
+/* feature ledger buckets */
+.buckets{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:640px){.buckets{grid-template-columns:1fr}}
+.bucket .bh{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  font-weight:600;color:var(--ink-3);margin-bottom:11px;padding-bottom:9px;border-bottom:1px solid var(--hairline)}
+.bucket .bh i{width:9px;height:9px;border-radius:2px}
+.bucket .bh .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.bucket ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.bucket li{font-size:13px;line-height:1.4;color:var(--ink-2);padding-left:15px;position:relative}
+.bucket li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:var(--border-strong)}
+.bucket.ship li{color:var(--ink)}.bucket.ship li::before{background:var(--ink)}
+.bucket.prog li::before{background:var(--ink-3)}
+
+/* lanes: decisions / history */
+.lane{display:flex;flex-direction:column}
+.lane .row{display:grid;grid-template-columns:auto 1fr;gap:14px;padding:13px 0;border-bottom:1px solid var(--hairline)}
+.lane .row:last-child{border-bottom:none}
+.lane .row .date{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);white-space:nowrap;padding-top:1px}
+.lane .row .body{font-size:13.5px;line-height:1.5}
+.lane .row .body b{font-weight:600}
+.lane .row .tagline{margin-top:4px}
+.tline{position:relative;padding-left:22px}
+.tline .row{border:none;padding:0 0 18px}
+.tline .row .date{grid-column:1/-1}
+.tline::before{content:"";position:absolute;left:5px;top:4px;bottom:14px;width:1.5px;background:var(--border)}
+.tline .node{position:absolute;left:0;width:11px;height:11px;border-radius:50%;background:var(--panel);border:2px solid var(--border-strong)}
+.tline .item{position:relative;padding-left:22px;padding-bottom:18px}
+.tline .item:last-child{padding-bottom:0}
+.tline .item::before{content:"";position:absolute;left:0;top:4px;width:11px;height:11px;border-radius:50%;background:var(--panel);border:2px solid var(--border-strong)}
+.tline .item .d{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.tline .item p{margin:3px 0 0;font-size:13.5px;line-height:1.5}
+
+/* execution plan phases */
+.phases{width:100%;border-collapse:collapse;font-size:13px}
+.phases th{text-align:left;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:600;padding:0 12px 10px;border-bottom:1px solid var(--border)}
+.phases td{padding:12px;border-bottom:1px solid var(--hairline);vertical-align:top}
+.phases tr:last-child td{border-bottom:none}
+.phases .ph-n{font-family:var(--mono);color:var(--ink-3);width:36px}
+.phases .st{font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--r-pill);white-space:nowrap}
+.st.done{background:var(--panel-2);color:var(--ink-3);border:1px solid var(--border)}
+.st.active{background:var(--seal-soft);color:var(--seal)}
+.st.planned{background:var(--panel-2);color:var(--ink-3);border:1px solid var(--border)}
+.phases tr.is-active td{background:var(--seal-soft)}
+
+/* metrics */
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.metric{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px}
+.metric .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.metric .v{font-size:22px;font-weight:600;margin-top:6px;font-variant-numeric:tabular-nums}
+.metric .v small{font-size:13px;color:var(--ink-3);font-weight:500}
+.metric .v.fresh{color:var(--ink)}
+.freshbar{margin-top:9px;height:5px;border-radius:var(--r-pill);background:var(--border);overflow:hidden}
+.freshbar i{display:block;height:100%;background:var(--ink-2);border-radius:var(--r-pill)}
+
+.roadprog{display:flex;align-items:center;gap:12px;margin-top:4px}
+.roadprog .track-bar{flex:1}
+.roadprog .pct{font-family:var(--mono);font-size:12px;color:var(--ink-2);white-space:nowrap}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px}
+.kv dt{color:var(--ink-3)}
+.kv dd{margin:0;color:var(--ink)}
+
+/* settings */
+.settings-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:22px;max-width:920px}
+.sfield label{display:block;font-size:13.5px;font-weight:600;margin-bottom:6px}
+.sfield .desc{font-size:12.5px;color:var(--ink-3);margin:0 0 10px;line-height:1.45}
+
+footer{border-top:1px solid var(--hairline);margin-top:40px;padding:26px 0}
+.foot-in{display:flex;align-items:center;gap:14px;color:var(--ink-faint);font-size:12.5px}
+.foot-in .eye{width:26px;height:17px;color:var(--ink-faint)}
+
+hr.div{border:none;border-top:1px solid var(--hairline);margin:0}
+
+/* ===== v2 overview restructure ===== */
+.greet{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:6px}
+.greet .gtext{flex:1;min-width:240px;display:flex;flex-direction:column;gap:3px}
+.greet .gtext h2{font-size:22px;font-weight:600;margin:2px 0 0;letter-spacing:.01em}
+.attn-pill{display:inline-flex;align-items:center;gap:13px;text-decoration:none;
+  background:var(--seal-soft);border:1px solid var(--seal-line);border-radius:var(--r-md);padding:11px 17px;transition:border-color var(--t-fast)}
+.attn-pill:hover{border-color:var(--seal)}
+.attn-pill .n{font-size:26px;font-weight:600;color:var(--seal);line-height:1;font-variant-numeric:tabular-nums}
+.attn-pill .lab{display:flex;flex-direction:column;line-height:1.3}
+.attn-pill .lab b{font-size:13px;color:var(--ink);font-weight:600}
+.attn-pill .lab span{font-size:12px;color:var(--ink-3)}
+
+.ov-layout{display:grid;grid-template-columns:1fr 322px;gap:26px;align-items:start;margin-top:8px}
+@media(max-width:1000px){.ov-layout{grid-template-columns:1fr}}
+.ov-main{min-width:0}
+
+/* accounts side panel — compact */
+.side-acct{position:sticky;top:84px}
+@media(max-width:1000px){.side-acct{position:static}}
+.acct-panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.acct-panel > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:15px 18px}
+.acct-panel > summary::-webkit-details-marker{display:none}
+.acct-panel > summary h3{margin:0;font-size:14.5px;font-weight:600}
+.acct-panel > summary .eyebrow{margin:0}
+.acct-panel > summary .chev{margin-left:auto;color:var(--ink-3);transition:transform var(--t-fast);font-size:11px}
+.acct-panel[open] > summary{border-bottom:1px solid var(--hairline)}
+.acct-panel[open] > summary .chev{transform:rotate(90deg)}
+.acct-c{display:flex;flex-direction:column;gap:10px;padding:14px 18px;border-bottom:1px solid var(--hairline)}
+.acct-row{display:flex;align-items:center;gap:11px}
+.acct-row .ring-wrap{width:34px;height:34px;flex:none}
+.acct-row .ring{width:34px;height:34px}
+.acct-row .ring-num{font-size:10px}
+.acct-row .info{flex:1;min-width:0}
+.alias-edit{display:flex;align-items:center;gap:4px}
+.alias-in{font:inherit;font-size:13.5px;font-weight:600;color:var(--ink);background:transparent;
+  border:1px solid transparent;border-radius:5px;padding:2px 5px;width:100%;max-width:150px;transition:all var(--t-fast)}
+.alias-in:hover{border-color:var(--border)}
+.alias-in:focus{outline:none;border-color:var(--seal);background:var(--panel-2);box-shadow:0 0 0 2px var(--seal-soft)}
+.icon-btn{flex:none;width:23px;height:23px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid transparent;background:transparent;color:var(--ink-3);border-radius:5px;cursor:pointer;font-size:12px;opacity:0;transition:all var(--t-fast)}
+.alias-edit:hover .icon-btn,.alias-in:focus + .icon-btn{opacity:1}
+.icon-btn:hover{background:var(--go-soft);color:var(--go);border-color:color-mix(in srgb,var(--go) 35%,transparent)}
+.prov-line{display:flex;align-items:center;gap:7px;margin-top:3px;padding-left:5px}
+.prov-line .when2{font-size:11px;color:var(--ink-faint)}
+.mini-session{flex:none;width:27px;height:27px;border-radius:7px;font-size:17px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);
+  background:var(--panel-2);color:var(--ink-2);cursor:pointer;transition:all var(--t-fast)}
+.mini-session:hover{background:var(--raised);color:var(--ink);border-color:var(--border-strong)}
+.wbar.mini{margin-top:0}
+.wbar.mini .lab{font-size:11px;margin-bottom:4px}
+.acct-foot2{padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+.remove-pop > summary{list-style:none;cursor:pointer;font-size:12.5px;color:var(--ink-3);display:inline-flex;align-items:center;gap:7px}
+.remove-pop > summary::-webkit-details-marker{display:none}
+.remove-pop > summary:hover{color:var(--seal)}
+.remove-pop > summary .chev{font-size:10px;transition:transform var(--t-fast)}
+.remove-pop[open] > summary .chev{transform:rotate(90deg)}
+.remove-pop .menu{margin-top:11px;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+.remove-pop .menu button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font:inherit;font-size:12.5px;color:var(--ink-2);background:var(--panel-2);border:none;border-bottom:1px solid var(--hairline);padding:9px 12px;cursor:pointer;text-align:left}
+.remove-pop .menu button:last-child{border-bottom:none}
+.remove-pop .menu button:hover{background:var(--seal-soft);color:var(--seal)}
+.remove-pop .menu .x{color:var(--ink-faint);font-size:12px}
+.remove-pop .menu button:hover .x{color:var(--seal)}
+
+/* card footer fix — disclosure full width below action row */
+.pc-foot{display:block;border-top:1px solid var(--hairline);padding-top:13px}
+.pc-actions{display:flex;gap:9px}
+.pc-actions .btn{flex:1}
+.pc-foot details.disc{margin-top:11px}
+
+
+/* ===== v3: sumi-e chrome, fixed left rail, welcome popup ===== */
+.sun-mark{width:26px;height:26px;border-radius:50%;flex:none;display:inline-block;
+  background:radial-gradient(circle at 38% 35%, color-mix(in srgb,var(--seal) 78%, #fff 34%), var(--seal) 64%, var(--seal-strong) 100%)}
+.sun-mark.big{width:54px;height:54px;margin:0 auto 4px;display:block;box-shadow:0 6px 22px -6px var(--seal-line)}
+
+#welcome{position:absolute;opacity:0;pointer-events:none}
+.welcome{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:color-mix(in srgb,var(--bg-2) 76%, transparent);backdrop-filter:blur(5px);animation:wfade .3s ease both}
+#welcome:checked ~ .welcome{display:none}
+@keyframes wfade{from{opacity:0}to{opacity:1}}
+.welcome-card{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-lift);max-width:430px;width:100%;padding:34px 32px 30px;text-align:center}
+.welcome-card .wm{height:152px;width:auto;image-rendering:pixelated;display:block;margin:6px auto 4px;
+  filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}
+.skin-light .welcome-card .wm{filter:drop-shadow(0 6px 14px rgba(40,38,32,.22))}
+.welcome-card h3{margin:6px 0 8px;font-size:22px;font-weight:600;letter-spacing:.02em}
+.welcome-card p{margin:0 0 22px;font-size:13.5px;color:var(--ink-2);line-height:1.6}
+.welcome-card .btn{padding:11px 22px;font-size:14px}
+
+.ov-shell{display:grid;grid-template-columns:300px minmax(0,1fr);gap:30px;align-items:start;padding-top:26px;padding-bottom:8px}
+@media(max-width:1000px){.ov-shell{grid-template-columns:1fr}}
+.rail{position:sticky;top:84px;align-self:start;display:flex;flex-direction:column}
+@media(max-width:1000px){.rail{position:static}}
+.ov-col{min-width:0;display:flex;flex-direction:column}
+.ov-col .greet{margin-top:0;margin-bottom:6px}
+.ov-col .shead{margin-top:14px}
+.ov-col .band{padding:22px 0}
+
+
+/* ===== v4: whole-card opens project; ink+white+red only ===== */
+.pcard{position:relative}
+.card-link{position:absolute;inset:0;z-index:0;border-radius:var(--r-lg)}
+.pcard > *:not(.card-link){position:relative;z-index:1}
+.pcard:hover{cursor:pointer}
+.pc-open{flex:none;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:7px;border:1px solid transparent;color:var(--ink-3);font-size:15px;transition:all var(--t-fast);text-decoration:none}
+.pcard:hover .pc-open{color:var(--ink);border-color:var(--border);background:var(--panel-2)}
+
+</style>
+</head>
+<body data-skin="dark">
+<input type="checkbox" id="skin" onclick="document.body.classList.toggle('skin-light',this.checked)">
+<input type="checkbox" id="welcome">
+<div class="welcome">
+  <div class="welcome-card">
+    <span class="sun-mark big"></span>
+    <img class="wm" src="data:image/png;base64,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" alt="Horus">
+    <h3>Horus is watching</h3>
+    <p>Your projects' continuity, kept coherent — vision, next actions, decisions and history, all in one calm place.</p>
+    <label class="btn btn-seal" for="welcome">Enter the dashboard</label>
+  </div>
+</div>
+
+<!-- ============================ HEADER ============================ -->
+<header class="top">
+  <div class="wrap top-in">
+    <div class="brand">
+      <!-- Eye of Horus — geometric falcon gaze, identity mark -->
+      <span class="sun-mark" aria-hidden="true"></span>
+      <div class="wordmark">
+        <b>Horus</b>
+        <small>project continuity &amp; control panel</small>
+      </div>
+    </div>
+    <nav class="tabs">
+      <a class="t-projects" href="#overview"><span class="dot"></span>Projects</a>
+      <a class="t-settings" href="#settings"><span class="dot"></span>Settings</a>
+    </nav>
+    <div class="top-right">
+      <label class="skin-btn" for="skin">
+        <span class="moon">◗ Dark</span><span class="sun">◖ Light</span>
+      </label>
+    </div>
+  </div>
+</header>
+
+<!-- ============================ OVERVIEW (COCKPIT) ============================ -->
+<main id="overview" class="page" data-screen-label="Projects overview">
+  <div class="wrap ov-shell">
+    <aside class="rail">
+      <details class="acct-panel" open>
+            <summary><span class="eyebrow">Usage</span><h3>Accounts</h3><span class="chev">▸</span></summary>
+
+            <div class="acct-c">
+              <div class="acct-row">
+                <div class="ring-wrap"><svg class="ring" viewBox="0 0 40 40"><circle class="track" cx="20" cy="20" r="17" pathLength="100"/><circle class="meter" cx="20" cy="20" r="17" pathLength="100" stroke="var(--border-strong)" style="stroke-dasharray:2 100"/></svg><span class="ring-num">0%</span></div>
+                <div class="info">
+                  <div class="alias-edit"><input class="alias-in" value="personal" aria-label="alias"><button class="icon-btn" title="Save alias">✓</button></div>
+                  <div class="prov-line"><span class="tag-prov">Claude</span></div>
+                </div>
+                <button class="mini-session" title="Start session">+</button>
+              </div>
+              <div class="wbar mini"><div class="lab"><b>Weekly 79%</b><span>resets 07-03</span></div><div class="track-bar"><i style="width:79%;background:var(--ink-3)"></i></div></div>
+            </div>
+
+            <div class="acct-c">
+              <div class="acct-row">
+                <div class="ring-wrap"><svg class="ring" viewBox="0 0 40 40"><circle class="track" cx="20" cy="20" r="17" pathLength="100"/></svg><span class="ring-num muted">––</span></div>
+                <div class="info">
+                  <div class="alias-edit"><input class="alias-in" value="personal2" aria-label="alias"><button class="icon-btn" title="Save alias">✓</button></div>
+                  <div class="prov-line"><span class="tag-prov">Claude</span><span class="when2">no usage yet</span></div>
+                </div>
+                <button class="mini-session" title="Start session">+</button>
+              </div>
+            </div>
+
+            <div class="acct-c">
+              <div class="acct-row">
+                <div class="ring-wrap"><svg class="ring" viewBox="0 0 40 40"><circle class="track" cx="20" cy="20" r="17" pathLength="100"/><circle class="meter" cx="20" cy="20" r="17" pathLength="100" stroke="var(--border-strong)" style="stroke-dasharray:2 100"/></svg><span class="ring-num">0%</span></div>
+                <div class="info">
+                  <div class="alias-edit"><input class="alias-in" value="work" aria-label="alias"><button class="icon-btn" title="Save alias">✓</button></div>
+                  <div class="prov-line"><span class="tag-prov">Claude</span></div>
+                </div>
+                <button class="mini-session" title="Start session">+</button>
+              </div>
+              <div class="wbar mini"><div class="lab"><b>Weekly 28%</b><span>resets 07-05</span></div><div class="track-bar"><i style="width:28%;background:var(--border-strong)"></i></div></div>
+            </div>
+
+            <div class="acct-c">
+              <div class="acct-row">
+                <div class="ring-wrap"><svg class="ring" viewBox="0 0 40 40"><circle class="track" cx="20" cy="20" r="17" pathLength="100"/><circle class="meter" cx="20" cy="20" r="17" pathLength="100" stroke="var(--ink-3)" style="stroke-dasharray:75 100"/></svg><span class="ring-num">75%</span></div>
+                <div class="info">
+                  <div class="alias-edit"><input class="alias-in" value="personal" aria-label="alias"><button class="icon-btn" title="Save alias">✓</button></div>
+                  <div class="prov-line"><span class="tag-prov codex">Codex</span><span class="when2">5h · resets 06-28</span></div>
+                </div>
+                <button class="mini-session" title="Start session">+</button>
+              </div>
+              <div class="wbar mini"><div class="lab"><b>Weekly 81%</b><span>resets 06-28</span></div><div class="track-bar"><i style="width:81%;background:var(--seal)"></i></div></div>
+            </div>
+
+            <div class="acct-foot2">
+              <button class="btn block">+ Add account</button>
+              <details class="remove-pop">
+                <summary><span class="chev">▸</span>Remove an account</summary>
+                <div class="menu">
+                  <button>personal <span class="muted">· Claude</span><span class="x">remove ✕</span></button>
+                  <button>personal2 <span class="muted">· Claude</span><span class="x">remove ✕</span></button>
+                  <button>work <span class="muted">· Claude</span><span class="x">remove ✕</span></button>
+                  <button>personal <span class="muted">· Codex</span><span class="x">remove ✕</span></button>
+                </div>
+              </details>
+            </div>
+          </details>
+          <p class="muted" style="font-size:11.5px;margin:13px 4px 0;line-height:1.5">Subscription auth only — friendly aliases shown, never raw account emails or IDs.</p>
+    </aside>
+    <div class="ov-col">
+      <div class="greet">
+        <div class="gtext">
+          <span class="eyebrow">Cockpit</span>
+          <h2>Good evening — 3 projects under watch</h2>
+          <span class="meta">last sync 7 minutes ago · <a href="#overview">refresh</a></span>
+        </div>
+        <a class="attn-pill" href="#detail">
+          <span class="n">1</span>
+          <span class="lab"><b>Needs attention</b><span>fabric-medallion · artifacts outdated</span></span>
+        </a>
+      </div>
+      <div class="shead">
+        <span class="eyebrow">Under watch</span>
+        <h2>Projects</h2>
+        <span class="meta">local projects · tracked on this machine</span>
+      </div>
+      <div class="grid">
+
+
+            <!-- horus-harness -->
+            <article class="pcard">
+          <a class="card-link" href="#detail" aria-label="Open project"></a>
+              <div class="pc-head">
+                <div class="pc-title">
+                  <h3><a href="#detail">horus-harness</a></h3>
+                  <div class="pc-sub"><span class="branch">⎇ main</span><span class="muted">· 7 hours ago</span></div>
+                </div>
+                <div class="pc-health"><span class="health-dot"><i></i>healthy</span></div><a class="pc-open" href="#detail" title="Open project" aria-label="Open project">↗</a>
+              </div>
+              <div class="statline">
+                <span class="badge">status active</span>
+                <span class="badge"><b class="mono">12</b>&nbsp;sessions</span>
+              </div>
+              <div class="next">
+                <div class="nh">
+                  <svg class="glyph" viewBox="0 0 64 40" fill="none"><path d="M4 20 Q24 7 47 17 Q26 31 4 20Z" stroke="currentColor" stroke-width="3"/><circle cx="25" cy="18.5" r="5.5" fill="currentColor"/></svg>
+                  <b>Next action</b>
+                </div>
+                <p>Resume polishing Horus for the user's use case — close the two small open items: phase-status vocabulary in the execution skill, or the deferred workflow-policy refinements.</p>
+                <div class="mode"><b>Recommended:</b> proceed directly with the frontier model
+                  <span class="hint">continue-as-is — small, low-ambiguity polish; high judgment, low volume → inline beats delegation.</span>
+                </div>
+              </div>
+              <div class="feat">
+                <div class="fbar"><i class="s" style="width:55%"></i><i class="p" style="width:24%"></i><i class="q" style="width:21%"></i></div>
+                <div class="fk">
+                  <span><i class="dot-s"></i><b>11</b> shipped</span>
+                  <span><i class="dot-p"></i><b>4</b> in progress</span>
+                  <span><i class="dot-q"></i><b>5</b> planned</span>
+                </div>
+              </div>
+              <div class="recap">
+                <span class="when">last session · 2026-06-30 02:07</span>
+                The Control-retirement consolidation dropped two quick-launch affordances the user relied on. Restored them on the main tab and added a remove-account button. 501 tests green.
+              </div>
+              <div class="pc-foot">
+                <details class="disc go">
+                  <summary><span class="chev">▸</span>Start a session</summary>
+                  <div class="disc-body lform">
+                    <div class="frow">
+                      <div class="field"><label>Agent</label><select><option>Claude Code</option><option>Codex</option></select></div>
+                      <div class="field"><label>Account</label><select><option>personal</option><option>work</option></select></div>
+                    </div>
+                    <div class="frow"><button class="btn btn-go" style="flex:1">▸ Resume — next action</button><button class="btn" style="flex:1">Fresh session</button></div>
+                  </div>
+                </details>
+              </div>
+            </article>
+
+            <!-- fabric (needs attention) -->
+            <article class="pcard">
+          <a class="card-link" href="#detail" aria-label="Open project"></a>
+              <div class="pc-head">
+                <div class="pc-title">
+                  <h3><a href="#detail">fabric-metadata-driven-medallion</a></h3>
+                  <div class="pc-sub"><span class="branch">⎇ main</span><span class="muted">· 5 days ago</span></div>
+                </div>
+                <div class="pc-health"><span class="health-dot warn"><i></i>1 warning</span></div><a class="pc-open" href="#detail" title="Open project" aria-label="Open project">↗</a>
+              </div>
+              <div class="statline">
+                <span class="badge">status active</span>
+                <span class="badge"><b class="mono">0</b>&nbsp;sessions</span>
+                <span class="badge seal"><span class="gd"></span>⚠ artifacts outdated</span>
+              </div>
+              <div class="next empty">
+                <div class="nh">
+                  <svg class="glyph" viewBox="0 0 64 40" fill="none"><path d="M4 20 Q24 7 47 17 Q26 31 4 20Z" stroke="currentColor" stroke-width="3"/></svg>
+                  <b>Next action</b>
+                </div>
+                <p>Not set — author <span class="mono">next_action</span> in roadmap.md, or refresh artifacts to re-derive it.</p>
+              </div>
+              <div class="roadprog">
+                <span class="muted" style="font-size:12px">roadmap</span>
+                <div class="track-bar"><i style="width:31%;background:var(--ink-3)"></i></div>
+                <span class="pct">5/16 · 31%</span>
+              </div>
+              <div class="feat">
+                <div class="fbar"><i class="s" style="width:31%"></i><i class="p" style="width:13%"></i><i class="q" style="width:56%"></i></div>
+                <div class="fk">
+                  <span><i class="dot-s"></i><b>5</b> shipped</span>
+                  <span><i class="dot-p"></i><b>2</b> in progress</span>
+                  <span><i class="dot-q"></i><b>9</b> planned</span>
+                </div>
+              </div>
+              <div class="recap none">No sessions yet — build the consolidated, non-blocking reconciliation.</div>
+              <div class="pc-foot">
+                <div class="pc-actions">
+                  <button class="btn btn-warn">↻ Refresh artifacts</button>
+                  
+                </div>
+                <details class="disc go">
+                  <summary><span class="chev">▸</span>Start a session</summary>
+                  <div class="disc-body lform">
+                    <div class="frow"><button class="btn btn-go" style="flex:1">▸ Resume — next action</button><button class="btn" style="flex:1">Fresh session</button></div>
+                  </div>
+                </details>
+              </div>
+            </article>
+
+            <!-- agentic-ttrpg (planning) -->
+            <article class="pcard">
+          <a class="card-link" href="#detail" aria-label="Open project"></a>
+              <div class="pc-head">
+                <div class="pc-title">
+                  <h3><a href="#detail">agentic-ttrpg</a></h3>
+                  <div class="pc-sub"><span class="branch">⎇ main</span><span class="muted">· 5 days ago</span><span class="badge warn" style="font-size:11px"><span class="gd"></span>uncommitted</span></div>
+                </div>
+                <div class="pc-health"><span class="health-dot plan"><i></i>planning</span></div><a class="pc-open" href="#detail" title="Open project" aria-label="Open project">↗</a>
+              </div>
+              <div class="statline">
+                <span class="badge">status planning</span>
+                <span class="badge"><b class="mono">0</b>&nbsp;sessions</span>
+                <span class="badge warn"><span class="gd"></span>5 warnings</span>
+              </div>
+              <div class="next empty">
+                <div class="nh">
+                  <svg class="glyph" viewBox="0 0 64 40" fill="none"><path d="M4 20 Q24 7 47 17 Q26 31 4 20Z" stroke="currentColor" stroke-width="3"/></svg>
+                  <b>Next action</b>
+                </div>
+                <p>Not set — describe the immediate focus in <span class="mono">project.md</span> to seed the continuity model.</p>
+              </div>
+              <div class="roadprog">
+                <span class="muted" style="font-size:12px">roadmap</span>
+                <div class="track-bar"><i style="width:0%;background:var(--ink-3)"></i></div>
+                <span class="pct">0/2 · 0%</span>
+              </div>
+              <div class="recap none">No sessions yet — one-paragraph description of what this project is.</div>
+              <div class="pc-foot">
+                <details class="disc go">
+                  <summary><span class="chev">▸</span>Start a session</summary>
+                  <div class="disc-body lform">
+                    <div class="frow"><button class="btn btn-go" style="flex:1">▸ Resume — next action</button><button class="btn" style="flex:1">Fresh session</button></div>
+                  </div>
+                </details>
+              </div>
+            </article>
+      </div>
+      <div class="band tight">
+        <details class="fold">
+        <summary>
+          <span class="chev">▸</span>
+          <h2>GitHub remote catalog</h2><span class="count">5 cloned here</span>
+          <span class="grow"><button class="btn sm" onclick="event.preventDefault()">↻ Refresh rafaelmjf</button></span>
+        </summary>
+        <div class="fold-body">
+          <div class="repogrid">
+            <div class="repo cache">
+              <h4>Catalog cache</h4>
+              <p>rafaelmjf — showing cached results from 2026-06-30 00:09; refreshing in background.</p>
+            </div>
+            <div class="repo">
+              <h4><a href="#detail">rafaelmjf/horus-harness</a></h4>
+              <div class="meta"><span class="branch">⎇ main</span><span class="badge go" style="font-size:11px"><span class="gd"></span>cloned here</span></div>
+              <p>Dashboard refocused on continuity; account usage + start/resume folded into the Projects tab.</p>
+              <div class="acts"><a class="btn sm" href="#detail">Open</a></div>
+            </div>
+            <div class="repo">
+              <h4><a href="#detail">rafaelmjf/rmjf-notes</a></h4>
+              <div class="meta"><span class="branch">⎇ main</span><span class="badge go" style="font-size:11px"><span class="gd"></span>cloned here</span></div>
+              <p>Describe the immediate focus here.</p>
+              <div class="acts"><button class="btn sm">Onboard</button></div>
+            </div>
+            <div class="repo">
+              <h4><a href="#detail">rafaelmjf/fabric-metadata-driven-medallion</a></h4>
+              <div class="meta"><span class="branch">⎇ main</span><span class="badge go" style="font-size:11px"><span class="gd"></span>cloned here</span></div>
+              <p>Build the consolidated, non-blocking reconciliation.</p>
+              <div class="acts"><a class="btn sm" href="#detail">Open</a></div>
+            </div>
+            <div class="repo">
+              <h4><a href="#detail">rafaelmjf/zorin-macos-wizard</a></h4>
+              <div class="meta"><span class="branch">⎇ main</span><span class="badge go" style="font-size:11px"><span class="gd"></span>cloned here</span></div>
+              <p>Describe the immediate focus here.</p>
+              <div class="acts"><button class="btn sm">Onboard</button></div>
+            </div>
+            <div class="repo">
+              <h4><a href="#detail">rafaelmjf/agentic-ttrpg</a></h4>
+              <div class="meta"><span class="branch">⎇ main</span><span class="badge go" style="font-size:11px"><span class="gd"></span>cloned here</span></div>
+              <p>Describe the immediate focus here.</p>
+              <div class="acts"><button class="btn sm">Onboard</button></div>
+            </div>
+          </div>
+        </div>
+      </details>
+      </div>
+      <div class="band tight">
+        <details class="fold">
+        <summary><span class="chev">▸</span><h2>Not tracked</h2><span class="count">15 repos · hidden from your watch list</span></summary>
+        <div class="fold-body">
+          <p class="muted" style="margin:0 0 18px;font-size:13px;max-width:680px">Onboard uses this machine's <span class="badge" style="font-size:10px">gh</span> GitHub login for clone/PR. The Claude/Codex account choice happens later, when you launch work on the project.</p>
+          <div class="repogrid">
+            <div class="repo"><h4><a href="#">rafaelmjf/agentic-gym-coach</a></h4><div class="meta"><span class="branch">⎇ master</span><span class="badge" style="font-size:11px">remote only</span></div><div class="acts"><button class="btn sm">Onboard</button><button class="btn btn-ghost sm">Ignore</button></div></div>
+            <div class="repo"><h4><a href="#">rafaelmjf/plotly_and_dash_for_bi</a></h4><div class="meta"><span class="branch">⎇ main</span><span class="badge" style="font-size:11px">remote only</span></div><p>Repository intended to test python libraries as replacement for BI tools such as Tableau and Power BI.</p><div class="acts"><button class="btn sm">Onboard</button><button class="btn btn-ghost sm">Ignore</button></div></div>
+            <div class="repo"><h4><a href="#">rafaelmjf/personal-website</a></h4><div class="meta"><span class="branch">⎇ main</span><span class="badge" style="font-size:11px">remote only</span></div><div class="acts"><button class="btn sm">Onboard</button><button class="btn btn-ghost sm">Ignore</button></div></div>
+            <div class="repo"><h4><a href="#">rafaelmjf/dash-sample-apps</a></h4><div class="meta"><span class="branch">⎇ main</span><span class="badge" style="font-size:11px">remote only</span></div><p>Open-source demos hosted on Dash Gallery.</p><div class="acts"><button class="btn sm">Onboard</button><button class="btn btn-ghost sm">Ignore</button></div></div>
+            <div class="repo"><h4><a href="#">rafaelmjf/engine-sim</a></h4><div class="meta"><span class="branch">⎇ master</span><span class="badge" style="font-size:11px">remote only</span></div><p>Combustion engine simulator that generates realistic audio.</p><div class="acts"><button class="btn sm">Onboard</button><button class="btn btn-ghost sm">Ignore</button></div></div>
+            <div class="repo"><h4><a href="#">rafaelmjf/awesome-dash</a></h4><div class="meta"><span class="branch">⎇ master</span><span class="badge" style="font-size:11px">remote only</span></div><p>A curated list of awesome Dash (plotly) resources.</p><div class="acts"><button class="btn sm">Onboard</button><button class="btn btn-ghost sm">Ignore</button></div></div>
+          </div>
+          <div style="margin-top:16px"><button class="btn btn-ghost sm">Show 9 more…</button></div>
+        </div>
+      </details>
+      </div>
+    </div>
+  </div>
+
+  <footer><div class="wrap foot-in">
+    <svg class="eye" viewBox="0 0 64 40" fill="none"><path d="M4 20 Q24 7 47 17 Q26 31 4 20Z" stroke="currentColor" stroke-width="2"/><circle cx="25" cy="18.5" r="4" fill="var(--seal)"/></svg>
+    Horus runs locally · single user · subscription auth only · deliberately lightweight
+  </div></footer>
+</main>
+
+<!-- ============================ PROJECT DETAIL ============================ -->
+<main id="detail" class="page" data-screen-label="Project detail — horus-harness">
+  <section class="band">
+    <div class="wrap">
+      <div class="crumb"><a href="#overview">Projects</a> <span>›</span> <span class="mono">horus-harness</span></div>
+      <div class="detail-top">
+        <div>
+          <h1>horus-harness</h1>
+          <div class="sub">
+            <span class="branch">⎇ main</span>
+            <span class="muted">· clean · 7 hours ago</span>
+            <span class="health-dot"><i></i>healthy</span>
+            <span class="badge">status active</span>
+            <span class="badge"><b class="mono">12</b>&nbsp;sessions</span>
+          </div>
+        </div>
+        <div class="right">
+          <button class="btn btn-warn">↻ Refresh artifacts</button>
+          <a class="btn" href="#overview">← Back</a>
+        </div>
+      </div>
+
+      <div class="dlayout">
+        <!-- main continuity column -->
+        <div class="col">
+
+          <!-- current focus -->
+          <div class="panel">
+            <div class="ph"><span class="eyebrow">Current focus</span><span class="x mono">.horus/project.md</span></div>
+            <p class="lead">Dashboard refocused on continuity: the Control session-cockpit was retired (completing the Omnigent freeze-the-cockpit stance), with account usage and start/resume folded into the Projects tab. Project lifecycle is rounded out — onboard / one-click upgrade / offboard. Horus stays the durable memory plane; orchestration is ceded to Omnigent.</p>
+          </div>
+
+          <!-- NEXT + mode -->
+          <div class="panel">
+            <div class="ph"><span class="eyebrow">Roadmap · next</span><span class="x mono">.horus/roadmap.md</span></div>
+            <div class="next">
+              <div class="nh">
+                <svg class="glyph" viewBox="0 0 64 40" fill="none"><path d="M4 20 Q24 7 47 17 Q26 31 4 20Z" stroke="currentColor" stroke-width="3"/><circle cx="25" cy="18.5" r="5.5" fill="currentColor"/></svg>
+                <b>Next action</b>
+              </div>
+              <p>Resume polishing Horus for the user's use case. Open small items: (a) the pilot tuning finding — phase-status vocabulary (planned / delegated / accepted / blocked) in the horus-execution skill + execution.md template; or (b) the two deferred workflow-policy refinements (project [workflow] into the managed block; per-project git-synced override).</p>
+              <div class="mode"><b>Recommended mode:</b> proceed directly with the frontier model
+                <span class="hint">continue-as-is — small, low-ambiguity doc/skill polish; high judgment, low volume → inline beats delegation.</span>
+              </div>
+            </div>
+            <div class="roadprog" style="margin-top:16px">
+              <span class="muted" style="font-size:12px">roadmap progress</span>
+              <div class="track-bar"><i style="width:62%;background:var(--ink-3)"></i></div>
+              <span class="pct">8/13 · 62%</span>
+            </div>
+          </div>
+
+          <!-- features ledger -->
+          <div class="panel">
+            <div class="ph"><span class="eyebrow">Features ledger</span><span class="x mono">.horus/features.md</span></div>
+            <div class="buckets">
+              <div class="bucket">
+                <div class="bh"><i class="dot-q"></i>Planned<span class="n">5</span></div>
+                <ul>
+                  <li>rulesync projection to other tools</li>
+                  <li>Companion status signals</li>
+                  <li>Autonomous routine variant (Horus spawns the agent)</li>
+                  <li>LLM-based <span class="mono">horus infer</span></li>
+                </ul>
+              </div>
+              <div class="bucket prog">
+                <div class="bh"><i class="dot-p"></i>In progress<span class="n">4</span></div>
+                <ul>
+                  <li>Proper native desktop app (window lifecycle, tray, icon)</li>
+                  <li>Agent execution layer (MVP 3→4)</li>
+                  <li>Routine + skill validation on a real project</li>
+                </ul>
+              </div>
+              <div class="bucket ship">
+                <div class="bh"><i class="dot-s"></i>Shipped<span class="n">11</span></div>
+                <ul>
+                  <li>Dashboard account-management controls</li>
+                  <li>Minimum-context resume handoff</li>
+                  <li>Dashboard NEXT implementation-mode hint</li>
+                  <li>GitHub untracked-repo onboarding</li>
+                  <li>Artifact-staleness badge</li>
+                  <li>Active execution-plan lane</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- decisions + history -->
+          <div class="panel">
+            <div class="ph"><span class="eyebrow">Decisions &amp; history</span><span class="x mono">.horus/decisions.md · history.md</span></div>
+            <div class="buckets" style="grid-template-columns:1fr 1fr">
+              <div>
+                <div class="bh" style="display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--ink-3);margin-bottom:14px;padding-bottom:9px;border-bottom:1px solid var(--hairline)">Durable decisions</div>
+                <div class="lane">
+                  <div class="row"><span class="date">06-29</span><div class="body"><b>Cockpit retired.</b> Session-cockpit tab removed; usage + launch live in Projects.<div class="tagline"><span class="badge seal" style="font-size:10px"><span class="gd"></span>reversal</span></div></div></div>
+                  <div class="row"><span class="date">06-24</span><div class="body"><b>Subscription auth only.</b> Never surface raw account emails/IDs — friendly aliases only.</div></div>
+                  <div class="row"><span class="date">06-21</span><div class="body"><b>Orchestration ceded to Omnigent.</b> Horus is the durable memory plane, not an orchestrator.</div></div>
+                </div>
+              </div>
+              <div>
+                <div class="bh" style="display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--ink-3);margin-bottom:14px;padding-bottom:9px;border-bottom:1px solid var(--hairline)">Recent history</div>
+                <div class="tline">
+                  <div class="item"><span class="d mono">06-30 02:07</span><p>Restored two quick-launch affordances + remove-account button. 501 tests green.</p></div>
+                  <div class="item"><span class="d mono">06-28 19:40</span><p>Folded account usage strip into Projects; async-loaded panel.</p></div>
+                  <div class="item"><span class="d mono">06-26 11:02</span><p>Shipped artifact-staleness badge + one-click refresh.</p></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- execution plan -->
+          <div class="panel">
+            <div class="ph"><span class="eyebrow">Active execution plan</span><span class="x mono">.horus/execution.md</span></div>
+            <table class="phases">
+              <thead><tr><th class="ph-n">#</th><th>Phase</th><th>Owner</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td class="ph-n">01</td><td>Retire Control cockpit; move usage to Projects</td><td class="muted">inline</td><td><span class="st done">done</span></td></tr>
+                <tr><td class="ph-n">02</td><td>Restore quick-launch + remove-account affordances</td><td class="muted">inline</td><td><span class="st done">done</span></td></tr>
+                <tr class="is-active"><td class="ph-n">03</td><td>Phase-status vocabulary in execution skill + template</td><td class="muted">inline</td><td><span class="st active">active</span></td></tr>
+                <tr><td class="ph-n">04</td><td>Workflow-policy refinements (managed block + per-project override)</td><td class="muted">inline</td><td><span class="st planned">planned</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+        <!-- sidebar -->
+        <div class="col">
+
+          <!-- start a session -->
+          <div class="panel sticky">
+            <h3>
+              <svg style="width:17px;height:12px;color:var(--seal)" viewBox="0 0 64 40" fill="none"><path d="M4 20 Q24 7 47 17 Q26 31 4 20Z" stroke="currentColor" stroke-width="3"/><circle cx="25" cy="18.5" r="5.5" fill="currentColor"/></svg>
+              Start a session
+            </h3>
+            <p class="muted" style="font-size:12.5px;margin:0 0 16px">Launch an attended CLI against this repo.</p>
+            <div class="lform">
+              <div class="frow">
+                <div class="field"><label>Agent</label><select><option>Claude Code</option><option>Codex</option></select></div>
+                <div class="field"><label>Account</label><select><option>personal</option><option>work</option><option>personal2</option></select></div>
+              </div>
+              <div class="field"><label>Permission posture</label>
+                <select><option>Default — prompt for edits</option><option>Plan-only (read &amp; propose)</option><option>Accept edits in workspace</option></select>
+              </div>
+              <div class="frow"><button class="btn btn-go" style="flex:1">▸ Resume — next action</button><button class="btn" style="flex:1">Fresh session</button></div>
+            </div>
+          </div>
+
+          <!-- context metrics -->
+          <div class="panel">
+            <div class="ph"><span class="eyebrow">Context cache</span></div>
+            <div class="metrics">
+              <div class="metric"><div class="k">Freshness</div><div class="v fresh">Fresh</div><div class="freshbar"><i style="width:88%"></i></div></div>
+              <div class="metric"><div class="k">Age</div><div class="v">3<small>h</small></div></div>
+              <div class="metric"><div class="k">Token overhead</div><div class="v">2.4<small>k</small></div></div>
+              <div class="metric"><div class="k">Lanes loaded</div><div class="v">2<small>/6</small></div></div>
+            </div>
+            <p class="muted" style="font-size:12px;margin:14px 0 0">Lazy-loads only the lanes a task needs — execution &amp; project loaded; features / decisions / history / sessions deferred.</p>
+          </div>
+
+          <!-- last session -->
+          <div class="panel">
+            <div class="ph"><span class="eyebrow">Last session</span><span class="x mono">06-30 02:07</span></div>
+            <p class="lead" style="font-size:13.5px">The Control-retirement consolidation dropped two quick-launch affordances the user relied on. Restored them on the main tab and added a remove-account button. 501 tests green.</p>
+            <dl class="kv" style="margin-top:14px">
+              <dt>Account</dt><dd>personal <span class="muted">· Claude</span></dd>
+              <dt>Duration</dt><dd>1h 12m</dd>
+              <dt>Files</dt><dd>9 changed · 501 tests ✓</dd>
+            </dl>
+          </div>
+
+          <!-- manage integration -->
+          <div class="panel">
+            <div class="ph"><span class="eyebrow">Manage Horus integration</span></div>
+            <div class="lform">
+              <button class="btn btn-go block">↻ Refresh artifacts from repo</button>
+              <button class="btn block">Stop tracking — keep <span class="mono" style="margin:0 4px">.horus/</span> files</button>
+              <button class="btn btn-danger block">Remove completely (delete .horus/)</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer><div class="wrap foot-in">
+    <svg class="eye" viewBox="0 0 64 40" fill="none"><path d="M4 20 Q24 7 47 17 Q26 31 4 20Z" stroke="currentColor" stroke-width="2"/><circle cx="25" cy="18.5" r="4" fill="var(--seal)"/></svg>
+    Horus runs locally · single user · subscription auth only · deliberately lightweight
+  </div></footer>
+</main>
+
+<!-- ============================ SETTINGS ============================ -->
+<main id="settings" class="page" data-screen-label="Settings">
+  <section class="band">
+    <div class="wrap">
+      <div class="shead"><span class="eyebrow">Configuration</span><h2>Settings</h2><span class="meta">workflow policy applies to every tracked project</span></div>
+      <div class="panel" style="max-width:980px">
+        <div class="settings-form">
+          <div class="sfield">
+            <label>Default agent</label>
+            <p class="desc">Pre-selected when you start a session.</p>
+            <select><option>Claude Code</option><option>Codex</option><option>Ask each time</option></select>
+          </div>
+          <div class="sfield">
+            <label>Default permission posture</label>
+            <p class="desc">How much the agent may do without prompting.</p>
+            <select><option>Prompt for edits</option><option>Plan-only (read &amp; propose)</option><option>Accept edits in workspace</option></select>
+          </div>
+          <div class="sfield">
+            <label>Start mode</label>
+            <p class="desc">Fresh context or resume from the continuity handoff.</p>
+            <select><option>Resume from handoff</option><option>Fresh</option></select>
+          </div>
+          <div class="sfield">
+            <label>Artifact staleness threshold</label>
+            <p class="desc">Flag a project when its <span class="mono">.horus/</span> files lag the repo by more than…</p>
+            <select><option>1 day</option><option selected>3 days</option><option>7 days</option><option>Never</option></select>
+          </div>
+          <div class="sfield">
+            <label>Context loading</label>
+            <p class="desc">Stay lightweight — load lanes lazily, or eager-load all six.</p>
+            <select><option>Lazy (recommended)</option><option>Eager — all lanes</option></select>
+          </div>
+          <div class="sfield">
+            <label>Account ID display</label>
+            <p class="desc">Locked to aliases by product policy — raw IDs are never shown.</p>
+            <select disabled><option>Friendly aliases only</option></select>
+          </div>
+          <div class="sfield">
+            <label>GitHub catalog refresh</label>
+            <p class="desc">How often to re-poll your remote repo list.</p>
+            <select><option>On open</option><option selected>Every 6 hours</option><option>Daily</option><option>Manual only</option></select>
+          </div>
+          <div class="sfield">
+            <label>Theme</label>
+            <p class="desc">Or use the toggle in the header.</p>
+            <select><option>Match system</option><option selected>Dark (sumi ink)</option><option>Light (washi)</option></select>
+          </div>
+        </div>
+        <div style="margin-top:24px;display:flex;gap:10px;border-top:1px solid var(--hairline);padding-top:20px">
+          <button class="btn btn-seal">Save policy</button>
+          <a class="btn btn-ghost" href="#overview">Cancel</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer><div class="wrap foot-in">
+    <svg class="eye" viewBox="0 0 64 40" fill="none"><path d="M4 20 Q24 7 47 17 Q26 31 4 20Z" stroke="currentColor" stroke-width="2"/><circle cx="25" cy="18.5" r="4" fill="var(--seal)"/></svg>
+    Horus runs locally · single user · subscription auth only · deliberately lightweight
+  </div></footer>
+</main>
+
+<script>
+/* tiny vanilla — clipboard only */
+function cp(b){
+  var t=b.getAttribute('data-cmd');
+  navigator.clipboard&&navigator.clipboard.writeText(t);
+  var o=b.textContent;b.textContent='Copied ✓';b.classList.add('done');
+  setTimeout(function(){b.textContent=o;b.classList.remove('done')},1400);
+}
+</script>
+</body>
+</html>

@@ -104,22 +104,51 @@ def ensure_dashboard_for_open(
     return ensure_dashboard(host, port, start=start)
 
 
+def _terminate_process_tree(process: subprocess.Popen[str], *, timeout: float = 2.0) -> None:
+    """Terminate ``process`` and any children it spawned.
+
+    Windows virtualenv launchers can leave the real ``pythonw.exe`` child alive if
+    only the immediate ``Popen`` handle is terminated. ``taskkill /T`` is the
+    platform tool that reaps that whole tree; other platforms keep the previous
+    direct terminate/kill behavior.
+    """
+    if sys.platform == "win32" and getattr(process, "pid", None):
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                timeout=timeout,
+                check=False,
+            )
+            try:
+                process.wait(timeout=timeout)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            return
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    try:
+        process.terminate()
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+            process.wait(timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    except OSError:
+        pass
+
+
 def stop_dashboard(dashboard: DashboardProcess, *, timeout: float = 2.0) -> None:
     """Terminate a dashboard server *this* companion spawned, so it doesn't outlive
     the mascot and pile up as an orphan. No-op when the dashboard was reused (an
     existing one was already live) or none was started."""
     if dashboard.started and dashboard.process is not None:
-        try:
-            dashboard.process.terminate()
-            dashboard.process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            try:
-                dashboard.process.kill()
-                dashboard.process.wait(timeout=timeout)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-        except OSError:
-            pass
+        _terminate_process_tree(dashboard.process, timeout=timeout)
 
 
 def relaunch_without_console() -> bool:
@@ -292,16 +321,7 @@ def stop_browser(process: subprocess.Popen[str] | None, *, timeout: float = 2.0)
     never touches the user's everyday browser. No-op in tab mode (process is None)."""
     if process is None or process.poll() is not None:
         return
-    try:
-        process.terminate()
-        process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        try:
-            process.kill()
-        except OSError:
-            pass
-    except OSError:
-        pass
+    _terminate_process_tree(process, timeout=timeout)
 
 
 def mascot_asset_path() -> Path:
