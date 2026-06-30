@@ -117,6 +117,40 @@ def test_accounts_strip_empty_state():
     assert "No agent account detected" in dashboard._accounts_strip([])
 
 
+def test_accounts_strip_has_per_account_launch_and_remove():
+    strip = dashboard._accounts_strip([
+        {"alias": "work", "agent": "claude", "five_pct": 50.0, "week_pct": 10.0,
+         "five_reset": "", "week_reset": ""},
+    ])
+    # "+ session" launches a native terminal as that account (not the retired in-app PTY).
+    assert "+ session" in strip and "value='window'" in strip and "value='app'" not in strip
+    # Remove-account button (red, confirm).
+    assert "action='/account-remove'" in strip and "btn-danger" in strip
+
+
+def test_process_account_remove_unmaps(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.set_account_config_dir("personal", str(tmp_path / "p"))
+    assert "personal" in config.load_account_config_dirs()
+    assert dashboard.process_account_remove({"alias": "personal"}) == "account=removed"
+    assert "personal" not in config.load_account_config_dirs()
+    # Removing an unknown account is reported, not an error.
+    assert dashboard.process_account_remove({"alias": "nope"}) == "account=absent"
+
+
+def test_account_remove_notice():
+    assert "removed" in dashboard._launch_notice({"account": ["removed"]})
+
+
+def test_project_column_has_launch_disclosure(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path / "proj", assume_yes=True, no_input=True)
+    p = dashboard.load_project(str(tmp_path / "proj"))
+    col = dashboard._project_column(p, 0, [{"alias": "work"}])
+    assert "<details class='launch'>" in col and "Start a session" in col
+    assert "action='/launch'" in col and "name='agent'" in col
+
+
 def test_dashboard_server_is_single_instance():
     # The leak fix: only one dashboard may hold a port. Default ThreadingHTTPServer
     # allows duplicate binds on Windows; POSIX keeps reuse enabled so a clean restart

@@ -462,7 +462,8 @@ form.launch-form select { background: #0b0d12; color: #e6e6e6; border: 1px solid
 form.launch-form .modes { display: flex; flex-direction: column; gap: 3px; }
 form.launch-form .modes label { display: flex; align-items: center; gap: 6px; }
 button.start { font: inherit; cursor: pointer; }
-form.acct-launch { margin-left: auto; }
+.acct-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.acct-actions form { margin: 0; }
 .acct-edit { margin-top: 4px; display: flex; gap: 5px; align-items: center; }
 .acct-edit input { width: 118px; min-width: 0; background: #0b0d12; color: #e6e6e6;
                    border: 1px solid #284058; border-radius: 5px; padding: 3px 5px; font-size: 12px; }
@@ -983,7 +984,7 @@ def _features_buckets_html(p: dict[str, Any]) -> str:
     )
 
 
-def _project_column(p: dict[str, Any], i: int) -> str:
+def _project_column(p: dict[str, Any], i: int, aliases: list[dict[str, Any]] | None = None) -> str:
     missing = "" if p["exists"] else " <span class='health-fail'>(no .horus/)</span>"
     why = f"<p class='why'>{html.escape(p['tagline'])}</p>" if p["tagline"] else ""
     _artifacts_pill = (
@@ -1007,9 +1008,13 @@ def _project_column(p: dict[str, Any], i: int) -> str:
         f"{_progress_html(p, href=f'/project?i={i}#roadmap')}"
         f"{_remaining_items_html(p)}</div>"
     )
+    launch = (
+        "<details class='launch'><summary>&#9654; Start a session</summary>"
+        f"<div class='launch-body'>{_project_launch_form(i, p, aliases or [])}</div></details>"
+    )
     return (
         f"<div class='col'><h2><a href='/project?i={i}'>{html.escape(p['name'])}</a>{missing}</h2>"
-        f"{why}{pills}{last}{roadmap}{_features_buckets_html(p)}"
+        f"{why}{pills}{last}{roadmap}{_features_buckets_html(p)}{launch}"
         f"{_offload_control(i, compact=True)}</div>"
     )
 
@@ -1269,7 +1274,8 @@ def render_index(
             + remote
         )
         return _page("Horus", body, live=live)
-    cols = "".join(_project_column(p, i) for i, p in enumerate(projects))
+    launch_aliases = [{"alias": a} for a in sorted(_known_aliases())]
+    cols = "".join(_project_column(p, i, launch_aliases) for i, p in enumerate(projects))
     return _page("Horus", f"{notice}{accounts_strip}<div class='columns'>{cols}</div>{remote}", live=live)
 
 
@@ -1543,10 +1549,14 @@ def _accounts_strip(accounts: list[dict[str, Any]]) -> str:
             if a.get("week_reset"):
                 label += f" · resets {a['week_reset']}"
             week_bar = _usage_bar(a["week_pct"], label)
+        actions = (
+            f"<div class='acct-actions'>{_account_launch_form(a['alias'], agent)}"
+            f"{_account_remove_form(a['alias'])}</div>"
+        )
         rows.append(
             f"<div class='acct'>{_ring(a['five_pct'])}"
             f"<div><div class='who'>{html.escape(a['alias'])}{badge}</div>{reset}"
-            f"{_account_alias_form(a)}</div></div>{week_bar}"
+            f"{_account_alias_form(a)}</div>{actions}</div>{week_bar}"
         )
     return f"<div class='section'><h2>Accounts</h2><div class='card'>{''.join(rows)}{add_form}</div></div>"
 
@@ -1581,14 +1591,26 @@ def _account_add_form() -> str:
 
 
 def _account_launch_form(alias: str, agent: str = "claude") -> str:
-    """A one-click "fresh session as this account" button (opens an in-app tab)."""
+    """One-click "fresh session as this account" — opens the agent's TUI in a native
+    OS terminal (home dir; no project context)."""
     return (
-        "<form class='acct-launch' method='post' action='/launch'>"
+        "<form class='acct-launch' method='post' action='/launch' style='display:inline'>"
         f"<input type='hidden' name='account' value='{html.escape(alias, quote=True)}'>"
         f"<input type='hidden' name='agent' value='{html.escape(agent, quote=True)}'>"
         "<input type='hidden' name='mode' value='fresh'>"
-        "<button class='start' type='submit' name='target' value='app' "
-        "title='Open a fresh in-app session as this account'>+ session</button></form>"
+        "<button class='start' type='submit' name='target' value='window' "
+        "title='Open a fresh session as this account in a native terminal'>+ session</button></form>"
+    )
+
+
+def _account_remove_form(alias: str) -> str:
+    """Forget an account (unmaps it from Horus; the login dir on disk is left intact)."""
+    return (
+        "<form method='post' action='/account-remove' style='display:inline' "
+        "onsubmit='return confirm(\"Remove this account from Horus? (its login files are "
+        "left on disk)\")'>"
+        f"<input type='hidden' name='alias' value='{html.escape(alias, quote=True)}'>"
+        "<button class='btn-danger' type='submit' title='Forget this account'>remove</button></form>"
     )
 
 
@@ -1792,6 +1814,10 @@ def _launch_notice(params: dict[str, list[str]]) -> str:
         return "<div class='banner ok'>Account mapping added.</div>"
     if params.get("account") == ["alias"]:
         return "<div class='banner ok'>Account alias updated.</div>"
+    if params.get("account") == ["removed"]:
+        return "<div class='banner ok'>Account removed from Horus (login files left on disk).</div>"
+    if params.get("account") == ["absent"]:
+        return "<div class='banner err'>Nothing to remove for that account.</div>"
     if params.get("account") == ["login-started"]:
         return (
             "<div class='banner ok'>Account created &mdash; a terminal opened to sign in. "
@@ -2021,6 +2047,14 @@ def process_account_add(form: dict[str, str]) -> str:
     else:
         return "error=" + quote_plus("unknown account agent")
     return "account=added"
+
+
+def process_account_remove(form: dict[str, str]) -> str:
+    alias = (form.get("alias") or "").strip()
+    if not alias:
+        return "error=" + quote_plus("account alias is required")
+    removed = config.remove_account(alias)
+    return "account=removed" if removed else "account=absent"
 
 
 def process_account_login(form: dict[str, str], *, launch_login: Any = None) -> str:
@@ -2377,6 +2411,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/account-add",
             "/account-login",
             "/account-alias",
+            "/account-remove",
             "/github-refresh",
             "/github-onboard",
             "/github-ignore",
@@ -2417,6 +2452,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/account-login":
             self._redirect(f"/?{process_account_login(self._read_form())}")
+            return
+        if parsed.path == "/account-remove":
+            self._redirect(f"/?{process_account_remove(self._read_form())}")
             return
         if parsed.path == "/account-alias":
             self._redirect(f"/?{process_account_alias(self._read_form())}")
