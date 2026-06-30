@@ -414,8 +414,8 @@ main { padding: 24px 28px; max-width: 1320px; }
 .bar > span { display: block; height: 100%; background: #57d39a; }
 .progress-label { font-size: 12px; color: #8a93a6; }
 .progress-label a { color: #8a93a6; text-decoration: underline dotted; }
-details.tasks { margin: 8px 0; border: 1px solid #232733; border-radius: 8px; padding: 6px 12px; background: #12141b; }
-details.tasks summary { cursor: pointer; font-size: 13px; color: #b9c2d0; }
+details.tasks { margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--panel-2); }
+details.tasks summary { cursor: pointer; font-size: 13px; color: var(--ink-2); }
 details.tasks ul { margin: 8px 0 4px; }
 details.tasks li { list-style: none; margin-left: -16px; }
 .t-done { color: #8a93a6; } .t-done .mk { color: #57d39a; }
@@ -495,9 +495,7 @@ button.linkbtn:hover { color: #b9c2d0; }
 .xterm-host { height: 420px; }
 .xterm-host .xterm { height: 100%; }
 /* Action buttons: green = refresh/upgrade (go), red = remove completely, neutral = keep. */
-button.btn-go { font: inherit; font-size: 11px; cursor: pointer; color: #04130b;
-    background: #57d39a; border: 1px solid #57d39a; border-radius: 999px; padding: 1px 9px; font-weight: 600; }
-button.btn-go:hover { background: #6fe0ac; }
+/* legacy pill btn-go removed; .btn + .btn-go (sumi-e) own this now */
 button.btn-danger { font: inherit; font-size: 12px; cursor: pointer; color: #fff0f1;
     background: #b1404f; border: 1px solid #c9505f; border-radius: 6px; padding: 4px 12px; font-weight: 600; }
 button.btn-danger:hover { background: #c64d5d; }
@@ -604,7 +602,7 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         f"<link rel='icon' href='/favicon.ico?v={icon_key}' sizes='any'>"
         f"<link rel='icon' type='image/png' href='/assets/icon.png?v={icon_key}'>"
         f"<style>{_STYLE}</style>"
-        "<script>try{if(localStorage.getItem('horus_skin')==='light')document.documentElement.classList.add('skin-light')}catch(e){}</script>"
+        "<script>try{if(localStorage.getItem('horus_skin')!=='dark')document.documentElement.classList.add('skin-light')}catch(e){document.documentElement.classList.add('skin-light')}</script>"
         "</head><body>"
         "<input type='checkbox' id='skin' onclick=\"var l=document.documentElement.classList.toggle('skin-light');try{localStorage.setItem('horus_skin',l?'light':'dark')}catch(e){};this.checked=l\">"
         "<input type='checkbox' id='welcome'>"
@@ -1416,6 +1414,9 @@ def render_settings(policy: dict[str, str], *, saved: bool = False) -> str:
             f"<select name='{html.escape(key, quote=True)}'>{opts}</select></div>"
         )
     fields.extend([
+        "<div class='sfield'><label>Theme</label><p class='desc'>Default appearance. Light is the default; the header toggle changes it too. Stored in this browser.</p>"
+        "<select id='theme-sel' onchange=\"try{localStorage.setItem('horus_skin',this.value)}catch(e){};document.documentElement.classList.toggle('skin-light',this.value==='light')\">"
+        "<option value='light'>Light</option><option value='dark'>Dark</option></select></div>",
         "<div class='sfield'><label>Default agent</label><p class='desc'>Pre-selected when starting a session.</p><select disabled><option>Choose at launch</option></select></div>",
         "<div class='sfield'><label>Account ID display</label><p class='desc'>Locked by product policy; raw IDs are never shown.</p><select disabled><option>Friendly aliases only</option></select></div>",
         "<div class='sfield'><label>Context loading</label><p class='desc'>Keep startup light and load lanes as needed.</p><select disabled><option>Lazy</option></select></div>",
@@ -1430,6 +1431,7 @@ def render_settings(policy: dict[str, str], *, saved: bool = False) -> str:
         "<div class='settings-actions'><button class='btn btn-seal' type='submit'>Save</button>"
         "<a class='btn' href='/'>Cancel</a></div>"
         "</form></div></div></section>"
+        "<script>try{document.getElementById('theme-sel').value=(localStorage.getItem('horus_skin')==='dark')?'dark':'light'}catch(e){}</script>"
         f"{_footer_html()}"
     )
     return inner
@@ -1667,7 +1669,7 @@ def _upgrade_button(index: int) -> str:
     return (
         " <form method='post' action='/upgrade-project' style='display:inline'>"
         f"<input type='hidden' name='project' value='{index}'>"
-        "<button class='btn-go' type='submit' "
+        "<button class='btn btn-go' type='submit' "
         "title='Refresh Horus-managed artifacts to the installed version'>Refresh now</button>"
         "</form>"
     )
