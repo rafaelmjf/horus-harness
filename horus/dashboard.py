@@ -15,7 +15,9 @@ known set, and the POST is same-origin-guarded (the server binds loopback only).
 from __future__ import annotations
 
 import html
+import os
 import re
+import subprocess
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -957,8 +959,12 @@ def _task_li(t: dict[str, Any]) -> str:
     )
 
 
-def _breakdown_html(p: dict[str, Any]) -> str:
-    """The items behind the progress count: open/in-progress and completed, grouped."""
+def _breakdown_html(p: dict[str, Any], *, completed: bool = True) -> str:
+    """The items behind the progress count: open/in-progress and (optionally) completed.
+
+    The dashboard passes ``completed=False`` to keep the detail page focused on
+    open work — completed items only grow and live in the file (open it to see all).
+    """
     tasks = p["tasks"]
     if not tasks:
         return markdown.render(p["roadmap_body"]) if p["roadmap_body"] else ""
@@ -971,7 +977,9 @@ def _breakdown_html(p: dict[str, Any]) -> str:
             f"<details class='tasks' open><summary>Open &amp; in progress ({len(open_tasks)})</summary>"
             f"<ul>{items}</ul></details>"
         )
-    if done_tasks:
+    elif completed:
+        out.append("<p class='muted' style='font-size:13px'>No open roadmap items.</p>")
+    if completed and done_tasks:
         items = "".join(_task_li(t) for t in done_tasks)
         out.append(
             f"<details class='tasks'><summary>Completed ({len(done_tasks)})</summary>"
@@ -1649,13 +1657,29 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
         f"<table>{rows}</table></div>"
     )
     if p.get("decisions_body") or p.get("history_body"):
+        decisions_part = ""
+        if p.get("decisions_body") and index is not None:
+            decisions_part = (
+                "<details class='tasks'><summary>Durable decisions</summary>"
+                f"{markdown.render(p.get('decisions_body', ''))}</details>"
+                f"<div style='margin-top:8px'>{_open_lane_button(idx, 'decisions', 'Open decisions.md')}</div>"
+            )
+        elif p.get("decisions_body"):
+            decisions_part = (
+                "<details class='tasks' open><summary>Durable decisions</summary>"
+                f"{markdown.render(p.get('decisions_body', ''))}</details>"
+            )
+        history_part = ""
+        if p.get("history_body"):
+            # History grows without bound and holds the full rationale; keep it out of
+            # the dashboard render and offer an editor link instead.
+            note = "<p class='muted' style='font-size:13px;margin:0 0 8px'>History holds the full rationale and bumps in the road. It grows over time, so it's kept out of the dashboard."
+            note += " Open it in your editor for the detail.</p>" if index is not None else "</p>"
+            history_part = note + (_open_lane_button(idx, "history", "Open history.md") if index is not None else "")
         main_parts.append(
             "<div class='panel'><div class='ph'><span class='eyebrow'>Decisions &amp; history</span>"
             "<span class='x mono'>.horus/decisions.md - history.md</span></div>"
-            "<details class='tasks' open><summary>Durable decisions</summary>"
-            f"{markdown.render(p.get('decisions_body', ''))}</details>"
-            "<details class='tasks' id='history'><summary>Bumps in the road</summary>"
-            f"{markdown.render(p.get('history_body', ''))}</details></div>"
+            f"{decisions_part}{history_part}</div>"
         )
     if p.get("execution_body"):
         main_parts.append(
@@ -1664,9 +1688,14 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
             f"{markdown.render(p['execution_body'])}</div>"
         )
     if p.get("roadmap_body"):
+        open_btn = (
+            f"<div style='margin-top:10px'>{_open_lane_button(idx, 'roadmap', 'Open roadmap.md')}</div>"
+            if index is not None else ""
+        )
         main_parts.append(
-            "<div class='panel'><div class='ph'><span class='eyebrow'>Roadmap details</span></div>"
-            f"{_breakdown_html(p)}</div>"
+            "<div class='panel'><div class='ph'><span class='eyebrow'>Roadmap details</span>"
+            "<span class='x mono'>open items</span></div>"
+            f"{_breakdown_html(p, completed=False)}{open_btn}</div>"
         )
     if index is not None:
         # Heavy: parses Claude/Codex session logs (~seconds). Load it lazily so the
@@ -1711,6 +1740,52 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
         f"{_footer_html()}"
     )
     return _page(f"Horus - {p['name']}", body, live=_live_count(gather_sessions()))
+
+_LANE_FILES = {
+    "project": "project.md", "roadmap": "roadmap.md", "features": "features.md",
+    "decisions": "decisions.md", "history": "history.md", "execution": "execution.md",
+}
+
+
+def _open_in_editor(path: Path) -> None:
+    """Open a local lane file in the OS default handler. Best-effort; the dashboard
+    is local-only, so this runs on the user's own machine."""
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(path))  # type: ignore[attr-defined]  # noqa: S606
+        elif sys.platform == "darwin":
+            subprocess.run(["open", str(path)], check=False)
+        else:
+            subprocess.run(["xdg-open", str(path)], check=False)
+    except OSError:
+        pass
+
+
+def _open_lane_button(index: int, lane: str, label: str) -> str:
+    """A same-origin POST button that opens one `.horus/<lane>.md` in the editor."""
+    return (
+        "<form method='post' action='/open-lane' style='display:inline'>"
+        f"<input type='hidden' name='project' value='{index}'>"
+        f"<input type='hidden' name='lane' value='{html.escape(lane, quote=True)}'>"
+        f"<button class='btn sm' type='submit'>{html.escape(label)}</button></form>"
+    )
+
+
+def process_open_lane(form: dict[str, list[str]]) -> str:
+    """Open a project's lane file in the OS editor; addressed by index, lane allow-listed."""
+    try:
+        idx = int(form.get("project", [""])[0])
+        project = config.load_projects()[idx]
+    except (ValueError, IndexError):
+        return "/"
+    lane = form.get("lane", [""])[0]
+    fname = _LANE_FILES.get(lane)
+    if fname:
+        path = Path(project) / HORUS_DIR / fname
+        if path.is_file():
+            _open_in_editor(path)
+    return f"/project?i={idx}"
+
 
 def _upgrade_button(index: int) -> str:
     """A one-click 'apply upgrade-project' button (same-origin POST, project by index)."""
@@ -2757,6 +2832,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/settings",
             "/upgrade-project",
             "/offboard",
+            "/open-lane",
             "/account-add",
             "/account-login",
             "/account-alias",
@@ -2795,6 +2871,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/offboard":
             self._redirect(process_offboard(self._read_form()))
+            return
+        if parsed.path == "/open-lane":
+            self._redirect(process_open_lane(self._read_form()))
             return
         if parsed.path == "/account-add":
             self._redirect(f"/?{process_account_add(self._read_form())}")

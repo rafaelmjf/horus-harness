@@ -544,12 +544,12 @@ def test_progress_links_to_roadmap_breakdown(tmp_path, monkeypatch):
     idx = dashboard.render_index([data])
     assert "/project?i=0#roadmap" in idx
 
-    # Detail: anchored roadmap with grouped open/completed breakdown.
+    # Detail: anchored roadmap shows open items; completed live in the file only.
     det = dashboard.render_project(data)
     assert "id='roadmap'" in det
     assert "Open &amp; in progress (2)" in det
-    assert "Completed (1)" in det
-    assert "todo one" in det and "doing two" in det and "shipped" in det
+    assert "todo one" in det and "doing two" in det
+    assert "Completed (1)" not in det  # completed items kept out of the dashboard now
 
 
 def test_dashboard_surfaces_features_and_history(tmp_path, monkeypatch):
@@ -567,10 +567,13 @@ def test_dashboard_surfaces_features_and_history(tmp_path, monkeypatch):
     data = dashboard.load_project(str(tmp_path))
     assert data["feature_counts"]["shipped"] == 1
 
-    det = dashboard.render_project(data)
+    det = dashboard.render_project(data, index=0)
     assert "id='features'" in det and "Widget engine" in det
-    assert "id='history'" in det and "the big outage" in det
     assert "<table>" in det  # capability ledger rendered as a table
+    # History is no longer inline-rendered (it only grows); a note + editor link instead.
+    assert "the big outage" not in det
+    assert "History holds the full rationale" in det
+    assert "/open-lane" in det  # open-in-editor affordance present on the detail page
 
     idx = dashboard.render_index([data])
     # New column layout: features show as named buckets (Idea / In progress / Shipped).
