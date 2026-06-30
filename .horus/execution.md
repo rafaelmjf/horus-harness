@@ -1,5 +1,5 @@
 ---
-status: active
+status: review-pending
 current_feature: "Continuity-model + dashboard refinement: async perf, lane discipline (decisions/roadmap/history), bake into skills, reflow lanes, dashboard render-to-match"
 supervisor_tier: frontier
 worker_tier: standard
@@ -41,10 +41,10 @@ Tiers, resolved locally per agent/account/availability.
 | phase | status | difficulty | mode | worker_tier | delegation_basis | handoff_note | review |
 |---|---|---|---|---|---|---|---|
 | 1-dashboard-perf | done | medium | direct | — | UI/perf; frontier judgment + user is gate. PR #51. | — | DONE. render_project 6426→8ms (overhead+cache async); index gather_projects 2000→1053ms (thread pool + git_state 235→114ms via status --porcelain=v2); index first paint 1.4s→1ms (/projects-grid async); mascot unblocked + dashboard pre-warmed in bg (A1+B1). A2 (cut double-import) SKIPPED: needs a broad cli.py lazy-import refactor for ~400ms, disproportionate risk. User to confirm in-app. |
-| 2-lane-discipline-spec | todo | medium | direct | — | Design that drives phases 3-4; must be coherent → one mind. New branch. | — | decisions/roadmap/history target shapes agreed with user |
-| 3-bake-skills | todo | high | direct (Codex-mirror delegable) | standard | Interconnected (skill + templates + managed block) stays direct; mechanical `.agents/skills` mirror is the only delegation candidate. | — | horus-consolidate + templates + CLAUDE/AGENTS block consistent and mirrored to .claude/.agents; doctor + suite green |
-| 4-reflow-lanes | todo | medium | direct | — | Judgment over Horus's own content; not mechanical. | — | this repo's decisions/roadmap/history match the spec; `horus close --check` + doctor green |
-| 5-dashboard-render | todo | medium | direct | — | UI; user's eyeball is the gate. PR #51. | — | roadmap top/open-only inline, history → open-in-editor link, decisions curated + open-full button; suite green; user confirms |
+| 2-lane-discipline-spec | done | medium | direct | — | Design that drives phases 3-4; must be coherent → one mind. New branch. | — | decisions/roadmap/history target shapes agreed with user |
+| 3-bake-skills | done | high | direct (Codex-mirror delegable) | standard | Interconnected (skill + templates + managed block) stays direct; mechanical `.agents/skills` mirror is the only delegation candidate. | — | horus-consolidate + templates + CLAUDE/AGENTS block consistent and mirrored to .claude/.agents; doctor + suite green |
+| 4-reflow-lanes | done | medium | direct | — | Judgment over Horus's own content; not mechanical. | — | this repo's decisions/roadmap/history match the spec; `horus close --check` + doctor green |
+| 5-dashboard-render | done | medium | direct | — | UI; user's eyeball is the gate. PR #51. | — | roadmap top/open-only inline, history → open-in-editor link, decisions curated + open-full button; suite green; user confirms |
 
 ## Notes carried into the plan
 
