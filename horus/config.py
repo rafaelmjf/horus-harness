@@ -368,6 +368,27 @@ def set_account_codex_home(alias: str, codex_home_path: str) -> None:
     _write_accounts(accts["aliases"], accts["config_dirs"], accts["codex_homes"])
 
 
+def remove_account(alias: str) -> bool:
+    """Forget an account from local config: drop its isolated dir mapping(s) and any
+    identifier→alias entry. Returns True if anything was removed. The on-disk login
+    directory is left intact (unmapping, not deleting)."""
+    accts = _load_accounts()
+    changed = False
+    if alias in accts["config_dirs"]:
+        del accts["config_dirs"][alias]
+        changed = True
+    if alias in accts["codex_homes"]:
+        del accts["codex_homes"][alias]
+        changed = True
+    for ident, mapped in list(accts["aliases"].items()):
+        if mapped == alias:
+            del accts["aliases"][ident]
+            changed = True
+    if changed:
+        _write_accounts(accts["aliases"], accts["config_dirs"], accts["codex_homes"])
+    return changed
+
+
 def account_login_dir(agent: str, alias: str) -> str:
     """Standard isolated login directory for ``agent``/``alias`` under ``~/.horus``.
 
