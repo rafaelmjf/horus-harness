@@ -128,8 +128,8 @@ def discover(
         url = str(repo.get("url") or "")
         remote_keys = {_normalize_remote(url), _normalize_remote(clone_url)}
         remote_keys.discard("")
-        local_path = next((local_by_remote[k] for k in remote_keys if k in local_by_remote), None)
         name = str(repo.get("name") or full_name.rsplit("/", 1)[-1])
+        local_path = _match_local(name, remote_keys, local_by_remote)
         description = str(repo.get("description") or "")
 
         # Fast path (Horus project): reuse cached .horus/ content when pushedAt is unchanged.
@@ -390,6 +390,25 @@ def _local_projects_by_remote(projects: list[str]) -> dict[str, str]:
     return out
 
 
+def _match_local(name: str, remote_keys: set[str], local_by_remote: dict[str, str]) -> str | None:
+    """Local clone path for a repo: a registered project with a matching remote,
+    else the conventional clone destination (`workspace_root/<name>`) when that
+    directory exists and its remote matches. The workspace probe is what lets a
+    repo cloned here but never registered show as 'cloned' instead of 'remote only'."""
+    hit = next((local_by_remote[k] for k in remote_keys if k in local_by_remote), None)
+    if hit is not None:
+        return hit
+    if not name:
+        return None
+    candidate = Path(config.load_workspace_root()).expanduser() / name
+    if not candidate.is_dir():
+        return None
+    state = gitstate.git_state(candidate)
+    if state and _normalize_remote(str(state.get("remote_url") or "")) in remote_keys:
+        return str(candidate)
+    return None
+
+
 def _normalize_remote(url: str) -> str:
     value = url.strip()
     if not value:
@@ -430,11 +449,12 @@ def _project_from_cache(owner: str, item: dict[str, Any], local_by_remote: dict[
     clone_url = str(item.get("clone_url") or "")
     remote_keys = {_normalize_remote(url), _normalize_remote(clone_url)}
     remote_keys.discard("")
-    local_path = next((local_by_remote[k] for k in remote_keys if k in local_by_remote), None)
     full_name = str(item.get("full_name") or "")
+    name = str(item.get("name") or full_name.rsplit("/", 1)[-1])
+    local_path = _match_local(name, remote_keys, local_by_remote)
     return RemoteProject(
         owner=str(item.get("owner") or owner),
-        name=str(item.get("name") or full_name.rsplit("/", 1)[-1]),
+        name=name,
         full_name=full_name,
         url=url,
         clone_url=clone_url or url,
@@ -465,11 +485,12 @@ def _untracked_from_cache(owner: str, item: dict[str, Any], local_by_remote: dic
     clone_url = str(item.get("clone_url") or "")
     remote_keys = {_normalize_remote(url), _normalize_remote(clone_url)}
     remote_keys.discard("")
-    local_path = next((local_by_remote[k] for k in remote_keys if k in local_by_remote), None)
     full_name = str(item.get("full_name") or "")
+    name = str(item.get("name") or full_name.rsplit("/", 1)[-1])
+    local_path = _match_local(name, remote_keys, local_by_remote)
     return UntrackedRepo(
         owner=str(item.get("owner") or owner),
-        name=str(item.get("name") or full_name.rsplit("/", 1)[-1]),
+        name=name,
         full_name=full_name,
         url=url,
         clone_url=clone_url or url,

@@ -637,3 +637,68 @@ def test_cache_without_untracked_key_loads_as_empty(tmp_path, monkeypatch):
     assert cached is not None
     assert cached.untracked == []
     assert len(cached.projects) == 1
+
+
+def test_untracked_cache_matches_workspace_clone_when_not_registered(tmp_path, monkeypatch):
+    """A repo cloned at workspace_root/<name> but never registered still shows as
+    local (the two-machine test found already-cloned repos labeled 'remote only'
+    right up until onboarding registered them)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    workspace = tmp_path / "ws"
+    clone = workspace / "plain-repo"
+    clone.mkdir(parents=True)
+    monkeypatch.setattr(github_catalog.config, "load_workspace_root", lambda: str(workspace))
+    monkeypatch.setattr(
+        github_catalog.gitstate,
+        "git_state",
+        lambda root: (
+            {"remote_url": "git@github.com:rafaelmjf/plain-repo.git"} if Path(root) == clone else {}
+        ),
+    )
+
+    untracked = github_catalog.UntrackedRepo(
+        owner="rafaelmjf",
+        name="plain-repo",
+        full_name="rafaelmjf/plain-repo",
+        url="https://github.com/rafaelmjf/plain-repo",
+        clone_url="git@github.com:rafaelmjf/plain-repo.git",
+        default_branch="main",
+        pushed_at="2026-07-02T00:00:00Z",
+    )
+    github_catalog.save_cache("rafaelmjf", [], [untracked])
+
+    cached = github_catalog.load_cache("rafaelmjf", local_projects=[])
+    assert cached is not None
+    u = cached.untracked[0]
+    assert u.local_path == str(clone)
+    assert u.is_local
+
+
+def test_untracked_cache_ignores_workspace_dir_with_different_remote(tmp_path, monkeypatch):
+    """A same-named workspace directory whose remote points elsewhere must NOT match."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    workspace = tmp_path / "ws"
+    (workspace / "plain-repo").mkdir(parents=True)
+    monkeypatch.setattr(github_catalog.config, "load_workspace_root", lambda: str(workspace))
+    monkeypatch.setattr(
+        github_catalog.gitstate,
+        "git_state",
+        lambda root: {"remote_url": "git@github.com:someone-else/plain-repo.git"},
+    )
+
+    untracked = github_catalog.UntrackedRepo(
+        owner="rafaelmjf",
+        name="plain-repo",
+        full_name="rafaelmjf/plain-repo",
+        url="https://github.com/rafaelmjf/plain-repo",
+        clone_url="git@github.com:rafaelmjf/plain-repo.git",
+        default_branch="main",
+        pushed_at="2026-07-02T00:00:00Z",
+    )
+    github_catalog.save_cache("rafaelmjf", [], [untracked])
+
+    cached = github_catalog.load_cache("rafaelmjf", local_projects=[])
+    assert cached is not None
+    assert cached.untracked[0].local_path is None

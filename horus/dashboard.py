@@ -2166,30 +2166,6 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
         "</form>"
     )
 
-def render_onboard_handoff(
-    name: str, project_index: int | None, project_path: str, accounts: list[dict[str, Any]]
-) -> str:
-    """Post-Onboard handoff: a start-work CTA for the just-tracked project, with an
-    account-alias chooser for the first session. Bridges "repo onboarded" → "working on
-    it" so the user doesn't have to hunt the new project down.
-
-    ``accounts`` only needs an ``alias`` per entry (no usage rings here)."""
-    if project_index is None:
-        return ""  # couldn't locate the freshly-registered project; skip the CTA
-    if accounts:
-        body = _project_launch_form(project_index, {"name": name, "path": project_path}, accounts)
-    else:
-        body = (
-            "<p class='muted'>No agent account is set up yet. Add one from the Accounts "
-            "section on the Projects tab (it opens a sign-in terminal), then start a "
-            "session here.</p>"
-        )
-    return (
-        f"<div class='banner ok'><strong>Onboarded {html.escape(name)} &mdash; start working on it"
-        f"</strong><div class='launch-body'>{body}</div></div>"
-    )
-
-
 def _projects_panel(projects: list[dict[str, Any]], accounts: list[dict[str, Any]]) -> str:
     if not projects:
         return "<div class='card'><h2>Projects</h2><p class='muted'>None registered.</p></div>"
@@ -2656,6 +2632,24 @@ def _project_action_banner(params: dict[str, list[str]]) -> str:
         return f"<div class='banner ok'>Removed Horus from {name}{extra}.</div>"
     if "offboard_error" in params:
         return f"<div class='banner err'>Offboard failed: {html.escape(params['offboard_error'][0])}</div>"
+    if "onboarded" in params:
+        name = html.escape(params["onboarded"][0])
+        pr = params.get("onboard_pr", [""])[0]
+        pr_html = (
+            f" Continuity PR: <a href='{html.escape(pr, quote=True)}'>{html.escape(pr)}</a>."
+            if pr else ""
+        )
+        out = (
+            f"<div class='banner ok'>Onboarded {name} &mdash; start a session below.{pr_html}</div>"
+        )
+        if "onboard_detail" in params:
+            out += (
+                "<div class='banner err'>Integration incomplete: "
+                f"{html.escape(params['onboard_detail'][0])}</div>"
+            )
+        return out
+    if "onboard_error" in params:
+        return f"<div class='banner err'>Onboard failed: {html.escape(params['onboard_error'][0])}</div>"
     return ""
 
 
@@ -3067,47 +3061,36 @@ class _Handler(BaseHTTPRequestHandler):
             self._redirect("/#github-catalog")
             return
         if parsed.path == "/github-onboard":
+            # PRG like ignore/unignore — the POST must never answer with a raw
+            # catalog fragment at /github-onboard (unstyled page, F5 re-onboards).
             form = self._read_form()
             target = form.get("target", "")
             owner = target.split("/")[0] if "/" in target else target
             if owner not in config.load_github_owners():
-                projects, errors, notes = gather_remote_projects()
-                visible_untracked, hidden_untracked = gather_untracked_repos()
-                self._send(render_remote_catalog(
-                    projects,
-                    errors + [f"refusing to onboard untrusted repo: {target}"],
-                    notes,
-                    untracked=visible_untracked,
-                    hidden=hidden_untracked,
-                ), 400)
+                self._redirect(
+                    "/?onboard_error="
+                    + quote_plus(f"refusing to onboard untrusted repo: {target}")
+                    + "#github-catalog"
+                )
                 return
-            onboard_notes: list[str] = []
-            onboard_errors: list[str] = []
-            handoff = ""
             try:
                 result = remote_start.onboard_github_project(f"github:{target}")
-                integ = result.integration
-                if integ.ok:
-                    detail = f" (PR: {integ.pr_url})" if getattr(integ, "pr_url", None) else ""
-                    onboard_notes.append(f"Onboarded {target} successfully.{detail}")
-                else:
-                    onboard_notes.append(f"Onboarded {target} (integration incomplete: {integ.detail}).")
-                if result.registered:
-                    # Post-Onboard handoff: offer a start-work CTA for the new project.
-                    handoff = render_onboard_handoff(
-                        result.path.name,
-                        _project_index(result.path),
-                        str(result.path),
-                        [{"alias": a} for a in sorted(_known_aliases())],
-                    )
             except (RuntimeError, ValueError) as exc:
-                onboard_errors.append(f"Onboard failed for {target}: {exc}")
-            projects, errors, notes = gather_remote_projects()
-            visible_untracked, hidden_untracked = gather_untracked_repos()
-            self._send(handoff + render_remote_catalog(
-                projects, errors + onboard_errors, notes + onboard_notes,
-                untracked=visible_untracked, hidden=hidden_untracked,
-            ))
+                self._redirect("/?onboard_error=" + quote_plus(str(exc)) + "#github-catalog")
+                return
+            integ = result.integration
+            params = "onboarded=" + quote_plus(target)
+            if getattr(integ, "pr_url", None):
+                params += "&onboard_pr=" + quote_plus(str(integ.pr_url))
+            if not integ.ok:
+                params += "&onboard_detail=" + quote_plus(integ.detail)
+            # Land on the new project's detail page: its "Start a session" card is
+            # the post-onboard CTA (accounts chooser + fresh/resume launch).
+            idx = _project_index(result.path) if result.registered else None
+            if idx is not None:
+                self._redirect(f"/project?i={idx}&{params}")
+            else:
+                self._redirect(f"/?{params}#github-catalog")
             return
 
         form = self._read_form()
