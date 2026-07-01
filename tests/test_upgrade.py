@@ -65,3 +65,46 @@ def test_upgrade_project_apply_installs_codex_hooks(tmp_path, monkeypatch):
     assert any(a.status in ("created", "updated") and "Codex usage hook" in a.message for a in actions)
     data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     assert data["hooks"]["Stop"][0]["hooks"][0]["command"].startswith("python3 -m horus")
+
+
+def test_upgrade_refuses_to_downgrade_newer_block(tmp_path, monkeypatch):
+    """An OLD installed CLI reading a NEWER pulled repo must not offer a downgrade
+    'refresh' — it should say the CLI is what needs updating."""
+    _home(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    agents = tmp_path / "AGENTS.md"
+    newer = agents.read_text(encoding="utf-8").replace(
+        f"horus-block-version: {templates.BLOCK_VERSION}", "horus-block-version: 999"
+    )
+    agents.write_text(newer, encoding="utf-8")
+
+    dry = upgrade.upgrade_project(tmp_path, apply=False, hooks=False, skills_=False)
+    applied = upgrade.upgrade_project(tmp_path, apply=True, hooks=False, skills_=False)
+
+    for actions in (dry, applied):
+        flagged = [a for a in actions if "AGENTS.md" in a.message]
+        assert flagged and flagged[0].status == "skipped"
+        assert "newer than this CLI" in flagged[0].message
+    assert "horus-block-version: 999" in agents.read_text(encoding="utf-8")  # untouched
+
+
+def test_legacy_unversioned_block_still_refreshes(tmp_path, monkeypatch):
+    """Blocks written before the version marker existed count as older."""
+    from horus.instructions import block_version, extract_block
+
+    _home(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    agents = tmp_path / "AGENTS.md"
+    legacy = agents.read_text(encoding="utf-8").replace(
+        f"<!-- horus-block-version: {templates.BLOCK_VERSION} -->\n", ""
+    )
+    agents.write_text(legacy, encoding="utf-8")
+    assert block_version(extract_block(legacy).raw or "") is None
+
+    actions = upgrade.upgrade_project(tmp_path, apply=False, hooks=False, skills_=False)
+    assert any(a.status == "would-update" and "AGENTS.md" in a.message for a in actions)
+
+
+def test_shared_block_carries_version_marker():
+    block = templates.shared_block("CLAUDE.md")
+    assert f"<!-- horus-block-version: {templates.BLOCK_VERSION} -->" in block

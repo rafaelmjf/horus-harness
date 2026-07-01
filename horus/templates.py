@@ -11,6 +11,12 @@ from __future__ import annotations
 BLOCK_BEGIN = "<!-- HORUS:BEGIN shared-instructions -->"
 BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 
+# Bump whenever _SHARED_BODY changes. Blocks written before the marker existed
+# parse as None and count as older than any versioned block, so `upgrade-project`
+# refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
+# what's outdated — never offer a downgrade as a "refresh").
+BLOCK_VERSION = 2
+
 _SHARED_BODY = """## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -72,7 +78,10 @@ Instruction synchronization:
 
 def shared_block(other_file: str) -> str:
     """Return the full managed block (markers included) cross-referencing ``other_file``."""
-    return f"{BLOCK_BEGIN}\n{_SHARED_BODY.format(other=other_file)}\n{BLOCK_END}"
+    return (
+        f"{BLOCK_BEGIN}\n<!-- horus-block-version: {BLOCK_VERSION} -->\n"
+        f"{_SHARED_BODY.format(other=other_file)}\n{BLOCK_END}"
+    )
 
 
 def instruction_file(title: str, other_file: str, agent_notes_heading: str) -> str:

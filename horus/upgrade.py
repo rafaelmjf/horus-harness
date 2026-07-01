@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from horus import native_hooks, skills, templates
-from horus.instructions import extract_block, replace_block
+from horus.instructions import block_version, extract_block, replace_block
 
 
 class UpgradeAction(NamedTuple):
@@ -57,6 +57,17 @@ def _upgrade_instructions(project_root: Path, *, apply: bool) -> list[UpgradeAct
         current = extract_block(text)
         if not current.found:
             actions.append(UpgradeAction("skipped", f"{filename} has no Horus managed block; rerun `horus init --yes` to inject"))
+            continue
+        # Direction guard: a block NEWER than this CLI means the CLI is what's
+        # outdated (e.g. an old installed tool reading a freshly pulled repo).
+        # Refreshing would silently downgrade it — refuse and point at self-update.
+        current_version = block_version(current.raw or "")
+        if current_version is not None and current_version > templates.BLOCK_VERSION:
+            actions.append(UpgradeAction(
+                "skipped",
+                f"{filename} managed block (v{current_version}) is newer than this CLI "
+                f"(v{templates.BLOCK_VERSION}) — upgrade horus-harness instead of refreshing",
+            ))
             continue
         new_text = replace_block(text, desired_block)
         if new_text == text:
