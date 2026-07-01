@@ -70,6 +70,11 @@ reflow) if a "why did we ever…" archaeology is ever needed.
 - **Cognitive routines ship as Claude/Codex skills; agent-delegated first** — `consolidate`/`distill-history`/`infer` run a deterministic read-only pre-pass + emit a ritual prompt for the in-loop agent (which sees the live context a file-only script can't). Edit scope `.horus/**` only. Autonomous (Horus-spawns-the-agent) variant deferred. ↳ history.md
 - **Infer is LLM-based** — the deterministic inference path was removed (it produced drifting, truncated `.horus/`); `horus infer` distils `.horus/` from canonical docs and points at them rather than duplicating. ↳ history.md
 - **rulesync is the eventual portability path, deferred behind Claude-first** — author native `SKILL.md` now and keep skills self-contained; Horus projects its own Claude/Codex skills + hooks directly for now and never embeds rulesync (npm/Node).
+- **Projections move together across agent targets; drift is user-visible** — a major change to skills/hooks/managed blocks must reach every agent surface (Claude + Codex today, more later), never one; the dashboard should indicate per-project projection-sync state rather than relying on the user to remember. (User-set, 2026-07-02; observable half → roadmap "Projection-sync indicator".)
+
+## Platform support
+
+- **Three OS targets: Windows, Linux, macOS** — every feature must work (or degrade gracefully) on all three; macOS is untested to date, so treat it as a first-class gap, not an afterthought (→ roadmap "macOS validation pass"). Anything committed to a repo (hook files, skills, blocks) executes on *every* machine and OS the repo reaches, so committed artifacts are held to the strictest portability bar. ↳ history.md
 
 ## Distribution & licensing
 

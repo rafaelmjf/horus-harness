@@ -20,6 +20,46 @@ last_updated: 2026-07-02
 
 - [ ] Decide active behavior for cold/expired sessions: companion warning, launch-flow warning, native hook/statusline projection, or dashboard-only.
 
+## UX hardening — fresh-machine first-touch (from the 2026-07-01/02 two-machine test)
+
+> Every failure the live test surfaced happened silently or cryptically the moment a
+> fresh machine first touched Horus (v0.0.5 dead-on-import; hook error spam; "app won't
+> open" with no diagnostic; stale uv index on upgrade). Design lenses for all items:
+> (1) **cross-platform** — everything must work on Windows, Linux, AND macOS (macOS
+> entirely untested so far); (2) **cross-agent** — Claude and Codex (more later) must
+> stay in sync: skills + hooks are *projections*, so any major change must reach every
+> agent surface, and the UI should say when they've drifted. See history.md for the bumps.
+
+- [ ] **Graceful hooks when the CLI is missing/broken** (top priority): committed hook
+  files reach every machine and every collaborator, including ones without Horus — a
+  missing `horus` must be a silent no-op, not per-Bash-call error spam. NB the guard
+  must be per-OS (POSIX `command -v` vs Windows — Claude runs hook commands through the
+  native shell), so this is exactly where the cross-platform lens bites. `horus doctor`
+  / dashboard then report "hooks installed but CLI unavailable" as the visible signal.
+- [ ] **Post-publish install smoke** (CI): after each PyPI publish, fresh
+  ubuntu + windows + **macos** runners `uv tool install` from PyPI (retry for index
+  propagation), then probe `horus --version` + dashboard `/health`. Doubles as the
+  first-ever macOS coverage; "reproduce the gate" applied to releases.
+- [ ] Dashboard `/self-update` button: run `uv tool upgrade --refresh` (stale uv index
+  cache no-opped the upgrade twice during the live test). One-liner.
+- [ ] **`horus doctor` machine-level checks**: console script on PATH, interpreter vs
+  the `requires-python` floor, hook commands resolvable, Tk present (mascot), `gh`
+  auth. The one command to run when "the app won't open".
+- [ ] **Startup failure visibility**: dashboard/companion startup errors go to
+  `~/.horus/logs/` and the companion surfaces "dashboard failed to start — run
+  `horus doctor`" instead of nothing.
+- [ ] **Bulk projection refresh**: `horus upgrade-project --all` (or a dashboard
+  "refresh all stale projects" action) so a CLI upgrade propagates skills/hooks/blocks
+  to every registered repo in one step, building on the existing staleness badge.
+- [ ] **Projection-sync indicator in the UI**: per project, show whether each agent
+  surface (Claude `.claude/` vs Codex `.agents/`+`.codex/`) carries the same
+  generation of skills/hooks/managed block — "in sync" vs "Codex projection behind".
+  This is the observable half of `horus doctor compat` (→ "Cross-tool interface sync"
+  track below); do the read-only report + badge before any auto-sync.
+- [ ] **macOS validation pass**: nothing has ever run on macOS — mascot (Tk
+  transparency), terminal spawning in `launcher`, owned-window/tab defaults, hook
+  execution. Fold findings back into the per-OS defaults like `resolve_open_mode`.
+
 ## Execution Planning Workflow
 
 - [ ] Apply the two pilot tuning findings (deferred behind the GitHub-onboarding tracks): (1) supervisor brief / handoff template carries the known pre-existing test-failure baseline; (2) a small phase status vocabulary (`planned/delegated/accepted/blocked`) in the `horus-execution` skill + `execution.md` template. Small `continue-as-is` task; see decisions.md 2026-06-29 "Execution-Workflow Pilot".
@@ -232,6 +272,8 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
 - [ ] **`horus doctor compat` (observe first)** — per project, report what *each* installed agent
   (claude/codex/gemini/copilot) would actually load: which instruction files, skills, MCP, hooks.
   Read-only; solves the real pain ("which instructions/skills are active here, for this agent?").
+  The dashboard-facing half is the "Projection-sync indicator in the UI" item in the UX-hardening
+  track above — same underlying comparison, badge form.
 - [ ] **Canonical + projections, formalized** — `.horus/compat.toml` declares canonical surfaces
   (`AGENTS.md`, `.agents/skills/`) + per-target projection policy; generated `CLAUDE.md` /
   `.claude/skills/` are marked-generated with drift detection. Extends today's ad-hoc dual-write.
