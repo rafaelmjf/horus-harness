@@ -11,6 +11,26 @@ design (the "bumps" below), plus the **rationale behind the rules** in `decision
 (those live in `roadmap.md`). Most decisions' rationale is already a bump below; the
 foundational whys that aren't are collected under "Decision rationale" at the end.
 
+## Onboard succeeded invisibly: a fragment response and a matcher blind spot
+
+Two-machine test, onboard leg (2026-07-02): the user onboarded an already-cloned
+repo and reported total failure — yet the onboard had *worked* (init, continuity
+branch pushed, PR opened, project registered). Two UX bugs hid it. (1) The
+`/github-onboard` POST answered with a raw `render_remote_catalog` fragment at the
+action URL — unstyled "unrendered" page, and a refresh would re-onboard. This was
+the **third** endpoint caught returning HTML from a POST (ignore and unignore were
+PRG-fixed earlier); the lesson graduated into a rule: PRG is the default contract
+for every dashboard form POST (→ decisions.md), success landing somewhere useful
+(the new project's detail page) with query-param banners. (2) The repo showed
+"remote only" while sitting cloned in the workspace root, because the local-clone
+matcher only consulted *registered* projects — and the pre-onboard state is by
+definition unregistered, so the one moment the badge mattered most was the one
+moment it couldn't work. Fixed by probing the conventional clone destination
+(`workspace_root/<name>`, remote-verified) after the registry. Both in v0.0.8.
+Residual observation: the onboarded clone is left checked out on the continuity
+branch, and auto-merge silently requires the repo's "Allow auto-merge" setting —
+the PR sat OPEN with nothing telling the user to merge it.
+
 ## Committed hook files spammed "PreToolUse: Bash hook error" on the second machine
 
 Two-machine test, second finding (2026-07-01): on machine 2 every single Bash tool
