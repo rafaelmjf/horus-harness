@@ -1678,3 +1678,82 @@ def test_render_project_omits_upgrade_command_when_fresh(tmp_path, monkeypatch):
     data = dashboard.load_project(str(tmp_path))
     html_out = dashboard.render_project(data)
     assert "horus upgrade-project --apply" not in html_out
+
+
+# --- self-update + health + recent-sessions panel ---
+
+
+def _get(path: str) -> dict[str, object]:
+    handler = object.__new__(dashboard._Handler)
+    handler.path = path
+    handler.headers = {"Host": "127.0.0.1:8765"}
+    handler.rfile = BytesIO(b"")
+    handler.wfile = BytesIO()
+    response: dict[str, object] = {"headers": []}
+    handler.send_response = lambda s: response.__setitem__("status", s)  # type: ignore[method-assign]
+    handler.send_header = lambda k, v: response["headers"].append((k, v))  # type: ignore[method-assign, index]
+    handler.end_headers = lambda: None  # type: ignore[method-assign]
+    dashboard._Handler.do_GET(handler)
+    response["body"] = handler.wfile.getvalue()
+    return response
+
+
+def test_health_endpoint_identity():
+    import json as _json
+
+    response = _get("/health")
+    assert response["status"] == 200
+    data = _json.loads(response["body"])
+    assert data["app"] == "horus-dashboard"
+    assert data["version"] == dashboard.__version__
+    assert isinstance(data["pid"], int)
+
+
+def test_update_pill_renders_when_newer():
+    out = dashboard._update_pill_html({"update_available": True, "latest": "9.9.9"})
+    assert "/self-update" in out and "9.9.9" in out
+
+
+def test_update_pill_empty_when_current():
+    assert dashboard._update_pill_html({"update_available": False, "latest": None}) == ""
+
+
+def test_post_self_update_runs_upgrade_and_redirects(monkeypatch):
+    monkeypatch.setattr(dashboard.selfupdate, "run_upgrade", lambda: (True, "Updated to v9.9.9"))
+    response = _post("/self-update", {}, origin="http://127.0.0.1:8765")
+    assert response["status"] == 303
+    location = next(v for k, v in response["headers"] if k == "Location")
+    assert "selfupdated=" in location
+
+
+def test_post_self_update_reports_failure(monkeypatch):
+    monkeypatch.setattr(dashboard.selfupdate, "run_upgrade", lambda: (False, "boom"))
+    response = _post("/self-update", {}, origin="http://127.0.0.1:8765")
+    location = next(v for k, v in response["headers"] if k == "Location")
+    assert "selfupdate_error=" in location
+
+
+def test_project_sessions_panel_lists_discovered_sessions(monkeypatch):
+    from pathlib import Path as _Path
+
+    from horus.session_discovery import SessionInfo
+
+    fake = [
+        SessionInfo(
+            agent="claude", session_id="abc123def456xyz", started_at="2026-07-01T10:00:00Z",
+            last_activity="2026-07-01T11:00:00Z", message_count=42, source_path=_Path("t.jsonl"),
+        )
+    ]
+    monkeypatch.setattr(dashboard.session_discovery, "discover_sessions", lambda p: fake)
+    out = dashboard._project_sessions_html(_Path("."))
+    assert "Recent sessions" in out
+    assert "claude" in out and "42" in out and "abc123def456" in out
+    assert "2026-07-01 11:00" in out
+
+
+def test_project_sessions_panel_empty(monkeypatch):
+    from pathlib import Path as _Path
+
+    monkeypatch.setattr(dashboard.session_discovery, "discover_sessions", lambda p: [])
+    out = dashboard._project_sessions_html(_Path("."))
+    assert "No Claude/Codex transcripts" in out

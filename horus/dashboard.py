@@ -15,6 +15,7 @@ known set, and the POST is same-origin-guarded (the server binds loopback only).
 from __future__ import annotations
 
 import html
+import json
 import os
 import re
 import subprocess
@@ -47,6 +48,8 @@ from horus import (
     remote_start,
     roadmap,
     routines,
+    selfupdate,
+    session_discovery,
     upgrade,
 )
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
@@ -604,6 +607,61 @@ def _active_class(active: bool) -> str:
     return ' class="active"' if active else ""
 
 
+def _update_pill_html(status: dict[str, object] | None = None) -> str:
+    """Top-nav "update available" pill + Update button, or "" when current.
+
+    The button runs `uv tool upgrade horus-harness`; the running server keeps its
+    old in-memory build (no hot reload), so the post-upgrade banner says to
+    restart Horus rather than pretending the new version is live.
+    """
+    status = status if status is not None else selfupdate.check_update()
+    if not status.get("update_available"):
+        return ""
+    latest = html.escape(str(status.get("latest")))
+    return (
+        "<form method='post' action='/self-update' style='display:inline-block;margin-right:10px'"
+        f" onsubmit=\"return confirm('Upgrade horus-harness to v{latest}? Horus must be restarted afterwards to load it.')\">"
+        f"<button class='btn sm btn-seal' type='submit' title='Installed: v{html.escape(__version__)}'>"
+        f"&#8599; Update to v{latest}</button></form>"
+    )
+
+
+def _project_sessions_html(path: Path) -> str:
+    """Recent sessions panel: every Claude/Codex session that touched this project,
+    discovered read-only from the transcripts the CLIs write — regardless of how the
+    session was started. Counts + timestamps only, never transcript content."""
+    try:
+        sessions = session_discovery.discover_sessions(Path(path))
+    except Exception as exc:  # noqa: BLE001 — panel must never break the page
+        return (
+            "<div class='panel'><div class='ph'><span class='eyebrow'>Recent sessions</span></div>"
+            f"<p class='muted'>Session discovery unavailable: {html.escape(str(exc))}</p></div>"
+        )
+    if not sessions:
+        return (
+            "<div class='panel'><div class='ph'><span class='eyebrow'>Recent sessions</span></div>"
+            "<p class='muted'>No Claude/Codex transcripts found for this project on this machine.</p></div>"
+        )
+    rows = []
+    for s in sessions[:8]:
+        last = html.escape((s.last_activity or "")[:16].replace("T", " ")) or "—"
+        rows.append(
+            f"<tr><td><span class='badge'>{html.escape(s.agent)}</span></td>"
+            f"<td class='mono'>{html.escape(s.session_id[:12])}</td>"
+            f"<td>{last}</td><td>{s.message_count}</td></tr>"
+        )
+    more = (
+        f"<p class='muted' style='font-size:12px'>+ {len(sessions) - 8} older session(s)</p>"
+        if len(sessions) > 8 else ""
+    )
+    return (
+        "<div class='panel'><div class='ph'><span class='eyebrow'>Recent sessions</span>"
+        "<span class='x mono'>from local transcripts</span></div>"
+        "<div style='overflow-x:auto'><table><tr><th>Agent</th><th>Session</th>"
+        f"<th>Last activity</th><th>Msgs</th></tr>{''.join(rows)}</table></div>{more}</div>"
+    )
+
+
 def _page(title: str, body: str, active: str = "projects", wide: bool = False, live: int = 0) -> str:
     icon_key = html.escape(__version__, quote=True)
     return (
@@ -629,7 +687,11 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "<div class='wordmark'><b>Horus</b><small>project continuity &amp; control panel</small></div>"
         "</div>"
         f"{_nav(active, live)}"
-        "<div class='top-right'><label class='skin-btn' for='skin'>"
+        "<div class='top-right'>"
+        # Self-update pill: async (PyPI check must never block a paint); empty
+        # fragment = up to date, so the placeholder just disappears.
+        "<span data-horus-src='/update-check'></span>"
+        "<label class='skin-btn' for='skin'>"
         "<span class='moon'>&#9687; Dark</span><span class='sun'>&#9686; Light</span></label></div>"
         "</div></header>"
         f"<main{' class=\"wide\"' if wide else ''}>{body}</main>"
@@ -1719,6 +1781,13 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
     else:
         main_parts.append(_project_overhead_html(p["path"]).replace("class='section'", "class='panel'"))
     if index is not None:
+        # Same lazy pattern: transcript scanning is disk-heavy, keep it off the paint.
+        main_parts.append(
+            f"<div class='panel' data-horus-src='/project-sessions?i={idx}'>"
+            "<div class='ph'><span class='eyebrow'>Recent sessions</span></div>"
+            "<p class='muted' style='font-size:12.5px'>Loading&hellip;</p></div>"
+        )
+    if index is not None:
         cache_panel = (
             f"<div class='panel' data-horus-src='/project-cache?i={idx}'>"
             "<div class='ph'><span class='eyebrow'>Context cache</span></div>"
@@ -2553,6 +2622,13 @@ def _notice(params: dict[str, list[str]]) -> str:
 
 def _project_action_banner(params: dict[str, list[str]]) -> str:
     """Banner for upgrade/offboard POST redirects (index + project pages)."""
+    if "selfupdated" in params:
+        return (
+            f"<div class='banner ok'>{html.escape(params['selfupdated'][0])} &mdash; "
+            "restart Horus to load the new version (the running server keeps its old build).</div>"
+        )
+    if "selfupdate_error" in params:
+        return f"<div class='banner err'>Self-update failed: {html.escape(params['selfupdate_error'][0])}</div>"
     if "upgraded" in params:
         n = html.escape(params["upgraded"][0])
         return f"<div class='banner ok'>Refreshed Horus artifacts &mdash; {n} item(s) updated.</div>"
@@ -2691,7 +2767,7 @@ class _Handler(BaseHTTPRequestHandler):
             # the ~1.2s gather_projects cost off the initial paint.
             self._send(_projects_section_html(gather_projects()))
             return
-        if parsed.path in ("/project-overhead", "/project-cache"):
+        if parsed.path in ("/project-overhead", "/project-cache", "/project-sessions"):
             # Heavy per-project panels (session-log parsing) loaded lazily so the
             # detail page paints immediately. Project addressed by index, never path.
             projects = gather_projects()
@@ -2703,11 +2779,30 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/project-overhead":
                 self._send(_project_overhead_html(path).replace("class='section'", "class='panel'"))
+            elif parsed.path == "/project-sessions":
+                self._send(_project_sessions_html(path))
             else:
                 self._send(
                     "<div class='panel'><div class='ph'><span class='eyebrow'>Context cache</span></div>"
                     f"{_cache_sidebar_panel(path)}</div>"
                 )
+            return
+        if parsed.path == "/update-check":
+            # Async top-nav fragment; a failed/offline check renders as up-to-date.
+            self._send(_update_pill_html())
+            return
+        if parsed.path == "/health":
+            # Machine-readable identity for the companion: lets a starting mascot
+            # tell a current dashboard from a stale orphan (and from a foreign
+            # server) before adopting the port.
+            payload = json.dumps(
+                {"app": "horus-dashboard", "version": __version__, "pid": os.getpid()}
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
             return
         if parsed.path == "/pty/stream":
             term_id = parse_qs(parsed.query).get("id", [""])[0]
@@ -2841,6 +2936,7 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path not in (
             "/launch",
             "/settings",
+            "/self-update",
             "/upgrade-project",
             "/offboard",
             "/open-lane",
@@ -2860,6 +2956,14 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if not self._same_origin():
             self._send(_page("Forbidden", "<p>Cross-origin request refused.</p>"), 403)
+            return
+
+        if parsed.path == "/self-update":
+            ok, detail = selfupdate.run_upgrade()
+            if ok:
+                self._redirect(f"/?selfupdated={quote_plus(detail)}")
+            else:
+                self._redirect(f"/?selfupdate_error={quote_plus(detail)}")
             return
 
         if parsed.path == "/settings":
