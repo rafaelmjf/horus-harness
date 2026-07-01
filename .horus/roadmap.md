@@ -97,6 +97,20 @@ Phase 3 — portability (started with direct Codex skill projection):
 - [ ] Add this lens to future feature specs: "native Claude path", "native Codex path",
   "Horus-owned/session path if needed".
 
+## Upgrade-project direction-awareness
+
+> Found 2026-07-01 while planning the two-machine test. Skills are version-gated
+> (repo-ahead = "up to date", never downgraded), but the managed instruction block
+> and hooks are pure content comparisons — an OLD installed CLI sees a NEWER pulled
+> repo as "artifacts outdated", and clicking Refresh would *downgrade* the block to
+> the old CLI's wording. Safe order today: upgrade the CLI first, then refresh.
+
+- [ ] Make the staleness badge / `upgrade-project` direction-aware for content-compared
+  artifacts: version-mark the managed block (like skills' `horus-skill-version`) or
+  compare against the CLI's version, so a repo *ahead* of the CLI renders as "your CLI
+  is outdated — update it" (pointing at the self-update pill) instead of offering a
+  downgrade refresh.
+
 ## Self-update follow-up
 
 > Pill + Update button shipped 2026-07-01 (→ features.md "Dashboard self-update signal").
