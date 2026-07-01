@@ -667,6 +667,9 @@ def _project_sessions_html(path: Path) -> str:
 
 def _page(title: str, body: str, active: str = "projects", wide: bool = False, live: int = 0) -> str:
     icon_key = html.escape(__version__, quote=True)
+    # Hoisted out of the f-string: a backslash inside an f-string expression
+    # is a SyntaxError before Python 3.12 (PEP 701), and we support 3.11.
+    main_cls = " class='wide'" if wide else ""
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -697,7 +700,7 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "<label class='skin-btn' for='skin'>"
         "<span class='moon'>&#9687; Dark</span><span class='sun'>&#9686; Light</span></label></div>"
         "</div></header>"
-        f"<main{' class=\"wide\"' if wide else ''}>{body}</main>"
+        f"<main{main_cls}>{body}</main>"
         "<script>"
         "if(sessionStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');}"
         "function horusCopy(btn){"

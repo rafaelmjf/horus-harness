@@ -1,0 +1,30 @@
+name: tests
+
+# Test gate on the oldest and newest supported Pythons. The 3.11 job exists
+# because dev machines run newer interpreters: v0.0.5 shipped an f-string
+# backslash (legal only from 3.12/PEP 701) that crashed every 3.11 install
+# on import, and nothing before publish would have caught it.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e . pytest  # pywinpty is win-only/conditional; stdlib pty on Linux
+      - name: Compile all modules (import-time syntax gate)
+        run: python -m compileall -q horus
+      - name: Run tests
+        run: python -m pytest -q
