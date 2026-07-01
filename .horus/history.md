@@ -313,3 +313,25 @@ The non-obvious *why* behind rules in `decisions.md` that aren't already a bump 
   won; rationale already living here kept, foundational whys added above. The full dated
   log remains in git (pre-reflow commit). **Lesson:** decisions.md is current rules, not a
   log — the `horus-consolidate` skill (v7) now enforces that routing so it doesn't re-drift.
+- **Why the companion checks `/health` before adopting a dashboard (2026-07-01).** The
+  orphan bug's root cause was *unconditional adoption*: startup reused any live 8765
+  server, so a crashed/pre-fix launch's dashboard was adopted by every new mascot, never
+  owned, never reaped — and served its old in-memory build for days (observed: a 06-26
+  PID surviving 3 days of quit/reopen). Reap-on-quit alone can't fix adoption; identity
+  can: `/health` (app/version/pid) makes "same version → adopt, stale Horus → replace,
+  foreign → never touch" decidable. Legacy pre-`/health` builds need the netstat pid
+  fallback exactly once — every build after 0.0.3 self-identifies.
+- **Why the update button doesn't restart the server (2026-07-01).** Python doesn't hot
+  reload, and a server respawning *itself* on Windows re-enters the ownership questions
+  (owned-child reaping, port reuse, mascot liveness) that MVP5 exists to answer. An
+  honest "restart Horus to load vX" banner ships the value (one-click upgrade) without
+  a half-right lifecycle hack; auto-respawn lands with the lifecycle unification.
+- **First real worker delegation under the rubric worked (2026-07-01).** The
+  session-discovery parsers were the one batch phase clearing the volume×ambiguity bar;
+  a standard-tier worker in an isolated worktree implemented them from a contract-first
+  brief (module API + "reuse these modules' conventions" pointers + explicit privacy
+  rule + handoff contract). The worker delivered 513 green and honestly flagged its one
+  unverified assumption (Claude's message-type set), which the supervisor then verified
+  against a real transcript. **Lesson:** the brief's "read these sibling modules first"
+  pointer is what kept the worker from inventing a second slug/matching convention;
+  worktree isolation let direct supervisor work continue in parallel without conflicts.

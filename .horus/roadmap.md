@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "Two-PR refinement of the dashboard + continuity model, both merged to main. PR #51: sumi-e dashboard redesign, light-mode default + theme persistence + Settings control, async performance (project open ~6.5s→instant, index first paint 1.4s→1ms, git_state 235→114ms, mascot unblocked + dashboard pre-warm), and render-to-match (roadmap open-items only, history/decisions open-in-editor). PR (feat/horus-lane-discipline): baked the lane discipline into the horus-consolidate skill (v7) + templates + managed CLAUDE/AGENTS block (Claude+Codex), then reflowed this repo's lanes — decisions.md ~1318→~85 lines of concise topic-grouped current rules, history.md gained a Decision-rationale section, roadmap.md 748→349 lines (completed log dropped). 503 tests green."
-next_action: "REVIEW (with the user) the autonomously-completed lane-discipline work now in main, taking the recommended path where a call was pending: (a) confirm the decisions.md topic taxonomy and that collapsing the 68 dated entries lost no current rule; (b) confirm the horus-consolidate v7 routing wording; (c) re-judge the 52 roadmap items carried forward by the mechanical trim — several are likely shipped-but-unticked (e.g. the post-Onboard launch CTA [A6], companion stale-dashboard reaping), so prune them into features.md. All discussed scope (dashboard redesign/perf/render + lane discipline + skills) is merged to main."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state from the remote. Both refinement PRs are MERGED to main: (#51) the sumi-e dashboard redesign + light-mode-default + async perf + lane render-to-match; and the continuity-model refinement (execution.md phases 2-4) — horus-consolidate skill v7 + templates + managed block now define decisions.md as concise topic-grouped current rules with rationale in history.md, and this repo's lanes were reflowed (decisions ~1318→~85 lines, history gained a Decision-rationale section, roadmap 748→349). All done autonomously taking the recommended path. NEXT is a review pass with the user (see next_action): confirm the decisions taxonomy lost no current rule, the v7 routing wording, and re-judge the 52 carried-forward roadmap open items (some are shipped-but-unticked) — pruning the done ones into features.md. The full pre-reflow decision log is in git. `uv run pytest -q` => 503 passed."
-execution_recommendation: "continue-as-is - the phased build (execution.md phases 1-5) is done and merged; what remains is a single-agent review/prune pass with the user, not new multi-surface implementation."
-last_updated: 2026-06-30
+current_focus: "2026-07-01 batch fully shipped (PRs #53-#56) and v0.0.3 published to PyPI (trusted-publishing run verified). New since #52: fetch-first guard on close --push, sessions/archive/ after distillation (consolidate skill v8), catalog Ignore without reload, read-only session discovery (delegated Sonnet worker) + Recent-sessions panel, dashboard self-update pill/button, companion stale-dashboard replacement via /health identity. 533 tests green."
+next_action: "USER runs the live two-machine flow validation (full script in the 2026-07-01 session summary + its caveat checklist: same alias on both machines, per-machine owner config, 0.0.3 from PyPI on machine 2). Exercise this session's new dashboard/companion behaviors along the way and fix whatever the test surfaces; then pick the next roadmap item (overview-card transcript summaries, or MVP2.5 fetch-all)."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state. Everything through v0.0.3 is merged to main AND published to PyPI: close-push fetch-first guard, sessions/archive distillation flow (skill v8), catalog ignore-in-place, horus/session_discovery.py + the project-detail Recent-sessions panel, self-update pill + /self-update button (no auto-restart by design), and the companion /health-based stale-dashboard replacement. 533 tests green. NEXT: support the user's live cross-machine onboard/continue test (see roadmap next_action) and fix what it surfaces. The active execution.md documents the finished 2026-07-01 batch (all phases done/accepted) — replace it when the next substantial item starts."
+execution_recommendation: "continue-as-is - the next step is a user-driven live test plus fixes for whatever it surfaces: interactive, exploratory, small-volume debugging where delegation buys nothing."
+last_updated: 2026-07-01
 ---
 
 # Roadmap
@@ -97,20 +97,14 @@ Phase 3 — portability (started with direct Codex skill projection):
 - [ ] Add this lens to future feature specs: "native Claude path", "native Codex path",
   "Horus-owned/session path if needed".
 
-## Self-update signal - dashboard update button
+## Self-update follow-up
 
-> Approved 2026-07-01. The artifact-staleness badge covers project-vs-installed-CLI;
-> nothing covers installed-CLI-vs-latest-PyPI. Personal tool, so keep it passive +
-> one click, no auto-update.
+> Pill + Update button shipped 2026-07-01 (→ features.md "Dashboard self-update signal").
 
-- [ ] Detect a newer `horus-harness` release (PyPI JSON API; cached + async so it never
-  blocks a page or fails the dashboard offline) and show an "update available" pill in
-  the top nav.
-- [ ] Top-nav Update button: run `uv tool upgrade horus-harness`, then cleanly restart
-  the dashboard server (a running server can't hot-swap its own code — needs a
-  respawn, minding the companion's owned-child reaping and the port-8765 reuse logic)
-  and afterwards point at `horus upgrade-project` for refreshing tracked repos'
-  projections.
+- [ ] Post-upgrade auto-respawn of the dashboard server (today the banner says
+  "restart Horus" — no hot reload). Belongs with the MVP5 lifecycle-unification work,
+  not a quick add: the respawn must mind the companion's owned-child reaping and the
+  port-8765 reuse/health logic.
 
 ## Companion app / mascot - visible Horus presence (next)
 
@@ -118,17 +112,6 @@ Intent: make Horus feel active without prematurely owning agent sessions. The fi
 app slice should be a tiny always-on-top companion that acts as a doorway to the
 dashboard and later becomes the place for continuity/status nudges.
 
-- [ ] **Residual gap (found 2026-06-29): a stale/orphaned dashboard survives Quit and is
-  reused forever.** The 2026-06-28 fix only reaps the dashboard child the *current* mascot
-  owns. A dashboard process from an earlier launch (e.g. one orphaned before the fix, or by a
-  crash) is not owned by a freshly-opened mascot — and because startup *reuses* any live
-  server on 8765, the new mascot adopts the orphan instead of spawning its own, so it never
-  owns a child to reap, and Quit leaves the orphan running. The orphan keeps serving its old
-  in-memory build across quit/reopen cycles (observed live: PID from 06-26 still on 8765 after
-  3 days + multiple quit/reopen; manually killed). Fix options: on startup, verify a reused
-  server reports the current `__version__` (and replace it if stale); and/or on Quit, reap any
-  `horus dashboard` on 8765 even if not the owned child (guard against killing a user's
-  manually-started one). Relates to the MVP5 "decouple session-host lifecycle" item.
 - [ ] Low priority: add a configurable mascot background picker once the companion
   shell has a clean settings surface; the current foreground is generated by
   keying the source export's baked checkerboard preview, so a true-alpha source
@@ -144,10 +127,6 @@ dashboard and later becomes the place for continuity/status nudges.
 > sessions, and launch state. See decisions 2026-06-28 "Cross-Computer View Starts
 > As A Remote Catalog, Not A Runtime".
 
-- [ ] **Ignore/Unignore without a page reload** (user request 2026-07-01): clicking
-  Ignore on an untracked GitHub card currently PRGs the whole page; make it remove the
-  card in place (small fetch POST + DOM removal, same-origin guard unchanged) so
-  several repos can be ignored in one sitting.
 - [ ] Later proper-app track: machine snapshot aggregation for non-local paths,
   running sessions, account availability, dirty state, and non-git/Google Drive
   projects with explicit project ids.
@@ -214,15 +193,10 @@ Deferred (noted as future direction, low value for now):
   spans tabs/reloads while the dashboard process runs).
 - [ ] **Remote / cross-machine attach** — run the host per machine, attach over a tailnet with
   auth (Tailscale was already reserved for live state). Protocol kept transport-agnostic for this.
-- [ ] **Monitor sessions Horus did NOT start** (read-only) — discover foreign `claude`/`codex`
-  sessions from the transcripts they already write (`~/.claude/projects/<slug>/<uuid>.jsonl`;
-  Codex rollouts already read by `codex_usage`), surfacing project/last-activity/message-count.
-  **PROMOTED 2026-06-30** as THE session-visibility path now that the Control cockpit is
-  retired: this read-only transcript-discovery (no hosting) is what shows *all* sessions
-  regardless of how they started — the thing the cockpit's Horus-only live view never could.
-  Surface it on the Projects tab (per-project recent sessions). Deferred for now, but it's
-  the chosen approach. (Drop the old "continue into a Horus-owned PTY" bridge — no cockpit.)
-  Optional process-scan layer (cwd→project) wants psutil.
+- [ ] Session-discovery follow-ups (core shipped 2026-07-01 → features.md "Read-only
+  session discovery + Recent sessions panel"): surface a compact recent-sessions hint on
+  the *overview* project cards too (detail page only today); optional process-scan layer
+  (cwd→project, wants psutil) to tell live sessions from finished ones.
 - [ ] Literal OS-level drag gestures / re-dock automation (pop-out covers the practical need).
 
 ## Cross-tool interface sync (Claude ↔ Codex ↔ Gemini CLI ↔ Copilot …)
@@ -264,16 +238,6 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
 > running several times. Fix keeps LLM-authors / Python-detects. See features.md
 > ("Closure freshness gate", "Continuity PR check") + decisions.md.
 
-- [ ] **Fetch-first guard on `horus close --push`** (approved 2026-07-01): before
-  committing/pushing lanes, `git fetch` and stop with "origin has newer `.horus/`
-  commits — pull first" when the remote is ahead on lane paths. The mirror image of
-  `horus resume`'s fetch-first pickup; protects the one-person-two-machines flow. No
-  locking/merge machinery — git conflict resolution on markdown is the fallback.
-- [ ] **Archive session summaries after distillation** (approved 2026-07-01): once a
-  summary's durable content is folded into the lanes, move it to
-  `.horus/sessions/archive/` instead of leaving it in the active list (56 undistilled
-  today). Teach `horus consolidate` to count only non-archived summaries and the
-  emitted distillation ritual to do the move.
 - [ ] Promote the CI check from advisory to a required gate once proven (drop the
   `|| echo ::warning::` fallbacks).
 - [ ] Decide whether `horus init` installs the merge gate by default (`--kind all`)

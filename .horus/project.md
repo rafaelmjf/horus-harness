@@ -1,8 +1,8 @@
 ---
 project: horus-harness
 status: active
-current_focus: "Dashboard redesign from the Claude design handoff is implemented and tightened in the stdlib-rendered dashboard: sumi-e shell, welcome overlay, sticky account rail, redesigned project cards, fold-style catalog sections, two-column project detail, and settings form. The Windows companion opens the owned app window by default and now reaps spawned dashboard/browser process trees on quit. Control remains retired; Horus stays the durable memory plane while launch/account actions keep using existing POST endpoints."
-last_updated: 2026-06-30
+current_focus: "v0.0.3 is on PyPI with the cross-machine flow hardened: fetch-first close guard, read-only session discovery + Recent-sessions panel, dashboard self-update pill/button, companion /health-based stale-dashboard replacement, catalog ignore-in-place, and sessions/archive distillation flow. Next up is the user's live two-machine onboard/continue test; Horus remains the durable memory plane (no session hosting)."
+last_updated: 2026-07-01
 ---
 
 # Horus Harness
