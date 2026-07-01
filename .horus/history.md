@@ -11,6 +11,30 @@ design (the "bumps" below), plus the **rationale behind the rules** in `decision
 (those live in `roadmap.md`). Most decisions' rationale is already a bump below; the
 foundational whys that aren't are collected under "Decision rationale" at the end.
 
+## The stale dashboard "fixed" staleness against itself; uv's env pin blocked every upgrade
+
+Two-machine test, continue leg (2026-07-02). The user clicked "refresh artifacts" on
+the gym project and the outdated-artifacts warning cleared — but the next session still
+spammed hook errors (`/bin/sh: 1: python: not found`). Two compounding causes. (1) The
+dashboard serving the click was a **long-running 0.0.6 build**: its refresh ran
+`upgrade_project` *in-process* with its own loaded modules, writing 0.0.6-generation
+hooks, and its staleness badge compares repos against that same in-memory generation —
+a stale server is self-referentially "fresh" and actively re-stamps projects with
+outdated artifacts. (2) Fixing it by upgrading the CLI hit a second wall: the uv tool
+env was created under Python 3.11, and with the >=3.12 floor every plain `uv tool
+install/upgrade` **silently resolved 0.0.6** (the newest floor-compatible release) and
+reported success — `--python 3.12` was required once to migrate the env. A
+self-inflicted twist made diagnosis harder: a background install-poll (plain install,
+no `--python`, grepping for the new version) kept re-pinning the env to 3.11/0.0.6
+every 20s, fighting the manual fix — concurrent installers against one tool env are a
+footgun. **Lessons:** (1) in-process artifact operations bind to the *server's* build,
+not the installed CLI — mutating endpoints must shell out or refuse when stale;
+(2) raising `requires-python` strands existing tool envs pinned to the old interpreter,
+and the failure mode is a silent "success" at the old version — self-update must handle
+the interpreter, not just the package; (3) after any CLI upgrade, the running dashboard
+must be restarted (or replaced) before its buttons are trusted. → roadmap "UX hardening"
+top items.
+
 ## Onboard succeeded invisibly: a fragment response and a matcher blind spot
 
 Two-machine test, onboard leg (2026-07-02): the user onboarded an already-cloned

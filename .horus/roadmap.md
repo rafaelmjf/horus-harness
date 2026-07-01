@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Two-machine test legs 1–3 done (Linux machine 2), three releases in one night: v0.0.6 (3.11 dead-on-import + first-ever CI test matrix), v0.0.7 (portable 'horus' hook commands, floor >=3.12), v0.0.8 (onboard POST is PRG landing on the new project's detail page; cloned-but-unregistered repos match via workspace-root probe). The gym-repo onboard actually worked — its continuity PR awaits manual merge (auto-merge is off on that repo). 538 tests green."
-next_action: "Start the UX-hardening plan-execution batch (see the triage note in the 'UX hardening' track): scaffold a fresh execution.md (the current one documents the finished 2026-07-01 batch), design phase first for the projection-sync 'same generation' semantics, then delegate the doctor machine-level checks + the new registry-wide `--all` variant + sync-indicator implementation to standard-tier workers with the supervisor reproducing the test gate. Meanwhile the USER is running the two-machine onboard/continue legs (started 2026-07-02 with a sibling-project onboard from machine 2) — fold any findings from that test in as they arrive; sibling repos also still need their committed hook files brought to the portable ≥0.0.7 commands (see the UX-hardening track)."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state. v0.0.7 is on PyPI (portable 'horus' hook commands; Python floor >=3.12; CI matrix gates the floor). 537 tests green. NEXT: start the UX-hardening plan-execution batch per roadmap next_action — replace the stale execution.md (finished 2026-07-01 batch) with a plan covering: (1) design phase for projection-sync generation semantics, (2) delegated phases for doctor machine checks, bulk upgrade-project --all, and the sync-indicator badge. Keep graceful-hooks/startup-visibility/install-smoke items direct (per the track's triage note). The user may report findings from the live two-machine onboard test — handle those first if present."
+current_focus: "Two-machine test complete through the continue leg (Linux machine 2), three releases in one night: v0.0.6 (3.11 dead-on-import + first CI test matrix), v0.0.7 (portable hook commands, floor >=3.12), v0.0.8 (onboard PRG + workspace-clone matching). The continue leg then exposed two systemic traps, remediated by hand and now top roadmap items: a long-running stale dashboard writes stale artifacts and calls them fresh (in-process upgrade_project), and 3.11-era uv tool envs silently pin every upgrade to 0.0.6 (one-time --python 3.12 migration needed — Windows machine likely affected). Gym repo hooks fixed with real 0.0.8; local dashboard restarted on 0.0.8. 538 tests green."
+next_action: "Start the UX-hardening plan-execution batch (triage note in the 'UX hardening' track), now led by the two 2026-07-02 top items: stale-build-server artifact safety (mutating endpoints shell out to the installed CLI / stale-build banner) and self-update interpreter migration (--python handling in /self-update + documented one-time migration; run it on the Windows machine). Then the original batch: design phase for projection-sync 'same generation' semantics, delegated phases for doctor machine-level checks + registry-wide --all + sync-indicator badge. Scaffold a fresh execution.md first (the current one documents the finished 2026-07-01 batch)."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state. v0.0.8 is on PyPI; the two-machine test ran through the continue leg and every finding is either shipped (v0.0.6-v0.0.8) or on the roadmap. NEXT: start the UX-hardening plan-execution batch per roadmap next_action — scaffold a fresh execution.md; put the two 2026-07-02 top items first (stale-build server artifact safety; self-update --python migration, incl. running it on the Windows machine); then design projection-sync generation semantics and delegate doctor machine checks / upgrade-project --all / sync-indicator to standard-tier workers. Keep graceful-hooks/startup-visibility/install-smoke direct (triage note). Why behind the top items: history.md 'The stale dashboard fixed staleness against itself'."
 execution_recommendation: "plan-execution - three of the batch items (doctor machine checks, bulk projection refresh, sync-indicator implementation) are independent, precisely specifiable, and testable; on this runtime a frontier supervisor + standard-tier workers buys context hygiene AND a cheaper tier. The design phase (sync-generation semantics) and the per-OS/companion-lifecycle items stay with the supervisor."
 last_updated: 2026-07-02
 ---
@@ -39,6 +39,30 @@ last_updated: 2026-07-02
 > lifecycle territory where workers fail confidently, install smoke + --refresh are too
 > small, and the macOS pass is user-driven on real hardware.
 
+- [ ] **Stale-build server must not write artifacts** (top priority, found 2026-07-02):
+  a long-running dashboard's artifact operations (refresh-artifacts, onboard→init) run
+  **in-process against the server's loaded build**, and the staleness badge compares
+  repos against that same build — so a stale server reports itself fresh and "refreshes"
+  projects with outdated artifacts (this is how the gym repo kept its broken hooks after
+  the user clicked refresh on a 0.0.6 server). Fix: mutating artifact endpoints shell
+  out to the installed `horus` CLI (always the on-disk generation), and/or the dashboard
+  compares its in-memory `__version__` to the on-disk installed dist and shows a
+  "restart Horus — this dashboard runs an old build" banner that disables artifact
+  writes. Pairs with the MVP5 post-upgrade auto-respawn.
+- [ ] **Self-update vs interpreter-pinned tool env** (top priority, found 2026-07-02):
+  a uv tool env created under Python 3.11 + the >=3.12 floor means every plain
+  `uv tool install/upgrade horus-harness` silently resolves 0.0.6 (newest
+  floor-compatible) and reports success — the machine can never reach the current
+  release without `--python 3.12`. The dashboard `/self-update` button has the same
+  loop. Fix: self-update passes an explicit compatible `--python` (or detects the pin
+  and instructs); document the one-time `uv tool install --force --python 3.12
+  horus-harness` migration. **NB: the Windows machine (machine 1) almost certainly has
+  a 3.11-era env and is stuck exactly like this — run the migration there.**
+- [ ] **Onboard/integrate should commit the projected artifacts** (found 2026-07-02 by
+  the gym session): onboard writes `.claude/settings.json` + `.codex/hooks.json` (and
+  skills) but leaves them untracked, so the first fresh session confronts the user with
+  unexplained files. Decide commit-vs-gitignore policy (horus-harness commits them) and
+  make `integrate()` include them in the continuity commit.
 - [ ] **Graceful hooks when the CLI is missing/broken** (top priority): committed hook
   files reach every machine and every collaborator, including ones without Horus — a
   missing `horus` must be a silent no-op, not per-Bash-call error spam. NB the guard
