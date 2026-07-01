@@ -34,7 +34,9 @@ reflow) if a "why did we ever…" archaeology is ever needed.
 - **Git policy: branch → PR → auto-merge unless review** — a configurable per-machine `[workflow]` policy for Horus's *own* commits (onboard/close), so onboarding never leaves a local-only `.horus/`. Projecting the policy onto the in-session agent + a per-project override are deferred.
 - **Both `AGENTS.md` and `CLAUDE.md` stay native** — a Horus-managed shared block (`HORUS:BEGIN/END`) kept aligned via `reconcile`/`doctor instructions`; the drift check normalizes the cross-reference line. Agent-specific instructions live outside the block. ↳ history.md
 - **Three model-independent disciplines, every session** — reproduce the gate yourself; bound each pass to a green committed-and-pushed checkpoint; put safety in the code (guards), not the reviewer. ↳ history.md
-- **CI tests run on the `requires-python` floor + latest** — dev interpreters are newer than the floor, so floor-only syntax breaks are invisible locally and only surface on install (v0.0.5 was dead-on-import under 3.11). `tests.yml` = pytest matrix + `compileall` gate on every PR/push. ↳ history.md
+- **CI tests run on the `requires-python` floor + latest** — dev interpreters are newer than the floor, so floor-only syntax breaks are invisible locally and only surface on install (v0.0.5 was dead-on-import under 3.11). `tests.yml` = pytest matrix + `compileall` gate on every PR/push; keep the matrix minimum equal to the pyproject floor. ↳ history.md
+- **Python floor tracks uv provisioning, not distro pythons (>=3.12 since v0.0.7)** — uv auto-downloads the floor interpreter for tool installs, so raising the floor never degrades an install; it eliminated the PEP 701 f-string trap as a class. pip-on-old-system-python is not the audience. ↳ history.md
+- **Committed hook commands are the `horus` console script, nothing interpreter-prefixed** — hook files travel with the repo to every machine; `python`/`python3`/`py -m horus` only resolves where horus happens to be importable ambiently (uv tool isolation prevents it; Linux has no `python`). uv guarantees `horus` on PATH cross-OS. ↳ history.md
 
 ## Execution & delegation
 

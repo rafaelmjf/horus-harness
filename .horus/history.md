@@ -11,6 +11,25 @@ design (the "bumps" below), plus the **rationale behind the rules** in `decision
 (those live in `roadmap.md`). Most decisions' rationale is already a bump below; the
 foundational whys that aren't are collected under "Decision rationale" at the end.
 
+## Committed hook files spammed "PreToolUse: Bash hook error" on the second machine
+
+Two-machine test, second finding (2026-07-01): on machine 2 every single Bash tool
+call produced two hook errors. The committed `.claude/settings.json`/`.codex/hooks.json`
+invoked hooks as `python -m horus` (or `python3`/`py`). That spelling only ever worked
+on the machine that wrote it — and for a subtle reason: `python -m` prepends the cwd to
+`sys.path`, so *inside the horus-harness repo* it silently imported the checkout rather
+than any installed copy. Everywhere else it needs horus importable in the ambient
+interpreter, which the uv tool env's isolation is designed to prevent — and Ubuntu has
+no bare `python` at all, so both PreToolUse hooks died with "command not found" on
+every call. **Lessons:** (1) anything committed to the repo executes on *every* machine
+the repo reaches — a command that works locally via cwd-import is a portability bug in
+disguise; (2) the `horus` console script is the one cross-OS spelling uv actually
+guarantees on PATH; (3) old spellings are rewritten in place because the hook merge
+matches Horus entries by marker substring, not exact command — other onboarded repos
+need `horus upgrade-project --apply` after the CLI upgrade. Fixed in v0.0.7 together
+with raising the floor to >=3.12 (user call: uv auto-provisions interpreters, so a
+higher floor never degrades an install and retires the PEP 701 trap below).
+
 ## v0.0.5 was dead-on-import on the Python floor that no gate ever ran
 
 The live two-machine test's first act (2026-07-01, Linux machine 2): `uv tool

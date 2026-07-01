@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "The live two-machine test is underway and already paid off: its first leg found v0.0.5 dead-on-import under Python 3.11 (uv's managed interpreter on machine 2). v0.0.6 is on PyPI with the fix plus a new CI test matrix (3.11+3.13) so the support floor is gated. Machine 2 (Linux) is unblocked and verified serving; the onboard/continue legs of the test are next. Horus remains the durable memory plane (no session hosting)."
+current_focus: "The live two-machine test is underway and already paid off twice: leg 1 found v0.0.5 dead-on-import under Python 3.11 (→ v0.0.6 + the first-ever CI test matrix), leg 2 found the committed hook files erroring on every Bash call on machine 2 (→ v0.0.7: portable 'horus' console-script hook commands, floor raised to >=3.12). Machine 2 (Linux) is unblocked and verified; the onboard/continue legs are next. Horus remains the durable memory plane (no session hosting)."
 last_updated: 2026-07-02
 ---
 

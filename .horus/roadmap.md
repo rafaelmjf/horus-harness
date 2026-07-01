@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Two-machine test leg 1 done (Linux machine 2): it caught v0.0.5 dead-on-import under Python 3.11 — fixed same night as v0.0.6 on PyPI (PR #60) plus a new tests.yml CI matrix (3.11+3.13, compileall gate; there was no test CI at all). 537 tests green on both interpreters; machine 2 verified serving 0.0.6 from PyPI (/health + index 200)."
-next_action: "USER continues the live two-machine flow validation from machine 2, now unblocked on v0.0.6: run the onboard/continue legs (same alias on both machines, per-machine owner config), exercise the dashboard/companion behaviors shipped 2026-07-01 (see features.md rows from that date), and fix whatever the test surfaces; then pick the next roadmap item (overview-card transcript summaries, or MVP2.5 fetch-all)."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state. v0.0.6 is on PyPI: the two-machine test's first finding (v0.0.5 crashed on import under Python 3.11 — f-string backslash, PEP 701-only) is fixed and gated by the new tests.yml CI matrix (3.11+3.13). 537 tests green. NEXT: continue the live cross-machine onboard/continue test from the roadmap next_action and fix what it surfaces. The active execution.md documents the finished 2026-07-01 batch — replace it when the next substantial item starts."
+current_focus: "Two-machine test legs 1–2 done (Linux machine 2): caught v0.0.5 dead-on-import under Python 3.11 (→ v0.0.6 + first-ever CI test matrix) and the committed hook files erroring on every Bash call ('python -m horus' is machine-local; → v0.0.7: portable 'horus' console-script hook commands + floor raised to >=3.12, user call). Both on PyPI; 537 tests green; machine 2 verified."
+next_action: "USER continues the live two-machine flow validation from machine 2, now on v0.0.7: run the onboard/continue legs (same alias on both machines, per-machine owner config), exercise the dashboard/companion behaviors shipped 2026-07-01 (see features.md rows from that date), and fix whatever the test surfaces. Also run `horus upgrade-project --apply` in the sibling onboarded repos so their committed hook files pick up the portable commands; then pick the next roadmap item (overview-card transcript summaries, or MVP2.5 fetch-all)."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state. v0.0.7 is on PyPI carrying the two-machine test's first two findings: the 3.11 import crash (fixed + CI matrix now gates the floor) and the non-portable committed hook commands (now the 'horus' console script; floor raised to >=3.12). 537 tests green. NEXT: continue the live cross-machine onboard/continue test from the roadmap next_action; refresh sibling repos' hooks via `horus upgrade-project --apply`; fix what the test surfaces. The active execution.md documents the finished 2026-07-01 batch — replace it when the next substantial item starts."
 execution_recommendation: "continue-as-is - the next step is a user-driven live test plus fixes for whatever it surfaces: interactive, exploratory, small-volume debugging where delegation buys nothing."
 last_updated: 2026-07-02
 ---
@@ -61,6 +61,7 @@ last_updated: 2026-07-02
 File-structure (NOT LLM-dependent — done 2026-06-25):
 
 - [ ] Propagate the updated managed block to the sibling repos (cross-repo propagation still manual; see "Later").
+- [ ] Run `horus upgrade-project --apply` in every onboarded repo after upgrading the CLI to ≥0.0.7 — their committed hook files still carry the non-portable `python -m horus` commands (they error on any machine that isn't the one that wrote them; see history.md).
 
 Distillation routines — **agent-delegated prototype shipped 2026-06-25** (pre-pass + emitted prompt, like `close`; runs on any machine with an in-loop agent). Contract in `docs/routines.md`.
 
