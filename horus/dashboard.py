@@ -175,6 +175,9 @@ def load_project(path_str: str) -> dict[str, Any]:
         stale = [a for a in actions if a.status == "would-update"]
         data["artifacts_stale"] = bool(stale)
         data["artifacts_stale_count"] = len(stale)
+        # The inverse direction: repo artifacts NEWER than the installed CLI.
+        # The remedy is updating horus-harness itself, not refreshing the repo.
+        data["cli_outdated"] = any("newer than this CLI" in a.message for a in actions)
     except Exception:
         # never let a projection check break the dashboard render
         data["artifacts_stale"] = False
@@ -1233,6 +1236,8 @@ def _project_column(p: dict[str, Any], i: int, aliases: list[dict[str, Any]] | N
     status_badges = [f"<span class='badge'>status {html.escape(p['status']) or 'unknown'}</span>", f"<span class='badge'><b class='mono'>{len(p['sessions'])}</b>&nbsp;sessions</span>"]
     if p.get("artifacts_stale"):
         status_badges.append("<span class='badge seal'><span class='gd'></span>&#9888; artifacts outdated</span>")
+    if p.get("cli_outdated"):
+        status_badges.append("<span class='badge seal'><span class='gd'></span>&#9888; Horus CLI outdated</span>")
     if git.get("dirty"):
         status_badges.append("<span class='badge warn'><span class='gd'></span>uncommitted</span>")
     if p.get("findings"):
@@ -1719,6 +1724,16 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
             "<div class='panel'><div class='ph'><span class='eyebrow'>Artifacts outdated</span></div>"
             f"<p class='lead' style='font-size:13.5px'>&#9888; artifacts outdated - {html.escape(str(p.get('artifacts_stale_count', 0)))} item(s) behind the installed CLI. "
             "Run <code>horus upgrade-project --apply</code> or use Refresh artifacts.</p></div>"
+        )
+    if p.get("cli_outdated"):
+        main_parts.append(
+            "<div class='panel'><div class='ph'><span class='eyebrow'>Horus CLI outdated</span></div>"
+            "<p class='lead' style='font-size:13.5px'>&#9888; this project's Horus artifacts are "
+            "<em>newer</em> than the installed CLI &mdash; refreshing would downgrade them. "
+            "Update horus-harness itself, then restart Horus.</p>"
+            "<form method='post' action='/self-update' "
+            "onsubmit=\"return confirm('Run uv tool upgrade horus-harness? Horus must be restarted afterwards to load it.')\">"
+            "<button class='btn sm btn-go' type='submit'>Update horus-harness from PyPI</button></form></div>"
         )
     rows = "".join(
         f"<tr><td class='{_LEVEL_CLASS.get(f['level'], '')}'>{html.escape(f['level'])}</td>"
