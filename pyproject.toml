@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "horus-harness"
-version = "0.0.2"
+version = "0.0.3"
 description = "Project-centric continuity and control panel for official coding-agent CLIs"
 readme = "README.md"
 requires-python = ">=3.11"
