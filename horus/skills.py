@@ -68,7 +68,7 @@ description: >-
   first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # Consolidate Horus continuity
 
@@ -164,7 +164,9 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
    roadmap item is done.
 
 5. **Backlog consolidation — ONLY when explicitly asked.** Distill old `sessions/*.md`
-   and stale `temp/*.md` handoff notes into the lanes then remove them; move historical done items into `features.md` and
+   into the lanes then move them to `sessions/archive/` (local-only, excluded from the
+   to-distill count — don't delete); remove stale `temp/*.md` handoff notes once
+   reviewed; move historical done items into `features.md` and
    **prune** them from `roadmap.md`; **de-duplicate** roadmap↔features overlaps by
    keeping action points in `roadmap.md` and status in `features.md`, with a literal
    `→ features.md` / `action points → roadmap.md` cross-reference each way (that
@@ -449,7 +451,7 @@ note written by the supervisor after doing the work does not satisfy the workflo
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 7, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 8, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 2, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 2, _INFER_SKILL),
     Skill("horus-execution", 4, _EXECUTION_SKILL),

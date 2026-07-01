@@ -296,3 +296,14 @@ def test_feature_items_groups_names_by_section():
     assert items["in_progress"] == ["Git awareness"]
     assert items["planned"] == ["Telegram"]
     assert routines.feature_counts(body) == {"shipped": 2, "in_progress": 1, "planned": 1}
+
+
+def test_recent_sessions_excludes_archive(tmp_path):
+    """Distilled summaries moved to sessions/archive/ leave the to-distill count."""
+    from horus.continuity import recent_sessions
+
+    sessions = tmp_path / ".horus" / "sessions"
+    (sessions / "archive").mkdir(parents=True)
+    (sessions / "active.md").write_text("x", encoding="utf-8")
+    (sessions / "archive" / "distilled.md").write_text("x", encoding="utf-8")
+    assert [p.name for p in recent_sessions(tmp_path, limit=10)] == ["active.md"]

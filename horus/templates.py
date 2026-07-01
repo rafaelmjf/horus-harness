@@ -608,7 +608,8 @@ Never invent status, dates, or versions; when intent is unclear, leave it and fl
    Keep roadmap focused on top/open action points; condense or archive long completed
    lists rather than letting them grow.
 4. Distill sessions: fold durable content from sessions/*.md into the lanes, then
-   remove or mark the distilled summary.
+   move the distilled summary into sessions/archive/ (kept local, excluded from
+   the to-distill count) rather than deleting it.
 5. Decisions discipline: decisions.md is concise current rules grouped by topic — NOT
    a dated log. Collapse superseded decisions to the rule that won, and move the
    narrative rationale / dead ends to history.md (a "Decision rationale" section).

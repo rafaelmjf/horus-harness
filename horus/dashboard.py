@@ -649,6 +649,17 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         ".then(function(html){el.outerHTML=html;})"
         ".catch(function(){el.innerHTML=\"<div class='banner err'>This section failed to load.</div>\";});"
         "});"
+        # Ignore-in-place: intercept catalog Ignore submits (delegated, so it also
+        # covers the async-loaded fragment) and remove the card without a reload,
+        # so several repos can be ignored in one sitting. Non-JS falls back to PRG.
+        "document.addEventListener('submit',function(ev){"
+        "var f=ev.target;"
+        "if(!f||!f.getAttribute||f.getAttribute('action')!=='/github-ignore')return;"
+        "ev.preventDefault();"
+        "fetch('/github-ignore',{method:'POST',headers:{'X-Horus-Fetch':'1'},"
+        "body:new URLSearchParams(new FormData(f))})"
+        ".then(function(r){if(r.ok){var c=f.closest('.repo');if(c)c.remove();}});"
+        "},true);"
         "</script>"
         "</body></html>"
     )
@@ -2923,7 +2934,10 @@ class _Handler(BaseHTTPRequestHandler):
             target = form.get("target", "")
             if self._valid_github_catalog_target(target):
                 config.ignore_repo(target)
-            self._redirect("/#github-catalog")
+            if self.headers.get("X-Horus-Fetch"):
+                self._no_content()  # in-place JS removal; no reload
+            else:
+                self._redirect("/#github-catalog")
             return
         if parsed.path == "/github-unignore":
             form = self._read_form()
