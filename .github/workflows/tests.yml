@@ -1,9 +1,10 @@
 name: tests
 
-# Test gate on the oldest and newest supported Pythons. The 3.11 job exists
-# because dev machines run newer interpreters: v0.0.5 shipped an f-string
-# backslash (legal only from 3.12/PEP 701) that crashed every 3.11 install
-# on import, and nothing before publish would have caught it.
+# Test gate on the oldest and newest supported Pythons. The floor job exists
+# because dev machines run newer interpreters: v0.0.5 shipped syntax legal
+# only above the then-3.11 floor and crashed every floor install on import,
+# with nothing before publish to catch it. Keep the matrix minimum equal to
+# requires-python in pyproject.toml.
 
 on:
   pull_request:
@@ -17,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.13']
+        python-version: ['3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

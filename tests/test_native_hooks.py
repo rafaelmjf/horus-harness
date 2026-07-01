@@ -14,7 +14,7 @@ def test_install_codex_usage_hook_creates_stop_hook(tmp_path):
         handler = data["hooks"][event][0]["hooks"][0]
         assert handler["type"] == "command"
         assert "horus usage check --path . --threshold 80 --hook" in handler["command"]
-        assert "commandWindows" in handler
+        assert "commandWindows" not in handler
 
 
 def test_install_codex_usage_hook_preserves_other_hooks_and_replaces_horus_hook(tmp_path):
@@ -50,7 +50,7 @@ def test_install_codex_usage_hook_preserves_other_hooks_and_replaces_horus_hook(
     ]
     assert stop_commands == [
         "echo keep",
-        "python3 -m horus usage check --path . --threshold 70 --hook",
+        "horus usage check --path . --threshold 70 --hook",
     ]
     prompt_commands = [
         handler["command"]
@@ -59,7 +59,7 @@ def test_install_codex_usage_hook_preserves_other_hooks_and_replaces_horus_hook(
     ]
     assert prompt_commands == [
         "echo prompt",
-        "python3 -m horus usage check --path . --threshold 70 --hook",
+        "horus usage check --path . --threshold 70 --hook",
     ]
     assert data["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "echo pre"
 
@@ -79,8 +79,8 @@ def test_install_codex_merge_hook_creates_pretooluse_gate(tmp_path):
     group = data["hooks"]["PreToolUse"][0]
     assert group["matcher"] == "Bash"
     handler = group["hooks"][0]
-    assert handler["command"] == "python3 -m horus close --hook"
-    assert handler["commandWindows"] == "py -m horus close --hook"
+    assert handler["command"] == "horus close --hook"
+    assert "commandWindows" not in handler
 
 
 def test_install_codex_usage_and_merge_hooks_coexist(tmp_path):
@@ -90,7 +90,7 @@ def test_install_codex_usage_and_merge_hooks_coexist(tmp_path):
 
     data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     assert "UserPromptSubmit" in data["hooks"] and "Stop" in data["hooks"]
-    assert data["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "python3 -m horus close --hook"
+    assert data["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "horus close --hook"
 
 
 def test_install_codex_merge_hook_idempotent(tmp_path):
@@ -106,8 +106,8 @@ def test_install_codex_guard_hook_creates_pretooluse_gate(tmp_path):
     group = data["hooks"]["PreToolUse"][0]
     assert group["matcher"] == "Bash"
     handler = group["hooks"][0]
-    assert handler["command"] == "python3 -m horus guard-host --hook"
-    assert handler["commandWindows"] == "py -m horus guard-host --hook"
+    assert handler["command"] == "horus guard-host --hook"
+    assert "commandWindows" not in handler
 
 
 def test_install_codex_usage_merge_and_guard_hooks_coexist(tmp_path):
@@ -120,8 +120,8 @@ def test_install_codex_usage_merge_and_guard_hooks_coexist(tmp_path):
     data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     assert "UserPromptSubmit" in data["hooks"] and "Stop" in data["hooks"]
     commands = {g["hooks"][0]["command"] for g in data["hooks"]["PreToolUse"]}
-    assert "python3 -m horus close --hook" in commands
-    assert "python3 -m horus guard-host --hook" in commands
+    assert "horus close --hook" in commands
+    assert "horus guard-host --hook" in commands
 
 
 def test_install_codex_guard_hook_idempotent(tmp_path):
@@ -164,7 +164,7 @@ def test_install_claude_merge_hook_creates_pretooluse_gate(tmp_path):
     data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     group = data["hooks"]["PreToolUse"][0]
     assert group["matcher"] == "Bash"  # matches the Bash tool; the command filters for the merge
-    assert group["hooks"][0]["command"] == "python -m horus close --hook"
+    assert group["hooks"][0]["command"] == "horus close --hook"
 
 
 def test_install_claude_merge_hook_idempotent(tmp_path):
@@ -179,7 +179,7 @@ def test_usage_and_merge_hooks_coexist_without_clobber(tmp_path):
     native_hooks.install_claude_usage_hook(tmp_path)
     data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert "UserPromptSubmit" in data["hooks"] and "Stop" in data["hooks"]
-    assert data["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "python -m horus close --hook"
+    assert data["hooks"]["PreToolUse"][0]["hooks"][0]["command"] == "horus close --hook"
 
 
 def test_install_claude_guard_hook_creates_pretooluse_gate(tmp_path):
@@ -188,7 +188,7 @@ def test_install_claude_guard_hook_creates_pretooluse_gate(tmp_path):
     data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     group = data["hooks"]["PreToolUse"][0]
     assert group["matcher"] == "Bash"
-    assert group["hooks"][0]["command"] == "python -m horus guard-host --hook"
+    assert group["hooks"][0]["command"] == "horus guard-host --hook"
 
 
 def test_install_claude_guard_hook_idempotent(tmp_path):
@@ -206,8 +206,8 @@ def test_usage_merge_and_guard_hooks_coexist_without_clobber(tmp_path):
     data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert "UserPromptSubmit" in data["hooks"] and "Stop" in data["hooks"]
     commands = {g["hooks"][0]["command"] for g in data["hooks"]["PreToolUse"]}
-    assert "python -m horus close --hook" in commands
-    assert "python -m horus guard-host --hook" in commands
+    assert "horus close --hook" in commands
+    assert "horus guard-host --hook" in commands
 
 
 def test_closure_sentinel_fires_once(tmp_path, monkeypatch):

@@ -336,7 +336,7 @@ def test_hook_install_codex_cli(tmp_path, monkeypatch):
     hooks_text = (tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8")
     assert '"Stop"' in hooks_text
     assert "horus usage check" in hooks_text
-    assert "commandWindows" in hooks_text
+    assert "commandWindows" not in hooks_text
 
 
 def test_hook_install_codex_merge_cli(tmp_path, monkeypatch):
@@ -346,8 +346,8 @@ def test_hook_install_codex_merge_cli(tmp_path, monkeypatch):
     data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     group = data["hooks"]["PreToolUse"][0]
     assert group["matcher"] == "Bash"
-    assert group["hooks"][0]["command"] == "python3 -m horus close --hook"
-    assert group["hooks"][0]["commandWindows"] == "py -m horus close --hook"
+    assert group["hooks"][0]["command"] == "horus close --hook"
+    assert "commandWindows" not in group["hooks"][0]
 
 
 def test_hook_install_codex_guard_cli(tmp_path, monkeypatch):
@@ -357,8 +357,8 @@ def test_hook_install_codex_guard_cli(tmp_path, monkeypatch):
     data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     group = data["hooks"]["PreToolUse"][0]
     assert group["matcher"] == "Bash"
-    assert group["hooks"][0]["command"] == "python3 -m horus guard-host --hook"
-    assert group["hooks"][0]["commandWindows"] == "py -m horus guard-host --hook"
+    assert group["hooks"][0]["command"] == "horus guard-host --hook"
+    assert "commandWindows" not in group["hooks"][0]
 
 
 def test_upgrade_project_cli_dry_run_reports_pending(tmp_path, monkeypatch, capsys):

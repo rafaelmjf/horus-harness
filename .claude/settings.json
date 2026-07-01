@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -m horus usage check --target claude --hook --threshold 90"
+            "command": "horus usage check --target claude --hook --threshold 90"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -m horus usage check --target claude --hook --threshold 90"
+            "command": "horus usage check --target claude --hook --threshold 90"
           }
         ]
       }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -m horus close --hook"
+            "command": "horus close --hook"
           }
         ]
       },
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python -m horus guard-host --hook"
+            "command": "horus guard-host --hook"
           }
         ]
       }
