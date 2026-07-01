@@ -1,6 +1,7 @@
 # Agent Instructions
 
 <!-- HORUS:BEGIN shared-instructions -->
+<!-- horus-block-version: 2 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.

@@ -26,6 +26,15 @@ class BlockResult(NamedTuple):
     raw: str | None  # block contents including markers, or None if not found
 
 
+_BLOCK_VERSION_RE = re.compile(r"horus-block-version:\s*(\d+)")
+
+
+def block_version(raw: str) -> int | None:
+    """The block's version marker, or None for blocks written before it existed."""
+    m = _BLOCK_VERSION_RE.search(raw)
+    return int(m.group(1)) if m else None
+
+
 def extract_block(text: str) -> BlockResult:
     """Pull the managed block (markers included) out of a file's text."""
     start = text.find(BLOCK_BEGIN)

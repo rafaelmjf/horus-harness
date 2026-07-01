@@ -99,17 +99,15 @@ Phase 3 — portability (started with direct Codex skill projection):
 
 ## Upgrade-project direction-awareness
 
-> Found 2026-07-01 while planning the two-machine test. Skills are version-gated
-> (repo-ahead = "up to date", never downgraded), but the managed instruction block
-> and hooks are pure content comparisons — an OLD installed CLI sees a NEWER pulled
-> repo as "artifacts outdated", and clicking Refresh would *downgrade* the block to
-> the old CLI's wording. Safe order today: upgrade the CLI first, then refresh.
+> Found 2026-07-01 while planning the two-machine test; the managed-block half was
+> hotfixed in v0.0.4 (`horus-block-version` marker + refusal to downgrade a newer
+> block — CLIs ≤0.0.3 remain direction-blind, so on old installs: upgrade the CLI
+> first, then refresh). → features.md "Project upgrade / projection refresh".
 
-- [ ] Make the staleness badge / `upgrade-project` direction-aware for content-compared
-  artifacts: version-mark the managed block (like skills' `horus-skill-version`) or
-  compare against the CLI's version, so a repo *ahead* of the CLI renders as "your CLI
-  is outdated — update it" (pointing at the self-update pill) instead of offering a
-  downgrade refresh.
+- [ ] Residual: native hook configs are still pure content comparisons — an old CLI
+  reading a repo with newer-generation hooks would offer a downgrade "refresh".
+  Version-mark or generation-stamp the hook entries the same way if hook payloads
+  start changing between releases.
 
 ## Self-update follow-up
 
