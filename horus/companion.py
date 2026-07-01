@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import socket
@@ -15,6 +16,8 @@ from pathlib import Path, PureWindowsPath
 from typing import Any, NamedTuple
 from urllib.error import URLError
 from urllib.request import urlopen
+
+from horus import __version__
 
 
 class DashboardProcess(NamedTuple):
@@ -66,9 +69,98 @@ def _wait_dashboard_live(url: str, process: subprocess.Popen[str], *, timeout: f
     return dashboard_is_live(url)
 
 
+def dashboard_identity(url: str, *, timeout: float = 0.5) -> dict[str, Any] | None:
+    """The `/health` identity of a live server, or None (pre-/health build, foreign
+    server, or unreachable)."""
+    try:
+        with urlopen(url.rstrip("/") + "/health", timeout=timeout) as response:
+            data = json.load(response)
+    except (OSError, TimeoutError, URLError, ValueError):
+        return None
+    if isinstance(data, dict) and data.get("app") == "horus-dashboard":
+        return data
+    return None
+
+
+def _looks_like_horus_dashboard(url: str, *, timeout: float = 0.5) -> bool:
+    """Heuristic for builds that predate `/health`: the index page brands itself."""
+    try:
+        with urlopen(url, timeout=timeout) as response:
+            return b"Horus" in response.read(4096)
+    except (OSError, TimeoutError, URLError, ValueError):
+        return False
+
+
+def _pid_listening_on(port: int) -> int | None:
+    """Owning PID of the listener on ``port`` (Windows only — where the legacy
+    orphan problem was observed; other platforms return None and skip the reap)."""
+    if sys.platform != "win32":
+        return None
+    try:
+        out = subprocess.run(
+            ["netstat", "-ano", "-p", "tcp"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[0] == "TCP" and parts[1].endswith(f":{port}") and parts[3] == "LISTENING":
+            try:
+                return int(parts[4])
+            except ValueError:
+                continue
+    return None
+
+
+def _kill_pid_tree(pid: int, *, timeout: float = 3.0) -> None:
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=timeout, check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return
+    try:
+        os.kill(pid, 15)
+    except OSError:
+        pass
+
+
+def _replace_stale_dashboard(url: str, port: int, *, timeout: float = 3.0) -> bool:
+    """Terminate a *stale* Horus dashboard occupying the port; True when it did.
+
+    A live server on the port used to be adopted unconditionally, so an orphan from
+    an old launch kept serving its old in-memory build forever (observed: a 3-day-old
+    PID surviving many quit/reopen cycles). Only a server that identifies as a Horus
+    dashboard with a different ``__version__`` — or brands itself as Horus but
+    predates ``/health`` — is killed; a foreign server is never touched."""
+    identity = dashboard_identity(url)
+    if identity is not None:
+        if identity.get("version") == __version__:
+            return False  # current build — adopting it is fine
+        pid = identity.get("pid")
+    elif _looks_like_horus_dashboard(url):
+        pid = _pid_listening_on(port)  # legacy Horus build with no /health
+    else:
+        return False  # not a Horus dashboard — never kill a foreign server
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    _kill_pid_tree(pid)
+    deadline = time.monotonic() + timeout
+    while dashboard_is_live(url) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    return not dashboard_is_live(url)
+
+
 def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool = True) -> DashboardProcess:
     url = dashboard_url(host, port)
-    if dashboard_is_live(url) or not start:
+    if not start:
+        return DashboardProcess(url, False, None)
+    if dashboard_is_live(url) and not _replace_stale_dashboard(url, port):
         return DashboardProcess(url, False, None)
 
     kwargs = {

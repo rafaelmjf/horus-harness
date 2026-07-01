@@ -342,3 +342,57 @@ def test_relaunch_without_console_spawns_pythonw(monkeypatch):
     cmd, kwargs = calls[0]
     assert cmd == [r"C:\Python\pythonw.exe", "-m", "horus", "app", "--path", "."]
     assert kwargs["env"]["HORUS_DETACHED"] == "1"
+
+
+# --- stale-orphan replacement (the adopted-dashboard fix) ---
+
+
+def test_replace_stale_dashboard_keeps_current_version(monkeypatch):
+    from horus import companion
+
+    monkeypatch.setattr(
+        companion, "dashboard_identity",
+        lambda url, **k: {"app": "horus-dashboard", "version": companion.__version__, "pid": 123},
+    )
+    killed: list[int] = []
+    monkeypatch.setattr(companion, "_kill_pid_tree", lambda pid, **k: killed.append(pid))
+    assert companion._replace_stale_dashboard("http://127.0.0.1:8765", 8765) is False
+    assert killed == []
+
+
+def test_replace_stale_dashboard_kills_old_version(monkeypatch):
+    from horus import companion
+
+    monkeypatch.setattr(
+        companion, "dashboard_identity",
+        lambda url, **k: {"app": "horus-dashboard", "version": "0.0.0", "pid": 123},
+    )
+    killed: list[int] = []
+    monkeypatch.setattr(companion, "_kill_pid_tree", lambda pid, **k: killed.append(pid))
+    monkeypatch.setattr(companion, "dashboard_is_live", lambda url, **k: False)
+    assert companion._replace_stale_dashboard("http://127.0.0.1:8765", 8765) is True
+    assert killed == [123]
+
+
+def test_replace_stale_dashboard_never_kills_foreign_server(monkeypatch):
+    from horus import companion
+
+    monkeypatch.setattr(companion, "dashboard_identity", lambda url, **k: None)
+    monkeypatch.setattr(companion, "_looks_like_horus_dashboard", lambda url, **k: False)
+    killed: list[int] = []
+    monkeypatch.setattr(companion, "_kill_pid_tree", lambda pid, **k: killed.append(pid))
+    assert companion._replace_stale_dashboard("http://127.0.0.1:8765", 8765) is False
+    assert killed == []
+
+
+def test_replace_stale_dashboard_reaps_legacy_build_by_port(monkeypatch):
+    from horus import companion
+
+    monkeypatch.setattr(companion, "dashboard_identity", lambda url, **k: None)
+    monkeypatch.setattr(companion, "_looks_like_horus_dashboard", lambda url, **k: True)
+    monkeypatch.setattr(companion, "_pid_listening_on", lambda port: 456)
+    killed: list[int] = []
+    monkeypatch.setattr(companion, "_kill_pid_tree", lambda pid, **k: killed.append(pid))
+    monkeypatch.setattr(companion, "dashboard_is_live", lambda url, **k: False)
+    assert companion._replace_stale_dashboard("http://127.0.0.1:8765", 8765) is True
+    assert killed == [456]
