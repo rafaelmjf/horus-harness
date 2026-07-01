@@ -1757,3 +1757,28 @@ def test_project_sessions_panel_empty(monkeypatch):
     monkeypatch.setattr(dashboard.session_discovery, "discover_sessions", lambda p: [])
     out = dashboard._project_sessions_html(_Path("."))
     assert "No Claude/Codex transcripts" in out
+
+
+def test_cli_outdated_flag_and_update_card(tmp_path, monkeypatch):
+    """A repo whose managed block is newer than the installed CLI surfaces an
+    'update horus-harness' card (POST /self-update), not a downgrade Refresh."""
+    from horus import upgrade as upgrade_mod
+
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    monkeypatch.setattr(
+        dashboard.upgrade, "upgrade_project",
+        lambda root, apply=False: [upgrade_mod.UpgradeAction(
+            "skipped",
+            "AGENTS.md managed block (v999) is newer than this CLI (v2) — upgrade horus-harness instead of refreshing",
+        )],
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["cli_outdated"] is True
+    assert data["artifacts_stale"] is False
+
+    html_out = dashboard.render_project(data)
+    assert "Horus CLI outdated" in html_out
+    assert "action='/self-update'" in html_out
+    assert "Update horus-harness from PyPI" in html_out
