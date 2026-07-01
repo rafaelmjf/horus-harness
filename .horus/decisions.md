@@ -34,6 +34,7 @@ reflow) if a "why did we ever…" archaeology is ever needed.
 - **Git policy: branch → PR → auto-merge unless review** — a configurable per-machine `[workflow]` policy for Horus's *own* commits (onboard/close), so onboarding never leaves a local-only `.horus/`. Projecting the policy onto the in-session agent + a per-project override are deferred.
 - **Both `AGENTS.md` and `CLAUDE.md` stay native** — a Horus-managed shared block (`HORUS:BEGIN/END`) kept aligned via `reconcile`/`doctor instructions`; the drift check normalizes the cross-reference line. Agent-specific instructions live outside the block. ↳ history.md
 - **Three model-independent disciplines, every session** — reproduce the gate yourself; bound each pass to a green committed-and-pushed checkpoint; put safety in the code (guards), not the reviewer. ↳ history.md
+- **CI tests run on the `requires-python` floor + latest** — dev interpreters are newer than the floor, so floor-only syntax breaks are invisible locally and only surface on install (v0.0.5 was dead-on-import under 3.11). `tests.yml` = pytest matrix + `compileall` gate on every PR/push. ↳ history.md
 
 ## Execution & delegation
 

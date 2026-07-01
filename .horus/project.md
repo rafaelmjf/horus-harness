@@ -1,8 +1,8 @@
 ---
 project: horus-harness
 status: active
-current_focus: "v0.0.3 is on PyPI with the cross-machine flow hardened: fetch-first close guard, read-only session discovery + Recent-sessions panel, dashboard self-update pill/button, companion /health-based stale-dashboard replacement, catalog ignore-in-place, and sessions/archive distillation flow. Next up is the user's live two-machine onboard/continue test; Horus remains the durable memory plane (no session hosting)."
-last_updated: 2026-07-01
+current_focus: "The live two-machine test is underway and already paid off: its first leg found v0.0.5 dead-on-import under Python 3.11 (uv's managed interpreter on machine 2). v0.0.6 is on PyPI with the fix plus a new CI test matrix (3.11+3.13) so the support floor is gated. Machine 2 (Linux) is unblocked and verified serving; the onboard/continue legs of the test are next. Horus remains the durable memory plane (no session hosting)."
+last_updated: 2026-07-02
 ---
 
 # Horus Harness

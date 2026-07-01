@@ -1,6 +1,6 @@
 ---
 status: active
-last_updated: 2026-06-30
+last_updated: 2026-07-02
 ---
 
 # History — bumps in the road & decision rationale
@@ -10,6 +10,24 @@ design (the "bumps" below), plus the **rationale behind the rules** in `decision
 (which stays concise — the *why* lives here). **Not** a timeline and **not** open issues
 (those live in `roadmap.md`). Most decisions' rationale is already a bump below; the
 foundational whys that aren't are collected under "Decision rationale" at the end.
+
+## v0.0.5 was dead-on-import on the Python floor that no gate ever ran
+
+The live two-machine test's first act (2026-07-01, Linux machine 2): `uv tool
+install horus-harness` succeeded but `horus` crashed on import — an f-string in
+`dashboard._page` contained a backslash inside the expression, legal only from
+Python 3.12 (PEP 701), while `requires-python` promised 3.11. Three compounding
+blind spots: the dev machines all run newer interpreters, so the suite could
+never see the floor; there was **no test CI at all** (only the advisory
+continuity check and publish), so nothing ran the suite anywhere else; and uv's
+tool env uses uv's *managed* interpreter choice (3.11.15 here) even when the
+system python is newer — the floor is what real installs actually get.
+**Lessons:** (1) the support floor must be exercised by a gate, not assumed from
+`requires-python` — hence the `tests.yml` matrix (floor + latest, `compileall`
+import gate); (2) declaring a version range is a promise the dev environment
+alone cannot verify; (3) `uv tool install --reinstall` can re-resolve a stale
+cached index — `--refresh` is needed to pick up a minutes-old release. Fixed in
+v0.0.6 the same night.
 
 ## Windows virtualenv `pythonw.exe` wrappers are not the whole process tree
 
