@@ -21,6 +21,7 @@ from horus.instructions import extract_block
 GITIGNORE_RULES = (
     "sessions/*.md",
     "!sessions/.gitkeep",
+    "sessions/archive/",
     "temp/*",
     "!temp/.gitkeep",
 )

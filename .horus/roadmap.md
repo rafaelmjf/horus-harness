@@ -29,23 +29,6 @@ last_updated: 2026-06-30
 
 - [ ] Deferred until the product surface is somewhat more stable: add a lightweight documentation website for Horus concepts, setup, workflows, and native Claude/Codex integration. This is increasingly valuable as the project grows, but it adds maintenance overhead; prefer improving README/help text and stabilizing command surfaces first.
 
-## GitHub project onboarding (Track A) - show + onboard untracked repos
-
-> Decided 2026-06-29 (see decisions.md "GitHub Onboarding + Workflow Policy").
-> Motivation: a fresh repo like `agentic-gym-coach` has no committed `.horus/`, so the
-> catalog never shows it. Surface untracked repos so they can be onboarded in one action,
-> while letting the user permanently hide repos they don't care about (old projects).
-
-- [ ] A6 — after a dashboard Onboard succeeds, surface the newly tracked project with an
-  explicit start-work CTA and account-alias choice so onboarding naturally flows into
-  "start work with this account."
-
-## Dashboard artifact-staleness flag (Track B) - independent, small
-
-> Decided 2026-06-29. Horus is in rapid development, so tracked projects drift behind the
-> installed CLI's projected artifacts (skills, hooks, managed block). `horus doctor` /
-> `horus upgrade-project` already detect/refresh this; surface it passively on the dashboard.
-
 ## Workflow policy + settings panel (Track C) - branch→PR→auto-merge default
 
 > Decided 2026-06-29. Default integration policy for Horus-driven git actions across all
@@ -114,17 +97,20 @@ Phase 3 — portability (started with direct Codex skill projection):
 - [ ] Add this lens to future feature specs: "native Claude path", "native Codex path",
   "Horus-owned/session path if needed".
 
-## Project upgrade / projection refresh
+## Self-update signal - dashboard update button
 
-> Goal: already-initialized repos should be able to tell whether their Horus-projected
-> artifacts are stale relative to the installed CLI, and refresh them safely. Upgrading
-> `horus-harness` updates the command code, but not repo-local projections.
+> Approved 2026-07-01. The artifact-staleness badge covers project-vs-installed-CLI;
+> nothing covers installed-CLI-vs-latest-PyPI. Personal tool, so keep it passive +
+> one click, no auto-update.
 
-## Token overhead / workflow cost measurement
-
-> Goal: quantify how much token/context overhead Horus adds compared with a plain
-> native Claude Code or Codex workflow, without pretending the first local-log
-> attribution pass is a precise counterfactual.
+- [ ] Detect a newer `horus-harness` release (PyPI JSON API; cached + async so it never
+  blocks a page or fails the dashboard offline) and show an "update available" pill in
+  the top nav.
+- [ ] Top-nav Update button: run `uv tool upgrade horus-harness`, then cleanly restart
+  the dashboard server (a running server can't hot-swap its own code — needs a
+  respawn, minding the companion's owned-child reaping and the port-8765 reuse logic)
+  and afterwards point at `horus upgrade-project` for refreshing tracked repos'
+  projections.
 
 ## Companion app / mascot - visible Horus presence (next)
 
@@ -158,6 +144,10 @@ dashboard and later becomes the place for continuity/status nudges.
 > sessions, and launch state. See decisions 2026-06-28 "Cross-Computer View Starts
 > As A Remote Catalog, Not A Runtime".
 
+- [ ] **Ignore/Unignore without a page reload** (user request 2026-07-01): clicking
+  Ignore on an untracked GitHub card currently PRGs the whole page; make it remove the
+  card in place (small fetch POST + DOM removal, same-origin guard unchanged) so
+  several repos can be ignored in one sitting.
 - [ ] Later proper-app track: machine snapshot aggregation for non-local paths,
   running sessions, account availability, dirty state, and non-git/Google Drive
   projects with explicit project ids.
@@ -197,8 +187,8 @@ dashboard and later becomes the place for continuity/status nudges.
 
 - [~] **Oversight controls**: actions on a tracked session from the dashboard. The **POST surface
   shipped** (PR #11 — `/launch`, same-origin-guarded, loopback-only; → features.md), which was the
-  blocker. Still open: terminate/resume of a *windowed* session from the UI (in-app PTY terminals
-  already have kill via `/pty/kill`). CLI `horus sessions --prune` covers cleanup today.
+  blocker. Still open: terminate/resume of a *windowed* session from the UI (the in-app PTY
+  cockpit path is retired). CLI `horus sessions --prune` covers cleanup today.
 - [ ] Persist the registry in SQLite (re-justified once concurrency/scale hurts; JSON file shipped first).
 - [ ] Restrict autonomous closure edits to `.horus/**`, `AGENTS.md`, `CLAUDE.md`.
 - [ ] **LLM-based `horus infer`** (replaces the removed deterministic version): drive the official CLI to distill `.horus/` from the project's canonical docs — follow doc pointers (README → status/roadmap → CLAUDE.md → linked docs like docs/HISTORY.md), produce clean project + roadmap with planned/in-progress/done items, mark superseded source docs as stale, and prompt the user when intent is unclear.
@@ -234,7 +224,6 @@ Deferred (noted as future direction, low value for now):
   the chosen approach. (Drop the old "continue into a Horus-owned PTY" bridge — no cockpit.)
   Optional process-scan layer (cwd→project) wants psutil.
 - [ ] Literal OS-level drag gestures / re-dock automation (pop-out covers the practical need).
-- [ ] Register in-app PTY terminals in the registry so `horus sessions` / usage cards see them.
 
 ## Cross-tool interface sync (Claude ↔ Codex ↔ Gemini CLI ↔ Copilot …)
 
@@ -275,6 +264,16 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
 > running several times. Fix keeps LLM-authors / Python-detects. See features.md
 > ("Closure freshness gate", "Continuity PR check") + decisions.md.
 
+- [ ] **Fetch-first guard on `horus close --push`** (approved 2026-07-01): before
+  committing/pushing lanes, `git fetch` and stop with "origin has newer `.horus/`
+  commits — pull first" when the remote is ahead on lane paths. The mirror image of
+  `horus resume`'s fetch-first pickup; protects the one-person-two-machines flow. No
+  locking/merge machinery — git conflict resolution on markdown is the fallback.
+- [ ] **Archive session summaries after distillation** (approved 2026-07-01): once a
+  summary's durable content is folded into the lanes, move it to
+  `.horus/sessions/archive/` instead of leaving it in the active list (56 undistilled
+  today). Teach `horus consolidate` to count only non-archived summaries and the
+  emitted distillation ritual to do the move.
 - [ ] Promote the CI check from advisory to a required gate once proven (drop the
   `|| echo ::warning::` fallbacks).
 - [ ] Decide whether `horus init` installs the merge gate by default (`--kind all`)

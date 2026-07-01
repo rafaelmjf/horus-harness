@@ -19,7 +19,13 @@ def _init(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
 
 
-def _post(path: str, form: dict[str, str], *, origin: str | None = None) -> dict[str, object]:
+def _post(
+    path: str,
+    form: dict[str, str],
+    *,
+    origin: str | None = None,
+    headers: dict[str, str] | None = None,
+) -> dict[str, object]:
     body = urlencode(form).encode("utf-8")
     handler = object.__new__(dashboard._Handler)
     handler.path = path
@@ -29,6 +35,8 @@ def _post(path: str, form: dict[str, str], *, origin: str | None = None) -> dict
     }
     if origin is not None:
         handler.headers["Origin"] = origin
+    if headers:
+        handler.headers.update(headers)
     handler.rfile = BytesIO(body)
     handler.wfile = BytesIO()
 
@@ -1327,6 +1335,22 @@ def test_post_github_ignore_redirects_and_persists_trusted_target(tmp_path, monk
     assert response["status"] == 303
     assert ("Location", "/#github-catalog") in response["headers"]
     assert response["body"] == ""
+    assert "rafaelmjf/some-app" in config.load_ignored_repos()
+
+
+def test_post_github_ignore_fetch_returns_no_content(tmp_path, monkeypatch):
+    """A JS fetch submit (X-Horus-Fetch) gets 204 so the card is removed in place,
+    letting several repos be ignored without a page reload."""
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+
+    response = _post(
+        "/github-ignore", {"target": "rafaelmjf/some-app"},
+        origin="http://127.0.0.1:8765", headers={"X-Horus-Fetch": "1"},
+    )
+
+    assert response["status"] == 204
+    assert not any(k == "Location" for k, _ in response["headers"])
     assert "rafaelmjf/some-app" in config.load_ignored_repos()
 
 

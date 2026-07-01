@@ -110,10 +110,37 @@ def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding
     return findings
 
 
+def remote_lane_divergence(root: Path) -> int:
+    """Fetch, then count upstream commits not present locally that touch continuity
+    paths. The one-person-two-machines guard: closing here while another machine
+    already pushed newer lanes would fork the continuity. Returns 0 when there is
+    no upstream, the fetch fails (offline), or the remote isn't ahead on lanes —
+    the guard errs toward allowing."""
+    if _git(root, "fetch", "--quiet") is None:
+        return 0
+    if not _git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"):
+        return 0
+    out = _git(root, "log", "--format=%H", "HEAD..@{upstream}", "--", *_CONTINUITY_PATHSPEC)
+    if not out:
+        return 0
+    return len([line for line in out.splitlines() if line.strip()])
+
+
 def commit_continuity(root: Path, message: str | None = None, *, push: bool = False) -> tuple[bool, str]:
-    """Stage and commit the continuity files. Returns (did_commit, detail)."""
+    """Stage and commit the continuity files. Returns (did_commit, detail).
+
+    With ``push``, fetches first and refuses when the upstream already has newer
+    continuity commits (see :func:`remote_lane_divergence`) so a stale machine
+    pulls before overwriting cross-machine state."""
     if not is_git_repo(root):
         return False, "not a git repository"
+    if push:
+        n = remote_lane_divergence(root)
+        if n:
+            return False, (
+                f"origin has {n} newer continuity commit(s) — run `git pull --ff-only` "
+                "to fold them in, then re-run `horus close --commit --push`"
+            )
     _git(root, "add", "--", *_CONTINUITY_PATHSPEC)
     staged = _git(root, "diff", "--cached", "--name-only", "--", *_CONTINUITY_PATHSPEC)
     if not staged:

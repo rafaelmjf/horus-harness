@@ -1,77 +1,60 @@
 ---
-status: review-pending
-current_feature: "Continuity-model + dashboard refinement: async perf, lane discipline (decisions/roadmap/history), bake into skills, reflow lanes, dashboard render-to-match"
+status: active
+current_feature: "Approved 2026-07-01 batch: read-only session discovery (parsers + dashboard panel), cross-machine flow guards (close fetch-first, catalog ignore-in-place), self-update pill/button, orphan-dashboard fix, archive-after-distillation"
 supervisor_tier: frontier
 worker_tier: standard
 continuity_tier: economy
-delegation_basis: "Single frontier agent, gated per phase (user's choice). Phases 2-4 are interconnected continuity-model design — coherence favors one mind, stay direct. Only the mechanical Codex skill-mirror in phase 3 is a delegation candidate. Phases 1 & 5 are UI/perf where the user's eyeball is the real gate."
-last_updated: 2026-06-30
+delegation_basis: "Frontier supervisor + Sonnet-tier worker available on this runtime, so the delegation bar is lower (context hygiene + cheaper tier). Only phase 1 clears it: high-volume, low-ambiguity parser work against a designed contract with a pytest gate. Everything else is small or lifecycle-sensitive (process reaping, port reuse, git guards) where judgment loss dominates — direct."
+last_updated: 2026-07-01
 ---
 
 # Execution Plan
 
-Active phased plan for refining Horus's continuity model and the dashboard. Born
-from the dashboard-redesign review (PR #51): opening a project takes ~6.5s (token
-overhead ~4s + context-cache ~2.5s of JSONL parsing — NOT markdown rendering, which
-is ~3ms), and the `decisions.md`/`roadmap.md`/`history.md` lanes have drifted into
-long logs that tax both the dashboard and every native session's context.
-
-Goal: make the dashboard paint fast, and make the lanes short, current, and
-readable — with the discipline baked into the skills/templates that generate them
-(Claude + Codex), not just hand-fixed once.
-
-## PR split
-
-- **PR #51 (`feat/dashboard-sumi-e-redesign`)**: phases 1 and 5 (dashboard perf + render).
-- **New branch (from `main` after #51 lands, or off #51)**: phases 2-4
-  (lane discipline spec + skills/templates/instructions + reflow Horus's own lanes).
+The 2026-07-01 approved batch. Priority order favors the user's imminent live test
+(onboard on machine 1 → continue on machine 2): the cross-machine guards ship first,
+session discovery runs delegated in parallel, lifecycle items follow.
 
 ## Model Policy
 
-Tiers, resolved locally per agent/account/availability.
-
 | tier | Intended use | Examples |
 |---|---|---|
-| economy | mechanical continuity updates, formatting, small docs from explicit notes | maintainer |
-| standard | narrow implementation phases with tests | worker |
+| economy | mechanical continuity updates, formatting | maintainer |
+| standard | narrow implementation phases with tests | worker (Sonnet-tier) |
 | frontier | planning, architecture, risky review, final acceptance | supervisor |
 
 ## Active Phases
 
 | phase | status | difficulty | mode | worker_tier | delegation_basis | handoff_note | review |
 |---|---|---|---|---|---|---|---|
-| 1-dashboard-perf | done | medium | direct | — | UI/perf; frontier judgment + user is gate. PR #51. | — | DONE. render_project 6426→8ms (overhead+cache async); index gather_projects 2000→1053ms (thread pool + git_state 235→114ms via status --porcelain=v2); index first paint 1.4s→1ms (/projects-grid async); mascot unblocked + dashboard pre-warmed in bg (A1+B1). A2 (cut double-import) SKIPPED: needs a broad cli.py lazy-import refactor for ~400ms, disproportionate risk. User to confirm in-app. |
-| 2-lane-discipline-spec | done | medium | direct | — | Design that drives phases 3-4; must be coherent → one mind. New branch. | — | decisions/roadmap/history target shapes agreed with user |
-| 3-bake-skills | done | high | direct (Codex-mirror delegable) | standard | Interconnected (skill + templates + managed block) stays direct; mechanical `.agents/skills` mirror is the only delegation candidate. | — | horus-consolidate + templates + CLAUDE/AGENTS block consistent and mirrored to .claude/.agents; doctor + suite green |
-| 4-reflow-lanes | done | medium | direct | — | Judgment over Horus's own content; not mechanical. | — | this repo's decisions/roadmap/history match the spec; `horus close --check` + doctor green |
-| 5-dashboard-render | done | medium | direct | — | UI; user's eyeball is the gate. PR #51. | — | roadmap top/open-only inline, history → open-in-editor link, decisions curated + open-full button; suite green; user confirms |
+| 1-session-discovery-parsers | accepted | medium | delegated | standard | High volume (two transcript formats + fixtures + tests), low ambiguity (contract designed by supervisor below), crisp pytest gate. Worktree-isolated so direct work continues in parallel. | .horus/temp/1-session-discovery-parsers.md | ACCEPTED: supervisor reproduced 513 green in the worktree + reviewed the diff (reuses overhead/codex_usage matching, privacy rule kept). Worker flagged: Claude user/assistant type-set not checked against a real transcript — verify in phase 4. |
+| 2-flow-guards | done | low | direct | — | Small git/consolidate logic; judgment > volume. Fetch-first guard on `close --push` + archive-after-distillation counting. | — | DONE: `remote_lane_divergence` + push refusal in closure.py; archive wording in ritual/skill v8; `sessions/archive/` gitignore rule; 2-clone test proves the refusal. |
+| 3-ignore-in-place | done | low | direct | — | Small UI fetch+DOM change; user's eyeball is the gate. | — | DONE: delegated submit listener + `X-Horus-Fetch` → 204; non-JS keeps PRG. User to click-test after merge. |
+| 4-session-discovery-panel | planned | medium | direct | — | Dashboard wiring on top of phase 1's module; async `data-horus-src` pattern; UI gate is the user. | — | pytest + user sees recent sessions per project |
+| 5-self-update | planned | medium | direct | — | Lifecycle-sensitive (server respawn, port reuse, owned-child reaping) — stay direct. | — | pytest + manual update-button dry-run |
+| 6-orphan-dashboard-fix | planned | medium | direct | — | Lifecycle-sensitive process reaping; small volume. | — | pytest + manual quit/reopen check on 8765 |
 
-## Notes carried into the plan
+## Phase 1 contract (for the delegated worker)
 
-- Perf is the two log-parsing panels, confirmed by measurement (overhead ~4s,
-  cache ~2.5s, markdown ~3ms). Fix = async-load those panels (the `data-horus-src`
-  + `fetch` pattern the accounts strip already uses); deeper log-parse optimization
-  is a possible follow-up, not required for the paint win.
-- Lane discipline target (phase 2 will firm this up): **decisions.md** = short,
-  topic-grouped, current-and-relevant rule bullets (not a dated log); **roadmap.md**
-  = top/open items, completed condensed/archived; **history.md** = the narrative
-  detail/lessons, and *not* loaded inline on the dashboard.
-- Index perf: `gather_projects` was 5 sequential `load_project` calls (~2s); now
-  parallelized across a thread pool → ~1.3s. **Remaining lever (queued follow-up):**
-  `gitstate.git_state` fires ~7 git subprocesses per project; collapsing to ~3
-  (`git status --porcelain=v2 --branch` gives branch+upstream+ahead/behind+dirty in
-  one call) would roughly halve it and help the detail page (405ms) too. Deferred —
-  it's a gitstate.py rewrite (CLI-shared, own tests), not a quick inline edit.
-- "Open lane in editor" (phase 5): the dashboard is local-only, so the server can
-  open a lane's raw `.md` via the OS default handler (`os.startfile` on Windows);
-  guard it as a local, same-origin action by project/lane, never an arbitrary path.
+New module `horus/session_discovery.py`, read-only, stdlib-only:
+
+- `discover_claude_sessions(project_root, claude_dir=None) -> list[SessionInfo]` —
+  map `project_root` to the Claude project slug dir (`~/.claude/projects/<slug>/`),
+  parse `*.jsonl` transcripts. Reuse the slug/paths conventions already used by
+  `horus/claude_usage.py` and `horus/cache_status.py` — do not invent a second mapping.
+- `discover_codex_sessions(project_root, codex_home=None) -> list[SessionInfo]` —
+  from Codex rollout files, reusing `horus/codex_usage.py` helpers where possible.
+- `SessionInfo` dataclass: `agent`, `session_id`, `started_at`, `last_activity`,
+  `message_count`, `cwd/project match basis`. NO transcript content beyond counts +
+  timestamps (privacy rule: Horus never displays transcript content).
+- Tolerant parsing: skip malformed lines/files, never raise on garbage input.
+- Tests with small fixture files for both formats (happy path + malformed + empty dir).
 
 ## Worker Handoff Contract
 
-If any phase is delegated (only the phase-3 Codex mirror is a candidate), the worker
-writes `.horus/temp/<phase>.md` via `horus execution handoff <phase>`: changed files,
-behavior, tests run + result, risks, suggested durable `.horus/` updates. The
-supervisor reproduces the gate and reviews the diff before marking accepted.
+The worker writes `.horus/temp/1-session-discovery-parsers.md` via
+`horus execution handoff 1-session-discovery-parsers`: changed files, behavior,
+tests run + result, risks, suggested durable `.horus/` updates. The supervisor
+reproduces the gate and reviews the diff before marking accepted.
 
-**Known pre-existing test baseline:** none currently red — full suite is 502 green as
-of 2026-06-30; do not misattribute a new red to an unrelated cause.
+**Known pre-existing test baseline:** 503 green as of 2026-06-30; do not
+misattribute a new red to an unrelated cause.
