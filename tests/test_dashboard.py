@@ -809,24 +809,27 @@ def test_project_action_banner_messages():
     assert dashboard._project_action_banner({}) == ""
 
 
-def test_onboard_handoff_offers_account_chooser_and_launch():
-    html = dashboard.render_onboard_handoff(
-        "demo", 3, "/work/demo", [{"alias": "personal"}, {"alias": "work"}],
-    )
-    assert "start working on it" in html
-    assert "action='/launch'" in html
-    assert "value='3'" in html  # launch posts the new project's index
-    assert "personal" in html and "work" in html  # account-alias chooser
+def test_onboard_banner_success_with_pr_and_detail():
+    """Post-onboard PRG banner (replaced render_onboard_handoff: the redirect lands on
+    the project detail page, whose Start-a-session card is the CTA)."""
+    out = dashboard._project_action_banner({
+        "onboarded": ["me/demo"],
+        "onboard_pr": ["https://github.com/me/demo/pull/1"],
+    })
+    assert "Onboarded me/demo" in out
+    assert "https://github.com/me/demo/pull/1" in out
+    incomplete = dashboard._project_action_banner({
+        "onboarded": ["me/demo"],
+        "onboard_detail": ["auto-merge could not be enabled"],
+    })
+    assert "Integration incomplete" in incomplete
+    assert "auto-merge could not be enabled" in incomplete
 
 
-def test_onboard_handoff_without_accounts_points_to_wizard():
-    html = dashboard.render_onboard_handoff("demo", 3, "/work/demo", [])
-    assert "Accounts section" in html  # points at the main-tab accounts strip (Control retired)
-    assert "action='/launch'" not in html  # nothing to launch as yet
-
-
-def test_onboard_handoff_skips_when_project_not_located():
-    assert dashboard.render_onboard_handoff("demo", None, "/work/demo", [{"alias": "x"}]) == ""
+def test_onboard_banner_error():
+    out = dashboard._project_action_banner({"onboard_error": ["refusing to onboard untrusted repo: x/y"]})
+    assert "Onboard failed" in out
+    assert "refusing to onboard" in out
 
 
 def test_process_account_alias_renames_generated_alias_and_mapping(tmp_path, monkeypatch):
