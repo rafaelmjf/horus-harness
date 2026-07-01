@@ -64,7 +64,7 @@ def test_upgrade_project_apply_installs_codex_hooks(tmp_path, monkeypatch):
 
     assert any(a.status in ("created", "updated") and "Codex usage hook" in a.message for a in actions)
     data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-    assert data["hooks"]["Stop"][0]["hooks"][0]["command"].startswith("python3 -m horus")
+    assert data["hooks"]["Stop"][0]["hooks"][0]["command"].startswith("horus usage check")
 
 
 def test_upgrade_refuses_to_downgrade_newer_block(tmp_path, monkeypatch):

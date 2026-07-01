@@ -667,8 +667,6 @@ def _project_sessions_html(path: Path) -> str:
 
 def _page(title: str, body: str, active: str = "projects", wide: bool = False, live: int = 0) -> str:
     icon_key = html.escape(__version__, quote=True)
-    # Hoisted out of the f-string: a backslash inside an f-string expression
-    # is a SyntaxError before Python 3.12 (PEP 701), and we support 3.11.
     main_cls = " class='wide'" if wide else ""
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"

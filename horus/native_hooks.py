@@ -26,12 +26,13 @@ _HORUS_GUARD_MARKER = "horus guard-host"
 
 
 def _codex_hook_command(threshold: float) -> dict[str, Any]:
-    # Keep both POSIX and Windows command spellings. Codex will use the Windows
-    # override on Windows and the portable command elsewhere.
+    # The `horus` console script is the one spelling that works on every machine
+    # these committed hook files reach (uv puts it on PATH); interpreter-prefixed
+    # forms (`python3 -m` / `py -m`) need horus importable in the ambient python,
+    # which the uv tool env's isolation prevents. No Windows override needed.
     return {
         "type": "command",
-        "command": f"python3 -m horus usage check --path . --threshold {threshold:g} --hook",
-        "commandWindows": f"py -m horus usage check --path . --threshold {threshold:g} --hook",
+        "command": f"horus usage check --path . --threshold {threshold:g} --hook",
         "timeout": 30,
         "statusMessage": "Checking Horus usage",
     }
@@ -40,8 +41,7 @@ def _codex_hook_command(threshold: float) -> dict[str, Any]:
 def _codex_merge_hook_command() -> dict[str, Any]:
     return {
         "type": "command",
-        "command": "python3 -m horus close --hook",
-        "commandWindows": "py -m horus close --hook",
+        "command": "horus close --hook",
         "timeout": 30,
         "statusMessage": "Checking Horus closure",
     }
@@ -50,8 +50,7 @@ def _codex_merge_hook_command() -> dict[str, Any]:
 def _codex_guard_hook_command() -> dict[str, Any]:
     return {
         "type": "command",
-        "command": "python3 -m horus guard-host --hook",
-        "commandWindows": "py -m horus guard-host --hook",
+        "command": "horus guard-host --hook",
         "timeout": 30,
         "statusMessage": "Checking Horus host safety",
     }
@@ -221,21 +220,24 @@ def install_codex_guard_hook(project_root: Path) -> HookAction:
 # --------------------------------------------------------------------------- #
 
 def _claude_hook_command(threshold: float) -> dict[str, Any]:
-    # Claude runs the command via the shell; `python -m horus` avoids depending on
-    # the `horus` console script being on the hook shell's PATH.
+    # These hook files are committed and travel across machines, so the command
+    # must be the `horus` console script (uv puts it on PATH everywhere): a bare
+    # `python`/`python3 -m horus` needs horus importable in the *ambient* python,
+    # which the uv tool env's isolation prevents — and Linux has no `python`.
+    # (`python -m` only worked inside this repo because it prepends the cwd.)
     return {
         "type": "command",
-        "command": f"python -m horus usage check --target claude --hook --threshold {threshold:g}",
+        "command": f"horus usage check --target claude --hook --threshold {threshold:g}",
     }
 
 
 def _claude_merge_hook_command() -> dict[str, Any]:
     # PreToolUse gate on `gh pr merge`. The command itself inspects the tool call
     # (stdin) and only blocks a merge while the lanes are stale; everything else
-    # passes. `python -m horus` so it doesn't depend on the console script on PATH.
+    # passes.
     return {
         "type": "command",
-        "command": "python -m horus close --hook",
+        "command": "horus close --hook",
     }
 
 
@@ -245,7 +247,7 @@ def _claude_guard_hook_command() -> dict[str, Any]:
     # restart/kill the dashboard process hosting the session. No-op everywhere else.
     return {
         "type": "command",
-        "command": "python -m horus guard-host --hook",
+        "command": "horus guard-host --hook",
     }
 
 
