@@ -29,6 +29,15 @@ last_updated: 2026-07-02
 > entirely untested so far); (2) **cross-agent** — Claude and Codex (more later) must
 > stay in sync: skills + hooks are *projections*, so any major change must reach every
 > agent surface, and the UI should say when they've drifted. See history.md for the bumps.
+>
+> Execution-mode triage (2026-07-02, volume × ambiguity × gate): when this track is
+> picked up, the **doctor machine checks + bulk projection refresh + the implementation
+> half of the projection-sync indicator** are a good `plan-execution` batch (independent,
+> precisely specifiable, testable — worker-tier friendly; the sync indicator needs a
+> supervisor/user design phase for "what counts as the same generation" first). The rest
+> stay direct: graceful hooks and startup visibility sit in subtle per-OS / companion-
+> lifecycle territory where workers fail confidently, install smoke + --refresh are too
+> small, and the macOS pass is user-driven on real hardware.
 
 - [ ] **Graceful hooks when the CLI is missing/broken** (top priority): committed hook
   files reach every machine and every collaborator, including ones without Horus — a
