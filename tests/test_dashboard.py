@@ -625,7 +625,10 @@ def test_project_detail_renders_launch_controls(tmp_path, monkeypatch):
     # Either agent can be launched in a native terminal window (not the Python TUI).
     assert "<select name='agent'>" in page
     assert ">Claude Code</option>" in page and ">Codex</option>" in page
-    assert "value='window'" in page and "Open in a terminal window" in page
+    # Launch destination choice: native terminal (default) or VS Code.
+    assert "<select name='target'>" in page
+    assert "value='window'>Native terminal" in page
+    assert "value='vscode'>VS Code" in page
     assert "value='app'" not in page  # retired in-app PTY target
     assert "<select name='posture'>" in page
     # Copy-the-command fallback offers Claude + Codex.
@@ -653,6 +656,52 @@ def test_process_launch_window_routes_selected_agent(tmp_path, monkeypatch):
     assert captured["agent"] == "codex"  # the chosen agent reaches the launcher
 
 
+def test_process_launch_vscode_opens_folder_without_spawning_agent(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    opened = {}
+
+    def fake_open_vscode(project_dir):
+        opened["dir"] = project_dir
+        return 777
+
+    def unexpected_launch(**kwargs):  # pragma: no cover
+        raise AssertionError("vscode target must not spawn an agent session")
+
+    monkeypatch.setattr(dashboard.launcher, "open_vscode", fake_open_vscode)
+    monkeypatch.setattr(dashboard.launch, "launch_interactive", unexpected_launch)
+
+    query = dashboard.process_launch(
+        {"project": "0", "mode": "resume", "target": "vscode"},
+        projects=[str(proj)], known_aliases=set(),
+    )
+
+    assert query == "vscode=demo"
+    assert opened["dir"] == proj
+
+
+def test_process_launch_vscode_reports_missing_code_cli(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+
+    def fake_open_vscode(project_dir):
+        raise OSError("VS Code CLI `code` not found on PATH")
+
+    monkeypatch.setattr(dashboard.launcher, "open_vscode", fake_open_vscode)
+
+    query = dashboard.process_launch(
+        {"project": "0", "mode": "fresh", "target": "vscode"},
+        projects=[str(proj)], known_aliases=set(),
+    )
+
+    assert query.startswith("error=")
+    assert "code" in query
+
+
 def test_launch_notice_banner():
     ok = dashboard._launch_notice({"launched": ["abcd1234"]})
     assert "Launched session" in ok and "abcd1234" in ok and "banner ok" in ok
@@ -660,6 +709,8 @@ def test_launch_notice_banner():
     assert "Launch failed" in err and "unknown account" in err and "banner err" in err
     tab = dashboard._launch_notice({"tab": ["app-1"]})
     assert "terminal panel" in tab and "banner ok" in tab
+    vs = dashboard._launch_notice({"vscode": ["demo"]})
+    assert "VS Code" in vs and "demo" in vs and "banner ok" in vs
     assert "Account mapping added" in dashboard._launch_notice({"account": ["added"]})
     assert "Account alias updated" in dashboard._launch_notice({"account": ["alias"]})
     assert dashboard._launch_notice({}) == ""

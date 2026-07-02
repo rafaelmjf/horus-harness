@@ -6,7 +6,8 @@ that actually happened was invisible to those sections: the CLI itself dead on i
 committed hook erroring on every tool call, or the dashboard refusing to start. This
 module is read-only (never mutates anything) and checks the machine-level causes: is the
 `horus` console script on PATH, does the running interpreter meet the installed dist's
-floor, do committed hook commands resolve, is Tk present, is `gh` authenticated.
+floor, do committed hook commands resolve, is Tk present, is the VS Code `code` CLI
+available, is `gh` authenticated.
 """
 
 from __future__ import annotations
@@ -142,6 +143,19 @@ def _tk_finding() -> Finding:
     )
 
 
+def _code_cli_finding() -> Finding:
+    """Presence probe for the VS Code CLI — the launch-in-VS-Code dashboard
+    destination shells out to ``code`` (``shutil.which`` covers the per-OS forms:
+    ``code`` on POSIX, ``code.cmd`` on Windows via PATHEXT)."""
+    if shutil.which("code") is None:
+        return Finding(
+            "warn",
+            "`code` (VS Code CLI) not found on PATH — the dashboard's open-in-VS-Code "
+            "launch destination needs it; other launch targets are unaffected",
+        )
+    return Finding("ok", "`code` (VS Code CLI) on PATH")
+
+
 def _gh_auth_finding() -> Finding:
     if shutil.which("gh") is None:
         return Finding("warn", "`gh` not found on PATH — GitHub onboarding/catalog features need it")
@@ -172,5 +186,6 @@ def machine_findings(root: Path | None = None) -> list[Finding]:
         findings.extend(_hook_command_findings(root))
 
     findings.append(_tk_finding())
+    findings.append(_code_cli_finding())
     findings.append(_gh_auth_finding())
     return findings

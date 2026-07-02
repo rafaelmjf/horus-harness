@@ -29,6 +29,36 @@ def test_open_terminal_returns_child_pid(monkeypatch, tmp_path):
     assert calls["creationflags"] == getattr(subprocess, "CREATE_NEW_CONSOLE", 0)  # own window on Windows
 
 
+def test_open_vscode_launches_code_with_project_dir(monkeypatch, tmp_path):
+    calls = {}
+
+    class FakeProc:
+        pid = 777
+
+    def fake_popen(argv):
+        calls.update(argv=argv)
+        return FakeProc()
+
+    monkeypatch.setattr(launcher.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(launcher.subprocess, "Popen", fake_popen)
+
+    pid = launcher.open_vscode(tmp_path)
+
+    assert pid == 777
+    assert calls["argv"] == ["/usr/bin/code", str(tmp_path.resolve())]
+
+
+def test_open_vscode_fails_clearly_when_code_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(launcher.shutil, "which", lambda name: None)
+
+    try:
+        launcher.open_vscode(tmp_path)
+    except OSError as exc:
+        assert "`code` not found" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected OSError")
+
+
 def test_open_terminal_fails_without_posix_display(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.delenv("DISPLAY", raising=False)

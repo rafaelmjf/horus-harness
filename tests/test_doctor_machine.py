@@ -69,6 +69,27 @@ def test_dist_requires_python_missing_dist_returns_none():
     assert doctor_machine._dist_requires_python("definitely-not-a-real-dist-xyz") is None
 
 
+def test_code_cli_present_ok(monkeypatch):
+    _stub_ok(monkeypatch)
+
+    findings = doctor_machine.machine_findings()
+
+    assert any(f.level == "ok" and "VS Code CLI" in f.message for f in findings)
+
+
+def test_code_cli_missing_warns(monkeypatch):
+    _stub_ok(monkeypatch)
+    monkeypatch.setattr(
+        doctor_machine.shutil, "which",
+        lambda cmd: None if cmd == "code" else f"/usr/bin/{cmd}",
+    )
+
+    findings = doctor_machine.machine_findings()
+
+    warns = [f for f in findings if f.level == "warn"]
+    assert any("VS Code" in f.message and "launch destination" in f.message for f in warns)
+
+
 def test_no_hook_config_produces_no_hook_findings(tmp_path):
     assert doctor_machine._hook_command_findings(tmp_path) == []
 
