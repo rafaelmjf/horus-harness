@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 import json
 
-from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, overhead
+from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead
 from horus.registry import Registry, SessionRecord
 from horus.upgrade import UpgradeAction
 
@@ -1836,3 +1836,34 @@ def test_cli_outdated_flag_and_update_card(tmp_path, monkeypatch):
     assert "Horus CLI outdated" in html_out
     assert "action='/self-update'" in html_out
     assert "Update horus-harness from PyPI" in html_out
+
+
+def test_render_project_shows_codex_projection_behind_badge(tmp_path, monkeypatch):
+    """Projection sync compares each surface to the installed CLI only (see
+    horus.projection_sync) - a Codex-only artifact regression surfaces a
+    'Codex projection behind' badge on the project detail page, Claude untouched."""
+    proj = _scaffolded_project(tmp_path, monkeypatch)
+    # init_project alone leaves the native hooks uninstalled (opt-in), so install
+    # everything first to get a genuinely fully-synced baseline, then degrade only
+    # the Codex-side skill.
+    for install in (
+        native_hooks.install_claude_usage_hook,
+        native_hooks.install_claude_merge_hook,
+        native_hooks.install_claude_guard_hook,
+        native_hooks.install_codex_usage_hook,
+        native_hooks.install_codex_merge_hook,
+        native_hooks.install_codex_guard_hook,
+    ):
+        install(proj)
+    skill_md = proj / ".agents" / "skills" / "horus-consolidate" / "SKILL.md"
+    skill_md.write_text(
+        skill_md.read_text(encoding="utf-8").replace("horus-skill-version: 8", "horus-skill-version: 1"),
+        encoding="utf-8",
+    )
+
+    data = dashboard.load_project(str(proj))
+    assert data["projection_sync"]["verdict"] == "codex_behind"
+
+    html_out = dashboard.render_project(data)
+    assert "Codex projection behind" in html_out
+    assert "Claude projection behind" not in html_out
