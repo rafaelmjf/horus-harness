@@ -43,8 +43,11 @@ jobs:
       - name: Install from PyPI (retry for index propagation)
         shell: bash
         run: |
+          # --refresh: without it uv caches the FIRST index answer, and a runner that
+          # starts before PyPI propagation re-reads "no such version" from its own
+          # cache for every retry (bit the v0.0.11 macOS release-trigger run).
           for i in $(seq 1 20); do
-            if uv tool install --force --python 3.12 "horus-harness==$VERSION"; then
+            if uv tool install --force --refresh --python 3.12 "horus-harness==$VERSION"; then
               exit 0
             fi
             echo "horus-harness==$VERSION not installable yet (attempt $i); retrying in 30s"
