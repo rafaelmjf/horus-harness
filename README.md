@@ -150,6 +150,20 @@ horus upgrade-project --apply  # refresh managed blocks, skills, and hooks
 horus doctor
 ```
 
+If `uv tool upgrade` keeps reporting success while `horus --version` stays at an
+old release, the tool env was created under an interpreter older than the
+current `requires-python` floor — uv then resolves the newest *old* release
+that still fits. Migrate the env once:
+
+```sh
+uv tool install --force --python 3.12 horus-harness
+```
+
+The dashboard's Update button detects this pin and runs the migration itself.
+After any CLI upgrade, restart Horus: a running dashboard keeps serving its old
+in-memory build (it will refuse artifact writes and show a restart banner until
+you do).
+
 `upgrade-project` only touches Horus-managed/projection surfaces: the managed
 blocks in `AGENTS.md`/`CLAUDE.md`, bundled skills, and native hooks. It does not
 rewrite source files or author `.horus/` lane content.
