@@ -1,5 +1,14 @@
 # Claude Code Instructions
 
+> **PRD-structure prototype (2026-07-03) — overrides the lane instructions in the
+> managed block below.** This repo's `.horus/` is now **`PRD.md` + `sessions/`**:
+> read `.horus/PRD.md` before substantial work (vision, backlog, shipped, rules);
+> `project.md`/`roadmap.md` are frontmatter-only shims for the tooling; retired
+> lanes live in `.horus/archive/`. Closure = update PRD backlog/shipped + shim
+> frontmatters + a session note (`horus session new`), then
+> `horus close --commit --push`. Run `horus consolidate` at most once and ignore
+> its lane-routing warnings — do not restore the six-lane split.
+
 <!-- HORUS:BEGIN shared-instructions -->
 <!-- horus-block-version: 2 -->
 ## Horus Project Continuity
