@@ -4,37 +4,24 @@ Horus keeps a concise, vendor-neutral record of project state here so any agent
 (Claude, Codex, ...) can pick up continuity across machines — even without Horus
 installed. Read this first.
 
-- `project.md` — what this project is, current focus, shape, boundaries (overview + vision).
-- `roadmap.md` — open **action points** (any type: feature work, bug fix, chore),
-  pruned when done. The *what's next*, not a completed log.
-- `features.md` — the **capability ledger**: complete packages tracked
-  shipped / in-progress / planned. A capability, not a task — distinct from roadmap.
-- `decisions.md` — durable decisions / rules to follow and their reasoning, dated.
-- `history.md` — curated bumps in the road: problems that bit us and the lessons
-  that shaped the design. Relevant context, **not** a timeline and **not** open issues.
-- `execution.md` — optional active execution plan for the current roadmap item:
-  phase breakdown, model-tier routing, worker handoff notes, and review gates.
-- `sessions/` — local session summaries (gitignored; per-machine context that
-  distills into the files above).
-- `temp/` — gitignored scratch notes from implementation workers/subagents. These
-  are fleeting handoffs for the supervisor, not durable project memory.
+**Structure prototype (2026-07-03): PRD.md + sessions/.** The six-lane layout is
+retired in this repo; transcript analysis showed the value lives in the resume
+frontmatter + session notes, while the lane taxonomy carried the overhead.
 
-**This is the single concise source of "what is this, and what's next."** If the
-project already has rich docs (README, a status/roadmap file, and anything they
-point to), distill the essentials here and treat those as the source — do not
-maintain two hand-written roadmaps that will drift. Mark a superseded doc as such
-once its content lives here.
+- `PRD.md` — **the one maintained file**: vision, prioritized backlog (features and
+  bugs in one list), shipped ledger (one line each), load-bearing rules.
+- `sessions/` — local session summaries (gitignored; operational facts, dead ends,
+  verified gates). Distilled notes move to `sessions/archive/`.
+- `project.md` / `roadmap.md` — **frontmatter shims only** (current_focus,
+  next_action/next_prompt) feeding the dashboard, `horus resume`, and the merge
+  freshness gate until the tooling reads PRD.md directly. Content lives in PRD.md.
+- `archive/` — the retired lanes (`features.md`, `decisions.md`, `history.md`,
+  `execution.md`), preserved verbatim for archaeology.
+- `temp/` — gitignored scratch notes from implementation workers/subagents.
 
-Keep each lane in its lane; run `horus consolidate` to route facts to the right
-file, prune what's done, and distill session summaries upward.
+If the project has rich docs (README, status files), distill essentials into PRD.md
+and point at them — never maintain two hand-written roadmaps.
 
-When the roadmap recommends `plan-execution`, run `horus execution prompt
---target claude|codex` for the supervisor frame and `horus execution handoff
-<phase>` to create the local worker note in `temp/`.
-
-Durable state (`project.md` / `roadmap.md` / `features.md` / `decisions.md` /
-`history.md` / `execution.md`) is committed and travels via git; session summaries
-and temp worker notes stay local per machine.
-
-These files are scaffolded by `horus init` and maintained by the agents working in
-this repo. A future `horus infer` will populate them automatically (LLM-based).
+Closure = update PRD backlog/shipped + the two shim frontmatters + a session note,
+then `horus close --commit --push`. One `horus consolidate` pass at most; do not
+chase lane-routing warnings (they predate this structure).
