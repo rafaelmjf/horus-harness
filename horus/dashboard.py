@@ -43,6 +43,7 @@ from horus import (
     markdown,
     offboard,
     overhead,
+    projection_sync,
     pty_host,
     registry,
     remote_start,
@@ -84,6 +85,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         "findings": [],
         "artifacts_stale": False,
         "artifacts_stale_count": 0,
+        "projection_sync": {"verdict": "unknown"},
         "next_action": "",
         "execution_recommendation": "",
         "latest": None,
@@ -181,6 +183,10 @@ def load_project(path_str: str) -> dict[str, Any]:
     except Exception:
         # never let a projection check break the dashboard render
         data["artifacts_stale"] = False
+
+    # Per-surface sync (Claude vs installed CLI, Codex vs installed CLI - never
+    # surfaces to each other). Read-only and self-guarded; see projection_sync.
+    data["projection_sync"] = projection_sync.sync_state(root)
 
     return data
 
@@ -1721,6 +1727,29 @@ def _manage_integration_panel(index: int, stale: bool) -> str:
     return f"<div class='lform'>{refresh}{keep_form}{remove_form}</div>"
 
 
+def _projection_sync_badge_html(p: dict[str, Any]) -> str:
+    """Compact badge: does each agent surface (Claude vs Codex) carry the current
+    generation of projected artifacts, compared to the installed CLI. Each surface
+    is only ever compared to the CLI, never to the other surface - see
+    horus.projection_sync. Sits next to the existing Refresh artifacts affordance."""
+    state = p.get("projection_sync") or {}
+    verdict = state.get("verdict", "unknown")
+    if verdict == "in_sync":
+        return "<span class='badge'><span class='gd'></span>Projections in sync</span>"
+    if verdict == "cli_outdated":
+        return "<span class='badge seal'><span class='gd'></span>&#9888; Horus CLI outdated</span>"
+    badges = []
+    if verdict in ("codex_behind", "behind"):
+        n = state.get("codex", {}).get("pending", 0)
+        badges.append(f"<span class='badge warn'><span class='gd'></span>Codex projection behind ({n})</span>")
+    if verdict in ("claude_behind", "behind"):
+        n = state.get("claude", {}).get("pending", 0)
+        badges.append(f"<span class='badge warn'><span class='gd'></span>Claude projection behind ({n})</span>")
+    if badges:
+        return "".join(badges)
+    return "<span class='muted' style='font-size:12px'>sync unknown</span>"
+
+
 def render_project(p: dict[str, Any], *, index: int | None = None, notice: str = "") -> str:
     idx = 0 if index is None else index
     git = p.get("git") or {}
@@ -1732,6 +1761,7 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
         f"{_health_dot(p)}"
         f"<span class='badge'>status {html.escape(p['status']) or 'unknown'}</span>"
         f"<span class='badge'><b class='mono'>{len(p['sessions'])}</b>&nbsp;sessions</span>"
+        f"{_projection_sync_badge_html(p)}"
     )
     refresh = _upgrade_button(idx) if p.get("artifacts_stale") and index is not None else ""
     aliases = [{"alias": a} for a in sorted(_known_aliases())]
