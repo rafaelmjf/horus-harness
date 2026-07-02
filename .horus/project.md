@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "UX-hardening batch 4/6 shipped (PRs #63-#66, 567 tests green): stale-build servers refuse artifact writes, self-update migrates interpreter-pinned envs + verifies the upgrade landed, `horus doctor machine`, and `horus upgrade-project --all` — the systemic fixes for everything the two-machine test surfaced. Pending user: phase 3 projection-sync design sign-off (execution.md) and a v0.0.9 release decision (PyPI still 0.0.8). Horus remains the durable memory plane (no session hosting)."
+current_focus: "v0.0.9 released (UX-hardening batch complete, 6/6): the systemic fixes for everything the two-machine test surfaced — stale-build write refusal, self-update env migration + landing verification, doctor machine, upgrade-project --all — plus the user-approved projection-sync badge (PR #68, next release). 575 tests green. Remaining UX-hardening items are per-OS/lifecycle direct work (graceful hooks, onboard artifact commits, startup visibility, install-smoke CI). Horus remains the durable memory plane (no session hosting)."
 last_updated: 2026-07-02
 ---
 

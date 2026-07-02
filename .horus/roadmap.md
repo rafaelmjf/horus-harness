@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "UX-hardening batch: four of six phases shipped in one session (PRs #63-#66, all merged, 567 tests green) — stale-build servers refuse artifact writes + restart banner, self-update migrates interpreter-pinned envs and verifies the upgrade actually landed, `horus doctor machine` (the 'app won't open' command), and registry-wide `horus upgrade-project --all` (phases 4-5 by delegated Sonnet workers, gates reproduced + real surfaces driven). Phase 3 (projection-sync 'same generation' design) is PROPOSED in execution.md awaiting user sign-off; phase 6 (sync badge) blocked on it. None of this is on PyPI yet (still 0.0.8)."
-next_action: "Two user decisions, then finish the batch: (1) review the phase 3 design proposal in execution.md (compare each agent surface to the installed CLI via per-target upgrade_project dry-runs; hook generation stamp as prerequisite) — on sign-off, delegate phase 6 (sync-indicator badge) per the plan; (2) decide whether to publish v0.0.9 now so real machines actually get this batch's guards (recommended), then run the one-time `--python 3.12` env fix on the Windows machine (roadmap 'UX hardening' residual). Remaining direct items: graceful hooks when CLI missing, startup-failure visibility, onboard committing projected artifacts, post-publish install smoke."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main should carry PRs #63-#66). The UX-hardening batch is 4/6 shipped; execution.md tracks it. NEXT: ask the user to sign off the phase 3 projection-sync design proposal (execution.md 'Phase 3 design proposal') and to decide on releasing v0.0.9; on design sign-off delegate phase 6 (sync-indicator badge, standard-tier worker) per execution.md; if release approved, bump version + publish and consider starting the post-publish install-smoke CI item in the same pass. Windows machine still needs the one-time `uv tool install --force --python 3.12 horus-harness` migration."
-execution_recommendation: "continue-as-is until the two user decisions land - phase 6 is the only delegable item left and it is blocked on the phase 3 design sign-off; the remaining UX-hardening items are per-OS/lifecycle-subtle (graceful hooks, startup visibility) or release-process work, where worker delegation buys little on any runtime. Re-enter plan-execution for phase 6 once the design is approved."
+current_focus: "UX-hardening batch COMPLETE (6/6) and v0.0.9 RELEASED to PyPI (publish workflow green, install verified on this machine): stale-build write guard, self-update env migration + landing verification, doctor machine, upgrade-project --all all shipped in v0.0.9 (PRs #63-#66); user approved the projection-sync design and the badge shipped post-release (PR #68, 575 tests green, rides the next release). Phases 4-6 by delegated Sonnet workers, every gate reproduced and every surface driven for real. Windows machine still needs its one-time --python 3.12 env migration."
+next_action: "Pick up the remaining UX-hardening direct items, roughly in order: (1) graceful hooks when the CLI is missing/broken (per-OS guard — the cross-platform lens bites here; doctor machine already provides the visible signal); (2) onboard/integrate committing the projected artifacts (decide commit-vs-gitignore, make integrate() include them); (3) startup-failure visibility (~/.horus/logs/ + companion nudge); (4) post-publish install smoke CI (ubuntu+windows+macos uv tool install probe — first macOS coverage; v0.0.9's manual PyPI-propagation wait showed exactly why). Also run the one-time env migration on the Windows machine when next at it."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68; v0.0.9 is live on PyPI). The UX-hardening execution batch is complete (execution.md status: complete — replace it when the next substantial item starts). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
+execution_recommendation: "continue-as-is - the remaining UX-hardening items are per-OS/lifecycle-subtle (graceful hooks, startup visibility) or policy decisions (onboard artifact commits), exactly where workers fail confidently; the install-smoke CI item is small. No delegable volume until the next substantial feature track opens."
 last_updated: 2026-07-02
 ---
 
@@ -72,14 +72,11 @@ last_updated: 2026-07-02
 - [x] Bulk projection refresh — SHIPPED 2026-07-02 (PR #65) → features.md
   "`horus upgrade-project --all`". (A dashboard "refresh all stale" action remains
   possible later; the CLI covers the release-propagation need.)
-- [ ] **Projection-sync indicator in the UI**: per project, show whether each agent
-  surface (Claude `.claude/` vs Codex `.agents/`+`.codex/`) carries the same
-  generation of skills/hooks/managed block — "in sync" vs "Codex projection behind".
-  This is the observable half of `horus doctor compat` (→ "Cross-tool interface sync"
-  track below); do the read-only report + badge before any auto-sync. **Design
-  proposed 2026-07-02** (execution.md phase 3: compare each surface to the installed
-  CLI via per-target dry-runs; hook generation stamp as prerequisite) — **awaiting
-  user sign-off**, then implement as execution.md phase 6.
+- [x] Projection-sync indicator in the UI — design user-approved + SHIPPED 2026-07-02
+  (PR #68, post-v0.0.9, rides the next release) → features.md "Projection-sync badge";
+  rule in decisions.md "Projection sync compares each surface to the installed CLI".
+  Still the observable half of `horus doctor compat` (CLI report form → "Cross-tool
+  interface sync" track below).
 - [ ] **macOS validation pass**: nothing has ever run on macOS — mascot (Tk
   transparency), terminal spawning in `launcher`, owned-window/tab defaults, hook
   execution. Fold findings back into the per-OS defaults like `resolve_open_mode`.
