@@ -78,9 +78,9 @@ def test_both_surfaces_behind(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     proj = tmp_path / "proj"
     proj.mkdir()
-    # init_project alone never installs the native hooks - both surfaces start
-    # behind on them until `horus hook-install` (or upgrade --apply) runs.
-    initialize.init_project(proj, assume_yes=True, no_input=True)
+    # Opt out of hooks at init to simulate a repo behind on them (init installs
+    # the full projection set by default since the onboard-artifacts change).
+    initialize.init_project(proj, assume_yes=True, no_input=True, with_hooks=False)
 
     state = projection_sync.sync_state(proj)
 

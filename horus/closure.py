@@ -19,8 +19,20 @@ from horus import codex_usage, routines
 from horus.continuity import Finding, check_project, recent_sessions
 from horus.instructions import check_drift
 
-# Files Horus treats as "continuity" (committed durable state + instruction blocks).
-_CONTINUITY_PATHSPEC = [".horus", "AGENTS.md", "CLAUDE.md"]
+# Projected agent artifacts (hooks + skills) are committed, not gitignored — they
+# must reach every machine the repo does, and the missing-CLI hook guards make them
+# safe on machines without Horus. Specific paths rather than whole directories, so
+# user-local files (e.g. .claude/settings.local.json) are never staged.
+PROJECTED_ARTIFACT_PATHS = [
+    ".claude/settings.json",
+    ".claude/skills",
+    ".agents/skills",
+    ".codex/hooks.json",
+]
+
+# Files Horus treats as "continuity" (committed durable state + instruction blocks
+# + projected agent artifacts).
+_CONTINUITY_PATHSPEC = [".horus", "AGENTS.md", "CLAUDE.md", *PROJECTED_ARTIFACT_PATHS]
 
 
 def _git(root: Path, *args: str) -> str | None:
@@ -141,7 +153,11 @@ def commit_continuity(root: Path, message: str | None = None, *, push: bool = Fa
                 f"origin has {n} newer continuity commit(s) — run `git pull --ff-only` "
                 "to fold them in, then re-run `horus close --commit --push`"
             )
-    _git(root, "add", "--", *_CONTINUITY_PATHSPEC)
+    # Only add paths that exist: `git add` fails wholesale on a pathspec that
+    # matches nothing (e.g. a repo without hooks/skills installed).
+    present = [p for p in _CONTINUITY_PATHSPEC if (root / p).exists()]
+    if present:
+        _git(root, "add", "--", *present)
     staged = _git(root, "diff", "--cached", "--name-only", "--", *_CONTINUITY_PATHSPEC)
     if not staged:
         return False, "nothing to commit (continuity already committed)"

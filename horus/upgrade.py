@@ -114,19 +114,8 @@ def _upgrade_hooks(project_root: Path, *, apply: bool, targets: tuple[str, ...])
 
 def _upgrade_hook_target(root: Path, *, project_root: Path, target: str, apply: bool) -> list[UpgradeAction]:
     actions: list[UpgradeAction] = []
-    if target == "codex":
-        installers = (
-            native_hooks.install_codex_usage_hook,
-            native_hooks.install_codex_merge_hook,
-            native_hooks.install_codex_guard_hook,
-        )
-    elif target == "claude":
-        installers = (
-            native_hooks.install_claude_usage_hook,
-            native_hooks.install_claude_merge_hook,
-            native_hooks.install_claude_guard_hook,
-        )
-    else:
+    installers = native_hooks.HOOK_INSTALLERS.get(target)
+    if installers is None:
         return actions
     for install in installers:
         a = install(root)

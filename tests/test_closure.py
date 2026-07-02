@@ -73,6 +73,35 @@ def test_commit_continuity(tmp_path, monkeypatch):
     assert not did2 and "nothing to commit" in detail2
 
 
+def test_projected_artifacts_are_continuity(tmp_path, monkeypatch):
+    """Hook/skill projections count as continuity: an untracked .claude/settings.json
+    warns and `close --commit` commits it (the gym-coach 2026-07-02 finding)."""
+    _setup(tmp_path, monkeypatch)
+    (tmp_path / ".claude" / "settings.json").write_text("{}\n", encoding="utf-8")
+    assert any("uncommitted continuity" in m for m in _msgs(tmp_path))
+    did, _ = closure.commit_continuity(tmp_path, "test closure")
+    assert did
+    status = subprocess.run(
+        ["git", "-C", str(tmp_path), "status", "--porcelain"],
+        capture_output=True, text=True,
+    ).stdout
+    assert ".claude/settings.json" not in status
+
+
+def test_commit_continuity_survives_missing_artifact_paths(tmp_path, monkeypatch):
+    """A repo without hooks/skills installed: `git add` must not fail wholesale on
+    pathspecs that match nothing."""
+    _setup(tmp_path, monkeypatch)
+    import shutil
+    for rel in (".claude", ".agents", ".codex"):
+        shutil.rmtree(tmp_path / rel, ignore_errors=True)
+    _run(tmp_path, "add", "-A")
+    _run(tmp_path, "commit", "-m", "drop projections")
+    (tmp_path / ".horus" / "roadmap.md").write_text("changed\n", encoding="utf-8")
+    did, detail = closure.commit_continuity(tmp_path, "test closure")
+    assert did and "committed" in detail
+
+
 def _setup_two_clones(tmp_path, monkeypatch):
     """A bare origin with two clones — the one-person-two-machines scenario."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
