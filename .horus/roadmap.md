@@ -234,6 +234,23 @@ dashboard and later becomes the place for continuity/status nudges.
 - [ ] Optional, YAGNI for now: store each project's remote URL in the registry so the
   same project can be recognized across machines (only if cross-machine dedup is wanted).
 
+## Launch destinations — VS Code (user request, 2026-07-02)
+
+- [ ] **Launch-in-VS-Code option on the session launcher** (user-requested at the
+  0.0.9 close): extend the fresh/resume launch disclosure with a destination
+  choice — native terminal (today's `target=window`) vs VS Code. Two tiers:
+  **(1) ship first, small:** `target=vscode` runs `code <project>` (opens/focuses
+  the folder; user starts claude/codex via the Claude extension or the integrated
+  terminal; fresh/resume prompt copy stays available on the project page).
+  **(2) design before building:** auto-start the agent in the integrated terminal
+  via a Horus-written `.vscode/tasks.json` task with `"runOn": "folderOpen"`,
+  reusing the launcher's exact argv/env (account `CLAUDE_CONFIG_DIR`, resume
+  prompt). Caveats to decide: VS Code's per-folder "Allow Automatic Tasks" trust
+  gate, `.vscode/` is a non-Horus surface (ownership, offboard cleanup,
+  commit-vs-gitignore — same policy family as "onboard commits projected
+  artifacts"), and a resume prompt must never land in a committed file. Also
+  check `code` CLI presence per-OS (`horus doctor machine` candidate check).
+
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 
 > No longer deferred: `claude` 2.1.191 is installed AND logged in on this machine, so
