@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 from typing import NamedTuple
 
-from horus import config, native_hooks, skills
+from horus import config, native_hooks, skills, vscode
 from horus.instructions import extract_block, remove_block
 
 
@@ -43,6 +43,7 @@ def offboard_project(
     actions.extend(_remove_managed_blocks(project_root, apply=apply))
     actions.extend(_remove_skills(project_root, apply=apply, targets=targets))
     actions.extend(_remove_hooks(project_root, apply=apply, targets=targets))
+    actions.extend(_remove_vscode_tasks(project_root, apply=apply))
     actions.append(_unregister(project_root, apply=apply))
     actions.append(_handle_horus_dir(project_root, apply=apply, purge=purge))
     return actions
@@ -113,6 +114,22 @@ def _remove_hooks(project_root: Path, *, apply: bool, targets: tuple[str, ...]) 
         elif native_hooks.file_has_horus_hooks(path_fn(project_root)):
             actions.append(OffboardAction("would-remove", f"would remove Horus {label} hooks from {path_fn(project_root)}"))
     return actions
+
+
+def _remove_vscode_tasks(project_root: Path, *, apply: bool) -> list[OffboardAction]:
+    """Remove the `horus vscode-task` tasks.json — only when byte-identical to what
+    Horus writes (an edited file is the user's now; vscode.remove_tasks keeps it)."""
+    path = vscode.tasks_path(project_root)
+    if not path.exists():
+        return []
+    if apply:
+        action = vscode.remove_tasks(project_root)
+        if action.status == "removed":
+            return [OffboardAction("removed", action.message)]
+        return []  # kept (user-edited) — not Horus's to report on
+    if path.read_text(encoding="utf-8") == vscode.TASKS_JSON:
+        return [OffboardAction("would-remove", f"would remove {path}")]
+    return []
 
 
 def _unregister(project_root: Path, *, apply: bool) -> OffboardAction:

@@ -1,0 +1,24 @@
+{
+  // Written by `horus vscode-task`. Safe to edit — Horus never rewrites an
+  // existing tasks.json (offboard removes it only if byte-identical).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Horus: resume Claude session",
+      "detail": "Start claude in the integrated terminal, seeded with this repo's .horus continuity handoff",
+      "type": "shell",
+      "command": "claude \"$(horus resume)\"",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Horus: resume Codex session",
+      "detail": "Start codex in the integrated terminal, seeded with this repo's .horus continuity handoff",
+      "type": "shell",
+      "command": "codex \"$(horus resume)\"",
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true },
+      "problemMatcher": []
+    }
+  ]
+}
