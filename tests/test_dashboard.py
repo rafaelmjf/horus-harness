@@ -757,6 +757,57 @@ def test_process_upgrade_project_unknown_index(tmp_path, monkeypatch):
     assert dashboard.process_upgrade_project({"project": "9"}).startswith("/?upgrade_error=")
 
 
+def _force_stale_build(monkeypatch):
+    monkeypatch.setattr(
+        dashboard.selfupdate,
+        "build_state",
+        lambda: {"running": "0.0.6", "disk": "9.9.9", "stale": True},
+    )
+
+
+def test_stale_build_refuses_artifact_writes(tmp_path, monkeypatch):
+    proj = _scaffolded_project(tmp_path, monkeypatch)
+    _force_stale_build(monkeypatch)
+    marker = proj / ".horus" / "project.md"
+    before = marker.read_text(encoding="utf-8")
+    assert dashboard.process_upgrade_project({"project": "0"}) == "/project?i=0&stale_build=1"
+    assert marker.read_text(encoding="utf-8") == before  # nothing rewritten
+    assert dashboard.process_offboard({"project": "0"}) == "/?stale_build=1"
+    assert config.load_projects()  # still registered — offboard refused
+
+
+def test_stale_build_banner_on_pages_and_refusal_notice(monkeypatch):
+    _force_stale_build(monkeypatch)
+    page = dashboard._page("t", "<p>x</p>")
+    assert "running an old build" in page and "9.9.9" in page and "restart Horus" in page
+    notice = dashboard._project_action_banner({"stale_build": ["1"]})
+    assert "Refused" in notice and "old build" in notice
+
+
+def test_post_github_onboard_refuses_on_stale_build(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    _force_stale_build(monkeypatch)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        dashboard.remote_start,
+        "onboard_github_project",
+        lambda target, **kw: calls.append(target),
+    )
+    res = _post("/github-onboard", {"target": "owner/repo"})
+    assert res["status"] == 303
+    assert any(k == "Location" and "stale_build=1" in v for k, v in res["headers"])
+    assert calls == []  # onboard (init + integrate writes) never ran
+
+
+def test_fresh_build_renders_no_stale_banner(monkeypatch):
+    monkeypatch.setattr(
+        dashboard.selfupdate,
+        "build_state",
+        lambda: {"running": "0.0.8", "disk": "0.0.8", "stale": False},
+    )
+    assert "running an old build" not in dashboard._page("t", "<p>x</p>")
+
+
 def test_process_offboard_default_keeps_horus_and_unregisters(tmp_path, monkeypatch):
     proj = _scaffolded_project(tmp_path, monkeypatch)
     out = dashboard.process_offboard({"project": "0"})

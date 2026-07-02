@@ -10,6 +10,18 @@ def test_is_newer():
     assert not selfupdate.is_newer("0.0.1", "0.0.2")
 
 
+def test_build_state_stale_only_when_disk_is_newer(monkeypatch):
+    monkeypatch.setattr(selfupdate, "installed_disk_version", lambda: "9.9.9")
+    state = selfupdate.build_state()
+    assert state["stale"] is True and state["disk"] == "9.9.9"
+    monkeypatch.setattr(selfupdate, "installed_disk_version", lambda: selfupdate.__version__)
+    assert selfupdate.build_state()["stale"] is False  # in sync
+    monkeypatch.setattr(selfupdate, "installed_disk_version", lambda: "0.0.0")
+    assert selfupdate.build_state()["stale"] is False  # dev source ahead of install metadata
+    monkeypatch.setattr(selfupdate, "installed_disk_version", lambda: None)
+    assert selfupdate.build_state()["stale"] is False  # no dist on disk
+
+
 def test_check_update_caches_the_pypi_answer(tmp_path, monkeypatch):
     monkeypatch.setattr(selfupdate.config, "config_dir", lambda: tmp_path)
     calls: list[int] = []
