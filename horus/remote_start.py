@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from horus import config, github_catalog, initialize, integration, upgrade
+from horus import closure, config, github_catalog, initialize, integration, upgrade
 
 
 @dataclass(frozen=True)
@@ -109,13 +109,13 @@ def _clone_repo(full_name: str, path: Path) -> bool:
 
 # Paths that the onboard step might create inside a cloned repo — we only stage
 # files that actually exist so we never sweep unrelated working-tree changes.
+# Specific projected-artifact paths (not whole `.claude`/`.codex` dirs) so a
+# pre-existing user-local file like .claude/settings.local.json is never staged.
 _HORUS_MANAGED_PATHS = (
     ".horus",
     "AGENTS.md",
     "CLAUDE.md",
-    ".claude",
-    ".agents",
-    ".codex",
+    *closure.PROJECTED_ARTIFACT_PATHS,
     ".gitignore",
 )
 

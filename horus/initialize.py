@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
-from horus import config, skills, templates
+from horus import config, native_hooks, skills, templates
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, TEMP_DIR
 from horus.instructions import extract_block
 
@@ -64,6 +64,7 @@ def init_project(
     assume_yes: bool = False,
     no_input: bool = False,
     with_skills: bool = True,
+    with_hooks: bool = True,
     skill_targets: tuple[str, ...] = ("claude", "codex"),
 ) -> list[Action]:
     actions: list[Action] = []
@@ -155,6 +156,15 @@ def init_project(
     if with_skills:
         for sa in skills.install_skills(project_root, targets=skill_targets):
             actions.append(Action(sa.status, sa.message))
+
+    if with_hooks:
+        # Install the native hooks here so onboarding commits the complete projection
+        # set at once — hook files written by a later `upgrade-project` pass used to
+        # land untracked, confronting the next session with unexplained files.
+        for target in skill_targets:
+            for install in native_hooks.HOOK_INSTALLERS.get(target, ()):
+                ha = install(project_root)
+                actions.append(Action(ha.status, ha.message))
 
     if config.register_project(project_root):
         actions.append(Action("updated", "registered project in ~/.horus/config.toml"))

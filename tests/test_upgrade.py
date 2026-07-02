@@ -52,7 +52,7 @@ def test_upgrade_project_refreshes_stale_skills(tmp_path, monkeypatch):
 
 def test_upgrade_project_apply_installs_codex_hooks(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
-    initialize.init_project(tmp_path, assume_yes=True)
+    initialize.init_project(tmp_path, assume_yes=True, with_hooks=False)
 
     actions = upgrade.upgrade_project(
         tmp_path,

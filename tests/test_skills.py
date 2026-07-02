@@ -109,5 +109,5 @@ def test_init_scaffolds_all_skills_by_default(tmp_path, monkeypatch):
 def test_init_no_skills_opts_out(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
-    initialize.init_project(tmp_path / "b", assume_yes=True, with_skills=False)
+    initialize.init_project(tmp_path / "b", assume_yes=True, with_skills=False, with_hooks=False)
     assert not (tmp_path / "b" / ".claude").exists()

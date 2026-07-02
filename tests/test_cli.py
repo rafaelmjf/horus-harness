@@ -730,8 +730,8 @@ def test_routine_commands_reject_nonexistent_path(tmp_path, monkeypatch):
 
 def test_skill_install_cli(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
-    main(["init", str(tmp_path), "--yes", "--no-skills"])
-    assert not (tmp_path / ".claude").exists()  # --no-skills opted out at init
+    main(["init", str(tmp_path), "--yes", "--no-skills", "--no-hooks"])
+    assert not (tmp_path / ".claude").exists()  # --no-skills/--no-hooks opted out at init
     assert main(["skill", "install", "--path", str(tmp_path)]) == 0
     assert (tmp_path / ".claude" / "skills" / "horus-consolidate" / "SKILL.md").exists()
     assert (tmp_path / ".agents" / "skills" / "horus-consolidate" / "SKILL.md").exists()
@@ -739,7 +739,7 @@ def test_skill_install_cli(tmp_path, monkeypatch):
 
 def test_skill_install_codex_target_cli(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
-    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    main(["init", str(tmp_path), "--yes", "--no-skills", "--no-hooks"])
     assert main(["skill", "install", "--path", str(tmp_path), "--target", "codex"]) == 0
     assert (tmp_path / ".agents" / "skills" / "horus-consolidate" / "SKILL.md").exists()
     assert not (tmp_path / ".claude").exists()

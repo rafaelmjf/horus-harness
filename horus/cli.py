@@ -66,6 +66,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         assume_yes=args.yes,
         no_input=args.no_input,
         with_skills=not args.no_skills,
+        with_hooks=not args.no_hooks,
         skill_targets=_skill_targets(args.skill_target),
     )
     for a in actions:
@@ -1323,6 +1324,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--yes", "-y", action="store_true", help="auto-confirm block injection")
     p_init.add_argument("--no-input", action="store_true", help="never prompt; skip injection")
     p_init.add_argument("--no-skills", action="store_true", help="don't scaffold agent skills")
+    p_init.add_argument("--no-hooks", action="store_true", help="don't install native agent hooks")
     p_init.add_argument(
         "--skill-target",
         choices=("all", "claude", "codex"),

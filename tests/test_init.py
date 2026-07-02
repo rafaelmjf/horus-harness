@@ -32,6 +32,20 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     assert "!temp/.gitkeep" in gitignore
     assert not (tmp_path / ".gitignore").exists()  # no root .gitignore managed
     assert any(s == "created" for s in statuses.values())
+    # Native hooks are part of the init projection set, so onboarding commits the
+    # complete surface at once (they used to arrive later and land untracked).
+    assert (tmp_path / ".claude" / "settings.json").exists()
+    assert (tmp_path / ".codex" / "hooks.json").exists()
+
+
+def test_init_no_hooks_skips_hook_files(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    initialize.init_project(tmp_path, assume_yes=True, with_hooks=False)
+
+    assert not (tmp_path / ".claude" / "settings.json").exists()
+    assert not (tmp_path / ".codex" / "hooks.json").exists()
 
 
 def test_init_is_idempotent(tmp_path, monkeypatch):

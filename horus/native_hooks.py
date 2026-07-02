@@ -377,6 +377,14 @@ def install_claude_guard_hook(project_root: Path) -> HookAction:
     return _persist_hook(path, data, "Claude hosted-session guard hook")
 
 
+# The full per-target hook set — the single list `init`, `upgrade-project`, and any
+# other bulk installer should iterate so no surface gets a partial projection.
+HOOK_INSTALLERS = {
+    "claude": (install_claude_usage_hook, install_claude_merge_hook, install_claude_guard_hook),
+    "codex": (install_codex_usage_hook, install_codex_merge_hook, install_codex_guard_hook),
+}
+
+
 # --------------------------------------------------------------------------- #
 # Removal (offboarding) — strip Horus hook handlers, keep everything else
 # --------------------------------------------------------------------------- #
