@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Big UX-hardening day, all shipped AND released: v0.0.10 cut in the morning (carried #68 + #70-#74); then graceful hooks — committed hooks now no-op silently on machines without the CLI (PR #76); projected artifacts (hooks/skills/settings) now committed as continuity by init/onboard/close (PR #77); post-publish install smoke CI on ubuntu+windows+macos — first-ever macOS coverage, 0.0.10 green on all three (PR #78); v0.0.11 cut same day to make it all installable (613 tests green). Remaining UX-hardening: startup-failure visibility. Windows machine still owes its one-time --python 3.12 env migration."
-next_action: "(1) Operational: upgrade each machine to v0.0.11 (`uv tool install --force --reinstall --python 3.12 horus-harness`; on the Windows machine this doubles as its pending env migration) and run the registry-wide artifact refresh there so every onboarded repo gets the guarded hook generation and commits the new files at next closure. (2) Startup-failure visibility (~/.horus/logs/ + companion 'dashboard failed to start — run horus doctor' nudge) — the last of the direct UX-hardening batch. (3) Then the user-requested Skill map / inventory design (roadmap 'Cross-tool interface sync'). Opportunistic: integrate() direct-merge fallback for free-plan private repos; marking private repos in the catalog."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main is clean through PR #79; v0.0.11 is the live PyPI release — verify with `horus --version` and upgrade this machine's install if older). NEXT per roadmap next_action: run `horus upgrade-project --all` here to propagate guarded hooks to onboarded repos, then implement startup-failure visibility (dashboard/companion startup errors to ~/.horus/logs/ + companion nudge pointing at `horus doctor`). Companion-lifecycle territory — work it directly, no workers. Reminder for the user: on the Windows machine run `uv tool install --force --python 3.12 horus-harness` once (that also completes its env migration)."
-execution_recommendation: "continue-as-is - startup visibility sits in companion-lifecycle/per-OS territory where workers fail confidently, and the propagation step is operational not code. The next delegable volume is the Skill map scanner (precisely-specifiable, already triaged worker-friendly) once its design phase happens."
+current_focus: "The fresh-machine UX-hardening track is DONE and released — three releases on 2026-07-02 (v0.0.10/11/12): guarded hooks (#76), committed projections (#77), install smoke CI with first macOS coverage (#78 + #80), startup-failure visibility (#81), integrate() direct-merge fallback (#82). This machine propagated: gym-coach carries guarded hooks + committed artifacts (620 tests green). Left on the track: Windows machine's one-time --python 3.12 upgrade + refresh, macOS real-hardware pass, catalog private-repo marking. NEXT: the user-requested Skill map / inventory design."
+next_action: "(1) Design + observe-first slice of the Skill map / inventory (roadmap 'Cross-tool interface sync' — user request): settle the panel semantics (scopes, presence map, provenance-unknown handling, cross-machine visibility limits) with the user, then the read-only scanner + dashboard Skills panel + CLI report; the scanner half was triaged plan-execution-friendly once semantics lock. (2) User/ops: Windows machine one-time `uv tool install --force --python 3.12 horus-harness` then the registry-wide artifact refresh there. (3) Small opportunistic: mark private repos in the GitHub catalog + 'N ignored' affordance; onboard residual (a) — switch the clone back to the default branch after integrate()."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main clean through PR #83; v0.0.12 live on PyPI — `horus --version` should say 0.0.12, upgrade if older). NEXT per roadmap next_action: the Skill map / inventory feature (roadmap 'Cross-tool interface sync' track holds the full design notes from the 2026-07-02 triage). Start with the design questions (what counts as the same skill across scopes; how 'unused' reads as a presence map; UI for machine-local limits), get the user's sign-off, then decide direct vs plan-execution for the scanner. Reminder for the user: Windows machine still owes `uv tool install --force --python 3.12 horus-harness` + the artifact refresh."
+execution_recommendation: "plan-execution (conditional) - the Skill map scanner is high-volume/low-ambiguity with a crisp gate (deterministic filesystem scan across documented scopes, testable with fixtures) and worker-tier friendly per the 2026-07-02 triage, on a runtime with cheaper worker tiers that buys context hygiene AND cost; BUT the design/semantics phase (user-facing panel meaning, trust/provenance rules) must run direct with the user first — prepare execution.md only after that sign-off."
 last_updated: 2026-07-02
 ---
 
@@ -64,9 +64,9 @@ last_updated: 2026-07-02
   (`--reinstall`, which implies `--refresh`; uv rejects a bare `--refresh` on upgrade).
 - [x] `horus doctor` machine-level checks — SHIPPED 2026-07-02 (PR #66) → features.md
   "`horus doctor machine`".
-- [ ] **Startup failure visibility**: dashboard/companion startup errors go to
-  `~/.horus/logs/` and the companion surfaces "dashboard failed to start — run
-  `horus doctor`" instead of nothing.
+- [x] Startup failure visibility — SHIPPED 2026-07-02 (PR #81, v0.0.12) →
+  features.md "Startup-failure visibility". Residual: the mascot dialog itself
+  still wants one eyeball on a real desktop session (logic unit-tested).
 - [x] Bulk projection refresh — SHIPPED 2026-07-02 (PR #65) → features.md
   "`horus upgrade-project --all`". (A dashboard "refresh all stale" action remains
   possible later; the CLI covers the release-propagation need.)
@@ -87,12 +87,8 @@ last_updated: 2026-07-02
 - [x] Onboard residual (b): doctor/dashboard nudge for continuity PRs sitting
   OPEN (auto-merge off) — SHIPPED 2026-07-02 (PR #71) → features.md
   "Open-continuity-PR nudge". Validated same day by the real gym-coach case.
-- [ ] **`integrate()` direct-merge fallback (found 2026-07-02, see history.md
-  "Allow auto-merge cannot be enabled on free-plan private repos"):** when
-  `gh pr merge --auto` fails (private repo on Free plan — the API even refuses
-  the *setting* silently), fall back to an immediate `gh pr merge --merge` if
-  the repo has no required checks; otherwise leave the PR + rely on the #71
-  nudge. Affects every private-repo onboard for free-plan users.
+- [x] `integrate()` direct-merge fallback — SHIPPED 2026-07-02 (PR #82,
+  v0.0.12) → features.md "integrate() direct-merge fallback".
 - [ ] Small catalog UI nicety: badge private repos in the GitHub catalog and
   show an "N ignored" affordance on the untracked fold (2026-07-02 the user
   read "only public repos visible" when actually 3 of 6 private repos were

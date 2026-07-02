@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "v0.0.11 live on PyPI (two releases cut 2026-07-02): committed hooks now no-op silently on machines without the CLI (#76), projected artifacts are committed continuity (#77), and every release gets an install smoke on ubuntu+windows+macos — first-ever macOS coverage (#78). 613 tests green. NEXT: propagate guarded hooks (`upgrade-project --all` per machine), then startup-failure visibility; skill map/inventory queued as the next major UX feature. Horus remains the durable memory plane (no session hosting)."
+current_focus: "v0.0.12 live (three releases 2026-07-02) — the fresh-machine UX-hardening track is complete: guarded hooks (#76), committed projections (#77), install smoke CI incl. first macOS coverage (#78+#80), startup-failure visibility (#81), direct-merge fallback (#82); 620 tests green. NEXT: the user-requested Skill map / inventory (design first, scanner maybe delegated). Windows machine still owes its one-time --python 3.12 upgrade + refresh. Horus remains the durable memory plane (no session hosting)."
 last_updated: 2026-07-02
 ---
 
