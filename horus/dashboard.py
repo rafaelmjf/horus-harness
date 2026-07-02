@@ -205,6 +205,22 @@ def gather_projects() -> list[dict[str, Any]]:
         return list(pool.map(load_project, paths))
 
 
+def _drop_registered(items: list, registered: list[str] | None = None) -> list:
+    """Catalog dedup: a repo whose local clone is a *registered* project already has
+    a card under Projects — listing it again in the remote catalog reads as a
+    duplicate (user call, 2026-07-02); discrepancies (behind origin, continuity PR
+    stuck open) belong on the project card, not on a second catalog entry. Repos
+    that are merely cloned-but-unregistered stay: the catalog is their only surface."""
+    reg = {
+        str(Path(p).resolve())
+        for p in (config.load_projects() if registered is None else registered)
+    }
+    return [
+        x for x in items
+        if not (x.local_path and str(Path(x.local_path).resolve()) in reg)
+    ]
+
+
 def gather_remote_projects() -> tuple[list[github_catalog.RemoteProject], list[str], list[str]]:
     projects: list[github_catalog.RemoteProject] = []
     errors: list[str] = []
@@ -227,7 +243,7 @@ def gather_remote_projects() -> tuple[list[github_catalog.RemoteProject], list[s
             projects.extend(github_catalog.refresh_cache(owner, local_projects=local))
         except RuntimeError as exc:
             errors.append(f"{owner}: {exc}")
-    return projects, errors, notes
+    return _drop_registered(projects, local), errors, notes
 
 
 def force_refresh_remote(owner: str) -> tuple[list[github_catalog.RemoteProject], list[str], list[str]]:
@@ -241,7 +257,7 @@ def force_refresh_remote(owner: str) -> tuple[list[github_catalog.RemoteProject]
     else:
         errors.append(f"{owner}: force-refresh failed: {result.error}")
     cached = github_catalog.load_cache(owner, local_projects=local)
-    return (cached.projects if cached else [], errors, notes)
+    return (_drop_registered(cached.projects, local) if cached else [], errors, notes)
 
 
 def gather_untracked_repos() -> tuple[list[github_catalog.UntrackedRepo], list[github_catalog.UntrackedRepo]]:
@@ -257,7 +273,7 @@ def gather_untracked_repos() -> tuple[list[github_catalog.UntrackedRepo], list[g
         cached = github_catalog.load_cache(owner, local_projects=local)
         if cached is not None:
             all_untracked.extend(cached.untracked)
-    return github_catalog.filter_ignored(all_untracked)
+    return github_catalog.filter_ignored(_drop_registered(all_untracked, local))
 
 
 def _start_remote_refresh(owner: str, local_projects: list[str]) -> None:
@@ -1346,6 +1362,15 @@ def _remote_project_card(p: github_catalog.RemoteProject) -> str:
         command = f"cd {p.local_path} && horus open"
     else:
         command = f"horus start github:{p.full_name}"
+    # After the registered-project dedup, every card here is NOT yet a tracked
+    # project on this machine — so offer the one-click path: clone (if needed)
+    # + register + refresh projections (`remote_start.start_github_project`).
+    track_form = (
+        "<form method='post' action='/github-start' style='display:inline-block;margin-top:8px'>"
+        f"<input type='hidden' name='target' value='{html.escape(p.full_name, quote=True)}'>"
+        "<button class='btn sm btn-seal' type='submit'>Track on this machine</button>"
+        "</form>"
+    )
     return (
         "<div class='repo'>"
         f"<h3><a href='{html.escape(p.url)}'>{html.escape(p.full_name)}</a></h3>"
@@ -1354,6 +1379,7 @@ def _remote_project_card(p: github_catalog.RemoteProject) -> str:
         f"{focus}{next_action}"
         "<div class='resume'><span class='lbl'>Start here</span>"
         f"<div class='resume-text'><code>{html.escape(command)}</code></div></div>"
+        f"{track_form}"
         "</div>"
     )
 
@@ -2754,6 +2780,14 @@ def _project_action_banner(params: dict[str, list[str]]) -> str:
         return out
     if "onboard_error" in params:
         return f"<div class='banner err'>Onboard failed: {html.escape(params['onboard_error'][0])}</div>"
+    if "started" in params:
+        name = html.escape(params["started"][0])
+        return (
+            f"<div class='banner ok'>Tracking {name} on this machine &mdash; cloned/registered "
+            "and projections refreshed; start a session below.</div>"
+        )
+    if "start_error" in params:
+        return f"<div class='banner err'>Track failed: {html.escape(params['start_error'][0])}</div>"
     return ""
 
 
@@ -3083,6 +3117,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/account-alias",
             "/account-remove",
             "/github-refresh",
+            "/github-start",
             "/github-onboard",
             "/github-ignore",
             "/github-unignore",
@@ -3187,6 +3222,35 @@ class _Handler(BaseHTTPRequestHandler):
             if self._valid_github_catalog_target(target):
                 config.unignore_repo(target)
             self._redirect("/#github-catalog")
+            return
+        if parsed.path == "/github-start":
+            # Track an already-Horus remote project on this machine: clone if
+            # needed + register + refresh projections. PRG like /github-onboard.
+            if _stale_build():
+                self._redirect("/?stale_build=1#github-catalog")
+                return
+            form = self._read_form()
+            target = form.get("target", "")
+            owner = target.split("/")[0] if "/" in target else target
+            if owner not in config.load_github_owners():
+                self._redirect(
+                    "/?start_error="
+                    + quote_plus(f"refusing to track untrusted repo: {target}")
+                    + "#github-catalog"
+                )
+                return
+            try:
+                result = remote_start.start_github_project(f"github:{target}")
+            except (RuntimeError, ValueError) as exc:
+                self._redirect("/?start_error=" + quote_plus(str(exc)) + "#github-catalog")
+                return
+            params = "started=" + quote_plus(target)
+            # Land on the new project's detail page, same as a fresh onboard.
+            idx = _project_index(result.path)
+            if idx is not None:
+                self._redirect(f"/project?i={idx}&{params}")
+            else:
+                self._redirect(f"/?{params}#github-catalog")
             return
         if parsed.path == "/github-onboard":
             # PRG like ignore/unignore — the POST must never answer with a raw

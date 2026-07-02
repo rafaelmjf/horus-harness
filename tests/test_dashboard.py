@@ -1945,3 +1945,120 @@ def test_render_project_shows_codex_projection_behind_badge(tmp_path, monkeypatc
     html_out = dashboard.render_project(data)
     assert "Codex projection behind" in html_out
     assert "Claude projection behind" not in html_out
+
+
+# ---------------------------------------------------------------------------
+# Catalog dedup + "Track on this machine" (user request 2026-07-02)
+# ---------------------------------------------------------------------------
+
+def _make_remote(full_name="rafaelmjf/demo", *, local_path=None):
+    owner, name = full_name.split("/")
+    return github_catalog.RemoteProject(
+        owner=owner,
+        name=name,
+        full_name=full_name,
+        url=f"https://github.com/{full_name}",
+        clone_url=f"git@github.com:{full_name}.git",
+        default_branch="main",
+        pushed_at="2026-07-02T12:00:00Z",
+        local_path=local_path,
+    )
+
+
+def test_drop_registered_hides_tracked_projects_from_catalog(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    config.register_project(proj)
+    registered = config.load_projects()
+
+    tracked = _make_remote("rafaelmjf/demo", local_path=str(proj))
+    cloned_only = _make_remote("rafaelmjf/other", local_path=str(tmp_path / "other"))
+    remote_only = _make_remote("rafaelmjf/faraway")
+
+    out = dashboard._drop_registered([tracked, cloned_only, remote_only], registered)
+
+    # Registered project vanishes from the catalog (its card lives under Projects);
+    # cloned-but-unregistered and remote-only stay — the catalog is their only surface.
+    assert [p.full_name for p in out] == ["rafaelmjf/other", "rafaelmjf/faraway"]
+
+
+def test_gather_untracked_drops_registered_local_projects(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+    proj = tmp_path / "gym"
+    proj.mkdir()
+    config.register_project(proj)
+
+    registered_untracked = github_catalog.UntrackedRepo(
+        owner="rafaelmjf", name="gym", full_name="rafaelmjf/gym",
+        url="https://github.com/rafaelmjf/gym", clone_url="git@github.com:rafaelmjf/gym.git",
+        default_branch="master", pushed_at="2026-07-02T12:00:00Z", local_path=str(proj),
+    )
+    plain = _make_untracked("rafaelmjf/plain-app")
+    monkeypatch.setattr(
+        dashboard.github_catalog, "load_cache",
+        lambda owner, **kw: github_catalog.CachedCatalog(
+            owner=owner, projects=[], fetched_at="2026-07-02T12:00:00+00:00",
+            untracked=[registered_untracked, plain],
+        ),
+    )
+
+    visible, hidden = dashboard.gather_untracked_repos()
+
+    assert [u.full_name for u in visible] == ["rafaelmjf/plain-app"]
+    assert hidden == []
+
+
+def test_remote_project_card_has_track_button():
+    html_out = dashboard.render_remote_catalog([_make_remote("rafaelmjf/demo")], [])
+    assert "action='/github-start'" in html_out
+    assert "name='target' value='rafaelmjf/demo'" in html_out
+    assert "Track on this machine" in html_out
+    assert "horus start github:rafaelmjf/demo" in html_out  # copyable fallback kept
+
+
+def test_post_github_start_tracks_remote_horus_project(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    config.register_github_owner("rafaelmjf")
+    calls = []
+
+    def fake_start(target, **kw):
+        calls.append(target)
+        from horus.remote_start import StartResult
+        return StartResult(
+            project=_make_remote("rafaelmjf/demo"), path=tmp_path / "demo",
+            cloned=True, registered=True, upgrade_actions=[],
+        )
+
+    monkeypatch.setattr(dashboard.remote_start, "start_github_project", fake_start)
+
+    res = _post("/github-start", {"target": "rafaelmjf/demo"})
+
+    assert res["status"] == 303
+    loc = next(v for k, v in res["headers"] if k == "Location")
+    assert "started=rafaelmjf%2Fdemo" in loc
+    assert calls == ["github:rafaelmjf/demo"]
+
+
+def test_post_github_start_refuses_untrusted_owner(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)  # no github owners configured
+    called = []
+    monkeypatch.setattr(
+        dashboard.remote_start, "start_github_project",
+        lambda t, **kw: called.append(t),
+    )
+
+    res = _post("/github-start", {"target": "evil/repo"})
+
+    assert res["status"] == 303
+    loc = next(v for k, v in res["headers"] if k == "Location")
+    assert "start_error=" in loc and "untrusted" in loc
+    assert called == []
+
+
+def test_started_and_start_error_banners():
+    ok = dashboard._notice({"started": ["rafaelmjf/demo"]})
+    assert "banner ok" in ok and "rafaelmjf/demo" in ok and "Tracking" in ok
+    err = dashboard._notice({"start_error": ["gh repo clone failed"]})
+    assert "banner err" in err and "gh repo clone failed" in err
