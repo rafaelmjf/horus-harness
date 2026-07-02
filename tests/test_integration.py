@@ -268,7 +268,9 @@ def test_branch_pr_automerge_merge_failure_returns_not_ok(tmp_path, monkeypatch)
         _ok(), _ok(), _ok(), _ok(),
         _ok("refs/remotes/origin/main\n"),
         _ok(pr_url + "\n"),
-        _fail("merge not permitted"),
+        _fail("merge not permitted"),   # gh pr merge --auto
+        _fail("Branch not protected"),  # required-checks probe → none
+        _fail("still not permitted"),   # direct-merge fallback also refused
     ])
     monkeypatch.setattr(intmod, "_run", runner)
 
@@ -277,6 +279,55 @@ def test_branch_pr_automerge_merge_failure_returns_not_ok(tmp_path, monkeypatch)
 
     assert result.ok is False
     assert "merge not permitted" in result.detail
+    assert "still not permitted" in result.detail
+
+
+def test_branch_pr_automerge_falls_back_to_direct_merge(tmp_path, monkeypatch):
+    """Free-plan private repos can't enable auto-merge at all; with no required
+    checks on the base branch, integrate() merges the PR immediately instead of
+    leaving it stranded OPEN (the gym-coach 2026-07-02 case)."""
+    pr_url = "https://github.com/owner/repo/pull/6"
+    runner = FakeRunner([
+        _ok(), _ok(), _ok(), _ok(),
+        _ok("refs/remotes/origin/master\n"),  # non-main default branch, seen live
+        _ok(pr_url + "\n"),
+        _fail("Pull request Protected branch rules not configured"),  # --auto
+        _fail("HTTP 404: Branch not protected"),                      # probe → none
+        _ok(""),                                                      # direct merge
+    ])
+    monkeypatch.setattr(intmod, "_run", runner)
+
+    result = integrate(tmp_path, message="fallback merge",
+                       policy=_policy(integration="branch-pr-automerge"))
+
+    assert result.ok is True
+    assert result.merged is True
+    assert "merged PR directly" in result.detail
+    probe = [c[0] for c in runner.calls if c[0][:2] == ["gh", "api"]][0]
+    assert "branches/master/protection/required_status_checks" in probe[2]
+
+
+def test_branch_pr_automerge_leaves_pr_open_when_checks_required(tmp_path, monkeypatch):
+    """With required status checks on the base branch, an immediate merge would skip
+    gates auto-merge would have waited for — leave the PR to the open-PR nudge."""
+    pr_url = "https://github.com/owner/repo/pull/7"
+    runner = FakeRunner([
+        _ok(), _ok(), _ok(), _ok(),
+        _ok("refs/remotes/origin/main\n"),
+        _ok(pr_url + "\n"),
+        _fail("auto-merge is not allowed"),   # --auto
+        _ok('{"strict": true}'),              # probe → required checks exist
+    ])
+    monkeypatch.setattr(intmod, "_run", runner)
+
+    result = integrate(tmp_path, message="respect checks",
+                       policy=_policy(integration="branch-pr-automerge"))
+
+    assert result.ok is False
+    assert result.merged is False
+    assert "left open" in result.detail
+    direct = [c for c in runner.calls if c[0][:3] == ["gh", "pr", "merge"] and "--auto" not in c[0]]
+    assert direct == []  # never bypassed the required checks
 
 
 # ---------------------------------------------------------------------------
