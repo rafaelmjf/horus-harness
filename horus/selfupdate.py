@@ -17,6 +17,7 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import subprocess
+import sys
 import time
 from pathlib import Path
 from urllib.error import URLError
@@ -72,19 +73,47 @@ def build_state() -> dict[str, object]:
     }
 
 
-def fetch_latest_version(timeout: float = 3.0) -> str | None:
-    """The latest release on PyPI, or None when offline/unparseable."""
+def fetch_release_info(timeout: float = 3.0) -> dict[str, str | None] | None:
+    """The latest release on PyPI as {version, requires_python}, or None offline.
+
+    `requires_python` matters because raising the floor strands tool envs
+    created under an older interpreter: uv resolves the newest floor-compatible
+    (= OLD) release and reports success. run_upgrade needs the floor to detect
+    that trap before it happens.
+    """
     try:
         with urlopen(PYPI_URL, timeout=timeout) as response:
             payload = json.load(response)
-        version = payload.get("info", {}).get("version")
-        return version if isinstance(version, str) and version else None
+        info = payload.get("info", {})
+        version = info.get("version")
+        if not (isinstance(version, str) and version):
+            return None
+        requires = info.get("requires_python")
+        return {
+            "version": version,
+            "requires_python": requires if isinstance(requires, str) and requires else None,
+        }
     except (OSError, TimeoutError, URLError, ValueError):
         return None
 
 
+def _python_floor(requires_python: str | None) -> tuple[int, int] | None:
+    """The minimum (major, minor) from a requires-python spec like '>=3.12,<4'."""
+    if not requires_python:
+        return None
+    for clause in requires_python.split(","):
+        clause = clause.strip()
+        if clause.startswith(">="):
+            parts = clause[2:].strip().split(".")
+            try:
+                return int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+            except (ValueError, IndexError):
+                return None
+    return None
+
+
 def check_update(*, ttl: float = CACHE_TTL_SECONDS, now: float | None = None) -> dict[str, object]:
-    """Cached update check: {installed, latest, update_available}.
+    """Cached update check: {installed, latest, requires_python, update_available}.
 
     Reads the last PyPI answer from ``~/.horus/update-check.json`` while it is
     fresher than ``ttl``; otherwise fetches and rewrites the cache. Errs toward
@@ -93,20 +122,31 @@ def check_update(*, ttl: float = CACHE_TTL_SECONDS, now: float | None = None) ->
     current_time = time.time() if now is None else now
     cache = _cache_path()
     latest: str | None = None
+    requires: str | None = None
     try:
         cached = json.loads(cache.read_text(encoding="utf-8"))
         if current_time - float(cached.get("checked_at", 0)) < ttl:
             value = cached.get("latest")
             latest = value if isinstance(value, str) and value else None
+            spec = cached.get("requires_python")
+            requires = spec if isinstance(spec, str) and spec else None
     except (OSError, ValueError):
         cached = None
     if latest is None:
-        latest = fetch_latest_version()
-        if latest is not None:
+        info = fetch_release_info()
+        if info is not None:
+            latest = info.get("version")  # type: ignore[assignment]
+            requires = info.get("requires_python")  # type: ignore[assignment]
             try:
                 cache.parent.mkdir(parents=True, exist_ok=True)
                 cache.write_text(
-                    json.dumps({"latest": latest, "checked_at": current_time}),
+                    json.dumps(
+                        {
+                            "latest": latest,
+                            "requires_python": requires,
+                            "checked_at": current_time,
+                        }
+                    ),
                     encoding="utf-8",
                 )
             except OSError:
@@ -114,21 +154,38 @@ def check_update(*, ttl: float = CACHE_TTL_SECONDS, now: float | None = None) ->
     return {
         "installed": __version__,
         "latest": latest,
+        "requires_python": requires,
         "update_available": bool(latest and is_newer(latest, __version__)),
     }
 
 
 def run_upgrade(timeout: float = 120.0) -> tuple[bool, str]:
-    """Run ``uv tool upgrade horus-harness``. Returns (ok, detail).
+    """Upgrade the horus-harness tool env. Returns (ok, detail).
+
+    Three traps from the 2026-07-02 two-machine test are handled here:
+    ``--reinstall`` (implies ``--refresh``, which ``uv tool upgrade`` does not
+    accept directly as of uv 0.11 — a stale index cache silently no-ops the
+    upgrade otherwise); an
+    interpreter-pinned env (env python below the latest release's
+    requires-python floor → a plain upgrade resolves the newest OLD release
+    and reports success) is migrated via ``uv tool install --force --python``;
+    and the result is verified against the on-disk dist so a silent
+    stay-at-old-version never reports as success.
 
     The new code lands on disk but the running process keeps its old build; the
     caller must tell the user to restart Horus to load it.
     """
+    status = check_update()
+    latest = status.get("latest")
+    floor = _python_floor(status.get("requires_python"))  # type: ignore[arg-type]
+    floor_str = f"{floor[0]}.{floor[1]}" if floor else "3.12"
+    if floor and sys.version_info[:2] < floor:
+        # Migrate the pinned env: recreate it under a floor-compatible python.
+        cmd = ["uv", "tool", "install", "--force", "--python", floor_str, "horus-harness"]
+    else:
+        cmd = ["uv", "tool", "upgrade", "--reinstall", "horus-harness"]
     try:
-        result = subprocess.run(
-            ["uv", "tool", "upgrade", "horus-harness"],
-            capture_output=True, text=True, timeout=timeout,
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except FileNotFoundError:
         return False, "uv not found — install horus-harness updates manually"
     except (OSError, subprocess.SubprocessError) as exc:
@@ -136,4 +193,11 @@ def run_upgrade(timeout: float = 120.0) -> tuple[bool, str]:
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "upgrade failed").strip()
         return False, detail.splitlines()[-1] if detail else "upgrade failed"
+    disk = installed_disk_version()
+    if isinstance(latest, str) and disk and is_newer(latest, disk):
+        return False, (
+            f"still v{disk} after the upgrade — the tool env's interpreter is pinned "
+            f"below the latest release's floor; run: "
+            f"uv tool install --force --python {floor_str} horus-harness"
+        )
     return True, (result.stderr or result.stdout or "upgraded").strip().splitlines()[-1]
