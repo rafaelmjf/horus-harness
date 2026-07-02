@@ -18,12 +18,53 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from horus import __version__
+from horus import config as _config
 
 
 class DashboardProcess(NamedTuple):
     url: str
     started: bool
     process: subprocess.Popen[str] | None
+    error: str | None = None  # definite startup failure (child died before /health)
+
+
+# --------------------------------------------------------------------------- #
+# Startup logs — the app's GUI processes run windowless (pythonw / DEVNULL), so
+# a startup crash used to vanish. Child output and companion events land in
+# ~/.horus/logs/ and failures point the user at `horus doctor`.
+# --------------------------------------------------------------------------- #
+
+_LOG_MAX_BYTES = 512 * 1024
+
+
+def startup_log_path(name: str) -> Path:
+    return _config.config_dir() / "logs" / f"{name}.log"
+
+
+def _open_startup_log(name: str):
+    """Append handle to ``~/.horus/logs/<name>.log`` (rotated once when oversized),
+    or None when the filesystem refuses — logging must never block startup."""
+    try:
+        path = startup_log_path(name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and path.stat().st_size > _LOG_MAX_BYTES:
+            path.replace(path.with_name(f"{name}.log.1"))
+        return path.open("a", encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _log_line(name: str, message: str) -> None:
+    log = _open_startup_log(name)
+    if log is None:
+        return
+    with log:
+        log.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')} [horus {__version__}] {message}\n")
+
+
+def log_companion_event(message: str) -> None:
+    """Record a companion lifecycle event/failure (visible even under pythonw)."""
+    _log_line("companion", message)
 
 
 # Single-instance lock. Binding a fixed localhost port is a cross-platform mutex
@@ -163,9 +204,18 @@ def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool =
     if dashboard_is_live(url) and not _replace_stale_dashboard(url, port):
         return DashboardProcess(url, False, None)
 
+    # Child output goes to the startup log, not DEVNULL: when the dashboard dies
+    # on startup (import error, port conflict, …) its traceback is the diagnosis.
+    log = _open_startup_log("dashboard")
+    if log is not None:
+        log.write(
+            f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} [horus {__version__}] "
+            f"spawning dashboard on {host}:{port}\n"
+        )
+        log.flush()
     kwargs = {
-        "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
+        "stdout": log if log is not None else subprocess.DEVNULL,
+        "stderr": subprocess.STDOUT if log is not None else subprocess.DEVNULL,
         "stdin": subprocess.DEVNULL,
         "text": True,
     }
@@ -175,8 +225,19 @@ def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool =
         [sys.executable, "-m", "horus", "dashboard", "--host", host, "--port", str(port)],
         **kwargs,
     )
-    _wait_dashboard_live(url, process)
-    return DashboardProcess(url, True, process)
+    if log is not None:
+        log.close()  # the child holds its own descriptor from here
+    live = _wait_dashboard_live(url, process)
+    error = None
+    if not live and process.poll() is not None:
+        # Definite failure: the child died before answering. (Not-live-but-running
+        # is left alone — a slow start comes up late and the click path re-checks.)
+        error = (
+            f"Dashboard failed to start (exit code {process.returncode}).\n"
+            f"Run `horus doctor machine`.\nDetails: {startup_log_path('dashboard')}"
+        )
+        _log_line("dashboard", f"dashboard exited with code {process.returncode} before answering /health")
+    return DashboardProcess(url, True, process, error)
 
 
 def ensure_dashboard_for_open(
@@ -464,14 +525,20 @@ def run_companion(
     mascot_style: str = "auto",
     usage_threshold: float = 90.0,
 ) -> int:
+    # These refusals also land in the companion log: under pythonw / a desktop
+    # launcher there is no console, so a print alone is "the app won't open".
     try:
         import tkinter as tk
         from tkinter import messagebox
     except ImportError:
-        print("Tkinter is not available; the Horus companion needs a desktop Python with Tk.")
+        message = "Tkinter is not available; the Horus companion needs a desktop Python with Tk. Run `horus doctor machine`."
+        print(message)
+        log_companion_event(f"refusing to start: {message}")
         return 2
     if sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
-        print("No graphical display detected; run `horus app` from a Linux desktop session with DISPLAY or WAYLAND_DISPLAY set.")
+        message = "No graphical display detected; run `horus app` from a Linux desktop session with DISPLAY or WAYLAND_DISPLAY set."
+        print(message)
+        log_companion_event(f"refusing to start: {message}")
         return 2
 
     lock = acquire_singleton_lock()
@@ -484,6 +551,10 @@ def run_companion(
     # click, and the shutdown path agree on the dashboard process + browser window.
     state: dict[str, Any] = {"dashboard": None, "browser_proc": None}
     state_lock = threading.Lock()
+    # Startup-failure notice slot: written by ensure_open (any thread), drained by
+    # the main-thread animate loop — Tk must never be touched off the main thread,
+    # and animate must not contend on state_lock (a spawn holds it for seconds).
+    notice: dict[str, str] = {}
 
     def ensure_open(open_browser: bool) -> None:
         """Spawn/locate the dashboard and optionally open (or raise) its window.
@@ -492,10 +563,14 @@ def run_companion(
             dash = state["dashboard"] or ensure_dashboard(host, port, start=start_dashboard)
             if open_browser:
                 dash = ensure_dashboard_for_open(dash, host=host, port=port, start=start_dashboard)
-                state["browser_proc"] = reuse_or_open_dashboard(
-                    dash.url, state["browser_proc"], app_window=owned
-                )
+                if dash.error is None:
+                    state["browser_proc"] = reuse_or_open_dashboard(
+                        dash.url, state["browser_proc"], app_window=owned
+                    )
             state["dashboard"] = dash
+        if dash.error:
+            log_companion_event("surfacing dashboard startup failure to the user")
+            notice["msg"] = dash.error
 
     # Pre-warm off the critical path: the mascot window appears immediately instead
     # of blocking on the dashboard coming live and (when pre-warming) the browser's
@@ -594,6 +669,13 @@ def run_companion(
             image_index = wing_cycle[(n // 6) % len(wing_cycle)]
         canvas.itemconfigure(mascot_item, image=mascot_frames[image_index])
         canvas.coords(mascot_item, width // 2, height // 2 + bob)
+
+        # Surface a pending startup failure exactly once per occurrence (main
+        # thread — the only place Tk may be touched).
+        msg = notice.pop("msg", None)
+        if msg:
+            set_status("#f08a8a")
+            messagebox.showwarning("Horus", msg)
 
         frame["n"] = n + 1
         root.after(120, animate)

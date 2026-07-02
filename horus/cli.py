@@ -1133,16 +1133,23 @@ def cmd_app(args: argparse.Namespace) -> int:
         # child carries the GUI from here.
         return 0
     open_mode = companion.resolve_open_mode(app_window=args.app_window, tab=args.tab)
-    return companion.run_companion(
-        root,
-        host=args.host,
-        port=args.port,
-        start_dashboard=not args.no_dashboard,
-        open_on_start=not args.no_open,
-        open_mode=open_mode,
-        mascot_style=args.mascot_style,
-        usage_threshold=args.usage_threshold,
-    )
+    try:
+        return companion.run_companion(
+            root,
+            host=args.host,
+            port=args.port,
+            start_dashboard=not args.no_dashboard,
+            open_on_start=not args.no_open,
+            open_mode=open_mode,
+            mascot_style=args.mascot_style,
+            usage_threshold=args.usage_threshold,
+        )
+    except Exception:
+        # Under pythonw / a desktop launcher a crash here is invisible ("the app
+        # won't open") — record it where `horus doctor` can point the user.
+        import traceback
+        companion.log_companion_event(f"companion crashed:\n{traceback.format_exc()}")
+        raise
 
 
 def _resolve_dir(path_str: str) -> Path | None:

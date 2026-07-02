@@ -396,3 +396,84 @@ def test_replace_stale_dashboard_reaps_legacy_build_by_port(monkeypatch):
     monkeypatch.setattr(companion, "dashboard_is_live", lambda url, **k: False)
     assert companion._replace_stale_dashboard("http://127.0.0.1:8765", 8765) is True
     assert killed == [456]
+
+
+# --------------------------------------------------------------------------- #
+# Startup-failure visibility (~/.horus/logs/ + companion nudge)
+# --------------------------------------------------------------------------- #
+
+class _DeadProc:
+    returncode = 1
+
+    def poll(self):
+        return 1
+
+
+class _LiveProc:
+    returncode = None
+
+    def poll(self):
+        return None
+
+
+def _fake_home(tmp_path, monkeypatch):
+    monkeypatch.setattr(companion._config, "config_dir", lambda: tmp_path / ".horus")
+
+
+def test_ensure_dashboard_logs_and_reports_startup_failure(tmp_path, monkeypatch):
+    _fake_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(companion, "dashboard_is_live", lambda url, **k: False)
+    monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: _DeadProc())
+
+    dash = companion.ensure_dashboard()
+
+    assert dash.error is not None
+    assert "horus doctor machine" in dash.error
+    assert str(companion.startup_log_path("dashboard")) in dash.error
+    log_text = companion.startup_log_path("dashboard").read_text(encoding="utf-8")
+    assert "spawning dashboard" in log_text
+    assert "exited with code 1" in log_text
+
+
+def test_ensure_dashboard_no_error_when_child_comes_live(tmp_path, monkeypatch):
+    _fake_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(companion, "dashboard_is_live", lambda url, **k: False)
+    monkeypatch.setattr(companion, "_wait_dashboard_live", lambda url, process, **k: True)
+    monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: _LiveProc())
+
+    dash = companion.ensure_dashboard()
+
+    assert dash.error is None
+    assert dash.started is True
+
+
+def test_ensure_dashboard_slow_start_is_not_a_failure(tmp_path, monkeypatch):
+    # Not live yet but still running: leave error unset (the click path re-checks).
+    _fake_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(companion, "dashboard_is_live", lambda url, **k: False)
+    monkeypatch.setattr(companion, "_wait_dashboard_live", lambda url, process, **k: False)
+    monkeypatch.setattr(companion.subprocess, "Popen", lambda cmd, **k: _LiveProc())
+
+    assert companion.ensure_dashboard().error is None
+
+
+def test_startup_log_rotates_once_when_oversized(tmp_path, monkeypatch):
+    _fake_home(tmp_path, monkeypatch)
+    path = companion.startup_log_path("dashboard")
+    path.parent.mkdir(parents=True)
+    path.write_text("x" * (companion._LOG_MAX_BYTES + 1), encoding="utf-8")
+
+    log = companion._open_startup_log("dashboard")
+    assert log is not None
+    log.close()
+
+    assert (path.parent / "dashboard.log.1").stat().st_size > companion._LOG_MAX_BYTES
+    assert path.stat().st_size == 0
+
+
+def test_log_companion_event_writes_line(tmp_path, monkeypatch):
+    _fake_home(tmp_path, monkeypatch)
+    companion.log_companion_event("refusing to start: no display")
+    text = companion.startup_log_path("companion").read_text(encoding="utf-8")
+    assert "refusing to start: no display" in text
+    assert companion.__version__ in text
