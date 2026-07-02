@@ -316,3 +316,86 @@ def test_slug_strips_special_chars(tmp_path, monkeypatch):
     assert " " not in result.branch
     assert "(" not in result.branch
     assert ")" not in result.branch
+
+
+# ---------------------------------------------------------------------------
+# Open continuity-PR nudge (open_horus_prs / continuity_pr_findings)
+# ---------------------------------------------------------------------------
+
+def _pr_json(stdout: str) -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
+
+
+def test_open_horus_prs_filters_to_horus_branches(tmp_path, monkeypatch):
+    (tmp_path / ".git").mkdir()
+    payload = (
+        '[{"headRefName": "horus/chore-continuity", "url": "https://gh/pr/7", "title": "Continuity"},'
+        ' {"headRefName": "feat/other-work", "url": "https://gh/pr/8", "title": "Other"}]'
+    )
+    monkeypatch.setattr(
+        intmod.subprocess, "run", lambda *a, **k: _pr_json(payload)
+    )
+
+    prs = intmod.open_horus_prs(tmp_path)
+
+    assert prs == [{"branch": "horus/chore-continuity", "url": "https://gh/pr/7", "title": "Continuity"}]
+
+
+def test_open_horus_prs_non_repo_returns_none_without_gh(tmp_path, monkeypatch):
+    def unexpected_run(*a, **k):  # pragma: no cover
+        raise AssertionError("gh must not be invoked outside a git repo")
+
+    monkeypatch.setattr(intmod.subprocess, "run", unexpected_run)
+    assert intmod.open_horus_prs(tmp_path) is None
+
+
+def test_open_horus_prs_unknowable_states_return_none(tmp_path, monkeypatch):
+    (tmp_path / ".git").mkdir()
+    # gh errors (no remote / unauthenticated) -> None, never raises.
+    monkeypatch.setattr(intmod.subprocess, "run", lambda *a, **k: _fail("no git remotes"))
+    assert intmod.open_horus_prs(tmp_path) is None
+
+    # gh missing entirely -> None.
+    def raise_oserror(*a, **k):
+        raise OSError("gh not found")
+
+    monkeypatch.setattr(intmod.subprocess, "run", raise_oserror)
+    assert intmod.open_horus_prs(tmp_path) is None
+
+    # Garbage stdout -> None.
+    monkeypatch.setattr(intmod.subprocess, "run", lambda *a, **k: _pr_json("not-json"))
+    assert intmod.open_horus_prs(tmp_path) is None
+
+
+def test_continuity_pr_findings_warn_per_open_pr(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        intmod, "open_horus_prs",
+        lambda root: [{"branch": "horus/chore-x", "url": "https://gh/pr/7", "title": "x"}],
+    )
+    findings = intmod.continuity_pr_findings(tmp_path)
+    assert len(findings) == 1
+    assert findings[0].level == "warn"
+    assert "https://gh/pr/7" in findings[0].message and "Allow auto-merge" in findings[0].message
+
+    # None (unknowable) and empty both produce no findings.
+    monkeypatch.setattr(intmod, "open_horus_prs", lambda root: None)
+    assert intmod.continuity_pr_findings(tmp_path) == []
+
+
+def test_cli_doctor_project_prints_open_continuity_pr_warn(tmp_path, monkeypatch, capsys):
+    from horus.cli import main
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    from horus import initialize
+    initialize.init_project(tmp_path, assume_yes=True)
+    monkeypatch.setattr(
+        intmod, "open_horus_prs",
+        lambda root: [{"branch": "horus/chore-continuity", "url": "https://gh/pr/7", "title": "Continuity"}],
+    )
+
+    rc = main(["doctor", "project", "--path", str(tmp_path)])
+
+    out = capsys.readouterr().out
+    assert "Horus continuity PR still open: https://gh/pr/7" in out
+    assert rc == 1  # warn flips the project-section exit code (existing semantics)
