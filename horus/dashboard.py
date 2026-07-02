@@ -2205,14 +2205,19 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
     return (
         "<form class='lform' method='post' action='/launch'>"
         f"<input type='hidden' name='project' value='{i}'>"
-        "<input type='hidden' name='target' value='window'><span hidden>Open in a terminal window</span>"
         "<div class='frow'>"
         "<div class='field'><label>Agent</label><select name='agent'>"
         "<option value='claude'>Claude Code</option><option value='codex'>Codex</option>"
         "</select></div>"
         f"<div class='field'><label>Account</label><select name='account'>{opts}</select></div>"
         "</div>"
+        "<div class='frow'>"
         f"<div class='field'><label>Permission posture</label><select name='posture'>{_POSTURE_OPTIONS}</select></div>"
+        "<div class='field'><label>Open in</label><select name='target'>"
+        "<option value='window'>Native terminal</option>"
+        "<option value='vscode'>VS Code</option>"
+        "</select></div>"
+        "</div>"
         "<div class='intent-row'>"
         "<button class='btn btn-go' type='submit' name='mode' value='resume'>&#9656; Resume - next action</button>"
         "<button class='btn' type='submit' name='mode' value='fresh'>Fresh session</button>"
@@ -2330,6 +2335,13 @@ def _launch_notice(params: dict[str, list[str]]) -> str:
         return (
             f"<div class='banner ok'>Launched session <code>{sid}</code> in a new "
             "window &mdash; it appears under Live sessions once its process is up.</div>"
+        )
+    if "vscode" in params:
+        name = html.escape(params["vscode"][0])
+        return (
+            f"<div class='banner ok'>Opened <code>{name}</code> in VS Code &mdash; start "
+            "the agent there (Claude extension or integrated terminal); the fresh/resume "
+            "prompt is copyable on the project page.</div>"
         )
     if "error" in params:
         return f"<div class='banner err'>Launch failed: {html.escape(params['error'][0])}</div>"
@@ -2726,8 +2738,10 @@ def process_launch(
 ) -> str:
     """Handle a Control-tab launch request; return the query string to redirect
     ``/control`` to. ``target=app`` (default) opens an in-app terminal tab
-    (``tab=<client_id>``); ``target=window`` opens an OS console (``launched=<id8>``).
-    Failures return ``error=<reason>``.
+    (``tab=<client_id>``); ``target=window`` opens an OS console (``launched=<id8>``);
+    ``target=vscode`` opens/focuses the project folder in VS Code (``vscode=<name>``)
+    without spawning or registering an agent session. Failures return
+    ``error=<reason>``.
 
     Safety mirrors the read surface: a project is addressed by its **index** into
     the registered list (never an arbitrary path), and an account must be in the
@@ -2760,8 +2774,20 @@ def process_launch(
             project_dir = Path(projects[int(raw_project)])
         except (ValueError, IndexError):
             return "error=" + quote_plus("unknown project")
-        if mode == "resume":
-            prompt = _resume_prompt_text(load_project(str(project_dir)))
+
+    if target == "vscode":
+        # A destination, not a session: open/focus the folder in VS Code and stop.
+        # The user starts the agent there themselves, so mode/agent/posture don't
+        # apply and a resume prompt is never injected into a surface Horus doesn't
+        # control — its copyable text stays on the project page.
+        try:
+            launcher.open_vscode(project_dir)
+        except OSError as exc:
+            return "error=" + quote_plus(str(exc))
+        return "vscode=" + quote_plus(project_dir.name)
+
+    if raw_project != "" and mode == "resume":
+        prompt = _resume_prompt_text(load_project(str(project_dir)))
 
     if target == "app":
         # In-app terminal: spawn the real agent TUI under a PTY in the session-host.

@@ -40,6 +40,27 @@ def open_terminal(argv: list[str], cwd: Path | str, env: dict[str, str] | None =
     return proc.pid
 
 
+def open_vscode(project_dir: Path | str) -> int:
+    """Open (or focus) ``project_dir`` as a folder in VS Code; return the child PID.
+
+    The alternate launch *destination* to :func:`open_terminal`: no agent process is
+    spawned and nothing is registered — the user starts claude/codex themselves via
+    the Claude extension or the integrated terminal. ``shutil.which`` resolves the
+    per-OS launcher (``code`` on POSIX, ``code.cmd`` on Windows via PATHEXT); the
+    ``code`` CLI hands off to the real VS Code instance and exits, so the returned
+    PID is not a liveness signal.
+    """
+    exe = shutil.which("code")
+    if exe is None:
+        raise OSError(
+            "VS Code CLI `code` not found on PATH; install VS Code and enable its "
+            "shell command (macOS: run \"Shell Command: Install 'code' command in "
+            "PATH\" from the Command Palette)"
+        )
+    proc = subprocess.Popen([exe, str(Path(project_dir).resolve())])  # noqa: S603
+    return proc.pid
+
+
 def _posix_terminal_argv(argv: list[str], *, cwd: Path) -> list[str]:
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         raise OSError(
