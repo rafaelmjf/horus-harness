@@ -35,6 +35,7 @@ from horus import (
     skills,
     templates,
     upgrade,
+    vscode,
 )
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
 from horus.doctor_machine import machine_findings
@@ -386,6 +387,23 @@ def cmd_open(args: argparse.Namespace) -> int:
         return 2
     print(f"Opened {result.agent} session in {result.project.name} as {result.account or 'ambient'} "
           f"(pid {result.pid}, session {result.session_id}).")
+    return 0
+
+
+def cmd_vscode_task(args: argparse.Namespace) -> int:
+    """Install the static VS Code tasks (Ctrl+Shift+B → agent seeded with `horus resume`)."""
+    root = Path(args.path).resolve()
+    if not (root / HORUS_DIR).is_dir():
+        print(f"No {HORUS_DIR}/ here (run `horus init` first) — the task seeds from it.")
+        return 1
+    action = vscode.write_tasks(root)
+    print(f"[{action.status}] {action.message}")
+    if action.status == "kept":
+        print("\nAdd this to your .vscode/tasks.json 'tasks' array:\n")
+        print(vscode.TASKS_JSON)
+        return 1
+    if action.status == "created":
+        print("In VS Code: Ctrl+Shift+B runs \"Horus: resume Claude session\" in the integrated terminal.")
     return 0
 
 
@@ -1538,6 +1556,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="initial prompt to seed the interactive session (default: fresh, unseeded)",
     )
     p_open.set_defaults(func=cmd_open)
+
+    p_vscode = sub.add_parser(
+        "vscode-task",
+        help="write .vscode/tasks.json tasks that start claude/codex seeded with `horus resume` (Ctrl+Shift+B)",
+    )
+    p_vscode.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_vscode.set_defaults(func=cmd_vscode_task)
 
     p_resume = sub.add_parser("resume", help="print the minimum-context fresh-session handoff for this project")
     p_resume.add_argument("--path", default=".", help="project root (default: cwd)")
