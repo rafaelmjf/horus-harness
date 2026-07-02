@@ -31,8 +31,9 @@ def _console_script_finding() -> Finding:
     if shutil.which("horus") is None:
         return Finding(
             "fail",
-            "`horus` console script not found on PATH — committed hook files will error "
-            "on every tool call until horus is installed (`uv tool install horus-harness`) "
+            "`horus` console script not found on PATH — committed hook files are inert "
+            "(guarded generations no-op silently; pre-guard ones error on every tool call) "
+            "until horus is installed (`uv tool install horus-harness`) "
             "or the hooks are removed (`horus offboard --apply`)",
         )
     return Finding("ok", "`horus` console script on PATH")

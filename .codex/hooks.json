@@ -5,7 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "horus usage check --path . --threshold 90 --hook",
+            "command": "horus usage check --path . --threshold 90 --hook || exit 0",
+            "commandWindows": "if (Get-Command horus -ErrorAction SilentlyContinue) { horus usage check --path . --threshold 90 --hook }; exit 0",
             "timeout": 30,
             "statusMessage": "Checking Horus usage"
           }
@@ -17,7 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "horus usage check --path . --threshold 90 --hook",
+            "command": "horus usage check --path . --threshold 90 --hook || exit 0",
+            "commandWindows": "if (Get-Command horus -ErrorAction SilentlyContinue) { horus usage check --path . --threshold 90 --hook }; exit 0",
             "timeout": 30,
             "statusMessage": "Checking Horus usage"
           }
@@ -30,7 +32,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "horus close --hook",
+            "command": "horus close --hook || exit 0",
+            "commandWindows": "if (Get-Command horus -ErrorAction SilentlyContinue) { horus close --hook }; exit 0",
             "timeout": 30,
             "statusMessage": "Checking Horus closure"
           }
@@ -41,7 +44,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "horus guard-host --hook",
+            "command": "horus guard-host --hook || exit 0",
+            "commandWindows": "if (Get-Command horus -ErrorAction SilentlyContinue) { horus guard-host --hook }; exit 0",
             "timeout": 30,
             "statusMessage": "Checking Horus host safety"
           }
