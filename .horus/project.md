@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "v0.0.9 live on PyPI; riding the next release: projection-sync badge (PR #68), VS Code launch destination tier 1 (PR #70), open-continuity-PR nudge (PR #71), and the one-keypress VS Code resume/fresh tasks (PRs #72+#73; 601 tests green). Remaining UX-hardening items are per-OS/lifecycle direct work (graceful hooks, onboard artifact commits, startup visibility, install-smoke CI). Horus remains the durable memory plane (no session hosting)."
+current_focus: "v0.0.9 live on PyPI; riding the next release: projection-sync badge (#68), VS Code launch destination (#70), open-continuity-PR nudge (#71), VS Code resume/fresh tasks (#72+#73), catalog dedup + Track button (#74; 607 tests green). NEXT: cut v0.0.10, then graceful hooks; skill map/inventory queued as the next major UX feature. Horus remains the durable memory plane (no session hosting)."
 last_updated: 2026-07-02
 ---
 

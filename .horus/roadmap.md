@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Shipped today, riding the next release (601 tests green): VS Code launch destination tier 1 (PR #70), open-continuity-PR nudge (PR #71), and the cheap tier-2 VS Code resume/fresh tasks `horus vscode-task` (PRs #72+#73 — Ctrl+Shift+B resume, ctrl+alt+r/ctrl+alt+n user keybindings, generation-aware tasks.json upgrade; dogfooded; user still to confirm inside Flatpak VS Code). Also fixed live on this machine: `code` wrapper + user keybindings for Flatpak VS Code. v0.0.9 remains the live PyPI release. Windows machine still needs its one-time --python 3.12 env migration."
+current_focus: "Shipped today, riding the next release (607 tests green): VS Code launch destination (PR #70), open-continuity-PR nudge (PR #71), VS Code resume/fresh tasks (PRs #72+#73), and catalog dedup + Track-on-this-machine button (PR #74 — registered projects never re-listed in the GitHub catalog; one-click clone+register for remote Horus repos). Live fixes on this machine: gym-coach dup resolved (merged stuck PR #1 — free-plan private repos can't enable auto-merge), Flatpak `code` wrapper + VS Code keybindings. v0.0.9 remains the live PyPI release; NEXT is cutting v0.0.10. Windows machine still needs its one-time --python 3.12 env migration."
 next_action: "(0) Cut release v0.0.10 — PRs #68 + #70-#73 are merged but only live in checkouts (today's 'old UI' confusion was exactly this lag); pairs with (4). Then the remaining UX-hardening direct items, roughly in order: (1) graceful hooks when the CLI is missing/broken (per-OS guard — the cross-platform lens bites here; doctor machine already provides the visible signal); (2) onboard/integrate committing the projected artifacts (decide commit-vs-gitignore, make integrate() include them); (3) startup-failure visibility (~/.horus/logs/ + companion nudge); (4) post-publish install smoke CI (ubuntu+windows+macos uv tool install probe — first macOS coverage). After that, the user-requested Skill map / inventory design (roadmap 'Cross-tool interface sync'). Also run the one-time env migration on the Windows machine when next at it."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68 and #70-#73; v0.0.9 is live on PyPI, #68 and #70-#73 ride the next release). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68 and #70-#74; v0.0.9 is live on PyPI, #68 and #70-#74 ride the next release). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
 execution_recommendation: "continue-as-is - the remaining UX-hardening items are per-OS/lifecycle-subtle (graceful hooks, startup visibility) or policy decisions (onboard artifact commits), exactly where workers fail confidently; the install-smoke CI item is small. No delegable volume until the next substantial feature track opens."
 last_updated: 2026-07-02
 ---
@@ -97,6 +97,9 @@ last_updated: 2026-07-02
   show an "N ignored" affordance on the untracked fold (2026-07-02 the user
   read "only public repos visible" when actually 3 of 6 private repos were
   simply on their own ignore list).
+- [x] Catalog dedup (registered projects never re-listed) + "Track on this
+  machine" button on remote Horus-project cards — SHIPPED 2026-07-02 (PR #74,
+  user request) → features.md "Catalog dedup + Track-on-this-machine".
 
 ## Execution Planning Workflow
 
