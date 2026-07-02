@@ -1,0 +1,80 @@
+name: Install smoke
+
+# "Reproduce the gate" applied to releases: after each PyPI publish, prove a fresh
+# machine can actually install and start Horus. Runs on every published release
+# (concurrently with publish.yml — the install retry loop absorbs both the upload
+# and PyPI index propagation) and on manual dispatch against any released version.
+# The macOS runner is the project's first macOS coverage of any kind.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to smoke-test (e.g. 0.0.10); defaults to the release tag"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  install-smoke:
+    name: Install smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+
+      - name: Resolve target version
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "smoke-testing horus-harness==$VERSION"
+
+      - name: Install from PyPI (retry for index propagation)
+        shell: bash
+        run: |
+          for i in $(seq 1 20); do
+            if uv tool install --force --python 3.12 "horus-harness==$VERSION"; then
+              exit 0
+            fi
+            echo "horus-harness==$VERSION not installable yet (attempt $i); retrying in 30s"
+            sleep 30
+          done
+          echo "release never became installable from PyPI"
+          exit 1
+
+      - name: Probe the console script
+        shell: bash
+        run: |
+          export PATH="$(uv tool dir --bin):$PATH"
+          INSTALLED="$(horus --version)"
+          echo "$INSTALLED"
+          test "$INSTALLED" = "horus $VERSION"
+
+      - name: Probe the dashboard /health endpoint
+        shell: bash
+        run: |
+          export PATH="$(uv tool dir --bin):$PATH"
+          # Redirect output so the lingering child never holds the step's pipes open.
+          horus dashboard --port 8765 > dashboard.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8765/health; then
+              echo
+              echo "dashboard healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "dashboard never answered /health; log follows"
+          cat dashboard.log
+          exit 1
