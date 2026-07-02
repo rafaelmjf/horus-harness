@@ -834,6 +834,12 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
 
 
 def cmd_upgrade_project(args: argparse.Namespace) -> int:
+    if args.all:
+        if args.path != ".":
+            print("error: --all cannot be combined with --path")
+            return 2
+        return _cmd_upgrade_project_all(args)
+
     root = _resolve_dir(args.path)
     if root is None:
         return 2
@@ -859,6 +865,62 @@ def cmd_upgrade_project(args: argparse.Namespace) -> int:
         if skipped:
             print("\nSome artifacts were skipped because Horus does not own them.")
             return 1
+    return 0
+
+
+def _cmd_upgrade_project_all(args: argparse.Namespace) -> int:
+    """`upgrade-project --all`: propagate a CLI upgrade to every registered project
+    in one step, instead of the operator running `--apply` in each repo by hand.
+
+    A registry entry can point at a path that only exists on another machine (the
+    registry file is user-global, not repo-local), so a missing path is a skip, not
+    a failure.
+    """
+    projects = config.load_projects()
+    if not projects:
+        print("No projects registered (run `horus init` inside a project).")
+        return 0
+
+    targets = _skill_targets(args.target)
+    mode = "Applying" if args.apply else "Checking"
+    print(f"{mode} Horus project projections across {len(projects)} registered project(s)\n")
+
+    processed = 0
+    skipped_projects = 0
+    total_items = 0
+    any_pending = False
+    for path_str in projects:
+        root = Path(path_str)
+        if not root.is_dir():
+            print(f"  [skip] {path_str} (registered path not found on this machine)")
+            skipped_projects += 1
+            continue
+
+        processed += 1
+        print(root)
+        actions = upgrade.upgrade_project(
+            root,
+            apply=args.apply,
+            targets=targets,
+            hooks=not args.no_hooks,
+            skills_=not args.no_skills,
+            instructions=not args.no_instructions,
+        )
+        for action in actions:
+            print(f"  [{action.status}] {action.message}")
+        if args.apply:
+            total_items += sum(1 for a in actions if a.status in ("updated", "created"))
+        else:
+            pending = [a for a in actions if a.status in ("would-update", "skipped")]
+            total_items += len(pending)
+            if pending:
+                any_pending = True
+        print()
+
+    verb = "updated" if args.apply else "pending"
+    print(f"Summary: {processed} project(s) processed, {skipped_projects} skipped, {total_items} item(s) {verb}.")
+    if not args.apply and any_pending:
+        return 1
     return 0
 
 
@@ -1247,6 +1309,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_upgrade = sub.add_parser("upgrade-project", help="refresh repo-local Horus projected artifacts")
     p_upgrade.add_argument("--path", default=".", help="project root (default: cwd)")
     p_upgrade.add_argument("--apply", action="store_true", help="write updates (default is dry-run/report)")
+    p_upgrade.add_argument(
+        "--all",
+        action="store_true",
+        help="apply to every registered project instead of --path",
+    )
     p_upgrade.add_argument(
         "--target",
         choices=("all", "claude", "codex"),

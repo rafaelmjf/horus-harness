@@ -391,6 +391,83 @@ def test_upgrade_project_cli_apply_writes(tmp_path, monkeypatch, capsys):
     assert "Applying Horus project projections" in capsys.readouterr().out
 
 
+def test_upgrade_project_all_applies_to_every_registered_project(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import initialize
+
+    proj_a = tmp_path / "proj-a"
+    proj_b = tmp_path / "proj-b"
+    proj_a.mkdir()
+    proj_b.mkdir()
+    initialize.init_project(proj_a, assume_yes=True)
+    initialize.init_project(proj_b, assume_yes=True)
+    (proj_a / ".codex" / "hooks.json").unlink(missing_ok=True)
+    (proj_b / ".codex" / "hooks.json").unlink(missing_ok=True)
+
+    rc = main(["upgrade-project", "--all", "--apply", "--target", "codex", "--no-skills", "--no-instructions"])
+
+    assert rc == 0
+    assert (proj_a / ".codex" / "hooks.json").exists()
+    assert (proj_b / ".codex" / "hooks.json").exists()
+    out = capsys.readouterr().out
+    assert str(proj_a) in out
+    assert str(proj_b) in out
+    assert "2 project(s) processed, 0 skipped" in out
+
+
+def test_upgrade_project_all_skips_missing_registered_path(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import initialize
+
+    proj_a = tmp_path / "proj-a"
+    proj_a.mkdir()
+    initialize.init_project(proj_a, assume_yes=True)
+    config.register_project(tmp_path / "does-not-exist")
+
+    rc = main(["upgrade-project", "--all", "--apply", "--target", "codex", "--no-skills", "--no-instructions"])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "does-not-exist" in out
+    assert "1 project(s) processed, 1 skipped" in out
+
+
+def test_upgrade_project_all_rejects_explicit_path(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+
+    rc = main(["upgrade-project", "--all", "--path", str(tmp_path)])
+
+    assert rc == 2
+    assert "error" in capsys.readouterr().out
+
+
+def test_upgrade_project_all_empty_registry_returns_ok(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+
+    rc = main(["upgrade-project", "--all"])
+
+    assert rc == 0
+    assert "No projects registered" in capsys.readouterr().out
+
+
+def test_upgrade_project_all_dry_run_reports_pending_across_projects(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import initialize
+
+    proj_a = tmp_path / "proj-a"
+    proj_a.mkdir()
+    initialize.init_project(proj_a, assume_yes=True)
+    (proj_a / ".codex" / "hooks.json").unlink(missing_ok=True)
+
+    rc = main(["upgrade-project", "--all", "--target", "codex", "--no-skills", "--no-instructions"])
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "would-update" in out
+    assert "1 project(s) processed, 0 skipped" in out
+    assert not (proj_a / ".codex" / "hooks.json").exists()
+
+
 def test_app_cli_dispatches_to_companion(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     calls = []
