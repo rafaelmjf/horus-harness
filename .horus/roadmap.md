@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Shipped today, riding the next release: VS Code launch destination tier 1 (PR #70) and the open-continuity-PR nudge closing onboard residual (b) (PR #71 — doctor warn + async dashboard fragment; 591 tests green, both driven against the real server with shim code/gh CLIs). v0.0.9 remains the live PyPI release. Remaining UX-hardening items are per-OS/lifecycle direct work. Windows machine still needs its one-time --python 3.12 env migration."
+current_focus: "Shipped today, riding the next release (600 tests green): VS Code launch destination tier 1 (PR #70), open-continuity-PR nudge (PR #71), and the cheap tier-2 VS Code resume task `horus vscode-task` (PR #72 — Ctrl+Shift+B runs claude seeded with `horus resume`; dogfooded into this repo; user still to confirm it inside Flatpak VS Code). Also fixed live on this machine: `code` wrapper for Flatpak VS Code at ~/.local/bin/code. v0.0.9 remains the live PyPI release. Windows machine still needs its one-time --python 3.12 env migration."
 next_action: "Pick up the remaining UX-hardening direct items, roughly in order: (1) graceful hooks when the CLI is missing/broken (per-OS guard — the cross-platform lens bites here; doctor machine already provides the visible signal); (2) onboard/integrate committing the projected artifacts (decide commit-vs-gitignore, make integrate() include them); (3) startup-failure visibility (~/.horus/logs/ + companion nudge); (4) post-publish install smoke CI (ubuntu+windows+macos uv tool install probe — first macOS coverage; v0.0.9's manual PyPI-propagation wait showed exactly why). Also run the one-time env migration on the Windows machine when next at it."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68, #70, #71; v0.0.9 is live on PyPI, #68/#70/#71 ride the next release). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68 and #70-#72; v0.0.9 is live on PyPI, #68/#70/#71/#72 ride the next release). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
 execution_recommendation: "continue-as-is - the remaining UX-hardening items are per-OS/lifecycle-subtle (graceful hooks, startup visibility) or policy decisions (onboard artifact commits), exactly where workers fail confidently; the install-smoke CI item is small. No delegable volume until the next substantial feature track opens."
 last_updated: 2026-07-02
 ---
@@ -241,14 +241,20 @@ dashboard and later becomes the place for continuity/status nudges.
   "VS Code launch destination (tier 1)"; rule in decisions.md "A launch
   *destination* is not a session". Includes the `code`-presence
   `horus doctor machine` check.
-- [ ] **Tier 2 (design before building): auto-start the agent in the integrated
-  terminal** via a Horus-written `.vscode/tasks.json` task with
-  `"runOn": "folderOpen"`, reusing the launcher's exact argv/env (account
-  `CLAUDE_CONFIG_DIR`, resume prompt). Caveats to decide: VS Code's per-folder
-  "Allow Automatic Tasks" trust gate, `.vscode/` is a non-Horus surface
-  (ownership, offboard cleanup, commit-vs-gitignore — same policy family as
-  "onboard commits projected artifacts"), and a resume prompt must never land
-  in a committed file.
+- [x] Tier 2, cheap one-keypress variant (user-chosen 2026-07-02: "just UX and
+  convenience, not worth a big effort") — SHIPPED 2026-07-02 (PR #72) →
+  features.md "VS Code resume task (`horus vscode-task`)"; ownership rule in
+  decisions.md "`.vscode/` is a user surface". Residual: user still to confirm
+  Ctrl+Shift+B works inside *Flatpak* VS Code (interactive-shell probe was
+  positive; task shells may not read ~/.bashrc — if it fails there, the fix is
+  VS Code's flatpak host-shell profile, or revisit).
+- [ ] Tier 2 full auto-run (DEFERRED indefinitely — only if the one-keypress
+  variant proves insufficient): `"runOn": "folderOpen"` reusing the launcher's
+  exact argv/env (account `CLAUDE_CONFIG_DIR`, resume prompt) via a
+  machine-local one-shot launch spec + `horus launch-here` indirection. Caveats
+  that made it not-cheap: VS Code's per-folder "Allow Automatic Tasks" trust
+  gate, secrets/prompt must never land in the committed file, per-packaging
+  PATH (Flatpak sandbox).
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 
