@@ -82,10 +82,21 @@ last_updated: 2026-07-02
   execution. Fold findings back into the per-OS defaults like `resolve_open_mode`.
 - [ ] **Onboard residual (a) (found 2026-07-02, see history.md):** `integrate()`
   leaves the clone checked out on the `horus/chore-…` continuity branch — decide
-  whether to switch back to the default branch after pushing.
+  whether to switch back to the default branch after pushing. (Seen live in
+  agentic-gym-coach 2026-07-02.)
 - [x] Onboard residual (b): doctor/dashboard nudge for continuity PRs sitting
   OPEN (auto-merge off) — SHIPPED 2026-07-02 (PR #71) → features.md
-  "Open-continuity-PR nudge".
+  "Open-continuity-PR nudge". Validated same day by the real gym-coach case.
+- [ ] **`integrate()` direct-merge fallback (found 2026-07-02, see history.md
+  "Allow auto-merge cannot be enabled on free-plan private repos"):** when
+  `gh pr merge --auto` fails (private repo on Free plan — the API even refuses
+  the *setting* silently), fall back to an immediate `gh pr merge --merge` if
+  the repo has no required checks; otherwise leave the PR + rely on the #71
+  nudge. Affects every private-repo onboard for free-plan users.
+- [ ] Small catalog UI nicety: badge private repos in the GitHub catalog and
+  show an "N ignored" affordance on the untracked fold (2026-07-02 the user
+  read "only public repos visible" when actually 3 of 6 private repos were
+  simply on their own ignore list).
 
 ## Execution Planning Workflow
 

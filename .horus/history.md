@@ -11,6 +11,22 @@ design (the "bumps" below), plus the **rationale behind the rules** in `decision
 (those live in `roadmap.md`). Most decisions' rationale is already a bump below; the
 foundational whys that aren't are collected under "Decision rationale" at the end.
 
+## "Allow auto-merge" cannot be enabled on free-plan private repos — the onboard PR class has a plan-level root cause
+
+2026-07-02. The user reported agentic-gym-coach appearing BOTH as a tracked project and
+in "Not tracked". Diagnosis: onboard's continuity PR #1 had sat OPEN since 2026-07-01 —
+locally the registered clone had `.horus/` (tracked), remotely the default branch had
+none (untracked). The root cause is deeper than a forgotten repo setting: GitHub's
+"Allow auto-merge" is **not available on private repos on the Free plan** — the API
+PATCH silently returns `allow_auto_merge: false` (no error). So for this user every
+*private* repo onboard will hit it; it's a recurring class, not a one-off. Remedies in
+place: PR #71's doctor/dashboard nudge surfaces stuck `horus/…` PRs (validated by this
+very case); fixed the instance by merging PR #1, switching the clone off the continuity
+branch (residual (a) seen live), and refreshing the catalog. Candidate improvement on
+the roadmap: `integrate()` falling back to an immediate `gh pr merge --merge` when
+enabling auto-merge fails and the repo has no required checks. Also note: the clone's
+default branch was `master`, not `main` — never hardcode `main` in remedies.
+
 ## The stale dashboard "fixed" staleness against itself; uv's env pin blocked every upgrade
 
 Two-machine test, continue leg (2026-07-02). The user clicked "refresh artifacts" on
