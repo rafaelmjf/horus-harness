@@ -59,7 +59,7 @@ reflow) if a "why did we ever…" archaeology is ever needed.
 
 - **Control cockpit retired; continuity is the dashboard's job** — session hosting/orchestration is ceded to Omnigent, and the cockpit only ever saw Horus-launched sessions. Usage + launch folded into the Projects tab.
 - **Dashboard is read-mostly: explicit next-step + clickable roadmap** — renders current state, never infers it.
-- **Heavy panels load async; pages paint instantly** — token-overhead, context-cache, and the project grid load via `data-horus-src` fetch (they parse session logs, ~seconds); the page never blocks on them, and account usage never blocks on the OAuth `/usage` call.
+- **Heavy panels load async; pages paint instantly** — token-overhead, context-cache, the project grid, and network probes (gh open-PR nudge) load via `data-horus-src` fetch; the page never blocks on them, account usage never blocks on the OAuth `/usage` call, and network calls stay out of `check_project`/`gitstate` (files-only layers). A nudge fragment that has nothing to say returns empty — absence of a warning, never a rendered "all clear" it can't actually promise.
 - **`horus app` pre-warms the dashboard in the background** — the mascot shows immediately (not blocked on the dashboard coming live); the dashboard window opens during startup; `--no-open` for mascot-only.
 - **Owned dashboard window is default only where the raise is reliable (Windows)** — dedup is cross-OS but raise/focus isn't (Wayland has no API; `webbrowser.open` ignores `new=` on Windows); `--tab`/`--app-window` force either anywhere. ↳ history.md
 - **Light mode is the default** — persisted per-browser (localStorage) with a header toggle + a Settings control.

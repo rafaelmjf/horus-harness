@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "VS Code launch destination tier 1 SHIPPED (PR #70, merged to main; rides the next release like the projection-sync badge #68): 'Open in' select on every launch surface, `code`-CLI opener, doctor machine check — 583 tests green, error + success paths driven against the real dashboard server. v0.0.9 remains the live PyPI release. Remaining UX-hardening items are per-OS/lifecycle direct work. Windows machine still needs its one-time --python 3.12 env migration."
+current_focus: "Shipped today, riding the next release: VS Code launch destination tier 1 (PR #70) and the open-continuity-PR nudge closing onboard residual (b) (PR #71 — doctor warn + async dashboard fragment; 591 tests green, both driven against the real server with shim code/gh CLIs). v0.0.9 remains the live PyPI release. Remaining UX-hardening items are per-OS/lifecycle direct work. Windows machine still needs its one-time --python 3.12 env migration."
 next_action: "Pick up the remaining UX-hardening direct items, roughly in order: (1) graceful hooks when the CLI is missing/broken (per-OS guard — the cross-platform lens bites here; doctor machine already provides the visible signal); (2) onboard/integrate committing the projected artifacts (decide commit-vs-gitignore, make integrate() include them); (3) startup-failure visibility (~/.horus/logs/ + companion nudge); (4) post-publish install smoke CI (ubuntu+windows+macos uv tool install probe — first macOS coverage; v0.0.9's manual PyPI-propagation wait showed exactly why). Also run the one-time env migration on the Windows machine when next at it."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68 and #70; v0.0.9 is live on PyPI, #68/#70 ride the next release). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68, #70, #71; v0.0.9 is live on PyPI, #68/#70/#71 ride the next release). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
 execution_recommendation: "continue-as-is - the remaining UX-hardening items are per-OS/lifecycle-subtle (graceful hooks, startup visibility) or policy decisions (onboard artifact commits), exactly where workers fail confidently; the install-smoke CI item is small. No delegable volume until the next substantial feature track opens."
 last_updated: 2026-07-02
 ---
@@ -80,12 +80,12 @@ last_updated: 2026-07-02
 - [ ] **macOS validation pass**: nothing has ever run on macOS — mascot (Tk
   transparency), terminal spawning in `launcher`, owned-window/tab defaults, hook
   execution. Fold findings back into the per-OS defaults like `resolve_open_mode`.
-- [ ] **Onboard residuals (found 2026-07-02, see history.md):** (a) `integrate()`
+- [ ] **Onboard residual (a) (found 2026-07-02, see history.md):** `integrate()`
   leaves the clone checked out on the `horus/chore-…` continuity branch — decide
-  whether to switch back to the default branch after pushing; (b) when the repo's
-  GitHub "Allow auto-merge" setting is off, the continuity PR sits OPEN silently —
-  the onboarded banner now shows integration detail, but consider a doctor/dashboard
-  nudge for unmerged continuity PRs.
+  whether to switch back to the default branch after pushing.
+- [x] Onboard residual (b): doctor/dashboard nudge for continuity PRs sitting
+  OPEN (auto-merge off) — SHIPPED 2026-07-02 (PR #71) → features.md
+  "Open-continuity-PR nudge".
 
 ## Execution Planning Workflow
 
