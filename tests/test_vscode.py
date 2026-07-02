@@ -16,6 +16,7 @@ def test_write_tasks_creates_file(tmp_path):
     # at run time, agents run ambient (no account env), nothing machine-specific.
     assert 'claude \\"$(horus resume)\\"' in text
     assert 'codex \\"$(horus resume)\\"' in text
+    assert '"command": "claude",' in text and '"command": "codex",' in text  # fresh variants
     assert "CLAUDE_CONFIG_DIR" not in text and "CODEX_HOME" not in text
 
 
@@ -23,6 +24,17 @@ def test_write_tasks_idempotent_on_own_file(tmp_path):
     vscode.write_tasks(tmp_path)
     action = vscode.write_tasks(tmp_path)
     assert action.status == "up-to-date"
+
+
+def test_write_tasks_upgrades_unedited_previous_generation(tmp_path):
+    path = vscode.tasks_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(vscode._PREVIOUS_TASKS_JSON[0], encoding="utf-8")
+
+    action = vscode.write_tasks(tmp_path)
+
+    assert action.status == "updated"
+    assert path.read_text(encoding="utf-8") == vscode.TASKS_JSON
 
 
 def test_write_tasks_never_touches_foreign_file(tmp_path):
@@ -42,6 +54,13 @@ def test_remove_tasks_only_removes_byte_identical_file(tmp_path):
     assert action.status == "removed"
     assert not vscode.tasks_path(tmp_path).exists()
     assert not (tmp_path / ".vscode").exists()  # emptied dir pruned
+
+    # An unedited *previous* generation is still ours to remove.
+    path = vscode.tasks_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(vscode._PREVIOUS_TASKS_JSON[0], encoding="utf-8")
+    assert vscode.remove_tasks(tmp_path).status == "removed"
+    assert not (tmp_path / ".vscode").exists()
 
     # An edited file is the user's now.
     path = vscode.tasks_path(tmp_path)

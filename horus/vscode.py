@@ -21,11 +21,58 @@ from __future__ import annotations
 from pathlib import Path
 from typing import NamedTuple
 
-# The command runs through the task's shell, so `$(horus resume)` resolves at
-# run time from the repo's committed `.horus/` lanes — nothing machine- or
+# The resume commands run through the task's shell, so `$(horus resume)` resolves
+# at run time from the repo's committed `.horus/` lanes — nothing machine- or
 # session-specific is baked into the file. POSIX sh and PowerShell (VS Code's
 # Windows default) share this substitution syntax; classic cmd.exe does not.
 TASKS_JSON = """\
+{
+  // Written by `horus vscode-task`. Safe to edit — Horus never rewrites an
+  // edited tasks.json (it only updates/removes its own unedited versions).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Horus: resume Claude session",
+      "detail": "Start claude in the integrated terminal, seeded with this repo's .horus continuity handoff",
+      "type": "shell",
+      "command": "claude \\"$(horus resume)\\"",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Horus: fresh Claude session",
+      "detail": "Start claude in the integrated terminal, unseeded",
+      "type": "shell",
+      "command": "claude",
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Horus: resume Codex session",
+      "detail": "Start codex in the integrated terminal, seeded with this repo's .horus continuity handoff",
+      "type": "shell",
+      "command": "codex \\"$(horus resume)\\"",
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Horus: fresh Codex session",
+      "detail": "Start codex in the integrated terminal, unseeded",
+      "type": "shell",
+      "command": "codex",
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true },
+      "problemMatcher": []
+    }
+  ]
+}
+"""
+
+# Byte-exact earlier generations of the file above. A tasks.json matching any of
+# these is still *ours* (unedited), so write_tasks may upgrade it in place and
+# remove_tasks may delete it; anything else has user edits and is theirs now.
+_PREVIOUS_TASKS_JSON: tuple[str, ...] = (
+    """\
 {
   // Written by `horus vscode-task`. Safe to edit — Horus never rewrites an
   // existing tasks.json (offboard removes it only if byte-identical).
@@ -50,7 +97,21 @@ TASKS_JSON = """\
     }
   ]
 }
+""",
+)
+
+# Keyboard shortcuts are a *user-level* VS Code surface (keybindings.json has no
+# per-workspace variant), so Horus can't project them into the repo — the CLI
+# prints this snippet for the user to paste instead. Ctrl+Shift+B already runs
+# the default build task (resume Claude) without any of this.
+KEYBINDINGS_SNIPPET = """\
+{ "key": "ctrl+alt+r", "command": "workbench.action.tasks.runTask", "args": "Horus: resume Claude session" },
+{ "key": "ctrl+alt+n", "command": "workbench.action.tasks.runTask", "args": "Horus: fresh Claude session" }\
 """
+
+
+def _is_horus_file(text: str) -> bool:
+    return text == TASKS_JSON or text in _PREVIOUS_TASKS_JSON
 
 
 class TaskAction(NamedTuple):
@@ -63,15 +124,20 @@ def tasks_path(project_root: Path) -> Path:
 
 
 def write_tasks(project_root: Path) -> TaskAction:
-    """Create `.vscode/tasks.json` when absent (or already exactly ours).
+    """Create `.vscode/tasks.json` when absent; upgrade in place when it's an
+    unedited earlier Horus generation.
 
     A foreign/edited file is kept untouched (`status="kept"`) — the caller shows
     the snippet for a manual merge instead.
     """
     path = tasks_path(project_root)
     if path.exists():
-        if path.read_text(encoding="utf-8") == TASKS_JSON:
+        text = path.read_text(encoding="utf-8")
+        if text == TASKS_JSON:
             return TaskAction("up-to-date", f"{path} already current")
+        if text in _PREVIOUS_TASKS_JSON:
+            path.write_text(TASKS_JSON, encoding="utf-8")
+            return TaskAction("updated", f"updated {path} (unedited Horus tasks, older generation)")
         return TaskAction("kept", f"{path} exists and isn't Horus's — left untouched; add the task manually")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(TASKS_JSON, encoding="utf-8")
@@ -79,12 +145,12 @@ def write_tasks(project_root: Path) -> TaskAction:
 
 
 def remove_tasks(project_root: Path) -> TaskAction:
-    """Offboard counterpart: remove tasks.json only if byte-identical to what
-    Horus writes (a user-edited file is theirs now); prune an emptied `.vscode/`."""
+    """Offboard counterpart: remove tasks.json only if it's an unedited Horus
+    generation (a user-edited file is theirs now); prune an emptied `.vscode/`."""
     path = tasks_path(project_root)
     if not path.exists():
         return TaskAction("absent", "no .vscode/tasks.json")
-    if path.read_text(encoding="utf-8") != TASKS_JSON:
+    if not _is_horus_file(path.read_text(encoding="utf-8")):
         return TaskAction("kept", f"{path} was edited — kept (not Horus's to remove)")
     path.unlink()
     if path.parent.is_dir() and not any(path.parent.iterdir()):
