@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "The live two-machine test is underway and already paid off twice: leg 1 found v0.0.5 dead-on-import under Python 3.11 (→ v0.0.6 + the first-ever CI test matrix), leg 2 found the committed hook files erroring on every Bash call on machine 2 (→ v0.0.7: portable 'horus' console-script hook commands, floor raised to >=3.12). Machine 2 (Linux) is unblocked and verified; the onboard/continue legs are next. Horus remains the durable memory plane (no session hosting)."
+current_focus: "UX-hardening batch 4/6 shipped (PRs #63-#66, 567 tests green): stale-build servers refuse artifact writes, self-update migrates interpreter-pinned envs + verifies the upgrade landed, `horus doctor machine`, and `horus upgrade-project --all` — the systemic fixes for everything the two-machine test surfaced. Pending user: phase 3 projection-sync design sign-off (execution.md) and a v0.0.9 release decision (PyPI still 0.0.8). Horus remains the durable memory plane (no session hosting)."
 last_updated: 2026-07-02
 ---
 

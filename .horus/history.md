@@ -35,6 +35,19 @@ the interpreter, not just the package; (3) after any CLI upgrade, the running da
 must be restarted (or replaced) before its buttons are trusted. → roadmap "UX hardening"
 top items.
 
+## The mocked test blessed a uv flag that doesn't exist
+
+Remediating the self-update loop (2026-07-02), the planned fix was `uv tool upgrade
+--refresh` — the roadmap said so, the mocked subprocess test asserted it, the suite was
+green. Driving the real dashboard button then failed instantly: `uv tool upgrade`
+rejects a bare `--refresh` (uv 0.11); the working spelling is `--reinstall` (which
+implies `--refresh`). A monkeypatched `subprocess.run` validates whatever command you
+believed in — only the real surface validates the command that ships. **Lesson:**
+"reproduce the gate" includes the *runtime* gate, not just pytest: for anything that
+shells out to an external tool, drive the real path once before merging (the same
+session's end-to-end pass also live-proved the stale-build banner by forcing a
+version skew). This is the verify-at-the-surface discipline, now demonstrated twice.
+
 ## Onboard succeeded invisibly: a fragment response and a matcher blind spot
 
 Two-machine test, onboard leg (2026-07-02): the user onboarded an already-cloned

@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Two-machine test complete through the continue leg (Linux machine 2), three releases in one night: v0.0.6 (3.11 dead-on-import + first CI test matrix), v0.0.7 (portable hook commands, floor >=3.12), v0.0.8 (onboard PRG + workspace-clone matching). The continue leg then exposed two systemic traps, remediated by hand and now top roadmap items: a long-running stale dashboard writes stale artifacts and calls them fresh (in-process upgrade_project), and 3.11-era uv tool envs silently pin every upgrade to 0.0.6 (one-time --python 3.12 migration needed — Windows machine likely affected). Gym repo hooks fixed with real 0.0.8; local dashboard restarted on 0.0.8. 538 tests green."
-next_action: "Start the UX-hardening plan-execution batch (triage note in the 'UX hardening' track), now led by the two 2026-07-02 top items: stale-build-server artifact safety (mutating endpoints shell out to the installed CLI / stale-build banner) and self-update interpreter migration (--python handling in /self-update + documented one-time migration; run it on the Windows machine). Then the original batch: design phase for projection-sync 'same generation' semantics, delegated phases for doctor machine-level checks + registry-wide --all + sync-indicator badge. Scaffold a fresh execution.md first (the current one documents the finished 2026-07-01 batch)."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state. v0.0.8 is on PyPI; the two-machine test ran through the continue leg and every finding is either shipped (v0.0.6-v0.0.8) or on the roadmap. NEXT: start the UX-hardening plan-execution batch per roadmap next_action — scaffold a fresh execution.md; put the two 2026-07-02 top items first (stale-build server artifact safety; self-update --python migration, incl. running it on the Windows machine); then design projection-sync generation semantics and delegate doctor machine checks / upgrade-project --all / sync-indicator to standard-tier workers. Keep graceful-hooks/startup-visibility/install-smoke direct (triage note). Why behind the top items: history.md 'The stale dashboard fixed staleness against itself'."
-execution_recommendation: "plan-execution - three of the batch items (doctor machine checks, bulk projection refresh, sync-indicator implementation) are independent, precisely specifiable, and testable; on this runtime a frontier supervisor + standard-tier workers buys context hygiene AND a cheaper tier. The design phase (sync-generation semantics) and the per-OS/companion-lifecycle items stay with the supervisor."
+current_focus: "UX-hardening batch: four of six phases shipped in one session (PRs #63-#66, all merged, 567 tests green) — stale-build servers refuse artifact writes + restart banner, self-update migrates interpreter-pinned envs and verifies the upgrade actually landed, `horus doctor machine` (the 'app won't open' command), and registry-wide `horus upgrade-project --all` (phases 4-5 by delegated Sonnet workers, gates reproduced + real surfaces driven). Phase 3 (projection-sync 'same generation' design) is PROPOSED in execution.md awaiting user sign-off; phase 6 (sync badge) blocked on it. None of this is on PyPI yet (still 0.0.8)."
+next_action: "Two user decisions, then finish the batch: (1) review the phase 3 design proposal in execution.md (compare each agent surface to the installed CLI via per-target upgrade_project dry-runs; hook generation stamp as prerequisite) — on sign-off, delegate phase 6 (sync-indicator badge) per the plan; (2) decide whether to publish v0.0.9 now so real machines actually get this batch's guards (recommended), then run the one-time `--python 3.12` env fix on the Windows machine (roadmap 'UX hardening' residual). Remaining direct items: graceful hooks when CLI missing, startup-failure visibility, onboard committing projected artifacts, post-publish install smoke."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main should carry PRs #63-#66). The UX-hardening batch is 4/6 shipped; execution.md tracks it. NEXT: ask the user to sign off the phase 3 projection-sync design proposal (execution.md 'Phase 3 design proposal') and to decide on releasing v0.0.9; on design sign-off delegate phase 6 (sync-indicator badge, standard-tier worker) per execution.md; if release approved, bump version + publish and consider starting the post-publish install-smoke CI item in the same pass. Windows machine still needs the one-time `uv tool install --force --python 3.12 horus-harness` migration."
+execution_recommendation: "continue-as-is until the two user decisions land - phase 6 is the only delegable item left and it is blocked on the phase 3 design sign-off; the remaining UX-hardening items are per-OS/lifecycle-subtle (graceful hooks, startup visibility) or release-process work, where worker delegation buys little on any runtime. Re-enter plan-execution for phase 6 once the design is approved."
 last_updated: 2026-07-02
 ---
 
@@ -39,25 +39,14 @@ last_updated: 2026-07-02
 > lifecycle territory where workers fail confidently, install smoke + --refresh are too
 > small, and the macOS pass is user-driven on real hardware.
 
-- [ ] **Stale-build server must not write artifacts** (top priority, found 2026-07-02):
-  a long-running dashboard's artifact operations (refresh-artifacts, onboard→init) run
-  **in-process against the server's loaded build**, and the staleness badge compares
-  repos against that same build — so a stale server reports itself fresh and "refreshes"
-  projects with outdated artifacts (this is how the gym repo kept its broken hooks after
-  the user clicked refresh on a 0.0.6 server). Fix: mutating artifact endpoints shell
-  out to the installed `horus` CLI (always the on-disk generation), and/or the dashboard
-  compares its in-memory `__version__` to the on-disk installed dist and shows a
-  "restart Horus — this dashboard runs an old build" banner that disables artifact
-  writes. Pairs with the MVP5 post-upgrade auto-respawn.
-- [ ] **Self-update vs interpreter-pinned tool env** (top priority, found 2026-07-02):
-  a uv tool env created under Python 3.11 + the >=3.12 floor means every plain
-  `uv tool install/upgrade horus-harness` silently resolves 0.0.6 (newest
-  floor-compatible) and reports success — the machine can never reach the current
-  release without `--python 3.12`. The dashboard `/self-update` button has the same
-  loop. Fix: self-update passes an explicit compatible `--python` (or detects the pin
-  and instructs); document the one-time `uv tool install --force --python 3.12
-  horus-harness` migration. **NB: the Windows machine (machine 1) almost certainly has
-  a 3.11-era env and is stuck exactly like this — run the migration there.**
+- [x] Stale-build server artifact safety — SHIPPED 2026-07-02 (PR #63) → features.md
+  "Stale-build artifact-write guard".
+- [x] Self-update vs interpreter-pinned tool env — SHIPPED 2026-07-02 (PR #64, incl.
+  the `--refresh`→`--reinstall` index-cache fix) → features.md "Self-update env
+  migration + landing verification". **Residual user action: the Windows machine
+  (machine 1) almost certainly has a 3.11-era env — run the one-time
+  `uv tool install --force --python 3.12 horus-harness` there** (or click the
+  dashboard Update button once it's on ≥0.0.9, which now migrates automatically).
 - [ ] **Onboard/integrate should commit the projected artifacts** (found 2026-07-02 by
   the gym session): onboard writes `.claude/settings.json` + `.codex/hooks.json` (and
   skills) but leaves them untracked, so the first fresh session confronts the user with
@@ -73,22 +62,24 @@ last_updated: 2026-07-02
   ubuntu + windows + **macos** runners `uv tool install` from PyPI (retry for index
   propagation), then probe `horus --version` + dashboard `/health`. Doubles as the
   first-ever macOS coverage; "reproduce the gate" applied to releases.
-- [ ] Dashboard `/self-update` button: run `uv tool upgrade --refresh` (stale uv index
-  cache no-opped the upgrade twice during the live test). One-liner.
-- [ ] **`horus doctor` machine-level checks**: console script on PATH, interpreter vs
-  the `requires-python` floor, hook commands resolvable, Tk present (mascot), `gh`
-  auth. The one command to run when "the app won't open".
+- [x] Dashboard self-update index-cache staleness — SHIPPED 2026-07-02 inside PR #64
+  (`--reinstall`, which implies `--refresh`; uv rejects a bare `--refresh` on upgrade).
+- [x] `horus doctor` machine-level checks — SHIPPED 2026-07-02 (PR #66) → features.md
+  "`horus doctor machine`".
 - [ ] **Startup failure visibility**: dashboard/companion startup errors go to
   `~/.horus/logs/` and the companion surfaces "dashboard failed to start — run
   `horus doctor`" instead of nothing.
-- [ ] **Bulk projection refresh**: `horus upgrade-project --all` (or a dashboard
-  "refresh all stale projects" action) so a CLI upgrade propagates skills/hooks/blocks
-  to every registered repo in one step, building on the existing staleness badge.
+- [x] Bulk projection refresh — SHIPPED 2026-07-02 (PR #65) → features.md
+  "`horus upgrade-project --all`". (A dashboard "refresh all stale" action remains
+  possible later; the CLI covers the release-propagation need.)
 - [ ] **Projection-sync indicator in the UI**: per project, show whether each agent
   surface (Claude `.claude/` vs Codex `.agents/`+`.codex/`) carries the same
   generation of skills/hooks/managed block — "in sync" vs "Codex projection behind".
   This is the observable half of `horus doctor compat` (→ "Cross-tool interface sync"
-  track below); do the read-only report + badge before any auto-sync.
+  track below); do the read-only report + badge before any auto-sync. **Design
+  proposed 2026-07-02** (execution.md phase 3: compare each surface to the installed
+  CLI via per-target dry-runs; hook generation stamp as prerequisite) — **awaiting
+  user sign-off**, then implement as execution.md phase 6.
 - [ ] **macOS validation pass**: nothing has ever run on macOS — mascot (Tk
   transparency), terminal spawning in `launcher`, owned-window/tab defaults, hook
   execution. Fold findings back into the per-OS defaults like `resolve_open_mode`.
