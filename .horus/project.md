@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "v0.0.12 live (three releases 2026-07-02) — the fresh-machine UX-hardening track is complete: guarded hooks (#76), committed projections (#77), install smoke CI incl. first macOS coverage (#78+#80), startup-failure visibility (#81), direct-merge fallback (#82); 620 tests green. NEXT: the user-requested Skill map / inventory (design first, scanner maybe delegated). Windows machine still owes its one-time --python 3.12 upgrade + refresh. Horus remains the durable memory plane (no session hosting)."
+current_focus: "v0.0.13 live (four releases 2026-07-02) — UX-hardening track complete (#76-#82) AND the user-requested Skill map shipped its observe-first slice (#84): `horus skill map` + dashboard Skills tab, read-only presence map across project/user/account scopes; 628 tests green. No committed NEXT — candidates in roadmap. Windows machine still owes its one-time --python 3.12 upgrade + refresh. Horus remains the durable memory plane (no session hosting)."
 last_updated: 2026-07-02
 ---
 

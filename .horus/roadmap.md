@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "The fresh-machine UX-hardening track is DONE and released — three releases on 2026-07-02 (v0.0.10/11/12): guarded hooks (#76), committed projections (#77), install smoke CI with first macOS coverage (#78 + #80), startup-failure visibility (#81), integrate() direct-merge fallback (#82). This machine propagated: gym-coach carries guarded hooks + committed artifacts (620 tests green). Left on the track: Windows machine's one-time --python 3.12 upgrade + refresh, macOS real-hardware pass, catalog private-repo marking. NEXT: the user-requested Skill map / inventory design."
-next_action: "(1) Design + observe-first slice of the Skill map / inventory (roadmap 'Cross-tool interface sync' — user request): settle the panel semantics (scopes, presence map, provenance-unknown handling, cross-machine visibility limits) with the user, then the read-only scanner + dashboard Skills panel + CLI report; the scanner half was triaged plan-execution-friendly once semantics lock. (2) User/ops: Windows machine one-time `uv tool install --force --python 3.12 horus-harness` then the registry-wide artifact refresh there. (3) Small opportunistic: mark private repos in the GitHub catalog + 'N ignored' affordance; onboard residual (a) — switch the clone back to the default branch after integrate()."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main clean through PR #83; v0.0.12 live on PyPI — `horus --version` should say 0.0.12, upgrade if older). NEXT per roadmap next_action: the Skill map / inventory feature (roadmap 'Cross-tool interface sync' track holds the full design notes from the 2026-07-02 triage). Start with the design questions (what counts as the same skill across scopes; how 'unused' reads as a presence map; UI for machine-local limits), get the user's sign-off, then decide direct vs plan-execution for the scanner. Reminder for the user: Windows machine still owes `uv tool install --force --python 3.12 horus-harness` + the artifact refresh."
-execution_recommendation: "plan-execution (conditional) - the Skill map scanner is high-volume/low-ambiguity with a crisp gate (deterministic filesystem scan across documented scopes, testable with fixtures) and worker-tier friendly per the 2026-07-02 triage, on a runtime with cheaper worker tiers that buys context hygiene AND cost; BUT the design/semantics phase (user-facing panel meaning, trust/provenance rules) must run direct with the user first — prepare execution.md only after that sign-off."
+current_focus: "Four releases on 2026-07-02 (v0.0.10–13). The fresh-machine UX-hardening track shipped whole (guarded hooks #76, committed projections #77, install smoke CI #78+#80, startup visibility #81, direct-merge fallback #82), then the user-requested Skill map landed its observe-first slice (#84, v0.0.13): `horus skill map` + dashboard Skills tab, read-only presence map across project/user/account scopes (628 tests green). Outstanding ops: Windows machine's one-time --python 3.12 upgrade + artifact refresh; macOS real-hardware pass."
+next_action: "No committed next feature — pick per appetite: (a) small catalog niceties (mark private repos + 'N ignored' affordance; onboard residual (a): switch the clone back to the default branch after integrate()); (b) skill-inventory follow-up slices (Claude↔Codex third-party skill copy with provenance/diff/trust UX) — only after real-use feedback on the new inventory; (c) execution-workflow pilot tuning items (roadmap 'Execution Planning Workflow'). User/ops regardless: Windows machine one-time `uv tool install --force --python 3.12 horus-harness` + registry-wide artifact refresh; eyeball the mascot failure dialog and the new Skills tab on a desktop session."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main clean through PR #85; v0.0.13 live on PyPI — `horus --version` should say 0.0.13, upgrade with `uv tool install --force --reinstall --refresh --python 3.12 horus-harness` if older; also verify the v0.0.13 release smoke went green if the last session note doesn't say). NEXT: no committed feature — roadmap next_action lists the candidates (catalog niceties / skill-map follow-ups / execution-workflow tuning); ask the user or pick the smallest. Reminder for the user: Windows machine still owes its one-time --python 3.12 install + artifact refresh."
+execution_recommendation: "continue-as-is - every candidate NEXT is small (catalog UI niceties, pilot tuning) or gated on real-use feedback (skill-map follow-ups); nothing offers the volume × low-ambiguity shape where delegation pays for its coordination overhead."
 last_updated: 2026-07-02
 ---
 
@@ -335,24 +335,18 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
   Read-only; solves the real pain ("which instructions/skills are active here, for this agent?").
   The dashboard-facing half is the "Projection-sync indicator in the UI" item in the UX-hardening
   track above — same underlying comparison, badge form.
-- [ ] **Skill map / inventory (user request, 2026-07-02 — next major UX feature candidate).**
-  One overview of ALL skills across scopes, used and unused: per registered project
-  (`.claude/skills/`, `.agents/skills/`), ambient user scope (`~/.claude/skills/`,
-  `$CODEX_HOME`), and per-account isolated config dirs (`~/.horus/accounts/<agent>-<alias>/skills`)
-  — third-party/personal skills included, not just Horus-bundled (which get version/staleness
-  detection; foreign ones get presence + provenance-unknown). Pain: same skill installed N times
-  across machines × accounts × projects with no visibility. Design notes from the 2026-07-02
-  triage: (1) **observe first** — a read-only scanner + dashboard "Skills" panel + CLI report; it
-  subsumes the skills half of `doctor compat` above; (2) "unused" starts as a *presence map*
-  (installed here, absent there), not usage telemetry — actual invocation tracking would need
-  transcript scanning (session_discovery-style, later); (3) cross-**machine** view is limited to
-  repo-local skills via git — global/user-scope skills are machine-local and belong to the
-  deferred machine-snapshot track (make the limitation visible in the UI rather than guessing);
-  (4) **sync comes after the map**: for Claude↔Codex a small Horus-owned copy of third-party
-  skills between `.claude/skills/` and `.agents/skills/` (provenance + diff + the trust rules
-  below) needs no Node dep; adopt **rulesync** per the standing decision only at the 3rd tool
-  (Gemini/Copilot) or when instructions/commands/MCP sync is wanted too. Scanner is
-  precisely-specifiable → good worker/plan-execution candidate; panel semantics + trust UX direct.
+- [x] Skill map / inventory, observe-first slice — SHIPPED 2026-07-02 (PR #84,
+  v0.0.13) → features.md "Skill map (observe-first)". Semantics locked in that
+  row (slug identity, bundled-vs-foreign provenance, presence-map "unused",
+  machine-local limits stated in the UI). Subsumes the skills half of
+  `doctor compat` above.
+- [ ] **Skill map follow-up slices** (only after the map proves useful): actual
+  invocation tracking would need transcript scanning (session_discovery-style);
+  **sync comes after the map** — for Claude↔Codex a small Horus-owned copy of
+  third-party skills between `.claude/skills/` and `.agents/skills/`
+  (provenance + diff + the trust rules below) needs no Node dep; adopt
+  **rulesync** per the standing decision only at the 3rd tool (Gemini/Copilot)
+  or when instructions/commands/MCP sync is wanted too.
 - [ ] **Canonical + projections, formalized** — `.horus/compat.toml` declares canonical surfaces
   (`AGENTS.md`, `.agents/skills/`) + per-target projection policy; generated `CLAUDE.md` /
   `.claude/skills/` are marked-generated with drift detection. Extends today's ad-hoc dual-write.
