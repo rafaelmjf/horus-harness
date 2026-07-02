@@ -105,6 +105,21 @@ def _stage_and_commit(root: Path, message: str, files: list[str] | None) -> tupl
     return True, "committed"
 
 
+def _has_required_checks(root: Path, base: str) -> bool:
+    """True when the base branch demands required status checks — the one case where
+    an immediate merge would skip gates auto-merge would have waited for.
+
+    Errs toward False: on free-plan private repos the protection API is unavailable
+    (protection can't be configured there at all), which is exactly the fallback
+    class — and a wrong False self-corrects because GitHub refuses the direct merge
+    of a protected branch anyway."""
+    r = _run(
+        ["gh", "api", f"repos/{{owner}}/{{repo}}/branches/{base}/protection/required_status_checks"],
+        root,
+    )
+    return r.returncode == 0
+
+
 # Head-branch prefix `integrate()` generates for its feature branches; the
 # open-PR nudge below keys on it, so keep the two in sync.
 HORUS_BRANCH_PREFIX = "horus/"
@@ -307,9 +322,27 @@ def integrate(
         merge_cmd = ["gh", "pr", "merge", "--auto", "--merge", pr_url or effective_branch]
         r = _run(merge_cmd, root)
         if r.returncode != 0:
+            # Recurring class, not a misconfiguration: "Allow auto-merge" cannot even
+            # be enabled on free-plan private repos (the settings API refuses
+            # silently), so every private-repo onboard for a free-plan user lands
+            # here. When the base branch demands no required checks, an immediate
+            # merge is what auto-merge would have done anyway; otherwise leave the
+            # PR open — doctor/dashboard nudge it (continuity_pr_findings).
+            auto_err = r.stderr.strip()
+            if _has_required_checks(root, base):
+                return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
+                                         pushed=True, pr_url=pr_url, merged=False,
+                                         detail=(f"auto-merge unavailable ({auto_err}); PR left open "
+                                                 f"for its required checks: {pr_url}"), ok=False)
+            r2 = _run(["gh", "pr", "merge", "--merge", pr_url or effective_branch], root)
+            if r2.returncode == 0:
+                return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
+                                         pushed=True, pr_url=pr_url, merged=True,
+                                         detail=f"auto-merge unavailable; merged PR directly: {pr_url}", ok=True)
             return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
                                      pushed=True, pr_url=pr_url, merged=False,
-                                     detail=f"gh pr merge --auto failed: {r.stderr.strip()}", ok=False)
+                                     detail=(f"gh pr merge --auto failed: {auto_err}; direct merge "
+                                             f"also failed: {r2.stderr.strip()}"), ok=False)
         # gh pr merge --auto schedules the merge for when checks pass; it is not
         # merged immediately in most cases.  We reflect success but merged=False
         # with a clear detail note.
