@@ -610,6 +610,31 @@ def _active_class(active: bool) -> str:
     return ' class="active"' if active else ""
 
 
+def _stale_build() -> dict[str, object] | None:
+    """Build state when this server's loaded build is older than the on-disk
+    install, else None. A stale server must not write artifacts: its in-process
+    `upgrade_project` stamps the OLD generation and its staleness badge compares
+    against that same generation (self-referentially "fresh") — see history.md
+    "The stale dashboard fixed staleness against itself"."""
+    try:
+        state = selfupdate.build_state()
+    except Exception:
+        return None
+    return state if state.get("stale") else None
+
+
+def _stale_build_banner() -> str:
+    state = _stale_build()
+    if not state:
+        return ""
+    return (
+        "<div class='banner err'>This dashboard is running an old build "
+        f"(v{html.escape(str(state['running']))} in memory; v{html.escape(str(state['disk']))} "
+        "is installed) &mdash; restart Horus to load it. Artifact writes are disabled and "
+        "staleness badges may be wrong until then.</div>"
+    )
+
+
 def _update_pill_html(status: dict[str, object] | None = None) -> str:
     """Top-nav "update available" pill + Update button, or "" when current.
 
@@ -698,7 +723,7 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "<label class='skin-btn' for='skin'>"
         "<span class='moon'>&#9687; Dark</span><span class='sun'>&#9686; Light</span></label></div>"
         "</div></header>"
-        f"<main{main_cls}>{body}</main>"
+        f"<main{main_cls}>{_stale_build_banner()}{body}</main>"
         "<script>"
         "if(sessionStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');}"
         "function horusCopy(btn){"
@@ -2589,6 +2614,8 @@ def process_upgrade_project(form: dict[str, str], *, projects: list[str] | None 
     root, idx = _project_by_index(form, projects)
     if root is None:
         return "/?upgrade_error=" + quote_plus("unknown project")
+    if _stale_build():
+        return f"/project?i={idx}&stale_build=1"
     actions = upgrade.upgrade_project(root, apply=True)
     updated = sum(1 for a in actions if a.status in ("updated", "created"))
     return f"/project?i={idx}&upgraded={updated}"
@@ -2601,6 +2628,8 @@ def process_offboard(form: dict[str, str], *, projects: list[str] | None = None)
     root, _ = _project_by_index(form, projects)
     if root is None:
         return "/?offboard_error=" + quote_plus("unknown project")
+    if _stale_build():
+        return "/?stale_build=1"
     purge = (form.get("purge") or "").strip().lower() in ("1", "true", "on", "yes")
     name = root.name
     offboard.offboard_project(root, apply=True, purge=purge)
@@ -2621,6 +2650,12 @@ def _project_action_banner(params: dict[str, list[str]]) -> str:
         )
     if "selfupdate_error" in params:
         return f"<div class='banner err'>Self-update failed: {html.escape(params['selfupdate_error'][0])}</div>"
+    if "stale_build" in params:
+        return (
+            "<div class='banner err'>Refused: this dashboard is running an old build &mdash; "
+            "an in-process write would stamp the project with an outdated artifact generation. "
+            "Restart Horus, then retry.</div>"
+        )
     if "upgraded" in params:
         n = html.escape(params["upgraded"][0])
         return f"<div class='banner ok'>Refreshed Horus artifacts &mdash; {n} item(s) updated.</div>"
@@ -3063,6 +3098,9 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/github-onboard":
             # PRG like ignore/unignore — the POST must never answer with a raw
             # catalog fragment at /github-onboard (unstyled page, F5 re-onboards).
+            if _stale_build():
+                self._redirect("/?stale_build=1#github-catalog")
+                return
             form = self._read_form()
             target = form.get("target", "")
             owner = target.split("/")[0] if "/" in target else target

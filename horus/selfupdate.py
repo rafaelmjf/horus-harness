@@ -1,7 +1,10 @@
 """Self-update signal: is a newer horus-harness on PyPI, and one-click upgrade.
 
 The dashboard's artifact-staleness badge covers *project vs installed CLI*; this
-module covers *installed CLI vs latest release*. The check is passive (a cached
+module covers *installed CLI vs latest release* plus *running server vs installed
+CLI* (`build_state` — a long-running dashboard whose on-disk install has moved
+past its loaded build must stop writing artifacts, because in-process writes
+stamp the OLD generation while self-reporting fresh). The check is passive (a cached
 PyPI JSON read that never blocks a page or fails the dashboard offline) and the
 upgrade is explicit — a button running ``uv tool upgrade horus-harness``, never
 automatic. A running server keeps serving its old in-memory build, so after an
@@ -11,6 +14,7 @@ no-hot-reload rule as templates.HOSTED_RESTART_INSTRUCTION).
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import subprocess
 import time
@@ -38,6 +42,34 @@ def _version_tuple(version: str) -> tuple[int, ...]:
 
 def is_newer(candidate: str, current: str) -> bool:
     return _version_tuple(candidate) > _version_tuple(current)
+
+
+def installed_disk_version() -> str | None:
+    """The horus-harness version currently installed on disk, or None.
+
+    Re-read from dist metadata on every call (importlib.metadata invalidates its
+    path cache on directory mtime), so after `uv tool upgrade` rewrites the env
+    this reflects the NEW install while `__version__` stays the loaded build.
+    """
+    try:
+        return importlib.metadata.version("horus-harness")
+    except Exception:
+        return None
+
+
+def build_state() -> dict[str, object]:
+    """Running (in-memory) vs installed (on-disk) build: {running, disk, stale}.
+
+    `stale` only when the disk is NEWER — an upgrade landed under a running
+    server. A dev checkout whose source version is ahead of its install
+    metadata is not stale, and a missing dist (bare checkout) never warns.
+    """
+    disk = installed_disk_version()
+    return {
+        "running": __version__,
+        "disk": disk,
+        "stale": bool(disk and is_newer(disk, __version__)),
+    }
 
 
 def fetch_latest_version(timeout: float = 3.0) -> str | None:
