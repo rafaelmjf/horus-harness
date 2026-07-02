@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from horus import config
+from horus import claude_usage, config
 from horus.adapters import AccountMismatch, ClaudeAdapter, EventType, PermissionPosture, SpawnSpec, get_adapter
 
 
@@ -181,6 +181,33 @@ def test_verify_account_mismatch(tmp_path, monkeypatch):
     check = adapter.verify_account("personal")
     assert check.ok is False
     assert check.detected_email == "rafa@work.com"
+
+
+def test_verify_account_adopts_first_login_in_own_dir(tmp_path, monkeypatch):
+    """The wizard maps alias→dir before the user signs in, so the login is invisible
+    until a launch verifies it — the first (unaliased) login found in the account's
+    own isolated dir is adopted, not refused. Regression: adding a second account
+    and launching from the UI failed with 'login mismatch' on a correct setup."""
+    _home(tmp_path, monkeypatch)
+    cfg = _config_dir_with_email(tmp_path, "work-dir", "rafa@work.com")
+    adapter = ClaudeAdapter(config_dirs={"work": str(cfg)})  # no email→alias row yet
+
+    check = adapter.verify_account("work")
+    assert check.ok is True
+    assert config.load_account_aliases()["rafa@work.com"] == "work"  # learned for next time
+
+
+def test_verify_account_never_adopts_into_ambient(tmp_path, monkeypatch):
+    """No isolated dir mapped for the alias → nothing owns the ambient login; an
+    unaliased ambient email must not be claimed by whatever account name was asked."""
+    _home(tmp_path, monkeypatch)
+    ambient = _config_dir_with_email(tmp_path, "home", "someone@example.com")
+    monkeypatch.setattr(claude_usage, "config_path", lambda: ambient / ".claude.json")
+    adapter = ClaudeAdapter(config_dirs={})
+
+    check = adapter.verify_account("work")
+    assert check.ok is False
+    assert "someone@example.com" not in config.load_account_aliases()
 
 
 def test_spawn_guard_refuses_account_mismatch(tmp_path, monkeypatch):
