@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "UX-hardening batch COMPLETE (6/6) and v0.0.9 RELEASED to PyPI (publish workflow green, install verified on this machine): stale-build write guard, self-update env migration + landing verification, doctor machine, upgrade-project --all all shipped in v0.0.9 (PRs #63-#66); user approved the projection-sync design and the badge shipped post-release (PR #68, 575 tests green, rides the next release). Phases 4-6 by delegated Sonnet workers, every gate reproduced and every surface driven for real. Windows machine still needs its one-time --python 3.12 env migration."
+current_focus: "VS Code launch destination tier 1 SHIPPED (PR #70, merged to main; rides the next release like the projection-sync badge #68): 'Open in' select on every launch surface, `code`-CLI opener, doctor machine check — 583 tests green, error + success paths driven against the real dashboard server. v0.0.9 remains the live PyPI release. Remaining UX-hardening items are per-OS/lifecycle direct work. Windows machine still needs its one-time --python 3.12 env migration."
 next_action: "Pick up the remaining UX-hardening direct items, roughly in order: (1) graceful hooks when the CLI is missing/broken (per-OS guard — the cross-platform lens bites here; doctor machine already provides the visible signal); (2) onboard/integrate committing the projected artifacts (decide commit-vs-gitignore, make integrate() include them); (3) startup-failure visibility (~/.horus/logs/ + companion nudge); (4) post-publish install smoke CI (ubuntu+windows+macos uv tool install probe — first macOS coverage; v0.0.9's manual PyPI-propagation wait showed exactly why). Also run the one-time env migration on the Windows machine when next at it."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68; v0.0.9 is live on PyPI). The UX-hardening execution batch is complete (execution.md status: complete — replace it when the next substantial item starts). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68 and #70; v0.0.9 is live on PyPI, #68/#70 ride the next release). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
 execution_recommendation: "continue-as-is - the remaining UX-hardening items are per-OS/lifecycle-subtle (graceful hooks, startup visibility) or policy decisions (onboard artifact commits), exactly where workers fail confidently; the install-smoke CI item is small. No delegable volume until the next substantial feature track opens."
 last_updated: 2026-07-02
 ---
@@ -236,20 +236,19 @@ dashboard and later becomes the place for continuity/status nudges.
 
 ## Launch destinations — VS Code (user request, 2026-07-02)
 
-- [ ] **Launch-in-VS-Code option on the session launcher** (user-requested at the
-  0.0.9 close): extend the fresh/resume launch disclosure with a destination
-  choice — native terminal (today's `target=window`) vs VS Code. Two tiers:
-  **(1) ship first, small:** `target=vscode` runs `code <project>` (opens/focuses
-  the folder; user starts claude/codex via the Claude extension or the integrated
-  terminal; fresh/resume prompt copy stays available on the project page).
-  **(2) design before building:** auto-start the agent in the integrated terminal
-  via a Horus-written `.vscode/tasks.json` task with `"runOn": "folderOpen"`,
-  reusing the launcher's exact argv/env (account `CLAUDE_CONFIG_DIR`, resume
-  prompt). Caveats to decide: VS Code's per-folder "Allow Automatic Tasks" trust
-  gate, `.vscode/` is a non-Horus surface (ownership, offboard cleanup,
-  commit-vs-gitignore — same policy family as "onboard commits projected
-  artifacts"), and a resume prompt must never land in a committed file. Also
-  check `code` CLI presence per-OS (`horus doctor machine` candidate check).
+- [x] **Tier 1: launch-in-VS-Code option on the session launcher** — SHIPPED
+  2026-07-02 (PR #70, post-v0.0.9, rides the next release) → features.md
+  "VS Code launch destination (tier 1)"; rule in decisions.md "A launch
+  *destination* is not a session". Includes the `code`-presence
+  `horus doctor machine` check.
+- [ ] **Tier 2 (design before building): auto-start the agent in the integrated
+  terminal** via a Horus-written `.vscode/tasks.json` task with
+  `"runOn": "folderOpen"`, reusing the launcher's exact argv/env (account
+  `CLAUDE_CONFIG_DIR`, resume prompt). Caveats to decide: VS Code's per-folder
+  "Allow Automatic Tasks" trust gate, `.vscode/` is a non-Horus surface
+  (ownership, offboard cleanup, commit-vs-gitignore — same policy family as
+  "onboard commits projected artifacts"), and a resume prompt must never land
+  in a committed file.
 
 ## MVP 3 - Agent Execution (the core wedge; next major phase)
 
