@@ -50,6 +50,7 @@ reflow) if a "why did we ever…" archaeology is ever needed.
 ## Accounts & auth
 
 - **Account setup is login-driven, not path-entry** — the wizard takes agent + alias, derives an isolated dir, and opens the CLI's own login with `CLAUDE_CONFIG_DIR`/`CODEX_HOME` set; the sign-in populates it.
+- **Account identity is trust-on-first-use for isolated dirs** — the wizard's sign-in happens where Horus can't observe it, so `verify_account` adopts an *unaliased* login found in the account's own mapped dir as that account's identity (persists email→alias); a login already aliased to a different account still refuses, and ambient logins are never claimed. (Fixed 2026-07-02: a fresh second account failed every UI launch with "login mismatch".)
 - **Onboarding uses GitHub auth; work uses agent-account aliases** — `horus onboard github:…` clones/inits/integrates via `gh`; the Claude/Codex account choice happens at the first work session. Two separate auth domains.
 - **The real account email never lands in a commit** — sessions record a local alias (`acct-<sha6>` fallback); the identity→alias map stays per-machine.
 - **Usage hook advises and asks; never overrides a command or strands work** — UserPromptSubmit = advisory context (do the user's request fully, incl. push); Stop = ask (close now vs push ahead); both use `horus close --commit --push`. ↳ history.md
