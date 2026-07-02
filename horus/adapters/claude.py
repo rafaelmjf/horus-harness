@@ -110,15 +110,28 @@ class ClaudeAdapter(AgentAdapter):
 
         Reads ``<CLAUDE_CONFIG_DIR>/.claude.json`` (or the ambient ``~/.claude.json``
         when the account has no mapped dir) and checks its email aliases back to the
-        requested account. Read-only; never exposes the email beyond this result.
+        requested account. Never exposes the email beyond this result.
+
+        Adoption (trust on first use): the account wizard maps alias→dir *before*
+        the user signs in, and nothing else observes the login until a launch lands
+        here — so a login in the account's own isolated dir whose email has no
+        explicit alias yet IS this account's first login; persist email→alias
+        instead of refusing a correctly-completed setup. A login already aliased to
+        a *different* account still refuses (the real wrong-login case).
         """
         cfg = self.config_dirs.get(account) if account else None
         claude_json = Path(cfg) / ".claude.json" if cfg else claude_usage.config_path()
         email = claude_usage.current_account(claude_json)
         if account is None:
             ok = email is not None  # ambient: just confirm *someone* is logged in
+        elif email is None:
+            ok = False
         else:
-            ok = email is not None and config.alias_for(email) == account
+            aliased = config.load_account_aliases().get(email)
+            if aliased is None and cfg:
+                config.set_account_alias(email, account)
+                aliased = account
+            ok = aliased == account
         return IdentityCheck(account=account, config_dir=str(cfg) if cfg else None, detected_email=email, ok=ok)
 
     def _launch(self, spec: SpawnSpec, *, resume_id: str | None) -> AgentRun:
