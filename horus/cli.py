@@ -402,8 +402,11 @@ def cmd_vscode_task(args: argparse.Namespace) -> int:
         print("\nAdd this to your .vscode/tasks.json 'tasks' array:\n")
         print(vscode.TASKS_JSON)
         return 1
-    if action.status == "created":
-        print("In VS Code: Ctrl+Shift+B runs \"Horus: resume Claude session\" in the integrated terminal.")
+    if action.status in ("created", "updated"):
+        print("In VS Code: Ctrl+Shift+B runs \"Horus: resume Claude session\" in the integrated terminal;")
+        print("fresh/Codex variants live under Terminal > Run Task. For dedicated shortcuts, add to your")
+        print("USER keybindings.json (keybindings are per-user in VS Code, never per-repo):\n")
+        print(vscode.KEYBINDINGS_SNIPPET)
     return 0
 
 

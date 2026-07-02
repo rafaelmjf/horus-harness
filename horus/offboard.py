@@ -117,8 +117,8 @@ def _remove_hooks(project_root: Path, *, apply: bool, targets: tuple[str, ...]) 
 
 
 def _remove_vscode_tasks(project_root: Path, *, apply: bool) -> list[OffboardAction]:
-    """Remove the `horus vscode-task` tasks.json — only when byte-identical to what
-    Horus writes (an edited file is the user's now; vscode.remove_tasks keeps it)."""
+    """Remove the `horus vscode-task` tasks.json — only when it's an unedited Horus
+    generation (an edited file is the user's now; vscode.remove_tasks keeps it)."""
     path = vscode.tasks_path(project_root)
     if not path.exists():
         return []
@@ -127,7 +127,7 @@ def _remove_vscode_tasks(project_root: Path, *, apply: bool) -> list[OffboardAct
         if action.status == "removed":
             return [OffboardAction("removed", action.message)]
         return []  # kept (user-edited) — not Horus's to report on
-    if path.read_text(encoding="utf-8") == vscode.TASKS_JSON:
+    if vscode._is_horus_file(path.read_text(encoding="utf-8")):
         return [OffboardAction("would-remove", f"would remove {path}")]
     return []
 
