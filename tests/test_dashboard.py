@@ -656,6 +656,33 @@ def test_process_launch_window_routes_selected_agent(tmp_path, monkeypatch):
     assert captured["agent"] == "codex"  # the chosen agent reaches the launcher
 
 
+def test_project_prs_fragment_empty_when_no_open_horus_prs(tmp_path, monkeypatch):
+    # Both "none open" and "unknowable" render nothing — no panel noise.
+    monkeypatch.setattr(dashboard.integration, "open_horus_prs", lambda path: [])
+    assert dashboard._project_prs_html(str(tmp_path)) == ""
+    monkeypatch.setattr(dashboard.integration, "open_horus_prs", lambda path: None)
+    assert dashboard._project_prs_html(str(tmp_path)) == ""
+
+
+def test_project_prs_fragment_nudges_on_open_continuity_pr(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        dashboard.integration, "open_horus_prs",
+        lambda path: [{"branch": "horus/chore-continuity", "url": "https://gh/pr/7", "title": "Continuity"}],
+    )
+    frag = dashboard._project_prs_html(str(tmp_path))
+    assert "banner err" in frag and "Allow auto-merge" in frag
+    assert "https://gh/pr/7" in frag and "horus/chore-continuity" in frag
+
+
+def test_project_detail_includes_prs_nudge_placeholder(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    page = dashboard.render_project(dashboard.load_project(str(proj)), index=0)
+    assert "data-horus-src='/project-prs?i=0'" in page
+
+
 def test_process_launch_vscode_opens_folder_without_spawning_agent(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     proj = tmp_path / "demo"

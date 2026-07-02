@@ -38,6 +38,7 @@ from horus import (
     frontmatter,
     gitstate,
     github_catalog,
+    integration,
     launch,
     launcher,
     markdown,
@@ -693,6 +694,29 @@ def _project_sessions_html(path: Path) -> str:
         "<span class='x mono'>from local transcripts</span></div>"
         "<div style='overflow-x:auto'><table><tr><th>Agent</th><th>Session</th>"
         f"<th>Last activity</th><th>Msgs</th></tr>{''.join(rows)}</table></div>{more}</div>"
+    )
+
+
+def _project_prs_html(path: str) -> str:
+    """Open-continuity-PR nudge: Horus `horus/…` branch PRs sitting OPEN (typically
+    the repo's GitHub "Allow auto-merge" setting is off, so `integrate()`'s PR never
+    merged and the continuity is stranded on its branch). Empty when there are none
+    or the state is unknowable (no gh/remote) — absence of a warning, not an
+    all-clear claim, so nothing renders in the common case."""
+    prs = integration.open_horus_prs(path)
+    if not prs:
+        return ""
+    items = "".join(
+        f"<li><a href='{html.escape(pr['url'], quote=True)}'>{html.escape(pr['title'] or pr['branch'])}</a>"
+        f" <span class='mono' style='font-size:12px'>{html.escape(pr['branch'])}</span></li>"
+        for pr in prs
+    )
+    return (
+        "<div class='panel'><div class='ph'><span class='eyebrow'>Continuity PRs</span></div>"
+        f"<div class='banner err'>{len(prs)} Horus PR(s) still open &mdash; merge them or "
+        "enable &quot;Allow auto-merge&quot; in the repo settings, or the continuity stays "
+        "stranded on its branch.</div>"
+        f"<ul style='margin:0;padding-left:18px'>{items}</ul></div>"
     )
 
 
@@ -1877,7 +1901,10 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
         f"{cache_panel}"
         "<div class='panel'><div class='ph'><span class='eyebrow'>Last session</span></div>"
         f"{_latest_session_panel_html(p)}</div>"
-        "<div class='panel'><div class='ph'><span class='eyebrow'>Manage Horus integration</span></div>"
+        # Open-continuity-PR nudge: bare async wrapper (no panel chrome/placeholder) —
+        # the fragment is empty in the common no-open-PRs case, so nothing shows.
+        + (f"<div data-horus-src='/project-prs?i={idx}'></div>" if index is not None else "")
+        + "<div class='panel'><div class='ph'><span class='eyebrow'>Manage Horus integration</span></div>"
         f"{_manage_integration_panel(idx, bool(p.get('artifacts_stale'))) if index is not None else ''}</div></div>"
     )
     body = (
@@ -2887,6 +2914,16 @@ class _Handler(BaseHTTPRequestHandler):
                     "<div class='panel'><div class='ph'><span class='eyebrow'>Context cache</span></div>"
                     f"{_cache_sidebar_panel(path)}</div>"
                 )
+            return
+        if parsed.path == "/project-prs":
+            # Async open-continuity-PR nudge (network: one gh call). Addressed by
+            # index like every project fragment; empty body when nothing to nudge.
+            try:
+                path = config.load_projects()[int(parse_qs(parsed.query).get("i", ["?"])[0])]
+            except (ValueError, IndexError):
+                self._send("", 404)
+                return
+            self._send(_project_prs_html(path))
             return
         if parsed.path == "/update-check":
             # Async top-nav fragment; a failed/offline check renders as up-to-date.

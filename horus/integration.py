@@ -18,6 +18,7 @@ push/PR part.  The same simplification applies across all non-local-only modes.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -26,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from horus import config as _config
+from horus.continuity import Finding
 
 # Keep git/gh children from flashing a console when the caller (e.g. the
 # console-less dashboard server) spawns them on Windows. See gitstate._NO_WINDOW.
@@ -101,6 +103,71 @@ def _stage_and_commit(root: Path, message: str, files: list[str] | None) -> tupl
     if r.returncode != 0:
         return False, f"git commit failed: {r.stderr.strip()}"
     return True, "committed"
+
+
+# Head-branch prefix `integrate()` generates for its feature branches; the
+# open-PR nudge below keys on it, so keep the two in sync.
+HORUS_BRANCH_PREFIX = "horus/"
+_PR_LIST_TIMEOUT = 5.0
+
+
+def open_horus_prs(root: str | Path, *, timeout: float = _PR_LIST_TIMEOUT) -> list[dict[str, str]] | None:
+    """Open PRs from Horus-created branches (head ``horus/…``), or ``None`` when
+    the answer is unknowable (no ``gh``, unauthenticated, no GitHub remote,
+    timeout).
+
+    Best-effort read-only probe behind the "continuity PR still open" nudge:
+    when a repo's GitHub "Allow auto-merge" setting is off, ``integrate()``'s
+    auto-merge request fails or silently never fires, and the PR sits OPEN with
+    the continuity stranded on its branch. Never raises.
+    """
+    if not (Path(root) / ".git").exists():  # covers dirs and worktree files
+        return None
+    try:
+        r = subprocess.run(  # noqa: S603
+            ["gh", "pr", "list", "--state", "open", "--json", "headRefName,url,title"],
+            cwd=str(Path(root)),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            **_NO_WINDOW,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        prs = json.loads(r.stdout or "[]")
+    except ValueError:
+        return None
+    if not isinstance(prs, list):
+        return None
+    return [
+        {
+            "branch": str(p.get("headRefName", "")),
+            "url": str(p.get("url", "")),
+            "title": str(p.get("title", "")),
+        }
+        for p in prs
+        if isinstance(p, dict) and str(p.get("headRefName", "")).startswith(HORUS_BRANCH_PREFIX)
+    ]
+
+
+def continuity_pr_findings(root: str | Path) -> list[Finding]:
+    """Doctor findings for Horus PRs sitting open — one warn per PR, nothing when
+    there are none or the state is unknowable (gh absent is `doctor machine`'s
+    signal, not this one's)."""
+    prs = open_horus_prs(root)
+    if not prs:
+        return []
+    return [
+        Finding(
+            "warn",
+            f"Horus continuity PR still open: {pr['url']} ({pr['branch']}) — merge it "
+            'or enable "Allow auto-merge" in the repo settings',
+        )
+        for pr in prs
+    ]
 
 
 # ---------------------------------------------------------------------------

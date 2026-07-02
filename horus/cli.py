@@ -23,6 +23,7 @@ from horus import (
     gitstate,
     github_catalog,
     initialize,
+    integration,
     launch,
     launcher,
     native_hooks,
@@ -81,7 +82,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     if args.target in ("project", "all"):
         print(f"doctor project: {root}")
-        if not _print_findings(check_project(root) + skills.skill_findings(root, targets=("claude", "codex"))):
+        findings = (
+            check_project(root)
+            + skills.skill_findings(root, targets=("claude", "codex"))
+            + integration.continuity_pr_findings(root)
+        )
+        if not _print_findings(findings):
             rc = 1
         print()
 
