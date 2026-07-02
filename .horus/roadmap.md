@@ -1,7 +1,7 @@
 ---
 status: active
 current_focus: "Shipped today, riding the next release (601 tests green): VS Code launch destination tier 1 (PR #70), open-continuity-PR nudge (PR #71), and the cheap tier-2 VS Code resume/fresh tasks `horus vscode-task` (PRs #72+#73 — Ctrl+Shift+B resume, ctrl+alt+r/ctrl+alt+n user keybindings, generation-aware tasks.json upgrade; dogfooded; user still to confirm inside Flatpak VS Code). Also fixed live on this machine: `code` wrapper + user keybindings for Flatpak VS Code. v0.0.9 remains the live PyPI release. Windows machine still needs its one-time --python 3.12 env migration."
-next_action: "Pick up the remaining UX-hardening direct items, roughly in order: (1) graceful hooks when the CLI is missing/broken (per-OS guard — the cross-platform lens bites here; doctor machine already provides the visible signal); (2) onboard/integrate committing the projected artifacts (decide commit-vs-gitignore, make integrate() include them); (3) startup-failure visibility (~/.horus/logs/ + companion nudge); (4) post-publish install smoke CI (ubuntu+windows+macos uv tool install probe — first macOS coverage; v0.0.9's manual PyPI-propagation wait showed exactly why). Also run the one-time env migration on the Windows machine when next at it."
+next_action: "(0) Cut release v0.0.10 — PRs #68 + #70-#73 are merged but only live in checkouts (today's 'old UI' confusion was exactly this lag); pairs with (4). Then the remaining UX-hardening direct items, roughly in order: (1) graceful hooks when the CLI is missing/broken (per-OS guard — the cross-platform lens bites here; doctor machine already provides the visible signal); (2) onboard/integrate committing the projected artifacts (decide commit-vs-gitignore, make integrate() include them); (3) startup-failure visibility (~/.horus/logs/ + companion nudge); (4) post-publish install smoke CI (ubuntu+windows+macos uv tool install probe — first macOS coverage). After that, the user-requested Skill map / inventory design (roadmap 'Cross-tool interface sync'). Also run the one-time env migration on the Windows machine when next at it."
 next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68 and #70-#73; v0.0.9 is live on PyPI, #68 and #70-#73 ride the next release). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
 execution_recommendation: "continue-as-is - the remaining UX-hardening items are per-OS/lifecycle-subtle (graceful hooks, startup visibility) or policy decisions (onboard artifact commits), exactly where workers fail confidently; the install-smoke CI item is small. No delegable volume until the next substantial feature track opens."
 last_updated: 2026-07-02
@@ -325,6 +325,24 @@ hooks (Claude OAuth `/usage` + `decision:block`; Codex rollouts + `Stop`).
   Read-only; solves the real pain ("which instructions/skills are active here, for this agent?").
   The dashboard-facing half is the "Projection-sync indicator in the UI" item in the UX-hardening
   track above — same underlying comparison, badge form.
+- [ ] **Skill map / inventory (user request, 2026-07-02 — next major UX feature candidate).**
+  One overview of ALL skills across scopes, used and unused: per registered project
+  (`.claude/skills/`, `.agents/skills/`), ambient user scope (`~/.claude/skills/`,
+  `$CODEX_HOME`), and per-account isolated config dirs (`~/.horus/accounts/<agent>-<alias>/skills`)
+  — third-party/personal skills included, not just Horus-bundled (which get version/staleness
+  detection; foreign ones get presence + provenance-unknown). Pain: same skill installed N times
+  across machines × accounts × projects with no visibility. Design notes from the 2026-07-02
+  triage: (1) **observe first** — a read-only scanner + dashboard "Skills" panel + CLI report; it
+  subsumes the skills half of `doctor compat` above; (2) "unused" starts as a *presence map*
+  (installed here, absent there), not usage telemetry — actual invocation tracking would need
+  transcript scanning (session_discovery-style, later); (3) cross-**machine** view is limited to
+  repo-local skills via git — global/user-scope skills are machine-local and belong to the
+  deferred machine-snapshot track (make the limitation visible in the UI rather than guessing);
+  (4) **sync comes after the map**: for Claude↔Codex a small Horus-owned copy of third-party
+  skills between `.claude/skills/` and `.agents/skills/` (provenance + diff + the trust rules
+  below) needs no Node dep; adopt **rulesync** per the standing decision only at the 3rd tool
+  (Gemini/Copilot) or when instructions/commands/MCP sync is wanted too. Scanner is
+  precisely-specifiable → good worker/plan-execution candidate; panel semantics + trust UX direct.
 - [ ] **Canonical + projections, formalized** — `.horus/compat.toml` declares canonical surfaces
   (`AGENTS.md`, `.agents/skills/`) + per-target projection policy; generated `CLAUDE.md` /
   `.claude/skills/` are marked-generated with drift detection. Extends today's ad-hoc dual-write.

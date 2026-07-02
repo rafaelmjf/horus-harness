@@ -94,6 +94,7 @@ Status: **Shipped** · **In progress** · **Planned**
 
 | Capability | Notes |
 |---|---|
+| Skill map / inventory | User-requested 2026-07-02: one overview of all skills (Horus-bundled + third-party, used and unused) across project / user / per-account scopes — read-only scanner + dashboard Skills panel + CLI report; subsumes the skills half of `doctor compat`. Sync (Horus-owned Claude↔Codex copy, or rulesync at the 3rd tool) comes after the map. action points → roadmap.md "Cross-tool interface sync" |
 | rulesync projection to other tools | Phase 3; evaluate for broader AGENTS/CLAUDE/instruction sync beyond Horus's direct Claude/Codex skill and hook projection |
 | Companion status signals | Build on the mascot: usage warning, stale session summary, uncommitted continuity, hook active/trusted state, dashboard server state |
 | Autonomous routine variant (Horus spawns the agent) | the spawning half of consolidate/distill; MVP3 (now unblocked — adapters exist) |
