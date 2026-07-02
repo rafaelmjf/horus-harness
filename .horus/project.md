@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "v0.0.9 live on PyPI; riding the next release: projection-sync badge (#68), VS Code launch destination (#70), open-continuity-PR nudge (#71), VS Code resume/fresh tasks (#72+#73), catalog dedup + Track button (#74; 607 tests green). NEXT: cut v0.0.10, then graceful hooks; skill map/inventory queued as the next major UX feature. Horus remains the durable memory plane (no session hosting)."
+current_focus: "v0.0.11 live on PyPI (two releases cut 2026-07-02): committed hooks now no-op silently on machines without the CLI (#76), projected artifacts are committed continuity (#77), and every release gets an install smoke on ubuntu+windows+macos — first-ever macOS coverage (#78). 613 tests green. NEXT: propagate guarded hooks (`upgrade-project --all` per machine), then startup-failure visibility; skill map/inventory queued as the next major UX feature. Horus remains the durable memory plane (no session hosting)."
 last_updated: 2026-07-02
 ---
 

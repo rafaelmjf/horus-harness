@@ -11,6 +11,28 @@ design (the "bumps" below), plus the **rationale behind the rules** in `decision
 (those live in `roadmap.md`). Most decisions' rationale is already a bump below; the
 foundational whys that aren't are collected under "Decision rationale" at the end.
 
+## Hook guards had to be per-OS because the two agents run hooks in different shells
+
+2026-07-02 (PR #76 rationale). The obvious "silent when missing" guards were all wrong
+for at least one surface: `command -v horus || exit 0` breaks Windows outright
+(`command` isn't a cmd/PowerShell builtin), and a plain `… || exit 0` breaks any
+PowerShell host because `||` is a **PS7-only** operator. What settled it was verifying
+the actual execution shells instead of assuming: Claude Code runs hook commands via
+`sh -c` on POSIX and **Git Bash** on Windows (PowerShell only as a no-Git-Bash
+fallback), and hides stderr entirely at exit 0 — so one POSIX `|| exit 0` covers every
+Claude machine and both no extra probe nor stderr redirect is needed. Codex, however,
+runs its Windows hooks **through PowerShell**, which is why `commandWindows` (dropped
+in v0.0.7 as "unnecessary") came back — same `horus` spelling, PS 5.1-safe
+`Get-Command` guard. The guard is safe only because of a property the hooks already
+had: every Horus hook communicates via stdout JSON and exits 0, so a forced exit 0
+can silence breakage but never flip a decision — that property is now a named
+invariant in `native_hooks.py` and decisions.md. **Lessons:** (1) "the native shell"
+is per-*agent*, not per-OS — verify per surface before writing cross-platform command
+strings; (2) a guard is only safe relative to an explicit signaling contract — write
+the contract down where the next hook author will trip over it; (3) `broken` and
+`missing` need the same UX (both spam otherwise), which rules out presence-probe-only
+guards.
+
 ## "Allow auto-merge" cannot be enabled on free-plan private repos — the onboard PR class has a plan-level root cause
 
 2026-07-02. The user reported agentic-gym-coach appearing BOTH as a tracked project and

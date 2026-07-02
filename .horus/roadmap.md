@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Shipped today, riding the next release (607 tests green): VS Code launch destination (PR #70), open-continuity-PR nudge (PR #71), VS Code resume/fresh tasks (PRs #72+#73), and catalog dedup + Track-on-this-machine button (PR #74 — registered projects never re-listed in the GitHub catalog; one-click clone+register for remote Horus repos). Live fixes on this machine: gym-coach dup resolved (merged stuck PR #1 — free-plan private repos can't enable auto-merge), Flatpak `code` wrapper + VS Code keybindings. v0.0.9 remains the live PyPI release; NEXT is cutting v0.0.10. Windows machine still needs its one-time --python 3.12 env migration."
-next_action: "(0) Cut release v0.0.10 — PRs #68 + #70-#73 are merged but only live in checkouts (today's 'old UI' confusion was exactly this lag); pairs with (4). Then the remaining UX-hardening direct items, roughly in order: (1) graceful hooks when the CLI is missing/broken (per-OS guard — the cross-platform lens bites here; doctor machine already provides the visible signal); (2) onboard/integrate committing the projected artifacts (decide commit-vs-gitignore, make integrate() include them); (3) startup-failure visibility (~/.horus/logs/ + companion nudge); (4) post-publish install smoke CI (ubuntu+windows+macos uv tool install probe — first macOS coverage). After that, the user-requested Skill map / inventory design (roadmap 'Cross-tool interface sync'). Also run the one-time env migration on the Windows machine when next at it."
-next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main carries PRs #63-#68 and #70-#74; v0.0.9 is live on PyPI, #68 and #70-#74 ride the next release). NEXT per roadmap next_action: the remaining direct UX-hardening items, starting with graceful hooks when the CLI is missing (per-OS: POSIX `command -v` vs Windows native shell) and onboard committing projected artifacts. These are lifecycle/per-OS-subtle — work them directly, no workers. Reminder for the user: run `uv tool install --force --python 3.12 horus-harness` once on the Windows machine."
-execution_recommendation: "continue-as-is - the remaining UX-hardening items are per-OS/lifecycle-subtle (graceful hooks, startup visibility) or policy decisions (onboard artifact commits), exactly where workers fail confidently; the install-smoke CI item is small. No delegable volume until the next substantial feature track opens."
+current_focus: "Big UX-hardening day, all shipped AND released: v0.0.10 cut in the morning (carried #68 + #70-#74); then graceful hooks — committed hooks now no-op silently on machines without the CLI (PR #76); projected artifacts (hooks/skills/settings) now committed as continuity by init/onboard/close (PR #77); post-publish install smoke CI on ubuntu+windows+macos — first-ever macOS coverage, 0.0.10 green on all three (PR #78); v0.0.11 cut same day to make it all installable (613 tests green). Remaining UX-hardening: startup-failure visibility. Windows machine still owes its one-time --python 3.12 env migration."
+next_action: "(1) Operational: upgrade each machine to v0.0.11 (`uv tool install --force --reinstall --python 3.12 horus-harness`; on the Windows machine this doubles as its pending env migration) and run the registry-wide artifact refresh there so every onboarded repo gets the guarded hook generation and commits the new files at next closure. (2) Startup-failure visibility (~/.horus/logs/ + companion 'dashboard failed to start — run horus doctor' nudge) — the last of the direct UX-hardening batch. (3) Then the user-requested Skill map / inventory design (roadmap 'Cross-tool interface sync'). Opportunistic: integrate() direct-merge fallback for free-plan private repos; marking private repos in the catalog."
+next_prompt: "Resume Horus. FIRST `git fetch --all --prune` and verify branch state (main is clean through PR #79; v0.0.11 is the live PyPI release — verify with `horus --version` and upgrade this machine's install if older). NEXT per roadmap next_action: run `horus upgrade-project --all` here to propagate guarded hooks to onboarded repos, then implement startup-failure visibility (dashboard/companion startup errors to ~/.horus/logs/ + companion nudge pointing at `horus doctor`). Companion-lifecycle territory — work it directly, no workers. Reminder for the user: on the Windows machine run `uv tool install --force --python 3.12 horus-harness` once (that also completes its env migration)."
+execution_recommendation: "continue-as-is - startup visibility sits in companion-lifecycle/per-OS territory where workers fail confidently, and the propagation step is operational not code. The next delegable volume is the Skill map scanner (precisely-specifiable, already triaged worker-friendly) once its design phase happens."
 last_updated: 2026-07-02
 ---
 
@@ -47,21 +47,19 @@ last_updated: 2026-07-02
   (machine 1) almost certainly has a 3.11-era env — run the one-time
   `uv tool install --force --python 3.12 horus-harness` there** (or click the
   dashboard Update button once it's on ≥0.0.9, which now migrates automatically).
-- [ ] **Onboard/integrate should commit the projected artifacts** (found 2026-07-02 by
-  the gym session): onboard writes `.claude/settings.json` + `.codex/hooks.json` (and
-  skills) but leaves them untracked, so the first fresh session confronts the user with
-  unexplained files. Decide commit-vs-gitignore policy (horus-harness commits them) and
-  make `integrate()` include them in the continuity commit.
-- [ ] **Graceful hooks when the CLI is missing/broken** (top priority): committed hook
-  files reach every machine and every collaborator, including ones without Horus — a
-  missing `horus` must be a silent no-op, not per-Bash-call error spam. NB the guard
-  must be per-OS (POSIX `command -v` vs Windows — Claude runs hook commands through the
-  native shell), so this is exactly where the cross-platform lens bites. `horus doctor`
-  / dashboard then report "hooks installed but CLI unavailable" as the visible signal.
-- [ ] **Post-publish install smoke** (CI): after each PyPI publish, fresh
-  ubuntu + windows + **macos** runners `uv tool install` from PyPI (retry for index
-  propagation), then probe `horus --version` + dashboard `/health`. Doubles as the
-  first-ever macOS coverage; "reproduce the gate" applied to releases.
+- [x] Onboard/integrate commit the projected artifacts — policy decided (committed,
+  not gitignored) + SHIPPED 2026-07-02 (PR #77, v0.0.11) → features.md "Projected
+  artifacts committed as continuity"; rule in decisions.md. Residual user action:
+  existing repos pick this up at their next `horus close --commit` once on ≥0.0.11
+  (gym-coach's untracked files resolve themselves then).
+- [x] Graceful hooks when the CLI is missing/broken — SHIPPED 2026-07-02 (PR #76,
+  v0.0.11) → features.md "Graceful hooks on horus-less machines"; guard invariant in
+  decisions.md. Residuals: run `horus upgrade-project --all` per machine to rewrite
+  the unguarded generation in onboarded repos; PowerShell `commandWindows` form still
+  wants a live Windows validation.
+- [x] Post-publish install smoke — SHIPPED 2026-07-02 (PR #78) → features.md
+  "Post-publish install smoke CI". Validated by dispatch against 0.0.10 AND by the
+  v0.0.11 release trigger; first macOS coverage of any kind.
 - [x] Dashboard self-update index-cache staleness — SHIPPED 2026-07-02 inside PR #64
   (`--reinstall`, which implies `--refresh`; uv rejects a bare `--refresh` on upgrade).
 - [x] `horus doctor` machine-level checks — SHIPPED 2026-07-02 (PR #66) → features.md
@@ -77,9 +75,11 @@ last_updated: 2026-07-02
   rule in decisions.md "Projection sync compares each surface to the installed CLI".
   Still the observable half of `horus doctor compat` (CLI report form → "Cross-tool
   interface sync" track below).
-- [ ] **macOS validation pass**: nothing has ever run on macOS — mascot (Tk
-  transparency), terminal spawning in `launcher`, owned-window/tab defaults, hook
-  execution. Fold findings back into the per-OS defaults like `resolve_open_mode`.
+- [ ] **macOS validation pass**: the install-smoke CI (PR #78) now proves
+  install + CLI + headless dashboard `/health` on macOS every release; still
+  never exercised there — mascot (Tk transparency), terminal spawning in
+  `launcher`, owned-window/tab defaults, hook execution. Fold findings back
+  into the per-OS defaults like `resolve_open_mode`. Needs real hardware.
 - [ ] **Onboard residual (a) (found 2026-07-02, see history.md):** `integrate()`
   leaves the clone checked out on the `horus/chore-…` continuity branch — decide
   whether to switch back to the default branch after pushing. (Seen live in
@@ -142,7 +142,7 @@ last_updated: 2026-07-02
 File-structure (NOT LLM-dependent — done 2026-06-25):
 
 - [ ] Propagate the updated managed block to the sibling repos (cross-repo propagation still manual; see "Later").
-- [ ] Run `horus upgrade-project --apply` in every onboarded repo after upgrading the CLI to ≥0.0.7 — their committed hook files still carry the non-portable `python -m horus` commands (they error on any machine that isn't the one that wrote them; see history.md).
+- [ ] Run `horus upgrade-project --all` on each machine after upgrading the CLI to ≥0.0.11 — rewrites the repos' committed hook files to the guarded generation (pre-0.0.7 `python -m horus` spellings error everywhere; 0.0.7–0.0.10 unguarded `horus …` spellings spam machines without the CLI; see history.md).
 
 Distillation routines — **agent-delegated prototype shipped 2026-06-25** (pre-pass + emitted prompt, like `close`; runs on any machine with an in-loop agent). Contract in `docs/routines.md`.
 
