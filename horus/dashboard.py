@@ -616,7 +616,7 @@ def _nav(active: str, live: int = 0) -> str:
     # Control (the session cockpit) was retired — its useful bits (account usage,
     # start/resume) now live on the Projects tab. ``live`` is accepted for call
     # compatibility but no longer renders a badge.
-    links = [("/", "Projects", "projects"), ("/settings", "Settings", "settings")]
+    links = [("/", "Projects", "projects"), ("/skills", "Skills", "skills"), ("/settings", "Settings", "settings")]
     out = []
     for href, label, key in links:
         if key == active:
@@ -1567,6 +1567,72 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
         f"{body}</table></div>"
     )
 
+
+
+def render_skill_map() -> str:
+    """Inner body for the read-only /skills page: every skill installed on this
+    machine, grouped by name across project/user/account scopes. Observe-only —
+    no install/sync/delete actions (sync is a later, separate track)."""
+    from horus import skillmap
+
+    try:
+        groups = skillmap.skill_map()
+    except Exception as exc:
+        groups = None
+        error = html.escape(str(exc))
+
+    if groups is None:
+        body = f"<div class='panel'><span class='health-warn'>Skill scan unavailable:</span> {error}</div>"
+    elif not groups:
+        body = ("<div class='panel'><p class='muted'>No skills found on this machine — "
+                "registered projects, <code>~/.claude/skills</code>, <code>$CODEX_HOME/skills</code>, "
+                "and Horus account dirs are all empty.</p></div>")
+    else:
+        cards = []
+        for group in groups:
+            name = html.escape(group["name"])
+            if group["bundled"]:
+                badge = f"<span class='pill'>horus-bundled v{group['latest']}</span>"
+                if group["stale"]:
+                    badge += f" <span class='badge warn'>{group['stale']} install(s) behind</span>"
+            else:
+                badge = "<span class='pill' title='Not a Horus-bundled skill; Horus reports presence only'>foreign</span>"
+            desc = f"<p class='muted'>{html.escape(group['description'])}</p>" if group["description"] else ""
+            rows = []
+            for inst in group["instances"]:
+                where = {
+                    "project": f"project <strong>{html.escape(inst['owner'])}</strong>",
+                    "user": "user scope",
+                    "account": f"account <strong>{html.escape(inst['owner'])}</strong>",
+                }[inst["scope"]]
+                version = f"v{inst['version']}" if inst["version"] is not None else "no version marker"
+                flag = {
+                    "stale": " <span class='health-warn'>stale</span>",
+                    "unmarked": " <span class='health-warn'>unmarked</span>",
+                }.get(inst["verdict"], "")
+                rows.append(
+                    f"<tr><td>{where}</td><td>{html.escape(inst['agent'])}</td>"
+                    f"<td>{version}{flag}</td></tr>"
+                )
+            cards.append(
+                "<div class='panel' style='margin-bottom:14px'>"
+                f"<h3 style='margin:0 0 2px'>{name} {badge}</h3>{desc}"
+                "<div style='overflow-x:auto'><table>"
+                "<thead><tr><th>Location</th><th>Agent</th><th>Version</th></tr></thead>"
+                f"<tbody>{''.join(rows)}</tbody></table></div></div>"
+            )
+        body = "".join(cards)
+
+    inner = (
+        "<section class='band'><div class='wrap'>"
+        "<div class='shead'><span class='eyebrow'>Inventory</span><h2>Skills</h2>"
+        "<span class='meta'>read-only presence map — this machine only (repo-local skills travel "
+        "with git; user/account scopes are machine-local)</span></div>"
+        f"<div style='max-width:980px'>{body}</div>"
+        "</div></section>"
+        f"{_footer_html()}"
+    )
+    return inner
 
 
 def render_settings(policy: dict[str, str], *, saved: bool = False) -> str:
@@ -2914,6 +2980,9 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/sessions":
             recs = gather_sessions()
             self._send(_page("Horus — sessions", render_sessions_card(recs), live=_live_count(recs)))
+            return
+        if parsed.path == "/skills":
+            self._send(_page("Horus — skills", render_skill_map(), active="skills"))
             return
         if parsed.path == "/control":
             # Control (the session cockpit) was retired; its useful bits moved to the

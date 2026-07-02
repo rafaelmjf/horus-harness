@@ -1293,6 +1293,42 @@ def cmd_skill(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_skill_map(args: argparse.Namespace) -> int:
+    """Read-only machine-wide skill inventory (the observe-first Skill map slice)."""
+    from horus import skillmap
+
+    groups = skillmap.skill_map()
+    if not groups:
+        print("No skills found on this machine (projects, user scope, or account dirs).")
+        return 0
+
+    print("Skill map — this machine only (repo-local skills travel with git; user/account scopes do not)\n")
+    for group in groups:
+        if group["bundled"]:
+            badge = f"horus-bundled v{group['latest']}"
+            if group["stale"]:
+                badge += f", {group['stale']} install(s) behind"
+        else:
+            badge = "foreign (presence only — provenance unknown)"
+        print(f"{group['name']}  [{badge}]")
+        if group["description"]:
+            print(f"    {group['description']}")
+        for inst in group["instances"]:
+            where = {
+                "project": f"project {inst['owner']}",
+                "user": "user scope",
+                "account": f"account {inst['owner']}",
+            }[inst["scope"]]
+            version = f"v{inst['version']}" if inst["version"] is not None else "no version marker"
+            flag = {"stale": "  <- STALE", "unmarked": "  <- unmarked"}.get(inst["verdict"], "")
+            print(f"    - {where} ({inst['agent']}): {version}{flag}")
+        print()
+    stale_total = sum(g["stale"] for g in groups)
+    if stale_total:
+        print(f"{stale_total} bundled install(s) behind the CLI — `horus upgrade-project --all` refreshes project scopes.")
+    return 0
+
+
 def cmd_reconcile(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
@@ -1733,6 +1769,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="which agent skill target to install (default: all)",
     )
     p_skill_install.set_defaults(func=cmd_skill)
+    p_skill_map = skill_sub.add_parser(
+        "map",
+        help="read-only inventory of every skill installed on this machine (projects, user scope, accounts)",
+    )
+    p_skill_map.set_defaults(func=cmd_skill_map)
 
     p_recon = sub.add_parser("reconcile", help="sync the managed instruction block across files")
     p_recon.add_argument("target", nargs="?", choices=("instructions",), default="instructions")
