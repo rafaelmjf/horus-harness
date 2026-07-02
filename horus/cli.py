@@ -36,6 +36,7 @@ from horus import (
     upgrade,
 )
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
+from horus.doctor_machine import machine_findings
 from horus.instructions import check_drift, reconcile
 
 _LEVEL_TAG = {"ok": "[ ok ]", "warn": "[warn]", "fail": "[fail]"}
@@ -107,6 +108,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                     print(f"      {line}")
                 print("      run `horus upgrade-project --apply --no-hooks --no-skills` to refresh Horus-managed blocks")
                 rc = 1
+        print()
+
+    if args.target in ("machine", "all"):
+        print(f"doctor machine: {root}")
+        findings = machine_findings(root)
+        _print_findings(findings)
+        if any(f.level == "fail" for f in findings):
+            rc = 1
         print()
 
     return rc
@@ -1237,7 +1246,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_doctor.add_argument(
         "target",
         nargs="?",
-        choices=("project", "instructions", "all"),
+        choices=("project", "instructions", "machine", "all"),
         default="all",
         help="what to check (default: all)",
     )
