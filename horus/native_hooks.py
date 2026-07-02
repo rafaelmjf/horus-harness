@@ -25,14 +25,39 @@ _HORUS_MERGE_MARKER = "horus close --hook"
 _HORUS_GUARD_MARKER = "horus guard-host"
 
 
+# Committed hook files reach every machine and collaborator the repo does, including
+# ones without Horus installed — there a bare `horus …` command errors on every single
+# tool call. The guards below turn a missing (or dead-on-import) CLI into a silent
+# no-op; `horus doctor machine` / the dashboard stay the visible "hooks installed but
+# CLI unavailable" signal. Guard invariant: every Horus hook signals decisions via
+# stdout JSON and exits 0, so forcing exit 0 can never mask a real block/deny — keep
+# it that way (an exit-code-2 hook would be swallowed by these guards).
+
+def _guard_posix(command: str) -> str:
+    # Valid under `sh -c` (macOS/Linux) and Git Bash — the shells Claude Code runs
+    # hook commands through (Windows falls back to PowerShell only when Git Bash is
+    # absent) and the POSIX path for Codex `command` entries.
+    return f"{command} || exit 0"
+
+
+def _guard_windows(command: str) -> str:
+    # Codex runs `commandWindows` through PowerShell, where `||` is PS7-only syntax;
+    # Get-Command is the PS 5.1-safe presence probe, and the trailing `exit 0`
+    # silences a CLI that exists but crashes.
+    return f"if (Get-Command horus -ErrorAction SilentlyContinue) {{ {command} }}; exit 0"
+
+
 def _codex_hook_command(threshold: float) -> dict[str, Any]:
     # The `horus` console script is the one spelling that works on every machine
     # these committed hook files reach (uv puts it on PATH); interpreter-prefixed
     # forms (`python3 -m` / `py -m`) need horus importable in the ambient python,
-    # which the uv tool env's isolation prevents. No Windows override needed.
+    # which the uv tool env's isolation prevents. `commandWindows` differs only in
+    # guard syntax (PowerShell), not in spelling.
+    command = f"horus usage check --path . --threshold {threshold:g} --hook"
     return {
         "type": "command",
-        "command": f"horus usage check --path . --threshold {threshold:g} --hook",
+        "command": _guard_posix(command),
+        "commandWindows": _guard_windows(command),
         "timeout": 30,
         "statusMessage": "Checking Horus usage",
     }
@@ -41,7 +66,8 @@ def _codex_hook_command(threshold: float) -> dict[str, Any]:
 def _codex_merge_hook_command() -> dict[str, Any]:
     return {
         "type": "command",
-        "command": "horus close --hook",
+        "command": _guard_posix("horus close --hook"),
+        "commandWindows": _guard_windows("horus close --hook"),
         "timeout": 30,
         "statusMessage": "Checking Horus closure",
     }
@@ -50,7 +76,8 @@ def _codex_merge_hook_command() -> dict[str, Any]:
 def _codex_guard_hook_command() -> dict[str, Any]:
     return {
         "type": "command",
-        "command": "horus guard-host --hook",
+        "command": _guard_posix("horus guard-host --hook"),
+        "commandWindows": _guard_windows("horus guard-host --hook"),
         "timeout": 30,
         "statusMessage": "Checking Horus host safety",
     }
@@ -225,9 +252,11 @@ def _claude_hook_command(threshold: float) -> dict[str, Any]:
     # `python`/`python3 -m horus` needs horus importable in the *ambient* python,
     # which the uv tool env's isolation prevents — and Linux has no `python`.
     # (`python -m` only worked inside this repo because it prepends the cwd.)
+    # Claude's hook schema has a single command string; the POSIX guard also covers
+    # Windows because Claude runs hooks through Git Bash there.
     return {
         "type": "command",
-        "command": f"horus usage check --target claude --hook --threshold {threshold:g}",
+        "command": _guard_posix(f"horus usage check --target claude --hook --threshold {threshold:g}"),
     }
 
 
@@ -237,7 +266,7 @@ def _claude_merge_hook_command() -> dict[str, Any]:
     # passes.
     return {
         "type": "command",
-        "command": "horus close --hook",
+        "command": _guard_posix("horus close --hook"),
     }
 
 
@@ -247,7 +276,7 @@ def _claude_guard_hook_command() -> dict[str, Any]:
     # restart/kill the dashboard process hosting the session. No-op everywhere else.
     return {
         "type": "command",
-        "command": "horus guard-host --hook",
+        "command": _guard_posix("horus guard-host --hook"),
     }
 
 
