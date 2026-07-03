@@ -1550,6 +1550,16 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
     for r in records:
         cls = _SESSION_STATUS_CLASS.get(r.status, "muted")
         rc = "" if r.returncode is None else f" ({r.returncode})"
+        if r.status in registry.TERMINAL:
+            action = (
+                "<form method='post' action='/session-dismiss' style='margin:0'>"
+                f"<input type='hidden' name='session_id' value='{html.escape(r.session_id)}'>"
+                "<button class='btn sm btn-seal' type='submit' title='Remove this finished "
+                "worker from the registry (and the mascot badge)'>Reviewed &#10003;</button>"
+                "</form>"
+            )
+        else:
+            action = "<span class='muted'>-</span>"
         rows.append(
             f"<tr><td><span class='{cls}'>&#9679;</span> {html.escape(r.status)}{html.escape(rc)}</td>"
             f"<td>{html.escape(r.agent)}</td>"
@@ -1557,14 +1567,20 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
             f"<td>{html.escape(Path(r.project).name)}</td>"
             f"<td>{r.pid if r.pid is not None else '-'}</td>"
             f"<td><code>{html.escape(r.session_id[:8])}</code></td>"
-            f"<td class='muted'>{html.escape(r.updated_at)}</td></tr>"
+            f"<td class='muted'>{html.escape(r.updated_at)}</td>"
+            f"<td>{action}</td></tr>"
         )
     body = "".join(rows)
     return (
         "<div class='card'><h2>Live sessions</h2>"
         "<table><tr><th>status</th><th>agent</th><th>account</th><th>project</th>"
-        "<th>pid</th><th>session</th><th>updated</th></tr>"
-        f"{body}</table></div>"
+        "<th>pid</th><th>session</th><th>updated</th><th></th></tr>"
+        f"{body}</table>"
+        "<p class='muted'>A finished worker counts as <em>awaiting review</em> (the mascot badge) "
+        "until dismissed. The review itself happens where the worker was spawned — the supervising "
+        "session's transcript and the project's <code>.horus/temp/</code> handoff note. Once its "
+        "results are folded in, mark it <em>Reviewed</em> here, or clear all finished workers via "
+        "the mascot's right-click menu.</p></div>"
     )
 
 
@@ -2782,6 +2798,22 @@ def process_upgrade_project(form: dict[str, str], *, projects: list[str] | None 
     return f"/project?i={idx}&upgraded={updated}"
 
 
+def process_session_dismiss(form: dict[str, str]) -> str:
+    """POST /session-dismiss: drop one *finished* worker record after review.
+
+    Running rows are never removed here — reconcile owns their liveness; dismissing
+    is the explicit "this worker's results are folded in" act, which also clears the
+    record from the mascot's worker badge."""
+    if _stale_build():
+        return "/?stale_build=1"
+    sid = (form.get("session_id") or "").strip()
+    reg = registry.Registry.default()
+    rec = reg.get(sid) if sid else None
+    if rec is not None and rec.status in registry.TERMINAL:
+        reg.remove(sid)
+    return "/sessions"
+
+
 def process_offboard(form: dict[str, str], *, projects: list[str] | None = None) -> str:
     """Offboard a registered project (by index): remove projected artifacts + unregister,
     purging `.horus/` only when the purge box is ticked. Redirects to the overview (the
@@ -3181,6 +3213,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/upgrade-project",
             "/offboard",
             "/open-lane",
+            "/session-dismiss",
             "/account-add",
             "/account-login",
             "/account-alias",
@@ -3231,6 +3264,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/open-lane":
             self._redirect(process_open_lane(self._read_form()))
+            return
+        if parsed.path == "/session-dismiss":
+            self._redirect(process_session_dismiss(self._read_form()))
             return
         if parsed.path == "/account-add":
             self._redirect(f"/?{process_account_add(self._read_form())}")

@@ -85,6 +85,42 @@ def test_gather_sessions_reconciles(tmp_path, monkeypatch):
     assert len(records) == 1 and records[0].status == "orphaned"  # pid-less running -> orphaned
 
 
+def test_render_sessions_card_offers_reviewed_dismiss_only_when_finished():
+    running = SessionRecord(session_id="run1", agent="codex", project="/p",
+                            pid=1, status="running", updated_at="t")
+    done = SessionRecord(session_id="done1", agent="codex", project="/p",
+                         pid=None, status="exited", updated_at="t")
+    html = dashboard.render_sessions_card([running, done])
+    assert html.count("action='/session-dismiss'") == 1   # finished row only
+    assert "value='done1'" in html
+    assert "awaiting review" in html                       # explains the badge term
+
+
+def test_process_session_dismiss_removes_only_finished(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    reg = Registry.default()
+    reg.upsert(SessionRecord(session_id="live", agent="codex", project="/p",
+                             pid=os.getpid(), status="running"))
+    reg.upsert(SessionRecord(session_id="done", agent="codex", project="/p",
+                             pid=None, status="exited"))
+    assert dashboard.process_session_dismiss({"session_id": "done"}) == "/sessions"
+    assert Registry.default().get("done") is None
+    assert dashboard.process_session_dismiss({"session_id": "live"}) == "/sessions"
+    assert Registry.default().get("live") is not None      # running rows never dismissed
+    assert dashboard.process_session_dismiss({"session_id": "nope"}) == "/sessions"
+    assert dashboard.process_session_dismiss({}) == "/sessions"
+
+
+def test_post_session_dismiss_route_redirects_to_sessions(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    Registry.default().upsert(SessionRecord(session_id="d1", agent="codex", project="/p",
+                                            pid=None, status="exited"))
+    resp = _post("/session-dismiss", {"session_id": "d1"}, origin="http://127.0.0.1:8765")
+    assert resp["status"] == 303
+    assert ("Location", "/sessions") in resp["headers"]
+    assert Registry.default().get("d1") is None
+
+
 def test_render_index_has_accounts_strip_and_no_control(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     page = dashboard.render_index([], dashboard.gather_sessions())
