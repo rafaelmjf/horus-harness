@@ -1,19 +1,22 @@
 ---
 name: horus-consolidate
 description: >-
-  Consolidate a project's Horus continuity (`.horus/`) so each lane stays in its
-  lane — route shipped work into the features ledger, prune done/stale roadmap
-  items, distill session notes into the durable files, and de-duplicate facts that
-  drifted across roadmap.md and features.md. Use this whenever wrapping up or
-  closing out a work session in a repo that has a `.horus/` directory; when the user
-  says "consolidate", "wrap up", "update continuity", "tidy the roadmap", or "close
-  out"; right after shipping a capability (to move it from roadmap to features); or
-  whenever the `.horus/` lanes look like they've drifted. Prefer this over editing
-  the `.horus/` files ad hoc, because it runs `horus consolidate` for precise signals
-  first and applies consistent routing rules.
+  Consolidate a project's Horus continuity (`.horus/`). On a PRD-structure (v3)
+  project this is a light backlog-hygiene pass over the single `PRD.md` file
+  (line-count vs the cap, stale frontmatter, undistilled session notes,
+  duplicate or lingering-done backlog items). On a six-lane (v2) project it
+  routes shipped work into the features ledger, prunes done/stale roadmap
+  items, distills session notes into the durable files, and de-duplicates
+  facts that drifted across roadmap.md and features.md. Use this whenever
+  wrapping up or closing out a work session in a repo that has a `.horus/`
+  directory; when the user says "consolidate", "wrap up", "update continuity",
+  "tidy the roadmap"/"tidy the backlog", or "close out"; right after shipping a
+  capability; or whenever `.horus/` looks like it's drifted. Prefer this over
+  editing `.horus/` ad hoc, because it runs `horus consolidate` for precise
+  signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # Consolidate Horus continuity
 
@@ -22,7 +25,102 @@ CLI does not: the **live context of what just happened** — decisions made, wor
 shipped, things discussed but not yet written to `.horus/`. Use that. The CLI sees
 only the files and git; you see the conversation too. Fold both in.
 
-## Two jobs — do not conflate them
+`horus consolidate` inspects `.horus/` and reports the signals for whichever
+structure the project uses — follow the matching section below.
+
+## PRD-structure projects (v3 — `.horus/PRD.md` present)
+
+`PRD.md` is the **one maintained continuity file**: frontmatter (`status`,
+`current_focus`, `next_action`, `next_prompt`, `execution_recommendation`,
+`last_updated`) plus Vision / Backlog / Shipped / Rules sections. `sessions/`
+(one note per session) and `temp/` (fleeting worker handoff notes) are
+**unchanged** from six-lane projects.
+
+### Two jobs — do not conflate them
+
+- **Per-session close (always, bounded):** fold this session's delta into
+  `PRD.md` and refresh the frontmatter handoff fields.
+- **Backlog hygiene (small, do it whenever `horus consolidate` flags it):** trim
+  the file back under the line cap, delete done items, split duplicate titles.
+  Mechanical — no need to wait for an explicit "pay down continuity debt" ask
+  the way v2's backlog pass does; a v3 PRD drifts fast if hygiene waits.
+
+### The dashboard contract — keep these current at EVERY close
+
+The shared reader (`resolve_focus`) is PRD-first, so `current_focus`,
+`next_action`, `next_prompt`, and `execution_recommendation` must live in
+`PRD.md` frontmatter (not a shim). `horus close --check` fails while any of
+them is stale or empty.
+
+### Steps
+
+1. **Get the deterministic signals.** Run `horus consolidate` (optionally
+   `--path <repo>`). On a v3 project it reports **backlog-hygiene signals
+   only** — no lane-routing/overlap warnings, because there are no lanes to
+   route between:
+   - **Line count vs the ~250-line cap** — warns past 235, more urgently past
+     250. Fix by trimming: one-line `## Shipped` entries, deleted done backlog
+     items (git remembers them, no need to keep them around).
+   - **Stale frontmatter** — `last_updated` older than the newest `sessions/`
+     note date. Refresh the content and bump the date.
+   - **Undistilled session notes** — more than a dozen files directly in
+     `sessions/` (excluding `README.md` and `archive/`). Move older ones to
+     `sessions/archive/` (local, git-ignored, doesn't count against the cap).
+   - **Duplicate backlog titles** — two `## Backlog` items whose bold
+     `**Title**` text matches case-insensitively. Merge or rename one.
+   - **Lingering done items** — a backlog item checked `[x]` or prefixed
+     `DONE`/`Done:`. Delete the item; a `**Result … PASS**` note continuing a
+     still-open item is not itself a done marker, leave those.
+
+2. **Read `PRD.md`**, the newest `sessions/*.md` note, and any `temp/*.md`
+   handoff notes awaiting review.
+
+3. **Record this session, in `PRD.md` only** (never source, `AGENTS.md`, or
+   `CLAUDE.md`):
+   - Fold capabilities shipped *this session* into `## Shipped` as **one line
+     each** — not a paragraph; detail lives in git history and session notes.
+   - Add or update `## Backlog` items for new or changed open work.
+   - Add any newly load-bearing invariant to `## Rules`, concise and
+     current-state only (not a dated log — that's what `sessions/` and git
+     history are for).
+   - Refresh the frontmatter handoff fields and bump `last_updated`. Same
+     judgment as v2 for `execution_recommendation`: `"continue-as-is — <why>"`
+     for small/ambiguous/exploratory/debugging work, `"plan-execution — <why>"`
+     for high-volume low-ambiguity work with a clear gate (create/update
+     `execution.md` before implementation starts). The `<why>` must name what
+     delegation actually buys *on this runtime* — a frontier supervisor +
+     cheaper worker tiers gains context hygiene AND a cheaper tier; a single
+     strong model gains mostly context hygiene, so its bar is higher. Do not
+     sell supervisor review as the safeguard (reproduce the gate / bound
+     checkpoints / safety-in-code are the durable ones).
+   - When a `temp/` worker handoff note exists, treat it as evidence, not
+     truth: review the diff/tests yourself, then fold the accepted facts into
+     `PRD.md` and update `execution.md` if a phase completed.
+
+4. **Apply backlog hygiene** for whatever Step 1 flagged. This is normally
+   small enough to fold into the same close — don't let the file blow the cap
+   before acting on the warning.
+
+5. **Verify.** Run `horus close --check` — it must pass. One `consolidate`
+   pass at most per close; don't chase every signal to zero (a duplicate title
+   you've deliberately kept apart, for instance, is fine to leave).
+
+### Boundaries
+
+- **Never invent** status, dates, versions, or decisions. When intent is
+  unclear, leave the content and flag it for the user rather than guessing.
+- Edits are confined to `.horus/**`. This is continuity maintenance, not a
+  coding task.
+- Bump `last_updated` in `PRD.md` frontmatter if it isn't already today.
+
+## v2 six-lane projects (fallback)
+
+No `.horus/PRD.md` — the project still uses the six lanes (`project.md`,
+`roadmap.md`, `features.md`, `decisions.md`, `history.md`) plus `sessions/`
+and `temp/`. `horus consolidate` reports lane-routing signals for this
+structure unchanged from before.
+
+### Two jobs — do not conflate them
 
 This skill spans two sizes of work. **Do the per-session close every time; do the
 backlog pass only when the user asks for it.** Conflating them is why lanes drift:
@@ -38,7 +136,7 @@ the per-session part gets half-done because the backlog looks huge.
   (many done items / undistilled sessions); that pressure is for *this* job, not the
   per-session close — **do not try to clear it every time.**
 
-## The dashboard contract — keep these current at EVERY close
+### The dashboard contract — keep these current at EVERY close
 
 The dashboard renders exactly these as the project's *current* state and never
 infers them. If this session moved the project, each must reflect it before you
@@ -57,7 +155,7 @@ finish:
 `horus close --check` is the gate: it fails (non-zero) while any of these is stale,
 so closure isn't done until it passes. It also backs a pre-merge CI check.
 
-## Steps
+### Steps
 
 1. **Get the deterministic signals.** Run `horus consolidate` (optionally
    `--path <repo>`). It reports file-only candidates: roadmap↔features overlaps,
@@ -124,7 +222,7 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
    lanes keep appearing until they carry the pointer — **do not delete ledger rows or
    roadmap actions chasing zero.**
 
-## Boundaries
+### Boundaries
 
 - **Never invent** status, dates, versions, or decisions. When intent is unclear,
   leave the content and flag it for the user rather than guessing.

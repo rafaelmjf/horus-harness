@@ -2,15 +2,16 @@
 name: horus-execution
 description: >-
   Supervise an optional Horus phased execution plan from `.horus/execution.md`.
-  Use this when `roadmap.md` recommends `plan-execution`, when the user asks to
-  split a feature into phases, spawn implementation workers/subagents, prepare
-  worker handoff notes, or review worker output before continuing to the next phase.
-  It keeps `.horus/execution.md` fluid, uses `.horus/temp/` for fleeting worker
-  notes, and distills durable outcomes back into roadmap/features/decisions/history
-  at closure.
+  Use this when the project's `execution_recommendation` (in `PRD.md` on a v3
+  project, `roadmap.md` on a v2 project) says `plan-execution`, when the user
+  asks to split a feature into phases, spawn implementation workers/subagents,
+  prepare worker handoff notes, or review worker output before continuing to
+  the next phase. It keeps `.horus/execution.md` fluid, uses `.horus/temp/` for
+  fleeting worker notes, and distills durable outcomes back into `PRD.md` (v3)
+  or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Horus execution supervision
 
@@ -55,9 +56,12 @@ not the reviewer.
 
 ## Steps
 
-1. **Read the lanes.** Read `.horus/project.md`, `roadmap.md`, `features.md`,
-   `decisions.md`, `history.md`, and `execution.md`. Review relevant `.horus/temp/*.md`
-   handoff notes only when an execution plan is active.
+1. **Read the continuity.** On a PRD-structure (v3) project, read `.horus/PRD.md`
+   (vision/backlog/shipped/rules + the frontmatter handoff fields) and
+   `execution.md`. On a six-lane (v2) project, read `.horus/project.md`,
+   `roadmap.md`, `features.md`, `decisions.md`, `history.md`, and `execution.md`.
+   Either way, review relevant `.horus/temp/*.md` handoff notes only when an
+   execution plan is active — that directory is unchanged across both structures.
 
 2. **Get the native prompt.** Run:
 
@@ -73,9 +77,9 @@ not the reviewer.
 
    Use the printed prompt as the supervisor frame for this project and agent.
 
-3. **Plan or refresh `execution.md`.** Keep it current for the active roadmap item:
-   phases, status, difficulty, mode, model tier, delegation basis, handoff note path,
-   and review gate. Replace it when the next substantial roadmap item starts. Do not
+3. **Plan or refresh `execution.md`.** Keep it current for the active backlog/roadmap
+   item: phases, status, difficulty, mode, model tier, delegation basis, handoff note
+   path, and review gate. Replace it when the next substantial item starts. Do not
    archive a timeline there.
 
    Execution is optional. The planning agent decides whether to use direct work,
@@ -139,6 +143,17 @@ not the reviewer.
 When the goal is to validate the workflow itself, "delegated" means a distinct worker
 agent/session/model actually did the implementation and left a handoff note. A handoff
 note written by the supervisor after doing the work does not satisfy the workflow test.
+
+## v2 six-lane projects (fallback)
+
+Everything above is structure-agnostic — phases, delegation judgment, handoff notes,
+and `execution.md` itself work the same regardless of whether the project uses
+`PRD.md` or the six lanes. The one structure-dependent step is reading the
+continuity at the start (Step 1): a v2 project has no `PRD.md`, so read
+`.horus/project.md`, `roadmap.md`, `features.md`, `decisions.md`, `history.md`, and
+`execution.md` instead — the original six-lane reading list, unchanged. Distilling
+durable results at closure (Step 6) likewise goes back to those lanes via
+`horus-consolidate`'s v2 path rather than into `PRD.md`.
 
 ## Boundaries
 
