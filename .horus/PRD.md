@@ -62,6 +62,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    from `.horus/` only. Baseline 2026-07-03, v2 measured at its freshly-consolidated
    best (commit 5f81c40): v3 = 4 files, ~17 KB, 5/5 correct; v2 = 6 files, ~145 KB,
    5/5 correct — equal quality at ~1/8 the context.
+   **Result (rerun 2026-07-03 evening, 5 v3 closures vs live v2 controls): PASS.**
+   Closure ritual v3 ≈ 7–12 tool calls vs v2 26–32 (gym) / 26–36 continuity calls
+   (codex sessions); cold probe again 5/5 at 5 calls / 4 files (v2 probe: 8 calls);
+   zero failure flags (no missed rule, no dead-end retry, no wrong pickup; PRD
+   232/250 lines — growth ~5 lines/closure, watch the cap). → proceed to teach the
+   tooling (templates, init, close --check on PRD frontmatter, consolidate→backlog
+   hygiene, infer/skills, dashboard, migrate the two control repos).
 2. **[bug] Claude adapter marks a completed run `failed` with rc=0** — seen
    2026-07-03: a claude/work full-auto worker delivered its full result, registry
    row ended `failed` + `returncode 0` (and `horus run` exited 1). Status mapping
