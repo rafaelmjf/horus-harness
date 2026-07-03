@@ -32,6 +32,7 @@ from horus import (
     registry,
     remote_start,
     routines,
+    runlog,
     skills,
     templates,
     upgrade,
@@ -352,19 +353,105 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"Refusing to run: {exc}")
         return 2
 
+    log = runlog.RunLog()
+    watch_pending = getattr(args, "watch", False)
+
+    def emit(line: str) -> None:
+        print(line)
+        log.line(line)
+
     for ev in registry.track(reg, run):
+        log.bind(run.session.session_id)
+        if watch_pending and run.session.session_id:
+            watch_pending = False
+            _spawn_watcher(run.session.session_id, root)
         if ev.type is adapters.EventType.SESSION_STARTED:
-            print(f"... session {ev.session_id}")
+            emit(f"... session {ev.session_id}")
         elif ev.type is adapters.EventType.ASSISTANT_TEXT and ev.text:
-            print(ev.text)
+            emit(ev.text)
         elif ev.type is adapters.EventType.TOOL_USE:
-            print(f"  [tool] {ev.tool}")
+            emit(f"  [tool] {ev.tool}")
         elif ev.type is adapters.EventType.ERROR:
-            print(f"  [error] {ev.text or ''}")
+            emit(f"  [error] {ev.text or ''}")
 
     s = run.session
-    print(f"\n{s.status} — session {s.session_id} (account {s.account or '-'})")
+    emit(f"\n{s.status} — session {s.session_id} (account {s.account or '-'})")
     return 0 if s.status == "exited" else 1
+
+
+def _spawn_watcher(session_id: str, cwd: Path) -> None:
+    """Open a watcher terminal running ``horus tail <session_id>`` (--watch).
+
+    Best-effort by contract: no display, no emulator, or no ``horus`` on PATH
+    must never fail the run — warn once and continue headless."""
+    try:
+        launcher.open_terminal(["horus", "tail", session_id], cwd=cwd)
+    except Exception as exc:  # noqa: BLE001 (any watcher failure stays non-fatal)
+        print(f"  [watch] could not open a watcher terminal ({exc}); continuing headless")
+
+
+def _resolve_tail_session(reg: "registry.Registry", session_id: str | None) -> "registry.SessionRecord":
+    """The session `horus tail` should follow: prefix match when an id is given
+    (like git short hashes), else the most recently updated running session.
+    Raises ``LookupError`` with a user-facing message when there isn't one."""
+    records = reg.all()
+    if session_id:
+        matches = [r for r in records if r.session_id.startswith(session_id)]
+        if not matches:
+            raise LookupError(f"No session matching {session_id!r}. Run `horus sessions` to list them.")
+        if len(matches) > 1:
+            raise LookupError(f"{session_id!r} is ambiguous ({len(matches)} sessions); use more of the id.")
+        return matches[0]
+    running = [r for r in records if r.status == "running"]
+    if not running:
+        raise LookupError("No running session to tail. Run `horus sessions` or pass a session id.")
+    return max(running, key=lambda r: r.updated_at)
+
+
+def cmd_tail(args: argparse.Namespace) -> int:
+    """Print a session's run log so far, then follow it until the run is over.
+
+    The watcher half of `horus run --watch`: reads the per-session log that
+    `horus run` tees to ``~/.horus/logs/runs/``, polls for new lines, and stops
+    once the registry marks the session terminal and the log has gone quiet,
+    closing with a final status line from the registry. Ctrl+C detaches cleanly
+    (the run itself is unaffected — this is a reader, not the session)."""
+    reg = registry.Registry.default()
+    reg.reconcile()
+    try:
+        rec = _resolve_tail_session(reg, args.session_id)
+    except LookupError as exc:
+        print(exc)
+        return 2
+
+    path = runlog.run_log_path(rec.session_id)
+    text, offset = runlog.read_from(path, 0)
+    if text:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    elif rec.status in registry.TERMINAL:
+        print(f"(no run log at {path})")
+
+    if rec.status not in registry.TERMINAL:
+        def is_terminal() -> bool:
+            reg.reconcile()  # a crashed run leaves "running" behind; don't follow a ghost
+            current = reg.get(rec.session_id)
+            return current is None or current.status in registry.TERMINAL
+
+        def write(chunk: str) -> None:
+            sys.stdout.write(chunk)
+            sys.stdout.flush()
+
+        try:
+            runlog.follow(path, offset, emit=write, is_terminal=is_terminal)
+        except KeyboardInterrupt:
+            print(f"\n(detached from session {rec.session_id})")
+            return 0
+
+    final = reg.get(rec.session_id) or rec
+    rc = "" if final.returncode is None else f" rc={final.returncode}"
+    print(f"\n{final.status} — session {final.session_id} (account {final.account or '-'}){rc}")
+    return 0
 
 
 def cmd_open(args: argparse.Namespace) -> int:
@@ -1585,7 +1672,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.add_argument("--resume", metavar="SESSION_ID", help="resume an existing session by id")
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
+    p_run.add_argument(
+        "--watch",
+        action="store_true",
+        help="open a watcher terminal following this session's log (best-effort; headless runs continue without it)",
+    )
     p_run.set_defaults(func=cmd_run)
+
+    p_tail = sub.add_parser("tail", help="print and follow a session's run log until it finishes")
+    p_tail.add_argument(
+        "session_id",
+        nargs="?",
+        default=None,
+        help="session id or unique prefix (default: the most recently updated running session)",
+    )
+    p_tail.set_defaults(func=cmd_tail)
 
     p_open = sub.add_parser("open", help="open an interactive agent session in its own terminal (tracked)")
     p_open.add_argument("path", nargs="?", default=".", help="project root to open in (default: cwd)")
