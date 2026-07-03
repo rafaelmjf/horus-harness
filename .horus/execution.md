@@ -1,0 +1,52 @@
+---
+status: planned
+
+current_feature: "v3 continuity structure as the product (PRD backlog item 1, second half): teach templates/init, close --check, consolidate, infer/skills, and the dashboard the PRD+sessions shape; drop the shims; migrate gym-coach + ttrpg via upgrade-project"
+supervisor_tier: frontier
+worker_tier: standard
+continuity_tier: economy
+delegation_basis: "Frontier supervisor (Fable) + claude/work workers via branch+PR (proven v0.0.18 flow) → low delegation bar for narrow, pytest-gated phases. Phase 1 pins the frontmatter contract every other phase builds on — judgment-heavy, direct. Phase 5's migration engine rewrites real repos' continuity — integrity-sensitive, guards are the work, direct. Phases 2–4 are high-volume/low-ambiguity after phase 1 lands — delegate. Phase 6 is supervised runs + probes, not implementation. Workers spawned visibly per Rafa's preference: horus run --watch, badge, explicit review."
+last_updated: 2026-07-03
+---
+
+# Execution Plan
+
+Tooling learns the PRD+sessions structure that just passed its acceptance test
+(5 closures, zero failure flags — docs/structure-test-2026-07-03.html). Order is
+dependency-driven: phase 1 defines the PRD-frontmatter contract all readers share;
+2–4 fan out on it (independent of each other, parallelizable); 5 builds the
+migration engine; 6 migrates the two control repos and re-runs the quiz probe as
+the acceptance gate. v2 six-lane projects must keep working untouched at every
+phase — the fallback path is part of each gate, not a cleanup at the end.
+
+This file is the fluid coordination surface for the batch (recreated per the v3
+structure contract; not a revived lane — replaced when the next batch starts).
+
+## Model Policy
+
+| tier | Intended use | Examples |
+|---|---|---|
+| economy | mechanical continuity updates, formatting | maintainer |
+| standard | narrow implementation phases with tests | worker (claude/work via branch+PR) |
+| frontier | planning, architecture, risky review, final acceptance | supervisor (this session) |
+
+## Active Phases
+
+| phase | status | difficulty | mode | worker_agent | worker_tier | delegation_basis | handoff_note | review gate |
+|---|---|---|---|---|---|---|---|---|
+| 1-prd-frontmatter-contract | planned | medium | direct | native | — | The contract is the work: PRD.md frontmatter absorbs the shim fields (current_focus / next_action / next_prompt / execution_recommendation); one shared reader with resolution order PRD-frontmatter → legacy shims, consumed by close --check freshness, the merge gate, horus resume, dashboard NEXT, and companion. doctor project learns the v3 shape (PRD present → six lanes not required). Cross-cutting + judgment-heavy → direct. | — | Full suite green; scratch v2 project unaffected; THIS repo's shims deleted at phase end with close --check rc 0, horus resume correct, dashboard NEXT populated from PRD. |
+| 2-templates-init-v3 | planned | medium | delegated | claude | standard | High volume, low ambiguity once phase 1 pins the contract: init scaffolds PRD.md + sessions/ (+ .horus/README, sessions .gitignore) instead of six lanes; managed-block closure contract text becomes "PRD backlog/shipped + session note + close"; never-clobber semantics keep existing v2 projects untouched. | .horus/temp/2-templates-init-v3.md | Supervisor reproduces: pytest green; scratch `horus init` → cold `close --check` rc 0 → a cold read of the scaffold answers focus/next-step from PRD alone. |
+| 3-consolidate-hygiene-infer-skills | planned | medium | delegated | claude | standard | Enumerable checks with a crisp gate. consolidate's v3 path = backlog hygiene (PRD line count vs ~250 cap, lingering done items, stale last_updated, undistilled session-note count, duplicate backlog titles) — no lane-purity warnings; infer fills the PRD skeleton from canonical docs; the four bundled skills (consolidate / infer / distill-history / execution) rewritten for v3 with explicit v2 fallback wording; skill version markers bumped. Supervisor specifies the exact check list in the brief. | .horus/temp/3-consolidate-hygiene-infer-skills.md | Supervisor reproduces: pytest green; `horus consolidate` on this repo emits hygiene signals only (zero lane warnings); on gym-coach (still v2) behavior unchanged. |
+| 4-dashboard-prd | planned | medium | delegated | claude | standard | Bounded UI slice on the phase-1 reader: project detail renders PRD focus, top backlog items, shipped count + latest line, and a line-budget meter vs the ~250 cap; v2 projects render exactly as today. The user's eyeball is the real gate (visual). | .horus/temp/4-dashboard-prd.md | Supervisor drives the live dashboard (both a v3 and a v2 project) + pytest green; Rafa eyeballs the detail page before accept. |
+| 5-migration-engine | planned | high | direct | native | — | `upgrade-project --structure prd` (opt-in): deterministic six-lane → PRD+sessions collapse — git mv lanes to .horus/archive/, scaffold PRD with mapped sections (project→Vision, open roadmap→Backlog, features→Shipped one-liners, decisions→Rules), carry roadmap frontmatter into PRD frontmatter, leave an agent-polish TODO marker. Integrity-sensitive rewrite of real repos' continuity: refuses on dirty tree / behind-origin (fetch-first), never deletes content, archives verbatim. Safety in the code — direct. | — | Full suite + dry-run mode; rehearsal on a scratch clone of gym-coach compared against this repo's hand-made collapse (same section mapping, nothing lost — archive diff empty vs originals). |
+| 6-migrate-controls-validate | planned | medium | delegated | codex | standard | Supervised runs, not implementation: run the engine on agentic-gym-coach + agentic-ttrpg, then one bounded worker per repo polishes the generated PRD prose (codex auto-edit — read-only .git, supervisor owns commit/push per rule). Acceptance = the same pre-registered cold-reader quiz (5 questions, .horus/ only) scores 5/5 on BOTH migrated repos + close --check rc 0 + dashboard NEXT correct. Then delete PRD backlog item 1, release v0.0.21. | .horus/temp/6-migrate-controls-validate.md | Supervisor reproduces the quiz probes + close --check on both repos and commits/pushes their continuity; release cut with the 3-file bump ritual, suite rerun AFTER the bump. |
+
+## Notes
+
+- Phases 2–4 are mutually independent once 1 lands; run up to two workers in
+  parallel with `--watch` terminals, review one at a time.
+- Shim removal (end of phase 1) is repo-local; OTHER v3 repos keep working because
+  the reader prefers PRD frontmatter and only falls back to shims when present.
+- The quiz probe in phase 6 reuses the acceptance-test wording verbatim (session
+  note 2026-07-03-210751 → baseline note 2026-07-03-090957) with Q5 pinned to the
+  then-latest release.
