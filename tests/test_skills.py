@@ -48,9 +48,46 @@ def test_expected_skills_registered():
     assert {"horus-consolidate", "horus-distill-history", "horus-infer", "horus-execution"} <= names
 
 
+def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
+    # Phase 3 (v3-tooling): every rewritten skill keeps the six-lane guidance
+    # reachable under an explicit, clearly-marked fallback heading.
+    for s in skills.SKILLS:
+        assert "## v2 six-lane projects (fallback)" in s.content, s.name
+
+
+def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
+    consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
+    assert consolidate.version == 9
+    assert "PRD.md" in consolidate.content
+    assert "no lane-routing/overlap warnings" in consolidate.content
+    assert "~250-line cap" in consolidate.content
+    assert "Stale frontmatter" in consolidate.content
+    assert "Undistilled session notes" in consolidate.content
+    assert "Duplicate backlog titles" in consolidate.content
+    assert "Lingering done items" in consolidate.content
+    assert "one line" in consolidate.content and "not a paragraph" in consolidate.content
+    # sessions/ and temp/ handoff notes stay unchanged in v3.
+    assert "temp/" in consolidate.content
+
+
+def test_infer_skill_v3_reports_prd_skeleton_gaps():
+    infer = next(s for s in skills.SKILLS if s.name == "horus-infer")
+    assert infer.version == 3
+    assert "Vision" in infer.content and "Backlog" in infer.content
+    assert "Shipped" in infer.content and "Rules" in infer.content
+    assert "PRD.md" in infer.content
+
+
+def test_distill_history_skill_v3_targets_archive():
+    distill = next(s for s in skills.SKILLS if s.name == "horus-distill-history")
+    assert distill.version == 3
+    assert ".horus/archive/history.md" in distill.content
+    assert "PRD.md" in distill.content
+
+
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 5
+    assert execution.version == 6
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content

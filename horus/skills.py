@@ -56,19 +56,22 @@ _CONSOLIDATE_SKILL = """\
 ---
 name: horus-consolidate
 description: >-
-  Consolidate a project's Horus continuity (`.horus/`) so each lane stays in its
-  lane — route shipped work into the features ledger, prune done/stale roadmap
-  items, distill session notes into the durable files, and de-duplicate facts that
-  drifted across roadmap.md and features.md. Use this whenever wrapping up or
-  closing out a work session in a repo that has a `.horus/` directory; when the user
-  says "consolidate", "wrap up", "update continuity", "tidy the roadmap", or "close
-  out"; right after shipping a capability (to move it from roadmap to features); or
-  whenever the `.horus/` lanes look like they've drifted. Prefer this over editing
-  the `.horus/` files ad hoc, because it runs `horus consolidate` for precise signals
-  first and applies consistent routing rules.
+  Consolidate a project's Horus continuity (`.horus/`). On a PRD-structure (v3)
+  project this is a light backlog-hygiene pass over the single `PRD.md` file
+  (line-count vs the cap, stale frontmatter, undistilled session notes,
+  duplicate or lingering-done backlog items). On a six-lane (v2) project it
+  routes shipped work into the features ledger, prunes done/stale roadmap
+  items, distills session notes into the durable files, and de-duplicates
+  facts that drifted across roadmap.md and features.md. Use this whenever
+  wrapping up or closing out a work session in a repo that has a `.horus/`
+  directory; when the user says "consolidate", "wrap up", "update continuity",
+  "tidy the roadmap"/"tidy the backlog", or "close out"; right after shipping a
+  capability; or whenever `.horus/` looks like it's drifted. Prefer this over
+  editing `.horus/` ad hoc, because it runs `horus consolidate` for precise
+  signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # Consolidate Horus continuity
 
@@ -77,7 +80,102 @@ CLI does not: the **live context of what just happened** — decisions made, wor
 shipped, things discussed but not yet written to `.horus/`. Use that. The CLI sees
 only the files and git; you see the conversation too. Fold both in.
 
-## Two jobs — do not conflate them
+`horus consolidate` inspects `.horus/` and reports the signals for whichever
+structure the project uses — follow the matching section below.
+
+## PRD-structure projects (v3 — `.horus/PRD.md` present)
+
+`PRD.md` is the **one maintained continuity file**: frontmatter (`status`,
+`current_focus`, `next_action`, `next_prompt`, `execution_recommendation`,
+`last_updated`) plus Vision / Backlog / Shipped / Rules sections. `sessions/`
+(one note per session) and `temp/` (fleeting worker handoff notes) are
+**unchanged** from six-lane projects.
+
+### Two jobs — do not conflate them
+
+- **Per-session close (always, bounded):** fold this session's delta into
+  `PRD.md` and refresh the frontmatter handoff fields.
+- **Backlog hygiene (small, do it whenever `horus consolidate` flags it):** trim
+  the file back under the line cap, delete done items, split duplicate titles.
+  Mechanical — no need to wait for an explicit "pay down continuity debt" ask
+  the way v2's backlog pass does; a v3 PRD drifts fast if hygiene waits.
+
+### The dashboard contract — keep these current at EVERY close
+
+The shared reader (`resolve_focus`) is PRD-first, so `current_focus`,
+`next_action`, `next_prompt`, and `execution_recommendation` must live in
+`PRD.md` frontmatter (not a shim). `horus close --check` fails while any of
+them is stale or empty.
+
+### Steps
+
+1. **Get the deterministic signals.** Run `horus consolidate` (optionally
+   `--path <repo>`). On a v3 project it reports **backlog-hygiene signals
+   only** — no lane-routing/overlap warnings, because there are no lanes to
+   route between:
+   - **Line count vs the ~250-line cap** — warns past 235, more urgently past
+     250. Fix by trimming: one-line `## Shipped` entries, deleted done backlog
+     items (git remembers them, no need to keep them around).
+   - **Stale frontmatter** — `last_updated` older than the newest `sessions/`
+     note date. Refresh the content and bump the date.
+   - **Undistilled session notes** — more than a dozen files directly in
+     `sessions/` (excluding `README.md` and `archive/`). Move older ones to
+     `sessions/archive/` (local, git-ignored, doesn't count against the cap).
+   - **Duplicate backlog titles** — two `## Backlog` items whose bold
+     `**Title**` text matches case-insensitively. Merge or rename one.
+   - **Lingering done items** — a backlog item checked `[x]` or prefixed
+     `DONE`/`Done:`. Delete the item; a `**Result … PASS**` note continuing a
+     still-open item is not itself a done marker, leave those.
+
+2. **Read `PRD.md`**, the newest `sessions/*.md` note, and any `temp/*.md`
+   handoff notes awaiting review.
+
+3. **Record this session, in `PRD.md` only** (never source, `AGENTS.md`, or
+   `CLAUDE.md`):
+   - Fold capabilities shipped *this session* into `## Shipped` as **one line
+     each** — not a paragraph; detail lives in git history and session notes.
+   - Add or update `## Backlog` items for new or changed open work.
+   - Add any newly load-bearing invariant to `## Rules`, concise and
+     current-state only (not a dated log — that's what `sessions/` and git
+     history are for).
+   - Refresh the frontmatter handoff fields and bump `last_updated`. Same
+     judgment as v2 for `execution_recommendation`: `"continue-as-is — <why>"`
+     for small/ambiguous/exploratory/debugging work, `"plan-execution — <why>"`
+     for high-volume low-ambiguity work with a clear gate (create/update
+     `execution.md` before implementation starts). The `<why>` must name what
+     delegation actually buys *on this runtime* — a frontier supervisor +
+     cheaper worker tiers gains context hygiene AND a cheaper tier; a single
+     strong model gains mostly context hygiene, so its bar is higher. Do not
+     sell supervisor review as the safeguard (reproduce the gate / bound
+     checkpoints / safety-in-code are the durable ones).
+   - When a `temp/` worker handoff note exists, treat it as evidence, not
+     truth: review the diff/tests yourself, then fold the accepted facts into
+     `PRD.md` and update `execution.md` if a phase completed.
+
+4. **Apply backlog hygiene** for whatever Step 1 flagged. This is normally
+   small enough to fold into the same close — don't let the file blow the cap
+   before acting on the warning.
+
+5. **Verify.** Run `horus close --check` — it must pass. One `consolidate`
+   pass at most per close; don't chase every signal to zero (a duplicate title
+   you've deliberately kept apart, for instance, is fine to leave).
+
+### Boundaries
+
+- **Never invent** status, dates, versions, or decisions. When intent is
+  unclear, leave the content and flag it for the user rather than guessing.
+- Edits are confined to `.horus/**`. This is continuity maintenance, not a
+  coding task.
+- Bump `last_updated` in `PRD.md` frontmatter if it isn't already today.
+
+## v2 six-lane projects (fallback)
+
+No `.horus/PRD.md` — the project still uses the six lanes (`project.md`,
+`roadmap.md`, `features.md`, `decisions.md`, `history.md`) plus `sessions/`
+and `temp/`. `horus consolidate` reports lane-routing signals for this
+structure unchanged from before.
+
+### Two jobs — do not conflate them
 
 This skill spans two sizes of work. **Do the per-session close every time; do the
 backlog pass only when the user asks for it.** Conflating them is why lanes drift:
@@ -93,7 +191,7 @@ the per-session part gets half-done because the backlog looks huge.
   (many done items / undistilled sessions); that pressure is for *this* job, not the
   per-session close — **do not try to clear it every time.**
 
-## The dashboard contract — keep these current at EVERY close
+### The dashboard contract — keep these current at EVERY close
 
 The dashboard renders exactly these as the project's *current* state and never
 infers them. If this session moved the project, each must reflect it before you
@@ -112,7 +210,7 @@ finish:
 `horus close --check` is the gate: it fails (non-zero) while any of these is stale,
 so closure isn't done until it passes. It also backs a pre-merge CI check.
 
-## Steps
+### Steps
 
 1. **Get the deterministic signals.** Run `horus consolidate` (optionally
    `--path <repo>`). It reports file-only candidates: roadmap↔features overlaps,
@@ -179,7 +277,7 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
    lanes keep appearing until they carry the pointer — **do not delete ledger rows or
    roadmap actions chasing zero.**
 
-## Boundaries
+### Boundaries
 
 - **Never invent** status, dates, versions, or decisions. When intent is unclear,
   leave the content and flag it for the user rather than guessing.
@@ -193,16 +291,19 @@ _DISTILL_HISTORY_SKILL = """\
 name: horus-distill-history
 description: >-
   Compress a large, raw project log (a long `docs/HISTORY.md`, `CHANGELOG.md`, or an
-  oversized `.horus/history.md` archive) down to the curated "bumps in the road" that
-  belong in Horus's `history.md` — the problems that bit the project and the durable
-  lessons they forced. Use this whenever onboarding Horus into a long-running project
-  with a big changelog; when the user says "distill the history", "compress the
-  changelog", "the history file is too long", or "summarize the project log"; or when
-  `.horus/history.md` has grown into a timeline instead of a curated lesson set. Runs
-  `horus distill-history` first for the source-log location and size.
+  oversized history archive) down to the curated "bumps in the road" worth carrying
+  forward — the problems that bit the project and the durable lessons they forced.
+  On a PRD-structure (v3) project the curated result lives in
+  `.horus/archive/history.md`, with any still-load-bearing rule folded into `PRD.md`'s
+  `## Rules`; on a six-lane (v2) project it's `.horus/history.md` directly. Use this
+  whenever onboarding Horus into a long-running project with a big changelog; when
+  the user says "distill the history", "compress the changelog", "the history file
+  is too long", or "summarize the project log"; or when the curated history has grown
+  into a timeline instead of a lesson set. Runs `horus distill-history` first for the
+  source-log location and size.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Distill project history
 
@@ -210,7 +311,54 @@ Turn a verbose log into the high-signal subset worth carrying forward. You are n
 writing a timeline — you are keeping only what a future agent would otherwise have
 to re-learn the hard way.
 
-## Steps
+## PRD-structure projects (v3 — `.horus/PRD.md` present)
+
+The curated target is **`.horus/archive/history.md`** — in this structure history is
+retired-lane material, not an actively maintained file (`PRD.md`'s `## Rules` section
+is the *current*-state surface; this archive is the *why* behind it, same idea as
+`decisions.md` + `history.md` in v2, just no longer live lanes).
+
+1. **Locate the source.** Run `horus distill-history` (optionally `--path <repo>` /
+   `--source <file>`) for the source log it found. Its `.horus/history.md missing`
+   line is a known false note on v3 projects — the deterministic pre-pass predates
+   the archive convention and doesn't look in `.horus/archive/` yet; ignore that
+   line and check `.horus/archive/history.md`'s current size yourself.
+
+2. **Read the source log** in full (or in chunks if very large).
+
+3. **Apply the signal test** to every entry — same test as v2 below: keep a real
+   problem plus the durable lesson/design change it forced; drop routine noise,
+   version bumps, and anything already captured as a `PRD.md` `## Rules` entry
+   (cross-reference instead of duplicating).
+
+4. **Write the curated subset** into `.horus/archive/history.md` (create the
+   `archive/` directory if this is the first distillation): short, deduplicated
+   "bumps in the road", each pairing the problem with the lesson. Not a timeline.
+
+5. **Promote load-bearing lessons.** If a lesson amounts to an invariant the
+   project must keep obeying (not just "this happened once"), also add a
+   concise one-liner to `PRD.md`'s `## Rules` — that's the surface a cold
+   reader actually checks day to day.
+
+6. **Forward open work, don't drop it.** Roadmap-shaped material (backlog,
+   "next session", planned-but-not-done) isn't history — note it for the user
+   to fold into `PRD.md`'s `## Backlog` rather than silently dropping it. (This
+   skill edits history/archive material, so flag it; don't edit `## Backlog`
+   here.)
+
+7. **Freeze the source**, don't delete it: add a one-line "superseded —
+   curated in `.horus/archive/history.md`" pointer at the top of its body
+   (below any YAML front matter) so the two don't drift.
+
+### Boundaries
+
+- Only compress what the log records — **never invent** incidents, dates, or causes.
+- Edit `.horus/archive/history.md`, at most a one-line addition to `PRD.md`'s
+  `## Rules`, and the one-line pointer on the source log; nothing else.
+
+## v2 six-lane projects (fallback)
+
+No `.horus/PRD.md` — the curated target is `.horus/history.md` directly, as before.
 
 1. **Locate + size the source.** Run `horus distill-history` (optionally
    `--path <repo>` / `--source <file>`). It reports the source log it found and the
@@ -244,7 +392,7 @@ to re-learn the hard way.
    `.horus/history.md`" pointer at the top of its body (just below any YAML front
    matter, so the front matter stays first) so the two don't drift.
 
-## Boundaries
+### Boundaries
 
 - Only compress what the log records — **never invent** incidents, dates, or causes.
 - Edit `.horus/history.md` (and the one-line pointer on the source log); nothing else.
@@ -257,14 +405,16 @@ name: horus-infer
 description: >-
   Bootstrap or refresh a project's Horus continuity (`.horus/`) by distilling the
   project's own canonical docs — README, status/roadmap files, CLAUDE.md/AGENTS.md,
-  and linked docs — into the clean six-lane structure. Use this when setting Horus up
-  in an existing repo that already has docs; when the user says "set up horus here",
-  "bootstrap the .horus files", "populate the continuity", "infer the project state",
-  or "fill in the roadmap from our docs"; or right after `horus init` left placeholder
-  lanes. Runs `horus infer` first to find the canonical docs and the empty lanes.
+  and linked docs — into `.horus/`: the PRD-structure `PRD.md` skeleton (Vision /
+  Backlog / Shipped / Rules) on a v3 project, or the six-lane structure on a v2
+  project. Use this when setting Horus up in an existing repo that already has docs;
+  when the user says "set up horus here", "bootstrap the .horus files", "populate
+  the continuity", "infer the project state", or "fill in the backlog/roadmap from
+  our docs"; or right after `horus init` left placeholder content. Runs `horus infer`
+  first to find the canonical docs and the empty/placeholder sections.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -273,7 +423,55 @@ This distills that into `.horus/` as the single concise source of "what is this 
 what's next" — pointing at the canonical docs rather than copying them, so the two
 never drift.
 
-## Steps
+`horus infer` reports which structure the project uses — follow the matching
+section below.
+
+## PRD-structure projects (v3 — `.horus/PRD.md` present)
+
+1. **Get the signals.** Run `horus infer` (optionally `--path <repo>`). It lists
+   the canonical docs to distill from and which `PRD.md` skeleton sections
+   (Vision / Backlog / Shipped / Rules) are missing or still placeholder text.
+
+2. **Read the canonical docs and follow their pointers** — README → status/roadmap →
+   CLAUDE.md/AGENTS.md → linked docs like `docs/*.md`. Build a real model of the
+   project before writing anything.
+
+3. **Distill into `PRD.md`**, one file, each section concise:
+   - Frontmatter: `status`, `current_focus`, `next_action`, `next_prompt`,
+     `execution_recommendation`, `last_updated`.
+   - `## Vision` — what the project is, its shape, and explicit out-of-scope
+     boundaries.
+   - `## Backlog` — open action points as a prioritized list, bold **title**
+     per item, bugs marked `[bug]`, ops chores `[ops]`.
+   - `## Shipped` — **one line per capability**, not a paragraph; the deep
+     detail lives in git history, not here.
+   - `## Rules` — durable, current invariants only (not a dated log — if the
+     docs describe *why* a rule exists or a superseded alternative, that
+     rationale belongs in a `sessions/` note or `.horus/archive/`, not `PRD.md`).
+
+4. **Don't duplicate.** Where a canonical doc stays the deep reference (e.g. a
+   detailed architecture doc), point at it from `PRD.md` instead of copying it
+   wholesale. Keep the whole file well under the ~250-line cap — `horus
+   consolidate` will start warning past 235.
+
+5. **Mark superseded docs — only when truly superseded.** If a doc's "current
+   state / next steps" role now lives in `PRD.md`, add a one-line pointer at
+   its top. But if `PRD.md` merely *distills* a doc that stays the canonical
+   deep reference, add no pointer. Ask before substantially rewriting any
+   source doc.
+
+### Boundaries
+
+- When intent is genuinely unclear (real status, priorities, what shipped vs
+  planned), **ask the user** rather than guess. Never invent decisions, dates,
+  or versions — `## Rules` in particular: only record an invariant the docs
+  actually state; leave it thin rather than manufacturing one.
+- Edit scope is `.horus/PRD.md`, plus — with care and consent — a one-line
+  pointer atop a superseded source doc.
+
+## v2 six-lane projects (fallback)
+
+No `.horus/PRD.md` — infer into the six lanes as before.
 
 1. **Get the signals.** Run `horus infer` (optionally `--path <repo>`). It lists the
    canonical docs to distill from and which `.horus/` lanes are missing or still hold
@@ -302,7 +500,7 @@ never drift.
    pointer — just point at the doc from `.horus/`. Ask before substantially rewriting
    any source doc.
 
-## Boundaries
+### Boundaries
 
 - When intent is genuinely unclear (real status, priorities, what shipped vs planned),
   **ask the user** rather than guess. Never invent decisions, dates, or versions —
@@ -318,15 +516,16 @@ _EXECUTION_SKILL = """\
 name: horus-execution
 description: >-
   Supervise an optional Horus phased execution plan from `.horus/execution.md`.
-  Use this when `roadmap.md` recommends `plan-execution`, when the user asks to
-  split a feature into phases, spawn implementation workers/subagents, prepare
-  worker handoff notes, or review worker output before continuing to the next phase.
-  It keeps `.horus/execution.md` fluid, uses `.horus/temp/` for fleeting worker
-  notes, and distills durable outcomes back into roadmap/features/decisions/history
-  at closure.
+  Use this when the project's `execution_recommendation` (in `PRD.md` on a v3
+  project, `roadmap.md` on a v2 project) says `plan-execution`, when the user
+  asks to split a feature into phases, spawn implementation workers/subagents,
+  prepare worker handoff notes, or review worker output before continuing to
+  the next phase. It keeps `.horus/execution.md` fluid, uses `.horus/temp/` for
+  fleeting worker notes, and distills durable outcomes back into `PRD.md` (v3)
+  or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Horus execution supervision
 
@@ -371,9 +570,12 @@ not the reviewer.
 
 ## Steps
 
-1. **Read the lanes.** Read `.horus/project.md`, `roadmap.md`, `features.md`,
-   `decisions.md`, `history.md`, and `execution.md`. Review relevant `.horus/temp/*.md`
-   handoff notes only when an execution plan is active.
+1. **Read the continuity.** On a PRD-structure (v3) project, read `.horus/PRD.md`
+   (vision/backlog/shipped/rules + the frontmatter handoff fields) and
+   `execution.md`. On a six-lane (v2) project, read `.horus/project.md`,
+   `roadmap.md`, `features.md`, `decisions.md`, `history.md`, and `execution.md`.
+   Either way, review relevant `.horus/temp/*.md` handoff notes only when an
+   execution plan is active — that directory is unchanged across both structures.
 
 2. **Get the native prompt.** Run:
 
@@ -389,9 +591,9 @@ not the reviewer.
 
    Use the printed prompt as the supervisor frame for this project and agent.
 
-3. **Plan or refresh `execution.md`.** Keep it current for the active roadmap item:
-   phases, status, difficulty, mode, model tier, delegation basis, handoff note path,
-   and review gate. Replace it when the next substantial roadmap item starts. Do not
+3. **Plan or refresh `execution.md`.** Keep it current for the active backlog/roadmap
+   item: phases, status, difficulty, mode, model tier, delegation basis, handoff note
+   path, and review gate. Replace it when the next substantial item starts. Do not
    archive a timeline there.
 
    Execution is optional. The planning agent decides whether to use direct work,
@@ -456,6 +658,17 @@ When the goal is to validate the workflow itself, "delegated" means a distinct w
 agent/session/model actually did the implementation and left a handoff note. A handoff
 note written by the supervisor after doing the work does not satisfy the workflow test.
 
+## v2 six-lane projects (fallback)
+
+Everything above is structure-agnostic — phases, delegation judgment, handoff notes,
+and `execution.md` itself work the same regardless of whether the project uses
+`PRD.md` or the six lanes. The one structure-dependent step is reading the
+continuity at the start (Step 1): a v2 project has no `PRD.md`, so read
+`.horus/project.md`, `roadmap.md`, `features.md`, `decisions.md`, `history.md`, and
+`execution.md` instead — the original six-lane reading list, unchanged. Distilling
+durable results at closure (Step 6) likewise goes back to those lanes via
+`horus-consolidate`'s v2 path rather than into `PRD.md`.
+
 ## Boundaries
 
 - Do not force `execution.md` onto small single-agent tasks.
@@ -469,10 +682,10 @@ note written by the supervisor after doing the work does not satisfy the workflo
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 8, _CONSOLIDATE_SKILL),
-    Skill("horus-distill-history", 2, _DISTILL_HISTORY_SKILL),
-    Skill("horus-infer", 2, _INFER_SKILL),
-    Skill("horus-execution", 5, _EXECUTION_SKILL),
+    Skill("horus-consolidate", 9, _CONSOLIDATE_SKILL),
+    Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
+    Skill("horus-infer", 3, _INFER_SKILL),
+    Skill("horus-execution", 6, _EXECUTION_SKILL),
 )
 
 

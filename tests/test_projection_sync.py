@@ -50,7 +50,7 @@ def test_codex_skill_behind_marks_codex_only(tmp_path, monkeypatch):
     proj = _fully_synced_project(tmp_path, monkeypatch)
     skill_md = proj / ".agents" / "skills" / "horus-consolidate" / "SKILL.md"
     skill_md.write_text(
-        skill_md.read_text(encoding="utf-8").replace("horus-skill-version: 8", "horus-skill-version: 1"),
+        skill_md.read_text(encoding="utf-8").replace("horus-skill-version: 9", "horus-skill-version: 1"),
         encoding="utf-8",
     )
 

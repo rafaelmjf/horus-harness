@@ -397,3 +397,232 @@ def test_resume_prompt_v2_unchanged(tmp_path):
     prompt = routines.resume_prompt(tmp_path)
     assert ".horus/project.md" in prompt
     assert "PRD.md" not in prompt
+
+
+# --------------------------------------------------------------------------- #
+# consolidate — structure v3 (PRD.md + sessions/): backlog hygiene only
+# --------------------------------------------------------------------------- #
+
+_PRD_HEADER = (
+    '---\nstatus: active\ncurrent_focus: "x"\nlast_updated: {last_updated}\n---\n'
+    "# PRD\n\n## Vision\n\nA real vision paragraph about the project.\n\n"
+)
+_PRD_BACKLOG = "## Backlog\n\n{backlog}\n\n"
+_PRD_TAIL = "## Shipped\n\nOne line per capability shipped.\n\n## Rules\n\n- A real rule.\n"
+
+
+def _mk_prd_v3(root: Path, *, last_updated="2026-07-01", backlog="1. **Task one.** Do it.\n", extra_lines=0):
+    hdir = root / ".horus"
+    hdir.mkdir(parents=True, exist_ok=True)
+    body = (
+        _PRD_HEADER.format(last_updated=last_updated)
+        + _PRD_BACKLOG.format(backlog=backlog)
+        + _PRD_TAIL
+        + ("\n" * extra_lines)
+    )
+    (hdir / "PRD.md").write_text(body, encoding="utf-8")
+    return hdir
+
+
+def _mk_session(hdir: Path, name: str, date: str):
+    sessions = hdir / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    (sessions / name).write_text(f"---\ndate: {date}\nsummary: x\n---\n# s\n", encoding="utf-8")
+
+
+def _warn_msgs(findings):
+    return [m for lvl, m in _levels(findings) if lvl == "warn"]
+
+
+def test_consolidate_v3_clean_prd_has_no_warnings(tmp_path):
+    _mk_prd_v3(tmp_path)
+    findings = routines.consolidate_signals(tmp_path)
+    assert not _warn_msgs(findings)
+    assert any(f.level == "ok" for f in findings)
+
+
+def test_consolidate_v3_no_lane_routing_warnings(tmp_path):
+    # A v3 project never gets six-lane warnings, even though this PRD would trip
+    # plenty of v2 lane checks if it were mistakenly run through that path.
+    _mk_prd_v3(tmp_path)
+    findings = routines.consolidate_signals(tmp_path)
+    msgs = " ".join(f.message for f in findings)
+    assert "features.md missing" not in msgs
+    assert "overlap:" not in msgs
+    assert "roadmap↔features" not in msgs
+
+
+def test_consolidate_v3_warns_approaching_line_cap(tmp_path):
+    _mk_prd_v3(tmp_path, extra_lines=220)
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert any("approaching the ~250-line cap" in m for m in msgs)
+    assert not any("over the ~250-line cap" in m for m in msgs)
+
+
+def test_consolidate_v3_warns_over_line_cap(tmp_path):
+    _mk_prd_v3(tmp_path, extra_lines=260)
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert any("over the ~250-line cap" in m for m in msgs)
+
+
+def test_consolidate_v3_under_cap_has_no_size_warning(tmp_path):
+    _mk_prd_v3(tmp_path)
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert not any("line cap" in m for m in msgs)
+
+
+def test_consolidate_v3_warns_stale_frontmatter(tmp_path):
+    hdir = _mk_prd_v3(tmp_path, last_updated="2026-06-20")
+    _mk_session(hdir, "s1.md", "2026-07-01T10:00:00")
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert any("last_updated" in m and "newest session note" in m for m in msgs)
+
+
+def test_consolidate_v3_fresh_frontmatter_no_warning(tmp_path):
+    hdir = _mk_prd_v3(tmp_path, last_updated="2026-07-01")
+    _mk_session(hdir, "s1.md", "2026-06-20T10:00:00")
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert not any("last_updated" in m for m in msgs)
+
+
+def test_consolidate_v3_warns_too_many_undistilled_sessions(tmp_path):
+    hdir = _mk_prd_v3(tmp_path)
+    for i in range(13):
+        _mk_session(hdir, f"s{i}.md", "2026-06-01")
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert any("distill older ones to" in m and "sessions/archive" in m for m in msgs)
+
+
+def test_consolidate_v3_few_sessions_no_warning(tmp_path):
+    hdir = _mk_prd_v3(tmp_path)
+    for i in range(5):
+        _mk_session(hdir, f"s{i}.md", "2026-06-01")
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert not any("distill older ones to" in m for m in msgs)
+
+
+def test_consolidate_v3_archived_sessions_excluded_from_count(tmp_path):
+    hdir = _mk_prd_v3(tmp_path)
+    (hdir / "sessions" / "archive").mkdir(parents=True)
+    for i in range(20):
+        (hdir / "sessions" / "archive" / f"a{i}.md").write_text("x", encoding="utf-8")
+    for i in range(3):
+        _mk_session(hdir, f"s{i}.md", "2026-06-01")
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert not any("distill older ones to" in m for m in msgs)
+
+
+def test_consolidate_v3_warns_duplicate_backlog_titles(tmp_path):
+    _mk_prd_v3(
+        tmp_path,
+        backlog=(
+            "1. **Ship the widget.** Do it.\n"
+            "2. **Other thing:** blah.\n"
+            "3. **ship the widget** again, differently worded.\n"
+        ),
+    )
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert any("duplicate backlog title" in m and "ship the widget" in m.lower() for m in msgs)
+
+
+def test_consolidate_v3_distinct_backlog_titles_no_warning(tmp_path):
+    _mk_prd_v3(
+        tmp_path,
+        backlog="1. **Ship the widget.** Do it.\n2. **Ship the gadget.** Do it too.\n",
+    )
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert not any("duplicate backlog title" in m for m in msgs)
+
+
+def test_consolidate_v3_warns_lingering_checked_item(tmp_path):
+    _mk_prd_v3(
+        tmp_path,
+        backlog="- [x] **Old task.** Already shipped.\n- [ ] **Open task.** Still pending.\n",
+    )
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert any("Old task" in m and "delete it" in m for m in msgs)
+    assert not any("Open task" in m and "delete it" in m for m in msgs)
+
+
+def test_consolidate_v3_warns_lingering_done_prefix(tmp_path):
+    _mk_prd_v3(
+        tmp_path,
+        backlog="1. DONE: ship the thing.\n2. Done: another one.\n3. Still open work.\n",
+    )
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert sum("delete it" in m for m in msgs) == 2
+    assert not any("Still open work" in m for m in msgs)
+
+
+def test_consolidate_v3_result_pass_continuation_is_not_a_done_marker(tmp_path):
+    # A "**Result ... PASS**" line inside an item, without its own list marker, is a
+    # wrapped continuation of the item above — not a separate done item.
+    _mk_prd_v3(
+        tmp_path,
+        backlog=(
+            "1. **Big feature.** Long description spanning more than one line.\n"
+            "   **Result (rerun 2026-07-03): PASS.** Zero failure flags.\n"
+        ),
+    )
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    assert not any("delete it" in m for m in msgs)
+
+
+def test_consolidate_v2_still_unchanged_after_v3_branch_added(tmp_path):
+    # Sanity: the v2 path (no PRD.md) still exercises the original lane-routing
+    # signals, unaffected by the new v3 branch.
+    _mk_horus(
+        tmp_path,
+        roadmap_body="# Roadmap\n\n## Now\n\n- [ ] parquet export compaction to prod\n",
+        features_body="## Planned\n\n| Capability | Notes |\n|---|---|\n| parquet export compaction | x |\n",
+    )
+    findings = routines.consolidate_signals(tmp_path)
+    overlaps = [f for f in findings if f.message.startswith("overlap:")]
+    assert len(overlaps) == 1
+
+
+# --------------------------------------------------------------------------- #
+# infer — structure v3: report PRD skeleton gaps instead of six-lane placeholders
+# --------------------------------------------------------------------------- #
+
+def test_infer_v3_reports_prd_skeleton_gaps(tmp_path):
+    (tmp_path / "README.md").write_text("# real project\n\ndoes things\n", encoding="utf-8")
+    _mk_prd_v3(tmp_path)
+    hdir = tmp_path / ".horus"
+    # Overwrite with a placeholder Vision and a missing Rules section.
+    (hdir / "PRD.md").write_text(
+        '---\nstatus: active\nlast_updated: 2026-07-01\n---\n# PRD\n\n'
+        "## Vision\n\nTODO describe the vision.\n\n"
+        "## Backlog\n\n1. **Task.** Do it.\n\n"
+        "## Shipped\n\nOne line per capability.\n",
+        encoding="utf-8",
+    )
+    msgs = " ".join(f.message for f in routines.infer_signals(tmp_path))
+    assert "PRD skeleton section(s) empty/placeholder" in msgs
+    assert "Vision" in msgs
+    assert "Rules" in msgs
+    assert "canonical docs above" in msgs
+
+
+def test_infer_v3_all_sections_populated(tmp_path):
+    (tmp_path / "README.md").write_text("# real project\n\ndoes things\n", encoding="utf-8")
+    _mk_prd_v3(tmp_path)
+    msgs = " ".join(f.message for f in routines.infer_signals(tmp_path))
+    assert "PRD skeleton sections" in msgs and "populated" in msgs
+    assert "placeholder/empty lanes" not in msgs
+
+
+def test_infer_v2_unaffected_by_v3_branch(tmp_path):
+    from horus import templates
+
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "project.md").write_text(templates.project_md("p", "2026-01-01"), encoding="utf-8")
+    (hdir / "roadmap.md").write_text(templates.roadmap_md("2026-01-01"), encoding="utf-8")
+    (hdir / "features.md").write_text(templates.features_md("2026-01-01"), encoding="utf-8")
+    (hdir / "history.md").write_text(templates.history_md("2026-01-01"), encoding="utf-8")
+    (tmp_path / "README.md").write_text("# real project\n\ndoes things\n", encoding="utf-8")
+
+    msgs = " ".join(f.message for f in routines.infer_signals(tmp_path))
+    assert "placeholder/empty lanes" in msgs
+    assert "PRD skeleton" not in msgs
