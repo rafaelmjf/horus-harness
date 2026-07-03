@@ -62,13 +62,20 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    from `.horus/` only. Baseline 2026-07-03, v2 measured at its freshly-consolidated
    best (commit 5f81c40): v3 = 4 files, ~17 KB, 5/5 correct; v2 = 6 files, ~145 KB,
    5/5 correct — equal quality at ~1/8 the context.
-2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
+2. **Background-worker visibility.** Headless `horus run` workers (especially
+   cross-agent Codex) are invisible outside the invoking transcript; a hub session's
+   own closure can silently not happen (2026-07-03 orphaned closure). Tee the adapter
+   event stream to a per-session log, add `horus tail <session-id>` to follow it, and
+   have `horus run --watch` spawn a watcher terminal via the existing
+   `launcher.open_terminal` (CREATE_NEW_CONSOLE on Windows); consider default-on for
+   cross-agent workers + a mascot "N workers live" badge (ties into Companion signals).
+3. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
-3. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
+4. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
    + `horus upgrade-project --all`; eyeball the mascot failure dialog + Skills tab on a
    desktop session; confirm VS Code task keybindings work under Flatpak.
-4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
+5. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
 
@@ -148,7 +155,9 @@ dedup + Track-on-this-machine · ignore/unignore · `horus start github:…`.
 via `CLAUDE_CONFIG_DIR`/`CODEX_HOME`) · `run`/`open`/`focus` · execution workflow
 (`execution prompt`/`handoff`, delegation rubric volume×ambiguity×runtime) · cross-agent
 worker marking: per-phase `worker_agent` (native/claude/codex) in template + skill v5,
-spawned via `horus run --agent codex`, proven live 2026-07-03 · in-app PTY
+spawned via `horus run --agent codex`, proven live 2026-07-03 · hub-orchestrated
+cross-project delegation proven (ttrpg Phase 2 shipped from a horus-harness hub
+session, 2026-07-03) · in-app PTY
 cockpit **retired 2026-06-30** (code dormant; launch/usage moved to Projects tab).
 
 **Companion & launch:** Tk mascot (windowless on Windows, layered background on Linux) ·
