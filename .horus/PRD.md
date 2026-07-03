@@ -204,7 +204,9 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   installed CLI, never surfaces to each other.
 - **Every release:** cut promptly after meaningful merges; install smoke on all three
   OSes; tests on the `requires-python` floor (uv provisions it — floor tracks uv, not
-  distro pythons).
+  distro pythons). The bump is **three files together** — `pyproject.toml` +
+  `horus/__init__.py` + `uv.lock` — each missed once (0.0.15, 0.0.19-broken); rerun
+  the suite *after* the bump (the stale-build guard test catches a skew).
 - **Dashboard contract:** read-mostly; every form POST is PRG; heavy/network panels load
   async, never in the page paint; a stale-build server never writes artifacts; empty
   nudge fragments return empty (no false "all clear").
