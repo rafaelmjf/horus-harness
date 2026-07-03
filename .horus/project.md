@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "PRD-structure prototype live (2026-07-03), acceptance test running: this repo on v3, gym-coach+ttrpg six-lane controls (each +1 worker session today). v0.0.17 on PyPI: worker badge on the mascot (v0.0.16) + Live-sessions Reviewed dismiss (v0.0.17); hub-orchestrated Codex delegation proven — supervisor owns gates/commit (worker sandbox: read-only .git, no sockets); 645 tests green."
+current_focus: "v0.0.18 on PyPI: worker badge, Reviewed-dismiss, per-run logs + horus tail + run --watch. Supervisor-only hub round proven (3 parallel workers, mixed codex/claude accounts). Structure test has enough data; analysis is next. 656 tests green."
 last_updated: 2026-07-03
 ---
 

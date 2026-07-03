@@ -62,11 +62,10 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    from `.horus/` only. Baseline 2026-07-03, v2 measured at its freshly-consolidated
    best (commit 5f81c40): v3 = 4 files, ~17 KB, 5/5 correct; v2 = 6 files, ~145 KB,
    5/5 correct — equal quality at ~1/8 the context.
-2. **Background-worker visibility, watcher-window slice.** The mascot badge shipped
-   (PR #91); still open: tee the adapter event stream to a per-session log, add
-   `horus tail <session-id>` to follow it, and have `horus run --watch` spawn a
-   watcher terminal via the existing `launcher.open_terminal` (CREATE_NEW_CONSOLE
-   on Windows); consider default-on for cross-agent workers.
+2. **[bug] Claude adapter marks a completed run `failed` with rc=0** — seen
+   2026-07-03: a claude/work full-auto worker delivered its full result, registry
+   row ended `failed` + `returncode 0` (and `horus run` exited 1). Status mapping
+   in the claude adapter's stream-end handling is suspect. Small, delegable.
 3. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
@@ -156,7 +155,9 @@ via `CLAUDE_CONFIG_DIR`/`CODEX_HOME`) · `run`/`open`/`focus` · execution workf
 worker marking: per-phase `worker_agent` (native/claude/codex) in template + skill v5,
 spawned via `horus run --agent codex`, proven live 2026-07-03 · hub-orchestrated
 cross-project delegation proven (ttrpg Phase 2 shipped from a horus-harness hub
-session, 2026-07-03) · in-app PTY
+session, 2026-07-03) · per-run logs (`~/.horus/logs/runs/`) + `horus tail
+<session-id>` + `run --watch` watcher terminal, built by a delegated claude/work
+worker via branch+PR (v0.0.18) · in-app PTY
 cockpit **retired 2026-06-30** (code dormant; launch/usage moved to Projects tab).
 
 **Companion & launch:** Tk mascot (windowless on Windows, layered background on Linux) ·
