@@ -51,16 +51,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    `infer`/skills rewritten for the new shape; dashboard renders PRD sections; migrate
    agentic-gym-coach + agentic-ttrpg via `upgrade-project`. Closure contract becomes:
    update PRD (focus/backlog/shipped) + session note + commit.
-2. **[bug] `integrate()` leaves the clone on the `horus/chore-…` branch** after pushing —
-   switch back to the default branch (seen live in agentic-gym-coach; default branch may
-   be `master`, never hardcode `main`).
-3. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
+2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
-4. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
+3. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
    + `horus upgrade-project --all`; eyeball the mascot failure dialog + Skills tab on a
    desktop session; confirm VS Code task keybindings work under Flatpak.
-5. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
+4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
 
@@ -132,8 +129,9 @@ surfacing (v0.0.12).
 
 **GitHub bridge:** remote catalog (`discover github`, cached snapshots, incremental
 refresh) · onboard `github:owner/repo` (clone→init→integrate via workflow policy) ·
-integrate() direct-merge fallback for free-plan private repos (v0.0.12) · catalog dedup +
-Track-on-this-machine · ignore/unignore · `horus start github:…`.
+integrate() direct-merge fallback for free-plan private repos (v0.0.12) · integrate()
+returns the clone to the default branch once the branch is pushed (v0.0.14) · catalog
+dedup + Track-on-this-machine · ignore/unignore · `horus start github:…`.
 
 **Execution & adapters:** adapter contract + Fake/Claude/Codex adapters (multi-account
 via `CLAUDE_CONFIG_DIR`/`CODEX_HOME`) · `run`/`open`/`focus` · execution workflow
