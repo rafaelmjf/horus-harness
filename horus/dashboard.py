@@ -74,6 +74,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         "next_prompt": "",
         "tagline": "",
         "project_body": "",
+        "prd": {},
         "roadmap_body": "",
         "features_body": "",
         "execution_body": "",
@@ -119,6 +120,9 @@ def load_project(path_str: str) -> dict[str, Any]:
         if prd_doc is not None:
             data["project_body"] = prd_doc.body
             data["tagline"] = _first_paragraph(prd_doc.body)
+
+    if frontmatter.has_prd(root):
+        data["prd"] = _prd_dashboard_data(frontmatter.prd_path(root))
 
     roadmap_md = hdir / "roadmap.md"
     if roadmap_md.is_file():
@@ -199,6 +203,60 @@ def load_project(path_str: str) -> dict[str, Any]:
     data["projection_sync"] = projection_sync.sync_state(root)
 
     return data
+
+
+_PRD_BACKLOG_NOW_HEADING = "Now / next candidates"
+
+
+def _prd_backlog_now_items(now_body: str) -> list[dict[str, str]]:
+    """Title + compact first-sentence detail for each 'Now / next candidates' item,
+    reusing routines' backlog-item parsing (phase 3) rather than re-parsing markdown."""
+    items = []
+    for raw in routines._backlog_item_texts(now_body):
+        cb = routines._CHECKBOX_RE.match(raw)
+        text = cb.group(2) if cb else raw
+        title = routines._item_title(text)
+        remainder = routines._BOLD_TITLE_RE.sub("", text, count=1) if title else text
+        items.append({
+            "title": markdown.plain_text(title) if title else "",
+            "detail": markdown.first_sentence(markdown.plain_text(remainder)),
+        })
+    return items
+
+
+def _prd_dashboard_data(prd_path: Path) -> dict[str, Any]:
+    """Backlog top items/counts, shipped count+latest, and the line-budget meter for
+    a v3 project's PRD.md — rendered by the detail page alongside the already
+    PRD-first focus/NEXT fields (`frontmatter.resolve_focus`)."""
+    prd_text = prd_path.read_text(encoding="utf-8")
+    body = frontmatter.parse(prd_text).body
+
+    backlog_body = routines._section(body, "Backlog")
+    now_body = markdown.subsection(backlog_body, _PRD_BACKLOG_NOW_HEADING)
+    other_counts = {
+        heading: len(routines._backlog_item_texts(markdown.subsection(backlog_body, heading)))
+        for heading in markdown.subsection_headings(backlog_body)
+        if heading.strip().lower() != _PRD_BACKLOG_NOW_HEADING.lower()
+    }
+
+    shipped_count, shipped_latest = markdown.shipped_summary(routines._section(body, "Shipped"))
+
+    line_count = len(prd_text.splitlines())
+    if line_count > routines._PRD_HARD_CAP:
+        line_class = "over"
+    elif line_count > routines._PRD_SOFT_CAP:
+        line_class = "warn"
+    else:
+        line_class = "ok"
+
+    return {
+        "backlog_now": _prd_backlog_now_items(now_body)[:10],
+        "backlog_other_counts": other_counts,
+        "shipped_count": shipped_count,
+        "shipped_latest": shipped_latest,
+        "line_count": line_count,
+        "line_class": line_class,
+    }
 
 
 def gather_projects() -> list[dict[str, Any]]:
@@ -1891,11 +1949,70 @@ def _projection_sync_badge_html(p: dict[str, Any]) -> str:
     return "<span class='muted' style='font-size:12px'>sync unknown</span>"
 
 
+_PRD_LINE_BUDGET_CLASS = {"ok": "health-ok", "warn": "health-warn", "over": "health-fail"}
+
+
+def _prd_line_budget_html(prd: dict[str, Any]) -> str:
+    """Header badge: PRD.md line count vs the ~250-line cap (routines' soft/hard caps)."""
+    if not prd:
+        return ""
+    cls = _PRD_LINE_BUDGET_CLASS.get(prd.get("line_class", "ok"), "health-ok")
+    return (
+        f"<span class='badge'><span class='{cls}'>&#9679;</span> "
+        f"PRD {prd.get('line_count', 0)}/{routines._PRD_HARD_CAP} lines</span>"
+    )
+
+
+def _prd_backlog_panel_html(prd: dict[str, Any]) -> str:
+    """Top 'Now / next candidates' items (title + compact detail) plus counts for
+    the other backlog subsections — never a full dump of the whole backlog."""
+    now_items = prd.get("backlog_now") or []
+    other_counts = prd.get("backlog_other_counts") or {}
+    if not now_items and not other_counts:
+        body = "<p class='muted' style='font-size:13px'>Backlog is empty.</p>"
+    else:
+        rows = "".join(
+            f"<li><b>{html.escape(item['title'])}</b> {html.escape(item['detail'])}</li>"
+            if item["title"] else f"<li>{html.escape(item['detail'])}</li>"
+            for item in now_items
+        ) or "<li class='muted'>No 'Now / next candidates' items.</li>"
+        counts = " &middot; ".join(
+            f"{html.escape(name)} ({n})" for name, n in other_counts.items()
+        )
+        counts_html = f"<p class='muted' style='font-size:12px;margin-top:10px'>{counts}</p>" if counts else ""
+        body = f"<ul class='checklist' style='margin-top:2px'>{rows}</ul>{counts_html}"
+    return (
+        "<div class='panel' id='backlog'><div class='ph'><span class='eyebrow'>Backlog - next candidates</span>"
+        f"<span class='x mono'>.horus/{frontmatter.PRD_FILE}</span></div>{body}</div>"
+    )
+
+
+def _prd_shipped_panel_html(prd: dict[str, Any]) -> str:
+    """Shipped capability count + the latest entry as a one-liner (details in git
+    history, per the PRD's own Shipped section note)."""
+    count = prd.get("shipped_count", 0)
+    latest = prd.get("shipped_latest", "")
+    if not count:
+        body = "<p class='muted' style='font-size:13px'>Nothing shipped yet.</p>"
+    else:
+        plural = "capability" if count == 1 else "capabilities"
+        latest_html = (
+            f"<p class='muted' style='font-size:12.5px;margin-top:8px'>{html.escape(latest)}</p>"
+            if latest else ""
+        )
+        body = f"<p class='lead' style='font-size:14px'><b>{count}</b> {plural} shipped</p>{latest_html}"
+    return (
+        "<div class='panel' id='shipped'><div class='ph'><span class='eyebrow'>Shipped</span>"
+        f"<span class='x mono'>.horus/{frontmatter.PRD_FILE}</span></div>{body}</div>"
+    )
+
+
 def render_project(p: dict[str, Any], *, index: int | None = None, notice: str = "") -> str:
     idx = 0 if index is None else index
     git = p.get("git") or {}
     branch = html.escape(git.get("branch") or "-")
     git_state = "clean" if not git.get("dirty") else "uncommitted"
+    prd = p.get("prd") or {}
     status_badges = (
         f"<span class='branch'>branch {branch}</span>"
         f"<span class='muted'>- {git_state}</span>"
@@ -1903,19 +2020,30 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
         f"<span class='badge'>status {html.escape(p['status']) or 'unknown'}</span>"
         f"<span class='badge'><b class='mono'>{len(p['sessions'])}</b>&nbsp;sessions</span>"
         f"{_projection_sync_badge_html(p)}"
+        f"{_prd_line_budget_html(prd)}"
     )
     refresh = _upgrade_button(idx) if p.get("artifacts_stale") and index is not None else ""
     aliases = [{"alias": a} for a in sorted(_known_aliases())]
     focus = html.escape(p.get("current_focus") or p.get("tagline") or "No current focus recorded yet.")
+    focus_source = frontmatter.PRD_FILE if prd else "project.md"
+    next_source = frontmatter.PRD_FILE if prd else "roadmap.md"
     roadmap_progress = _road_progress_html(p, href="#roadmap")
     main_parts = [
-        "<div class='panel'><div class='ph'><span class='eyebrow'>Current focus</span><span class='x mono'>.horus/project.md</span></div>"
+        f"<div class='panel'><div class='ph'><span class='eyebrow'>Current focus</span><span class='x mono'>.horus/{focus_source}</span></div>"
         f"<p class='lead'>{focus}</p></div>",
-        "<div class='panel' id='roadmap'><div class='ph'><span class='eyebrow'>Roadmap - next</span><span class='x mono'>.horus/roadmap.md</span></div>"
+        "<div class='panel' id='roadmap'><div class='ph'><span class='eyebrow'>Roadmap - next</span>"
+        f"<span class='x mono'>.horus/{next_source}</span></div>"
         f"{_single_next_html(p)}{roadmap_progress}</div>",
-        "<div class='panel' id='features'><div class='ph'><span class='eyebrow'>Features ledger</span><span class='x mono'>.horus/features.md</span></div>"
-        f"{_feature_buckets_detail_html(p)}</div>",
     ]
+    if prd:
+        main_parts.append(_prd_backlog_panel_html(prd))
+        main_parts.append(_prd_shipped_panel_html(prd))
+    if p.get("features_body"):
+        main_parts.append(
+            "<div class='panel' id='features'><div class='ph'><span class='eyebrow'>Features ledger</span>"
+            "<span class='x mono'>.horus/features.md</span></div>"
+            f"{_feature_buckets_detail_html(p)}</div>"
+        )
     if p.get("artifacts_stale"):
         main_parts.append(
             "<div class='panel'><div class='ph'><span class='eyebrow'>Artifacts outdated</span></div>"

@@ -40,6 +40,102 @@ def _is_table_separator(line: str) -> bool:
     return bool(cells) and all(_TABLE_SEP_CELL.match(c) for c in cells)
 
 
+_LIST_MARKER_RE = re.compile(r"^(?:[-*]|\d+\.)\s+")
+_BOLD_MARK_RE = re.compile(r"\*\*|__")
+_SENTENCE_END_RE = re.compile(r"[.!?]$")
+
+
+def subsection(body: str, heading: str) -> str:
+    """Body of a third-level (`### `) markdown section within a section body, until
+    the next `### ` or `## ` heading. Mirrors `routines._section` one level deeper."""
+    lines = body.splitlines()
+    start = None
+    target = f"### {heading}".lower()
+    for i, line in enumerate(lines):
+        if line.strip().lower() == target:
+            start = i + 1
+            break
+    if start is None:
+        return ""
+    end = len(lines)
+    for i in range(start, len(lines)):
+        s = lines[i].strip()
+        if s.startswith("### ") or s.startswith("## "):
+            end = i
+            break
+    return "\n".join(lines[start:end])
+
+
+def subsection_headings(body: str) -> list[str]:
+    """Third-level (`### `) heading titles at the top of a markdown section body,
+    in document order."""
+    return [line.strip()[4:].strip() for line in body.splitlines() if line.strip().startswith("### ")]
+
+
+def plain_text(text: str) -> str:
+    """Strip markdown emphasis/code markers and collapse whitespace to one line."""
+    text = _BOLD_MARK_RE.sub("", text)
+    text = _INLINE_CODE.sub(r"\1", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def first_sentence(text: str, max_len: int = 160) -> str:
+    """The first sentence of ``text``, or a hard cutoff at ``max_len`` — always
+    ending in an ellipsis when the source was truncated (including when the text
+    itself was a hard-wrapped continuation line with no terminal punctuation)."""
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return ""
+    m = re.match(r"(.{1,%d}?[.!?])(?:\s|$)" % max_len, text)
+    candidate = m.group(1) if m else text
+    if len(candidate) > max_len:
+        return candidate[: max_len - 1].rstrip() + "…"
+    if not _SENTENCE_END_RE.search(candidate):
+        return candidate + "…"
+    return candidate
+
+
+def shipped_summary(section_body: str) -> tuple[int, str]:
+    """Count shipped entries in a PRD `## Shipped` section body and return the
+    latest one as a plain one-liner. Prefers distinct bullet lines (wrap-tolerant);
+    falls back to bold-prefixed paragraph blocks (this repo's live PRD groups
+    capabilities under `**Category:**` paragraphs rather than one bullet each)."""
+    text = section_body.strip()
+    if not text:
+        return 0, ""
+
+    bullets: list[str] = []
+    current: list[str] = []
+
+    def flush() -> None:
+        if current:
+            bullets.append(" ".join(current))
+            current.clear()
+
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if _LIST_MARKER_RE.match(stripped):
+            flush()
+            current.append(_LIST_MARKER_RE.sub("", stripped, count=1))
+        elif not stripped:
+            flush()
+        elif current:
+            current.append(stripped)
+    flush()
+
+    if bullets:
+        return len(bullets), plain_text(bullets[-1])
+
+    bold_blocks = [
+        joined
+        for block in re.split(r"\n\s*\n", text)
+        if (joined := " ".join(l.strip() for l in block.splitlines() if l.strip())).startswith("**")
+    ]
+    if bold_blocks:
+        return len(bold_blocks), plain_text(bold_blocks[-1])
+    return 0, ""
+
+
 def render(md: str) -> str:
     out: list[str] = []
     para: list[str] = []

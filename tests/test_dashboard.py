@@ -2132,3 +2132,157 @@ def test_load_project_v3_prd_frontmatter_populates_next(tmp_path, monkeypatch):
     # Without a project.md shim the PRD body doubles as the project narrative.
     assert "product narrative" in data["project_body"]
     assert "product narrative" in data["tagline"]
+
+
+_PRD_BACKLOG_SHIPPED_FIXTURE = """---
+status: active
+current_focus: "x"
+next_action: "y"
+last_updated: 2026-07-03
+---
+
+# Demo - PRD
+
+## Backlog
+
+Prioritized open work.
+
+### Now / next candidates
+
+1. **First thing.** Do the first thing because it matters a lot for users everywhere.
+2. **Second thing:** short detail here.
+
+### Open, unscheduled
+
+- Idea one.
+- Idea two.
+- Idea three.
+
+### Deferred
+
+- Someday maybe.
+
+## Shipped
+
+One line per capability; details live in git history.
+
+- **Widget engine** shipped in 0.1.
+- **Gadget engine** shipped in 0.2.
+
+## Rules (load-bearing)
+
+- **Some rule** - because reasons.
+"""
+
+
+def test_load_project_v3_parses_prd_backlog_and_shipped(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    (tmp_path / ".horus" / "PRD.md").write_text(_PRD_BACKLOG_SHIPPED_FIXTURE, encoding="utf-8")
+
+    prd = dashboard.load_project(str(tmp_path))["prd"]
+
+    assert [item["title"] for item in prd["backlog_now"]] == ["First thing", "Second thing"]
+    assert prd["backlog_now"][0]["detail"] == "Do the first thing because it matters a lot for users everywhere."
+    assert prd["backlog_other_counts"] == {"Open, unscheduled": 3, "Deferred": 1}
+    assert prd["shipped_count"] == 2
+    assert prd["shipped_latest"] == "Gadget engine shipped in 0.2."
+    assert prd["line_count"] == len(_PRD_BACKLOG_SHIPPED_FIXTURE.splitlines())
+    assert prd["line_class"] == "ok"
+
+
+def _prd_padded_to(total_lines: int) -> str:
+    header = [
+        "---", "status: active", "last_updated: 2026-07-03", "---",
+        "# Demo - PRD", "", "## Backlog", "", "### Now / next candidates", "",
+        "## Shipped", "", "## Rules (load-bearing)", "",
+    ]
+    filler = [f"filler line {i}" for i in range(max(0, total_lines - len(header)))]
+    return "\n".join((header + filler)[:total_lines]) + "\n"
+
+
+def test_prd_line_budget_thresholds_match_routines_caps(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    prd_path = tmp_path / ".horus" / "PRD.md"
+
+    prd_path.write_text(_prd_padded_to(235), encoding="utf-8")
+    assert dashboard.load_project(str(tmp_path))["prd"]["line_class"] == "ok"
+
+    prd_path.write_text(_prd_padded_to(236), encoding="utf-8")
+    assert dashboard.load_project(str(tmp_path))["prd"]["line_class"] == "warn"
+
+    prd_path.write_text(_prd_padded_to(250), encoding="utf-8")
+    assert dashboard.load_project(str(tmp_path))["prd"]["line_class"] == "warn"
+
+    prd_path.write_text(_prd_padded_to(251), encoding="utf-8")
+    assert dashboard.load_project(str(tmp_path))["prd"]["line_class"] == "over"
+
+
+def test_project_detail_renders_prd_backlog_shipped_and_line_meter(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    (tmp_path / ".horus" / "PRD.md").write_text(_PRD_BACKLOG_SHIPPED_FIXTURE, encoding="utf-8")
+
+    data = dashboard.load_project(str(tmp_path))
+    det = dashboard.render_project(data, index=0)
+
+    assert "id='backlog'" in det and "id='shipped'" in det
+    assert "First thing" in det and "Second thing" in det
+    assert "Open, unscheduled (3)" in det and "Deferred (1)" in det
+    assert "<b>2</b> capabilities shipped" in det
+    assert "Gadget engine shipped in 0.2." in det
+    assert "/250 lines" in det  # line-budget badge in the detail header
+    assert "id='features'" not in det  # no legacy features.md in a pure v3 project
+
+
+def test_project_detail_v2_project_unchanged(tmp_path, monkeypatch):
+    """A v2 (six-lane) project must render exactly as before phase 4: no PRD
+    backlog/shipped/meter panels, legacy Features ledger panel intact."""
+    _init(tmp_path, monkeypatch)
+    hdir = tmp_path / ".horus"
+    hdir.mkdir(parents=True)
+    (hdir / "project.md").write_text(
+        '---\nproject: demo\nstatus: active\ncurrent_focus: "v2 focus"\n---\n# demo\n\nNarrative.\n',
+        encoding="utf-8",
+    )
+    initialize.init_project(tmp_path, assume_yes=True)  # scaffolds the rest of the six lanes
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["prd"] == {}
+
+    det = dashboard.render_project(data, index=0)
+    assert "id='backlog'" not in det and "id='shipped'" not in det
+    assert "/250 lines" not in det  # no PRD line-budget badge
+    assert "id='features'" in det  # legacy Features ledger panel still renders
+    assert "id='roadmap'" in det
+    assert ".horus/project.md" in det  # current-focus caption unchanged
+    assert ".horus/roadmap.md" in det  # roadmap-next caption unchanged
+    assert "v2 focus" in det
+
+
+def test_projects_grid_fragment_renders_v3_and_v2_projects(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    v3 = tmp_path / "v3"
+    initialize.init_project(v3, assume_yes=True)
+    (v3 / ".horus" / "PRD.md").write_text(_PRD_BACKLOG_SHIPPED_FIXTURE, encoding="utf-8")
+
+    v2 = tmp_path / "v2"
+    hdir = v2 / ".horus"
+    hdir.mkdir(parents=True)
+    (hdir / "project.md").write_text(
+        '---\nproject: demo\nstatus: active\ncurrent_focus: "v2 focus"\n---\n# demo\n\nNarrative.\n',
+        encoding="utf-8",
+    )
+    initialize.init_project(v2, assume_yes=True)
+
+    response = _get("/projects-grid")
+
+    assert response["status"] == 200
+    body = response["body"].decode("utf-8")
+    assert "2 projects under watch" in body
+    assert "v3" in body and "v2" in body
+    assert "v2 focus" in body
+    assert "NEXT ACTION" in body and ">y<" in body
+    assert "id='backlog'" not in body
+    assert "/250 lines" not in body
