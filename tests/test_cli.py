@@ -122,9 +122,11 @@ def test_session_new_records_alias_not_email(tmp_path, monkeypatch):
 def test_execution_prompt_uses_roadmap_and_target(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes", "--no-skills"])
-    (tmp_path / ".horus" / "roadmap.md").write_text(
+    # Fresh init scaffolds structure v3 (PRD.md); the focus/handoff fields are
+    # PRD-first, so author them there rather than in a (now absent) roadmap.md.
+    (tmp_path / ".horus" / "PRD.md").write_text(
         '---\nnext_action: "Implement phase routing"\n'
-        'execution_recommendation: "plan-execution - cross-module work"\n---\n# Roadmap\n',
+        'execution_recommendation: "plan-execution - cross-module work"\n---\n# PRD\n',
         encoding="utf-8",
     )
     (tmp_path / ".horus" / "execution.md").write_text(
@@ -683,13 +685,12 @@ def test_start_cli_requires_workspace_when_saving_root(tmp_path, monkeypatch, ca
 def test_resume_cli_prints_minimum_context_handoff(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes", "--no-skills"])
-    (tmp_path / ".horus" / "project.md").write_text(
-        '---\ncurrent_focus: "Tighten resume flow"\n---\n# Project\n',
-        encoding="utf-8",
-    )
-    (tmp_path / ".horus" / "roadmap.md").write_text(
-        '---\nnext_action: "Ship horus resume"\nnext_prompt: "Implement the resume command."\n'
-        'execution_recommendation: "plan-execution - small cross-surface change"\n---\n# Roadmap\n',
+    # Fresh init scaffolds structure v3 (PRD.md); the focus/handoff fields are
+    # PRD-first, so author them there rather than in the (now absent) v2 shims.
+    (tmp_path / ".horus" / "PRD.md").write_text(
+        '---\ncurrent_focus: "Tighten resume flow"\n'
+        'next_action: "Ship horus resume"\nnext_prompt: "Implement the resume command."\n'
+        'execution_recommendation: "plan-execution - small cross-surface change"\n---\n# PRD\n',
         encoding="utf-8",
     )
     (tmp_path / ".horus" / "execution.md").write_text(

@@ -1,6 +1,6 @@
 """Tests for `horus init` scaffolding behavior (no-clobber, block injection)."""
 
-from horus import initialize
+from horus import closure, initialize
 from horus.continuity import check_project
 from horus.instructions import extract_block
 
@@ -13,12 +13,14 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     actions = initialize.init_project(tmp_path, assume_yes=True)
     statuses = {a.message: a.status for a in actions}
 
-    assert (tmp_path / ".horus" / "project.md").exists()
-    assert (tmp_path / ".horus" / "roadmap.md").exists()
-    assert (tmp_path / ".horus" / "decisions.md").exists()
-    assert (tmp_path / ".horus" / "features.md").exists()
-    assert (tmp_path / ".horus" / "execution.md").exists()
-    assert (tmp_path / ".horus" / "history.md").exists()
+    # A fresh project gets structure v3: PRD.md + sessions/, not the six v2 lanes.
+    assert (tmp_path / ".horus" / "PRD.md").exists()
+    assert not (tmp_path / ".horus" / "project.md").exists()
+    assert not (tmp_path / ".horus" / "roadmap.md").exists()
+    assert not (tmp_path / ".horus" / "decisions.md").exists()
+    assert not (tmp_path / ".horus" / "features.md").exists()
+    assert not (tmp_path / ".horus" / "execution.md").exists()
+    assert not (tmp_path / ".horus" / "history.md").exists()
     assert (tmp_path / ".horus" / "sessions").is_dir()
     assert (tmp_path / ".horus" / "sessions" / ".gitkeep").exists()
     assert (tmp_path / ".horus" / "temp").is_dir()
@@ -36,6 +38,75 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     # complete surface at once (they used to arrive later and land untracked).
     assert (tmp_path / ".claude" / "settings.json").exists()
     assert (tmp_path / ".codex" / "hooks.json").exists()
+
+
+def test_init_fresh_prd_scaffold_passes_close_check(tmp_path, monkeypatch):
+    """A freshly scaffolded PRD.md must clear the freshness gate immediately —
+    its bootstrap frontmatter values are non-empty (no session exists yet to be
+    stale against)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    initialize.init_project(tmp_path, assume_yes=True)
+    findings = closure.freshness_gate(tmp_path)
+    assert not any(f.level in ("warn", "fail") for f in findings)
+
+
+def test_init_on_existing_v2_project_unchanged(tmp_path, monkeypatch):
+    """`init` on a project already carrying the six v2 lanes (marked by project.md,
+    no PRD.md) must keep scaffolding those lanes, never switch it to v3."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    hdir = tmp_path / ".horus"
+    hdir.mkdir(parents=True)
+    (hdir / "project.md").write_text(
+        '---\nproject: demo\nstatus: planning\ncurrent_focus: "hand-authored"\n---\n# demo\n',
+        encoding="utf-8",
+    )
+
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    assert not (hdir / "PRD.md").exists()
+    assert (hdir / "roadmap.md").exists()
+    assert (hdir / "features.md").exists()
+    assert (hdir / "decisions.md").exists()
+    assert (hdir / "history.md").exists()
+    assert (hdir / "execution.md").exists()
+    # never-clobber: the hand-authored project.md is untouched.
+    assert "hand-authored" in (hdir / "project.md").read_text(encoding="utf-8")
+
+
+def test_init_on_existing_v3_project_never_creates_six_lanes(tmp_path, monkeypatch):
+    """`init` on a project already carrying PRD.md must never overwrite it and
+    must never scaffold the six v2 lanes alongside it."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    hdir = tmp_path / ".horus"
+    hdir.mkdir(parents=True)
+    (hdir / "PRD.md").write_text(
+        '---\nstatus: active\ncurrent_focus: "hand-authored"\n---\n# PRD\n', encoding="utf-8"
+    )
+
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    assert "hand-authored" in (hdir / "PRD.md").read_text(encoding="utf-8")
+    for lane in ("project.md", "roadmap.md", "features.md", "decisions.md", "history.md", "execution.md"):
+        assert not (hdir / lane).exists()
+
+
+def test_init_v3_scaffold_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    initialize.init_project(tmp_path, assume_yes=True)
+    before = (tmp_path / ".horus" / "PRD.md").read_text(encoding="utf-8")
+    actions = initialize.init_project(tmp_path, assume_yes=True)
+    after = (tmp_path / ".horus" / "PRD.md").read_text(encoding="utf-8")
+
+    assert before == after
+    assert any(a.status == "exists" and "PRD.md" in a.message for a in actions)
 
 
 def test_init_no_hooks_skips_hook_files(tmp_path, monkeypatch):

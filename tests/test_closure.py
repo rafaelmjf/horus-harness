@@ -123,19 +123,21 @@ def _setup_two_clones(tmp_path, monkeypatch):
 
 def test_push_refused_when_remote_lanes_newer(tmp_path, monkeypatch):
     a, b = _setup_two_clones(tmp_path, monkeypatch)
+    # Fresh init scaffolds structure v3 (PRD.md, not roadmap.md); use the lane
+    # file that is actually tracked from the initial commit on both clones.
     # machine A closes and pushes newer lanes
-    (a / ".horus" / "roadmap.md").write_text("from machine a\n", encoding="utf-8")
+    (a / ".horus" / "PRD.md").write_text("from machine a\n", encoding="utf-8")
     did, _ = closure.commit_continuity(a, "close on a", push=True)
     assert did
     # machine B, unaware, tries to close --commit --push: refused, nothing committed
-    (b / ".horus" / "roadmap.md").write_text("from machine b\n", encoding="utf-8")
+    (b / ".horus" / "PRD.md").write_text("from machine b\n", encoding="utf-8")
     did, detail = closure.commit_continuity(b, "close on b", push=True)
     assert not did and "pull" in detail and "newer continuity" in detail
     assert closure.remote_lane_divergence(b) == 1
     # after pulling (theirs wins for the test), the push goes through
     _run(b, "checkout", "--", ".")
     _run(b, "pull", "--ff-only")
-    (b / ".horus" / "roadmap.md").write_text("merged on b\n", encoding="utf-8")
+    (b / ".horus" / "PRD.md").write_text("merged on b\n", encoding="utf-8")
     did, detail = closure.commit_continuity(b, "close on b", push=True)
     assert did and "pushed" in detail
 
