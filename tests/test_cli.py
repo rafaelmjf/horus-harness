@@ -215,6 +215,88 @@ def test_run_resume_uses_session_id(tmp_path, monkeypatch, capsys):
     assert "session prev-99" in capsys.readouterr().out  # resumed the given id
 
 
+def test_run_tees_event_stream_to_session_log(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import runlog
+
+    rc = main(["run", "hello there", "--agent", "fake", "--path", str(tmp_path)])
+    assert rc == 0
+    text = runlog.run_log_path("fake-session").read_text(encoding="utf-8")
+    assert "... session fake-session" in text  # session start marker
+    assert "(fake) hello there" in text        # assistant text
+    assert "exited — session fake-session" in text  # final status line
+
+
+def test_tail_prints_log_and_final_status(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import runlog
+
+    reg = Registry.default()
+    reg.upsert(SessionRecord(
+        session_id="fake-session", agent="fake", project=tmp_path.as_posix(),
+        status="exited", returncode=0,
+    ))
+    path = runlog.run_log_path("fake-session")
+    path.parent.mkdir(parents=True)
+    path.write_text("... session fake-session\n(fake) hello there\n", encoding="utf-8")
+
+    rc = main(["tail", "fake-ses"])  # prefix match, like git short hashes
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "(fake) hello there" in out                 # the log so far
+    assert "exited — session fake-session" in out      # final status from the registry
+    assert "rc=0" in out
+
+
+def test_tail_unknown_session_fails_clearly(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    assert main(["tail", "nope"]) == 2
+    assert "No session matching" in capsys.readouterr().out
+
+
+def test_tail_no_args_resolves_most_recent_running(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    import pytest
+    from horus.cli import _resolve_tail_session
+
+    reg = Registry.default()
+    with pytest.raises(LookupError):
+        _resolve_tail_session(reg, None)  # nothing running yet
+
+    proj = tmp_path.as_posix()
+    reg.upsert(SessionRecord(session_id="old-run", agent="fake", project=proj), now="2026-07-03T10:00:00")
+    reg.upsert(SessionRecord(session_id="new-run", agent="fake", project=proj), now="2026-07-03T11:00:00")
+    reg.upsert(SessionRecord(session_id="done-run", agent="fake", project=proj, status="exited"),
+               now="2026-07-03T12:00:00")
+    assert _resolve_tail_session(reg, None).session_id == "new-run"
+
+
+def test_run_watch_opens_watcher_terminal(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(launcher, "open_terminal", lambda argv, cwd, env=None: calls.append((argv, cwd)) or 4242)
+
+    rc = main(["run", "hello", "--agent", "fake", "--watch", "--path", str(tmp_path)])
+    assert rc == 0
+    assert len(calls) == 1  # spawned once, on the first event carrying the session id
+    argv, cwd = calls[0]
+    assert argv == ["horus", "tail", "fake-session"]  # console-script spelling only
+    assert Path(cwd) == tmp_path.resolve()
+
+
+def test_run_watch_failure_never_breaks_the_run(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+
+    def boom(argv, cwd, env=None):
+        raise OSError("no graphical display detected")
+
+    monkeypatch.setattr(launcher, "open_terminal", boom)
+    rc = main(["run", "hello", "--agent", "fake", "--watch", "--path", str(tmp_path)])
+    assert rc == 0  # the run's exit code is the session's, not the watcher's
+    out = capsys.readouterr().out
+    assert "continuing headless" in out and "exited" in out
+
+
 def test_open_launches_and_tracks_running_session(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     from horus import launcher
