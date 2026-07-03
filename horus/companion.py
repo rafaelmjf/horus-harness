@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 import webbrowser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from importlib import resources
 from pathlib import Path, PureWindowsPath
 from typing import Any, NamedTuple
@@ -524,7 +524,9 @@ def worker_status_lines(
     ancient leftovers in the registry don't pin a stale badge forever. Empty list
     means: hide the badge.
     """
-    moment = now or datetime.now()
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.astimezone()  # naive caller-supplied "now" is local time
     counts: dict[str, dict[str, int]] = {}
     for record in records:
         if record.status == "running":
@@ -532,6 +534,8 @@ def worker_status_lines(
         elif record.status in ("exited", "orphaned", "failed"):
             try:
                 updated = datetime.fromisoformat(record.updated_at)
+                if updated.tzinfo is None:
+                    updated = updated.astimezone()  # legacy rows: naive local time
                 stale = moment - updated > timedelta(minutes=done_window_minutes)
             except (TypeError, ValueError):
                 continue

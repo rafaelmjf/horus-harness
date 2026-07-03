@@ -547,3 +547,18 @@ def test_worker_status_lines_skips_unparseable_timestamps_and_unknown_statuses()
 def test_worker_status_lines_unknown_agent_falls_back_to_raw_name():
     lines = companion.worker_status_lines([_worker(agent="fake")], now=_NOW)
     assert lines == ["fake — 1 running"]
+
+
+def test_worker_status_lines_mixes_aware_utc_rows_with_naive_now():
+    # New registry rows are aware UTC; legacy rows and caller-supplied "now"
+    # may be naive local time. Neither combination may skip a fresh row.
+    from datetime import timedelta, timezone
+
+    from horus.registry import SessionRecord
+
+    fresh_utc = _NOW.astimezone(timezone.utc) - timedelta(minutes=5)
+    rec = SessionRecord(
+        session_id="z", agent="codex", project="/p", status="exited",
+        updated_at=fresh_utc.isoformat(timespec="seconds"),
+    )
+    assert companion.worker_status_lines([rec], now=_NOW) == ["Codex — 1 awaiting review"]

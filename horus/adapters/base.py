@@ -108,15 +108,23 @@ class AgentRun:
         self._events = events
 
     def __iter__(self) -> Iterator[AgentEvent]:
-        saw_error = False
+        result_error: bool | None = None
+        saw_stream_error = False
         for ev in self._events:
             if ev.session_id and not self.session.session_id:
                 self.session.session_id = ev.session_id
-            if ev.is_error or ev.type is EventType.ERROR:
-                saw_error = True
+            if ev.type is EventType.RESULT:
+                result_error = ev.is_error
+            elif ev.type is EventType.ERROR:
+                saw_stream_error = True
             yield ev
         if self.session.status == "running":
-            self.session.status = "failed" if saw_error else "exited"
+            # The terminal RESULT event is authoritative: a failing tool call
+            # mid-run (a denied permission, a red test) is normal work, not a
+            # failed run. Adapter-level ERROR events decide only when no RESULT
+            # closed the stream.
+            failed = result_error if result_error is not None else saw_stream_error
+            self.session.status = "failed" if failed else "exited"
 
     def drain(self) -> list[AgentEvent]:
         """Consume the whole stream and return every event (convenience for tests)."""

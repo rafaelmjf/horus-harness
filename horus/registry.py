@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from horus.adapters.base import AgentSession
@@ -25,6 +25,13 @@ from horus.config import config_dir
 
 # Terminal statuses never get liveness-reconciled.
 TERMINAL = frozenset({"exited", "failed", "orphaned"})
+
+
+def _now_iso() -> str:
+    """Aware UTC timestamp (``…+00:00``). Rows must be comparable against agent
+    transcripts and rollouts, whose own clocks mix local and UTC; legacy rows
+    written before this were naive local time."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 @dataclass
@@ -126,7 +133,7 @@ class Registry:
     # --- writes ---------------------------------------------------------------
 
     def upsert(self, record: SessionRecord, *, now: str | None = None) -> SessionRecord:
-        record.updated_at = now or datetime.now().isoformat(timespec="seconds")
+        record.updated_at = now or _now_iso()
         sessions = self._load()
         sessions[record.session_id] = asdict(record)
         self._save(sessions)
@@ -140,7 +147,7 @@ class Registry:
         row["status"] = status
         if returncode is not None:
             row["returncode"] = returncode
-        row["updated_at"] = datetime.now().isoformat(timespec="seconds")
+        row["updated_at"] = _now_iso()
         self._save(sessions)
         return True
 
@@ -162,7 +169,7 @@ class Registry:
                 continue
             if not process_alive(row.get("pid")):
                 row["status"] = "exited" if row.get("pid") else "orphaned"
-                row["updated_at"] = datetime.now().isoformat(timespec="seconds")
+                row["updated_at"] = _now_iso()
                 changed.append(SessionRecord(**row))
         if changed:
             self._save(sessions)
