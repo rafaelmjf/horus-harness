@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "PRD-structure acceptance test rerun: v3 PASSES (closure ~7–12 vs 26–32 calls, probe 5/5, zero failure flags). Next: teach init/close/consolidate/infer/dashboard the PRD shape, then migrate the control repos. v0.0.18 on PyPI."
+current_focus: "v3 acceptance test PASSED; v0.0.20 shipped (adapter status fix + UTC registry; 0.0.19 broken, skip). Active: 6-phase execution plan to teach the tooling the PRD shape — Phase 1 (frontmatter contract) is next, then migrate the control repos."
 last_updated: 2026-07-03
 ---
 

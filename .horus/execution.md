@@ -28,7 +28,7 @@ structure contract; not a revived lane — replaced when the next batch starts).
 |---|---|---|
 | economy | mechanical continuity updates, formatting | maintainer |
 | standard | narrow implementation phases with tests | worker (claude/work via branch+PR) |
-| frontier | planning, architecture, risky review, final acceptance | supervisor (this session) |
+| frontier | planning, architecture, risky review, final acceptance | supervisor (whichever session holds this plan) |
 
 ## Active Phases
 
@@ -40,6 +40,34 @@ structure contract; not a revived lane — replaced when the next batch starts).
 | 4-dashboard-prd | planned | medium | delegated | claude | standard | Bounded UI slice on the phase-1 reader: project detail renders PRD focus, top backlog items, shipped count + latest line, and a line-budget meter vs the ~250 cap; v2 projects render exactly as today. The user's eyeball is the real gate (visual). | .horus/temp/4-dashboard-prd.md | Supervisor drives the live dashboard (both a v3 and a v2 project) + pytest green; Rafa eyeballs the detail page before accept. |
 | 5-migration-engine | planned | high | direct | native | — | `upgrade-project --structure prd` (opt-in): deterministic six-lane → PRD+sessions collapse — git mv lanes to .horus/archive/, scaffold PRD with mapped sections (project→Vision, open roadmap→Backlog, features→Shipped one-liners, decisions→Rules), carry roadmap frontmatter into PRD frontmatter, leave an agent-polish TODO marker. Integrity-sensitive rewrite of real repos' continuity: refuses on dirty tree / behind-origin (fetch-first), never deletes content, archives verbatim. Safety in the code — direct. | — | Full suite + dry-run mode; rehearsal on a scratch clone of gym-coach compared against this repo's hand-made collapse (same section mapping, nothing lost — archive diff empty vs originals). |
 | 6-migrate-controls-validate | planned | medium | delegated | codex | standard | Supervised runs, not implementation: run the engine on agentic-gym-coach + agentic-ttrpg, then one bounded worker per repo polishes the generated PRD prose (codex auto-edit — read-only .git, supervisor owns commit/push per rule). Acceptance = the same pre-registered cold-reader quiz (5 questions, .horus/ only) scores 5/5 on BOTH migrated repos + close --check rc 0 + dashboard NEXT correct. Then delete PRD backlog item 1, release v0.0.21. | .horus/temp/6-migrate-controls-validate.md | Supervisor reproduces the quiz probes + close --check on both repos and commits/pushes their continuity; release cut with the 3-file bump ritual, suite rerun AFTER the bump. |
+
+## Phase 1 spec (supervisor draft — the contract to implement)
+
+**Fields.** PRD.md frontmatter gains the shim fields, same names, same semantics:
+`current_focus`, `next_action`, `next_prompt`, `execution_recommendation`
+(plus the existing `status`, `last_updated`). Shims win only when PRD.md is absent
+or lacks the field (v2 projects) — PRD is preferred the moment it exists.
+
+**One reader, many call sites.** Add a single resolution helper (suggested home:
+`horus/frontmatter.py` — e.g. `resolve_focus(root) -> dict`, reading
+`.horus/PRD.md` frontmatter first, then `roadmap.md`/`project.md`), then swap the
+scattered readers onto it:
+
+- `horus/continuity.py` — `COMMITTED_FILES` + the current_focus/placeholder
+  findings (~lines 12, 78–90); this drives `close --check` freshness and the
+  merge gate. v3 committed-set becomes `PRD.md` (+ `sessions/` structure).
+- `horus/dashboard.py` — NEXT box + project detail (~lines 73–115).
+- `horus/cli.py` — `horus resume` / catalog rows (~lines 175, 585).
+- `doctor project` — must stop requiring the six lanes when PRD.md exists
+  (the known cosmetic `[fail]` on missing decisions.md from the prototype note).
+- `horus/templates.py` / managed block — only the *text* that tells agents where
+  focus lives; actual template swap is phase 2.
+
+**End state for THIS repo:** move the live shim frontmatter values into PRD.md
+frontmatter, `git rm` `project.md` + `roadmap.md`, and the gate is:
+full suite green + `horus close --check` rc 0 + `horus resume` prints the
+PRD-sourced next step + dashboard NEXT populated + `doctor project` clean.
+A scratch v2 project must behave exactly as before throughout.
 
 ## Notes
 
