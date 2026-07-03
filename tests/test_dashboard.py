@@ -219,7 +219,8 @@ def test_load_project_reads_frontmatter_and_health(tmp_path, monkeypatch):
 
     data = dashboard.load_project(str(tmp_path))
     assert data["exists"] is True
-    assert data["status"] == "planning"
+    # Fresh init scaffolds structure v3 (PRD.md); its bootstrap status is "active".
+    assert data["status"] == "active"
     assert isinstance(data["findings"], list) and data["findings"]
 
 
@@ -488,11 +489,12 @@ def test_next_action_and_latest_surface(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)
 
-    # The single NEXT is agent-authored (roadmap.md next_action), not inferred.
-    (tmp_path / ".horus" / "roadmap.md").write_text(
+    # The single NEXT is agent-authored, not inferred. Fresh init scaffolds
+    # structure v3 (PRD.md); the fields are PRD-first, so author them there.
+    (tmp_path / ".horus" / "PRD.md").write_text(
         '---\nstatus: active\nnext_action: "Wire the adapter contract"\n'
         'execution_recommendation: "plan-execution — cross-module work"\n---\n'
-        "# Roadmap\n\n- [ ] First task.\n",
+        "# PRD\n\n- [ ] First task.\n",
         encoding="utf-8",
     )
     sessions = tmp_path / ".horus" / "sessions"
@@ -518,10 +520,11 @@ def test_next_action_and_latest_surface(tmp_path, monkeypatch):
 def test_next_action_direct_mode_hint(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)
-    (tmp_path / ".horus" / "roadmap.md").write_text(
+    # Fresh init scaffolds structure v3 (PRD.md); the fields are PRD-first.
+    (tmp_path / ".horus" / "PRD.md").write_text(
         '---\nstatus: active\nnext_action: "Fix one dashboard label"\n'
         'execution_recommendation: "continue-as-is - small single-surface fix"\n---\n'
-        "# Roadmap\n",
+        "# PRD\n",
         encoding="utf-8",
     )
 
@@ -539,15 +542,18 @@ def test_resume_prompt_prefers_written_then_falls_back(tmp_path, monkeypatch):
     data = dashboard.load_project(str(tmp_path))
 
     # No next_prompt set -> generated minimum-context handoff with lazy-load instructions.
+    # Fresh init scaffolds structure v3 (PRD.md), so the PRD-flavored lazy-load
+    # wording applies (see routines.resume_prompt's has_prd branch).
     fallback = dashboard._resume_prompt_text(data)
     assert tmp_path.name in fallback
     assert "git fetch --all --prune" in fallback
-    assert "Do not read every `.horus/` lane up front." in fallback
+    assert "Do not front-load the whole `.horus/` directory." in fallback
     assert "horus session new" not in fallback  # not a CLI trigger
 
-    # Authored next_prompt from roadmap.md is carried inside the generated handoff.
-    (tmp_path / ".horus" / "roadmap.md").write_text(
-        '---\nstatus: active\nnext_prompt: "Paste me into Claude to resume."\n---\n# Roadmap\n',
+    # Authored next_prompt from PRD.md (structure v3, PRD-first) is carried
+    # inside the generated handoff.
+    (tmp_path / ".horus" / "PRD.md").write_text(
+        '---\nstatus: active\nnext_prompt: "Paste me into Claude to resume."\n---\n# PRD\n',
         encoding="utf-8",
     )
     data = dashboard.load_project(str(tmp_path))
@@ -882,7 +888,8 @@ def _force_stale_build(monkeypatch):
 def test_stale_build_refuses_artifact_writes(tmp_path, monkeypatch):
     proj = _scaffolded_project(tmp_path, monkeypatch)
     _force_stale_build(monkeypatch)
-    marker = proj / ".horus" / "project.md"
+    # Fresh init scaffolds structure v3 (PRD.md), not project.md.
+    marker = proj / ".horus" / "PRD.md"
     before = marker.read_text(encoding="utf-8")
     assert dashboard.process_upgrade_project({"project": "0"}) == "/project?i=0&stale_build=1"
     assert marker.read_text(encoding="utf-8") == before  # nothing rewritten
@@ -1261,11 +1268,16 @@ def test_process_launch_codex_account_routes_to_pty(tmp_path, monkeypatch):
 def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)
-    # Replace roadmap body with all-done tasks.
-    roadmap_md = tmp_path / ".horus" / "roadmap.md"
-    roadmap_md.write_text(
+    # The roadmap checkbox/progress reading is still roadmap.md-only (dashboard
+    # PRD rendering is a separate phase) — write the all-done checklist there,
+    # and blank out PRD.md's bootstrap next_action (PRD wins that field per
+    # `resolve_focus`) so the dashboard has no authored NEXT to show instead.
+    (tmp_path / ".horus" / "roadmap.md").write_text(
         "---\nstatus: active\ncurrent_focus: \"x\"\n---\n# Roadmap\n\n- [x] all done\n",
         encoding="utf-8",
+    )
+    (tmp_path / ".horus" / "PRD.md").write_text(
+        "---\nstatus: active\nnext_action: \"\"\n---\n# PRD\n", encoding="utf-8"
     )
     data = dashboard.load_project(str(tmp_path))
     assert data["next_action"] == ""

@@ -15,48 +15,51 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 2
+BLOCK_VERSION = 3
 
 _SHARED_BODY = """## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
 
-**You — the agent in this session — maintain the `.horus/` lanes, filling them from the
-context you hold in this conversation.** The `horus` CLI only scaffolds templates and
-emits deterministic signals/checks; it never parses files to write lane content for you,
-because it cannot see this session. Update the lanes by invoking the **`horus-consolidate`**
-skill (it can see this conversation) and writing in what actually happened — decisions and
-why, what shipped, dead ends, the next step.
+**You — the agent in this session — maintain `.horus/`, filling it from the context
+you hold in this conversation.** The `horus` CLI only scaffolds templates and emits
+deterministic signals/checks; it never parses files to write content for you, because
+it cannot see this session. Update continuity by invoking the **`horus-consolidate`**
+skill (it can see this conversation) and writing in what actually happened — decisions
+and why, what shipped, dead ends, the next step.
 
-Before substantial work, read the `.horus/` lanes (each stays in its lane):
+Before substantial work, read `.horus/PRD.md` — the one maintained continuity file:
 
-- `project.md` — vision, shape, boundaries, current focus.
-- `roadmap.md` — open action points (the *what's next*).
-- `features.md` — capability ledger (shipped / in-progress / planned packages).
-- `decisions.md` — concise current rules, grouped by topic (not a log).
-- `history.md` — bumps in the road + the rationale behind the decisions.
-- `execution.md` — optional active execution plan: phases, model-tier routing,
-  supervisor/worker handoffs, and review gates for the current roadmap item.
+- Vision — what this project is, its shape, its boundaries.
+- Backlog — prioritized open work (the *what's next*), features and bugs together.
+- Shipped — one line per capability; details live in git history.
+- Rules — concise current rules, grouped by topic (not a log).
+- Frontmatter carries `current_focus` / `next_action` / `next_prompt` /
+  `execution_recommendation` / `last_updated`, read PRD-first by the dashboard,
+  `horus resume`, and the merge freshness gate.
 - Review recent local session summaries in `.horus/sessions/` when available.
 - Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
   is active; distill only the durable results upward.
+- If this project instead has `project.md` / `roadmap.md` / `features.md` /
+  `decisions.md` / `history.md` and no `PRD.md`, it is on the older six-lane
+  structure — read those lanes directly (each stays in its lane); migrating to
+  `PRD.md` is a separate, opt-in step and does not happen automatically.
 
 After work that contributes to the project state, close the session by invoking the
 `horus-consolidate` skill and folding in this session's context:
 
 - Add a concise session summary under `.horus/sessions/` (scaffold with
   `horus session new "<title>"`, then write what actually happened — not just a date).
-- Keep facts in their lane: open action points in `roadmap.md`, shipped/planned
-  capabilities in `features.md`, concise current rules in `decisions.md`, rationale
-  and lessons in `history.md`, active phase coordination in `execution.md`. Don't
-  maintain the same fact in two files.
+- Update PRD.md: refresh its frontmatter (`current_focus`, `next_action`,
+  `next_prompt`, `execution_recommendation`, `last_updated`), move any work that
+  shipped from Backlog to Shipped (one line), and record durable rules under Rules.
 - Implementation workers may write brief phase handoff notes under `.horus/temp/`;
-  the supervising agent reviews those notes and updates the durable lanes.
-- When authoring `roadmap.md` `next_action`, also set `execution_recommendation`
-  to say whether the next step should use `execution.md` + worker/subagents or
-  continue as a direct single-agent task.
+  the supervising agent reviews those notes and folds the durable outcome into PRD.md.
+- `execution_recommendation` says whether the next step should use a phased
+  execution plan (`.horus/execution.md` + worker/subagent handoffs) or continue as
+  a direct single-agent task.
 - `horus consolidate` / `horus close` are signal + verification only — you supply the
-  content from the session; they never rewrite the lanes for you.
+  content from the session; they never rewrite `.horus/` for you.
 - Do not store secrets or full transcripts in `.horus/`.
 
 Working discipline (every session, whether or not the work is delegated):
@@ -136,6 +139,72 @@ last_updated: {date}
 ## Later
 
 - [ ] Deferred task.
+"""
+
+
+def prd_md(project_name: str, date: str) -> str:
+    return f"""---
+status: active
+current_focus: "Fresh scaffold — fill from `horus infer` or the first working session."
+next_action: "Run `horus infer` to bootstrap this PRD from existing docs, or replace this with the first concrete task."
+next_prompt: "Resume {project_name}. Read .horus/PRD.md (frontmatter + Backlog), then continue the next_action above."
+execution_recommendation: "continue-as-is"
+last_updated: {date}
+---
+
+# {project_name} — PRD
+
+The one maintained continuity file. Structure: **PRD.md + sessions/**. This file
+carries vision, prioritized backlog, shipped ledger, and load-bearing rules; the
+tooling reads its frontmatter directly (dashboard NEXT box, `horus resume`, the
+merge freshness gate — see `resolve_focus`).
+
+## Vision
+
+What this project is, its shape, and its boundaries. A paragraph or two, plus an
+explicit **out of scope** list once the project has one.
+
+## Backlog
+
+Prioritized open work. Features and bugs in one list; jump order is allowed — this
+list is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
+
+### Now / next candidates
+
+1. First concrete next step.
+
+### Open, unscheduled
+
+- Direction noted, not yet scheduled.
+
+### Deferred
+
+- Direction noted, not scheduled; revisit later.
+
+## Shipped
+
+One line per capability; details live in git history.
+
+## Rules (load-bearing)
+
+The invariants that constrain new work.
+
+- **<rule in a few words>** — <terse why>.
+
+## Structure contract
+
+- **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines:
+  new shipped items are one line; done backlog items are deleted (git remembers);
+  bugs get appended to the backlog as found.
+- **`sessions/`**: one note per session (`horus session new`), operational facts
+  welcome (gates verified, tokens to rotate, dead ends). Distilled notes move to
+  `sessions/archive/` (local).
+- **Frontmatter:** this file carries `current_focus` / `next_action` /
+  `next_prompt` / `execution_recommendation` / `last_updated` — the tooling reads
+  them PRD-first (`resolve_focus`); no shims are needed.
+- **Closure:** update this file's frontmatter + backlog/shipped + a session note +
+  `horus close --commit --push`. One `horus consolidate` pass at most; do not chase
+  warnings.
 """
 
 
@@ -463,6 +532,39 @@ and temp worker notes stay local per machine.
 
 These files are scaffolded by `horus init` and maintained by the agents working in
 this repo. A future `horus infer` will populate them automatically (LLM-based).
+"""
+
+
+def readme_md_v3() -> str:
+    return """# `.horus/` — project continuity
+
+Horus keeps a concise, vendor-neutral record of project state here so any agent
+(Claude, Codex, ...) can pick up continuity across machines — even without Horus
+installed. Read this first.
+
+**Structure: PRD.md + sessions/.** One maintained file instead of a lane taxonomy.
+
+- `PRD.md` — **the one maintained file**: vision, prioritized backlog (features and
+  bugs in one list), shipped ledger (one line each), load-bearing rules. Its
+  frontmatter (`current_focus` / `next_action` / `next_prompt` /
+  `execution_recommendation` / `last_updated`) feeds the dashboard, `horus resume`,
+  and the merge freshness gate directly — see `resolve_focus`.
+- `sessions/` — local session summaries (gitignored; operational facts, dead ends,
+  verified gates). Distilled notes move to `sessions/archive/`.
+- `temp/` — gitignored scratch notes from implementation workers/subagents; fleeting
+  handoffs for the supervisor, not durable project memory.
+- `execution.md` — optional, created only when a backlog item needs a phased plan
+  (worker/subagent handoffs, review gates). Fluid: replaced when the next
+  substantial item starts, not preserved as a timeline.
+
+Keep PRD.md under ~250 lines: shipped items are one line, done backlog items are
+deleted (git remembers). Closure = update PRD.md (frontmatter + backlog/shipped) +
+a session note, then `horus close --commit --push`. One `horus consolidate` pass at
+most; do not chase warnings.
+
+These files are scaffolded by `horus init` and maintained by the agents working in
+this repo. `horus infer` can bootstrap PRD.md from existing docs (README, status
+files) when they exist.
 """
 
 
