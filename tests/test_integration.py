@@ -331,6 +331,113 @@ def test_branch_pr_automerge_leaves_pr_open_when_checks_required(tmp_path, monke
 
 
 # ---------------------------------------------------------------------------
+# Return to base branch after the branch flow (regression: clones were left
+# stranded on the horus/… branch — seen live in agentic-gym-coach)
+# ---------------------------------------------------------------------------
+
+def _last_git_checkout(runner: FakeRunner) -> list[str]:
+    checkouts = [c[0] for c in runner.calls if c[0][:2] == ["git", "checkout"]]
+    return checkouts[-1]
+
+
+def test_branch_pr_review_returns_to_base_branch(tmp_path, monkeypatch):
+    runner = FakeRunner([_ok(), _ok(), _ok(), _ok(),
+                         _ok("refs/remotes/origin/main\n"),
+                         _ok("https://gh/pr/1\n"),
+                         _ok()])                     # git checkout main
+    monkeypatch.setattr(intmod, "_run", runner)
+
+    result = integrate(tmp_path, message="back to base",
+                       policy=_policy(integration="branch-pr-review"))
+
+    assert result.ok is True
+    assert _last_git_checkout(runner) == ["git", "checkout", "main"]
+    # And it happens after the PR is created.
+    assert runner.calls[-1][0] == ["git", "checkout", "main"]
+
+
+def test_branch_pr_automerge_returns_to_non_main_default(tmp_path, monkeypatch):
+    """Default branch may be master — never hardcode main."""
+    runner = FakeRunner([_ok(), _ok(), _ok(), _ok(),
+                         _ok("refs/remotes/origin/master\n"),
+                         _ok("https://gh/pr/2\n"),
+                         _ok(""),                    # gh pr merge --auto
+                         _ok()])                     # git checkout master
+    monkeypatch.setattr(intmod, "_run", runner)
+
+    result = integrate(tmp_path, message="auto merge",
+                       policy=_policy(integration="branch-pr-automerge"))
+
+    assert result.ok is True
+    assert runner.calls[-1][0] == ["git", "checkout", "master"]
+
+
+def test_direct_merge_fallback_returns_to_base(tmp_path, monkeypatch):
+    runner = FakeRunner([_ok(), _ok(), _ok(), _ok(),
+                         _ok("refs/remotes/origin/master\n"),
+                         _ok("https://gh/pr/6\n"),
+                         _fail("auto-merge not allowed"),   # --auto
+                         _fail("Branch not protected"),     # probe → none
+                         _ok(""),                           # direct merge
+                         _ok()])                            # git checkout master
+    monkeypatch.setattr(intmod, "_run", runner)
+
+    result = integrate(tmp_path, message="fallback",
+                       policy=_policy(integration="branch-pr-automerge"))
+
+    assert result.merged is True
+    assert runner.calls[-1][0] == ["git", "checkout", "master"]
+
+
+def test_merge_failure_still_returns_to_base(tmp_path, monkeypatch):
+    """Even when the PR is left open, the work is pushed — don't strand the clone."""
+    runner = FakeRunner([_ok(), _ok(), _ok(), _ok(),
+                         _ok("refs/remotes/origin/main\n"),
+                         _ok("https://gh/pr/7\n"),
+                         _fail("auto-merge is not allowed"),  # --auto
+                         _ok('{"strict": true}'),             # required checks exist
+                         _ok()])                              # git checkout main
+    monkeypatch.setattr(intmod, "_run", runner)
+
+    result = integrate(tmp_path, message="left open",
+                       policy=_policy(integration="branch-pr-automerge"))
+
+    assert result.ok is False
+    assert runner.calls[-1][0] == ["git", "checkout", "main"]
+
+
+def test_push_failure_stays_on_feature_branch(tmp_path, monkeypatch):
+    """When the push fails the commits exist only locally on the branch — leaving
+    it checked out is the safe state, so no checkout back."""
+    runner = FakeRunner([_ok(), _ok(), _ok(),
+                         _fail("could not read from remote")])  # git push
+    monkeypatch.setattr(intmod, "_run", runner)
+
+    result = integrate(tmp_path, message="push fails",
+                       policy=_policy(integration="branch-pr-review"))
+
+    assert result.ok is False
+    assert result.pushed is False
+    checkouts = [c[0] for c in runner.calls if c[0][:2] == ["git", "checkout"]]
+    assert len(checkouts) == 1  # only the initial checkout -b
+
+
+def test_checkout_back_failure_warns_without_flipping_ok(tmp_path, monkeypatch):
+    runner = FakeRunner([_ok(), _ok(), _ok(), _ok(),
+                         _ok("refs/remotes/origin/main\n"),
+                         _ok("https://gh/pr/9\n"),
+                         _fail("local changes would be overwritten")])  # checkout main
+    monkeypatch.setattr(intmod, "_run", runner)
+
+    result = integrate(tmp_path, message="checkout back fails",
+                       policy=_policy(integration="branch-pr-review"))
+
+    assert result.ok is True
+    assert "could not return to main" in result.detail
+    assert "PR created" in result.detail
+
+
+# ---------------------------------------------------------------------------
 # policy loaded from config when not supplied
 # ---------------------------------------------------------------------------
 

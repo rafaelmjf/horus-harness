@@ -299,6 +299,20 @@ def integrate(
 
         # Create the PR.
         base = _default_branch(root)
+
+        # Once the branch is on the remote, every exit path below returns the
+        # clone to the base branch — leaving HEAD on horus/… strands the next
+        # session there (seen live in agentic-gym-coach). A failed checkout
+        # back is only a warning: the integration itself already succeeded or
+        # failed on its own terms.
+        def _done(*, pr_url: str | None, merged: bool, detail: str, ok: bool) -> IntegrationResult:
+            back = _run(["git", "checkout", base], root)
+            if back.returncode != 0:
+                detail += f"; warning: could not return to {base}: {back.stderr.strip()}"
+            return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
+                                     pushed=True, pr_url=pr_url, merged=merged,
+                                     detail=detail, ok=ok)
+
         pr_cmd = [
             "gh", "pr", "create",
             "--base", base,
@@ -308,15 +322,13 @@ def integrate(
         ]
         r = _run(pr_cmd, root)
         if r.returncode != 0:
-            return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
-                                     pushed=True, pr_url=None, merged=False,
-                                     detail=f"gh pr create failed: {r.stderr.strip()}", ok=False)
+            return _done(pr_url=None, merged=False,
+                         detail=f"gh pr create failed: {r.stderr.strip()}", ok=False)
         pr_url = r.stdout.strip()
 
         if mode == "branch-pr-review":
-            return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
-                                     pushed=True, pr_url=pr_url, merged=False,
-                                     detail=f"PR created: {pr_url}", ok=True)
+            return _done(pr_url=pr_url, merged=False,
+                         detail=f"PR created: {pr_url}", ok=True)
 
         # branch-pr-automerge: request auto-merge.
         merge_cmd = ["gh", "pr", "merge", "--auto", "--merge", pr_url or effective_branch]
@@ -330,25 +342,21 @@ def integrate(
             # PR open — doctor/dashboard nudge it (continuity_pr_findings).
             auto_err = r.stderr.strip()
             if _has_required_checks(root, base):
-                return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
-                                         pushed=True, pr_url=pr_url, merged=False,
-                                         detail=(f"auto-merge unavailable ({auto_err}); PR left open "
-                                                 f"for its required checks: {pr_url}"), ok=False)
+                return _done(pr_url=pr_url, merged=False,
+                             detail=(f"auto-merge unavailable ({auto_err}); PR left open "
+                                     f"for its required checks: {pr_url}"), ok=False)
             r2 = _run(["gh", "pr", "merge", "--merge", pr_url or effective_branch], root)
             if r2.returncode == 0:
-                return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
-                                         pushed=True, pr_url=pr_url, merged=True,
-                                         detail=f"auto-merge unavailable; merged PR directly: {pr_url}", ok=True)
-            return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
-                                     pushed=True, pr_url=pr_url, merged=False,
-                                     detail=(f"gh pr merge --auto failed: {auto_err}; direct merge "
-                                             f"also failed: {r2.stderr.strip()}"), ok=False)
+                return _done(pr_url=pr_url, merged=True,
+                             detail=f"auto-merge unavailable; merged PR directly: {pr_url}", ok=True)
+            return _done(pr_url=pr_url, merged=False,
+                         detail=(f"gh pr merge --auto failed: {auto_err}; direct merge "
+                                 f"also failed: {r2.stderr.strip()}"), ok=False)
         # gh pr merge --auto schedules the merge for when checks pass; it is not
         # merged immediately in most cases.  We reflect success but merged=False
         # with a clear detail note.
-        return IntegrationResult(mode=mode, committed=committed, branch=effective_branch,
-                                 pushed=True, pr_url=pr_url, merged=False,
-                                 detail=f"auto-merge enabled for PR {pr_url}", ok=True)
+        return _done(pr_url=pr_url, merged=False,
+                     detail=f"auto-merge enabled for PR {pr_url}", ok=True)
 
     # Unknown mode — should not happen given validated config, but handle it.
     return IntegrationResult(mode=mode, committed=False, branch=None,
