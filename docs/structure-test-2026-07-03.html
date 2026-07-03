@@ -1,0 +1,483 @@
+<title>Horus structure test — v3 verdict</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --accent: #2a78d6;          /* v3 series */
+    --accent-track: #cde2fb;    /* meter track, same ramp */
+    --dim: #8a8880;             /* v2 de-emphasis */
+    --dim-soft: #b5b3aa;
+    --good: #0ca30c;
+    --good-text: #006300;
+    --band: rgba(138,136,128,0.14);
+    --tooltip-bg: #0b0b0b;
+    --tooltip-ink: #fcfcfb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --accent: #3987e5;
+      --accent-track: #184f95;
+      --dim: #6f6e66;
+      --dim-soft: #4a4a46;
+      --good: #0ca30c;
+      --good-text: #0ca30c;
+      --band: rgba(111,110,102,0.18);
+      --tooltip-bg: #fcfcfb;
+      --tooltip-ink: #0b0b0b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --baseline: #383835;
+    --border: rgba(255,255,255,0.10); --accent: #3987e5; --accent-track: #184f95;
+    --dim: #6f6e66; --dim-soft: #4a4a46; --good: #0ca30c; --good-text: #0ca30c;
+    --band: rgba(111,110,102,0.18);
+    --tooltip-bg: #fcfcfb; --tooltip-ink: #0b0b0b;
+  }
+  :root[data-theme="light"] {
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e;
+    --muted: #898781; --grid: #e1e0d9; --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10); --accent: #2a78d6; --accent-track: #cde2fb;
+    --dim: #8a8880; --dim-soft: #b5b3aa; --good: #0ca30c; --good-text: #006300;
+    --band: rgba(138,136,128,0.14);
+    --tooltip-bg: #0b0b0b; --tooltip-ink: #fcfcfb;
+  }
+
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+    margin: 0;
+    padding: 40px 20px 72px;
+  }
+  .report { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin: 0 0 6px;
+  }
+  h1 { font-size: 27px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .subtitle { color: var(--ink-2); font-size: 14.5px; margin: 10px 0 0; max-width: 62ch; }
+  .subtitle code, .caveats code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.92em; background: var(--band); padding: 1px 4px; border-radius: 3px;
+  }
+
+  .verdict {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--good); color: var(--good-text);
+    border-radius: 999px; padding: 3px 12px 3px 9px;
+    font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em;
+    vertical-align: 4px; margin-left: 10px; white-space: nowrap;
+  }
+  .verdict svg { display: block; }
+
+  /* ---- KPI row ---- */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .tile .label { font-size: 12px; color: var(--ink-2); }
+  .tile .value { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; }
+  .tile .value .unit { font-size: 15px; font-weight: 500; color: var(--ink-2); margin-left: 2px; }
+  .tile .delta { font-size: 12px; color: var(--muted); }
+  .tile .delta strong { color: var(--good-text); font-weight: 600; }
+
+  /* ---- cards ---- */
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 18px 20px 16px;
+  }
+  .card h2 { font-size: 15.5px; font-weight: 650; margin: 0; }
+  .card .sub { font-size: 12.5px; color: var(--ink-2); margin: 3px 0 14px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 10px; font-size: 12px; color: var(--ink-2); }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .chart-wrap { overflow-x: auto; }
+  .chart-wrap svg { display: block; }
+  .fn { font-size: 11.5px; color: var(--muted); margin: 10px 0 0; }
+
+  details.table-view { margin-top: 12px; border-top: 1px solid var(--grid); padding-top: 8px; }
+  details.table-view summary { font-size: 12px; color: var(--muted); cursor: pointer; }
+  details.table-view table { border-collapse: collapse; margin-top: 8px; font-size: 12.5px; width: 100%; }
+  details.table-view th { text-align: left; color: var(--ink-2); font-weight: 600; }
+  details.table-view th, details.table-view td { padding: 4px 10px 4px 0; border-bottom: 1px solid var(--grid); }
+  details.table-view td.num, details.table-view th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---- small multiples ---- */
+  .multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
+  .panel h3 { font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin: 0 0 8px; }
+
+  /* ---- meter ---- */
+  .meter-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .meter-val { font-size: 26px; font-weight: 600; }
+  .meter-val .unit { font-size: 14px; font-weight: 500; color: var(--ink-2); }
+  .meter-track {
+    flex: 1 1 220px; height: 10px; border-radius: 5px; background: var(--accent-track);
+    position: relative; overflow: hidden; align-self: center;
+  }
+  .meter-fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 5px 4px 4px 5px; }
+
+  /* ---- flags ---- */
+  .flags { display: flex; flex-direction: column; gap: 0; }
+  .flag { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--grid); }
+  .flag:last-child { border-bottom: none; }
+  .flag .icon { flex: none; margin-top: 2px; }
+  .flag .name { font-weight: 600; font-size: 13.5px; }
+  .flag .name .state { color: var(--good-text); font-weight: 700; font-size: 12px; margin-left: 8px; letter-spacing: 0.03em; }
+  .flag .detail { font-size: 12.5px; color: var(--ink-2); max-width: 68ch; }
+
+  /* ---- method diagram ---- */
+  .diagram { overflow-x: auto; padding-bottom: 4px; }
+  .flow { display: flex; align-items: stretch; gap: 0; min-width: 720px; }
+  .stage { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .stage-label {
+    font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 2px;
+  }
+  .node {
+    border: 1px solid var(--border); background: var(--page); border-radius: 6px;
+    padding: 8px 11px; font-size: 12px; color: var(--ink-2);
+  }
+  .node strong { color: var(--ink); font-size: 12.5px; display: block; }
+  .node.v3 { border-left: 3px solid var(--accent); }
+  .node.v2 { border-left: 3px solid var(--dim); }
+  .node.pass { border-color: var(--good); color: var(--good-text); }
+  .node.pass strong { color: var(--good-text); }
+  .arrow { flex: none; display: flex; align-items: center; padding: 18px 10px 0; color: var(--baseline); }
+
+  .caveats { font-size: 13px; color: var(--ink-2); }
+  .caveats h2 { font-size: 13px; color: var(--ink); margin: 0 0 6px; }
+  .caveats ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+
+  footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--grid); padding-top: 14px; }
+
+  /* ---- tooltip ---- */
+  #tip {
+    position: fixed; pointer-events: none; z-index: 10; display: none;
+    background: var(--tooltip-bg); color: var(--tooltip-ink);
+    font-size: 12px; line-height: 1.35; padding: 6px 9px; border-radius: 5px;
+    max-width: 260px; box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  }
+  #tip .t-label { font-weight: 600; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .flag .icon path { transition: stroke-dashoffset 0.4s ease; }
+  }
+</style>
+
+<div class="report">
+
+  <header>
+    <p class="eyebrow">Horus · continuity structure test · 2026-07-03</p>
+    <h1>PRD structure (v3) vs six lanes (v2)
+      <span class="verdict">
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 L4.8 9.2 L10 3.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        PASS
+      </span>
+    </h1>
+    <p class="subtitle">Pre-registered acceptance test, rerun after 5 closures on the v3 cohort
+      (<code>horus-harness</code> on PRD&thinsp;+&thinsp;sessions) against live six-lane controls
+      (<code>agentic-gym-coach</code>, <code>agentic-ttrpg</code>). Measured from real session
+      transcripts on both Claude accounts plus Codex rollouts; quiz probe identical to baseline.</p>
+  </header>
+
+  <section class="kpis" aria-label="Headline results">
+    <div class="tile">
+      <span class="label">Closure ritual, median</span>
+      <span class="value">10<span class="unit">tool calls</span></span>
+      <span class="delta"><strong>−66%</strong> vs v2 controls (29)</span>
+    </div>
+    <div class="tile">
+      <span class="label">Cold-reader quiz</span>
+      <span class="value">5/5<span class="unit">correct</span></span>
+      <span class="delta">in 5 tool calls · v2 needed 8</span>
+    </div>
+    <div class="tile">
+      <span class="label">Context at cold read</span>
+      <span class="value">17<span class="unit">KB</span></span>
+      <span class="delta">v2 lanes: 52 KB (gym) · 145 KB (this repo)</span>
+    </div>
+    <div class="tile">
+      <span class="label">Failure flags triggered</span>
+      <span class="value">0<span class="unit">of 3</span></span>
+      <span class="delta">no missed rule · no dead-end retry · no wrong pickup</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Closure ritual cost, per closure event</h2>
+    <p class="sub">Tool calls spent updating continuity at session close, segmented from transcripts. Shaded band: v2 historical baseline (22–30 calls).</p>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:var(--accent)"></span>v3 — PRD + sessions</span>
+      <span class="key"><span class="swatch" style="background:var(--dim)"></span>v2 — six-lane controls</span>
+    </div>
+    <div class="chart-wrap"><div id="chart-closure"></div></div>
+    <p class="fn">† closure split across a usage-limit cutoff; repaired by the next session (repair cost included).&ensp;
+      ‡ Codex sessions: continuity calls include resume reads — attribution is coarser, so these overstate closure slightly.</p>
+    <details class="table-view">
+      <summary>Data table</summary>
+      <table id="table-closure"></table>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Cold resume, measured by the fixed 5-question quiz probe</h2>
+    <p class="sub">A Codex session with no shared history answers 5 questions from <code>.horus/</code> only. Both structures scored 5/5 — the cost differs.</p>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:var(--accent)"></span>v3 — PRD + sessions</span>
+      <span class="key"><span class="swatch" style="background:var(--dim)"></span>v2 — six lanes (at freshly-consolidated best)</span>
+    </div>
+    <div class="multiples">
+      <div class="panel"><h3>Tool calls to answer</h3><div id="chart-probe-calls"></div></div>
+      <div class="panel"><h3>Files read</h3><div id="chart-probe-files"></div></div>
+      <div class="panel"><h3>Continuity read, KB</h3><div id="chart-probe-kb"></div></div>
+    </div>
+    <p class="fn">v3 probe rerun this session (after 5 closures of drift): same 5/5, same 5 calls, same 4 files as baseline. Panels have independent scales.</p>
+    <details class="table-view">
+      <summary>Data table</summary>
+      <table id="table-probe"></table>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>The three pre-registered failure flags</h2>
+    <p class="sub">Any one of these would have failed v3. All three were checked against transcripts, session notes, and git history.</p>
+    <div class="flags">
+      <div class="flag">
+        <svg class="icon" width="18" height="18" viewBox="0 0 18 18" aria-label="clear"><circle cx="9" cy="9" r="8" fill="none" stroke="var(--good)" stroke-width="1.5"/><path d="M5.2 9.4 L7.8 12 L12.8 6.4" fill="none" stroke="var(--good)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="name">Cold session misses a load-bearing rule <span class="state">CLEAR</span></div>
+          <div class="detail">Branch → PR → auto-merge held across PRs #89–96; releases v0.0.14–18 cut promptly; every delegated gate reproduced by the supervisor.</div>
+        </div>
+      </div>
+      <div class="flag">
+        <svg class="icon" width="18" height="18" viewBox="0 0 18 18" aria-label="clear"><circle cx="9" cy="9" r="8" fill="none" stroke="var(--good)" stroke-width="1.5"/><path d="M5.2 9.4 L7.8 12 L12.8 6.4" fill="none" stroke="var(--good)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="name">Documented dead end re-attempted <span class="state">CLEAR</span></div>
+          <div class="detail">The <code>git stash</code>-mid-closure trap (documented in the v0.0.15 note) never recurred — the only later match is a benign mention inside a worker brief.</div>
+        </div>
+      </div>
+      <div class="flag">
+        <svg class="icon" width="18" height="18" viewBox="0 0 18 18" aria-label="clear"><circle cx="9" cy="9" r="8" fill="none" stroke="var(--good)" stroke-width="1.5"/><path d="M5.2 9.4 L7.8 12 L12.8 6.4" fill="none" stroke="var(--good)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="name">Resume lands at the wrong pickup point <span class="state">CLEAR</span></div>
+          <div class="detail">Every resume (including this analysis session and the quiz probe) landed on the shim's named next step. Stress case: a closure cut off by the usage limit was detected and repaired next session in ~8 calls.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>PRD line budget</h2>
+    <p class="sub">The structure contract caps <code>PRD.md</code> at ~250 lines; blowing it into a consolidation crisis was a failure condition.</p>
+    <div class="meter-row">
+      <span class="meter-val">239<span class="unit"> / 250 lines</span></span>
+      <div class="meter-track" role="img" aria-label="PRD at 239 of 250 lines, 96 percent of cap">
+        <div class="meter-fill" style="width:95.6%"></div>
+      </div>
+    </div>
+    <p class="fn">Grew 205 → 239 in one day (~5 lines per closure, plus this test's recorded result). Under cap, but the first watch item: the delete-done-items discipline has to hold.</p>
+  </section>
+
+  <section class="card">
+    <h2>How the test was run</h2>
+    <p class="sub">Design pre-registered 2026-07-03 (morning), before any outcome data existed.</p>
+    <div class="diagram">
+      <div class="flow">
+        <div class="stage">
+          <div class="stage-label">Cohorts</div>
+          <div class="node v3"><strong>horus-harness · v3</strong>PRD + sessions/ — 5 closures in 3 conversations</div>
+          <div class="node v2"><strong>agentic-gym-coach · v2</strong>six lanes — 7 sessions (Claude + Codex)</div>
+          <div class="node v2"><strong>agentic-ttrpg · v2</strong>six lanes — 4 sessions, mostly hub-closed</div>
+        </div>
+        <div class="arrow" aria-hidden="true"><svg width="18" height="12" viewBox="0 0 18 12"><path d="M1 6 H14 M10.5 2 L15 6 L10.5 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="stage">
+          <div class="stage-label">Measurements</div>
+          <div class="node"><strong>Transcript segmentation</strong>closure &amp; resume tool calls per session, both Claude accounts + Codex rollouts</div>
+          <div class="node"><strong>Cold-reader quiz</strong>fresh Codex session, 5 fixed questions, <code>.horus/</code> only</div>
+        </div>
+        <div class="arrow" aria-hidden="true"><svg width="18" height="12" viewBox="0 0 18 12"><path d="M1 6 H14 M10.5 2 L15 6 L10.5 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="stage">
+          <div class="stage-label">Gate</div>
+          <div class="node"><strong>3 failure flags</strong>missed rule · dead-end retry · wrong pickup</div>
+          <div class="node"><strong>Line-cap check</strong>PRD under ~250 lines</div>
+        </div>
+        <div class="arrow" aria-hidden="true"><svg width="18" height="12" viewBox="0 0 18 12"><path d="M1 6 H14 M10.5 2 L15 6 L10.5 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="stage">
+          <div class="stage-label">Verdict</div>
+          <div class="node pass"><strong>v3 PASSES</strong>→ teach the tooling the PRD shape; migrate both control repos</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="caveats">
+    <h2>Honest limits of the test</h2>
+    <ul>
+      <li>Cohort shapes differ: v3 sessions were hub/supervisor-shaped; controls carried heavy delegated-worker traffic. Only 2 Claude v2 closures were cleanly segmentable; Codex counts bundle resume with closure.</li>
+      <li>ttrpg's "v2" closures were mostly performed by v3 hub sessions and touched only 3 of 6 lanes (~9 calls) — lane discipline slips even when v2 is actively maintained, which itself supports the v3 thesis.</li>
+      <li>The v2 quiz baseline was measured at its freshly-consolidated best (commit <code>5f81c40</code>); its steady state carried 40 overlap warnings, so the comparison flatters v2.</li>
+      <li>Quiz Q5 pins to the current latest release (v0.0.18 at rerun vs v0.0.14 at baseline) — same slot in the pre-registered template.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Sources: session note <code style="font-family:ui-monospace,monospace">2026-07-03-210751</code> · PRD backlog item 1 (result recorded) ·
+    closure commit <code style="font-family:ui-monospace,monospace">35bdf70</code>. Baseline: note <code style="font-family:ui-monospace,monospace">2026-07-03-090957</code>.
+  </footer>
+
+</div>
+
+<div id="tip" role="tooltip"></div>
+
+<script>
+(function () {
+  // Colors are referenced as CSS variables via inline style, so theme flips
+  // (media query or data-theme stamp) recolor the SVG without a rebuild.
+  const css = v => 'var(' + v + ')';
+  const tip = document.getElementById('tip');
+
+  function showTip(evt, label, value, note) {
+    tip.innerHTML = '<span class="t-label">' + label + '</span><br>' + value + (note ? '<br><span style="opacity:.75">' + note + '</span>' : '');
+    tip.style.display = 'block';
+    moveTip(evt);
+  }
+  function moveTip(evt) {
+    const pad = 12;
+    let x = evt.clientX + pad, y = evt.clientY + pad;
+    const r = tip.getBoundingClientRect();
+    if (x + r.width > window.innerWidth - 8) x = evt.clientX - r.width - pad;
+    if (y + r.height > window.innerHeight - 8) y = evt.clientY - r.height - pad;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  function hideTip() { tip.style.display = 'none'; }
+
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  // fill/stroke go on style (presentation attributes don't resolve var()).
+  function el(name, attrs, parent) {
+    const n = document.createElementNS(SVGNS, name);
+    for (const k in attrs) {
+      if ((k === 'fill' || k === 'stroke') && String(attrs[k]).indexOf('var(') === 0) n.style[k] = attrs[k];
+      else n.setAttribute(k, attrs[k]);
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  // Bar with 4px rounded data-end, square at baseline (horizontal, growing right).
+  function hBarPath(x, y, w, h, r) {
+    r = Math.min(r, w, h / 2);
+    return 'M' + x + ' ' + y + ' H' + (x + w - r) + ' Q' + (x + w) + ' ' + y + ' ' + (x + w) + ' ' + (y + r) +
+           ' V' + (y + h - r) + ' Q' + (x + w) + ' ' + (y + h) + ' ' + (x + w - r) + ' ' + (y + h) +
+           ' H' + x + ' Z';
+  }
+
+  /* ---------- Chart A: closure cost ---------- */
+  const closure = [
+    { label: 'v0.0.14 release close', v: 12, s: 'v3', note: 'Claude · PRD edits ×4, shims, note, close' },
+    { label: 'v0.0.15 + baseline close', v: 9, s: 'v3', note: 'Claude · same conversation, second closure' },
+    { label: 'Hub-probe close †', v: 7, s: 'v3', note: 'Claude · cut off by usage limit; repair next session included' },
+    { label: 'Hub round 2 close', v: 12, s: 'v3', note: 'Claude · incl. one close→check→close loop' },
+    { label: 'Supervisor round 3 close', v: 10, s: 'v3', note: 'Claude · three parallel workers reviewed' },
+    { label: 'gym UI-regression close', v: 26, s: 'v2', note: 'Claude · consolidate→edit→recheck, close --check ×3' },
+    { label: 'gym telegram-log close', v: 32, s: 'v2', note: 'Claude · two closure passes, 6 lanes touched' },
+    { label: 'ttrpg phase 3 (Codex) ‡', v: 26, s: 'v2', note: 'Codex · continuity calls incl. resume reads' },
+    { label: 'gym UI batch (Codex) ‡', v: 33, s: 'v2', note: 'Codex · continuity calls incl. resume reads' },
+    { label: 'gym track F (Codex) ‡', v: 36, s: 'v2', note: 'Codex · continuity calls incl. resume reads' },
+  ];
+  (function () {
+    const W = 800, rowH = 26, barH = 16, labelW = 218, padR = 40, gapY = 8;
+    const groups = ['v3', 'v2'];
+    const H = closure.length * rowH + gapY + 24;
+    const xMax = 40, plotW = W - labelW - padR;
+    const x = v => labelW + v / xMax * plotW;
+    const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', 'aria-label': 'Closure cost per closure event, v3 versus v2' });
+    svg.style.maxWidth = W + 'px';
+    svg.style.fontFamily = 'inherit';
+
+    // baseline band 22–30
+    el('rect', { x: x(22), y: 0, width: x(30) - x(22), height: H - 24, fill: css('--band') }, svg);
+    const bandT = el('text', { x: x(26), y: 12, 'text-anchor': 'middle', 'font-size': 10.5, fill: css('--muted') }, svg);
+    bandT.textContent = 'v2 baseline 22–30';
+
+    // gridlines + ticks
+    [0, 10, 20, 30, 40].forEach(t => {
+      el('line', { x1: x(t), y1: 0, x2: x(t), y2: H - 24, stroke: css('--grid'), 'stroke-width': 1 }, svg);
+      const tx = el('text', { x: x(t), y: H - 8, 'text-anchor': 'middle', 'font-size': 10.5, fill: css('--muted'), style: 'font-variant-numeric: tabular-nums' }, svg);
+      tx.textContent = t;
+    });
+    el('line', { x1: labelW, y1: 0, x2: labelW, y2: H - 24, stroke: css('--baseline'), 'stroke-width': 1 }, svg);
+
+    let yPos = 0;
+    closure.forEach((d, i) => {
+      if (i === 5) yPos += gapY; // gap between cohorts
+      const y = yPos + (rowH - barH) / 2;
+      const color = d.s === 'v3' ? css('--accent') : css('--dim');
+      const lab = el('text', { x: labelW - 8, y: y + barH / 2 + 3.5, 'text-anchor': 'end', 'font-size': 11.5, fill: css('--ink-2') }, svg);
+      lab.textContent = d.label;
+      const bar = el('path', { d: hBarPath(labelW + 0.5, y, x(d.v) - labelW, barH, 4), fill: color }, svg);
+      const val = el('text', { x: x(d.v) + 6, y: y + barH / 2 + 3.5, 'font-size': 11.5, 'font-weight': 600, fill: css('--ink'), style: 'font-variant-numeric: tabular-nums' }, svg);
+      val.textContent = d.v;
+      // oversized hit target
+      const hit = el('rect', { x: 0, y: yPos, width: W, height: rowH, fill: 'transparent' }, svg);
+      hit.addEventListener('mousemove', e => { showTip(e, d.label, d.v + ' tool calls', d.note); moveTip(e); });
+      hit.addEventListener('mouseleave', hideTip);
+      yPos += rowH;
+    });
+    document.getElementById('chart-closure').appendChild(svg);
+
+    const tbl = document.getElementById('table-closure');
+    tbl.innerHTML = '<tr><th>Closure event</th><th>Structure</th><th class="num">Tool calls</th></tr>' +
+      closure.map(d => '<tr><td>' + d.label + '</td><td>' + d.s + '</td><td class="num">' + d.v + '</td></tr>').join('');
+  })();
+
+  /* ---------- Chart B: probe small multiples ---------- */
+  const probePanels = [
+    { id: 'chart-probe-calls', unit: 'tool calls', v3: 5, v2: 8, max: 10 },
+    { id: 'chart-probe-files', unit: 'files', v3: 4, v2: 6, max: 10 },
+    { id: 'chart-probe-kb', unit: 'KB', v3: 17, v2: 145, max: 150 },
+  ];
+  probePanels.forEach(p => {
+    const W = 230, rowH = 30, barH = 16, labelW = 34, padR = 44;
+    const H = 2 * rowH + 4;
+    const plotW = W - labelW - padR;
+    const x = v => labelW + v / p.max * plotW;
+    const svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', 'aria-label': p.unit + ': v3 ' + p.v3 + ', v2 ' + p.v2 });
+    svg.style.maxWidth = W + 'px';
+    el('line', { x1: labelW, y1: 0, x2: labelW, y2: H - 4, stroke: css('--baseline'), 'stroke-width': 1 }, svg);
+    [{ name: 'v3', v: p.v3, c: css('--accent') }, { name: 'v2', v: p.v2, c: css('--dim') }].forEach((d, i) => {
+      const y = i * rowH + (rowH - barH) / 2;
+      const lab = el('text', { x: labelW - 7, y: y + barH / 2 + 3.5, 'text-anchor': 'end', 'font-size': 11.5, fill: css('--ink-2') }, svg);
+      lab.textContent = d.name;
+      el('path', { d: hBarPath(labelW + 0.5, y, x(d.v) - labelW, barH, 4), fill: d.c }, svg);
+      const val = el('text', { x: x(d.v) + 6, y: y + barH / 2 + 3.5, 'font-size': 11.5, 'font-weight': 600, fill: css('--ink'), style: 'font-variant-numeric: tabular-nums' }, svg);
+      val.textContent = d.v;
+      const hit = el('rect', { x: 0, y: i * rowH, width: W, height: rowH, fill: 'transparent' }, svg);
+      hit.addEventListener('mousemove', e => { showTip(e, d.name + ' — ' + p.unit, d.v + ' ' + p.unit, null); moveTip(e); });
+      hit.addEventListener('mouseleave', hideTip);
+    });
+    document.getElementById(p.id).appendChild(svg);
+  });
+  document.getElementById('table-probe').innerHTML =
+    '<tr><th>Structure</th><th class="num">Tool calls</th><th class="num">Files read</th><th class="num">KB read</th><th class="num">Quiz score</th></tr>' +
+    '<tr><td>v3 — PRD + sessions</td><td class="num">5</td><td class="num">4</td><td class="num">17</td><td class="num">5/5</td></tr>' +
+    '<tr><td>v2 — six lanes</td><td class="num">8</td><td class="num">6</td><td class="num">145</td><td class="num">5/5</td></tr>';
+
+})();
+</script>

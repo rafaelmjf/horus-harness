@@ -98,7 +98,11 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 - **Git-aware overview (MVP2.5):** "fetch all" refresh (fetch only, never pull);
   behind-origin / uncommitted-continuity staleness folded into the warning surface.
 - **Mid-task usage interruption:** `PreToolUse` usage check (~60s cache) so a single long
-  turn can't blow past the limit between `UserPromptSubmit`/`Stop` checks.
+  turn can't blow past the limit between `UserPromptSubmit`/`Stop` checks; plus an
+  **emergency state-save at ≥97–98%** — hook-side and deterministic (zero model tokens):
+  commit `.horus/**` + push to a rescue ref with a stub note, never product code, never
+  a forced model closure (evidence: hub-probe closure orphaned at the limit 2026-07-03 —
+  the 90% advisory fired and asked, but a long turn sailed past it).
 - **Doctor compat (observe):** per project, report what each installed agent would load
   (instructions, skills, MCP, hooks). Skills half shipped as the Skill map.
 - **Workflow-policy refinements:** project the branch→PR→auto-merge default into the
