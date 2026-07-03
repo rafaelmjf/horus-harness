@@ -477,3 +477,73 @@ def test_log_companion_event_writes_line(tmp_path, monkeypatch):
     text = companion.startup_log_path("companion").read_text(encoding="utf-8")
     assert "refusing to start: no display" in text
     assert companion.__version__ in text
+
+
+# --- worker badge summary ----------------------------------------------------
+
+def _worker(agent="codex", status="running", minutes_ago=1, session_id="s1"):
+    from datetime import datetime, timedelta
+
+    from horus.registry import SessionRecord
+
+    return SessionRecord(
+        session_id=session_id,
+        agent=agent,
+        project="/proj",
+        pid=4321 if status == "running" else None,
+        status=status,
+        updated_at=(datetime(2026, 7, 3, 12, 0) - timedelta(minutes=minutes_ago)).isoformat(
+            timespec="seconds"
+        ),
+    )
+
+
+_NOW = __import__("datetime").datetime(2026, 7, 3, 12, 0)
+
+
+def test_worker_status_lines_single_running_reads_plainly():
+    lines = companion.worker_status_lines([_worker()], now=_NOW)
+    assert lines == ["Codex — 1 running"]
+
+
+def test_worker_status_lines_groups_per_agent_with_counts():
+    records = [
+        _worker(agent="claude", status="running", session_id="a"),
+        _worker(agent="claude", status="exited", session_id="b"),
+        _worker(agent="codex", status="running", session_id="c"),
+    ]
+    lines = companion.worker_status_lines(records, now=_NOW)
+    assert lines == [
+        "Claude — 2 agents: 1 running, 1 awaiting review",
+        "Codex — 1 running",
+    ]
+
+
+def test_worker_status_lines_hides_stale_terminal_records():
+    old = _worker(status="exited", minutes_ago=600)
+    assert companion.worker_status_lines([old], now=_NOW) == []
+    # ...but a stale *running* record still shows (reconcile owns its liveness).
+    stale_running = _worker(status="running", minutes_ago=600)
+    assert companion.worker_status_lines([stale_running], now=_NOW) == ["Codex — 1 running"]
+
+
+def test_worker_status_lines_calls_out_failures():
+    lines = companion.worker_status_lines([_worker(status="failed")], now=_NOW)
+    assert lines == ["Codex — 1 failed"]
+
+
+def test_worker_status_lines_empty_means_hidden():
+    assert companion.worker_status_lines([], now=_NOW) == []
+
+
+def test_worker_status_lines_skips_unparseable_timestamps_and_unknown_statuses():
+    from horus.registry import SessionRecord
+
+    bad_time = SessionRecord(session_id="x", agent="codex", project="/p", status="exited", updated_at="")
+    weird = SessionRecord(session_id="y", agent="codex", project="/p", status="mystery", updated_at="")
+    assert companion.worker_status_lines([bad_time, weird], now=_NOW) == []
+
+
+def test_worker_status_lines_unknown_agent_falls_back_to_raw_name():
+    lines = companion.worker_status_lines([_worker(agent="fake")], now=_NOW)
+    assert lines == ["fake — 1 running"]

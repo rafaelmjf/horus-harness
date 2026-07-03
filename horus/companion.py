@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import webbrowser
+from datetime import datetime, timedelta
 from importlib import resources
 from pathlib import Path, PureWindowsPath
 from typing import Any, NamedTuple
@@ -501,6 +502,68 @@ def resolve_mascot_style(style: str = "auto", *, platform: str | None = None) ->
     return "foreground" if actual_platform == "win32" else "layered"
 
 
+# Worker badge: how often the registry is re-read, and how long a finished worker
+# keeps showing as "awaiting review" before it stops counting as news.
+WORKER_POLL_SECONDS = 2.5
+WORKER_DONE_WINDOW_MINUTES = 240
+
+_AGENT_LABELS = {"claude": "Claude", "codex": "Codex"}
+
+
+def worker_status_lines(
+    records,
+    *,
+    now: datetime | None = None,
+    done_window_minutes: int = WORKER_DONE_WINDOW_MINUTES,
+) -> list[str]:
+    """One badge line per agent summarizing background worker sessions.
+
+    ``running`` records always show. Terminal records show as "awaiting review"
+    (exited/orphaned: the worker finished but nobody dismissed its output) or
+    "failed" — and only within ``done_window_minutes`` of their last update, so
+    ancient leftovers in the registry don't pin a stale badge forever. Empty list
+    means: hide the badge.
+    """
+    moment = now or datetime.now()
+    counts: dict[str, dict[str, int]] = {}
+    for record in records:
+        if record.status == "running":
+            bucket = "running"
+        elif record.status in ("exited", "orphaned", "failed"):
+            try:
+                updated = datetime.fromisoformat(record.updated_at)
+                stale = moment - updated > timedelta(minutes=done_window_minutes)
+            except (TypeError, ValueError):
+                continue
+            if stale:
+                continue
+            bucket = "failed" if record.status == "failed" else "review"
+        else:
+            continue
+        agent = counts.setdefault(record.agent, {"running": 0, "review": 0, "failed": 0})
+        agent[bucket] += 1
+
+    lines: list[str] = []
+    for agent in sorted(counts):
+        c = counts[agent]
+        total = c["running"] + c["review"] + c["failed"]
+        parts = [
+            part
+            for part in (
+                f"{c['running']} running" if c["running"] else "",
+                f"{c['review']} awaiting review" if c["review"] else "",
+                f"{c['failed']} failed" if c["failed"] else "",
+            )
+            if part
+        ]
+        label = _AGENT_LABELS.get(agent, agent)
+        if total == 1:
+            lines.append(f"{label} — {parts[0]}")
+        else:
+            lines.append(f"{label} — {total} agents: {', '.join(parts)}")
+    return lines
+
+
 def run_close_check(project_root: Path, *, threshold: float = 90.0) -> tuple[str, str]:
     from horus import closure
 
@@ -577,6 +640,25 @@ def run_companion(
     # cold launch. The click handler reuses whatever this set up.
     threading.Thread(target=lambda: ensure_open(open_browser=open_on_start), daemon=True).start()
 
+    # Worker badge: registry polled off the main thread (file IO + PID liveness
+    # checks), rendered by the animate loop — same main-thread-only Tk rule as
+    # `notice`. A damaged registry must never kill the poller: fall back to hidden.
+    workers: dict[str, list[str]] = {"lines": []}
+
+    def poll_workers() -> None:
+        from horus.registry import Registry
+        while True:
+            try:
+                reg = Registry.default()
+                reg.reconcile()
+                workers["lines"] = worker_status_lines(reg.all())
+            except Exception as exc:  # noqa: BLE001 (badge is best-effort by design)
+                log_companion_event(f"worker badge poll failed: {exc}")
+                workers["lines"] = []
+            time.sleep(WORKER_POLL_SECONDS)
+
+    threading.Thread(target=poll_workers, daemon=True).start()
+
     root = tk.Tk()
     root.title("Horus")
     root.resizable(False, False)
@@ -615,6 +697,28 @@ def run_companion(
     status_item = canvas.create_rectangle(width - 18, height - 18, width - 8, height - 8, fill="#57d39a", outline="#ffffff")
     canvas.create_text(width - 13, height - 13, text="", fill="#ffffff")
 
+    # Worker badge window: a small always-on-top strip that docks under the mascot,
+    # shown only while there is something to say. Clicking it opens the dashboard
+    # (Live sessions card) — the "take me to the agents" affordance.
+    badge = tk.Toplevel(root)
+    badge.withdraw()
+    badge.overrideredirect(True)
+    badge.attributes("-topmost", True)
+    badge_label = tk.Label(
+        badge,
+        text="",
+        justify="left",
+        anchor="w",
+        bg="#0f1115",
+        fg="#e8e4da",
+        padx=8,
+        pady=4,
+        borderwidth=1,
+        relief="solid",
+    )
+    badge_label.pack()
+    badge_shown = {"text": ""}
+
     drag: dict[str, int | bool] = {"x": 0, "y": 0, "root_x": 80, "root_y": 80, "moved": False}
     frame = {"n": 0}
 
@@ -631,6 +735,17 @@ def run_companion(
         set_status({"ok": "#57d39a", "warn": "#e6c35c", "fail": "#f08a8a"}.get(level, "#57d39a"))
         if level != "ok":
             messagebox.showwarning("Horus", message)
+
+    def dismiss_workers_action() -> None:
+        # Drop finished/failed records (running ones are untouched) so the badge
+        # stops announcing work that has been reviewed.
+        from horus.registry import Registry
+        try:
+            reg = Registry.default()
+            reg.prune()
+            workers["lines"] = worker_status_lines(reg.all())
+        except Exception as exc:  # noqa: BLE001 (same best-effort rule as the poller)
+            log_companion_event(f"dismiss finished workers failed: {exc}")
 
     def quit_action() -> None:
         root.destroy()
@@ -677,11 +792,25 @@ def run_companion(
             set_status("#f08a8a")
             messagebox.showwarning("Horus", msg)
 
+        # Apply the latest worker summary and keep the badge docked under the
+        # mascot (it follows drags because this runs every tick).
+        text = "\n".join(workers["lines"])
+        if text != badge_shown["text"]:
+            badge_shown["text"] = text
+            if text:
+                badge_label.configure(text=text)
+                badge.deiconify()
+            else:
+                badge.withdraw()
+        if text:
+            badge.geometry(f"+{root.winfo_x()}+{root.winfo_y() + height + 6}")
+
         frame["n"] = n + 1
         root.after(120, animate)
 
     menu.add_command(label="Open Dashboard", command=open_action)
     menu.add_command(label="Run Close Check", command=close_check_action)
+    menu.add_command(label="Dismiss Finished Workers", command=dismiss_workers_action)
     menu.add_separator()
     menu.add_command(label="Quit", command=quit_action)
 
@@ -689,6 +818,8 @@ def run_companion(
     canvas.bind("<B1-Motion>", motion)
     canvas.bind("<ButtonRelease-1>", release)
     canvas.bind("<Button-3>", show_menu)
+    badge_label.bind("<ButtonRelease-1>", open_action)
+    badge_label.bind("<Button-3>", show_menu)
 
     animate()
     try:
