@@ -141,7 +141,8 @@ transcript discovery), open-continuity-PR nudge, token-overhead report · accoun
 with usage rings + login-driven account wizard · settings/workflow-policy panel ·
 self-update pill + button (env-migrating, verify-on-land, v0.0.9) · stale-build
 artifact-write guard (v0.0.9) · startup-failure visibility: dashboard.log + mascot error
-surfacing (v0.0.12).
+surfacing (v0.0.12) · Live-sessions "Reviewed ✓" per-row dismiss + review-contract
+footer — the actionable side of the badge's awaiting-review (v0.0.17).
 
 **GitHub bridge:** remote catalog (`discover github`, cached snapshots, incremental
 refresh) · onboard `github:owner/repo` (clone→init→integrate via workflow policy) ·
@@ -160,7 +161,7 @@ cockpit **retired 2026-06-30** (code dormant; launch/usage moved to Projects tab
 
 **Companion & launch:** Tk mascot (windowless on Windows, layered background on Linux) ·
 worker badge on the mascot: per-agent running / awaiting-review / failed counts from the
-session registry, click→dashboard, Dismiss Finished Workers menu (2026-07-03) ·
+session registry, click→dashboard, Dismiss Finished Workers menu (v0.0.16) ·
 owned dashboard window where raise is reliable · VS Code launch destination +
 `vscode-task` resume/fresh tasks · same-version `/health` adoption guard.
 
@@ -204,8 +205,13 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   secret-free, create-only).
 - **Delegation is volume × ambiguity × runtime** — delegate high-volume/low-ambiguity
   with a clear gate, then reproduce the gate; stay inline for exploratory/debugging;
-  workflow tests require a real distinct worker.
-- **Platform traps to remember:** ctypes needs argtypes/restype (64-bit truncation);
+  workflow tests require a real distinct worker. Codex auto-edit workers get a
+  read-only `.git` and no socket bind: the supervisor owns commit, push, and every
+  runtime gate — write briefs accordingly.
+- **Platform traps to remember:** `uv tool install horus-harness` without
+  `--python 3.12` silently resolves an ancient version when uv's default python is
+  below the floor (hit on Linux 2026-07-03, not just Windows);
+  ctypes needs argtypes/restype (64-bit truncation);
   Windows GUI under `pythonw.exe` + reap the process tree; pin CI actions to tags that
   exist; probe the HTTP server, not the companion process; grep the binary/watch the
   network before concluding "no endpoint".

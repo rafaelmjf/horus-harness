@@ -1,7 +1,7 @@
 ---
 project: horus-harness
 status: active
-current_focus: "PRD-structure prototype live (2026-07-03) with a pre-registered acceptance test (PRD backlog item 1): this repo on v3, gym-coach+ttrpg as six-lane controls, Codex cold-reader probes. Baseline probe: equal quiz quality at ~1/8 the context. v0.0.15 on PyPI: cross-agent worker marking (worker_agent per phase, spawn via horus run --agent codex, proven live); 635 tests green."
+current_focus: "PRD-structure prototype live (2026-07-03), acceptance test running: this repo on v3, gym-coach+ttrpg six-lane controls (each +1 worker session today). v0.0.17 on PyPI: worker badge on the mascot (v0.0.16) + Live-sessions Reviewed dismiss (v0.0.17); hub-orchestrated Codex delegation proven — supervisor owns gates/commit (worker sandbox: read-only .git, no sockets); 645 tests green."
 last_updated: 2026-07-03
 ---
 
