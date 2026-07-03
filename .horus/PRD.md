@@ -62,13 +62,11 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    from `.horus/` only. Baseline 2026-07-03, v2 measured at its freshly-consolidated
    best (commit 5f81c40): v3 = 4 files, ~17 KB, 5/5 correct; v2 = 6 files, ~145 KB,
    5/5 correct — equal quality at ~1/8 the context.
-2. **Background-worker visibility.** Headless `horus run` workers (especially
-   cross-agent Codex) are invisible outside the invoking transcript; a hub session's
-   own closure can silently not happen (2026-07-03 orphaned closure). Tee the adapter
-   event stream to a per-session log, add `horus tail <session-id>` to follow it, and
-   have `horus run --watch` spawn a watcher terminal via the existing
-   `launcher.open_terminal` (CREATE_NEW_CONSOLE on Windows); consider default-on for
-   cross-agent workers + a mascot "N workers live" badge (ties into Companion signals).
+2. **Background-worker visibility, watcher-window slice.** The mascot badge shipped
+   (PR #91); still open: tee the adapter event stream to a per-session log, add
+   `horus tail <session-id>` to follow it, and have `horus run --watch` spawn a
+   watcher terminal via the existing `launcher.open_terminal` (CREATE_NEW_CONSOLE
+   on Windows); consider default-on for cross-agent workers.
 3. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
@@ -161,6 +159,8 @@ session, 2026-07-03) · in-app PTY
 cockpit **retired 2026-06-30** (code dormant; launch/usage moved to Projects tab).
 
 **Companion & launch:** Tk mascot (windowless on Windows, layered background on Linux) ·
+worker badge on the mascot: per-agent running / awaiting-review / failed counts from the
+session registry, click→dashboard, Dismiss Finished Workers menu (2026-07-03) ·
 owned dashboard window where raise is reliable · VS Code launch destination +
 `vscode-task` resume/fresh tasks · same-version `/health` adoption guard.
 
