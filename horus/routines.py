@@ -226,14 +226,165 @@ def _name_stopwords(root: Path) -> frozenset[str]:
 # Cap how many individual overlap lines we print before summarizing the rest.
 _MAX_OVERLAP_LINES = 8
 
+# --------------------------------------------------------------------------- #
+# consolidate — structure v3 (PRD.md + sessions/): backlog hygiene only, no
+# lane-purity/overlap warnings (there are no lanes to route between).
+# --------------------------------------------------------------------------- #
+
+_PRD_SOFT_CAP = 235
+_PRD_HARD_CAP = 250
+_MAX_UNDISTILLED_SESSIONS = 12
+
+# A top-level markdown list item: "- text", "* text", or "1. text".
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*]|\d+\.)\s+(.*)$")
+_CHECKBOX_RE = re.compile(r"^\[([ xX])\]\s*(.*)$")
+_BOLD_TITLE_RE = re.compile(r"^\*\*(.+?)\*\*")
+
+_PRD_SKELETON_SECTIONS = ("Vision", "Backlog", "Shipped", "Rules")
+_PRD_PLACEHOLDER_MARKERS = ("describe ", "todo", "tbd", "fill in", "placeholder", "one-paragraph")
+
+
+def _section(body: str, heading: str) -> str:
+    """Body of a top-level (`## `) markdown section, until the next `## ` heading."""
+    lines = body.splitlines()
+    start = None
+    target = f"## {heading}".lower()
+    for i, line in enumerate(lines):
+        if line.strip().lower() == target:
+            start = i + 1
+            break
+    if start is None:
+        return ""
+    end = len(lines)
+    for i in range(start, len(lines)):
+        if lines[i].startswith("## "):
+            end = i
+            break
+    return "\n".join(lines[start:end])
+
+
+def _backlog_item_texts(section_body: str) -> list[str]:
+    """Marker-stripped text of each top-level list item in a section (sub-bullets
+    included; wrapped continuation lines without a marker are not list items)."""
+    items = []
+    for line in section_body.splitlines():
+        m = _LIST_ITEM_RE.match(line)
+        if m:
+            items.append(m.group(1))
+    return items
+
+
+def _item_title(text: str) -> str | None:
+    """The bold **title** at the start of a backlog item's text, if any."""
+    m = _BOLD_TITLE_RE.match(text.strip())
+    return m.group(1).rstrip(" .:").strip() if m else None
+
+
+def _prd_skeleton_gaps(prd_body: str) -> list[str]:
+    """PRD skeleton sections (Vision/Backlog/Shipped/Rules) that are missing, empty,
+    or still carry generic placeholder wording."""
+    gaps: list[str] = []
+    for heading in _PRD_SKELETON_SECTIONS:
+        section = _section(prd_body, heading).strip()
+        if not section:
+            gaps.append(f"{heading} (missing/empty)")
+            continue
+        low = section.lower()
+        if any(marker in low[:120] for marker in _PRD_PLACEHOLDER_MARKERS):
+            gaps.append(heading)
+    return gaps
+
+
+def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
+    """Backlog-hygiene checks for structure v3 (PRD.md + sessions/). Read-only."""
+    findings: list[Finding] = []
+    prd_text = _read(hdir, frontmatter.PRD_FILE) or ""
+    doc = frontmatter.parse(prd_text)
+
+    # 1. PRD size vs the ~250-line cap.
+    line_count = len(prd_text.splitlines())
+    if line_count > _PRD_HARD_CAP:
+        findings.append(Finding(
+            "warn",
+            f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {line_count} lines — over the ~250-line cap: "
+            f"distill one-line shipped entries, delete done backlog items (git remembers)",
+        ))
+    elif line_count > _PRD_SOFT_CAP:
+        findings.append(Finding(
+            "warn",
+            f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {line_count} lines — approaching the ~250-line "
+            f"cap — distill: one-line shipped entries, delete done backlog items (git remembers)",
+        ))
+
+    # 2. Stale frontmatter: PRD last_updated older than the newest session note.
+    sessions = recent_sessions(root, limit=999)
+    newest_session_date = None
+    for s in sessions:
+        d = _as_date(frontmatter.parse(s.read_text(encoding="utf-8")).front_matter.get("date"))
+        if d and (newest_session_date is None or d > newest_session_date):
+            newest_session_date = d
+    if newest_session_date:
+        prd_updated = _as_date(doc.front_matter.get("last_updated"))
+        if prd_updated is None or prd_updated < newest_session_date:
+            stamp = prd_updated.isoformat() if prd_updated else "unset"
+            findings.append(Finding(
+                "warn",
+                f"{HORUS_DIR}/{frontmatter.PRD_FILE} last_updated ({stamp}) is older than the "
+                f"newest session note ({newest_session_date.isoformat()}) — refresh it and bump last_updated",
+            ))
+
+    # 3. Undistilled session notes.
+    if len(sessions) > _MAX_UNDISTILLED_SESSIONS:
+        findings.append(Finding(
+            "warn",
+            f"{len(sessions)} session notes in {HORUS_DIR}/sessions/ — distill older ones to "
+            f"{HORUS_DIR}/sessions/archive/",
+        ))
+
+    # 4 & 5. Backlog hygiene: duplicate titles + lingering done items.
+    backlog_items = _backlog_item_texts(_section(doc.body, "Backlog"))
+    seen_titles: dict[str, str] = {}
+    warned_dupes: set[str] = set()
+    for raw in backlog_items:
+        cb = _CHECKBOX_RE.match(raw)
+        checked = bool(cb and cb.group(1).lower() == "x")
+        text = cb.group(2) if cb else raw
+        title = _item_title(text)
+
+        if title:
+            key = title.lower()
+            if key in seen_titles:
+                if key not in warned_dupes:
+                    findings.append(Finding(
+                        "warn", f"duplicate backlog title '{seen_titles[key]}' — merge or rename"
+                    ))
+                    warned_dupes.add(key)
+            else:
+                seen_titles[key] = title
+
+        if checked or text.startswith("DONE") or text.startswith("Done:"):
+            findings.append(Finding(
+                "warn",
+                f"backlog item '{title or _short(text)}' is done — delete it (git remembers)",
+            ))
+
+    if not any(f.level in ("warn", "fail") for f in findings):
+        findings.append(Finding(
+            "ok", "PRD backlog hygiene looks clean — size, freshness, duplicates, done items"
+        ))
+    return findings
+
 
 def consolidate_signals(root: Path, *, overlap_threshold: float = 0.5) -> list[Finding]:
     """Detect what a consolidation pass should route/prune/distill. Read-only."""
-    findings: list[Finding] = []
     hdir = horus_dir(root)
     if not hdir.is_dir():
         return [Finding("fail", f"no {HORUS_DIR}/ directory (run `horus init`)")]
 
+    if frontmatter.has_prd(root):
+        return _consolidate_signals_v3(root, hdir)
+
+    findings: list[Finding] = []
     for name in RECOMMENDED_FILES:
         if not (hdir / name).is_file():
             findings.append(Finding("warn", f"{HORUS_DIR}/{name} missing — run `horus init` to scaffold it"))
@@ -522,7 +673,20 @@ def infer_signals(root: Path) -> list[Finding]:
             "warn", "no canonical docs found (README/ROADMAP/STATUS/…); infer has little to distill from"
         ))
 
-    if hdir.is_dir():
+    if hdir.is_dir() and frontmatter.has_prd(root):
+        prd_body = frontmatter.parse(_read(hdir, frontmatter.PRD_FILE) or "").body
+        gaps = _prd_skeleton_gaps(prd_body)
+        if gaps:
+            findings.append(Finding(
+                "warn",
+                f"PRD skeleton section(s) empty/placeholder: {', '.join(gaps)} — distill from the "
+                f"canonical docs above",
+            ))
+        else:
+            findings.append(Finding(
+                "ok", "PRD skeleton sections (Vision/Backlog/Shipped/Rules) are populated"
+            ))
+    elif hdir.is_dir():
         placeholders = _placeholder_lanes(hdir)
         if placeholders:
             findings.append(Finding("warn", f"placeholder/empty lanes to populate: {', '.join(placeholders)}"))
