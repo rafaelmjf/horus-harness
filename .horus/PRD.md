@@ -69,17 +69,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    232/250 lines — growth ~5 lines/closure, watch the cap). → proceed to teach the
    tooling (templates, init, close --check on PRD frontmatter, consolidate→backlog
    hygiene, infer/skills, dashboard, migrate the two control repos).
-2. **[bug] Claude adapter marks a completed run `failed` with rc=0** — seen
-   2026-07-03: a claude/work full-auto worker delivered its full result, registry
-   row ended `failed` + `returncode 0` (and `horus run` exited 1). Status mapping
-   in the claude adapter's stream-end handling is suspect. Small, delegable.
-3. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
+2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
-4. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
+3. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
    + `horus upgrade-project --all`; eyeball the mascot failure dialog + Skills tab on a
    desktop session; confirm VS Code task keybindings work under Flatpak.
-5. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
+4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
 
@@ -164,7 +160,9 @@ spawned via `horus run --agent codex`, proven live 2026-07-03 · hub-orchestrate
 cross-project delegation proven (ttrpg Phase 2 shipped from a horus-harness hub
 session, 2026-07-03) · per-run logs (`~/.horus/logs/runs/`) + `horus tail
 <session-id>` + `run --watch` watcher terminal, built by a delegated claude/work
-worker via branch+PR (v0.0.18) · in-app PTY
+worker via branch+PR (v0.0.18) · run status decided by the terminal RESULT event —
+transient tool failures no longer mark a completed run `failed`/rc=0 · registry
+timestamps aware-UTC (legacy naive rows normalized on read) · in-app PTY
 cockpit **retired 2026-06-30** (code dormant; launch/usage moved to Projects tab).
 
 **Companion & launch:** Tk mascot (windowless on Windows, layered background on Linux) ·

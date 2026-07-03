@@ -12,6 +12,7 @@ from horus.adapters import (
     SpawnSpec,
     get_adapter,
 )
+from horus.adapters.base import AgentRun, AgentSession
 
 
 def _spec(**kw) -> SpawnSpec:
@@ -97,6 +98,39 @@ def test_error_event_marks_run_failed():
     run = fake.spawn(_spec())
     run.drain()
     assert run.session.status == "failed"
+
+
+def _run_of(*events: AgentEvent) -> AgentRun:
+    session = AgentSession(agent="fake", project_dir=Path("/proj"))
+    return AgentRun(session, iter(events))
+
+
+def test_failed_tool_result_does_not_fail_a_completed_run():
+    # Regression: a failing tool call mid-run (denied permission, red test) used
+    # to latch the whole run to failed even when it completed cleanly — registry
+    # rows showed status=failed with returncode=0.
+    run = _run_of(
+        AgentEvent(EventType.SESSION_STARTED, session_id="s1"),
+        AgentEvent(EventType.TOOL_RESULT, is_error=True),
+        AgentEvent(EventType.RESULT, is_error=False),
+    )
+    run.drain()
+    assert run.session.status == "exited"
+
+
+def test_error_result_event_marks_run_failed():
+    run = _run_of(AgentEvent(EventType.RESULT, is_error=True))
+    run.drain()
+    assert run.session.status == "failed"
+
+
+def test_stream_error_recovered_by_successful_result_exits_clean():
+    run = _run_of(
+        AgentEvent(EventType.ERROR, text="transient", is_error=True),
+        AgentEvent(EventType.RESULT, is_error=False),
+    )
+    run.drain()
+    assert run.session.status == "exited"
 
 
 def test_scripted_permission_request_surfaces():

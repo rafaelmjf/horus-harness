@@ -30,6 +30,19 @@ def test_upsert_persists_and_survives_reload(tmp_path):
     assert got.updated_at  # stamped on upsert
 
 
+def test_timestamps_are_aware_utc(tmp_path):
+    # Transcripts are UTC, rollout filenames local; the registry must be the
+    # unambiguous clock. Legacy rows were naive local time.
+    from datetime import datetime
+
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(session_id="abc"))
+    reg.set_status("abc", "exited", returncode=0)
+    stamp = reg.get("abc").updated_at
+    assert datetime.fromisoformat(stamp).tzinfo is not None
+    assert stamp.endswith("+00:00")
+
+
 def test_upsert_is_idempotent_by_session_id(tmp_path):
     reg = _reg(tmp_path)
     reg.upsert(_rec(session_id="abc", status="running"))
