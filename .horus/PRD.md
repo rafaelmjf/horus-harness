@@ -51,6 +51,17 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    `infer`/skills rewritten for the new shape; dashboard renders PRD sections; migrate
    agentic-gym-coach + agentic-ttrpg via `upgrade-project`. Closure contract becomes:
    update PRD (focus/backlog/shipped) + session note + commit.
+   **Acceptance test (pre-registered 2026-07-03, keep simple):** this repo runs v3;
+   gym-coach + ttrpg stay on six lanes as controls. After ~5 sessions per cohort, rerun
+   the transcript analysis (closure + resume tool calls, each project vs its own
+   baseline). v3 *fails* if a cold session misses a load-bearing rule or re-attempts a
+   documented dead end, if the PRD blows its ~250-line cap into a consolidation crisis,
+   or if a resume lands at the wrong pickup point. Repeatable probe: Codex cold reader
+   (`horus run --agent codex`, no shared history) answers a fixed 5-question quiz
+   (focus / next step / a rules question / two load-bearing rules / latest release)
+   from `.horus/` only. Baseline 2026-07-03, v2 measured at its freshly-consolidated
+   best (commit 5f81c40): v3 = 4 files, ~17 KB, 5/5 correct; v2 = 6 files, ~145 KB,
+   5/5 correct — equal quality at ~1/8 the context.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
@@ -135,7 +146,9 @@ dedup + Track-on-this-machine · ignore/unignore · `horus start github:…`.
 
 **Execution & adapters:** adapter contract + Fake/Claude/Codex adapters (multi-account
 via `CLAUDE_CONFIG_DIR`/`CODEX_HOME`) · `run`/`open`/`focus` · execution workflow
-(`execution prompt`/`handoff`, delegation rubric volume×ambiguity×runtime) · in-app PTY
+(`execution prompt`/`handoff`, delegation rubric volume×ambiguity×runtime) · cross-agent
+worker marking: per-phase `worker_agent` (native/claude/codex) in template + skill v5,
+spawned via `horus run --agent codex`, proven live 2026-07-03 · in-app PTY
 cockpit **retired 2026-06-30** (code dormant; launch/usage moved to Projects tab).
 
 **Companion & launch:** Tk mascot (windowless on Windows, layered background on Linux) ·
