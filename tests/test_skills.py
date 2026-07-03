@@ -50,7 +50,7 @@ def test_expected_skills_registered():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 4
+    assert execution.version == 5
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -62,6 +62,21 @@ def test_execution_skill_requires_real_delegation_for_model_separation():
     assert "volume × ambiguity" in execution.content
     assert "safety guarantee" in execution.content  # honest review caveat
     assert "does not satisfy the workflow test" in execution.content
+    # v5: cross-agent workers — mark a phase for the other CLI and spawn it tracked.
+    assert "worker_agent: codex" in execution.content
+    assert "horus run --agent codex" in execution.content
+    assert "shares no conversation history" in execution.content
+    assert "reproduce the gate yourself" in execution.content
+
+
+def test_execution_template_carries_worker_agent_marking():
+    from horus import templates
+
+    doc = templates.execution_md("2026-07-03")
+    assert "| worker_tier | worker_agent |" in doc  # Active Phases column
+    assert "`worker_agent` marks which agent CLI runs a delegated phase" in doc
+    assert "horus run --agent codex --account <alias>" in doc
+    assert "cold reader" in doc
 
 
 def test_missing_or_stale_and_findings(tmp_path):

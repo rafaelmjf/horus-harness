@@ -326,7 +326,7 @@ description: >-
   at closure.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Horus execution supervision
 
@@ -409,6 +409,20 @@ not the reviewer.
    be spawned from the current environment, stop and tell the user that the test
    cannot proceed faithfully here.
 
+   A phase can also be marked for a **cross-agent worker** (`worker_agent: codex` or
+   `claude` instead of the default `native`). Spawn it as a one-shot tracked session:
+
+   ```bash
+   horus run --agent codex --account <alias> --path . "<phase brief — point it at the handoff note>"
+   ```
+
+   The prompt must be self-contained: the worker shares no conversation history with
+   the supervisor, so hand it the phase scope, the handoff-note path to fill, and the
+   gate to run. `--account` selects an isolated `CODEX_HOME`/`CLAUDE_CONFIG_DIR`
+   mapping (`horus account --set-codex-home` / `--set-dir`); omit it for the default
+   login. The review contract is unchanged: review the diff and the handoff note,
+   then reproduce the gate yourself.
+
 5. **Require a handoff note.** Before a worker returns, create or ask it to create:
 
    ```bash
@@ -433,6 +447,10 @@ not the reviewer.
   useful. Map frontier to strong/high-reasoning supervision, standard to worker
   implementation, and economy to mechanical continuity or formatting updates. Codex's
   cost/latency/review tradeoffs may differ from Claude; record the local rationale.
+- Cross-agent (either supervisor): `worker_agent: codex`/`claude` phases run on the
+  other CLI via `horus run --agent <cli>` — a one-shot exec session, registry-tracked.
+  Because a cross-vendor worker shares no conversation history, it doubles as an
+  honest cold reader of `.horus/` continuity (useful for resume probes).
 
 When the goal is to validate the workflow itself, "delegated" means a distinct worker
 agent/session/model actually did the implementation and left a handoff note. A handoff
@@ -454,7 +472,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 8, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 2, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 2, _INFER_SKILL),
-    Skill("horus-execution", 4, _EXECUTION_SKILL),
+    Skill("horus-execution", 5, _EXECUTION_SKILL),
 )
 
 

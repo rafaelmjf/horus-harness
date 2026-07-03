@@ -1574,7 +1574,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_run = sub.add_parser("run", help="spawn (or resume) an agent session, tracked in the registry")
     p_run.add_argument("prompt", help="the prompt to send the agent")
-    p_run.add_argument("--agent", default="claude", help="adapter to use (claude | fake; default: claude)")
+    p_run.add_argument("--agent", default="claude", help="adapter to use (claude | codex | fake; default: claude)")
     p_run.add_argument("--account", default=None, help="account alias to run under (uses its isolated config dir)")
     p_run.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
     p_run.add_argument(
@@ -1589,7 +1589,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_open = sub.add_parser("open", help="open an interactive agent session in its own terminal (tracked)")
     p_open.add_argument("path", nargs="?", default=".", help="project root to open in (default: cwd)")
-    p_open.add_argument("--agent", default="claude", help="adapter to use (claude | fake; default: claude)")
+    p_open.add_argument("--agent", default="claude", help="adapter to use (claude | codex | fake; default: claude)")
     p_open.add_argument("--account", default=None, help="account alias to run under (uses its isolated config dir)")
     p_open.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
     p_open.add_argument(

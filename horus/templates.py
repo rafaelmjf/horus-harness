@@ -225,11 +225,22 @@ for this agent/runtime. Different agents may reasonably choose differently.
 | standard | narrow implementation phases with tests | worker |
 | frontier | planning, architecture, risky review, final acceptance | supervisor |
 
+`worker_agent` marks which agent CLI runs a delegated phase: `native` (the
+supervisor's own subagents — the default) or a named CLI (`claude`, `codex`) for a
+cross-agent worker. Spawn a cross-agent worker as a one-shot tracked session:
+
+    horus run --agent codex --account <alias> --path . "<phase brief - point it at the handoff note>"
+
+The review contract does not change with the worker agent: review the diff and the
+handoff note, then reproduce the gate yourself. A cross-vendor worker shares no
+conversation history with the supervisor, which also makes it an honest cold reader
+of `.horus/` continuity.
+
 ## Active Phases
 
-| phase | status | difficulty | mode | worker_tier | delegation_basis | handoff_note | review |
-|---|---|---|---|---|---|---|---|
-| 1A | planned | S2 | direct-or-delegate | standard-if-delegated | why delegation is worth/not worth it here | `.horus/temp/1A.md` | frontier |
+| phase | status | difficulty | mode | worker_tier | worker_agent | delegation_basis | handoff_note | review |
+|---|---|---|---|---|---|---|---|---|
+| 1A | planned | S2 | direct-or-delegate | standard-if-delegated | native | why delegation is worth/not worth it here | `.horus/temp/1A.md` | frontier |
 
 ## Worker Handoff Contract
 
@@ -248,7 +259,10 @@ Useful commands:
 - `horus execution prompt --target codex` prints a supervisor prompt shaped for
   Codex subagents/custom agents.
 - `horus execution prompt --target claude` prints the Claude Code equivalent.
-- `horus execution handoff 1A` creates `.horus/temp/1A.md` for a worker note.
+- `horus execution handoff 1A` creates `.horus/temp/1A.md` for a worker note
+  (`--agent codex` to label a cross-agent worker).
+- `horus run --agent codex --path . "<prompt>"` spawns a one-shot tracked Codex
+  worker (`--account <alias>` for an isolated `CODEX_HOME`).
 """
 
 
