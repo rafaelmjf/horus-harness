@@ -144,18 +144,11 @@ def resume_context(root: Path) -> dict[str, str]:
         "latest_session": "",
     }
 
-    project_md = _read(hdir, "project.md")
-    if project_md is not None:
-        doc = frontmatter.parse(project_md)
-        context["current_focus"] = str(doc.front_matter.get("current_focus", "")).strip()
-
-    roadmap_md = _read(hdir, "roadmap.md")
-    if roadmap_md is not None:
-        doc = frontmatter.parse(roadmap_md)
-        fm = doc.front_matter
-        context["next_action"] = str(fm.get("next_action", "")).strip()
-        context["next_prompt"] = str(fm.get("next_prompt", "")).strip()
-        context["execution_recommendation"] = str(fm.get("execution_recommendation", "")).strip()
+    focus = frontmatter.resolve_focus(root)
+    context["current_focus"] = focus["current_focus"]
+    context["next_action"] = focus["next_action"]
+    context["next_prompt"] = focus["next_prompt"]
+    context["execution_recommendation"] = focus["execution_recommendation"]
 
     execution_md = _read(hdir, "execution.md")
     if execution_md is not None:
@@ -189,6 +182,18 @@ def resume_prompt(root: Path) -> str:
     next_prompt = info["next_prompt"]
     continuation = next_prompt or f"Continue with the next action above on the {project} project."
 
+    if frontmatter.has_prd(root):
+        lazy_load = f"""Do not front-load the whole `.horus/` directory. Lazy-load only what this task needs:
+- Read `.horus/{frontmatter.PRD_FILE}` before substantial work — vision, backlog, shipped, rules (it is the one maintained continuity file).
+- Read `.horus/execution.md` only if the work uses phased worker handoffs or `execution_recommendation` says `plan-execution`.
+- Read the latest `.horus/sessions/` summary only if local-only details from the previous session are needed."""
+    else:
+        lazy_load = """Do not read every `.horus/` lane up front. Lazy-load only what this task needs:
+- Read `.horus/execution.md` only if the work uses phased worker handoffs or `execution_recommendation` says `plan-execution`.
+- Read `.horus/project.md` only for broader product scope or constraints.
+- Read `.horus/features.md`, `.horus/decisions.md`, and `.horus/history.md` only when shipped capability status, durable rules, or prior lessons matter.
+- Read the latest `.horus/sessions/` summary only if local-only details from the previous session are needed."""
+
     return f"""Resume the {project} project.
 
 Before trusting local state:
@@ -202,11 +207,7 @@ Minimum Horus state already loaded:
 - `execution_status`: {execution_status}
 - `latest_session`: {latest_session}
 
-Do not read every `.horus/` lane up front. Lazy-load only what this task needs:
-- Read `.horus/execution.md` only if the work uses phased worker handoffs or `execution_recommendation` says `plan-execution`.
-- Read `.horus/project.md` only for broader product scope or constraints.
-- Read `.horus/features.md`, `.horus/decisions.md`, and `.horus/history.md` only when shipped capability status, durable rules, or prior lessons matter.
-- Read the latest `.horus/sessions/` summary only if local-only details from the previous session are needed.
+{lazy_load}
 
 Continue with this authored handoff:
 {continuation}
@@ -353,6 +354,11 @@ def freshness_signals(root: Path) -> list[Finding]:
     if not hdir.is_dir():
         return findings
 
+    # v3 (PRD.md + sessions/): the PRD frontmatter is the one fresh surface; the
+    # shared resolver still honors transitional shims per-field.
+    v3 = frontmatter.has_prd(root)
+    fresh_lanes = (frontmatter.PRD_FILE,) if v3 else _FRESH_LANES
+
     sessions = recent_sessions(root, limit=1)
     session_date = None
     if sessions:
@@ -360,7 +366,7 @@ def freshness_signals(root: Path) -> list[Finding]:
 
     # 1) Lanes that should track every session, but weren't updated since the last one.
     if session_date:
-        for lane in _FRESH_LANES:
+        for lane in fresh_lanes:
             body = _read(hdir, lane)
             if body is None:
                 continue
@@ -374,29 +380,28 @@ def freshness_signals(root: Path) -> list[Finding]:
                 ))
 
     # 2) The dashboard's NEXT + focus must be authored (it never infers them).
-    rm = _read(hdir, "roadmap.md")
-    next_action = ""
-    if rm is not None:
-        fm = frontmatter.parse(rm).front_matter
-        next_action = (fm.get("next_action") or "").strip()
+    focus = frontmatter.resolve_focus(root)
+    next_action = focus["next_action"]
+    next_home = frontmatter.PRD_FILE if v3 else "roadmap.md"
+    if v3 or _read(hdir, "roadmap.md") is not None:
         if not next_action:
             findings.append(Finding(
-                "warn", "roadmap.md next_action is empty — the dashboard NEXT shows 'not set'; author it at closure"
+                "warn", f"{next_home} next_action is empty — the dashboard NEXT shows 'not set'; author it at closure"
             ))
-        if not (fm.get("next_prompt") or "").strip():
+        if not focus["next_prompt"]:
             findings.append(Finding(
-                "warn", "roadmap.md next_prompt is empty — the dashboard's resume prompt is blank; author it"
+                "warn", f"{next_home} next_prompt is empty — the dashboard's resume prompt is blank; author it"
             ))
-        if not (fm.get("execution_recommendation") or "").strip():
+        if not focus["execution_recommendation"]:
             findings.append(Finding(
                 "warn",
-                "roadmap.md execution_recommendation is empty — analyze whether the NEXT needs execution.md/subagents",
+                f"{next_home} execution_recommendation is empty — analyze whether the NEXT needs execution.md/subagents",
             ))
 
-    pj = _read(hdir, "project.md")
-    if pj is not None and not (frontmatter.parse(pj).front_matter.get("current_focus") or "").strip():
+    focus_home = frontmatter.PRD_FILE if v3 else "project.md"
+    if (v3 or _read(hdir, "project.md") is not None) and not focus["current_focus"]:
         findings.append(Finding(
-            "warn", "project.md current_focus is empty — the dashboard shows it; set it at closure"
+            "warn", f"{focus_home} current_focus is empty — the dashboard shows it; set it at closure"
         ))
 
     # 3) NEXT pointing at already-shipped work. Fuzzy, so require a *strong* match

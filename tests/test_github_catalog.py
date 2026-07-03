@@ -702,3 +702,52 @@ def test_untracked_cache_ignores_workspace_dir_with_different_remote(tmp_path, m
     cached = github_catalog.load_cache("rafaelmjf", local_projects=[])
     assert cached is not None
     assert cached.untracked[0].local_path is None
+
+
+def test_discover_finds_v3_prd_repo_without_shims(monkeypatch):
+    prd_md = """---
+status: active
+current_focus: "PRD focus"
+next_action: "PRD next"
+next_prompt: "PRD prompt"
+---
+
+# PRD
+"""
+
+    def fake_run(cmd, **kwargs):
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+
+        result = Result()
+        if cmd[:3] == ["gh", "repo", "list"]:
+            result.stdout = json.dumps([
+                {
+                    "name": "v3repo",
+                    "nameWithOwner": "rafaelmjf/v3repo",
+                    "url": "https://github.com/rafaelmjf/v3repo",
+                    "sshUrl": "git@github.com:rafaelmjf/v3repo.git",
+                    "defaultBranchRef": {"name": "main"},
+                    "pushedAt": "2026-07-03T12:00:00Z",
+                },
+            ])
+            return result
+        if "repos/rafaelmjf/v3repo/contents/.horus/PRD.md" in cmd:
+            result.stdout = _content(prd_md)
+            return result
+        # No project.md / roadmap.md — the shims are gone on a v3 repo.
+        result.returncode = 1
+        result.stderr = "not found"
+        return result
+
+    monkeypatch.setattr(github_catalog.subprocess, "run", fake_run)
+
+    result = github_catalog.discover("rafaelmjf", local_projects=[])
+
+    assert len(result.untracked) == 0
+    assert len(result.projects) == 1
+    assert result.projects[0].current_focus == "PRD focus"
+    assert result.projects[0].next_action == "PRD next"
+    assert result.projects[0].next_prompt == "PRD prompt"

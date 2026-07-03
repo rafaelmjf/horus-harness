@@ -307,3 +307,93 @@ def test_recent_sessions_excludes_archive(tmp_path):
     (sessions / "active.md").write_text("x", encoding="utf-8")
     (sessions / "archive" / "distilled.md").write_text("x", encoding="utf-8")
     assert [p.name for p in recent_sessions(tmp_path, limit=10)] == ["active.md"]
+
+
+# --------------------------------------------------------------------------- #
+# structure v3 (PRD.md + sessions/) — freshness + resume via the shared resolver
+# --------------------------------------------------------------------------- #
+
+def _mk_fresh_v3(
+    root: Path, *, session_date="2026-06-26T10:00:00", prd_updated="2026-06-26",
+    next_action="Build the Codex adapter", next_prompt="Resume: build Codex adapter",
+    execution_recommendation="continue-as-is", current_focus="Shipping the terminal",
+):
+    """A v3 .horus/ (PRD.md + one session, no six lanes) for freshness_signals."""
+    hdir = root / ".horus"
+    (hdir / "sessions").mkdir(parents=True, exist_ok=True)
+    (hdir / "sessions" / "s1.md").write_text(
+        f"---\ndate: {session_date}\nsummary: x\n---\n# s\n", encoding="utf-8"
+    )
+    (hdir / "PRD.md").write_text(
+        f'---\nstatus: active\ncurrent_focus: "{current_focus}"\nnext_action: "{next_action}"\n'
+        f'next_prompt: "{next_prompt}"\nexecution_recommendation: "{execution_recommendation}"\n'
+        f"last_updated: {prd_updated}\n---\n# PRD\n\n## Vision\n\nA thing.\n",
+        encoding="utf-8",
+    )
+    return hdir
+
+
+def test_freshness_v3_ok_when_prd_current(tmp_path):
+    _mk_fresh_v3(tmp_path)
+    f = routines.freshness_signals(tmp_path)
+    assert not any(lvl == "warn" for lvl, _ in _levels(f))
+    assert any("fresh" in m for lvl, m in _levels(f) if lvl == "ok")
+
+
+def test_freshness_v3_flags_stale_prd(tmp_path):
+    _mk_fresh_v3(tmp_path, prd_updated="2026-06-20")
+    msgs = [m for lvl, m in _levels(routines.freshness_signals(tmp_path)) if lvl == "warn"]
+    assert any("PRD.md last_updated" in m for m in msgs)
+
+
+def test_freshness_v3_flags_empty_fields_naming_prd(tmp_path):
+    _mk_fresh_v3(
+        tmp_path, next_action="", next_prompt="", execution_recommendation="", current_focus=""
+    )
+    msgs = [m for lvl, m in _levels(routines.freshness_signals(tmp_path)) if lvl == "warn"]
+    assert any("PRD.md next_action is empty" in m for m in msgs)
+    assert any("PRD.md next_prompt is empty" in m for m in msgs)
+    assert any("PRD.md execution_recommendation is empty" in m for m in msgs)
+    assert any("PRD.md current_focus is empty" in m for m in msgs)
+
+
+def test_freshness_v3_transitional_shims_still_satisfy(tmp_path):
+    # PRD exists but the handoff fields still live in the shims: no warnings.
+    hdir = _mk_fresh_v3(
+        tmp_path, next_action="", next_prompt="", execution_recommendation="", current_focus=""
+    )
+    (hdir / "project.md").write_text(
+        '---\ncurrent_focus: "Shim focus"\nlast_updated: 2026-06-26\n---\n# P\n', encoding="utf-8"
+    )
+    (hdir / "roadmap.md").write_text(
+        '---\nnext_action: "Shim next"\nnext_prompt: "Shim prompt"\n'
+        'execution_recommendation: "Shim exec"\nlast_updated: 2026-06-26\n---\n# R\n',
+        encoding="utf-8",
+    )
+    f = routines.freshness_signals(tmp_path)
+    assert not any(lvl == "warn" for lvl, _ in _levels(f))
+
+
+def test_resume_context_v3_reads_prd_frontmatter(tmp_path):
+    _mk_fresh_v3(tmp_path)
+    ctx = routines.resume_context(tmp_path)
+    assert ctx["current_focus"] == "Shipping the terminal"
+    assert ctx["next_action"] == "Build the Codex adapter"
+    assert ctx["next_prompt"] == "Resume: build Codex adapter"
+    assert ctx["execution_recommendation"] == "continue-as-is"
+
+
+def test_resume_prompt_v3_points_at_prd_not_lanes(tmp_path):
+    _mk_fresh_v3(tmp_path)
+    prompt = routines.resume_prompt(tmp_path)
+    assert "PRD.md" in prompt
+    assert ".horus/project.md" not in prompt
+    assert ".horus/features.md" not in prompt
+    assert "Resume: build Codex adapter" in prompt
+
+
+def test_resume_prompt_v2_unchanged(tmp_path):
+    _mk_fresh(tmp_path)
+    prompt = routines.resume_prompt(tmp_path)
+    assert ".horus/project.md" in prompt
+    assert "PRD.md" not in prompt

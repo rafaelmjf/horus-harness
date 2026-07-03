@@ -101,3 +101,27 @@ def test_doctor_passes_on_fresh_init(tmp_path, monkeypatch):
     initialize.init_project(tmp_path, assume_yes=True)
     findings = check_project(tmp_path)
     assert not any(f.level == "fail" for f in findings)
+
+
+def test_doctor_v3_prd_project_needs_no_lanes(tmp_path):
+    # Structure v3: PRD.md + sessions/ — the six lanes must not be required.
+    hdir = tmp_path / ".horus"
+    (hdir / "sessions").mkdir(parents=True)
+    (hdir / "PRD.md").write_text(
+        '---\nstatus: active\ncurrent_focus: "Ship it"\n---\n# PRD\n\n## Vision\n', encoding="utf-8"
+    )
+    (hdir / "sessions" / "s1.md").write_text("---\ndate: 2026-07-03\n---\n# s\n", encoding="utf-8")
+
+    findings = check_project(tmp_path)
+    assert not any(f.level == "fail" for f in findings)
+    assert not any("missing" in f.message for f in findings)
+    assert any("PRD.md present" in f.message for f in findings)
+
+
+def test_doctor_v3_warns_on_missing_focus(tmp_path):
+    hdir = tmp_path / ".horus"
+    hdir.mkdir(parents=True)
+    (hdir / "PRD.md").write_text("---\nstatus: active\n---\n# PRD\n", encoding="utf-8")
+
+    findings = check_project(tmp_path)
+    assert any(f.level == "warn" and "no current_focus" in f.message for f in findings)

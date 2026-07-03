@@ -45,7 +45,7 @@ class RemoteProject:
 
 @dataclass(frozen=True)
 class UntrackedRepo:
-    """A GitHub repo that does not have `.horus/project.md`."""
+    """A GitHub repo with neither `.horus/PRD.md` nor `.horus/project.md`."""
 
     owner: str
     name: str
@@ -99,10 +99,11 @@ def discover(
 ) -> DiscoveryResult:
     """Return Horus-enabled and untracked GitHub repos for `owner`.
 
-    A repo is considered Horus-enabled when `.horus/project.md` is readable. The
-    roadmap file is optional; older Horus projects can still appear with just the
-    project focus. Repos without `.horus/project.md` are classified as untracked and
-    returned in ``DiscoveryResult.untracked``.
+    A repo is considered Horus-enabled when `.horus/PRD.md` (structure v3) or
+    `.horus/project.md` (v2) is readable. Focus fields resolve PRD-first, falling
+    back to the v2 project/roadmap frontmatter per-field — mirroring
+    :func:`horus.frontmatter.resolve_focus` for local projects. Repos with neither
+    file are classified as untracked and returned in ``DiscoveryResult.untracked``.
 
     When ``prior`` is supplied (a dict keyed by ``full_name``), any repo whose
     ``pushedAt`` matches the cached entry is returned from the cache without making
@@ -172,9 +173,18 @@ def discover(
                 )
                 continue
 
-        # Full fetch path: read .horus/ files from GitHub.
-        project_text = _repo_file(full_name, ".horus/project.md", branch)
-        if project_text is None:
+        # Full fetch path: read .horus/ files from GitHub — PRD.md first (v3),
+        # then the v2 shims for whichever fields the PRD doesn't carry.
+        prd_text = _repo_file(full_name, ".horus/PRD.md", branch)
+        prd_fm = frontmatter.parse(prd_text).front_matter if prd_text is not None else {}
+        current_focus = str(prd_fm.get("current_focus", "")).strip()
+        next_action = str(prd_fm.get("next_action", "")).strip()
+        next_prompt = str(prd_fm.get("next_prompt", "")).strip()
+
+        project_text = None
+        if prd_text is None or not current_focus:
+            project_text = _repo_file(full_name, ".horus/project.md", branch)
+        if prd_text is None and project_text is None:
             # Not a Horus project — classify as untracked.
             out_untracked.append(
                 UntrackedRepo(
@@ -190,9 +200,13 @@ def discover(
                 )
             )
             continue
-        roadmap_text = _repo_file(full_name, ".horus/roadmap.md", branch) or ""
-        project_doc = frontmatter.parse(project_text)
-        roadmap_doc = frontmatter.parse(roadmap_text)
+        if not current_focus and project_text is not None:
+            current_focus = str(frontmatter.parse(project_text).front_matter.get("current_focus", "")).strip()
+        if not (next_action and next_prompt):
+            roadmap_text = _repo_file(full_name, ".horus/roadmap.md", branch) or ""
+            roadmap_fm = frontmatter.parse(roadmap_text).front_matter
+            next_action = next_action or str(roadmap_fm.get("next_action", "")).strip()
+            next_prompt = next_prompt or str(roadmap_fm.get("next_prompt", "")).strip()
         out_projects.append(
             RemoteProject(
                 owner=owner,
@@ -202,9 +216,9 @@ def discover(
                 clone_url=clone_url or url,
                 default_branch=branch,
                 pushed_at=live_pushed_at,
-                current_focus=str(project_doc.front_matter.get("current_focus", "")),
-                next_action=str(roadmap_doc.front_matter.get("next_action", "")),
-                next_prompt=str(roadmap_doc.front_matter.get("next_prompt", "")),
+                current_focus=current_focus,
+                next_action=next_action,
+                next_prompt=next_prompt,
                 local_path=local_path,
             )
         )

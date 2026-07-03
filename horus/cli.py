@@ -576,14 +576,14 @@ def cmd_execution(args: argparse.Namespace) -> int:
         return 1
 
     if args.execution_cmd == "prompt":
-        roadmap_doc = _read_horus_doc(root, "roadmap.md")
+        focus = frontmatter.resolve_focus(root)
         execution_doc = _read_horus_doc(root, "execution.md")
         print(
             templates.execution_supervisor_prompt(
                 target=args.target,
                 project=root.name,
-                next_action=roadmap_doc.front_matter.get("next_action", ""),
-                execution_recommendation=roadmap_doc.front_matter.get("execution_recommendation", ""),
+                next_action=focus["next_action"],
+                execution_recommendation=focus["execution_recommendation"],
                 execution_status=execution_doc.front_matter.get("status", ""),
                 current_feature=execution_doc.front_matter.get("current_feature", ""),
             )

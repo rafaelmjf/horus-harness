@@ -7,7 +7,23 @@ understands the simple scalar front matter Horus writes (quoted or bare scalars)
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import NamedTuple
+
+PRD_FILE = "PRD.md"
+
+# Where each focus/handoff field lives in the legacy v2 lanes, in fallback order.
+# `resolve_focus` prefers `.horus/PRD.md` frontmatter (structure v3) the moment a
+# field is present there; these are the per-field fallbacks for v2 projects and
+# for v3 projects still carrying transitional shims.
+_SHIM_HOMES: dict[str, tuple[str, ...]] = {
+    "status": ("project.md",),
+    "current_focus": ("project.md", "roadmap.md"),
+    "next_action": ("roadmap.md",),
+    "next_prompt": ("roadmap.md",),
+    "execution_recommendation": ("roadmap.md",),
+    "last_updated": ("project.md", "roadmap.md"),
+}
 
 
 class Document(NamedTuple):
@@ -53,3 +69,50 @@ def parse(text: str) -> Document:
 
     body = "\n".join(lines[end_index + 1 :]).lstrip("\n")
     return Document(front, body)
+
+
+def prd_path(project_root: Path) -> Path:
+    return project_root / ".horus" / PRD_FILE
+
+
+def has_prd(project_root: Path) -> bool:
+    """True when the project uses the v3 continuity structure (PRD.md + sessions/)."""
+    return prd_path(project_root).is_file()
+
+
+def parse_file(path: Path) -> Document | None:
+    """Parse a Markdown file into a Document, or None when it doesn't exist."""
+    if not path.is_file():
+        return None
+    return parse(path.read_text(encoding="utf-8"))
+
+
+def resolve_focus(project_root: Path) -> dict[str, str]:
+    """Resolve the focus/handoff frontmatter fields for a project, PRD-first.
+
+    v3 projects carry `current_focus` / `next_action` / `next_prompt` /
+    `execution_recommendation` (plus `status` / `last_updated`) in `.horus/PRD.md`
+    frontmatter; v2 projects keep them in the `project.md` / `roadmap.md` lanes.
+    Per field, a non-empty PRD.md value wins the moment it exists; otherwise the
+    legacy lane value is used — so v2 projects behave exactly as before, and a v3
+    project may delete the shims entirely once PRD.md carries the fields.
+    """
+    hdir = project_root / ".horus"
+    prd = parse_file(hdir / PRD_FILE)
+    shims: dict[str, Document | None] = {}
+    result: dict[str, str] = {}
+    for field, homes in _SHIM_HOMES.items():
+        value = ""
+        if prd is not None:
+            value = str(prd.front_matter.get(field, "")).strip()
+        if not value:
+            for home in homes:
+                if home not in shims:
+                    shims[home] = parse_file(hdir / home)
+                doc = shims[home]
+                if doc is not None:
+                    value = str(doc.front_matter.get(field, "")).strip()
+                if value:
+                    break
+        result[field] = value
+    return result
