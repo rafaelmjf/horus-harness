@@ -40,6 +40,28 @@ def recent_sessions(project_root: Path, limit: int = 5) -> list[Path]:
     return files[:limit]
 
 
+def _check_focus(project_root: Path, source: str) -> list[Finding]:
+    """current_focus health via the shared PRD-first resolver."""
+    focus = frontmatter.resolve_focus(project_root).get("current_focus", "")
+    if not focus:
+        return [Finding("warn", f"{source}: no current_focus set")]
+    if focus.lower().startswith("describe "):
+        return [Finding("warn", f"{source}: current_focus still the placeholder")]
+    return []
+
+
+def _check_sessions(project_root: Path) -> list[Finding]:
+    sessions_path = horus_dir(project_root) / SESSIONS_DIR
+    if not sessions_path.is_dir():
+        return [Finding("warn", f"no {HORUS_DIR}/{SESSIONS_DIR}/ directory")]
+    recent = recent_sessions(project_root)
+    if recent:
+        return [
+            Finding("ok", f"{len(recent)} recent session summary(ies); latest: {recent[0].name}")
+        ]
+    return [Finding("warn", "no session summaries yet")]
+
+
 def check_project(project_root: Path) -> list[Finding]:
     """Inspect a project's `.horus/` continuity and return findings."""
     findings: list[Finding] = []
@@ -52,6 +74,19 @@ def check_project(project_root: Path) -> list[Finding]:
         return findings
 
     findings.append(Finding("ok", f"{HORUS_DIR}/ present"))
+
+    # Structure v3 (PRD.md + sessions/): the six lanes are not required; the PRD
+    # carries vision/backlog/shipped/rules and the focus fields live in its
+    # frontmatter (transitional shims still win per-field via the resolver).
+    prd = hdir / frontmatter.PRD_FILE
+    if prd.is_file():
+        if prd.read_text(encoding="utf-8").strip():
+            findings.append(Finding("ok", f"{HORUS_DIR}/{frontmatter.PRD_FILE} present (structure v3)"))
+        else:
+            findings.append(Finding("warn", f"{HORUS_DIR}/{frontmatter.PRD_FILE} is empty"))
+        findings.extend(_check_focus(project_root, frontmatter.PRD_FILE))
+        findings.extend(_check_sessions(project_root))
+        return findings
 
     for name in COMMITTED_FILES:
         path = hdir / name
@@ -89,16 +124,6 @@ def check_project(project_root: Path) -> list[Finding]:
                 Finding("warn", f"{name}: current_focus still the placeholder")
             )
 
-    sessions_path = hdir / SESSIONS_DIR
-    if not sessions_path.is_dir():
-        findings.append(Finding("warn", f"no {HORUS_DIR}/{SESSIONS_DIR}/ directory"))
-    else:
-        recent = recent_sessions(project_root)
-        if recent:
-            findings.append(
-                Finding("ok", f"{len(recent)} recent session summary(ies); latest: {recent[0].name}")
-            )
-        else:
-            findings.append(Finding("warn", "no session summaries yet"))
+    findings.extend(_check_sessions(project_root))
 
     return findings

@@ -1,15 +1,20 @@
 ---
 status: active
+current_focus: "v3-tooling execution plan Phase 1 (PRD-frontmatter contract) implemented: shared resolve_focus reader (PRD → shim fallback) behind close --check, merge gate, resume, dashboard NEXT, doctor, GitHub catalog; this repo's shims deleted. Phases 2–4 next (delegable in parallel)."
+next_action: "Delegate phases 2–4 of .horus/execution.md as parallel claude/work workers (templates/init v3, consolidate+skills v3, dashboard PRD rendering) via horus run --watch; review one at a time, supervisor reproduces each gate."
+next_prompt: "Resume Horus as execution supervisor. FIRST git fetch --all --prune. THEN read .horus/PRD.md and .horus/execution.md. Phase 1 (PRD-frontmatter contract) is DONE and merged: horus/frontmatter.py resolve_focus is the shared PRD-first reader; this repo has no shims. Next: delegate phases 2–4 as parallel claude/work workers per the plan (briefs from each phase's delegation_basis row), spawn with --watch, review one at a time and reproduce each gate yourself. Phase 5 (migration engine) stays direct supervisor work afterward."
+execution_recommendation: "plan-execution — ACTIVE: .horus/execution.md (6 phases). Phase 1 done; phases 2–4 are delegable in parallel (claude/work workers, branch+PR); phase 5 direct; phase 6 supervised runs + quiz gate."
 last_updated: 2026-07-03
 ---
 
 # Horus — PRD
 
 The one maintained continuity file. Structure: **PRD.md + sessions/** (prototype,
-2026-07-03). `project.md` and `roadmap.md` remain as thin frontmatter shims for the
-current tooling (dashboard NEXT box, `horus resume`, merge freshness gate); their
-content lives here. The retired lanes (`features.md`, `decisions.md`, `history.md`,
-`execution.md`) are preserved verbatim in `archive/` and in git history.
+2026-07-03). The tooling reads this file's frontmatter directly (dashboard NEXT box,
+`horus resume`, merge freshness gate — `resolve_focus`, Phase 1 of the v3-tooling
+plan); the `project.md`/`roadmap.md` shims are deleted. The retired lanes
+(`features.md`, `decisions.md`, `history.md`, `execution.md`) are preserved verbatim
+in `archive/` and in git history.
 
 ## Vision
 
@@ -236,8 +241,8 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **`sessions/`** unchanged: one note per session (`horus session new`), operational
   facts welcome (gates verified, tokens to rotate, dead ends). Distilled notes →
   `sessions/archive/` (local).
-- **Shims:** `project.md` (current_focus) and `roadmap.md` (next_action/next_prompt/
-  execution_recommendation) keep live frontmatter only, until the tooling reads PRD
-  frontmatter directly.
-- **Closure:** update shim frontmatter + this file's backlog/shipped + session note +
+- **Frontmatter:** this file carries `current_focus` / `next_action` / `next_prompt` /
+  `execution_recommendation` / `last_updated` — the tooling reads them PRD-first
+  (`resolve_focus`), so no shims are needed.
+- **Closure:** update this file's frontmatter + backlog/shipped + session note +
   `close --commit --push`. One `consolidate` pass at most; do not chase warnings.

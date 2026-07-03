@@ -98,22 +98,31 @@ def load_project(path_str: str) -> dict[str, Any]:
     if not hdir.is_dir():
         return data
 
+    # Focus/handoff fields via the shared PRD-first resolver (v3 PRD.md frontmatter
+    # wins per-field; v2 project.md/roadmap.md shims otherwise).
+    focus = frontmatter.resolve_focus(root)
+    data["status"] = focus["status"]
+    data["current_focus"] = focus["current_focus"]
+    data["next_prompt"] = focus["next_prompt"]
+    data["next_action"] = focus["next_action"]
+    data["execution_recommendation"] = focus["execution_recommendation"]
+
     project_md = hdir / "project.md"
     if project_md.is_file():
         doc = frontmatter.parse(project_md.read_text(encoding="utf-8"))
-        data["status"] = doc.front_matter.get("status", "")
-        data["current_focus"] = doc.front_matter.get("current_focus", "")
         data["project_body"] = doc.body
         data["tagline"] = _first_paragraph(doc.body)
+    else:
+        # v3 without the shim: the PRD body is the project narrative (proper PRD
+        # section rendering is a later phase; this keeps the detail page readable).
+        prd_doc = frontmatter.parse_file(frontmatter.prd_path(root))
+        if prd_doc is not None:
+            data["project_body"] = prd_doc.body
+            data["tagline"] = _first_paragraph(prd_doc.body)
 
     roadmap_md = hdir / "roadmap.md"
     if roadmap_md.is_file():
         doc = frontmatter.parse(roadmap_md.read_text(encoding="utf-8"))
-        if not data["current_focus"]:
-            data["current_focus"] = doc.front_matter.get("current_focus", "")
-        data["next_prompt"] = doc.front_matter.get("next_prompt", "")
-        data["next_action"] = doc.front_matter.get("next_action", "")
-        data["execution_recommendation"] = doc.front_matter.get("execution_recommendation", "")
         data["roadmap_body"] = doc.body
 
     features_md = hdir / "features.md"

@@ -2098,3 +2098,25 @@ def test_started_and_start_error_banners():
     assert "banner ok" in ok and "rafaelmjf/demo" in ok and "Tracking" in ok
     err = dashboard._notice({"start_error": ["gh repo clone failed"]})
     assert "banner err" in err and "gh repo clone failed" in err
+
+
+def test_load_project_v3_prd_frontmatter_populates_next(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "PRD.md").write_text(
+        '---\nstatus: active\ncurrent_focus: "PRD focus"\nnext_action: "PRD next"\n'
+        'next_prompt: "PRD prompt"\nexecution_recommendation: "direct"\n'
+        "last_updated: 2026-07-03\n---\n# PRD\n\nThe product narrative.\n",
+        encoding="utf-8",
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    assert data["status"] == "active"
+    assert data["current_focus"] == "PRD focus"
+    assert data["next_action"] == "PRD next"
+    assert data["next_prompt"] == "PRD prompt"
+    assert data["execution_recommendation"] == "direct"
+    # Without a project.md shim the PRD body doubles as the project narrative.
+    assert "product narrative" in data["project_body"]
+    assert "product narrative" in data["tagline"]
