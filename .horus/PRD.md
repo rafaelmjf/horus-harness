@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "v3-tooling execution plan Phase 1 (PRD-frontmatter contract) implemented: shared resolve_focus reader (PRD → shim fallback) behind close --check, merge gate, resume, dashboard NEXT, doctor, GitHub catalog; this repo's shims deleted. Phases 2–4 next (delegable in parallel)."
-next_action: "Delegate phases 2–4 of .horus/execution.md as parallel claude/work workers (templates/init v3, consolidate+skills v3, dashboard PRD rendering) via horus run --watch; review one at a time, supervisor reproduces each gate."
-next_prompt: "Resume Horus as execution supervisor. FIRST git fetch --all --prune. THEN read .horus/PRD.md and .horus/execution.md. Phase 1 (PRD-frontmatter contract) is DONE and merged: horus/frontmatter.py resolve_focus is the shared PRD-first reader; this repo has no shims. Next: delegate phases 2–4 as parallel claude/work workers per the plan (briefs from each phase's delegation_basis row), spawn with --watch, review one at a time and reproduce each gate yourself. Phase 5 (migration engine) stays direct supervisor work afterward."
-execution_recommendation: "plan-execution — ACTIVE: .horus/execution.md (6 phases). Phase 1 done; phases 2–4 are delegable in parallel (claude/work workers, branch+PR); phase 5 direct; phase 6 supervised runs + quiz gate."
-last_updated: 2026-07-03
+current_focus: "v3-tooling execution plan: phases 1–3 done+merged (PRs #101–103). Phase 4 (dashboard renders PRD sections) implemented — orphaned claude worker (usage cutoff) completed by a codex gpt-5.5 worker; supervisor reproduced the gate (710 tests green + live v3/v2 dashboard); PR #104 open, awaiting Rafa's eyeball of the detail page before accept/merge."
+next_action: "Rafa eyeballs the detail pages (dashboard running from the phase-4 worktree: /project?i=0 v3, ?i=1 v2 control); then merge PR #104, mark phase 4 accepted in execution.md, and start Phase 5 (migration engine, direct supervisor work)."
+next_prompt: "Resume Horus as execution supervisor. FIRST git fetch --all --prune. THEN read .horus/PRD.md and .horus/execution.md. Phases 1–4 of the plan are implemented; PR #104 (phase 4, dashboard PRD rendering) may still be open awaiting Rafa's visual accept — merge it first if approved. Next: Phase 5, the upgrade-project --structure prd migration engine — direct (integrity-sensitive; safety in the code), per the phase row: deterministic six-lane→PRD collapse, archive verbatim, refuse on dirty/behind-origin, dry-run + rehearsal on a scratch clone of gym-coach."
+execution_recommendation: "plan-execution — ACTIVE: .horus/execution.md. Phases 1–4 done/awaiting-eyeball; phase 5 direct supervisor work; phase 6 supervised runs + quiz gate, then release v0.0.21."
+last_updated: 2026-07-04
 ---
 
 # Horus — PRD
@@ -49,31 +49,15 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-1. **PRD structure as the product (v3 continuity structure).** Prototype is live in this
-   repo; if it survives a few sessions, teach the tooling: templates + `horus init` scaffold
-   PRD+sessions; `close --check` freshness reads PRD frontmatter (drop the shims);
-   `consolidate` becomes a light "backlog hygiene" check (no lane-purity warnings);
-   `infer`/skills rewritten for the new shape; dashboard renders PRD sections; migrate
-   agentic-gym-coach + agentic-ttrpg via `upgrade-project`. Closure contract becomes:
-   update PRD (focus/backlog/shipped) + session note + commit.
-   **Acceptance test (pre-registered 2026-07-03, keep simple):** this repo runs v3;
-   gym-coach + ttrpg stay on six lanes as controls. After ~5 sessions per cohort, rerun
-   the transcript analysis (closure + resume tool calls, each project vs its own
-   baseline). v3 *fails* if a cold session misses a load-bearing rule or re-attempts a
-   documented dead end, if the PRD blows its ~250-line cap into a consolidation crisis,
-   or if a resume lands at the wrong pickup point. Repeatable probe: Codex cold reader
-   (`horus run --agent codex`, no shared history) answers a fixed 5-question quiz
-   (focus / next step / a rules question / two load-bearing rules / latest release)
-   from `.horus/` only. Baseline 2026-07-03, v2 measured at its freshly-consolidated
-   best (commit 5f81c40): v3 = 4 files, ~17 KB, 5/5 correct; v2 = 6 files, ~145 KB,
-   5/5 correct — equal quality at ~1/8 the context.
-   **Result (rerun 2026-07-03 evening, 5 v3 closures vs live v2 controls): PASS.**
-   Closure ritual v3 ≈ 7–12 tool calls vs v2 26–32 (gym) / 26–36 continuity calls
-   (codex sessions); cold probe again 5/5 at 5 calls / 4 files (v2 probe: 8 calls);
-   zero failure flags (no missed rule, no dead-end retry, no wrong pickup; PRD
-   232/250 lines — growth ~5 lines/closure, watch the cap). → proceed to teach the
-   tooling (templates, init, close --check on PRD frontmatter, consolidate→backlog
-   hygiene, infer/skills, dashboard, migrate the two control repos).
+1. **PRD structure as the product (v3 continuity structure).** Acceptance test
+   **PASSED** (pre-registered + rerun 2026-07-03: closure ≈7–12 tool calls vs v2's
+   26–36; cold-reader quiz 5/5 from 4 files/~17 KB vs v2's 6 files/~145 KB; zero
+   failure flags — details in sessions 2026-07-03-090957 + -210751). Teach-in underway
+   via `.horus/execution.md`: phases 1–4 done (frontmatter contract, templates/init,
+   consolidate/infer/skills, dashboard PRD rendering — PR #104 awaiting visual accept);
+   remaining: phase 5 migration engine (`upgrade-project --structure prd`), phase 6
+   migrate gym-coach + ttrpg, rerun the quiz probe on both, release v0.0.21. Closure
+   contract: update PRD (focus/backlog/shipped) + session note + commit.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
