@@ -51,18 +51,37 @@ def _aware_utc_iso(value: object) -> str:
     return stamp.astimezone(timezone.utc).isoformat(timespec="seconds")
 
 
-def _result_status(session_id: str) -> str | None:
-    """Terminal status from a run log's RESULT line, when one exists."""
+@dataclass(frozen=True)
+class _RunResult:
+    status: str
+    returncode: int | None = None
+
+
+def _jsonl_result(session_id: str) -> _RunResult | None:
+    """Terminal status from the structured run-event sidecar, when present."""
+    for event in reversed(runlog.read_events(session_id)):
+        if event.get("event") != "result" or event.get("session_id") != session_id:
+            continue
+        status = event.get("status")
+        if status not in {"exited", "failed"}:
+            continue
+        rc = event.get("rc")
+        return _RunResult(status=status, returncode=rc if isinstance(rc, int) else None)
+    return None
+
+
+def _legacy_log_result(session_id: str) -> _RunResult | None:
+    """Terminal status from a legacy text run log's RESULT line."""
     text, _ = runlog.read_from(runlog.run_log_path(session_id), 0)
     for match in _RESULT_RE.finditer(text):
         if match.group("session_id") == session_id:
-            return match.group("status")
+            return _RunResult(match.group("status"))
     for line in text.splitlines():
         if "RESULT" in line and session_id in line:
             if "failed" in line:
-                return "failed"
+                return _RunResult("failed")
             if "exited" in line:
-                return "exited"
+                return _RunResult("exited")
     return None
 
 
@@ -209,9 +228,12 @@ class Registry:
                 dirty = True
             if row.get("status") in TERMINAL:
                 continue
-            result = _result_status(str(row.get("session_id", "")))
-            if result in {"exited", "failed"}:
-                row["status"] = result
+            session_id = str(row.get("session_id", ""))
+            result = _jsonl_result(session_id) or _legacy_log_result(session_id)
+            if result is not None:
+                row["status"] = result.status
+                if result.returncode is not None:
+                    row["returncode"] = result.returncode
                 row["updated_at"] = _now_iso()
                 dirty = True
                 changed.append(SessionRecord(**row))

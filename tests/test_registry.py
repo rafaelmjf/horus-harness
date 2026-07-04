@@ -98,7 +98,25 @@ def test_reconcile_marks_dead_running_records(tmp_path):
     assert reg.get("done").status == "exited"
 
 
-def test_reconcile_marks_result_event_completion(tmp_path, monkeypatch):
+def test_reconcile_prefers_jsonl_result_event(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(session_id="done-by-log", pid=os.getpid(), status="running"))
+    # A conflicting legacy log must not override the structured sidecar.
+    log = runlog.run_log_path("done-by-log")
+    log.parent.mkdir(parents=True)
+    log.write_text("RESULT failed — session done-by-log (account work)\n", encoding="utf-8")
+    runlog.append_event("done-by-log", "result", status="exited", rc=0, ended_at=runlog.utc_iso())
+
+    changed = reg.reconcile()
+
+    assert [r.session_id for r in changed] == ["done-by-log"]
+    got = reg.get("done-by-log")
+    assert got.status == "exited"
+    assert got.returncode == 0
+
+
+def test_reconcile_falls_back_to_legacy_result_line(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     reg = _reg(tmp_path)
     reg.upsert(_rec(session_id="done-by-log", pid=os.getpid(), status="running"))

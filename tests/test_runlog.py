@@ -1,5 +1,8 @@
 """Per-session run-log tee and the tail read/follow helpers."""
 
+import json
+from datetime import datetime
+
 from horus import runlog
 
 
@@ -13,6 +16,56 @@ def test_run_log_path_sanitizes_session_id(tmp_path, monkeypatch):
     path = runlog.run_log_path("weird/../id:with spaces")
     assert path.parent == runlog.run_log_path("x").parent  # can't escape logs/runs/
     assert path.name == "weird-..-id-with-spaces.log"  # separators neutralized, dots kept
+
+
+def test_run_events_path_sanitizes_session_id(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    path = runlog.run_events_path("weird/../id:with spaces")
+    assert path.parent == runlog.run_events_path("x").parent
+    assert path.name == "weird-..-id-with-spaces.jsonl"
+
+
+def test_append_event_writes_start_and_result_jsonl(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+
+    runlog.append_event(
+        "sess-1",
+        "start",
+        agent="fake",
+        account="work",
+        project="/proj",
+        pid=123,
+        argv={"prompt": "hello"},
+    )
+    runlog.append_event("sess-1", "result", status="exited", rc=0, ended_at=runlog.utc_iso())
+
+    lines = runlog.run_events_path("sess-1").read_text(encoding="utf-8").splitlines()
+    events = [json.loads(line) for line in lines]
+    assert [event["event"] for event in events] == ["start", "result"]
+    assert events[0]["session_id"] == "sess-1"
+    assert events[0]["agent"] == "fake"
+    assert events[1]["status"] == "exited"
+    assert events[1]["rc"] == 0
+    for event in events:
+        stamp = datetime.fromisoformat(event["ts"])
+        assert stamp.tzinfo is not None
+        assert event["ts"].endswith("+00:00")
+
+
+def test_run_writes_start_and_result_events(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus.cli import main
+
+    rc = main(["run", "hello there", "--agent", "fake", "--path", str(tmp_path)])
+
+    assert rc == 0
+    capsys.readouterr()
+    events = runlog.read_events("fake-session")
+    assert [event["event"] for event in events] == ["start", "result"]
+    assert events[0]["agent"] == "fake"
+    assert events[0]["project"] == tmp_path.resolve().as_posix()
+    assert events[0]["argv"]["prompt"] == "hello there"
+    assert events[1]["status"] == "exited"
 
 
 def test_runlog_buffers_lines_until_bound(tmp_path, monkeypatch):
