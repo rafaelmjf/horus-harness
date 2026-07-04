@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "Usage-limit survival kit SHIPPED 2026-07-04 as v0.0.25 (PR #115): 60s-cached usage snapshots, horus run preflight (warn 80/refuse 95/--force), PreToolUse guard with worker-aware emergency state-save at 97%. Delegated to a claude/personal Opus worker (work account at its window edge), one bounce (no-upstream rescue push). NOT yet armed anywhere: machine installs + upgrade-project pending. Hub: Rafa's UI verdict pending; work account resets 21:10 Berlin."
-next_action: "Arm the kit [tier: shell ops / no model, or Haiku]: uv tool install --force --python 3.12 horus-harness (v0.0.25) + horus upgrade-project --all so the PreToolUse guard actually reaches projects; restart the app. Then backlog #1 [ops] orphan reap [tier: Sonnet inline; Opus only to review the hook-guard/process-tree safety], or hub Phase 4 planning in ~/projects/horus-hub [tier: Opus for design, delegate implementation to Sonnet workers on the isolated claude-work account; usable after 21:10 Berlin]."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md — note the model-tier rule and the per-step tier tags in this frontmatter. First: arm v0.0.25 (uv tool install --force --python 3.12 horus-harness; horus upgrade-project --all; verify horus --version) — shell ops, no heavy model. Then backlog #1 orphan reap (Sonnet), or hub Phase 4 in ~/projects/horus-hub (Opus design, Sonnet workers) per its PRD."
-execution_recommendation: "continue-as-is for arming v0.0.25 (ops, minutes — no model needed, or Haiku). Default worker tier = Sonnet; reserve Opus for design and the verify/accept gate; Haiku for mechanical sweeps. plan-execution for hub Phase 4 (Opus supervisor + Sonnet workers on the isolated claude-work account, worktree-per-worker); orphan reap stays inline on Sonnet unless bundled with other registry work."
-last_updated: 2026-07-04
+current_focus: "v0.0.25 ARMED 2026-07-05 (uv tool install --force --python 3.12 + upgrade-project --all --apply → PreToolUse usage guard in all 4 projects, verified; desktop app restart still manual). From here: hub Phase 4 (minimal launch) + session-id hardening shipped (hub PRs #7/#8); the model-tier delegation rule + per-step tier convention added to Rules/frontmatter; and scheduled/usage-aware autonomous continuation proven hand-rolled (systemd timer → horus run at 02:51) and captured as a backlog item + 2026-07-05 session note."
+next_action: "Backlog #1 [ops] orphan reap [tier: Sonnet inline; Opus only for the hook-guard/process-tree safety review], or promote the scheduled/usage-aware autonomous-continuation feature (see Open, unscheduled + the 2026-07-05 session note). Hub work continues in ~/projects/horus-hub per its PRD (check the 02:51 scheduled run's held PR, then Phase 5 / detach-launch)."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md — note the model-tier rule + per-step tier tags. v0.0.25 is armed. Candidates: backlog #1 orphan reap (Sonnet), the scheduled-continuation feature (Open, unscheduled), or hub Phase 5 / detach-launch in ~/projects/horus-hub. Default worker tier = Sonnet; Opus for the verify gate."
+execution_recommendation: "continue-as-is for orphan reap (small, Sonnet/inline) and grooming the scheduled-continuation idea. plan-execution if implementing the scheduled-continuation primitives (several horus run flags + a scheduler — a real batch: Opus supervisor + Sonnet workers). Default worker tier = Sonnet; reserve Opus for design + the verify/accept gate; Haiku for mechanical sweeps."
+last_updated: 2026-07-05
 ---
 
 # Horus — PRD
@@ -67,6 +67,22 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open, unscheduled
 
+- **Scheduled / usage-aware autonomous continuation** (proven hand-rolled
+  2026-07-05 — a systemd user timer → `horus run` ran one pinned task on `work`
+  and closed cleanly; the survival-kit preflight refused an exhausted-window spawn
+  as designed). Make it first-class on the survival-kit substrate, not a new
+  subsystem: `horus run --stop-at-usage <pct>` (session self-checkpoints + closes
+  at a ceiling — today's 90% was best-effort prompt + advisory guard); `--at <time>`
+  / `--after-usage-reset` (defer via the known `resets_at`; inherits the preflight,
+  replaces the hand-rolled `sleep`+timer); `--resume-plan` (FRESH cold session =
+  the `horus resume` handoff + a "do the next *pinned* task → hold-merge → close →
+  stop-at-usage" protocol); an unattended posture (full-auto + hold-merge +
+  stop-at-usage + checkpoint-on-ambiguity); register the scheduled run + its PR
+  outcome in the registry/dashboard. Local scheduling required (cloud routines
+  can't reach local repos/accounts) — be honest about machine-awake or ship a
+  daemon / Persistent timer; continuity must pin a *specific* next task, not a
+  vague "next item". Fuller learnings in the 2026-07-05 session note. Cross-ref:
+  survival kit (v0.0.25), MVP3 autonomous closure.
 - **Execution-workflow tuning:** small phase-status vocabulary
   (planned/delegated/accepted/blocked) in the skill + template (the gate-command +
   failure-baseline handoff fields shipped in v0.0.22). Also propagate the **model-tier
