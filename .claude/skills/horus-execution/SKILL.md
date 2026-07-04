@@ -11,7 +11,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Horus execution supervision
 
@@ -53,6 +53,13 @@ review is **not** a safety guarantee. The durable safeguards are model-independe
 working-discipline rules in the managed block): reproduce the gate yourself, bound each
 pass to a green committed-and-pushed checkpoint, and put safety in the code (guards),
 not the reviewer.
+
+Reproducing the gate means observing a **deterministic signal** yourself, not
+re-doing the worker's verification. A *required* CI check green on the worker's exact
+commit counts as reproduction of the test gate — do not rerun the suite locally when
+a required check already covers it. What always stays yours: **one live probe of the
+changed runtime surface** (mocked tests bless nonexistent flags; a screenshot or one
+real command run is the floor). Never accept a phase on the handoff note's claims.
 
 ## Steps
 
@@ -109,7 +116,7 @@ not the reviewer.
    gate to run. `--account` selects an isolated `CODEX_HOME`/`CLAUDE_CONFIG_DIR`
    mapping (`horus account --set-codex-home` / `--set-dir`); omit it for the default
    login. The review contract is unchanged: review the diff and the handoff note,
-   then reproduce the gate yourself.
+   then reproduce the gate (deterministic signal + one runtime probe).
 
 5. **Require a handoff note.** Before a worker returns, create or ask it to create:
 
@@ -117,13 +124,18 @@ not the reviewer.
    horus execution handoff <phase>
    ```
 
-   The worker fills `.horus/temp/<phase>.md` with changed files, behavior, tests,
-   risks, and suggested durable Horus updates.
+   The worker fills `.horus/temp/<phase>.md` with changed files, behavior, **the
+   gate** (one command the supervisor can rerun verbatim, its expected output, and
+   the pre-existing failure baseline), risks, and suggested durable Horus updates.
+   No proof narratives — the gate command and the CI check speak.
 
-6. **Review, then continue.** The supervisor reviews the diff, tests, and handoff
-   note. If accepted, update the phase status in `execution.md`, ask the user before
-   proceeding to the next phase when appropriate, and distill durable results at
-   closure with `horus-consolidate`.
+6. **Accept on signals, then continue.** Accept a phase on deterministic signals
+   only: the required CI check green on the worker's exact commit (rerun the gate
+   locally only when no required check covers it) plus one runtime probe you drive
+   yourself. Review the diff and handoff note for scope and risk, not as evidence
+   that the work works. If accepted, update the phase status in `execution.md`, ask
+   the user before proceeding to the next phase when appropriate, and distill
+   durable results at closure with `horus-consolidate`.
 
 ## Native mapping
 

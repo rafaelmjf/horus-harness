@@ -10,7 +10,7 @@
 > its lane-routing warnings — do not restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 3 -->
+<!-- horus-block-version: 4 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -58,9 +58,10 @@ After work that contributes to the project state, close the session by invoking 
 
 Working discipline (every session, whether or not the work is delegated):
 
-- **Reproduce the gate; never trust the report.** Re-run the build/tests/check yourself
-  and watch it pass before calling work done — whether a worker did it or you did. A
-  confident "tests pass" is not evidence.
+- **Reproduce the gate; never trust the report.** Before calling work done, observe a
+  deterministic signal yourself: rerun the check locally, or watch a *required* CI
+  check go green on the exact commit — plus one live probe of the changed surface.
+  A confident "tests pass" in prose is not evidence, whoever wrote it.
 - **Bound each step to a green, committed-and-pushed checkpoint**, so there is always a
   clean resume point and nothing half-finished stranded only on this machine.
 - **Put safety in the code, not the reviewer.** Guards and invariants prevent the

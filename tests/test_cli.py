@@ -207,6 +207,31 @@ def test_execution_handoff_creates_temp_note_and_refuses_clobber(tmp_path, monke
     assert "Already exists" in capsys.readouterr().out
 
 
+def test_execution_handoff_carries_gate_and_prd_durable_updates(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])  # scaffolds structure v3
+    assert main(["execution", "handoff", "2B", "--path", str(tmp_path)]) == 0
+    text = (tmp_path / ".horus" / "temp" / "2B.md").read_text(encoding="utf-8")
+    assert "## Gate" in text
+    assert "reruns this verbatim" in text
+    assert "Pre-existing failure baseline" in text
+    assert "PRD.md backlog:" in text
+    assert "features.md:" not in text  # six-lane suggestions dropped on v3
+
+
+def test_execution_handoff_six_lane_durable_updates_unchanged(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "roadmap.md").write_text("---\nstatus: active\n---\n# R\n", encoding="utf-8")
+    assert main(["execution", "handoff", "2B", "--path", str(tmp_path)]) == 0
+    text = (hdir / "temp" / "2B.md").read_text(encoding="utf-8")
+    assert "## Gate" in text  # the gate contract applies to both structures
+    assert "roadmap.md:" in text
+    assert "features.md:" in text
+    assert "PRD.md backlog:" not in text
+
+
 def test_session_new_uses_configured_alias(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     from horus import claude_usage, config
