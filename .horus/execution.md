@@ -1,78 +1,102 @@
 ---
-status: completed
-current_feature: "Hub pre-work batch: D structured run-log event stream (codex GPT-5.5) + E horus run worktree/posture ergonomics (claude/work Opus 4.8) — the two seams horus-hub consumes, run under the skill-v8 orchestration contract."
+status: active
+current_feature: "Usage-limit survival kit (backlog #1): worker-aware emergency state-save + horus run usage preflight + PreToolUse usage guard — one delegated phase (claude/personal, Opus 4.8, full-auto, worktree)."
 supervisor_tier: frontier
-worker_tier: frontier (feature supervisors)
-continuity_tier: economy
-delegation_basis: "Second orchestration batch under skill v8. Two bounded, parallelizable slices with crisp gates and disjoint surfaces; both are prerequisites the hub's read model (D) and launch path (E) build on. Orchestrator (this session) plans/routes/accepts on deterministic signals, implements nothing; lessons from the pilot pre-applied: claude worker spawns full-auto from the start; codex brief carries a sandbox-runnable gate."
+worker_tier: frontier
+delegation_basis: "High volume (three sub-features across usage modules, native_hooks, cli, adapters + tests), low ambiguity once the design below is pinned, deterministic pytest gate. Delegation buys context hygiene; supervisor keeps the hook-guard invariant review and the rescue git-safety review. Work account is at its window edge (resets 21:10 Berlin), so the worker runs on personal/Opus per Rafa."
 last_updated: 2026-07-04
 ---
 
-# Execution Plan — hub pre-work
+# Execution Plan — usage-limit survival kit
 
-Two workers, two worktrees, wave of one. Merge sequencing per skill v8: after the
-first PR lands, watch main's push CI before arming the second.
+Single delegated phase: the three sub-features share one seam (usage reading,
+hook installation, run launch path) and land together as one PR.
 
 ## Active Phases
 
 | phase | status | difficulty | mode | worker_agent | worker_tier | delegation_basis | handoff_note | review gate |
 |---|---|---|---|---|---|---|---|---|
-| D-runlog-events | merged (PR #113; orchestrator reproduced 746 green + live probe; zero bounces; main push CI green post-merge) | medium | delegated | codex (auto-edit, read-only .git — orchestrator owns commit/PR) | frontier | Backend seam with a crisp pytest gate; hub Phase 2 consumes run logs — harden before building on it | `.horus/temp/D-runlog-events.md` (worker creates in worktree) | required CI green + orchestrator runs the handoff gate command + live probe: a fake run writes JSONL events and registry reconciliation reads them |
-| E-run-ergonomics | merged (PR #114; orchestrator reproduced 758 green + live worktree probe; zero bounces; main push CI green post-merge) | medium | delegated | claude (account work, model opus, posture full-auto) | frontier | CLI/launch slice; the pilot's two manual footguns; hub Phase 4 calls this exact path | `.horus/temp/E-run-ergonomics.md` (worker creates in worktree) | required CI green + orchestrator live probe: `horus run --agent fake --worktree` creates the worktree + tracked session; `--worker` applies the posture matrix |
+| survival-kit | delegated | medium-high | delegated | claude (account personal, model opus, posture full-auto, worktree) | frontier | see frontmatter | `.horus/temp/survival-kit.md` (worker creates in worktree) | full pytest suite green (required CI on the PR) + supervisor live probes: (1) `horus run` preflight warn/refuse against a faked usage report, (2) guard hook rescue-commit in a scratch worker worktree, (3) main-checkout rescue ref leaves index/worktree untouched |
 
-## Phase specs
+## Phase spec — survival-kit
 
-### D-runlog-events (codex)
+Backlog #1. Evidence: two workers died at the usage limit mid-run (2026-07-03,
+2026-07-04) with uncommitted code. Three sub-features, all deterministic and
+hook-side (zero model tokens):
 
-Structured event stream for tracked runs, replacing text-line scraping as the
-machine interface. Pinned design:
+### (a) Cached usage snapshot (shared substrate)
 
-- **Sidecar JSONL** per session: `~/.horus/logs/runs/<session-id>.jsonl`, written
-  alongside the existing human-readable `.log` (which stays; `horus tail` keeps
-  tailing the `.log`).
-- Events (one JSON object per line, `ts` aware-UTC ISO, `event` field):
-  `start` (session_id, agent, account, project, pid, argv summary) and
-  `result` (status exited/failed, rc, ended_at). No heartbeat in this slice —
-  note it as a follow-up.
-- **Registry reconciliation prefers the JSONL** (`result` event → terminal state)
-  and falls back to the existing text-line parsing for legacy logs — old logs
-  must keep working; no migration.
-- Fences: own `horus/runlog.py`, the run-side event emission, and the
-  reconciliation reader in `horus/registry.py`. Do NOT touch `horus/cli.py`
-  run-flag parsing, launch plumbing, or worktree logic (phase E owns those);
-  no PRD.md edits.
-- Sandbox-runnable gate (codex sandbox may lack network):
-  `python3 -m compileall -q horus tests` + targeted
-  `pytest tests/test_runlog.py tests/test_registry.py` if deps resolve; the
-  orchestrator's full-suite run is the first complete pass otherwise.
+- A small helper (own module `horus/usage_snapshot.py` or similar) returning the
+  freshest usage percent for a target agent+account, with a **file cache under
+  `~/.horus/cache/`, TTL ~60s** (key: agent + account alias or "default").
+- Claude: `claude_usage.latest_usage` honoring the account's isolated
+  `CLAUDE_CONFIG_DIR` mapping (see `horus account`); Codex: `codex_usage`.
+- Any failure (no creds, network, timeout ≤5s) → `None`. Never raise, never block.
 
-### E-run-ergonomics (claude/work)
+### (b) `horus run` usage preflight
 
-The pilot's manual footguns become flags. Pinned design:
+- Before spawn/resume in `cmd_run`, for claude/codex adapters only (the fake
+  adapter is exempt — tests depend on it), read the **target account's** usage.
+- 5h window ≥80%: print a warning (percent + reset time), continue.
+- ≥95%: **refuse** with exit 2 naming the reset time; `--force` proceeds anyway.
+- Unreadable usage: proceed silently (preflight is best-effort, never a wall).
 
-- **`horus run --worktree <branch>`**: creates (or reuses) a git worktree at
-  `<repo-parent>/<repo-name>-wt-<branch-slug>` on `<branch>` (creating the
-  branch from the current HEAD if missing), then runs the session with that
-  worktree as `--path`. The registry row records the worktree path. Refuse
-  politely when the target path exists and is not a worktree of this repo, or
-  when the repo is bare/has no git. No auto-cleanup in this slice (manual
-  `git worktree remove`) — note as follow-up.
-- **`--worker`**: posture preset applying the skill-v8 matrix — `claude` →
-  `full-auto`, `codex` → `auto-edit`; explicit `--posture` wins over the preset.
-  Help text names the headless-stall rationale.
-- Fences: own `horus/cli.py` run subparser, launch/worktree plumbing (a new
-  helper module is fine, e.g. `horus/worktree.py`). Do NOT touch
-  `horus/runlog.py` or registry reconciliation (phase D owns those); no PRD.md
-  edits.
-- Gate: full suite green + the live probe above; branch → PR, do not merge.
+### (c) PreToolUse usage guard + emergency state-save
 
-## Notes — orchestrator contract
+- New hook command (suggest `horus usage guard --hook`; reuse `usage check`
+  internals where sensible), installed as a **PreToolUse** hook for Claude and
+  Codex via new `install_*` functions in `native_hooks.py`, wired wherever the
+  existing usage hooks are wired (init / upgrade-project / hook sync). Follow the
+  existing marker-comment merge pattern so old configs update cleanly.
+- Behavior on each fire, reading the cached snapshot (a):
+  - **≥90%** (existing advisory threshold): inject an `additionalContext`
+    advisory — once per re-arm window (reuse the `closure_already_fired`-style
+    marker pattern) so it doesn't nag every tool call.
+  - **≥97%** (emergency threshold): perform the **emergency state-save**, once
+    per session/window, then inject context saying state was rescued and the
+    agent should wrap up. **Never deny the tool call, never force a closure.**
+- Emergency state-save, worker-aware:
+  - **Worker context** (linked git worktree — `git rev-parse --git-common-dir`
+    points outside the checkout — or the env marker below): rescue-commit the
+    FULL tree (`git add -A`) to the current branch with a clear
+    `horus rescue:` subject, then best-effort `git push` (failure tolerated,
+    reported in the injected context). Disposable branch ⇒ product code safe.
+  - **Main checkout**: commit **only `.horus/**`** to a rescue ref
+    `refs/horus/rescue/<UTC-timestamp>` built with a **temporary index**
+    (`GIT_INDEX_FILE`) — the user's index, HEAD, and working tree must be
+    untouched. No push. Nothing staged, nothing checked out, no reset ever.
+- Adapter env marker: `SpawnSpec` spawns export `HORUS_RUN_SESSION_ID` (and
+  `HORUS_RUN_WORKER=1` when `--worker`) in the child env for claude/codex
+  adapters, giving hooks a deterministic worker signal; linked-worktree
+  detection stays as the fallback for sessions not launched via `horus run`.
 
-- Worktrees: D in `~/projects/horus-wt-events` (branch `feat/runlog-events`),
-  E in `~/projects/horus-wt-runergo` (branch `feat/run-worktree`), both spawned
-  `--watch`.
-- Acceptance on signals only (required CI, handoff gate command, live probes);
-  bounce = resume the same session with the exact failure.
-- While workers run, the orchestrator handles `upgrade-project --all`
-  propagation (block v4 + skill v8 → gym-coach, ttrpg) as continuity mechanics.
-- **Batch findings:** zero bounces — the pilot lessons (full-auto claude spawn, sandbox-runnable codex gate, pinned designs, merge sequencing) removed both failure modes. Both seams the hub consumes are now shipped.
+### Hard requirements (hook-guard invariant — supervisor will review these)
+
+- Hook commands signal via **stdout JSON + exit 0**, always — including every
+  failure path. Per-OS silence guards (`|| exit 0` POSIX/Git Bash; the PS
+  5.1-safe probe pattern for Codex Windows) on every committed command string,
+  exactly like the existing hooks in `native_hooks.py`.
+- The only guaranteed spelling is the `horus` console script.
+- PreToolUse must be fast: cache hit is the hot path; cache-miss fetch timeout
+  ≤5s; on any error, silent pass (exit 0, no JSON needed).
+- Three OS targets. Forward-slash paths in anything written to JSON/TOML.
+
+### Fences
+
+- Do NOT touch: `dashboard.py`, `runlog.py`, `worktree.py`, `registry.py`
+  reconciliation, `PRD.md`, hub-related surfaces.
+- Do not change the existing 90% Stop/UserPromptSubmit advisory semantics —
+  (c) adds PreToolUse coverage beside them.
+- Keep the version bump OUT of this phase (release is supervisor mechanics).
+
+### Gate (worker runs, supervisor reproduces)
+
+```
+uv run python -m compileall -q horus tests && uv run pytest -q
+```
+
+Expected: full suite green. Baseline: main is green (push CI success on
+97b7ff6, 2026-07-04). New tests required: snapshot cache TTL + failure paths;
+preflight warn/refuse/`--force`/fake-exempt; guard JSON shape + re-arm marker;
+rescue-commit in a scratch worker worktree; main-checkout rescue ref leaving
+index/HEAD/worktree byte-identical (tmp git repos, no network).
