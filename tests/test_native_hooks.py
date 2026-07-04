@@ -243,6 +243,52 @@ def test_usage_merge_and_guard_hooks_coexist_without_clobber(tmp_path):
     assert "horus guard-host --hook || exit 0" in commands
 
 
+def test_install_claude_usage_guard_hook_creates_broad_pretooluse_gate(tmp_path):
+    action = native_hooks.install_claude_usage_guard_hook(tmp_path)
+    assert action.status == "created"
+    data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    group = data["hooks"]["PreToolUse"][0]
+    assert group["matcher"] == ""  # empty matcher -> fires on every tool call
+    assert group["hooks"][0]["command"] == "horus usage guard --target claude --hook || exit 0"
+
+
+def test_install_claude_usage_guard_hook_idempotent(tmp_path):
+    native_hooks.install_claude_usage_guard_hook(tmp_path)
+    assert native_hooks.install_claude_usage_guard_hook(tmp_path).status == "exists"
+
+
+def test_install_codex_usage_guard_hook_creates_broad_pretooluse_gate(tmp_path):
+    action = native_hooks.install_codex_usage_guard_hook(tmp_path)
+    assert action.status == "created"
+    data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    group = data["hooks"]["PreToolUse"][0]
+    assert group["matcher"] == ""
+    handler = group["hooks"][0]
+    assert handler["command"] == "horus usage guard --target codex --hook || exit 0"
+    assert "Get-Command horus" in handler["commandWindows"]  # PS 5.1-safe guard
+
+
+def test_usage_guard_coexists_with_merge_and_host_guard_hooks(tmp_path):
+    native_hooks.install_claude_merge_hook(tmp_path)
+    native_hooks.install_claude_guard_hook(tmp_path)
+    native_hooks.install_claude_usage_guard_hook(tmp_path)
+    # Re-running each install must not wipe the others (distinct markers).
+    native_hooks.install_claude_merge_hook(tmp_path)
+    native_hooks.install_claude_guard_hook(tmp_path)
+    data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    commands = {g["hooks"][0]["command"] for g in data["hooks"]["PreToolUse"]}
+    assert "horus close --hook || exit 0" in commands
+    assert "horus guard-host --hook || exit 0" in commands
+    assert "horus usage guard --target claude --hook || exit 0" in commands
+
+
+def test_offboard_strips_the_usage_guard_hook(tmp_path):
+    native_hooks.install_claude_usage_guard_hook(tmp_path)
+    assert native_hooks.file_has_horus_hooks(native_hooks.claude_settings_path(tmp_path)) is True
+    native_hooks.remove_claude_hooks(tmp_path)
+    assert native_hooks.file_has_horus_hooks(native_hooks.claude_settings_path(tmp_path)) is False
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="exercises the POSIX guard under /bin/sh")
 def test_guarded_hook_is_silent_noop_when_cli_missing(tmp_path):
     """A repo clone on a machine without Horus: the committed hook command must exit 0

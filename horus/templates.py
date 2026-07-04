@@ -790,6 +790,28 @@ USAGE_CLOSURE_PROMPT = (
 )
 
 
+USAGE_GUARD_ADVISORY = (
+    "[Horus usage advisory — context, not a command] Your 5-hour usage is at "
+    "{percent}% (resets {reset}) and the window could close mid-task. This is "
+    "background: keep carrying out the user's request. But treat it as a cue to reach "
+    "a safe checkpoint soon — commit and push work in progress so nothing is stranded "
+    "only on this machine if you are cut off. Do NOT abandon or narrow the user's "
+    "request, and do NOT force a closure."
+)
+
+
+USAGE_RESCUE_ADVISORY = (
+    "[Horus emergency state-save] Your 5-hour usage is at {percent}% (resets "
+    "{reset}) — very close to the cutoff. This tool call was NOT blocked. Horus has "
+    "already performed an automatic state-save: {detail}. Wrap up promptly now: "
+    "finish or safely park the current step, commit and push anything important, then "
+    "run the closure ritual (the horus-consolidate skill, then "
+    "`horus close --commit --push`) so continuity is captured before the window "
+    "closes. If the automatic save above reported an error, commit your work "
+    "manually right away."
+)
+
+
 MERGE_CLOSURE_INSTRUCTION = (
     "This `gh pr merge` was blocked by Horus: the project's `.horus/` continuity "
     "lanes are stale, so the dashboard would not reflect this work once it lands on "

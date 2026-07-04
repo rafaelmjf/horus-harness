@@ -23,6 +23,7 @@ class HookAction(NamedTuple):
 _HORUS_USAGE_MARKER = "horus usage check"
 _HORUS_MERGE_MARKER = "horus close --hook"
 _HORUS_GUARD_MARKER = "horus guard-host"
+_HORUS_USAGE_GUARD_MARKER = "horus usage guard"
 
 
 # Committed hook files reach every machine and collaborator the repo does, including
@@ -83,6 +84,17 @@ def _codex_guard_hook_command() -> dict[str, Any]:
     }
 
 
+def _codex_usage_guard_hook_command() -> dict[str, Any]:
+    command = "horus usage guard --target codex --hook"
+    return {
+        "type": "command",
+        "command": _guard_posix(command),
+        "commandWindows": _guard_windows(command),
+        "timeout": 30,
+        "statusMessage": "Checking Horus usage guard",
+    }
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -113,6 +125,10 @@ def _is_horus_guard_hook(handler: Any) -> bool:
     return _handler_has_marker(handler, _HORUS_GUARD_MARKER)
 
 
+def _is_horus_usage_guard_hook(handler: Any) -> bool:
+    return _handler_has_marker(handler, _HORUS_USAGE_GUARD_MARKER)
+
+
 def _merge_codex_usage_hook(hooks: dict[str, Any], event: str, threshold: float) -> None:
     groups = hooks.setdefault(event, [])
     if not isinstance(groups, list):
@@ -141,6 +157,7 @@ def _merge_codex_pretooluse_hook(
     handler: dict[str, Any],
     *,
     is_mine: Any = _is_horus_merge_hook,
+    matcher: str = "Bash",
 ) -> None:
     groups = hooks.setdefault("PreToolUse", [])
     if not isinstance(groups, list):
@@ -169,7 +186,7 @@ def _merge_codex_pretooluse_hook(
             new_groups.append(group)
 
     if not inserted:
-        new_groups.append({"matcher": "Bash", "hooks": [handler]})
+        new_groups.append({"matcher": matcher, "hooks": [handler]})
     hooks["PreToolUse"] = new_groups
 
 
@@ -242,6 +259,32 @@ def install_codex_guard_hook(project_root: Path) -> HookAction:
     return HookAction("updated" if old_text is not None else "created", f"installed Codex hosted-session guard hook in {path}")
 
 
+def install_codex_usage_guard_hook(project_root: Path) -> HookAction:
+    """Install/update a project-local Codex PreToolUse usage guard (empty matcher, so
+    it fires on every tool call). Near the limit it injects an advisory; at the
+    emergency threshold it performs a worker-aware emergency state-save — never denies."""
+    codex_dir = project_root / ".codex"
+    path = codex_dir / "hooks.json"
+    data = _load_json(path)
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        hooks = {}
+        data["hooks"] = hooks
+
+    _merge_codex_pretooluse_hook(
+        hooks, _codex_usage_guard_hook_command(), is_mine=_is_horus_usage_guard_hook, matcher="",
+    )
+    data["hooks"] = hooks
+
+    codex_dir.mkdir(parents=True, exist_ok=True)
+    new_text = json.dumps(data, indent=2) + "\n"
+    old_text = path.read_text(encoding="utf-8") if path.exists() else None
+    if old_text == new_text:
+        return HookAction("exists", f"Codex usage guard hook already installed in {path}")
+    path.write_text(new_text, encoding="utf-8")
+    return HookAction("updated" if old_text is not None else "created", f"installed Codex usage guard hook in {path}")
+
+
 # --------------------------------------------------------------------------- #
 # Claude Code
 # --------------------------------------------------------------------------- #
@@ -277,6 +320,17 @@ def _claude_guard_hook_command() -> dict[str, Any]:
     return {
         "type": "command",
         "command": _guard_posix("horus guard-host --hook"),
+    }
+
+
+def _claude_usage_guard_hook_command() -> dict[str, Any]:
+    # PreToolUse usage guard (empty matcher -> every tool call). Reads the cached
+    # usage snapshot; near the limit it injects an advisory, and at the emergency
+    # threshold it performs a worker-aware emergency state-save. It never denies a
+    # tool call, so the exit-0 guard can never swallow a real block.
+    return {
+        "type": "command",
+        "command": _guard_posix("horus usage guard --target claude --hook"),
     }
 
 
@@ -377,11 +431,36 @@ def install_claude_guard_hook(project_root: Path) -> HookAction:
     return _persist_hook(path, data, "Claude hosted-session guard hook")
 
 
+def install_claude_usage_guard_hook(project_root: Path) -> HookAction:
+    """Install/update a Claude `PreToolUse` usage guard. Empty matcher, so it fires on
+    every tool call — a single long turn cannot sail past the advisory. Near the limit
+    it injects an advisory; at the emergency threshold it performs a worker-aware
+    emergency state-save. It never denies a tool call. Coexists with the merge + host
+    guard PreToolUse hooks (own marker)."""
+    path, data, hooks = _claude_hooks_dict(project_root)
+    _merge_event_hook(
+        hooks, "PreToolUse", _claude_usage_guard_hook_command(),
+        matcher="", is_mine=_is_horus_usage_guard_hook,
+    )
+    data["hooks"] = hooks
+    return _persist_hook(path, data, "Claude usage guard hook")
+
+
 # The full per-target hook set — the single list `init`, `upgrade-project`, and any
 # other bulk installer should iterate so no surface gets a partial projection.
 HOOK_INSTALLERS = {
-    "claude": (install_claude_usage_hook, install_claude_merge_hook, install_claude_guard_hook),
-    "codex": (install_codex_usage_hook, install_codex_merge_hook, install_codex_guard_hook),
+    "claude": (
+        install_claude_usage_hook,
+        install_claude_merge_hook,
+        install_claude_guard_hook,
+        install_claude_usage_guard_hook,
+    ),
+    "codex": (
+        install_codex_usage_hook,
+        install_codex_merge_hook,
+        install_codex_guard_hook,
+        install_codex_usage_guard_hook,
+    ),
 }
 
 
@@ -390,7 +469,12 @@ HOOK_INSTALLERS = {
 # --------------------------------------------------------------------------- #
 
 def _is_any_horus_hook(handler: Any) -> bool:
-    return _is_horus_usage_hook(handler) or _is_horus_merge_hook(handler) or _is_horus_guard_hook(handler)
+    return (
+        _is_horus_usage_hook(handler)
+        or _is_horus_merge_hook(handler)
+        or _is_horus_guard_hook(handler)
+        or _is_horus_usage_guard_hook(handler)
+    )
 
 
 def _strip_horus_hooks(hooks: dict[str, Any]) -> int:
@@ -477,16 +561,23 @@ def codex_hooks_path(project_root: Path) -> Path:
 # Re-arm window: after firing, stay quiet for this long, then allow firing again.
 # Prevents a within-turn loop without permanently suppressing a long session.
 REARM_SECONDS = 1800.0
+# The emergency state-save fires at most once per usage window (~5h) per session,
+# so its re-arm spans the whole window rather than the short advisory re-arm.
+RESCUE_REARM_SECONDS = 6 * 3600.0
 
 
-def _sentinel_path(session_id: str) -> Path:
+def _sentinel_path(session_id: str, kind: str = "closure") -> Path:
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", session_id or "unknown")[:80]
-    return Path(tempfile.gettempdir()) / f"horus-closure-{safe}"
+    return Path(tempfile.gettempdir()) / f"horus-{kind}-{safe}"
 
 
-def closure_already_fired(session_id: str, *, rearm_seconds: float = REARM_SECONDS) -> bool:
-    """True if closure fired for this session within the re-arm window."""
-    path = _sentinel_path(session_id)
+def sentinel_fired(session_id: str, *, kind: str = "closure", rearm_seconds: float = REARM_SECONDS) -> bool:
+    """True if the ``kind`` sentinel fired for this session within the re-arm window.
+
+    A per-``kind`` marker keeps independent hooks from suppressing each other — the
+    PreToolUse guard's advisory/rescue markers do not share the Stop hook's closure
+    marker."""
+    path = _sentinel_path(session_id, kind)
     try:
         last = float(path.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
@@ -494,8 +585,17 @@ def closure_already_fired(session_id: str, *, rearm_seconds: float = REARM_SECON
     return (time.time() - last) < rearm_seconds
 
 
-def mark_closure_fired(session_id: str) -> None:
+def mark_sentinel_fired(session_id: str, *, kind: str = "closure") -> None:
     try:
-        _sentinel_path(session_id).write_text(f"{time.time():.0f}", encoding="utf-8")
+        _sentinel_path(session_id, kind).write_text(f"{time.time():.0f}", encoding="utf-8")
     except OSError:
         pass
+
+
+def closure_already_fired(session_id: str, *, rearm_seconds: float = REARM_SECONDS) -> bool:
+    """True if closure fired for this session within the re-arm window."""
+    return sentinel_fired(session_id, kind="closure", rearm_seconds=rearm_seconds)
+
+
+def mark_closure_fired(session_id: str) -> None:
+    mark_sentinel_fired(session_id, kind="closure")
