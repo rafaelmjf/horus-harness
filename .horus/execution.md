@@ -100,3 +100,11 @@ auto-edit posture; fill the handoff note and stop; the orchestrator commits to
     Branch-owning claude workers need `--posture full-auto` (or a pre-seeded
     allowlist in the worktree). A was resumed with full-auto, context intact.
     Codex under `auto-edit` ran without stalling. Intervention count: 1.
+  - C's sandbox couldn't run the suite (read-only uv cache + no network for
+    deps); its handoff said so honestly instead of claiming green. The
+    orchestrator's gate run caught 1 failed/725 passed (a cli tail test seeding
+    a fake-PID 'running' row that the new reconciliation rightly demotes) —
+    bounced back to the same codex session with the exact failure.
+    Intervention count: 2. Lesson: codex worker briefs must include a
+    sandbox-runnable gate (compileall + targeted tests) or accept that the
+    orchestrator's gate run is the first full-suite pass.
