@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "horus-hub Phase 1 COMPLETE 2026-07-04 (hub PRs #1–#3): codex auth skeleton, then two claude/work worktree workers — read-only inventory and pure-stdlib RS256 Access JWT verification (Rafa chose stdlib over a dependency). All accepted on reproduced gates + live probes (incl. supervisor adversarial JWT cases) + independent crypto review. Three delegated phases, zero bounces today. Hub branch protection still blocked (private repo, free plan)."
-next_action: "In ~/projects/horus-hub: plan Phase 2 (registry + run-log read model per its docs/design.md) as a fresh delegated batch — replace the hub's .horus/execution.md, then spawn. In this repo the backlog is the menu (catalog niceties / Windows ops / macOS pass are the top candidates)."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. Hub Phase 1 is complete (PRs #1–#3); next hub step is planning Phase 2 (registry + run-log read model) in ~/projects/horus-hub per its PRD. This repo's own backlog is otherwise the menu."
+current_focus: "horus-hub Phases 0–2 COMPLETE 2026-07-04 (hub PRs #1–#4, four delegated workers: codex, 2× claude/work sonnet, 1× claude/work opus; one cheap supervisor-side respawn). Read-only MVP data surface done: inventory + stdlib JWT auth + registry/run-log read model, all accepted on reproduced gates + live probes (real ~/.horus rendered the accepting session itself; registry byte-identical). Hub branch protection still blocked (private repo, free plan)."
+next_action: "In ~/projects/horus-hub: make the sequencing call (HTML UI rendering phase vs straight to Phase 3 launch-hardening — MVP cut wants a rendered dashboard, Phases 1–2 are JSON-only), then plan the chosen phase as a delegated batch. In this repo the backlog is the menu (catalog niceties / Windows ops / macOS pass are the top candidates)."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. Hub Phases 0–2 are complete (PRs #1–#4); next hub step is the UI-vs-Phase-3 sequencing decision in ~/projects/horus-hub per its PRD. This repo's own backlog is otherwise the menu."
 execution_recommendation: "plan-execution for hub Phase 1 (the batch lives in horus-hub's .horus/execution.md — codex worker buys context hygiene + keeps frontier tier on acceptance); continue-as-is for this repo's backlog items."
 last_updated: 2026-07-04
 ---
@@ -227,6 +227,9 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   branch, **name that branch in next_action/handoff prose** — a tree switched back
   to main looks empty and the next session burns time rediscovering it via reflog
   (hit 2026-07-04). Probe briefs must not hardcode port 8765 (the dashboard's).
+  **Commit continuity before cutting a worker worktree from HEAD** — an uncommitted
+  execution.md brief is invisible to the worker's checkout (cost a kill+respawn
+  2026-07-04).
 - **Platform traps to remember:** `uv tool install horus-harness` without
   `--python 3.12` silently resolves an ancient version when uv's default python is
   below the floor (hit on Linux 2026-07-03, not just Windows);
