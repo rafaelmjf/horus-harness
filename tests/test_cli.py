@@ -937,10 +937,41 @@ def test_consolidate_cli_runs(tmp_path, monkeypatch):
     assert main(["consolidate", "--path", str(tmp_path)]) == 0
 
 
+def test_consolidate_cli_prd_project_gets_v3_trailer(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes"])  # scaffolds structure v3 (PRD.md)
+    assert main(["consolidate", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "PRD structure" in out
+    assert "features.md" not in out  # no six-lane routing steps on a v3 project
+    assert "each lane stays in its lane" not in out
+
+
+def test_consolidate_cli_six_lane_trailer_unchanged(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "roadmap.md").write_text("---\nstatus: active\n---\n# R\n", encoding="utf-8")
+    assert main(["consolidate", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "each lane stays in its lane" in out
+    assert "PRD structure" not in out
+
+
 def test_distill_history_cli_runs(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes"])
     assert main(["distill-history", "--path", str(tmp_path)]) == 0
+
+
+def test_distill_history_cli_prd_project_targets_archive(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes"])  # scaffolds structure v3 (PRD.md)
+    assert main(["distill-history", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "archive/history.md" in out
+    assert "history.md missing" not in out
+    assert "decisions.md" not in out  # v2 trailer cross-references decisions.md
 
 
 def test_infer_cli_runs(tmp_path, monkeypatch):
