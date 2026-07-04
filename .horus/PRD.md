@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "horus-hub Phase 0 is IN FLIGHT in the new private repo rafaelmjf/horus-hub (created 2026-07-04, design doc = docs/design.md there): a codex worker is building the auth skeleton per the pinned spec; its .git is read-only so the orchestrator/accepting session owns commit → PR → gate. Hub pre-work shipped earlier today as v0.0.24."
-next_action: "In ~/projects/horus-hub: review the codex worker's handoff (.horus/temp/phase0.md), run its gate (python3 -m unittest discover -s tests) and the auth live probe (unauthenticated → denied, owner header → 200, /health liveness only), commit → PR → merge, make tests a required check, then plan Phase 1 as a delegated batch."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. horus-hub Phase 0 was delegated to a codex worker (repo ~/projects/horus-hub, spec docs/design.md, worker session findable via horus sessions / JSONL run logs). Accept it on signals: unittest gate + auth live probe; then required-check CI and Phase 1 planning per that repo's PRD."
-execution_recommendation: "continue-as-is — the remaining Phase 0 work is acceptance mechanics (gate, probe, PR) in horus-hub; plan-execution resumes from hub Phase 1 onward."
+current_focus: "horus-hub Phase 0 accepted and merged (hub PR #1, 2026-07-04): gate + auth live probe reproduced by the accepting session, tests CI green on the exact sha and on main's push run. Hub Phase 1 (read-only project inventory) is planned as a delegated batch in that repo's .horus/execution.md — workers not yet spawned. Hub branch protection is blocked (private repo, free plan) — parked as a hub ops item."
+next_action: "In ~/projects/horus-hub: spawn the phase1-inventory codex worker per its .horus/execution.md brief, accept on gate + live probe, then decide the phase1-access-jwt approach (stdlib RSA verify vs first justified dependency). In this repo the backlog is the menu (catalog niceties / Windows ops / macOS pass are the top candidates)."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. Hub work continues in ~/projects/horus-hub — its PRD frontmatter + .horus/execution.md carry the Phase 1 delegated batch (phase1-inventory ready to spawn). This repo's own backlog is otherwise the menu."
+execution_recommendation: "plan-execution for hub Phase 1 (the batch lives in horus-hub's .horus/execution.md — codex worker buys context hygiene + keeps frontier tier on acceptance); continue-as-is for this repo's backlog items."
 last_updated: 2026-07-04
 ---
 
@@ -55,11 +55,10 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 3. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
-4. **horus-hub Phase 0 (in flight, codex worker):** repo `rafaelmjf/horus-hub`
-   created (private, design in `docs/design.md`); acceptance pending per
-   `next_action`. Parked follow-ups: JSONL heartbeat events; `--worktree`
-   auto-cleanup; `--worker` could infer the agent from `--agent` (took a
-   usage-error bounce today).
+4. **horus-hub follow-ups (harness side):** hub work continues in
+   `rafaelmjf/horus-hub` (its PRD + execution.md). Parked here: JSONL heartbeat
+   events; `--worktree` auto-cleanup; `--worker` could infer the agent from
+   `--agent` (took a usage-error bounce 2026-07-04).
 
 ### Open, unscheduled
 
@@ -224,7 +223,10 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   bounce = resume the same session with the exact failure; after each merge in a
   batch, watch main's push CI before arming the next (non-strict checks let two
   individually green PRs land a red main). The orchestrator implements nothing
-  and alone edits continuity.
+  and alone edits continuity. When checkpointing unreviewed worker output on a
+  branch, **name that branch in next_action/handoff prose** — a tree switched back
+  to main looks empty and the next session burns time rediscovering it via reflog
+  (hit 2026-07-04). Probe briefs must not hardcode port 8765 (the dashboard's).
 - **Platform traps to remember:** `uv tool install horus-harness` without
   `--python 3.12` silently resolves an ancient version when uv's default python is
   below the floor (hit on Linux 2026-07-03, not just Windows);
