@@ -522,9 +522,16 @@ def test_worker_status_lines_groups_per_agent_with_counts():
 def test_worker_status_lines_hides_stale_terminal_records():
     old = _worker(status="exited", minutes_ago=600)
     assert companion.worker_status_lines([old], now=_NOW) == []
-    # ...but a stale *running* record still shows (reconcile owns its liveness).
-    stale_running = _worker(status="running", minutes_ago=600)
-    assert companion.worker_status_lines([stale_running], now=_NOW) == ["Codex — 1 running"]
+    stale_running = _worker(status="stale", minutes_ago=1)
+    assert companion.worker_status_lines([stale_running], now=_NOW) == []
+
+
+def test_worker_status_lines_excludes_stale_from_running_count():
+    records = [
+        _worker(status="running", session_id="live"),
+        _worker(status="stale", session_id="dead"),
+    ]
+    assert companion.worker_status_lines(records, now=_NOW) == ["Codex — 1 running"]
 
 
 def test_worker_status_lines_calls_out_failures():

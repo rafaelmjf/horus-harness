@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import threading
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -1595,6 +1596,7 @@ _SESSION_STATUS_CLASS = {
     "running": "health-ok",
     "failed": "health-fail",
     "orphaned": "health-warn",
+    "stale": "health-warn",
     "exited": "muted",
 }
 
@@ -1602,14 +1604,14 @@ _SESSION_STATUS_CLASS = {
 def gather_sessions() -> list[registry.SessionRecord]:
     """Reconcile the registry against live PIDs, then return records newest-first."""
     reg = registry.Registry.default()
-    reg.reconcile()  # correct records left "running" by a crashed/closed run
     return sorted(reg.all(), key=lambda r: r.updated_at, reverse=True)
 
 
 def render_sessions_card(records: list[registry.SessionRecord]) -> str:
+    as_of = datetime.now(timezone.utc).astimezone().strftime("%H:%M:%S")
     if not records:
         return (
-            "<div class='card'><h2>Live sessions</h2>"
+            f"<div class='card'><h2>Live sessions <span class='muted' style='font-size:12px'>as of {as_of}</span></h2>"
             "<p class='muted'>No tracked agent sessions yet. They appear here once "
             "Horus spawns or resumes one.</p></div>"
         )
@@ -1618,11 +1620,16 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
         cls = _SESSION_STATUS_CLASS.get(r.status, "muted")
         rc = "" if r.returncode is None else f" ({r.returncode})"
         if r.status in registry.TERMINAL:
+            label = "Clean up" if r.status == "stale" else "Reviewed &#10003;"
+            title = (
+                "Remove this stale worker from the registry"
+                if r.status == "stale"
+                else "Remove this finished worker from the registry (and the mascot badge)"
+            )
             action = (
                 "<form method='post' action='/session-dismiss' style='margin:0'>"
                 f"<input type='hidden' name='session_id' value='{html.escape(r.session_id)}'>"
-                "<button class='btn sm btn-seal' type='submit' title='Remove this finished "
-                "worker from the registry (and the mascot badge)'>Reviewed &#10003;</button>"
+                f"<button class='btn sm btn-seal' type='submit' title='{html.escape(title)}'>{label}</button>"
                 "</form>"
             )
         else:
@@ -1639,11 +1646,12 @@ def render_sessions_card(records: list[registry.SessionRecord]) -> str:
         )
     body = "".join(rows)
     return (
-        "<div class='card'><h2>Live sessions</h2>"
+        f"<div class='card'><h2>Live sessions <span class='muted' style='font-size:12px'>as of {as_of}</span></h2>"
         "<table><tr><th>status</th><th>agent</th><th>account</th><th>project</th>"
         "<th>pid</th><th>session</th><th>updated</th><th></th></tr>"
         f"{body}</table>"
-        "<p class='muted'>A finished worker counts as <em>awaiting review</em> (the mascot badge) "
+        "<p class='muted'>A stale worker was claimed as running but failed liveness checks, so it never counts as running. "
+        "A finished worker counts as <em>awaiting review</em> (the mascot badge) "
         "until dismissed. The review itself happens where the worker was spawned — the supervising "
         "session's transcript and the project's <code>.horus/temp/</code> handoff note. Once its "
         "results are folded in, mark it <em>Reviewed</em> here, or clear all finished workers via "

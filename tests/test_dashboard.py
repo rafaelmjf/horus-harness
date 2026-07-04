@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 import json
 
-from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead
+from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry
 from horus.registry import Registry, SessionRecord
 from horus.upgrade import UpgradeAction
 
@@ -82,7 +82,7 @@ def test_gather_sessions_reconciles(tmp_path, monkeypatch):
     reg = Registry.default()
     reg.upsert(SessionRecord(session_id="x", agent="claude", project="/p", pid=None, status="running"))
     records = dashboard.gather_sessions()
-    assert len(records) == 1 and records[0].status == "orphaned"  # pid-less running -> orphaned
+    assert len(records) == 1 and records[0].status == "stale"  # pid-less running -> stale
 
 
 def test_render_sessions_card_offers_reviewed_dismiss_only_when_finished():
@@ -94,6 +94,16 @@ def test_render_sessions_card_offers_reviewed_dismiss_only_when_finished():
     assert html.count("action='/session-dismiss'") == 1   # finished row only
     assert "value='done1'" in html
     assert "awaiting review" in html                       # explains the badge term
+    assert "as of " in html
+
+
+def test_render_sessions_card_flags_stale_with_cleanup():
+    stale = SessionRecord(session_id="stale1", agent="codex", project="/p",
+                          pid=123456, status="stale", updated_at="t")
+    html = dashboard.render_sessions_card([stale])
+    assert "stale" in html
+    assert "Clean up" in html
+    assert "never counts as running" in html
 
 
 def test_process_session_dismiss_removes_only_finished(tmp_path, monkeypatch):
@@ -1091,6 +1101,7 @@ def test_process_launch_fresh_by_project_index(tmp_path, monkeypatch):
         return 555
 
     monkeypatch.setattr(launcher, "open_terminal", fake_open)
+    monkeypatch.setattr(registry, "process_alive", lambda pid: pid == 555)
 
     query = dashboard.process_launch(
         {"project": "0", "mode": "fresh", "agent": "fake", "target": "window"},
