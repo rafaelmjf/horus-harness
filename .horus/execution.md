@@ -17,7 +17,7 @@ first PR lands, watch main's push CI before arming the second.
 
 | phase | status | difficulty | mode | worker_agent | worker_tier | delegation_basis | handoff_note | review gate |
 |---|---|---|---|---|---|---|---|---|
-| D-runlog-events | delegated | medium | delegated | codex (auto-edit, read-only .git — orchestrator owns commit/PR) | frontier | Backend seam with a crisp pytest gate; hub Phase 2 consumes run logs — harden before building on it | `.horus/temp/D-runlog-events.md` (worker creates in worktree) | required CI green + orchestrator runs the handoff gate command + live probe: a fake run writes JSONL events and registry reconciliation reads them |
+| D-runlog-events | merged (PR #113; orchestrator reproduced 746 green + live probe; zero bounces; main push CI green post-merge) | medium | delegated | codex (auto-edit, read-only .git — orchestrator owns commit/PR) | frontier | Backend seam with a crisp pytest gate; hub Phase 2 consumes run logs — harden before building on it | `.horus/temp/D-runlog-events.md` (worker creates in worktree) | required CI green + orchestrator runs the handoff gate command + live probe: a fake run writes JSONL events and registry reconciliation reads them |
 | E-run-ergonomics | delegated | medium | delegated | claude (account work, model opus, posture full-auto) | frontier | CLI/launch slice; the pilot's two manual footguns; hub Phase 4 calls this exact path | `.horus/temp/E-run-ergonomics.md` (worker creates in worktree) | required CI green + orchestrator live probe: `horus run --agent fake --worktree` creates the worktree + tracked session; `--worker` applies the posture matrix |
 
 ## Phase specs
