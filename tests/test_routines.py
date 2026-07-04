@@ -285,6 +285,23 @@ def test_distill_history_explicit_source(tmp_path):
     assert source is not None and source.name == "BIGLOG.md"
 
 
+def test_distill_history_v3_targets_archive_not_lane(tmp_path):
+    _mk_fresh_v3(tmp_path)
+    msgs = " ".join(f.message for f in routines.distill_signals(tmp_path, None))
+    assert "archive/history.md" in msgs
+    assert "history.md missing" not in msgs  # v2 lane must not be demanded on v3
+
+
+def test_distill_history_v3_reads_existing_archive(tmp_path):
+    hdir = _mk_fresh_v3(tmp_path)
+    (hdir / "archive").mkdir()
+    (hdir / "archive" / "history.md").write_text(
+        "# History\n\n## A bump\n\nlesson\n", encoding="utf-8"
+    )
+    msgs = " ".join(f.message for f in routines.distill_signals(tmp_path, None))
+    assert "current archive/history.md" in msgs
+
+
 def test_feature_items_groups_names_by_section():
     body = (
         "## Shipped\n| Capability | Since |\n|---|---|\n| Dashboard | v1 |\n| Closure | v1 |\n"

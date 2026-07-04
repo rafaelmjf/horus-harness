@@ -722,6 +722,21 @@ def distill_signals(root: Path, source: Path | None) -> list[Finding]:
             f"source log {rel}: {lines} non-blank line(s), {heads} heading(s) to compress",
         ))
 
+    if frontmatter.has_prd(root):
+        # Structure v3: the curated history lives in archive/, not a top-level lane.
+        history_body = _read(hdir, "archive/history.md")
+        if history_body is None:
+            findings.append(Finding(
+                "ok",
+                f"no {HORUS_DIR}/archive/history.md yet — the first distill pass creates it",
+            ))
+        else:
+            lines, heads = _log_stats(frontmatter.parse(history_body).body)
+            findings.append(Finding(
+                "ok", f"current archive/history.md: {lines} line(s), {heads} curated entry/entries"
+            ))
+        return findings
+
     history_body = _read(hdir, "history.md")
     if history_body is None:
         findings.append(Finding("warn", f"{HORUS_DIR}/history.md missing — run `horus init` to scaffold it"))

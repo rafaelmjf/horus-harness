@@ -745,6 +745,26 @@ Re-run `horus consolidate` afterward; the candidates above should be resolved.
 """
 
 
+CONSOLIDATE_PROMPT_V3 = """Consolidation routine (PRD structure) - a light backlog-hygiene pass over PRD.md.
+Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.md).
+Never invent status, dates, or versions; when intent is unclear, leave it and flag it.
+
+1. Size: keep PRD.md under the ~250-line cap - shipped entries are one line each;
+   delete done backlog items outright (git remembers).
+2. Freshness: refresh the frontmatter handoff fields (current_focus / next_action /
+   next_prompt / execution_recommendation / last_updated) to reflect this session.
+3. Backlog hygiene: de-duplicate backlog titles; move work that shipped to the
+   Shipped section as a single line; append newly found bugs to the Backlog.
+4. Distill sessions: fold durable content from sessions/*.md into PRD.md, then
+   move the distilled note into sessions/archive/ (kept local, excluded from the
+   to-distill count) rather than deleting it.
+5. Temp notes: distill durable outcomes from .horus/temp/ worker handoff notes
+   into PRD.md, then delete the notes (they are fleeting by contract).
+
+One pass at most - act on the signals above, do not iterate warnings to zero.
+"""
+
+
 DISTILL_HISTORY_PROMPT = """Distill-history routine - compress a large log into the curated history.md subset.
 Act on the signals above. Edit .horus/history.md (and freeze the source log); never
 invent incidents - only compress what the log already records.
@@ -758,6 +778,26 @@ Signal test for each entry:
 1. Read the source log identified above.
 2. Write the high-signal "bumps in the road" into history.md (curated, deduplicated).
 3. Mark the source log as superseded/frozen at the top - do not delete it.
+"""
+
+
+DISTILL_HISTORY_PROMPT_V3 = """Distill-history routine (PRD structure) - compress a large log into the curated .horus/archive/history.md subset.
+Act on the signals above. Edit .horus/archive/history.md (and freeze the source log);
+never invent incidents - only compress what the log already records.
+
+Signal test for each entry:
+- KEEP: a real problem the project hit + the durable lesson/design change it forced.
+- DROP: routine changelog/version-bump noise, resolved-and-irrelevant incidents,
+  anything already captured under PRD.md ## Rules (cross-reference instead).
+- archive/history.md is carried-forward context: NOT a timeline, NOT open work
+  (open work is the PRD.md Backlog).
+
+1. Read the source log identified above.
+2. Write the high-signal "bumps in the road" into .horus/archive/history.md
+   (curated, deduplicated; create the file if this is the first distill).
+3. Fold any still-load-bearing rule up into PRD.md ## Rules - the archive is
+   background, PRD.md is what agents read every session.
+4. Mark the source log as superseded/frozen at the top - do not delete it.
 """
 
 

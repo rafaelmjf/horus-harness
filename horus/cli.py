@@ -1357,6 +1357,14 @@ def cmd_consolidate(args: argparse.Namespace) -> int:
     print(f"Consolidation check: {root}\n")
     findings = routines.consolidate_signals(root)
     healthy = _print_findings(findings)
+    if frontmatter.has_prd(root):
+        print("\n" + templates.CONSOLIDATE_PROMPT_V3)
+        if healthy:
+            print("PRD backlog already consolidated — nothing to trim or distill.")
+        else:
+            print("Consolidation candidates above — the in-loop agent applies the routine.")
+        _skill_nudge(root)
+        return 0
     print("\n" + templates.CONSOLIDATE_PROMPT)
     if healthy:
         print("Lanes already consolidated — nothing to route or prune.")
@@ -1373,7 +1381,10 @@ def cmd_distill_history(args: argparse.Namespace) -> int:
     source = routines.find_source_log(root, args.source)
     print(f"Distill-history check: {root}\n")
     _print_findings(routines.distill_signals(root, source))
-    print("\n" + templates.DISTILL_HISTORY_PROMPT)
+    if frontmatter.has_prd(root):
+        print("\n" + templates.DISTILL_HISTORY_PROMPT_V3)
+    else:
+        print("\n" + templates.DISTILL_HISTORY_PROMPT)
     return 0
 
 
