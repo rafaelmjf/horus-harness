@@ -356,6 +356,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     log = runlog.RunLog()
     watch_pending = getattr(args, "watch", False)
+    event_log_started = False
 
     def emit(line: str) -> None:
         print(line)
@@ -363,6 +364,22 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     for ev in registry.track(reg, run):
         log.bind(run.session.session_id)
+        if not event_log_started and run.session.session_id:
+            event_log_started = True
+            runlog.append_event(
+                run.session.session_id,
+                "start",
+                agent=run.session.agent,
+                account=run.session.account,
+                project=run.session.project_dir.as_posix(),
+                pid=run.session.pid,
+                argv={
+                    "prompt": spec.prompt,
+                    "posture": spec.posture.value,
+                    "model": spec.model,
+                    "resume": args.resume,
+                },
+            )
         if watch_pending and run.session.session_id:
             watch_pending = False
             _spawn_watcher(run.session.session_id, root)
@@ -376,6 +393,13 @@ def cmd_run(args: argparse.Namespace) -> int:
             emit(f"  [error] {ev.text or ''}")
 
     s = run.session
+    runlog.append_event(
+        s.session_id,
+        "result",
+        status=s.status,
+        rc=s.returncode,
+        ended_at=runlog.utc_iso(),
+    )
     emit(f"\n{s.status} — session {s.session_id} (account {s.account or '-'})")
     return 0 if s.status == "exited" else 1
 

@@ -10,9 +10,12 @@ stay small so there is no rotation. Writing is strictly best-effort: any
 
 from __future__ import annotations
 
+import json
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from horus import config
 
@@ -23,6 +26,56 @@ def run_log_path(session_id: str) -> Path:
     """Log file for a session. The id is sanitized because it names a file and
     comes from an agent's output stream, not from us."""
     return config.config_dir() / "logs" / "runs" / f"{_SAFE_ID.sub('-', session_id)}.log"
+
+
+def run_events_path(session_id: str) -> Path:
+    """Structured event sidecar for a session, next to the human-readable log."""
+    return config.config_dir() / "logs" / "runs" / f"{_SAFE_ID.sub('-', session_id)}.jsonl"
+
+
+def utc_iso() -> str:
+    """Current aware UTC timestamp for run-event payloads."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def append_event(session_id: str | None, event: str, **fields: Any) -> None:
+    """Append one structured run event as JSONL.
+
+    The sidecar is best-effort like the text log: run visibility must never be
+    able to break the agent process.
+    """
+    if not session_id:
+        return
+    payload = {
+        "ts": utc_iso(),
+        "event": event,
+        "session_id": session_id,
+        **fields,
+    }
+    try:
+        path = run_events_path(session_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, sort_keys=True) + "\n")
+    except (OSError, TypeError, ValueError):
+        pass
+
+
+def read_events(session_id: str) -> list[dict[str, Any]]:
+    """Best-effort read of a session's structured JSONL events."""
+    try:
+        lines = run_events_path(session_id).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    events: list[dict[str, Any]] = []
+    for line in lines:
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            events.append(obj)
+    return events
 
 
 class RunLog:
