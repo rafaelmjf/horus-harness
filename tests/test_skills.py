@@ -87,7 +87,7 @@ def test_distill_history_skill_v3_targets_archive():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 6
+    assert execution.version == 7
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -104,6 +104,13 @@ def test_execution_skill_requires_real_delegation_for_model_separation():
     assert "horus run --agent codex" in execution.content
     assert "shares no conversation history" in execution.content
     assert "reproduce the gate yourself" in execution.content
+    # v7: signal-based acceptance — required CI green counts as reproduction of the
+    # test gate; one runtime probe stays with the supervisor; no proof narratives.
+    assert "deterministic signal" in execution.content
+    assert "required CI check green" in execution.content
+    assert "one runtime probe" in execution.content
+    assert "No proof narratives" in execution.content
+    assert "pre-existing failure baseline" in execution.content
 
 
 def test_execution_template_carries_worker_agent_marking():

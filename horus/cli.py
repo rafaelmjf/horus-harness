@@ -608,6 +608,7 @@ def cmd_execution(args: argparse.Namespace) -> int:
                 date=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
                 agent=args.agent,
                 model_tier=model_tier,
+                prd_structure=frontmatter.has_prd(root),
             ),
             encoding="utf-8",
         )

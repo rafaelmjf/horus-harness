@@ -15,7 +15,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 3
+BLOCK_VERSION = 4
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -64,9 +64,10 @@ After work that contributes to the project state, close the session by invoking 
 
 Working discipline (every session, whether or not the work is delegated):
 
-- **Reproduce the gate; never trust the report.** Re-run the build/tests/check yourself
-  and watch it pass before calling work done — whether a worker did it or you did. A
-  confident "tests pass" is not evidence.
+- **Reproduce the gate; never trust the report.** Before calling work done, observe a
+  deterministic signal yourself: rerun the check locally, or watch a *required* CI
+  check go green on the exact commit — plus one live probe of the changed surface.
+  A confident "tests pass" in prose is not evidence, whoever wrote it.
 - **Bound each step to a green, committed-and-pushed checkpoint**, so there is always a
   clean resume point and nothing half-finished stranded only on this machine.
 - **Put safety in the code, not the reviewer.** Guards and invariants prevent the
@@ -266,7 +267,7 @@ Delegation is a judgment call, not a default. Decide on implementation **volume*
 
 | Situation | Approach |
 |---|---|
-| High volume, low ambiguity, clear gate (scaffolding, repetitive edits, mechanical refactor) | Delegate, then reproduce the gate |
+| High volume, low ambiguity, clear gate (scaffolding, repetitive edits, mechanical refactor) | Delegate, then reproduce the gate (deterministic signal + one runtime probe) |
 | Integrity/security-sensitive (guarded writes, schema, auth) | Delegate is fine — keep an independent review + reproduce the gate |
 | Small, ambiguous/exploratory, or debugging | Stay inline — orchestration overhead and judgment loss dominate |
 | Work where the *user* is the real reviewer (visual/UI) | Delegate the build; the user's eyeball is the gate |
@@ -276,7 +277,11 @@ gains context hygiene **and** a cheaper tier; a single strong model (GPT-5.5) ga
 mostly context hygiene, so its bar to delegate is higher. Record the call per phase in
 `delegation_basis`. Review is not a safety guarantee — the durable safeguards are to
 reproduce the gate, bound each pass to a green committed checkpoint, and put safety in
-the code (guards), not the reviewer.
+the code (guards), not the reviewer. Reproducing the gate means observing a
+deterministic signal yourself — a *required* CI check green on the worker's exact
+commit counts as reproduction of the test gate; rerun locally only when no required
+check covers it — plus one live probe of the changed runtime surface. Never accept a
+phase on the handoff note's claims.
 
 ## Model Policy
 
@@ -301,7 +306,8 @@ cross-agent worker. Spawn a cross-agent worker as a one-shot tracked session:
     horus run --agent codex --account <alias> --path . "<phase brief - point it at the handoff note>"
 
 The review contract does not change with the worker agent: review the diff and the
-handoff note, then reproduce the gate yourself. A cross-vendor worker shares no
+handoff note, then reproduce the gate (deterministic signal + one runtime probe). A
+cross-vendor worker shares no
 conversation history with the supervisor, which also makes it an honest cold reader
 of `.horus/` continuity.
 
@@ -317,11 +323,14 @@ Implementation workers should write a brief note in `.horus/temp/` when a phase
 finishes. Keep it factual and reviewable:
 
 - changed files / behavior;
-- tests run and result;
+- the gate: one command the supervisor can rerun verbatim, its expected output, and
+  the pre-existing failure baseline (what was already red before the phase started);
 - risks or follow-ups;
 - suggested durable `.horus/` updates.
 
-The supervisor reviews the diff and the handoff, then updates the durable lanes.
+No proof narratives — the gate command and the CI check speak; prose claims are not
+reviewed. The supervisor reviews the diff and the handoff, then updates the durable
+continuity (`PRD.md` on a PRD-structure project; the lanes on six-lane).
 
 Useful commands:
 
@@ -388,7 +397,8 @@ Read `.horus/project.md`, `.horus/roadmap.md`, `.horus/features.md`,
 
 Supervisor workflow:
 
-1. Confirm whether `.horus/roadmap.md` `execution_recommendation` still applies.
+1. Confirm whether the project's `execution_recommendation` (PRD.md frontmatter on a
+   PRD-structure project, roadmap.md on six-lane) still applies.
 2. If it says `plan-execution`, first decide whether execution planning is actually
    warranted for this agent/runtime. Decide on implementation volume × ambiguity:
    delegate high-volume/low-ambiguity/clear-gate work; stay inline for small,
@@ -405,10 +415,15 @@ Supervisor workflow:
    If the user is testing model separation and no native worker/subagent is available,
    stop and report that the workflow test cannot proceed faithfully here.
 5. Instruct each worker to write a handoff note under `.horus/temp/` using
-   `horus execution handoff <phase>` before returning.
-6. Review the worker diff, tests, and handoff note before marking a phase accepted.
-7. Distill durable outcomes into roadmap/features/decisions/history at closure; keep
-   `.horus/execution.md` fluid and replace it for the next substantial roadmap item.
+   `horus execution handoff <phase>` before returning — including the gate command,
+   its expected output, and the pre-existing failure baseline. No proof narratives.
+6. Accept a phase on deterministic signals only: the required CI check green on the
+   worker's exact commit (rerun the gate locally only when no required check covers
+   it) plus one runtime probe you drive yourself. Review the diff and handoff note
+   for scope, not as evidence that the work works.
+7. Distill durable outcomes into PRD.md (PRD-structure) or
+   roadmap/features/decisions/history (six-lane) at closure; keep
+   `.horus/execution.md` fluid and replace it for the next substantial item.
 
 Native projection:
 
@@ -430,7 +445,19 @@ def execution_handoff_note(
     date: str,
     agent: str,
     model_tier: str,
+    prd_structure: bool = False,
 ) -> str:
+    if prd_structure:
+        durable = """- PRD.md backlog:
+- PRD.md shipped:
+- PRD.md rules:
+- execution.md:"""
+    else:
+        durable = """- roadmap.md:
+- features.md:
+- decisions.md:
+- history.md:
+- execution.md:"""
     return f"""---
 phase: {phase}
 title: "{title}"
@@ -449,27 +476,26 @@ status: in-progress
 
 ## Changed Files
 
-- 
+-
 
 ## Behavior
 
-- 
+-
 
-## Tests
+## Gate
 
-- Not run yet.
+- Command (the supervisor reruns this verbatim):
+- Expected output:
+- Pre-existing failure baseline (already red before this phase): none known
+- Last run result: not run yet
 
 ## Risks / Follow-ups
 
-- 
+-
 
 ## Suggested Durable Horus Updates
 
-- roadmap.md:
-- features.md:
-- decisions.md:
-- history.md:
-- execution.md:
+{durable}
 """
 
 
