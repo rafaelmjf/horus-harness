@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Orchestration pilot batch running (execution.md): A brainstorm-dashboard on claude/work Opus, C badge-liveness on codex GPT-5.5 (parallel, separate worktrees), B hub-design doc queued behind C. This session orchestrates on deterministic signals only (required CI, RESULT events, handoff gate commands, Rafa's eyeball for UI). Signal-based acceptance shipped v0.0.22."
-next_action: "Observe the wave-1 workers (A + C), accept on signals per execution.md's orchestrator contract, spawn B-hub-design on codex when C's PR is up, then distill the pilot verdict (keep/adjust/drop the orchestrator tier) into PRD."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md and .horus/execution.md (orchestration pilot, active). Check worker state: registry/badge, feat/brainstorm-dashboard and feat/session-liveness branches, open PRs and their required checks, handoff notes in the worktrees' .horus/temp/. Accept on signals only; B-hub-design starts on codex when C's PR is up."
-execution_recommendation: "plan-execution — the orchestration pilot batch is active in execution.md; the orchestrator session coordinates and accepts, it does not implement."
+current_focus: "Orchestration pilot complete and formalized (v0.0.23, PRs #108–112): brainstorm card, liveness badges, and the horus-hub design doc shipped via orchestrator > supervisor > worker across two vendors; execution skill v8 encodes the contract (worktrees, posture matrix, bounce-by-resume, merge sequencing). Next arc: hub pre-work, then horus-hub Phase 0."
+next_action: "Hub pre-work first (both are seams the hub consumes): structured JSON event stream in run logs + horus run --worktree/posture presets; propagate block v4 + skill v8 via upgrade-project --all; then scaffold horus-hub Phase 0 per research/horus-hub-design.md."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md. Orchestration pilot shipped in v0.0.23; the contract lives in execution skill v8. Next: hub pre-work — structured run-log event stream and horus run worktree/posture ergonomics (good two-worker orchestration batch) — then horus-hub Phase 0 (separate repo, auth skeleton) per research/horus-hub-design.md."
+execution_recommendation: "plan-execution — the hub pre-work pair is two bounded, parallelizable slices with crisp gates; run it as the next orchestration batch under skill v8. horus-hub Phase 0 itself starts as direct scaffolding in the new repo."
 last_updated: 2026-07-04
 ---
 
@@ -36,11 +36,8 @@ memory plane and interops via `.horus/`.
 **Out of scope:** multi-user SaaS, agent marketplace, distributed worker control plane,
 identity abstraction, memory beyond repo-local continuity.
 
-**Continuity value finding (2026-07-03, transcript analysis):** the proven spine is the
-resume frontmatter + session notes + fetch-first protocol (cold pickup in ~5 tool calls,
-cross-account). The six-lane taxonomy + iterate-to-zero consolidation was the overhead
-(20–30 tool calls per closure; 40 unresolved overlap warnings on this very repo). Hence
-this PRD structure.
+**Continuity value finding (2026-07-03):** the proven spine is resume frontmatter +
+session notes + fetch-first; the six-lane taxonomy was the overhead — hence this PRD.
 
 ## Backlog
 
@@ -58,21 +55,21 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 3. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
-4. **Orchestration pilot batch (active, see execution.md):** three parallel features
-   run as orchestrator > supervisor > worker — **A** dashboard Ideas/Brainstorm card
-   (scoped-context session that drafts an implementation plan; claude/work Opus),
-   **B** self-hostable hub design doc (central agent-launch place à la the gym app,
-   not in the uv package; codex), **C** trustworthy session badges (liveness-verified
-   registry counts, stale demotion, "as of" freshness in badge + dashboard; codex).
+4. **Hub pre-work, then horus-hub Phase 0:** structured JSON event stream in run
+   logs (text-line RESULT parsing flagged fragile in phase C; the hub's read model
+   consumes run logs — harden the seam before building on it) · `horus run`
+   orchestration ergonomics: `--worktree <branch>` + worker-posture presets (the
+   pilot's two manual footguns) · `upgrade-project --all` to propagate block v4 +
+   skill v8 to gym-coach/ttrpg · then scaffold the separate horus-hub repo
+   (auth skeleton behind Cloudflare Access) per `research/horus-hub-design.md`.
 
 ### Open, unscheduled
 
 - **Execution-workflow tuning:** small phase-status vocabulary
   (planned/delegated/accepted/blocked) in the skill + template (the gate-command +
   failure-baseline handoff fields shipped in v0.0.22).
-- **Skill map follow-ups** (gated on real use of the new Skills tab): Claude↔Codex
-  third-party skill copy with provenance/diff/trust; invocation tracking via transcript
-  scan; adopt rulesync only at a 3rd tool (Gemini/Copilot).
+- **Skill map follow-ups** (gated on real use of the Skills tab): third-party skill
+  copy with provenance/diff/trust; invocation tracking; rulesync only at a 3rd tool.
 - **Context-cache visibility, active behavior:** decide how cold/expired sessions warn
   (companion, launch flow, hook, or dashboard-only).
 - **Hook generation stamps:** hook configs are content-compared — an old CLI would offer
@@ -125,7 +122,11 @@ v3 consolidate/infer/skills, dashboard PRD rendering, opt-in six-lane migration 
 and live migrations for gym-coach + ttrpg with archived lanes preserved verbatim ·
 **signal-based acceptance** (v0.0.22): required pytest checks on main + live-proven
 auto-merge, block v4, execution skill v7 (gate-command/baseline handoffs,
-structure-aware suggestions), v3 routine trailers.
+structure-aware suggestions), v3 routine trailers · **orchestration pilot**
+(v0.0.23, PRs #108–112): Ideas/Brainstorm card + `horus brainstorm` · liveness-verified
+session badges (stale demotion, freshness, cleanup) · horus-hub design doc
+(`research/`) · execution skill v8 orchestration contract — 3 features, 2 vendors,
+2 bounces, orchestrator wrote no feature code.
 
 **Hooks & projections:** usage→closure hooks for Claude (OAuth `/usage`) + Codex
 (rollouts), advisory + ask-never-force · pre-merge gates both agents · hooks guarded to
@@ -216,6 +217,13 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   workflow tests require a real distinct worker. Codex auto-edit workers get a
   read-only `.git` and no socket bind: the supervisor owns commit, push, and every
   runtime gate — write briefs accordingly.
+- **Orchestration (proven 2026-07-04, contract in execution skill v8):** parallel
+  features run orchestrator > supervisor > worker — worktree per worker; claude
+  workers `full-auto` (default posture stalls headless, exits 0 with zero diffs);
+  bounce = resume the same session with the exact failure; after each merge in a
+  batch, watch main's push CI before arming the next (non-strict checks let two
+  individually green PRs land a red main). The orchestrator implements nothing
+  and alone edits continuity.
 - **Platform traps to remember:** `uv tool install horus-harness` without
   `--python 3.12` silently resolves an ancient version when uv's default python is
   below the floor (hit on Linux 2026-07-03, not just Windows);
