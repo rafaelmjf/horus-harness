@@ -50,6 +50,18 @@
             "statusMessage": "Checking Horus host safety"
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "horus usage guard --target codex --hook || exit 0",
+            "commandWindows": "if (Get-Command horus -ErrorAction SilentlyContinue) { horus usage guard --target codex --hook }; exit 0",
+            "timeout": 30,
+            "statusMessage": "Checking Horus usage guard"
+          }
+        ]
       }
     ]
   }

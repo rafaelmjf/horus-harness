@@ -40,6 +40,15 @@
             "command": "horus guard-host --hook || exit 0"
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "horus usage guard --target claude --hook || exit 0"
+          }
+        ]
       }
     ]
   }
