@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Orchestration pilot complete and formalized (v0.0.23, PRs #108–112): brainstorm card, liveness badges, and the horus-hub design doc shipped via orchestrator > supervisor > worker across two vendors; execution skill v8 encodes the contract (worktrees, posture matrix, bounce-by-resume, merge sequencing). Next arc: hub pre-work, then horus-hub Phase 0."
-next_action: "Hub pre-work first (both are seams the hub consumes): structured JSON event stream in run logs + horus run --worktree/posture presets; propagate block v4 + skill v8 via upgrade-project --all; then scaffold horus-hub Phase 0 per research/horus-hub-design.md."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md. Orchestration pilot shipped in v0.0.23; the contract lives in execution skill v8. Next: hub pre-work — structured run-log event stream and horus run worktree/posture ergonomics (good two-worker orchestration batch) — then horus-hub Phase 0 (separate repo, auth skeleton) per research/horus-hub-design.md."
-execution_recommendation: "plan-execution — the hub pre-work pair is two bounded, parallelizable slices with crisp gates; run it as the next orchestration batch under skill v8. horus-hub Phase 0 itself starts as direct scaffolding in the new repo."
+current_focus: "Hub pre-work shipped (v0.0.24, PRs #113–114, second orchestration batch, zero bounces): JSONL run-event sidecars with registry preference + horus run --worktree/--worker presets; block v4 + skill v8 propagated to gym-coach/ttrpg. The hub's two seams are hardened — next is horus-hub Phase 0 itself."
+next_action: "Scaffold the separate horus-hub repo per research/horus-hub-design.md Phase 0: config loader, health route, owner-auth middleware (Cloudflare Access header validation + app-side owner gate), deployment examples. Direct work in the new repo; onboard it with horus init."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md. Hub pre-work shipped in v0.0.24 (JSONL run events; horus run --worktree/--worker). Next: create the horus-hub repo and build Phase 0 per research/horus-hub-design.md — auth skeleton behind Cloudflare Access, read-only, no launch capability; gate: unauthenticated requests see no project data."
+execution_recommendation: "continue-as-is for horus-hub Phase 0 — greenfield scaffolding in a new repo is judgment-heavy and small; switch to plan-execution from Phase 1 onward (the design doc's phases are shaped for delegated batches)."
 last_updated: 2026-07-04
 ---
 
@@ -55,13 +55,10 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 3. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
-4. **Hub pre-work, then horus-hub Phase 0:** structured JSON event stream in run
-   logs (text-line RESULT parsing flagged fragile in phase C; the hub's read model
-   consumes run logs — harden the seam before building on it) · `horus run`
-   orchestration ergonomics: `--worktree <branch>` + worker-posture presets (the
-   pilot's two manual footguns) · `upgrade-project --all` to propagate block v4 +
-   skill v8 to gym-coach/ttrpg · then scaffold the separate horus-hub repo
-   (auth skeleton behind Cloudflare Access) per `research/horus-hub-design.md`.
+4. **horus-hub Phase 0** (pre-work shipped v0.0.24): scaffold the separate
+   self-hostable repo — auth skeleton behind Cloudflare Access, read-only before any
+   launch — per `research/horus-hub-design.md`. Parked follow-ups: heartbeat events
+   in the JSONL stream; worktree auto-cleanup for `horus run --worktree`.
 
 ### Open, unscheduled
 
@@ -126,7 +123,10 @@ structure-aware suggestions), v3 routine trailers · **orchestration pilot**
 (v0.0.23, PRs #108–112): Ideas/Brainstorm card + `horus brainstorm` · liveness-verified
 session badges (stale demotion, freshness, cleanup) · horus-hub design doc
 (`research/`) · execution skill v8 orchestration contract — 3 features, 2 vendors,
-2 bounces, orchestrator wrote no feature code.
+2 bounces, orchestrator wrote no feature code · **hub pre-work** (v0.0.24, PRs
+#113–114): JSONL run-event sidecars (registry prefers `result` events, legacy
+fallback) + `horus run --worktree`/`--worker` presets — second orchestration batch,
+zero bounces.
 
 **Hooks & projections:** usage→closure hooks for Claude (OAuth `/usage`) + Codex
 (rollouts), advisory + ask-never-force · pre-merge gates both agents · hooks guarded to

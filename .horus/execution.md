@@ -1,5 +1,5 @@
 ---
-status: active
+status: completed
 current_feature: "Hub pre-work batch: D structured run-log event stream (codex GPT-5.5) + E horus run worktree/posture ergonomics (claude/work Opus 4.8) — the two seams horus-hub consumes, run under the skill-v8 orchestration contract."
 supervisor_tier: frontier
 worker_tier: frontier (feature supervisors)
@@ -18,7 +18,7 @@ first PR lands, watch main's push CI before arming the second.
 | phase | status | difficulty | mode | worker_agent | worker_tier | delegation_basis | handoff_note | review gate |
 |---|---|---|---|---|---|---|---|---|
 | D-runlog-events | merged (PR #113; orchestrator reproduced 746 green + live probe; zero bounces; main push CI green post-merge) | medium | delegated | codex (auto-edit, read-only .git — orchestrator owns commit/PR) | frontier | Backend seam with a crisp pytest gate; hub Phase 2 consumes run logs — harden before building on it | `.horus/temp/D-runlog-events.md` (worker creates in worktree) | required CI green + orchestrator runs the handoff gate command + live probe: a fake run writes JSONL events and registry reconciliation reads them |
-| E-run-ergonomics | delegated | medium | delegated | claude (account work, model opus, posture full-auto) | frontier | CLI/launch slice; the pilot's two manual footguns; hub Phase 4 calls this exact path | `.horus/temp/E-run-ergonomics.md` (worker creates in worktree) | required CI green + orchestrator live probe: `horus run --agent fake --worktree` creates the worktree + tracked session; `--worker` applies the posture matrix |
+| E-run-ergonomics | merged (PR #114; orchestrator reproduced 758 green + live worktree probe; zero bounces; main push CI green post-merge) | medium | delegated | claude (account work, model opus, posture full-auto) | frontier | CLI/launch slice; the pilot's two manual footguns; hub Phase 4 calls this exact path | `.horus/temp/E-run-ergonomics.md` (worker creates in worktree) | required CI green + orchestrator live probe: `horus run --agent fake --worktree` creates the worktree + tracked session; `--worker` applies the posture matrix |
 
 ## Phase specs
 
@@ -75,4 +75,4 @@ The pilot's manual footguns become flags. Pinned design:
   bounce = resume the same session with the exact failure.
 - While workers run, the orchestrator handles `upgrade-project --all`
   propagation (block v4 + skill v8 → gym-coach, ttrpg) as continuity mechanics.
-- **Pilot findings (running log):** —
+- **Batch findings:** zero bounces — the pilot lessons (full-auto claude spawn, sandbox-runnable codex gate, pinned designs, merge sequencing) removed both failure modes. Both seams the hub consumes are now shipped.
