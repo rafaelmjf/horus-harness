@@ -80,6 +80,33 @@ def test_rescue_worker_commits_full_tree_and_pushes(tmp_path, monkeypatch):
     assert remote_head == local_head
 
 
+def test_rescue_worker_pushes_branch_with_no_upstream(tmp_path, monkeypatch):
+    """The kit's primary case: a fresh worker branch (no upstream) that never pushed.
+
+    A bare ``git push`` would fail with 'no upstream branch'; the rescue must fall back
+    to an explicit push so the commit still reaches origin."""
+    repo = _init_repo(tmp_path / "repo")
+    remote = _bare_remote(tmp_path)
+    _git(repo, "remote", "add", "origin", str(remote))
+    # A worker-style branch with NO upstream configured (like `git worktree add -b`).
+    _git(repo, "checkout", "-q", "-b", "wbranch")
+    upstream = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "wbranch@{upstream}"],
+        capture_output=True, text=True,
+    )
+    assert upstream.returncode != 0  # no upstream set — bare push would fail
+    (repo / "wip.py").write_text("print('unsaved')\n", encoding="utf-8")
+    monkeypatch.setenv("HORUS_RUN_WORKER", "1")
+
+    result = rescue.emergency_rescue(repo, session_id="sess-noups")
+    assert result.committed is True
+    assert result.pushed is True  # explicit-push fallback carried it to origin
+    # the rescue commit is present on origin's wbranch
+    remote_head = _git(repo, "rev-parse", "origin/wbranch").stdout.strip()
+    local_head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    assert remote_head == local_head
+
+
 def test_rescue_worker_push_failure_is_tolerated(tmp_path, monkeypatch):
     repo = _init_repo(tmp_path / "repo")  # no remote configured
     (repo / "wip.py").write_text("x\n", encoding="utf-8")

@@ -106,7 +106,7 @@ def rescue_worker(root: Path, *, session_id: str | None = None) -> RescueResult:
     committed = commit.returncode == 0
     if not committed:
         return RescueResult("worker", branch, False, None, f"nothing to rescue on branch {branch} (clean tree)")
-    push = _git(root, "push", env=env)
+    push = _push_worker_branch(root, branch, env)
     pushed = push.returncode == 0
     if pushed:
         detail = f"rescue-committed the full worktree to branch {branch} and pushed it"
@@ -116,6 +116,20 @@ def rescue_worker(root: Path, *, session_id: str | None = None) -> RescueResult:
             f"({push.stderr.strip() or 'unknown error'}) — the commit is local only"
         )
     return RescueResult("worker", branch, True, pushed, detail)
+
+
+def _push_worker_branch(root: Path, branch: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """Push the rescue commit, best-effort. A bare ``git push`` fails when the branch
+    has no upstream — which is exactly a fresh ``git worktree add -b`` worker branch,
+    the kit's primary "died before it ever pushed" case — so fall back to an explicit
+    ``git push -u origin <branch>`` (or ``origin HEAD`` when detached). A missing origin
+    or auth failure is still tolerated; the caller reports it in ``detail``."""
+    push = _git(root, "push", env=env)
+    if push.returncode == 0:
+        return push
+    if branch and branch != "HEAD":
+        return _git(root, "push", "-u", "origin", branch, env=env)
+    return _git(root, "push", "origin", "HEAD", env=env)
 
 
 def rescue_main(root: Path, *, session_id: str | None = None) -> RescueResult:
