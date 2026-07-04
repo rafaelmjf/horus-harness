@@ -8,23 +8,27 @@ git-synced — consistent with the file-first ethos; SQLite remains the later st
 concurrency/scale ever demands it.
 
 ``reconcile()`` is the restart story: a record left ``running`` from a previous run
-is checked against its PID; if the process is gone, the record is corrected to
-``exited`` (or ``orphaned`` when the PID was never known).
+is checked against its run log and PID; if the run has a terminal RESULT or the
+process is gone, the record is corrected before callers count it as running.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 from horus.adapters.base import AgentSession
 from horus.config import config_dir
+from horus import runlog
 
 # Terminal statuses never get liveness-reconciled.
-TERMINAL = frozenset({"exited", "failed", "orphaned"})
+TERMINAL = frozenset({"exited", "failed", "orphaned", "stale"})
+
+_RESULT_RE = re.compile(r"^(?P<status>exited|failed) — session (?P<session_id>\S+)", re.MULTILINE)
 
 
 def _now_iso() -> str:
@@ -32,6 +36,34 @@ def _now_iso() -> str:
     transcripts and rollouts, whose own clocks mix local and UTC; legacy rows
     written before this were naive local time."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _aware_utc_iso(value: object) -> str:
+    """Return an aware UTC ISO timestamp, tolerating legacy naive rows."""
+    if not isinstance(value, str) or not value:
+        return _now_iso()
+    try:
+        stamp = datetime.fromisoformat(value)
+    except ValueError:
+        return _now_iso()
+    if stamp.tzinfo is None:
+        stamp = stamp.astimezone()
+    return stamp.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def _result_status(session_id: str) -> str | None:
+    """Terminal status from a run log's RESULT line, when one exists."""
+    text, _ = runlog.read_from(runlog.run_log_path(session_id), 0)
+    for match in _RESULT_RE.finditer(text):
+        if match.group("session_id") == session_id:
+            return match.group("status")
+    for line in text.splitlines():
+        if "RESULT" in line and session_id in line:
+            if "failed" in line:
+                return "failed"
+            if "exited" in line:
+                return "exited"
+    return None
 
 
 @dataclass
@@ -124,9 +156,11 @@ class Registry:
     # --- reads ----------------------------------------------------------------
 
     def all(self) -> list[SessionRecord]:
+        self.reconcile()
         return [SessionRecord(**row) for row in self._load().values()]
 
     def get(self, session_id: str) -> SessionRecord | None:
+        self.reconcile()
         row = self._load().get(session_id)
         return SessionRecord(**row) if row else None
 
@@ -160,18 +194,34 @@ class Registry:
         return True
 
     def reconcile(self) -> list[SessionRecord]:
-        """Correct stale ``running`` records against real PID liveness. Returns the
-        records whose status changed (e.g. a session left running by a crashed run)."""
+        """Correct stale ``running`` records against RESULT logs and PID liveness.
+
+        Returns records whose status changed. Dead or pid-less running rows become
+        ``stale`` so they are visible but never counted as running.
+        """
         sessions = self._load()
         changed: list[SessionRecord] = []
+        dirty = False
         for row in sessions.values():
+            normalized = _aware_utc_iso(row.get("updated_at"))
+            if row.get("updated_at") != normalized:
+                row["updated_at"] = normalized
+                dirty = True
             if row.get("status") in TERMINAL:
                 continue
-            if not process_alive(row.get("pid")):
-                row["status"] = "exited" if row.get("pid") else "orphaned"
+            result = _result_status(str(row.get("session_id", "")))
+            if result in {"exited", "failed"}:
+                row["status"] = result
                 row["updated_at"] = _now_iso()
+                dirty = True
                 changed.append(SessionRecord(**row))
-        if changed:
+                continue
+            if not process_alive(row.get("pid")):
+                row["status"] = "stale"
+                row["updated_at"] = _now_iso()
+                dirty = True
+                changed.append(SessionRecord(**row))
+        if dirty:
             self._save(sessions)
         return changed
 

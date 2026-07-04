@@ -647,18 +647,19 @@ def run_companion(
     # Worker badge: registry polled off the main thread (file IO + PID liveness
     # checks), rendered by the animate loop — same main-thread-only Tk rule as
     # `notice`. A damaged registry must never kill the poller: fall back to hidden.
-    workers: dict[str, list[str]] = {"lines": []}
+    workers: dict[str, Any] = {"lines": [], "as_of": ""}
 
     def poll_workers() -> None:
         from horus.registry import Registry
         while True:
             try:
                 reg = Registry.default()
-                reg.reconcile()
                 workers["lines"] = worker_status_lines(reg.all())
+                workers["as_of"] = datetime.now(timezone.utc).astimezone().strftime("%H:%M:%S")
             except Exception as exc:  # noqa: BLE001 (badge is best-effort by design)
                 log_companion_event(f"worker badge poll failed: {exc}")
                 workers["lines"] = []
+                workers["as_of"] = ""
             time.sleep(WORKER_POLL_SECONDS)
 
     threading.Thread(target=poll_workers, daemon=True).start()
@@ -755,6 +756,8 @@ def run_companion(
         root.destroy()
 
     def show_menu(event: tk.Event) -> None:
+        as_of = workers.get("as_of") or "--:--:--"
+        menu.entryconfigure(0, label=f"Worker badge as of {as_of}")
         menu.tk_popup(event.x_root, event.y_root)
 
     def press(event: tk.Event) -> None:
@@ -812,6 +815,7 @@ def run_companion(
         frame["n"] = n + 1
         root.after(120, animate)
 
+    menu.add_command(label="Worker badge as of --:--:--", state="disabled")
     menu.add_command(label="Open Dashboard", command=open_action)
     menu.add_command(label="Run Close Check", command=close_check_action)
     menu.add_command(label="Dismiss Finished Workers", command=dismiss_workers_action)

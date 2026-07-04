@@ -2,8 +2,10 @@
 
 import subprocess
 import sys
+import os
 from pathlib import Path
 
+from horus import runlog
 from horus.adapters import FakeAdapter, SpawnSpec
 from horus.registry import Registry, SessionRecord, process_alive, track
 
@@ -13,7 +15,7 @@ def _reg(tmp_path) -> Registry:
 
 
 def _rec(session_id="s1", **kw) -> SessionRecord:
-    base = dict(session_id=session_id, agent="claude", project="/proj", pid=4321, status="running")
+    base = dict(session_id=session_id, agent="claude", project="/proj", pid=os.getpid(), status="running")
     base.update(kw)
     return SessionRecord(**base)
 
@@ -90,10 +92,24 @@ def test_reconcile_marks_dead_running_records(tmp_path):
 
     changed = reg.reconcile()
     by_id = {r.session_id: r for r in changed}
-    assert by_id["dead"].status == "exited"
-    assert by_id["noproc"].status == "orphaned"
+    assert by_id["dead"].status == "stale"
+    assert by_id["noproc"].status == "stale"
     assert "done" not in by_id
     assert reg.get("done").status == "exited"
+
+
+def test_reconcile_marks_result_event_completion(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(session_id="done-by-log", pid=os.getpid(), status="running"))
+    log = runlog.run_log_path("done-by-log")
+    log.parent.mkdir(parents=True)
+    log.write_text("hello\nRESULT exited — session done-by-log (account work)\n", encoding="utf-8")
+
+    changed = reg.reconcile()
+
+    assert [r.session_id for r in changed] == ["done-by-log"]
+    assert reg.get("done-by-log").status == "exited"
 
 
 def test_prune_drops_only_terminal(tmp_path):

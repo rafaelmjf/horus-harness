@@ -117,7 +117,7 @@ def test_focus_unknown_and_not_running(tmp_path, monkeypatch, capsys):
 
     Registry.default().upsert(SessionRecord(
         session_id="dead0001", agent="claude", project="/p", pid=None, status="running",
-    ))  # pid-less running -> reconcile -> orphaned -> not focusable
+    ))  # pid-less running -> reconcile -> stale -> not focusable
     assert main(["focus", "dead0001"]) == 1
     assert "not running" in capsys.readouterr().out
 
@@ -136,7 +136,7 @@ def test_sessions_cmd_lists_and_prunes(tmp_path, monkeypatch, capsys):
     assert main(["sessions"]) == 0
     out = capsys.readouterr().out
     assert "abc123" in out
-    assert "orphaned" in out  # reconcile flipped pid-less "running" -> orphaned
+    assert "stale" in out  # reconcile flipped pid-less "running" -> stale
 
     assert main(["sessions", "--prune"]) == 0
     assert reg.all() == []
@@ -326,8 +326,14 @@ def test_tail_no_args_resolves_most_recent_running(tmp_path, monkeypatch):
         _resolve_tail_session(reg, None)  # nothing running yet
 
     proj = tmp_path.as_posix()
-    reg.upsert(SessionRecord(session_id="old-run", agent="fake", project=proj), now="2026-07-03T10:00:00")
-    reg.upsert(SessionRecord(session_id="new-run", agent="fake", project=proj), now="2026-07-03T11:00:00")
+    reg.upsert(
+        SessionRecord(session_id="old-run", agent="fake", project=proj, pid=os.getpid()),
+        now="2026-07-03T10:00:00",
+    )
+    reg.upsert(
+        SessionRecord(session_id="new-run", agent="fake", project=proj, pid=os.getpid()),
+        now="2026-07-03T11:00:00",
+    )
     reg.upsert(SessionRecord(session_id="done-run", agent="fake", project=proj, status="exited"),
                now="2026-07-03T12:00:00")
     assert _resolve_tail_session(reg, None).session_id == "new-run"
@@ -361,10 +367,11 @@ def test_run_watch_failure_never_breaks_the_run(tmp_path, monkeypatch, capsys):
 
 def test_open_launches_and_tracks_running_session(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
-    from horus import launcher
+    from horus import launcher, registry
     from horus.registry import Registry
 
     monkeypatch.setattr(launcher, "open_terminal", lambda argv, cwd, env=None: 9999)
+    monkeypatch.setattr(registry, "process_alive", lambda pid: pid == 9999)
     rc = main(["open", str(tmp_path), "--agent", "fake", "--account", "demo"])
     assert rc == 0
     out = capsys.readouterr().out

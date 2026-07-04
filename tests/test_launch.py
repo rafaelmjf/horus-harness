@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from horus import launch, launcher
+from horus import launch, launcher, registry
 from horus.registry import Registry
 
 
@@ -21,6 +21,7 @@ def test_launch_interactive_tracks_running_session(tmp_path, monkeypatch):
         return 4242
 
     monkeypatch.setattr(launcher, "open_terminal", fake_open)
+    monkeypatch.setattr(registry, "process_alive", lambda pid: pid == 4242)
 
     result = launch.launch_interactive(agent="fake", project_dir=tmp_path, account="demo")
     assert result.ok and result.pid == 4242 and result.account == "demo"
