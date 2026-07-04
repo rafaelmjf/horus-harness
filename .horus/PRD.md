@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Hub pre-work shipped (v0.0.24, PRs #113–114, second orchestration batch, zero bounces): JSONL run-event sidecars with registry preference + horus run --worktree/--worker presets; block v4 + skill v8 propagated to gym-coach/ttrpg. The hub's two seams are hardened — next is horus-hub Phase 0 itself."
-next_action: "Scaffold the separate horus-hub repo per research/horus-hub-design.md Phase 0: config loader, health route, owner-auth middleware (Cloudflare Access header validation + app-side owner gate), deployment examples. Direct work in the new repo; onboard it with horus init."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md. Hub pre-work shipped in v0.0.24 (JSONL run events; horus run --worktree/--worker). Next: create the horus-hub repo and build Phase 0 per research/horus-hub-design.md — auth skeleton behind Cloudflare Access, read-only, no launch capability; gate: unauthenticated requests see no project data."
-execution_recommendation: "continue-as-is for horus-hub Phase 0 — greenfield scaffolding in a new repo is judgment-heavy and small; switch to plan-execution from Phase 1 onward (the design doc's phases are shaped for delegated batches)."
+current_focus: "horus-hub Phase 0 is IN FLIGHT in the new private repo rafaelmjf/horus-hub (created 2026-07-04, design doc = docs/design.md there): a codex worker is building the auth skeleton per the pinned spec; its .git is read-only so the orchestrator/accepting session owns commit → PR → gate. Hub pre-work shipped earlier today as v0.0.24."
+next_action: "In ~/projects/horus-hub: review the codex worker's handoff (.horus/temp/phase0.md), run its gate (python3 -m unittest discover -s tests) and the auth live probe (unauthenticated → denied, owner header → 200, /health liveness only), commit → PR → merge, make tests a required check, then plan Phase 1 as a delegated batch."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. horus-hub Phase 0 was delegated to a codex worker (repo ~/projects/horus-hub, spec docs/design.md, worker session findable via horus sessions / JSONL run logs). Accept it on signals: unittest gate + auth live probe; then required-check CI and Phase 1 planning per that repo's PRD."
+execution_recommendation: "continue-as-is — the remaining Phase 0 work is acceptance mechanics (gate, probe, PR) in horus-hub; plan-execution resumes from hub Phase 1 onward."
 last_updated: 2026-07-04
 ---
 
@@ -55,10 +55,11 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 3. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
-4. **horus-hub Phase 0** (pre-work shipped v0.0.24): scaffold the separate
-   self-hostable repo — auth skeleton behind Cloudflare Access, read-only before any
-   launch — per `research/horus-hub-design.md`. Parked follow-ups: heartbeat events
-   in the JSONL stream; worktree auto-cleanup for `horus run --worktree`.
+4. **horus-hub Phase 0 (in flight, codex worker):** repo `rafaelmjf/horus-hub`
+   created (private, design in `docs/design.md`); acceptance pending per
+   `next_action`. Parked follow-ups: JSONL heartbeat events; `--worktree`
+   auto-cleanup; `--worker` could infer the agent from `--agent` (took a
+   usage-error bounce today).
 
 ### Open, unscheduled
 
