@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v3-tooling execution plan: phases 1–3 done+merged (PRs #101–103). Phase 4 dashboard PRD rendering is implemented in PR #104, still awaiting Rafa's visual accept. Phase 5 migration engine is implemented in PR #105; supervisor reproduced 711 tests green and a gym-coach scratch migration with byte-identical archives."
-next_action: "Rafa eyeballs and merges PR #104 if accepted; review/merge PR #105; then mark phases 4–5 accepted in execution.md and run Phase 6: migrate gym-coach + ttrpg, polish generated PRDs, rerun cold-reader quiz + close --check/dashboard gates, then release v0.0.21."
-next_prompt: "Resume Horus as execution supervisor. FIRST git fetch --all --prune and verify the current branch against origin before trusting local refs. Read .horus/PRD.md and .horus/execution.md. PR #104 (dashboard PRD rendering) awaits Rafa visual accept; PR #105 (upgrade-project --structure prd migration engine) is open with tests and gym-coach scratch rehearsal reproduced. After both merge, run Phase 6: migrate gym-coach and ttrpg, polish PRDs, rerun the cold-reader quiz and close/dashboard gates, then release v0.0.21."
-execution_recommendation: "plan-execution — ACTIVE: .horus/execution.md. Phases 1–3 merged; phase 4 awaiting visual accept/merge; phase 5 implemented in PR #105; phase 6 supervised runs + quiz gate, then release v0.0.21."
+current_focus: "v3 PRD+sessions structure is now the product path: phases 1–6 shipped, PRs #101–105 merged, gym-coach and ttrpg migrated with byte-identical archives, PRD-first dashboard/close/resume gates green, and v0.0.21 bumped with 716 tests green."
+next_action: "Pick the next small backlog item: catalog niceties (private-repo badge + 'N ignored' affordance) is the top candidate. Keep it direct unless it grows beyond a narrow dashboard/catalog slice."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md. v3 PRD tooling shipped through phase 6: PRs #101–105 merged, controls migrated (agentic-gym-coach 56c6c60, agentic-ttrpg d870b15), gates green, v0.0.21 bumped. Next candidate: catalog niceties — badge private repos in the GitHub catalog and add an 'N ignored' affordance on the untracked fold."
+execution_recommendation: "continue-as-is — the next catalog nicety is a narrow dashboard/catalog UX slice; no active execution plan is needed unless the scope expands."
 last_updated: 2026-07-04
 ---
 
@@ -49,22 +49,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-1. **PRD structure as the product (v3 continuity structure).** Acceptance test
-   **PASSED** (pre-registered + rerun 2026-07-03: closure ≈7–12 tool calls vs v2's
-   26–36; cold-reader quiz 5/5 from 4 files/~17 KB vs v2's 6 files/~145 KB; zero
-   failure flags — details in sessions 2026-07-03-090957 + -210751). Teach-in underway
-   via `.horus/execution.md`: phases 1–5 implemented (frontmatter contract,
-   templates/init, consolidate/infer/skills, dashboard PRD rendering — PR #104 awaiting
-   visual accept; migration engine — PR #105 awaiting review); remaining: phase 6
-   migrate gym-coach + ttrpg, rerun the quiz probe on both, release v0.0.21. Closure
-   contract: update PRD (focus/backlog/shipped) + session note + commit.
-2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
+1. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
-3. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
+2. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
    + `horus upgrade-project --all`; eyeball the mascot failure dialog + Skills tab on a
    desktop session; confirm VS Code task keybindings work under Flatpak.
-4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
+3. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
 
@@ -121,7 +112,10 @@ clobbers) · `close` (verify-first; `--commit --push`, fetch-first cross-machine
 `distill-history` / `infer` (deterministic pre-pass + agent ritual; bundled as
 Claude+Codex skills) · `reconcile instructions` · closure freshness gate (`close --check`)
 + CI continuity check + local pre-merge hook · sessions archive (distilled → local
-`sessions/archive/`) · `horus resume` minimum-context handoff.
+`sessions/archive/`) · `horus resume` minimum-context handoff · **v3 PRD+sessions
+structure** (v0.0.21): PRD-first frontmatter/readers, fresh-project templates,
+v3 consolidate/infer/skills, dashboard PRD rendering, opt-in six-lane migration engine,
+and live migrations for gym-coach + ttrpg with archived lanes preserved verbatim.
 
 **Hooks & projections:** usage→closure hooks for Claude (OAuth `/usage`) + Codex
 (rollouts), advisory + ask-never-force · pre-merge gates both agents · hooks guarded to
