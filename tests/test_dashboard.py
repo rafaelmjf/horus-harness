@@ -1171,6 +1171,8 @@ def test_process_brainstorm_launches_scoped_tracked_session(tmp_path, monkeypatc
         return 909
 
     monkeypatch.setattr(launcher, "open_terminal", fake_open)
+    from horus import registry as registry_mod
+    monkeypatch.setattr(registry_mod, "process_alive", lambda pid: pid == 909)
 
     query = dashboard.process_brainstorm(
         {"project": "0", "agent": "fake", "topic": "offline sync"},
