@@ -93,3 +93,10 @@ auto-edit posture; fill the handoff note and stop; the orchestrator commits to
 - **Measurement:** record rounds/interventions/token feel vs the 2026-07-03 hub
   sessions at closure; the pilot's verdict goes to PRD (orchestrator tier: keep,
   adjust, or drop).
+- **Pilot findings (running log):**
+  - Claude workers under the *default* posture stall headless: A planned fully,
+    then exited asking for Edit/Bash permissions (exit 0, zero diffs — looked
+    "completed" in the task list; exactly the trust gap phase C addresses).
+    Branch-owning claude workers need `--posture full-auto` (or a pre-seeded
+    allowlist in the worktree). A was resumed with full-auto, context intact.
+    Codex under `auto-edit` ran without stalling. Intervention count: 1.
