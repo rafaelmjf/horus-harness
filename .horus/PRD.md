@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "horus-hub read-only MVP COMPLETE 2026-07-04 (hub PRs #1–#5, five delegated workers: codex, 2× sonnet, 2× opus, all claude ones on the work account): auth skeleton + stdlib JWT + inventory + registry/run-log read model + rendered HTML dashboard (sumi-e, CSP, zero JS). Captured pages sent to Rafa — visual verdict pending. Hub branch protection still blocked (private repo, free plan)."
-next_action: "In ~/projects/horus-hub: collect Rafa's visual verdict on the UI capture (tweaks → small follow-up), then plan Phase 3 (launch design hardening) as a delegated batch per its PRD. In this repo the backlog is the menu (catalog niceties / Windows ops / macOS pass are the top candidates)."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. Hub read-only MVP is shipped (PRs #1–#5); next hub steps are Rafa's UI verdict and Phase 3 planning in ~/projects/horus-hub per its PRD. This repo's own backlog is otherwise the menu."
+current_focus: "horus-hub Phases 0–3 + UI COMPLETE 2026-07-04 (hub PRs #1–#6, six delegated workers in one day). Phase 3 (launch guards: two-key arm, CSRF, injection-inert dry-run argv, hashed-prompt audit) shipped despite the worker dying at the work account's usage limit mid-probe — supervisor checkpointed, reproduced gate 186/186, ran the probe, merged. Work-account window resets 21:10 Berlin. Rafa's UI visual verdict still pending. Hub branch protection still blocked (private, free plan)."
+next_action: "In ~/projects/horus-hub: collect Rafa's visual verdict on the UI captures, then plan Phase 4 (minimal launch — execute the previewed argv behind the armed gate; gate: a normal Horus session + RESULT-backed run log, no hub-only state) as a delegated batch; claude/work is usable again after 21:10 Berlin. In this repo the backlog is the menu (catalog niceties / Windows ops / macOS pass are the top candidates)."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. Hub Phases 0–3 + UI are shipped (PRs #1–#6); next hub steps are Rafa's UI verdict and Phase 4 (minimal launch) planning in ~/projects/horus-hub per its PRD (work-account usage window resets 21:10 Berlin 2026-07-04). This repo's own backlog is otherwise the menu."
 execution_recommendation: "plan-execution for hub Phase 1 (the batch lives in horus-hub's .horus/execution.md — codex worker buys context hygiene + keeps frontier tier on acceptance); continue-as-is for this repo's backlog items."
 last_updated: 2026-07-04
 ---
@@ -229,7 +229,11 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   (hit 2026-07-04). Probe briefs must not hardcode port 8765 (the dashboard's).
   **Commit continuity before cutting a worker worktree from HEAD** — an uncommitted
   execution.md brief is invisible to the worker's checkout (cost a kill+respawn
-  2026-07-04).
+  2026-07-04). When a worker dies mid-run (usage limit): checkpoint its uncommitted
+  output at once, then check for orphaned worker processes holding probe ports
+  before running your own probes (a ghost server on 8899 made an armed-gate probe
+  lie, 2026-07-04); squashing a single-commit branch inherits that commit's title —
+  pass an explicit subject.
 - **Platform traps to remember:** `uv tool install horus-harness` without
   `--python 3.12` silently resolves an ancient version when uv's default python is
   below the floor (hit on Linux 2026-07-03, not just Windows);
