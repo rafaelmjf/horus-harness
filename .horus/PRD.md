@@ -58,13 +58,6 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 3. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
-4. **[bug] v2-worded routine trailers on v3 projects** (phase-3 follow-up, rescued from
-   the completed execution plan): `horus consolidate` prints the six-lane
-   `CONSOLIDATE_PROMPT` unconditionally (`cli.py` → `templates.py`), telling agents to
-   route work into `roadmap.md`/`features.md` that v3 repos no longer have;
-   `DISTILL_HISTORY_PROMPT` targets `.horus/history.md` instead of v3's
-   `.horus/archive/history.md`. Fix: v3 variants of both strings, selected by the
-   project's structure (PRD.md present).
 
 ### Open, unscheduled
 
