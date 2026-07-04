@@ -206,6 +206,9 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Platform traps to remember:** `uv tool install horus-harness` without
   `--python 3.12` silently resolves an ancient version when uv's default python is
   below the floor (hit on Linux 2026-07-03, not just Windows);
+  after a release, the app/mascot can still be the old `uv tool` install even when
+  the repo is current — compare `horus --version` with `uv run horus --version`, then
+  `uv tool install --force --python 3.12 horus-harness` and restart the app;
   ctypes needs argtypes/restype (64-bit truncation);
   Windows GUI under `pythonw.exe` + reap the process tree; pin CI actions to tags that
   exist; probe the HTTP server, not the companion process; grep the binary/watch the
