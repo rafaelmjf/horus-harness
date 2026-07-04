@@ -1134,6 +1134,88 @@ def test_process_launch_rejects_unknown_project_and_account(tmp_path, monkeypatc
     ) == "error=unknown+account"
 
 
+def test_project_detail_renders_brainstorm_card(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    page = dashboard.render_project(dashboard.load_project(str(proj)), index=0)
+
+    assert "Ideas / Brainstorm" in page
+    assert "method='post' action='/brainstorm'" in page
+    assert "name='topic'" in page and "required" in page
+    assert "Start brainstorm" in page
+    assert ".horus/temp/" in page  # tells the user where the draft lands
+
+
+def test_process_brainstorm_launches_scoped_tracked_session(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    captured = {}
+
+    def fake_open(argv, cwd, env=None):
+        captured["argv"], captured["cwd"] = argv, cwd
+        return 909
+
+    monkeypatch.setattr(launcher, "open_terminal", fake_open)
+
+    query = dashboard.process_brainstorm(
+        {"project": "0", "agent": "fake", "topic": "offline sync"},
+        projects=[str(proj)], known_aliases=set(),
+    )
+    assert query.startswith("brainstormed=")
+    # Scoped brainstorm prompt is seeded into the tracked session.
+    assert captured["argv"][-1].startswith("Brainstorm session for the demo project.")
+    assert "offline sync" in captured["argv"][-1]
+    recs = Registry.default().all()
+    assert len(recs) == 1 and recs[0].status == "running" and recs[0].pid == 909
+    # The draft target dir is prepared; PRD.md is left untouched.
+    assert (proj / ".horus" / "temp").is_dir()
+
+
+def test_process_brainstorm_rejects_bad_input(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    # Empty topic, unknown account, unknown project index each fail before launching.
+    assert dashboard.process_brainstorm(
+        {"project": "0", "topic": "  "}, projects=[str(proj)], known_aliases=set()
+    ) == "error=a+brainstorm+needs+a+topic"
+    assert dashboard.process_brainstorm(
+        {"project": "0", "topic": "x", "account": "ghost"}, projects=[str(proj)], known_aliases={"work"}
+    ) == "error=unknown+account"
+    assert dashboard.process_brainstorm(
+        {"project": "9", "topic": "x"}, projects=[str(proj)], known_aliases=set()
+    ) == "error=unknown+project"
+
+
+def test_post_brainstorm_route_redirects_prg(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    monkeypatch.setattr(config, "load_projects", lambda: [str(proj)])
+    monkeypatch.setattr(dashboard, "_known_aliases", lambda: set())
+    monkeypatch.setattr(launcher, "open_terminal", lambda argv, cwd, env=None: 42)
+
+    resp = _post(
+        "/brainstorm",
+        {"project": "0", "agent": "fake", "topic": "a topic"},
+        origin="http://127.0.0.1:8765",
+    )
+    assert resp["status"] == 303
+    assert any(k == "Location" and v.startswith("/project?i=0&brainstormed=") for k, v in resp["headers"])
+
+
+def test_brainstorm_notice_banner():
+    banner = dashboard._launch_notice({"brainstormed": ["ab12cd34"]})
+    assert "Started brainstorm session" in banner and "ab12cd34" in banner
+    assert "PRD.md is untouched" in banner
+
+
 def test_process_launch_account_only_uses_home_dir(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     captured = {}

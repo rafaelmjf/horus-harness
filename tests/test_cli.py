@@ -376,6 +376,39 @@ def test_open_launches_and_tracks_running_session(tmp_path, monkeypatch, capsys)
     assert r.status == "running" and r.pid == 9999 and r.account == "demo" and r.agent == "fake"
 
 
+def test_brainstorm_launches_scoped_tracked_session(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus.registry import Registry
+
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    main(["init", str(proj), "--yes"])
+
+    captured = {}
+    monkeypatch.setattr(
+        launcher, "open_terminal",
+        lambda argv, cwd, env=None: captured.update(argv=argv) or 4321,
+    )
+    rc = main(["brainstorm", "offline sync", "--path", str(proj), "--agent", "fake"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Started brainstorm on demo" in out
+    assert ".horus/temp/brainstorm-offline-sync.md" in out
+
+    # Same shared launch path: a tracked running session, seeded with the scoped prompt.
+    assert captured["argv"][-1].startswith("Brainstorm session for the demo project.")
+    recs = Registry.default().all()
+    assert len(recs) == 1 and recs[0].status == "running" and recs[0].agent == "fake"
+    assert (proj / ".horus" / "temp").is_dir()
+
+
+def test_brainstorm_without_horus_dir_refuses(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    rc = main(["brainstorm", "a topic", "--path", str(tmp_path)])
+    assert rc == 1
+    assert "run `horus init` first" in capsys.readouterr().out
+
+
 def test_run_account_mismatch_refuses(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     import json

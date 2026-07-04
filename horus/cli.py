@@ -13,6 +13,7 @@ from pathlib import Path
 from horus import (
     __version__,
     adapters,
+    brainstorm,
     claude_usage,
     closure,
     companion,
@@ -475,6 +476,41 @@ def cmd_open(args: argparse.Namespace) -> int:
         return 2
     print(f"Opened {result.agent} session in {result.project.name} as {result.account or 'ambient'} "
           f"(pid {result.pid}, session {result.session_id}).")
+    return 0
+
+
+def cmd_brainstorm(args: argparse.Namespace) -> int:
+    """Launch a tracked brainstorm session seeded with scoped PRD context + a topic.
+
+    The CLI twin of the dashboard's Ideas/Brainstorm card: both call
+    :func:`horus.brainstorm.start_brainstorm`, so there is one code path. The
+    session drafts an implementation plan to `.horus/temp/brainstorm-<slug>.md`
+    and never edits PRD.md.
+    """
+    root = Path(args.path).resolve()
+    if not (root / HORUS_DIR).is_dir():
+        print(f"No {HORUS_DIR}/ here (run `horus init` first) — brainstorm seeds from PRD.md.")
+        return 1
+    try:
+        result = brainstorm.start_brainstorm(
+            project_dir=root,
+            topic=args.topic,
+            agent=args.agent,
+            account=args.account,
+            posture=args.posture,
+            model=args.model,
+        )
+    except ValueError as exc:
+        print(f"Refusing to brainstorm: {exc}")
+        return 2
+    launched = result.launch
+    if not launched.ok:
+        print(f"Refusing to brainstorm: {launched.error}")
+        return 2
+    print(f"Started brainstorm on {launched.project.name} as {launched.account or 'ambient'} "
+          f"(pid {launched.pid}, session {launched.session_id}).")
+    print(f"Topic: {result.topic}")
+    print(f"The session will draft its plan to {result.note_path} (review it there; PRD.md is untouched).")
     return 0
 
 
@@ -1741,6 +1777,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="initial prompt to seed the interactive session (default: fresh, unseeded)",
     )
     p_open.set_defaults(func=cmd_open)
+
+    p_brainstorm = sub.add_parser(
+        "brainstorm",
+        help="launch a tracked brainstorm session (scoped PRD context + topic) that drafts a plan",
+    )
+    p_brainstorm.add_argument("topic", help="the topic to brainstorm on")
+    p_brainstorm.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_brainstorm.add_argument("--agent", default="claude", help="adapter to use (claude | codex | fake; default: claude)")
+    p_brainstorm.add_argument("--account", default=None, help="account alias to run under (uses its isolated config dir)")
+    p_brainstorm.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
+    p_brainstorm.add_argument(
+        "--posture",
+        default="default",
+        choices=[p.value for p in adapters.PermissionPosture],
+        help="permission posture (default: default)",
+    )
+    p_brainstorm.set_defaults(func=cmd_brainstorm)
 
     p_vscode = sub.add_parser(
         "vscode-task",
