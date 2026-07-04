@@ -438,6 +438,78 @@ Worker handoff contract:
 """
 
 
+def brainstorm_prompt(
+    *,
+    project: str,
+    topic: str,
+    vision: str,
+    backlog: str,
+    rules: str,
+    note_path: str,
+) -> str:
+    """Seed prompt for a scoped brainstorm session.
+
+    Minimal context by design: the PRD's vision/backlog/rules and the topic — no
+    session notes, no archive, no six-lane lanes. The output contract writes a
+    structured implementation-plan draft to ``note_path`` under ``.horus/temp/``
+    and never edits PRD.md (the orchestrator/consolidate owns continuity).
+    """
+    def _block(text: str, empty: str) -> str:
+        text = (text or "").strip()
+        return text if text else empty
+
+    vision_block = _block(vision, "(no Vision section recorded in PRD.md)")
+    backlog_block = _block(backlog, "(no Backlog section recorded in PRD.md)")
+    rules_block = _block(rules, "(no Rules section recorded in PRD.md)")
+
+    return f"""Brainstorm session for the {project} project.
+
+You are seeding a focused ideas/brainstorm on ONE topic. Deliberately minimal
+context is loaded below — the project's PRD vision, backlog, and rules. Do NOT
+read `.horus/sessions/`, `.horus/archive/`, or the full history; stay scoped to
+the topic and the context here. Read other repo code only if the topic needs it.
+
+## Topic
+
+{topic}
+
+## PRD — Vision
+
+{vision_block}
+
+## PRD — Backlog
+
+{backlog_block}
+
+## PRD — Rules (load-bearing)
+
+{rules_block}
+
+## Your task
+
+Think hard about the topic against the vision, backlog, and rules above, then
+produce a structured implementation-plan DRAFT — not a final decision, a draft
+for a human to review. Cover:
+
+- **Goal** — one paragraph on what solving this topic delivers and why it fits
+  the vision (or where it strains a rule, called out explicitly).
+- **Phases** — an ordered breakdown of the work into bounded phases.
+- **Risks** — what could go wrong, load-bearing rules it touches, unknowns.
+- **Suggested gates** — the deterministic signal(s) that would prove each phase
+  done (tests, a runtime probe, a required CI check).
+- **Proposed backlog lines** — one-line backlog entries, in the PRD's style,
+  ready for a human to paste into the Backlog.
+
+## Output contract (strict)
+
+- Write the draft to `{note_path}` (create `.horus/temp/` if needed).
+- Do NOT edit `.horus/PRD.md` or any other `.horus/` file — continuity is owned
+  by the consolidate/orchestrator step, which reviews your draft separately.
+- Do NOT commit anything. Leave the note uncommitted for review.
+- When the note is written, summarize what you drafted and stop.
+"""
+
+
 def execution_handoff_note(
     *,
     phase: str,

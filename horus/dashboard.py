@@ -32,6 +32,7 @@ from importlib import resources
 from horus import (
     __version__,
     adapters,
+    brainstorm,
     cache_status,
     claude_usage,
     codex_usage,
@@ -2151,6 +2152,8 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
         f"{_eye_glyph()}Start a session</h3>"
         "<p class='muted' style='font-size:12.5px;margin:0 0 16px'>Launch an attended CLI against this repo.</p>"
         f"{_project_launch_form(idx, p, aliases)}</div>"
+        "<div class='panel'><div class='ph'><span class='eyebrow'>Ideas / Brainstorm</span></div>"
+        f"{_project_brainstorm_form(idx, p, aliases)}</div>"
         f"{cache_panel}"
         "<div class='panel'><div class='ph'><span class='eyebrow'>Last session</span></div>"
         f"{_latest_session_panel_html(p)}</div>"
@@ -2506,6 +2509,36 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
         "</form>"
     )
 
+def _project_brainstorm_form(i: int, project: dict[str, Any], accounts: list[dict[str, Any]]) -> str:
+    """A topic + Start card that launches a tracked, scoped brainstorm session.
+
+    Same launch/registry plumbing as the launch form (``horus.brainstorm`` wraps
+    ``horus.launch``), but seeds a minimal-context prompt and drafts a plan to
+    ``.horus/temp/brainstorm-<slug>.md`` — never touching PRD.md. POST is PRG."""
+    opts = "<option value=''>ambient</option>" + "".join(
+        f"<option value='{html.escape(a['alias'], quote=True)}'>{html.escape(a['alias'])}</option>"
+        for a in accounts
+    )
+    return (
+        "<p class='muted' style='font-size:12.5px;margin:0 0 12px'>Seed a scoped session on one topic "
+        "&mdash; it drafts an implementation plan to <code>.horus/temp/</code> for review; PRD.md is untouched.</p>"
+        "<form class='lform' method='post' action='/brainstorm'>"
+        f"<input type='hidden' name='project' value='{i}'>"
+        "<div class='field'><label>Topic</label>"
+        "<input type='text' name='topic' required placeholder='e.g. offline-first sync for the mobile client'></div>"
+        "<div class='frow'>"
+        "<div class='field'><label>Agent</label><select name='agent'>"
+        "<option value='claude'>Claude Code</option><option value='codex'>Codex</option>"
+        "</select></div>"
+        f"<div class='field'><label>Account</label><select name='account'>{opts}</select></div>"
+        "</div>"
+        "<div class='intent-row'>"
+        "<button class='btn btn-go' type='submit'>&#9656; Start brainstorm</button>"
+        "</div>"
+        "</form>"
+    )
+
+
 def _projects_panel(projects: list[dict[str, Any]], accounts: list[dict[str, Any]]) -> str:
     if not projects:
         return "<div class='card'><h2>Projects</h2><p class='muted'>None registered.</p></div>"
@@ -2615,6 +2648,13 @@ def _launch_notice(params: dict[str, list[str]]) -> str:
         return (
             f"<div class='banner ok'>Launched session <code>{sid}</code> in a new "
             "window &mdash; it appears under Live sessions once its process is up.</div>"
+        )
+    if "brainstormed" in params:
+        sid = html.escape(params["brainstormed"][0])
+        return (
+            f"<div class='banner ok'>Started brainstorm session <code>{sid}</code> in a new "
+            "window &mdash; it drafts a plan to <code>.horus/temp/brainstorm-&lt;slug&gt;.md</code> "
+            "for review; PRD.md is untouched.</div>"
         )
     if "vscode" in params:
         name = html.escape(params["vscode"][0])
@@ -3113,6 +3153,49 @@ def process_launch(
     return f"launched={result.session_id[:8]}"
 
 
+def process_brainstorm(
+    form: dict[str, str],
+    *,
+    projects: list[str] | None = None,
+    known_aliases: set[str] | None = None,
+) -> str:
+    """Handle an Ideas/Brainstorm POST; return the query string to redirect with.
+
+    Same safety model as :func:`process_launch` — a project is addressed by its
+    **index** into the registered list (never an arbitrary path) and an account
+    must be in the **known** set. Launches a tracked brainstorm session in its own
+    terminal (``horus.brainstorm`` → ``horus.launch``); the session drafts a plan
+    to ``.horus/temp/brainstorm-<slug>.md`` and never edits PRD.md. Returns
+    ``brainstormed=<id8>`` on success or ``error=<reason>``."""
+    projects = config.load_projects() if projects is None else projects
+    known = _known_aliases() if known_aliases is None else known_aliases
+
+    account = (form.get("account") or "").strip() or None
+    if account is not None and account not in known:
+        return "error=" + quote_plus("unknown account")
+
+    agent = (form.get("agent") or "claude").strip()
+    topic = (form.get("topic") or "").strip()
+    if not topic:
+        return "error=" + quote_plus("a brainstorm needs a topic")
+
+    raw_project = (form.get("project") or "").strip()
+    try:
+        project_dir = Path(projects[int(raw_project)])
+    except (ValueError, IndexError):
+        return "error=" + quote_plus("unknown project")
+
+    try:
+        result = brainstorm.start_brainstorm(
+            project_dir=project_dir, topic=topic, agent=agent, account=account,
+        )
+    except (ValueError, adapters.AccountMismatch) as exc:
+        return "error=" + quote_plus(str(exc))
+    if not result.ok:
+        return "error=" + quote_plus(result.launch.error or "brainstorm launch failed")
+    return f"brainstormed={result.launch.session_id[:8]}"
+
+
 # --------------------------------------------------------------------------- #
 # Server
 # --------------------------------------------------------------------------- #
@@ -3353,6 +3436,7 @@ class _Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path not in (
             "/launch",
+            "/brainstorm",
             "/settings",
             "/self-update",
             "/upgrade-project",
@@ -3536,6 +3620,14 @@ class _Handler(BaseHTTPRequestHandler):
                 self._redirect(f"/project?i={idx}&{params}")
             else:
                 self._redirect(f"/?{params}#github-catalog")
+            return
+
+        if parsed.path == "/brainstorm":
+            form = self._read_form()
+            query = process_brainstorm(form)
+            # PRG: redirect back to the project detail page so F5 doesn't re-launch.
+            raw = (form.get("project") or "").strip()
+            self._redirect(f"/project?i={raw}&{query}" if raw.isdigit() else f"/?{query}")
             return
 
         form = self._read_form()
