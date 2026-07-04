@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 import tempfile
 from contextlib import nullcontext
+from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
-from horus import native_hooks, skills, templates
+from horus import frontmatter, native_hooks, skills, templates
 from horus.instructions import block_version, extract_block, replace_block
 
 
 class UpgradeAction(NamedTuple):
-    status: str  # "would-update" | "updated" | "exists" | "created" | "skipped"
+    status: str  # "would-update" | "updated" | "exists" | "created" | "skipped" | "error"
     message: str
+
+
+V2_LANES = ("project.md", "roadmap.md", "features.md", "decisions.md", "history.md", "execution.md")
 
 
 def upgrade_project(
@@ -34,6 +39,268 @@ def upgrade_project(
     if hooks:
         actions.extend(_upgrade_hooks(project_root, apply=apply, targets=targets))
     return actions
+
+
+def upgrade_structure_prd(project_root: Path, *, apply: bool = False) -> list[UpgradeAction]:
+    """Opt-in v2 six-lane -> v3 PRD.md + sessions/ migration.
+
+    The migration is intentionally conservative: the generated PRD is a deterministic
+    collapse for current-state reading, while every old lane is moved byte-for-byte to
+    `.horus/archive/` so no authored continuity is destroyed.
+    """
+    hdir = project_root / ".horus"
+    if not hdir.is_dir():
+        return [UpgradeAction("error", "no .horus/ directory (run `horus init` first)")]
+    if (hdir / frontmatter.PRD_FILE).exists():
+        return [UpgradeAction("exists", ".horus/PRD.md already present (structure v3)")]
+
+    lanes = [name for name in V2_LANES if (hdir / name).is_file()]
+    if not lanes:
+        return [UpgradeAction("error", "no v2 lane files found to migrate")]
+    required = {"project.md", "roadmap.md", "decisions.md"}
+    missing_required = sorted(required - set(lanes))
+    if missing_required:
+        return [UpgradeAction("error", f"missing required v2 lane(s): {', '.join(missing_required)}")]
+
+    archive = hdir / "archive"
+    collisions = [name for name in lanes if (archive / name).exists()]
+    if collisions:
+        return [UpgradeAction("error", f"archive target already exists: {', '.join('.horus/archive/' + n for n in collisions)}")]
+
+    if apply:
+        safety = _migration_git_safety(project_root)
+        if safety:
+            return [UpgradeAction("error", safety)]
+
+    prd_text = _build_prd(project_root.name, hdir)
+    actions = [UpgradeAction("would-update", f"would create .horus/{frontmatter.PRD_FILE}")]
+    actions.extend(UpgradeAction("would-update", f"would archive .horus/{name} -> .horus/archive/{name}") for name in lanes)
+    actions.append(UpgradeAction("would-update", "would leave .horus/sessions/ and .horus/temp/ in place"))
+    if not apply:
+        return actions
+
+    archive.mkdir(parents=True, exist_ok=True)
+    (hdir / frontmatter.PRD_FILE).write_text(prd_text, encoding="utf-8")
+    for name in lanes:
+        (hdir / name).rename(archive / name)
+    (hdir / "sessions").mkdir(exist_ok=True)
+    (hdir / "temp").mkdir(exist_ok=True)
+    return [
+        UpgradeAction("created", f"created .horus/{frontmatter.PRD_FILE}"),
+        *[UpgradeAction("updated", f"archived .horus/{name} -> .horus/archive/{name}") for name in lanes],
+        UpgradeAction("exists", ".horus/sessions/ and .horus/temp/ preserved"),
+    ]
+
+
+def _migration_git_safety(project_root: Path) -> str | None:
+    if _git(project_root, "rev-parse", "--is-inside-work-tree") != "true":
+        return None
+    if _git(project_root, "fetch", "--all", "--prune") is None:
+        return "git fetch --all --prune failed; refusing structure migration"
+    dirty = _git(project_root, "status", "--porcelain")
+    if dirty:
+        return "working tree is dirty; commit or stash before structure migration"
+    upstream = _git(project_root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    if not upstream:
+        return None
+    counts = _git(project_root, "rev-list", "--left-right", "--count", f"HEAD...{upstream}")
+    if not counts:
+        return None
+    ahead_s, behind_s = (counts.split() + ["0", "0"])[:2]
+    try:
+        behind = int(behind_s)
+    except ValueError:
+        behind = 0
+    if behind:
+        return f"branch is behind {upstream} by {behind} commit(s); pull before structure migration"
+    return None
+
+
+def _git(root: Path, *args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def _build_prd(project_name: str, hdir: Path) -> str:
+    project = frontmatter.parse((hdir / "project.md").read_text(encoding="utf-8"))
+    roadmap = frontmatter.parse((hdir / "roadmap.md").read_text(encoding="utf-8"))
+    features = frontmatter.parse((hdir / "features.md").read_text(encoding="utf-8")) if (hdir / "features.md").is_file() else None
+    decisions = frontmatter.parse((hdir / "decisions.md").read_text(encoding="utf-8"))
+
+    status = _fm(roadmap, "status") or _fm(project, "status") or "active"
+    current_focus = _fm(roadmap, "current_focus") or _fm(project, "current_focus")
+    last_updated = _fm(roadmap, "last_updated") or _fm(project, "last_updated") or date.today().isoformat()
+    front = {
+        "status": status,
+        "current_focus": current_focus,
+        "next_action": _fm(roadmap, "next_action"),
+        "next_prompt": _fm(roadmap, "next_prompt"),
+        "execution_recommendation": _fm(roadmap, "execution_recommendation") or "continue-as-is",
+        "last_updated": last_updated,
+    }
+    front_text = "\n".join(f'{key}: "{_escape_fm(value)}"' for key, value in front.items())
+    vision = _clean_body(project.body) or "Agent-polish TODO: distill the project vision from `.horus/archive/project.md`."
+    backlog = _roadmap_backlog(roadmap.body)
+    shipped = _features_shipped(features.body if features else "")
+    rules = _clean_body(decisions.body) or "Agent-polish TODO: distill load-bearing rules from `.horus/archive/decisions.md`."
+    return (
+        f"---\n{front_text}\n---\n\n"
+        f"# {project_name} — PRD\n\n"
+        "> Agent-polish TODO: Review this generated PRD, tighten prose, and remove any stale migrated detail. "
+        "The original six-lane files are preserved verbatim in `.horus/archive/`.\n\n"
+        "## Vision\n\n"
+        f"{vision}\n\n"
+        "## Backlog\n\n"
+        f"{backlog}\n\n"
+        "## Shipped\n\n"
+        f"{shipped}\n\n"
+        "## Rules (load-bearing)\n\n"
+        f"{rules}\n\n"
+        "## Structure contract\n\n"
+        "- **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines.\n"
+        "- **Archive:** the pre-migration six-lane files live under `.horus/archive/` verbatim.\n"
+        "- **Closure:** update PRD frontmatter + backlog/shipped + a session note, then `horus close --commit --push`.\n"
+    )
+
+
+def _fm(doc: frontmatter.Document, key: str) -> str:
+    return str(doc.front_matter.get(key, "")).strip()
+
+
+def _escape_fm(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _clean_body(body: str) -> str:
+    lines = body.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if lines and lines[0].lstrip().startswith("# "):
+        lines.pop(0)
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
+def _roadmap_backlog(body: str) -> str:
+    lines = _clean_body(body).splitlines()
+    kept: list[str] = []
+    skip_checked_indent: int | None = None
+    skip_done_section = False
+    for line in lines:
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+        if stripped.startswith("## "):
+            skip_done_section = "done" in stripped.lower()
+            skip_checked_indent = None
+            if not skip_done_section:
+                kept.append("#" + stripped)
+            continue
+        if skip_done_section:
+            continue
+        is_list_item = stripped.startswith(("- ", "* ")) or (
+            bool(stripped) and stripped[0].isdigit() and ". " in stripped[:6]
+        )
+        if skip_checked_indent is not None:
+            if not stripped:
+                continue
+            if indent > skip_checked_indent and not is_list_item and not stripped.startswith("#"):
+                continue
+            skip_checked_indent = None
+        if _is_checked_item(stripped):
+            skip_checked_indent = indent
+            continue
+        unchecked = _unchecked_item_text(stripped)
+        if unchecked is not None:
+            marker = line[: len(line) - len(stripped)] + "- "
+            kept.append(marker + unchecked)
+            continue
+        kept.append(line)
+    text = _drop_empty_headings(kept).strip()
+    if not text:
+        return "Agent-polish TODO: distill open roadmap items from `.horus/archive/roadmap.md`."
+    return text + "\n\nAgent-polish TODO: prune migrated backlog prose to the current open work."
+
+
+def _is_checked_item(stripped: str) -> bool:
+    low = stripped.lower()
+    if low.startswith(("- [x]", "* [x]")):
+        return True
+    dot = low.find(". ")
+    return dot > 0 and low[:dot].isdigit() and low[dot + 2 :].startswith("[x]")
+
+
+def _unchecked_item_text(stripped: str) -> str | None:
+    low = stripped.lower()
+    if low.startswith(("- [ ]", "* [ ]")):
+        return stripped[5:].strip()
+    dot = low.find(". ")
+    if dot > 0 and low[:dot].isdigit() and low[dot + 2 :].startswith("[ ]"):
+        return stripped[dot + 5 :].strip()
+    return None
+
+
+def _drop_empty_headings(lines: list[str]) -> str:
+    out: list[str] = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("### "):
+            j = i + 1
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            if j >= len(lines) or lines[j].strip().startswith("### "):
+                continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def _features_shipped(body: str) -> str:
+    section = _section(_clean_body(body), "Shipped")
+    rows: list[str] = []
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("|") and stripped.endswith("|"):
+            cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+            if not cells or set(cells[0]) <= {"-", ":"} or cells[0].lower() == "capability":
+                continue
+            detail = " — ".join(cell for cell in cells[1:] if cell)
+            rows.append(f"- **{cells[0]}**" + (f" — {detail}" if detail else ""))
+            continue
+        rows.append(line)
+    if not rows:
+        return "Agent-polish TODO: distill shipped one-liners from `.horus/archive/features.md`."
+    return "\n".join(rows)
+
+
+def _section(body: str, title: str) -> str:
+    lines = body.splitlines()
+    start: int | None = None
+    for i, line in enumerate(lines):
+        if line.strip().lower() == f"## {title.lower()}":
+            start = i + 1
+            break
+    if start is None:
+        return body
+    end = len(lines)
+    for i in range(start, len(lines)):
+        if lines[i].startswith("## "):
+            end = i
+            break
+    return "\n".join(lines[start:end]).strip()
 
 
 def _upgrade_instructions(project_root: Path, *, apply: bool) -> list[UpgradeAction]:

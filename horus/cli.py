@@ -958,6 +958,25 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
 
 
 def cmd_upgrade_project(args: argparse.Namespace) -> int:
+    if args.structure == "prd":
+        if args.all:
+            print("error: --structure prd cannot be combined with --all")
+            return 2
+        root = _resolve_dir(args.path)
+        if root is None:
+            return 2
+        actions = upgrade.upgrade_structure_prd(root, apply=args.apply)
+        mode = "Applying" if args.apply else "Checking"
+        print(f"{mode} Horus structure migration to PRD in {root}\n")
+        for action in actions:
+            print(f"  [{action.status}] {action.message}")
+        if any(a.status == "error" for a in actions):
+            return 2
+        if not args.apply and any(a.status == "would-update" for a in actions):
+            print("\nDry run only. Re-run with `--apply` to migrate this project to PRD structure.")
+            return 1
+        return 0
+
     if args.all:
         if args.path != ".":
             print("error: --all cannot be combined with --path")
@@ -1477,6 +1496,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_upgrade = sub.add_parser("upgrade-project", help="refresh repo-local Horus projected artifacts")
     p_upgrade.add_argument("--path", default=".", help="project root (default: cwd)")
     p_upgrade.add_argument("--apply", action="store_true", help="write updates (default is dry-run/report)")
+    p_upgrade.add_argument(
+        "--structure",
+        choices=("prd",),
+        help="opt-in continuity structure migration (currently: prd)",
+    )
     p_upgrade.add_argument(
         "--all",
         action="store_true",

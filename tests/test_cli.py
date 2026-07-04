@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 from horus import config, github_catalog, launcher, registry, remote_start, upgrade
@@ -13,6 +14,40 @@ from horus.registry import Registry, SessionRecord
 def _home(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def _git(root: Path, *args: str):
+    return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, text=True)
+
+
+def _write_v2_horus(root: Path):
+    hdir = root / ".horus"
+    hdir.mkdir(parents=True, exist_ok=True)
+    (hdir / "sessions").mkdir(exist_ok=True)
+    (hdir / "temp").mkdir(exist_ok=True)
+    (hdir / "project.md").write_text(
+        "---\nstatus: active\ncurrent_focus: \"Project focus\"\nlast_updated: 2026-07-01\n---\n"
+        "# Project\n\nA focused project vision.\n\n## Boundaries\n\nKeep it small.\n",
+        encoding="utf-8",
+    )
+    (hdir / "roadmap.md").write_text(
+        "---\nstatus: active\ncurrent_focus: \"Roadmap focus\"\nnext_action: \"Do next\"\n"
+        "next_prompt: \"Resume from the migrated PRD.\"\nexecution_recommendation: \"continue-as-is\"\n"
+        "last_updated: 2026-07-02\n---\n# Roadmap\n\n## Now\n\n- [ ] Open task\n- [x] Done task\n"
+        "      Done continuation must not leak.\n\n## Later\n\n- [ ] Later task\n",
+        encoding="utf-8",
+    )
+    (hdir / "features.md").write_text(
+        "---\nstatus: active\nlast_updated: 2026-07-01\n---\n# Features\n\n## Shipped\n\n"
+        "| Capability | Since | Notes |\n|---|---|---|\n| Dashboard | v1 | Shows state |\n\n## Planned\n\n| Capability | Notes |\n|---|---|\n",
+        encoding="utf-8",
+    )
+    (hdir / "decisions.md").write_text(
+        "# Decisions\n\n- **Repo-local memory** — continuity lives in git.\n",
+        encoding="utf-8",
+    )
+    (hdir / "history.md").write_text("# History\n\n- One lesson.\n", encoding="utf-8")
+    (hdir / "execution.md").write_text("# Execution\n\nIdle.\n", encoding="utf-8")
 
 
 def _write_codex_rollout(home, project, *, total=910, window=1000):
@@ -550,6 +585,117 @@ def test_upgrade_project_all_dry_run_reports_pending_across_projects(tmp_path, m
     assert "would-update" in out
     assert "1 project(s) processed, 0 skipped" in out
     assert not (proj_a / ".codex" / "hooks.json").exists()
+
+
+def test_upgrade_project_structure_prd_dry_run_does_not_write(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    _write_v2_horus(tmp_path)
+    before = (tmp_path / ".horus" / "project.md").read_bytes()
+
+    rc = main(["upgrade-project", "--path", str(tmp_path), "--structure", "prd"])
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "Dry run only" in out
+    assert "would create .horus/PRD.md" in out
+    assert not (tmp_path / ".horus" / "PRD.md").exists()
+    assert (tmp_path / ".horus" / "project.md").read_bytes() == before
+
+
+def test_upgrade_project_structure_prd_apply_archives_verbatim_and_maps_prd(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    _write_v2_horus(tmp_path)
+    originals = {p.name: p.read_bytes() for p in (tmp_path / ".horus").glob("*.md")}
+
+    rc = main(["upgrade-project", "--path", str(tmp_path), "--structure", "prd", "--apply"])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Applying Horus structure migration to PRD" in out
+    hdir = tmp_path / ".horus"
+    prd = (hdir / "PRD.md").read_text(encoding="utf-8")
+    assert 'current_focus: "Roadmap focus"' in prd
+    assert 'next_action: "Do next"' in prd
+    assert "A focused project vision." in prd
+    assert "Open task" in prd and "Later task" in prd and "Done task" not in prd
+    assert "Done continuation" not in prd
+    assert "- **Dashboard** — v1 — Shows state" in prd
+    assert "**Repo-local memory**" in prd
+    assert "Agent-polish TODO" in prd
+    for name, content in originals.items():
+        assert not (hdir / name).exists()
+        assert (hdir / "archive" / name).read_bytes() == content
+    assert (hdir / "sessions").is_dir()
+    assert (hdir / "temp").is_dir()
+
+
+def test_upgrade_project_structure_prd_is_noop_for_v3(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import initialize
+
+    initialize.init_project(tmp_path, assume_yes=True, with_skills=False, with_hooks=False)
+
+    rc = main(["upgrade-project", "--path", str(tmp_path), "--structure", "prd", "--apply"])
+
+    assert rc == 0
+    assert "already present" in capsys.readouterr().out
+    assert (tmp_path / ".horus" / "PRD.md").exists()
+
+
+def test_upgrade_project_structure_prd_apply_refuses_dirty_git_tree(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.email", "t@example.com")
+    _git(tmp_path, "config", "user.name", "Tester")
+    _write_v2_horus(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-m", "v2")
+    (tmp_path / "README.md").write_text("dirty\n", encoding="utf-8")
+
+    rc = main(["upgrade-project", "--path", str(tmp_path), "--structure", "prd", "--apply"])
+
+    assert rc == 2
+    assert "working tree is dirty" in capsys.readouterr().out
+    assert not (tmp_path / ".horus" / "PRD.md").exists()
+    assert (tmp_path / ".horus" / "project.md").exists()
+
+
+def test_upgrade_project_structure_prd_apply_refuses_behind_origin(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    origin = tmp_path / "origin.git"
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    subprocess.run(["git", "init", "--bare", str(origin)], check=True, capture_output=True)
+    subprocess.run(["git", "clone", str(origin), str(a)], check=True, capture_output=True)
+    subprocess.run(["git", "clone", str(origin), str(b)], check=True, capture_output=True)
+    for clone in (a, b):
+        _git(clone, "config", "user.email", "t@example.com")
+        _git(clone, "config", "user.name", "Tester")
+    _write_v2_horus(a)
+    _git(a, "add", "-A")
+    _git(a, "commit", "-m", "v2")
+    _git(a, "push", "-u", "origin", "HEAD")
+    _git(b, "pull", "--ff-only")
+    (a / "README.md").write_text("remote newer\n", encoding="utf-8")
+    _git(a, "add", "README.md")
+    _git(a, "commit", "-m", "remote newer")
+    _git(a, "push")
+
+    rc = main(["upgrade-project", "--path", str(b), "--structure", "prd", "--apply"])
+
+    assert rc == 2
+    assert "branch is behind" in capsys.readouterr().out
+    assert not (b / ".horus" / "PRD.md").exists()
+    assert (b / ".horus" / "project.md").exists()
+
+
+def test_upgrade_project_structure_prd_rejects_all(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+
+    rc = main(["upgrade-project", "--all", "--structure", "prd"])
+
+    assert rc == 2
+    assert "cannot be combined" in capsys.readouterr().out
 
 
 def test_app_cli_dispatches_to_companion(tmp_path, monkeypatch):
