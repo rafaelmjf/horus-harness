@@ -1,9 +1,9 @@
 ---
 status: active
 current_focus: "horus-hub Phases 0–3 + UI COMPLETE 2026-07-04 (hub PRs #1–#6, six delegated workers in one day). Phase 3 (launch guards: two-key arm, CSRF, injection-inert dry-run argv, hashed-prompt audit) shipped despite the worker dying at the work account's usage limit mid-probe — supervisor checkpointed, reproduced gate 186/186, ran the probe, merged. Work-account window resets 21:10 Berlin. Rafa's UI visual verdict still pending. Hub branch protection still blocked (private, free plan)."
-next_action: "In ~/projects/horus-hub: collect Rafa's visual verdict on the UI captures, then plan Phase 4 (minimal launch — execute the previewed argv behind the armed gate; gate: a normal Horus session + RESULT-backed run log, no hub-only state) as a delegated batch; claude/work is usable again after 21:10 Berlin. In this repo the backlog is the menu (catalog niceties / Windows ops / macOS pass are the top candidates)."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. Hub Phases 0–3 + UI are shipped (PRs #1–#6); next hub steps are Rafa's UI verdict and Phase 4 (minimal launch) planning in ~/projects/horus-hub per its PRD (work-account usage window resets 21:10 Berlin 2026-07-04). This repo's own backlog is otherwise the menu."
-execution_recommendation: "plan-execution for hub Phase 1 (the batch lives in horus-hub's .horus/execution.md — codex worker buys context hygiene + keeps frontier tier on acceptance); continue-as-is for this repo's backlog items."
+next_action: "THIS repo's top item: backlog #1 usage-limit survival kit (worker-aware emergency state-save hook + horus run usage preflight + PreToolUse check) — promoted after today's second mid-run orphan; suits a delegated phase with a clear gate. In ~/projects/horus-hub: Rafa's UI visual verdict, then plan Phase 4 (minimal launch) as a delegated batch; claude/work usable again after 21:10 Berlin."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. Top harness item: backlog #1 usage-limit survival kit (emergency state-save, run preflight, PreToolUse check). Hub (PRs #1–#6 shipped): Rafa's UI verdict, then Phase 4 planning in ~/projects/horus-hub per its PRD."
+execution_recommendation: "plan-execution for the survival kit (three bounded sub-features, deterministic hook-side gates — delegable with a clear test gate; supervisor owns the hook-guard invariant review); plan-execution for hub Phase 4 per that repo's execution.md when it starts."
 last_updated: 2026-07-04
 ---
 
@@ -46,16 +46,31 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-1. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
+1. **[TOP] Usage-limit survival kit** (promoted 2026-07-04 — second mid-run
+   orphan: hub Phase 3 worker died at the limit with code uncommitted):
+   (a) **emergency state-save at ≥97–98%**, hook-side/deterministic/zero model
+   tokens, *worker-aware* — in a worker worktree rescue-commit the FULL tree to
+   the session's branch + push (disposable branch = product code safe to rescue);
+   on a main checkout commit `.horus/**` to a rescue ref; never a forced closure.
+   (b) **usage preflight in `horus run`** — read the target account's window
+   (claude_usage/codex_usage exist); warn/refuse above ~80% so workers aren't
+   launched into a closing window. (c) `PreToolUse` usage check (~60s cache) so
+   one long turn can't sail past the 90% advisory (evidence 07-03 + 07-04).
+2. **[ops] Orphan reap after failed runs:** dead workers leave children holding
+   ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
+   On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
+   remaining process tree (registry has the pid); at minimum surface "pid still
+   has children" in `horus tail`/dashboard.
+3. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
-2. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
+4. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
    + `horus upgrade-project --all`; eyeball the mascot failure dialog + Skills tab on a
    desktop session; confirm VS Code task keybindings work under Flatpak.
-3. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
+5. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
-4. **horus-hub follow-ups (harness side):** hub work continues in
+6. **horus-hub follow-ups (harness side):** hub work continues in
    `rafaelmjf/horus-hub` (its PRD + execution.md). Parked here: JSONL heartbeat
    events; `--worktree` auto-cleanup; `--worker` could infer the agent from
    `--agent` (took a usage-error bounce 2026-07-04).
@@ -73,12 +88,6 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
   a downgrade "refresh"; version-mark them like the managed block if payloads change.
 - **Git-aware overview (MVP2.5):** "fetch all" refresh (fetch only, never pull);
   behind-origin / uncommitted-continuity staleness folded into the warning surface.
-- **Mid-task usage interruption:** `PreToolUse` usage check (~60s cache) so a single long
-  turn can't blow past the limit between `UserPromptSubmit`/`Stop` checks; plus an
-  **emergency state-save at ≥97–98%** — hook-side and deterministic (zero model tokens):
-  commit `.horus/**` + push to a rescue ref with a stub note, never product code, never
-  a forced model closure (evidence: hub-probe closure orphaned at the limit 2026-07-03 —
-  the 90% advisory fired and asked, but a long turn sailed past it).
 - **Doctor compat (observe):** per project, report what each installed agent would load
   (instructions, skills, MCP, hooks). Skills half shipped as the Skill map.
 - **Workflow-policy refinements:** project the branch→PR→auto-merge default into the
