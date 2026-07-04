@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v3 PRD+sessions structure is now the product path: phases 1–6 shipped, PRs #101–105 merged, gym-coach and ttrpg migrated with byte-identical archives, PRD-first dashboard/close/resume gates green, and v0.0.21 bumped with 716 tests green."
-next_action: "Pick the next small backlog item: catalog niceties (private-repo badge + 'N ignored' affordance) is the top candidate. Keep it direct unless it grows beyond a narrow dashboard/catalog slice."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md. v3 PRD tooling shipped through phase 6: PRs #101–105 merged, controls migrated (agentic-gym-coach 56c6c60, agentic-ttrpg d870b15), gates green, v0.0.21 bumped. Next candidate: catalog niceties — badge private repos in the GitHub catalog and add an 'N ignored' affordance on the untracked fold."
-execution_recommendation: "continue-as-is — the next catalog nicety is a narrow dashboard/catalog UX slice; no active execution plan is needed unless the scope expands."
+current_focus: "Signal-based acceptance shipped (v0.0.22, PRs #106–107): pytest is a required check on main, auto-merge proven live, block v4 + execution skill v7 redefine gate reproduction as deterministic signals + one runtime probe, handoff notes carry a rerunnable gate command. Next arc: orchestrator > supervisor > worker, gated on the new ritual proving out in a real batch."
+next_action: "Run the next delegated batch under the signal-based ritual (catalog niceties is the top small code item and a fine guinea pig), then the orchestrator pilot: one session coordinating supervisors across two repos via deterministic signals only."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md. Signal-based acceptance shipped in v0.0.22 (required pytest checks on main, block v4, execution skill v7 gate contract). Next: run a real delegated batch under the new ritual — catalog niceties (private-repo badge + 'N ignored' affordance) — then the orchestrator pilot from the backlog."
+execution_recommendation: "continue-as-is for catalog niceties (narrow dashboard/catalog UX slice); switch to plan-execution when the orchestrator pilot starts — it exists to exercise the execution workflow across repos."
 last_updated: 2026-07-04
 ---
 
@@ -58,12 +58,16 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 3. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
+4. **Orchestrator tier pilot** (gated on one real batch under the signal-based
+   ritual): a session coordinating supervisors across two repos via deterministic
+   signals only (required CI, RESULT events, `close --check` rc) — plans and routing,
+   no verification of its own; token cost measured vs the 2026-07-03 hub rounds.
 
 ### Open, unscheduled
 
-- **Execution-workflow tuning:** handoff template carries the pre-existing test-failure
-  baseline; small phase-status vocabulary (planned/delegated/accepted/blocked) in the
-  skill + template.
+- **Execution-workflow tuning:** small phase-status vocabulary
+  (planned/delegated/accepted/blocked) in the skill + template (the gate-command +
+  failure-baseline handoff fields shipped in v0.0.22).
 - **Skill map follow-ups** (gated on real use of the new Skills tab): Claude↔Codex
   third-party skill copy with provenance/diff/trust; invocation tracking via transcript
   scan; adopt rulesync only at a 3rd tool (Gemini/Copilot).
@@ -85,8 +89,9 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
   managed block; per-project override in `.horus/`.
 - **Companion signals:** usage warnings, stale continuity, uncommitted `.horus/`,
   per-project switching, configurable mascot background.
-- **CI gate promotion:** continuity check advisory → required once proven; decide if
-  `init` installs the merge gate by default.
+- **CI gate promotion:** tests are required on this repo's main since v0.0.22;
+  continuity check stays advisory → required once proven; decide if `init` installs
+  the merge gate by default.
 
 ### Deferred (direction noted, not scheduled)
 
@@ -115,7 +120,10 @@ Claude+Codex skills) · `reconcile instructions` · closure freshness gate (`clo
 `sessions/archive/`) · `horus resume` minimum-context handoff · **v3 PRD+sessions
 structure** (v0.0.21): PRD-first frontmatter/readers, fresh-project templates,
 v3 consolidate/infer/skills, dashboard PRD rendering, opt-in six-lane migration engine,
-and live migrations for gym-coach + ttrpg with archived lanes preserved verbatim.
+and live migrations for gym-coach + ttrpg with archived lanes preserved verbatim ·
+**signal-based acceptance** (v0.0.22): required pytest checks on main + live-proven
+auto-merge, block v4, execution skill v7 (gate-command/baseline handoffs,
+structure-aware suggestions), v3 routine trailers.
 
 **Hooks & projections:** usage→closure hooks for Claude (OAuth `/usage`) + Codex
 (rollouts), advisory + ask-never-force · pre-merge gates both agents · hooks guarded to
@@ -172,9 +180,11 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Closure reaches the remote, fetch-first** — `close --commit --push`; refuse when
   origin has newer continuity. At session start: `git fetch --all --prune` and verify
   against the remote before trusting local refs or continuity prose.
-- **Three disciplines, every session:** reproduce the gate yourself (including the
-  *runtime* gate — drive the real surface once, mocked tests bless nonexistent flags);
-  bound work to green committed-and-pushed checkpoints; safety in code, not review.
+- **Three disciplines, every session:** reproduce the gate via a deterministic signal
+  you observe yourself — a *required* CI check green on the exact commit counts for
+  the test gate; the *runtime* gate always stays yours (drive the real surface once,
+  mocked tests bless nonexistent flags); never accept on a report's claims. Bound work
+  to green committed-and-pushed checkpoints; safety in code, not review.
 - **Hook guard invariant:** hooks signal via stdout JSON + exit 0; every committed
   command carries a per-OS silence guard (`|| exit 0` POSIX/Git Bash; PS 5.1-safe probe
   for Codex Windows). Never add an exit-code-signaling hook without revisiting this.
@@ -195,9 +205,10 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   nudge fragments return empty (no false "all clear").
 - **Accounts:** login-driven setup into isolated dirs; TOFU identity adoption; the real
   email never lands in a commit; forward-slash every path written to TOML/JSON.
-- **Git policy:** branch → PR → auto-merge (fallback: direct merge when no required
-  checks); offboard keeps `.horus/` by default; `.vscode/` is a user surface (static,
-  secret-free, create-only).
+- **Git policy:** branch → PR → auto-merge; this repo's main requires pytest checks
+  (admins exempt so continuity pushes land directly; fallback direct merge only on
+  repos without required checks); offboard keeps `.horus/` by default; `.vscode/` is
+  a user surface (static, secret-free, create-only).
 - **Delegation is volume × ambiguity × runtime** — delegate high-volume/low-ambiguity
   with a clear gate, then reproduce the gate; stay inline for exploratory/debugging;
   workflow tests require a real distinct worker. Codex auto-edit workers get a
