@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 
@@ -32,11 +33,13 @@ from horus import (
     overhead,
     registry,
     remote_start,
+    rescue,
     routines,
     runlog,
     skills,
     templates,
     upgrade,
+    usage_snapshot,
     vscode,
     worktree,
 )
@@ -342,6 +345,32 @@ def _resolve_run_posture(explicit: str | None, worker: str | None) -> str:
     return "default"
 
 
+def _run_usage_preflight(agent: str, account: str | None, *, force: bool) -> int | None:
+    """Best-effort usage gate before a run spawns. Returns an exit code to refuse the
+    run, or ``None`` to proceed.
+
+    Only claude/codex are checked (the fake adapter has no usage and tests depend on
+    it). A warning at ≥80% still proceeds; ≥95% refuses (exit 2) unless ``--force``.
+    An unreadable window proceeds silently — the preflight is a courtesy, never a wall.
+    """
+    if agent not in ("claude", "codex"):
+        return None
+    snap = usage_snapshot.cached_usage(agent, account)
+    if snap is None or snap.percent is None:
+        return None
+    pct = snap.percent
+    reset = snap.resets_at or "unknown reset"
+    who = f"{agent}{f' account {account}' if account else ''}"
+    if pct >= usage_snapshot.PREFLIGHT_REFUSE and not force:
+        print(f"Refusing to run: {who} 5h usage is {pct:.0f}% (resets {reset}).")
+        print("The window is nearly exhausted — the session would likely die mid-run.")
+        print("Pass --force to launch anyway, or wait for the reset.")
+        return 2
+    if pct >= usage_snapshot.PREFLIGHT_WARN:
+        print(f"Warning: {who} 5h usage is {pct:.0f}% (resets {reset}) — launching into a closing window.")
+    return None
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Spawn (or resume) an agent session through an adapter, tracked in the registry.
 
@@ -368,12 +397,18 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(exc)
         return 2
 
+    refusal = _run_usage_preflight(args.agent, args.account, force=getattr(args, "force", False))
+    if refusal is not None:
+        return refusal
+
     spec = adapters.SpawnSpec(
         prompt=args.prompt,
         project_dir=root,
         account=args.account,
         posture=adapters.PermissionPosture(_resolve_run_posture(args.posture, getattr(args, "worker", None))),
         model=args.model,
+        worker=bool(getattr(args, "worker", None)),
+        run_session_id=uuid.uuid4().hex[:16],
     )
     reg = registry.Registry.default()
     try:
@@ -1000,6 +1035,80 @@ def cmd_usage_check(args: argparse.Namespace) -> int:
         return 0
     healthy = _print_findings(findings)
     return 0 if healthy else 1
+
+
+def _emit_pretooluse_context(text: str) -> None:
+    """Inject advisory context on a PreToolUse hook (never a deny)."""
+    print(json.dumps({
+        "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}
+    }))
+
+
+def _guard_session_id(hook_input: dict) -> str:
+    return str(
+        hook_input.get("session_id")
+        or hook_input.get("sessionId")
+        or os.environ.get("HORUS_RUN_SESSION_ID")
+        or "unknown"
+    )
+
+
+def _emergency_state_save(root: Path, session_id: str, percent: float, reset: str) -> int:
+    """Perform the worker-aware emergency state-save once per window, then inject
+    context. Never denies the tool call; any rescue failure is reported, not raised."""
+    if native_hooks.sentinel_fired(session_id, kind="rescue", rearm_seconds=native_hooks.RESCUE_REARM_SECONDS):
+        return 0  # already rescued this window — stay quiet
+    native_hooks.mark_sentinel_fired(session_id, kind="rescue")
+    try:
+        result = rescue.emergency_rescue(root, session_id=session_id)
+        detail = result.detail
+    except Exception as exc:  # noqa: BLE001 (a rescue must never crash the hook)
+        detail = f"automatic state-save hit an error ({exc}); commit your work manually"
+    _emit_pretooluse_context(
+        templates.USAGE_RESCUE_ADVISORY.format(percent=f"{percent:.0f}", reset=reset, detail=detail)
+    )
+    return 0
+
+
+def _usage_guard_hook(root: Path, target: str) -> int:
+    """PreToolUse usage guard: advisory near the limit, emergency state-save at the
+    top. Always stdout JSON + exit 0; a missing/unreadable snapshot is a silent pass."""
+    try:
+        snap = usage_snapshot.cached_usage(target)
+    except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
+        return 0
+    if snap is None or snap.percent is None:
+        return 0
+    pct = snap.percent
+    if pct < usage_snapshot.GUARD_ADVISORY:
+        return 0
+
+    hook_input = _read_hook_stdin()
+    session_id = _guard_session_id(hook_input)
+    reset = snap.resets_at or "unknown reset"
+
+    if pct >= usage_snapshot.GUARD_EMERGENCY:
+        return _emergency_state_save(root, session_id, pct, reset)
+
+    # Advisory band [90, 97): inject once per re-arm window so it doesn't nag.
+    if native_hooks.sentinel_fired(session_id, kind="guard-advisory"):
+        return 0
+    native_hooks.mark_sentinel_fired(session_id, kind="guard-advisory")
+    _emit_pretooluse_context(templates.USAGE_GUARD_ADVISORY.format(percent=f"{pct:.0f}", reset=reset))
+    return 0
+
+
+def cmd_usage_guard(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    if getattr(args, "hook", False):
+        return _usage_guard_hook(root, args.target)
+    # Non-hook invocation: report the current snapshot for this target.
+    snap = usage_snapshot.cached_usage(args.target)
+    if snap is None or snap.percent is None:
+        print(f"No {args.target} usage signal available.")
+        return 0
+    print(f"{args.target} 5h usage {snap.percent:.0f}% (resets {snap.resets_at or 'unknown reset'})")
+    return 0
 
 
 def cmd_hook_install(args: argparse.Namespace) -> int:
@@ -1817,6 +1926,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="open a watcher terminal following this session's log (best-effort; headless runs continue without it)",
     )
+    p_run.add_argument(
+        "--force",
+        action="store_true",
+        help="launch even when the target account's 5h usage is near exhaustion (skips the preflight refusal)",
+    )
     p_run.set_defaults(func=cmd_run)
 
     p_tail = sub.add_parser("tail", help="print and follow a session's run log until it finishes")
@@ -1969,6 +2083,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="hook mode: print only actionable warnings and always exit 0",
     )
     p_usage_check.set_defaults(func=cmd_usage_check)
+
+    p_usage_guard = usage_sub.add_parser(
+        "guard",
+        help="PreToolUse usage guard: advisory near the limit + worker-aware emergency state-save",
+    )
+    p_usage_guard.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_usage_guard.add_argument(
+        "--target", choices=("codex", "claude"), default="claude",
+        help="which app's cached usage snapshot to read (default: claude)",
+    )
+    p_usage_guard.add_argument(
+        "--hook",
+        action="store_true",
+        help="hook mode: inject advisory context / run the emergency state-save; never denies; always exit 0",
+    )
+    p_usage_guard.set_defaults(func=cmd_usage_guard)
 
     p_hook = sub.add_parser("hook", help="install native app hooks")
     hook_sub = p_hook.add_subparsers(dest="hook_cmd", required=True)

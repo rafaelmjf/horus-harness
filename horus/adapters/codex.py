@@ -90,8 +90,17 @@ class CodexAdapter(AgentAdapter):
         return argv
 
     def build_env(self, spec: SpawnSpec) -> dict[str, str]:
+        env: dict[str, str] = {}
         home = self.codex_homes.get(spec.account) if spec.account else None
-        return {"CODEX_HOME": str(Path(home))} if home else {}
+        if home:
+            env["CODEX_HOME"] = str(Path(home))
+        # Deterministic worker signal for the PreToolUse usage guard's emergency
+        # state-save (the linked-worktree check is the fallback).
+        if spec.run_session_id:
+            env["HORUS_RUN_SESSION_ID"] = spec.run_session_id
+        if spec.worker:
+            env["HORUS_RUN_WORKER"] = "1"
+        return env
 
     def interactive_command(self, spec: SpawnSpec, *, session_id: str) -> list[str]:
         """Argv for an *attended* interactive Codex session (no ``exec``).

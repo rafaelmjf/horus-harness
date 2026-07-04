@@ -81,8 +81,17 @@ class ClaudeAdapter(AgentAdapter):
         return argv
 
     def build_env(self, spec: SpawnSpec) -> dict[str, str]:
+        env: dict[str, str] = {}
         cfg = self.config_dirs.get(spec.account) if spec.account else None
-        return {"CLAUDE_CONFIG_DIR": str(Path(cfg))} if cfg else {}
+        if cfg:
+            env["CLAUDE_CONFIG_DIR"] = str(Path(cfg))
+        # Deterministic worker signal for the PreToolUse usage guard's emergency
+        # state-save (the linked-worktree check is the fallback).
+        if spec.run_session_id:
+            env["HORUS_RUN_SESSION_ID"] = spec.run_session_id
+        if spec.worker:
+            env["HORUS_RUN_WORKER"] = "1"
+        return env
 
     def interactive_command(self, spec: SpawnSpec, *, session_id: str) -> list[str]:
         """Argv for an *attended* TUI session (no ``-p``): the user types in it.
