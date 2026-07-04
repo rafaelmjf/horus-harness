@@ -20,6 +20,17 @@ def _git(root: Path, *args: str):
     return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, text=True)
 
 
+def _init_repo(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    _git(root, "init", "-b", "main")
+    _git(root, "config", "user.email", "t@example.com")
+    _git(root, "config", "user.name", "Test")
+    (root / "README.md").write_text("hi\n", encoding="utf-8")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-m", "init")
+    return root
+
+
 def _write_v2_horus(root: Path):
     hdir = root / ".horus"
     hdir.mkdir(parents=True, exist_ok=True)
@@ -1274,3 +1285,92 @@ def test_guard_noop_outside_hosted_session(monkeypatch, capsys):
 def test_guard_ignores_non_bash_tool(monkeypatch, capsys):
     rc, out = _guard_hook_run(monkeypatch, capsys, command="horus app", tool="Edit")
     assert rc == 0 and out.strip() == ""
+
+
+# --- horus run: --worktree + --worker posture presets (phase E) ---------------
+
+def _capture_run_posture(monkeypatch):
+    """Record the posture the SpawnSpec carried into the fake adapter."""
+    from horus.adapters.fake import FakeAdapter
+
+    captured = {}
+    original = FakeAdapter.spawn
+
+    def spy(self, spec):
+        captured["posture"] = spec.posture.value
+        captured["project"] = str(spec.project_dir)
+        return original(self, spec)
+
+    monkeypatch.setattr(FakeAdapter, "spawn", spy)
+    return captured
+
+
+def test_run_worker_preset_maps_claude_to_full_auto(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    captured = _capture_run_posture(monkeypatch)
+    rc = main(["run", "hi", "--agent", "fake", "--worker", "claude", "--path", str(tmp_path)])
+    assert rc == 0
+    assert captured["posture"] == "full-auto"
+
+
+def test_run_worker_preset_maps_codex_to_auto_edit(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    captured = _capture_run_posture(monkeypatch)
+    rc = main(["run", "hi", "--agent", "fake", "--worker", "codex", "--path", str(tmp_path)])
+    assert rc == 0
+    assert captured["posture"] == "auto-edit"
+
+
+def test_run_explicit_posture_beats_worker_preset(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    captured = _capture_run_posture(monkeypatch)
+    rc = main(["run", "hi", "--agent", "fake", "--worker", "claude",
+               "--posture", "read-only", "--path", str(tmp_path)])
+    assert rc == 0
+    assert captured["posture"] == "read-only"  # explicit --posture wins
+
+
+def test_run_defaults_to_default_posture_without_worker(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    captured = _capture_run_posture(monkeypatch)
+    rc = main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
+    assert rc == 0
+    assert captured["posture"] == "default"
+
+
+def test_run_worktree_creates_and_records_path(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    repo = _init_repo(tmp_path / "repo")
+    captured = _capture_run_posture(monkeypatch)
+
+    rc = main(["run", "hi", "--agent", "fake", "--worktree", "probe-branch", "--path", str(repo)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    expected = repo.parent / "repo-wt-probe-branch"
+    assert f"Created worktree {expected}" in out
+    assert expected.is_dir()  # git worktree really created
+    # The session ran in the worktree and the registry row records that path.
+    assert Path(captured["project"]).resolve() == expected.resolve()
+    recs = Registry.default().all()
+    assert len(recs) == 1
+    assert Path(recs[0].project).resolve() == expected.resolve()
+
+
+def test_run_worktree_reuses_existing(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    repo = _init_repo(tmp_path / "repo")
+    assert main(["run", "hi", "--agent", "fake", "--worktree", "probe-branch", "--path", str(repo)]) == 0
+    capsys.readouterr()
+    rc = main(["run", "again", "--agent", "fake", "--worktree", "probe-branch", "--path", str(repo)])
+    assert rc == 0
+    assert "Reusing worktree" in capsys.readouterr().out
+
+
+def test_run_worktree_refuses_non_worktree_target(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    repo = _init_repo(tmp_path / "repo")
+    (repo.parent / "repo-wt-probe-branch").mkdir()  # squatting non-worktree dir
+    rc = main(["run", "hi", "--agent", "fake", "--worktree", "probe-branch", "--path", str(repo)])
+    assert rc == 2
+    assert "Refusing to run" in capsys.readouterr().out
+    assert Registry.default().all() == []  # nothing spawned

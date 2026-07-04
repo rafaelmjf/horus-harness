@@ -38,6 +38,7 @@ from horus import (
     templates,
     upgrade,
     vscode,
+    worktree,
 )
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
 from horus.doctor_machine import machine_findings
@@ -327,13 +328,40 @@ def cmd_focus(args: argparse.Namespace) -> int:
     return 1
 
 
+# --worker posture presets (skill-v8 matrix). Headless claude stalls under the
+# default posture (exits 0 with zero diffs); codex auto-edits with a gated sandbox.
+# An explicit --posture always wins over the preset.
+_WORKER_POSTURE = {"claude": "full-auto", "codex": "auto-edit"}
+
+
+def _resolve_run_posture(explicit: str | None, worker: str | None) -> str:
+    if explicit is not None:
+        return explicit
+    if worker:
+        return _WORKER_POSTURE[worker]
+    return "default"
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Spawn (or resume) an agent session through an adapter, tracked in the registry.
 
     Streams the session's events to stdout and records it so it shows up in
     `horus sessions` and the dashboard's Live sessions card.
+
+    With ``--worktree <branch>`` the session runs in a per-branch git worktree
+    (created or reused), so the registry row records that worktree's path.
     """
     root = Path(args.path).resolve()
+    if getattr(args, "worktree", None):
+        try:
+            wt = worktree.ensure_worktree(root, args.worktree)
+        except worktree.WorktreeError as exc:
+            print(f"Refusing to run: {exc}")
+            return 2
+        verb = "Created" if wt.created else "Reusing"
+        print(f"{verb} worktree {wt.path} (branch {wt.branch})")
+        root = wt.path.resolve()
+
     try:
         adapter = adapters.get_adapter(args.agent)
     except KeyError as exc:
@@ -344,7 +372,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         prompt=args.prompt,
         project_dir=root,
         account=args.account,
-        posture=adapters.PermissionPosture(args.posture),
+        posture=adapters.PermissionPosture(_resolve_run_posture(args.posture, getattr(args, "worker", None))),
         model=args.model,
     )
     reg = registry.Registry.default()
@@ -1738,12 +1766,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
     p_run.add_argument(
         "--posture",
-        default="default",
+        default=None,
         choices=[p.value for p in adapters.PermissionPosture],
-        help="permission posture (default: default)",
+        help="permission posture (default: default; overrides any --worker preset)",
+    )
+    p_run.add_argument(
+        "--worker",
+        default=None,
+        choices=sorted(_WORKER_POSTURE),
+        help="posture preset for an unattended worker: claude=full-auto, codex=auto-edit "
+             "(the default posture stalls a headless claude — it exits 0 with zero diffs; "
+             "codex auto-edits inside a gated sandbox). --posture wins if also given.",
     )
     p_run.add_argument("--resume", metavar="SESSION_ID", help="resume an existing session by id")
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
+    p_run.add_argument(
+        "--worktree",
+        metavar="BRANCH",
+        default=None,
+        help="run in a git worktree for BRANCH at <repo-parent>/<repo-name>-wt-<branch-slug> "
+             "(created from HEAD if the branch is new, reused if it already exists); "
+             "the registry row records the worktree path. Remove with `git worktree remove`.",
+    )
     p_run.add_argument(
         "--watch",
         action="store_true",
