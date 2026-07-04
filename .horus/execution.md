@@ -1,110 +1,78 @@
 ---
 status: active
-current_feature: "Orchestration pilot: three parallel features — A dashboard brainstorm, B hosted-hub design, C trustworthy session badges — delegated to claude/work (Opus 4.8) and codex (GPT-5.5) feature supervisors; this session is the orchestrator."
+current_feature: "Hub pre-work batch: D structured run-log event stream (codex GPT-5.5) + E horus run worktree/posture ergonomics (claude/work Opus 4.8) — the two seams horus-hub consumes, run under the skill-v8 orchestration contract."
 supervisor_tier: frontier
-worker_tier: per-phase (see table)
+worker_tier: frontier (feature supervisors)
 continuity_tier: economy
-delegation_basis: "Pilot of orchestrator > supervisor > worker (PRD backlog). The orchestrator (Fable, this session) plans, routes, and accepts on deterministic signals only — required CI green on the exact commit, registry/RESULT events, close --check rc — it implements nothing and reruns no suites; for the one non-visual feature (C) it runs the single gate command from the handoff note before merge. Delegated sessions act as feature supervisors: they own implementation, their own runtime gates, and the handoff note; A may spawn sonnet subagents for narrow slices. Same-repo parallelism via git worktrees (Notes). Token/effort cost to be compared against the 2026-07-03 hub rounds baseline."
+delegation_basis: "Second orchestration batch under skill v8. Two bounded, parallelizable slices with crisp gates and disjoint surfaces; both are prerequisites the hub's read model (D) and launch path (E) build on. Orchestrator (this session) plans/routes/accepts on deterministic signals, implements nothing; lessons from the pilot pre-applied: claude worker spawns full-auto from the start; codex brief carries a sandbox-runnable gate."
 last_updated: 2026-07-04
 ---
 
-# Execution Plan — orchestration pilot
+# Execution Plan — hub pre-work
 
-Three features, two delegated supervisor sessions, one orchestrator. Wave 1 runs
-A and C in parallel (disjoint dashboard surfaces, separate worktrees). B is
-doc-only and starts on the codex account when C's PR is up. This file is the
-fluid coordination surface; durable outcomes distill into PRD.md at closure.
-
-## Model Policy
-
-| tier | Intended use | This batch |
-|---|---|---|
-| economy | mechanical continuity updates | orchestrator's continuity commits |
-| standard | narrow implementation slices | sonnet subagents under A (optional) |
-| frontier | feature supervision, design, acceptance | A: claude/work Opus 4.8 · B+C: codex GPT-5.5 · orchestrator: Fable (this session) |
+Two workers, two worktrees, wave of one. Merge sequencing per skill v8: after the
+first PR lands, watch main's push CI before arming the second.
 
 ## Active Phases
 
 | phase | status | difficulty | mode | worker_agent | worker_tier | delegation_basis | handoff_note | review gate |
 |---|---|---|---|---|---|---|---|---|
-| A-brainstorm-dashboard | PR #108 open, required CI green, handoff complete — awaiting Rafa's UI eyeball before the orchestrator arms auto-merge | medium | delegated | claude (account: work, model: opus) | frontier supervisor + optional sonnet subagents | UI + prompt-design feature; user is the real reviewer for the visual half; bounded by the dashboard contract and a CLI twin with tests | `.horus/temp/A-brainstorm-dashboard.md` (worker creates in its worktree) | required CI green on the PR + Rafa eyeballs the card/flow + orchestrator reads handoff for scope |
-| B-hub-design | PR #110 open (doc-only, orchestrator read done, zero bounces) — awaiting Rafa's read before the orchestrator arms the merge | medium | delegated | codex | frontier | Doc-only architecture deliverable; cross-vendor cold reader is an asset; no repo-code risk | `.horus/temp/B-hub-design.md` (worker creates in its worktree) | no CI (doc); Rafa + orchestrator read; accepted when decisions are concrete enough to scaffold the repo in a future batch |
-| C-badge-liveness | PR #109 open, auto-merge armed; orchestrator reproduced the gate (726 passed) + live probe (dead PID → stale, badge counts 1 running) after one bounce | medium | delegated | codex | frontier | Backend/registry slice, low ambiguity once specced, crisp pytest gate; codex auto-edit posture (read-only .git — orchestrator owns commit/PR mechanics) | `.horus/temp/C-badge-liveness.md` (worker creates in its worktree) | required CI green + orchestrator runs the one gate command from the handoff + live probe: a killed session must not count as running |
+| D-runlog-events | delegated | medium | delegated | codex (auto-edit, read-only .git — orchestrator owns commit/PR) | frontier | Backend seam with a crisp pytest gate; hub Phase 2 consumes run logs — harden before building on it | `.horus/temp/D-runlog-events.md` (worker creates in worktree) | required CI green + orchestrator runs the handoff gate command + live probe: a fake run writes JSONL events and registry reconciliation reads them |
+| E-run-ergonomics | delegated | medium | delegated | claude (account work, model opus, posture full-auto) | frontier | CLI/launch slice; the pilot's two manual footguns; hub Phase 4 calls this exact path | `.horus/temp/E-run-ergonomics.md` (worker creates in worktree) | required CI green + orchestrator live probe: `horus run --agent fake --worktree` creates the worktree + tracked session; `--worker` applies the posture matrix |
 
 ## Phase specs
 
-### A-brainstorm-dashboard (claude/work, Opus 4.8)
+### D-runlog-events (codex)
 
-Project detail gets an **Ideas / Brainstorm** card: a topic input + Start button →
-POST (PRG) that launches a **tracked brainstorm session** on the project via the
-existing run/launch plumbing, plus a CLI twin (`horus brainstorm --path . "<topic>"`)
-so the dashboard and CLI share one code path. The brainstorm session is seeded with
-a new `BRAINSTORM_PROMPT` template carrying **minimal context**: PRD.md
-vision/backlog/rules + the topic — not sessions, not archive. Its output contract:
-a structured implementation-plan draft (phases, risks, suggested gates) plus
-proposed backlog lines written to `.horus/temp/brainstorm-<slug>.md` for review —
-it must **never edit PRD.md directly**. Constraints: dashboard contract (PRG,
-async heavy panels, read-mostly); do not touch the live-sessions panel, registry,
-or companion (phase C owns those); do not edit PRD.md (orchestrator owns
-continuity). Branch `feat/brainstorm-dashboard` → PR; leave the PR open (the
-orchestrator arms auto-merge after review).
+Structured event stream for tracked runs, replacing text-line scraping as the
+machine interface. Pinned design:
 
-### B-hub-design (codex, GPT-5.5 — wave 2, doc only)
+- **Sidecar JSONL** per session: `~/.horus/logs/runs/<session-id>.jsonl`, written
+  alongside the existing human-readable `.log` (which stays; `horus tail` keeps
+  tailing the `.log`).
+- Events (one JSON object per line, `ts` aware-UTC ISO, `event` field):
+  `start` (session_id, agent, account, project, pid, argv summary) and
+  `result` (status exited/failed, rc, ended_at). No heartbeat in this slice —
+  note it as a follow-up.
+- **Registry reconciliation prefers the JSONL** (`result` event → terminal state)
+  and falls back to the existing text-line parsing for legacy logs — old logs
+  must keep working; no migration.
+- Fences: own `horus/runlog.py`, the run-side event emission, and the
+  reconciliation reader in `horus/registry.py`. Do NOT touch `horus/cli.py`
+  run-flag parsing, launch plumbing, or worktree logic (phase E owns those);
+  no PRD.md edits.
+- Sandbox-runnable gate (codex sandbox may lack network):
+  `python3 -m compileall -q horus tests` + targeted
+  `pytest tests/test_runlog.py tests/test_registry.py` if deps resolve; the
+  orchestrator's full-suite run is the first complete pass otherwise.
 
-`research/horus-hub-design.md`: design for a **self-hostable hub** (à la
-horus.rafaelfigueiredo.com, gym-app precedent) — one place to see projects and
-launch agents across accounts, explicitly **not** shipped in the uv package; a
-framework others can host themselves. Must include: threat model first (remote
-agent launch = remote code execution; auth is a hard gate — Cloudflare Access
-precedent from gym-coach), MVP cut (read-only multi-project dashboard behind auth
-before any launch capability), interop seam (repo-local `.horus/`, session
-registry, run logs as the API — hub stays a *consumer*), separate-repo scaffold
-plan, and explicit non-goals (multi-user SaaS stays out per PRD vision). No code.
+### E-run-ergonomics (claude/work)
 
-### C-badge-liveness (codex, GPT-5.5)
+The pilot's manual footguns become flags. Pinned design:
 
-Sessions the registry claims are `running` must be **verified live** before being
-counted anywhere: process/PID existence + run-log RESULT events, reconciled on
-read. Dead/orphaned rows are demoted to a `stale` state — never counted as running
-— with a visible flag and a one-click cleanup in the dashboard live-sessions
-panel. Surface freshness ("as of HH:MM:SS") on the mascot badge menu and the
-live-sessions panel so the number is auditable. Registry timestamps stay
-aware-UTC. Tests must cover: dead-PID demotion, RESULT-event completion, badge
-counts excluding stale rows. Do not touch project-detail templates or launch
-plumbing (phase A owns those). Working tree only — .git is read-only under the
-auto-edit posture; fill the handoff note and stop; the orchestrator commits to
-`feat/session-liveness` and opens the PR.
+- **`horus run --worktree <branch>`**: creates (or reuses) a git worktree at
+  `<repo-parent>/<repo-name>-wt-<branch-slug>` on `<branch>` (creating the
+  branch from the current HEAD if missing), then runs the session with that
+  worktree as `--path`. The registry row records the worktree path. Refuse
+  politely when the target path exists and is not a worktree of this repo, or
+  when the repo is bare/has no git. No auto-cleanup in this slice (manual
+  `git worktree remove`) — note as follow-up.
+- **`--worker`**: posture preset applying the skill-v8 matrix — `claude` →
+  `full-auto`, `codex` → `auto-edit`; explicit `--posture` wins over the preset.
+  Help text names the headless-stall rationale.
+- Fences: own `horus/cli.py` run subparser, launch/worktree plumbing (a new
+  helper module is fine, e.g. `horus/worktree.py`). Do NOT touch
+  `horus/runlog.py` or registry reconciliation (phase D owns those); no PRD.md
+  edits.
+- Gate: full suite green + the live probe above; branch → PR, do not merge.
 
-## Notes — orchestrator contract (the pilot)
+## Notes — orchestrator contract
 
-- **Worktrees:** A runs in `~/projects/horus-wt-brainstorm` (branch
-  `feat/brainstorm-dashboard`), C in `~/projects/horus-wt-liveness` (branch
-  `feat/session-liveness`), both spawned with `--watch` terminals per Rafa's
-  visibility preference. Registry entries appear under the worktree paths —
-  known cosmetic quirk for this pilot.
-- **Acceptance flows on signals:** required `pytest (3.12)/(3.13)` checks on each
-  PR (never a local suite rerun by the orchestrator), handoff-note gate command
-  (C only, one run), Rafa's eyeball for A's UI, RESULT events for session
-  completion. No tier accepts on a model's prose claim.
-- **Merge order:** whichever PR is green first merges first (strict=false); the
-  second rebases only if its CI goes red after the first lands.
-- **Continuity:** only the orchestrator edits `.horus/` on main. Workers write
-  handoff notes in their worktrees' `.horus/temp/` (local, uncommitted).
-- **Measurement:** record rounds/interventions/token feel vs the 2026-07-03 hub
-  sessions at closure; the pilot's verdict goes to PRD (orchestrator tier: keep,
-  adjust, or drop).
-- **Pilot findings (running log):**
-  - Claude workers under the *default* posture stall headless: A planned fully,
-    then exited asking for Edit/Bash permissions (exit 0, zero diffs — looked
-    "completed" in the task list; exactly the trust gap phase C addresses).
-    Branch-owning claude workers need `--posture full-auto` (or a pre-seeded
-    allowlist in the worktree). A was resumed with full-auto, context intact.
-    Codex under `auto-edit` ran without stalling. Intervention count: 1.
-  - C's sandbox couldn't run the suite (read-only uv cache + no network for
-    deps); its handoff said so honestly instead of claiming green. The
-    orchestrator's gate run caught 1 failed/725 passed (a cli tail test seeding
-    a fake-PID 'running' row that the new reconciliation rightly demotes) —
-    bounced back to the same codex session with the exact failure.
-    Intervention count: 2. Lesson: codex worker briefs must include a
-    sandbox-runnable gate (compileall + targeted tests) or accept that the
-    orchestrator's gate run is the first full-suite pass.
+- Worktrees: D in `~/projects/horus-wt-events` (branch `feat/runlog-events`),
+  E in `~/projects/horus-wt-runergo` (branch `feat/run-worktree`), both spawned
+  `--watch`.
+- Acceptance on signals only (required CI, handoff gate command, live probes);
+  bounce = resume the same session with the exact failure.
+- While workers run, the orchestrator handles `upgrade-project --all`
+  propagation (block v4 + skill v8 → gym-coach, ttrpg) as continuity mechanics.
+- **Pilot findings (running log):** —
