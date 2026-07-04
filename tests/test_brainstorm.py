@@ -2,7 +2,7 @@
 
 import pytest
 
-from horus import brainstorm, launch, launcher
+from horus import brainstorm, launch, launcher, registry
 from horus.registry import Registry
 
 _PRD = """---
@@ -107,6 +107,7 @@ def test_start_brainstorm_tracks_session_and_seeds_prompt(tmp_path, monkeypatch)
         return 5150
 
     monkeypatch.setattr(launcher, "open_terminal", fake_open)
+    monkeypatch.setattr(registry, "process_alive", lambda pid: pid == 5150)
 
     result = brainstorm.start_brainstorm(project_dir=root, topic="offline sync", agent="fake")
 

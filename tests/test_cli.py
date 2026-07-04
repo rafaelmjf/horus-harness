@@ -396,6 +396,8 @@ def test_brainstorm_launches_scoped_tracked_session(tmp_path, monkeypatch, capsy
         launcher, "open_terminal",
         lambda argv, cwd, env=None: captured.update(argv=argv) or 4321,
     )
+    from horus import registry as registry_mod
+    monkeypatch.setattr(registry_mod, "process_alive", lambda pid: pid == 4321)
     rc = main(["brainstorm", "offline sync", "--path", str(proj), "--agent", "fake"])
     assert rc == 0
     out = capsys.readouterr().out
