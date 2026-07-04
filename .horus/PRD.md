@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "horus-hub Phases 0–3 + UI COMPLETE 2026-07-04 (hub PRs #1–#6, six delegated workers in one day). Phase 3 (launch guards: two-key arm, CSRF, injection-inert dry-run argv, hashed-prompt audit) shipped despite the worker dying at the work account's usage limit mid-probe — supervisor checkpointed, reproduced gate 186/186, ran the probe, merged. Work-account window resets 21:10 Berlin. Rafa's UI visual verdict still pending. Hub branch protection still blocked (private, free plan)."
-next_action: "THIS repo's top item: backlog #1 usage-limit survival kit (worker-aware emergency state-save hook + horus run usage preflight + PreToolUse check) — promoted after today's second mid-run orphan; suits a delegated phase with a clear gate. In ~/projects/horus-hub: Rafa's UI visual verdict, then plan Phase 4 (minimal launch) as a delegated batch; claude/work usable again after 21:10 Berlin."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md. Top harness item: backlog #1 usage-limit survival kit (emergency state-save, run preflight, PreToolUse check). Hub (PRs #1–#6 shipped): Rafa's UI verdict, then Phase 4 planning in ~/projects/horus-hub per its PRD."
-execution_recommendation: "plan-execution for the survival kit (three bounded sub-features, deterministic hook-side gates — delegable with a clear test gate; supervisor owns the hook-guard invariant review); plan-execution for hub Phase 4 per that repo's execution.md when it starts."
+current_focus: "Usage-limit survival kit SHIPPED 2026-07-04 as v0.0.25 (PR #115): 60s-cached usage snapshots, horus run preflight (warn 80/refuse 95/--force), PreToolUse guard with worker-aware emergency state-save at 97%. Delegated to a claude/personal Opus worker (work account at its window edge), one bounce (no-upstream rescue push). NOT yet armed anywhere: machine installs + upgrade-project pending. Hub: Rafa's UI verdict pending; work account resets 21:10 Berlin."
+next_action: "Arm the kit [tier: shell ops / no model, or Haiku]: uv tool install --force --python 3.12 horus-harness (v0.0.25) + horus upgrade-project --all so the PreToolUse guard actually reaches projects; restart the app. Then backlog #1 [ops] orphan reap [tier: Sonnet inline; Opus only to review the hook-guard/process-tree safety], or hub Phase 4 planning in ~/projects/horus-hub [tier: Opus for design, delegate implementation to Sonnet workers on the isolated claude-work account; usable after 21:10 Berlin]."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the branch against origin. Read .horus/PRD.md — note the model-tier rule and the per-step tier tags in this frontmatter. First: arm v0.0.25 (uv tool install --force --python 3.12 horus-harness; horus upgrade-project --all; verify horus --version) — shell ops, no heavy model. Then backlog #1 orphan reap (Sonnet), or hub Phase 4 in ~/projects/horus-hub (Opus design, Sonnet workers) per its PRD."
+execution_recommendation: "continue-as-is for arming v0.0.25 (ops, minutes — no model needed, or Haiku). Default worker tier = Sonnet; reserve Opus for design and the verify/accept gate; Haiku for mechanical sweeps. plan-execution for hub Phase 4 (Opus supervisor + Sonnet workers on the isolated claude-work account, worktree-per-worker); orphan reap stays inline on Sonnet unless bundled with other registry work."
 last_updated: 2026-07-04
 ---
 
@@ -46,31 +46,21 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-1. **[TOP] Usage-limit survival kit** (promoted 2026-07-04 — second mid-run
-   orphan: hub Phase 3 worker died at the limit with code uncommitted):
-   (a) **emergency state-save at ≥97–98%**, hook-side/deterministic/zero model
-   tokens, *worker-aware* — in a worker worktree rescue-commit the FULL tree to
-   the session's branch + push (disposable branch = product code safe to rescue);
-   on a main checkout commit `.horus/**` to a rescue ref; never a forced closure.
-   (b) **usage preflight in `horus run`** — read the target account's window
-   (claude_usage/codex_usage exist); warn/refuse above ~80% so workers aren't
-   launched into a closing window. (c) `PreToolUse` usage check (~60s cache) so
-   one long turn can't sail past the 90% advisory (evidence 07-03 + 07-04).
-2. **[ops] Orphan reap after failed runs:** dead workers leave children holding
+1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
    remaining process tree (registry has the pid); at minimum surface "pid still
    has children" in `horus tail`/dashboard.
-3. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
+2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
-4. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
+3. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
    + `horus upgrade-project --all`; eyeball the mascot failure dialog + Skills tab on a
    desktop session; confirm VS Code task keybindings work under Flatpak.
-5. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
+4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
-6. **horus-hub follow-ups (harness side):** hub work continues in
+5. **horus-hub follow-ups (harness side):** hub work continues in
    `rafaelmjf/horus-hub` (its PRD + execution.md). Parked here: JSONL heartbeat
    events; `--worktree` auto-cleanup; `--worker` could infer the agent from
    `--agent` (took a usage-error bounce 2026-07-04).
@@ -79,7 +69,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 - **Execution-workflow tuning:** small phase-status vocabulary
   (planned/delegated/accepted/blocked) in the skill + template (the gate-command +
-  failure-baseline handoff fields shipped in v0.0.22).
+  failure-baseline handoff fields shipped in v0.0.22). Also propagate the **model-tier
+  suggestion** (Haiku/Sonnet/Opus per the model-tier rule) into the fresh-project
+  template + execution skill + delegation rubric, so the per-step tier convention (now
+  in this repo's PRD frontmatter) reaches every project — optionally a first-class
+  `model_recommendation` frontmatter field wired through `resolve_focus`/dashboard
+  rather than folded into `execution_recommendation` prose.
 - **Skill map follow-ups** (gated on real use of the Skills tab): third-party skill
   copy with provenance/diff/trust; invocation tracking; rulesync only at a 3rd tool.
 - **Context-cache visibility, active behavior:** decide how cold/expired sessions warn
@@ -123,26 +118,25 @@ clobbers) · `close` (verify-first; `--commit --push`, fetch-first cross-machine
 Claude+Codex skills) · `reconcile instructions` · closure freshness gate (`close --check`)
 + CI continuity check + local pre-merge hook · sessions archive (distilled → local
 `sessions/archive/`) · `horus resume` minimum-context handoff · **v3 PRD+sessions
-structure** (v0.0.21): PRD-first frontmatter/readers, fresh-project templates,
-v3 consolidate/infer/skills, dashboard PRD rendering, opt-in six-lane migration engine,
-and live migrations for gym-coach + ttrpg with archived lanes preserved verbatim ·
+structure** (v0.0.21): PRD-first frontmatter/readers, fresh-project templates, v3
+consolidate/infer/skills, dashboard PRD rendering, opt-in six-lane migration engine ·
 **signal-based acceptance** (v0.0.22): required pytest checks on main + live-proven
-auto-merge, block v4, execution skill v7 (gate-command/baseline handoffs,
-structure-aware suggestions), v3 routine trailers · **orchestration pilot**
-(v0.0.23, PRs #108–112): Ideas/Brainstorm card + `horus brainstorm` · liveness-verified
-session badges (stale demotion, freshness, cleanup) · horus-hub design doc
-(`research/`) · execution skill v8 orchestration contract — 3 features, 2 vendors,
-2 bounces, orchestrator wrote no feature code · **hub pre-work** (v0.0.24, PRs
-#113–114): JSONL run-event sidecars (registry prefers `result` events, legacy
-fallback) + `horus run --worktree`/`--worker` presets — second orchestration batch,
-zero bounces.
+auto-merge, block v4, execution skill v7 · **orchestration pilot** (v0.0.23): Ideas/
+Brainstorm card + `horus brainstorm`, liveness-verified session badges, horus-hub design
+doc, execution skill v8 orchestration contract · **hub pre-work** (v0.0.24): JSONL
+run-event sidecars (registry prefers `result` events) + `horus run --worktree`/`--worker`
+presets.
 
 **Hooks & projections:** usage→closure hooks for Claude (OAuth `/usage`) + Codex
 (rollouts), advisory + ask-never-force · pre-merge gates both agents · hooks guarded to
 silent no-op on horus-less machines (v0.0.11) · projected artifacts committed as
 continuity (v0.0.11) · `upgrade-project` (direction-aware managed block; `--all`
 registry-wide) · projection-sync badge (per-surface vs installed CLI) · Skill map:
-`horus skill map` + dashboard Skills tab, read-only presence across scopes (v0.0.13).
+`horus skill map` + dashboard Skills tab, read-only presence across scopes (v0.0.13) ·
+**usage-limit survival kit** (v0.0.25): 60s-cached usage snapshots, `horus run`
+preflight (warn ≥80 / refuse ≥95 / `--force`, spawns export `HORUS_RUN_SESSION_ID`/
+`HORUS_RUN_WORKER`), PreToolUse guard — 90% advisory + worker-aware emergency
+state-save at ≥97%, never-deny.
 
 **Dashboard:** read-mostly multi-project view, sumi-e design, async heavy panels ·
 project detail: launch card, context-cache estimate, recent-sessions (read-only
@@ -162,15 +156,11 @@ dedup + Track-on-this-machine · ignore/unignore · `horus start github:…`.
 **Execution & adapters:** adapter contract + Fake/Claude/Codex adapters (multi-account
 via `CLAUDE_CONFIG_DIR`/`CODEX_HOME`) · `run`/`open`/`focus` · execution workflow
 (`execution prompt`/`handoff`, delegation rubric volume×ambiguity×runtime) · cross-agent
-worker marking: per-phase `worker_agent` (native/claude/codex) in template + skill v5,
-spawned via `horus run --agent codex`, proven live 2026-07-03 · hub-orchestrated
-cross-project delegation proven (ttrpg Phase 2 shipped from a horus-harness hub
-session, 2026-07-03) · per-run logs (`~/.horus/logs/runs/`) + `horus tail
-<session-id>` + `run --watch` watcher terminal, built by a delegated claude/work
-worker via branch+PR (v0.0.18) · run status decided by the terminal RESULT event —
-transient tool failures no longer mark a completed run `failed`/rc=0 · registry
-timestamps aware-UTC (legacy naive rows normalized on read) · in-app PTY
-cockpit **retired 2026-06-30** (code dormant; launch/usage moved to Projects tab).
+worker marking (per-phase `worker_agent`, spawned via `horus run --agent codex`) ·
+hub-orchestrated cross-project delegation proven (ttrpg Phase 2 from a harness hub
+session) · per-run logs + `horus tail` + `run --watch` watcher terminal (v0.0.18) · run
+status decided by the terminal RESULT event · registry timestamps aware-UTC · in-app PTY
+cockpit **retired 2026-06-30** (launch/usage moved to Projects tab).
 
 **Companion & launch:** Tk mascot (windowless on Windows, layered background on Linux) ·
 worker badge on the mascot: per-agent running / awaiting-review / failed counts from the
@@ -204,6 +194,11 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   portability bar; the `horus` console script is the only guaranteed spelling.
 - **Hooks advise and ask, never override** — injected context defers to the user's
   explicit command; Stop asks (close now vs push ahead); never strand uncommitted work.
+  The emergency state-save keeps this bar: never denies the tool call; worker tree =
+  full-tree commit to the disposable branch (+push, `-u origin` fallback); main
+  checkout = `.horus/**`-only rescue ref via a temp `GIT_INDEX_FILE` — never touching
+  the user's index/HEAD/worktree. Hook sentinels are machine-global under `/tmp`:
+  probe session ids must be unique across supervisor/worker probes (re-arm suppression).
 - **Three OS targets** (Windows/Linux/macOS); projections move together across agent
   surfaces (Claude + Codex), drift user-visible; sync compares each surface to the
   installed CLI, never surfaces to each other.
@@ -226,6 +221,19 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   workflow tests require a real distinct worker. Codex auto-edit workers get a
   read-only `.git` and no socket bind: the supervisor owns commit, push, and every
   runtime gate — write briefs accordingly.
+- **Model tier is a delegation dimension — match it to the work, don't default to
+  frontier.** Token burn ≈ (tool-call turns) × (resident context), and cache reads of
+  that context are ~80% of the cost — so the lever is keeping the *expensive* tier's
+  context small: push tool-heavy exploration/verification into subagents (or workers)
+  that return distilled notes, not file dumps. (The 2026-07-04 burn was a 227-turn Opus
+  session re-reading ~156K/turn; the concurrent worker+supervisor on the *same* account
+  doubled the 5h-window drain.) Tiers: **Haiku** — mechanical, verifiable sweeps (tests,
+  grep/inventory, status checks); 200K context, no `effort`/thinking, so never the
+  judgment gate. **Sonnet** — most implementation. **Opus** — design, ambiguity, and the
+  verify/accept gate. The main-session model can't be swapped per tool call, so cheaper
+  execution comes only via a subagent/worker; run it on the **isolated** account, never
+  the ambient one, so it doesn't share the supervisor's 5h window. Cheaper tier ×
+  separate account is the double win.
 - **Orchestration (proven 2026-07-04, contract in execution skill v8):** parallel
   features run orchestrator > supervisor > worker — worktree per worker; claude
   workers `full-auto` (default posture stalls headless, exits 0 with zero diffs);
@@ -264,6 +272,10 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   `sessions/archive/` (local).
 - **Frontmatter:** this file carries `current_focus` / `next_action` / `next_prompt` /
   `execution_recommendation` / `last_updated` — the tooling reads them PRD-first
-  (`resolve_focus`), so no shims are needed.
+  (`resolve_focus`), so no shims are needed. **`next_action` / `next_prompt` /
+  `execution_recommendation` each name an explicit model tier** for the next step
+  (Haiku/Sonnet/Opus per the model-tier rule). If the user proposes starting a session
+  on a heavier model than the work needs, pushing back — recommend the lower tier, or a
+  delegated worker on the isolated account — is expected, not overstepping.
 - **Closure:** update this file's frontmatter + backlog/shipped + session note +
   `close --commit --push`. One `consolidate` pass at most; do not chase warnings.

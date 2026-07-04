@@ -1,5 +1,5 @@
 ---
-status: active
+status: completed
 current_feature: "Usage-limit survival kit (backlog #1): worker-aware emergency state-save + horus run usage preflight + PreToolUse usage guard — one delegated phase (claude/personal, Opus 4.8, full-auto, worktree)."
 supervisor_tier: frontier
 worker_tier: frontier
@@ -16,7 +16,7 @@ hook installation, run launch path) and land together as one PR.
 
 | phase | status | difficulty | mode | worker_agent | worker_tier | delegation_basis | handoff_note | review gate |
 |---|---|---|---|---|---|---|---|---|
-| survival-kit | delegated | medium-high | delegated | claude (account personal, model opus, posture full-auto, worktree) | frontier | see frontmatter | `.horus/temp/survival-kit.md` (worker creates in worktree) | full pytest suite green (required CI on the PR) + supervisor live probes: (1) `horus run` preflight warn/refuse against a faked usage report, (2) guard hook rescue-commit in a scratch worker worktree, (3) main-checkout rescue ref leaves index/worktree untouched |
+| survival-kit | merged (PR #115 → v0.0.25; one bounce: no-upstream rescue push; supervisor reproduced CI green on 8319e4e + three live probes incl. sentinel-suppression cross-check; main push CI green post-merge) | medium-high | delegated | claude (account personal, model opus, posture full-auto, worktree) | frontier | see frontmatter | `.horus/temp/survival-kit.md` (worker creates in worktree) | full pytest suite green (required CI on the PR) + supervisor live probes: (1) `horus run` preflight warn/refuse against a faked usage report, (2) guard hook rescue-commit in a scratch worker worktree, (3) main-checkout rescue ref leaves index/worktree untouched |
 
 ## Phase spec — survival-kit
 
