@@ -87,7 +87,7 @@ def test_distill_history_skill_v3_targets_archive():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 7
+    assert execution.version == 8
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -111,6 +111,12 @@ def test_execution_skill_requires_real_delegation_for_model_separation():
     assert "one runtime probe" in execution.content
     assert "No proof narratives" in execution.content
     assert "pre-existing failure baseline" in execution.content
+    # v8: orchestrator > supervisor > worker — the pilot's lessons, encoded.
+    assert "orchestrator implements nothing" in execution.content
+    assert "One git worktree per worker" in execution.content
+    assert "--posture full-auto" in execution.content
+    assert "Bounce protocol" in execution.content
+    assert "Merge sequencing" in execution.content
 
 
 def test_execution_template_carries_worker_agent_marking():

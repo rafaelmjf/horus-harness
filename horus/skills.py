@@ -525,7 +525,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # Horus execution supervision
 
@@ -574,6 +574,37 @@ commit counts as reproduction of the test gate — do not rerun the suite locall
 a required check already covers it. What always stays yours: **one live probe of the
 changed runtime surface** (mocked tests bless nonexistent flags; a screenshot or one
 real command run is the floor). Never accept a phase on the handoff note's claims.
+
+## Orchestrating parallel supervisors (orchestrator > supervisor > worker)
+
+When two or more features can run in parallel, a lean orchestrator session can
+coordinate multiple feature-supervisor sessions (proven 2026-07-04: three features,
+two vendors, two cheap bounces, orchestrator wrote no feature code):
+
+- **The orchestrator implements nothing.** It plans `execution.md`, routes, bounces,
+  and accepts. Its hands touch only git mechanics (commit/PR for read-only-.git
+  workers), gate commands, and continuity on main. Feature supervisors own
+  implementation and drive their own runtime gates.
+- **One git worktree per worker** for same-repo parallelism; spawn each with
+  `horus run --path <worktree> --watch`. Only the orchestrator edits `.horus/` on main.
+- **Posture matrix:** a branch-owning claude worker needs `--posture full-auto` — the
+  default posture stalls headless waiting for permission grants and exits 0 with zero
+  diffs, a false "completed". A codex worker runs `auto-edit` with a read-only `.git`,
+  so the orchestrator owns its commit/push/PR.
+- **Briefs carry fences and a sandbox-runnable gate.** Name what each worker must not
+  touch (the other workers' surfaces + PRD.md). Codex sandboxes may lack network:
+  give a gate the worker can actually run (compileall + targeted tests) or state that
+  the orchestrator's gate run is the first full-suite pass.
+- **Bounce protocol:** on a failed signal, resume the same worker session
+  (`horus run --resume <id>`) with the exact failure output — its context is intact
+  and the fix is cheap. Do not fix a worker's phase in the orchestrator context.
+- **Merge sequencing:** with non-strict required checks, two individually green PRs
+  can land a red main (semantic conflict between phases). After each merge in a
+  batch, watch main's push CI before arming the next PR. Cross-phase test glue after
+  both phases are accepted is orchestrator mechanics, not a new phase.
+- Acceptance per feature is the standard contract: required CI green on the exact
+  commit + the handoff gate command run once by the accepting tier + the user's
+  eyeball for visual surfaces.
 
 ## Steps
 
@@ -697,7 +728,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 9, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 3, _INFER_SKILL),
-    Skill("horus-execution", 7, _EXECUTION_SKILL),
+    Skill("horus-execution", 8, _EXECUTION_SKILL),
 )
 
 
