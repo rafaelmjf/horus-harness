@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Signal-based acceptance shipped (v0.0.22, PRs #106–107): pytest is a required check on main, auto-merge proven live, block v4 + execution skill v7 redefine gate reproduction as deterministic signals + one runtime probe, handoff notes carry a rerunnable gate command. Next arc: orchestrator > supervisor > worker, gated on the new ritual proving out in a real batch."
-next_action: "Run the next delegated batch under the signal-based ritual (catalog niceties is the top small code item and a fine guinea pig), then the orchestrator pilot: one session coordinating supervisors across two repos via deterministic signals only."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md. Signal-based acceptance shipped in v0.0.22 (required pytest checks on main, block v4, execution skill v7 gate contract). Next: run a real delegated batch under the new ritual — catalog niceties (private-repo badge + 'N ignored' affordance) — then the orchestrator pilot from the backlog."
-execution_recommendation: "continue-as-is for catalog niceties (narrow dashboard/catalog UX slice); switch to plan-execution when the orchestrator pilot starts — it exists to exercise the execution workflow across repos."
+current_focus: "Orchestration pilot batch running (execution.md): A brainstorm-dashboard on claude/work Opus, C badge-liveness on codex GPT-5.5 (parallel, separate worktrees), B hub-design doc queued behind C. This session orchestrates on deterministic signals only (required CI, RESULT events, handoff gate commands, Rafa's eyeball for UI). Signal-based acceptance shipped v0.0.22."
+next_action: "Observe the wave-1 workers (A + C), accept on signals per execution.md's orchestrator contract, spawn B-hub-design on codex when C's PR is up, then distill the pilot verdict (keep/adjust/drop the orchestrator tier) into PRD."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify the current branch against origin. Read .horus/PRD.md and .horus/execution.md (orchestration pilot, active). Check worker state: registry/badge, feat/brainstorm-dashboard and feat/session-liveness branches, open PRs and their required checks, handoff notes in the worktrees' .horus/temp/. Accept on signals only; B-hub-design starts on codex when C's PR is up."
+execution_recommendation: "plan-execution — the orchestration pilot batch is active in execution.md; the orchestrator session coordinates and accepts, it does not implement."
 last_updated: 2026-07-04
 ---
 
@@ -58,10 +58,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 3. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
    dashboard `/health` per release.
-4. **Orchestrator tier pilot** (gated on one real batch under the signal-based
-   ritual): a session coordinating supervisors across two repos via deterministic
-   signals only (required CI, RESULT events, `close --check` rc) — plans and routing,
-   no verification of its own; token cost measured vs the 2026-07-03 hub rounds.
+4. **Orchestration pilot batch (active, see execution.md):** three parallel features
+   run as orchestrator > supervisor > worker — **A** dashboard Ideas/Brainstorm card
+   (scoped-context session that drafts an implementation plan; claude/work Opus),
+   **B** self-hostable hub design doc (central agent-launch place à la the gym app,
+   not in the uv package; codex), **C** trustworthy session badges (liveness-verified
+   registry counts, stale demotion, "as of" freshness in badge + dashboard; codex).
 
 ### Open, unscheduled
 
