@@ -15,7 +15,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 4
+BLOCK_VERSION = 5
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -73,6 +73,13 @@ Working discipline (every session, whether or not the work is delegated):
 - **Put safety in the code, not the reviewer.** Guards and invariants prevent the
   dangerous class of bug; review — human or model — misses things, so it is a help, not
   a guarantee.
+- **Ground token-intensive actions before spending.** Before an action that fans out
+  many subagents or otherwise burns a large amount of tokens (multi-agent workflows,
+  broad research sweeps, whole-repo re-reads, adversarial verification passes), first
+  state why the cheaper path (a direct search, a single agent, a targeted read) is
+  insufficient, size the spend to the task, and — unless already authorized for this
+  session — get the user's confirmation. Thoroughness is a dial, not a default: match
+  it to the question, and prefer the lightest tool that answers it.
 
 Instruction synchronization:
 
