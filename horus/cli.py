@@ -906,18 +906,38 @@ def _is_host_restart_command(command: str, host_pid: str) -> bool:
     The recognised spellings are OS-flavoured *data* (POSIX kill verbs + Windows
     taskkill/Stop-Process), not platform code, so this stays cross-OS by design."""
     lowered = command.lower()
-    # Relaunching the Horus app/dashboard from inside its own host.
-    if re.search(r"\bhorus\b.*\b(app|dashboard)\b", lowered) or re.search(
-        r"-m\s+horus\s+(app|dashboard)\b", lowered
+    # A token that sits where a command can start: line start, after a shell
+    # separator/subshell, or after a common wrapper. Anchoring here is what keeps a
+    # mere *mention* (a path like horus/dashboard.py, a grep pattern, a pytest
+    # target) from matching — only invocations block.
+    cmd_pos = (
+        r"(?:^|[;&|(`]\s*|\$\(\s*"
+        r"|\b(?:sudo|exec|nohup|setsid|env|time|xargs|command)\s+"
+        r"|\b(?:uv|uvx|poetry|pdm|pipx)\s+run\s+)"
+    )
+    # Relaunching the Horus app/dashboard from inside its own host: `horus` invoked
+    # as a command with app/dashboard as its immediate subcommand.
+    if re.search(rf"{cmd_pos}horus\s+(app|dashboard)\b", lowered):
+        return True
+    if re.search(r"-m\s+horus(\.cli)?\s+(app|dashboard)\b", lowered):
+        return True
+    # A service-level restart/stop of the dashboard host (systemd or SysV spelling).
+    if re.search(
+        r"\b(systemctl|service)\b[^;&|]*"
+        r"\b(restart|try-restart|reload-or-restart|stop|kill)\b[^;&|]*\bhorus",
+        lowered,
+    ) or re.search(r"\bservice\b[^;&|]*\bhorus[^;&|]*\b(restart|stop)\b", lowered):
+        return True
+    # A kill verb invoked as a command, aimed — within the same command segment —
+    # at the host PID specifically…
+    kill_verb = rf"{cmd_pos}(taskkill(\.exe)?|stop-process|kill|pkill|killall)\b"
+    if host_pid and re.search(rf"{kill_verb}[^;&|]*\b{re.escape(host_pid)}\b", lowered):
+        return True
+    # …or at the process that *is* the host: the Python interpreter, or the host
+    # identified by name (`horus` / `dashboard`).
+    if re.search(
+        rf"{kill_verb}[^;&|]*(\bpython(w)?(\.exe)?\b|\bhorus\b|\bdashboard\b)", lowered
     ):
-        return True
-    # A kill verb aimed at the host PID specifically.
-    kill_verb = r"(taskkill|stop-process|\bkill\b|pkill|killall)"
-    if host_pid and re.search(rf"{kill_verb}.*\b{re.escape(host_pid)}\b", lowered):
-        return True
-    # A kill verb aimed at the process that *is* the host: the Python interpreter, or
-    # the host identified by name (`horus` / `dashboard`).
-    if re.search(rf"{kill_verb}.*(\bpython(w)?(\.exe)?\b|\bhorus\b|\bdashboard\b)", lowered):
         return True
     return False
 

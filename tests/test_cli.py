@@ -1270,8 +1270,33 @@ def test_guard_blocks_kill_of_host_by_name(monkeypatch, capsys):
         _assert_denied(*_guard_hook_run(monkeypatch, capsys, command=cmd))
 
 
+def test_guard_blocks_service_restart_of_dashboard(monkeypatch, capsys):
+    for cmd in (
+        "sudo systemctl restart horus-dashboard",
+        "systemctl stop horus-dashboard.service",
+        "sudo service horus-dashboard restart",
+    ):
+        _assert_denied(*_guard_hook_run(monkeypatch, capsys, command=cmd))
+
+
 def test_guard_allows_benign_command_when_hosted(monkeypatch, capsys):
     for cmd in ("git commit -m x", "ls -la", "gh pr merge 15", "kill -9 999"):
+        rc, out = _guard_hook_run(monkeypatch, capsys, command=cmd, host_pid="4242")
+        assert rc == 0 and out.strip() == "", cmd
+
+
+def test_guard_allows_mere_mentions_of_the_host(monkeypatch, capsys):
+    # Read-only commands that merely *mention* horus/dashboard/pty in paths or
+    # patterns must not block (real false positives from a hosted session).
+    for cmd in (
+        "wc -l /home/u/horus-harness/horus/dashboard.py horus/pty_host.py",
+        'grep -rn "dashboard|pty|launch" /home/u/projects/horus-harness',
+        "python -m pytest tests/test_dashboard.py -k launch",
+        "git -C ~/projects/horus-harness log --oneline -- horus/dashboard.py",
+        "systemctl status horus-dashboard",
+        'echo "how to kill the horus dashboard"',
+        "cat docs/horus-dashboard-runbook.md",
+    ):
         rc, out = _guard_hook_run(monkeypatch, capsys, command=cmd, host_pid="4242")
         assert rc == 0 and out.strip() == "", cmd
 
