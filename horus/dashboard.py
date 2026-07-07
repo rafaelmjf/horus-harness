@@ -2622,6 +2622,7 @@ def _project_brainstorm_form(i: int, project: dict[str, Any], accounts: list[dic
         "<option value='claude'>Claude Code</option><option value='codex'>Codex</option>"
         "</select></div>"
         f"<div class='field'><label>Account</label><select name='account'>{opts}</select></div>"
+        f"<div class='field'><label>Open in</label><select name='target'>{_launch_target_options()}</select></div>"
         "</div>"
         "<div class='intent-row'>"
         "<button class='btn btn-go' type='submit'>&#9656; Start brainstorm</button>"
@@ -3290,10 +3291,12 @@ def process_brainstorm(
 
     Same safety model as :func:`process_launch` — a project is addressed by its
     **index** into the registered list (never an arbitrary path) and an account
-    must be in the **known** set. Launches a tracked brainstorm session in its own
-    terminal (``horus.brainstorm`` → ``horus.launch``); the session drafts a plan
-    to ``.horus/temp/brainstorm-<slug>.md`` and never edits PRD.md. Returns
-    ``brainstormed=<id8>`` on success or ``error=<reason>``."""
+    must be in the **known** set. ``target=app`` (default — the only shape that
+    works on a hosted/headless dashboard) opens the brainstorm as an in-app
+    terminal tab (``tab=<term_id>``); ``target=window`` opens a native OS console
+    (``brainstormed=<id8>``). Either way the session drafts a plan to
+    ``.horus/temp/brainstorm-<slug>.md`` and never edits PRD.md. Failures return
+    ``error=<reason>``."""
     projects = config.load_projects() if projects is None else projects
     known = _known_aliases() if known_aliases is None else known_aliases
 
@@ -3311,6 +3314,20 @@ def process_brainstorm(
         project_dir = Path(projects[int(raw_project)])
     except (ValueError, IndexError):
         return "error=" + quote_plus("unknown project")
+
+    target = (form.get("target") or "app").strip()
+    if target == "app":
+        # In-app terminal: the brainstorm TUI runs under a PTY in the session-host
+        # (like process_launch's app target) — works on a headless hosted dashboard,
+        # where launch.launch_interactive would fail wanting an OS window.
+        try:
+            term_id, _note = brainstorm.start_brainstorm_app(
+                project_dir=project_dir, topic=topic, agent=agent, account=account,
+                host=pty_host.host,
+            )
+        except (ValueError, adapters.AccountMismatch) as exc:
+            return "error=" + quote_plus(str(exc))
+        return f"tab={quote_plus(term_id)}"
 
     try:
         result = brainstorm.start_brainstorm(
@@ -3784,9 +3801,16 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/brainstorm":
             form = self._read_form()
             query = process_brainstorm(form)
-            # PRG: redirect back to the project detail page so F5 doesn't re-launch.
+            # PRG: an in-app brainstorm (``tab=<id>``) lands on the Sessions cockpit
+            # with its sub-tab active, like any app launch; window/error redirect back
+            # to the project detail page so F5 doesn't re-launch.
             raw = (form.get("project") or "").strip()
-            self._redirect(f"/project?i={raw}&{query}" if raw.isdigit() else f"/?{query}")
+            if query.startswith("tab="):
+                self._redirect(f"/sessions?{query}")
+            elif raw.isdigit():
+                self._redirect(f"/project?i={raw}&{query}")
+            else:
+                self._redirect(f"/?{query}")
             return
 
         form = self._read_form()

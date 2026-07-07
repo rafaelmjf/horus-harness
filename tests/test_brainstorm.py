@@ -133,6 +133,38 @@ def test_start_brainstorm_surfaces_launch_failure(tmp_path, monkeypatch):
     assert Registry.default().all() == []  # nothing tracked on a failed launch
 
 
+def test_start_brainstorm_app_runs_under_session_host(tmp_path, monkeypatch):
+    # The headless-safe twin: the brainstorm TUI runs under the session-host PTY
+    # (no native OS window), seeded with the same scoped prompt + note contract.
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    seen = {}
+
+    class FakeHost:
+        def start(self, **kwargs):
+            seen.update(kwargs)
+            return "pty-11"
+
+    term_id, note_path = brainstorm.start_brainstorm_app(
+        project_dir=root, topic="offline sync", agent="claude", account="work",
+        posture="plan", model="opus", host=FakeHost(),
+    )
+
+    assert term_id == "pty-11"
+    assert note_path == ".horus/temp/brainstorm-offline-sync.md"
+    assert seen["agent"] == "claude" and seen["account"] == "work"
+    assert seen["posture"] == "plan" and seen["model"] == "opus"
+    assert seen["prompt"].startswith("Brainstorm session for the demo project.")
+    assert seen["title"] == "demo · brainstorm"
+    assert (root / ".horus" / "temp").is_dir()
+
+
+def test_start_brainstorm_app_empty_topic_raises(tmp_path):
+    root = _project(tmp_path)
+    with pytest.raises(ValueError):
+        brainstorm.start_brainstorm_app(project_dir=root, topic="  ", host=object())
+
+
 def test_start_brainstorm_uses_shared_launch_path(tmp_path, monkeypatch):
     # The CLI/dashboard twin both funnel through launch.launch_interactive.
     _home(tmp_path, monkeypatch)

@@ -1222,6 +1222,8 @@ def test_project_detail_renders_brainstorm_card(tmp_path, monkeypatch):
     assert "name='topic'" in page and "required" in page
     assert "Start brainstorm" in page
     assert ".horus/temp/" in page  # tells the user where the draft lands
+    # Destination picker, like the launch form: in-app always offered (headless-safe).
+    assert page.count("value='app'>In-app terminal") >= 1
 
 
 def test_process_brainstorm_launches_scoped_tracked_session(tmp_path, monkeypatch):
@@ -1240,7 +1242,7 @@ def test_process_brainstorm_launches_scoped_tracked_session(tmp_path, monkeypatc
     monkeypatch.setattr(registry_mod, "process_alive", lambda pid: pid == 909)
 
     query = dashboard.process_brainstorm(
-        {"project": "0", "agent": "fake", "topic": "offline sync"},
+        {"project": "0", "agent": "fake", "topic": "offline sync", "target": "window"},
         projects=[str(proj)], known_aliases=set(),
     )
     assert query.startswith("brainstormed=")
@@ -1281,11 +1283,45 @@ def test_post_brainstorm_route_redirects_prg(tmp_path, monkeypatch):
 
     resp = _post(
         "/brainstorm",
-        {"project": "0", "agent": "fake", "topic": "a topic"},
+        {"project": "0", "agent": "fake", "topic": "a topic", "target": "window"},
         origin="http://127.0.0.1:8765",
     )
     assert resp["status"] == 303
     assert any(k == "Location" and v.startswith("/project?i=0&brainstormed=") for k, v in resp["headers"])
+
+
+def test_process_brainstorm_defaults_to_in_app_terminal(tmp_path, monkeypatch):
+    """No target (or target=app) runs the brainstorm under the session-host PTY —
+    the shape that works on a hosted/headless dashboard, where a native window
+    launch would fail."""
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    captured = {}
+
+    def fake_start(**kwargs):
+        captured.update(kwargs)
+        return "pty-5"
+
+    monkeypatch.setattr(dashboard.pty_host.host, "start", fake_start)
+    query = dashboard.process_brainstorm(
+        {"project": "0", "agent": "claude", "topic": "offline sync"},
+        projects=[str(proj)], known_aliases=set(),
+    )
+    assert query == "tab=pty-5"
+    assert captured["prompt"].startswith("Brainstorm session for the demo project.")
+    assert "offline sync" in captured["prompt"]
+    assert captured["title"] == "demo · brainstorm"
+    assert (proj / ".horus" / "temp").is_dir()
+
+
+def test_post_brainstorm_app_lands_on_sessions_cockpit(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    monkeypatch.setattr(dashboard, "process_brainstorm", lambda form, **kw: "tab=pty-5")
+    resp = _post("/brainstorm", {"project": "0", "topic": "x"}, origin="http://127.0.0.1:8765")
+    assert resp["status"] == 303
+    assert dict(resp["headers"]).get("Location") == "/sessions?tab=pty-5"
 
 
 def test_brainstorm_notice_banner():

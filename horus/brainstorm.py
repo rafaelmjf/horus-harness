@@ -80,6 +80,47 @@ def build_prompt(project_dir: Path | str, topic: str) -> str:
     )
 
 
+def _prepare(project_dir: Path | str, topic: str) -> tuple[Path, str]:
+    """Validate the topic, build the scoped prompt, and ensure the note's parent
+    dir exists so the session can drop the draft. Returns (root, prompt)."""
+    topic = topic.strip()
+    if not topic:
+        raise ValueError("a brainstorm needs a non-empty topic")
+    root = Path(project_dir).resolve()
+    prompt = build_prompt(root, topic)
+    (root / ".horus" / _TEMP_DIRNAME).mkdir(parents=True, exist_ok=True)
+    return root, prompt
+
+
+def start_brainstorm_app(
+    *,
+    project_dir: Path | str,
+    topic: str,
+    agent: str = "claude",
+    account: str | None = None,
+    posture: str = "default",
+    model: str | None = None,
+    host=None,
+) -> tuple[str, str]:
+    """Start the brainstorm as an in-app PTY terminal (headless-safe); return
+    ``(term_id, note_path)``.
+
+    Same scoped prompt and output contract as :func:`start_brainstorm`, but the
+    session runs in the dashboard's session-host instead of a native OS window —
+    the only launch shape that works on a hosted/headless dashboard.
+    """
+    root, prompt = _prepare(project_dir, topic)
+    if host is None:  # late import: brainstorm is also used by the windowless CLI
+        from horus import pty_host
+
+        host = pty_host.host
+    term_id = host.start(
+        agent=agent, project_dir=root, account=account, posture=posture,
+        model=model, prompt=prompt, title=f"{root.name} · brainstorm",
+    )
+    return term_id, note_relpath(topic)
+
+
 @dataclass
 class BrainstormResult:
     """Outcome of starting a brainstorm: the launch result plus where the draft lands."""
@@ -111,14 +152,8 @@ def start_brainstorm(
     :class:`BrainstormResult` wrapping the (possibly failed) launch — the same
     return-don't-raise posture as :func:`launch.launch_interactive`.
     """
+    root, prompt = _prepare(project_dir, topic)
     topic = topic.strip()
-    if not topic:
-        raise ValueError("a brainstorm needs a non-empty topic")
-
-    root = Path(project_dir).resolve()
-    prompt = build_prompt(root, topic)
-    # Ensure the write target's parent exists so the session can drop the note.
-    (root / ".horus" / _TEMP_DIRNAME).mkdir(parents=True, exist_ok=True)
 
     result = launch_fn(
         agent=agent,
@@ -143,4 +178,5 @@ __all__ = [
     "note_relpath",
     "slugify",
     "start_brainstorm",
+    "start_brainstorm_app",
 ]
