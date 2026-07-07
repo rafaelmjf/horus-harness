@@ -2451,14 +2451,18 @@ def _account_add_form() -> str:
 
 
 def _account_launch_form(alias: str, agent: str = "claude") -> str:
-    """One-click fresh session as this account in a native OS terminal."""
+    """One-click fresh session as this account. Native terminal on a desktop; the
+    in-app terminal on a headless host (so it works over the hosted dashboard)."""
+    windowed = launcher.has_display()
+    target = "window" if windowed else "app"
+    where = "a native terminal" if windowed else "the in-app terminal"
     return (
         "<form class='acct-launch' method='post' action='/launch' style='display:inline'>"
         f"<input type='hidden' name='account' value='{html.escape(alias, quote=True)}'>"
         f"<input type='hidden' name='agent' value='{html.escape(agent, quote=True)}'>"
         "<input type='hidden' name='mode' value='fresh'>"
-        "<button class='mini-session' type='submit' name='target' value='window' "
-        "title='+ session - open a fresh session as this account in a native terminal'>+</button></form>"
+        f"<button class='mini-session' type='submit' name='target' value='{target}' "
+        f"title='+ session - open a fresh session as this account in {where}'>+</button></form>"
     )
 
 
@@ -2502,8 +2506,21 @@ _POSTURE_OPTIONS = "".join(
 
 
 
+def _launch_target_options() -> str:
+    """Launch destinations for the "Open in" select. The in-app terminal works
+    everywhere (local and hosted/headless) so it's always offered and is the
+    default; native terminal / VS Code need a desktop session, so they appear
+    only when one is present (a headless hosted dashboard hides them)."""
+    opts = "<option value='app'>In-app terminal</option>"
+    if launcher.has_display():
+        opts += "<option value='window'>Native terminal</option>"
+        opts += "<option value='vscode'>VS Code</option>"
+    return opts
+
+
 def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[str, Any]]) -> str:
-    """Pick agent/account/posture and launch fresh or resume in a native window."""
+    """Pick agent/account/posture and launch fresh or resume; in-app terminal by
+    default, native window / VS Code when a desktop session is available."""
     opts = "<option value=''>ambient</option>" + "".join(
         f"<option value='{html.escape(a['alias'], quote=True)}'>{html.escape(a['alias'])}</option>"
         for a in accounts
@@ -2519,10 +2536,7 @@ def _project_launch_form(i: int, project: dict[str, Any], accounts: list[dict[st
         "</div>"
         "<div class='frow'>"
         f"<div class='field'><label>Permission posture</label><select name='posture'>{_POSTURE_OPTIONS}</select></div>"
-        "<div class='field'><label>Open in</label><select name='target'>"
-        "<option value='window'>Native terminal</option>"
-        "<option value='vscode'>VS Code</option>"
-        "</select></div>"
+        f"<div class='field'><label>Open in</label><select name='target'>{_launch_target_options()}</select></div>"
         "</div>"
         "<div class='intent-row'>"
         "<button class='btn btn-go' type='submit' name='mode' value='resume'>&#9656; Resume - next action</button>"
