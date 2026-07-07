@@ -55,3 +55,26 @@ def test_account_quick_button_uses_window_target_on_desktop(monkeypatch):
     monkeypatch.setattr(dashboard.launcher, "has_display", lambda: True)
     html = dashboard._account_launch_form("work")
     assert "name='target' value='window'" in html
+
+
+# --- in-app terminal panel is embedded where launches land -------------------
+import types
+
+
+def _fake_term(tid="term-abc", title="claude", alive=True):
+    return types.SimpleNamespace(term_id=tid, title=title, alive=alive)
+
+
+def test_terminal_section_empty_without_terminals():
+    assert dashboard._terminal_section(None) == ""
+    assert dashboard._terminal_section([]) == ""
+
+
+def test_terminal_section_embeds_xterm_and_pane_for_live_terminal():
+    section = dashboard._terminal_section([_fake_term("term-abc")])
+    assert "/assets/xterm/xterm.js" in section          # assets loaded
+    assert "horusAttachTerm" in section                 # attach JS present
+    assert "data-tid='term-abc'" in section             # a pane for the PTY
+    assert "EventSource('/pty/stream" in section          # SSE wiring
+    # the bootstrap reads ?tab= to activate the launched session
+    assert "URLSearchParams(location.search).get('tab')" in section

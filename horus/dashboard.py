@@ -1848,6 +1848,7 @@ def render_index(
     *,
     notice: str = "",
     defer: bool = False,
+    terminals: list[pty_host.PtyTerminal] | None = None,
 ) -> str:
     records = sessions or []
     live = _live_count(records)
@@ -1870,7 +1871,7 @@ def render_index(
     else:
         projects_part = _projects_section_html(projects)
     body_html = (
-        f"{notice}<div class='wrap ov-shell'>{accounts_placeholder}<div class='ov-col'>"
+        f"{notice}{_terminal_section(terminals)}<div class='wrap ov-shell'>{accounts_placeholder}<div class='ov-col'>"
         f"{projects_part}"
         f"<div class='band tight'>{remote}</div>"
         "</div></div>"
@@ -2039,7 +2040,23 @@ def _prd_shipped_panel_html(prd: dict[str, Any]) -> str:
     )
 
 
-def render_project(p: dict[str, Any], *, index: int | None = None, notice: str = "") -> str:
+def _terminal_section(terminals: list[pty_host.PtyTerminal] | None) -> str:
+    """Embed the in-app terminal panel (xterm assets + panel + bootstrap JS) when
+    any PTY sessions are live on the host. Rendered on the project/index pages so a
+    session launched with ``target=app`` (the default on a headless host) has a
+    place to attach — the ``?tab=`` in the post-launch redirect activates it."""
+    if not terminals:
+        return ""
+    return (
+        f"{_TERMINAL_HEAD}<section class='band'><div class='wrap'>"
+        f"{_terminal_panel(terminals)}</div></section>{_XTERM_ATTACH_JS}{_TERMINAL_JS}"
+    )
+
+
+def render_project(
+    p: dict[str, Any], *, index: int | None = None, notice: str = "",
+    terminals: list[pty_host.PtyTerminal] | None = None,
+) -> str:
     idx = 0 if index is None else index
     git = p.get("git") or {}
     branch = html.escape(git.get("branch") or "-")
@@ -2187,7 +2204,7 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
         f"{_manage_integration_panel(idx, bool(p.get('artifacts_stale'))) if index is not None else ''}</div></div>"
     )
     body = (
-        f"{notice}<section class='band'><div class='wrap'>"
+        f"{notice}{_terminal_section(terminals)}<section class='band'><div class='wrap'>"
         f"<div class='crumb'><a href='/'>Projects</a><span>/</span><span class='mono'>{html.escape(p['name'])}</span></div>"
         "<div class='detail-top'><div>"
         f"<h1>{html.escape(p['name'])}</h1><div class='sub'>{status_badges}</div></div>"
@@ -3267,6 +3284,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(render_index(
                 [], gather_sessions(),
                 notice=_notice(parse_qs(parsed.query)), defer=True,
+                terminals=pty_host.host.terminals(),
             ))
             return
         if parsed.path == "/github-catalog":
@@ -3392,6 +3410,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(render_project(
                 project, index=idx,
                 notice=_notice(parse_qs(parsed.query)),
+                terminals=pty_host.host.terminals(),
             ))
             return
         self._send(_page("Not found", "<p>Not found.</p>"), 404)
