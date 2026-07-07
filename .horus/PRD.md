@@ -1,9 +1,9 @@
 ---
 status: active
 current_focus: "v0.0.25 ARMED 2026-07-05 (uv tool install --force --python 3.12 + upgrade-project --all --apply → PreToolUse usage guard in all 4 projects, verified; desktop app restart still manual). From here: hub Phase 4 (minimal launch) + session-id hardening shipped (hub PRs #7/#8); the model-tier delegation rule + per-step tier convention added to Rules/frontmatter; and scheduled/usage-aware autonomous continuation proven hand-rolled (systemd timer → horus run at 02:51) and captured as a backlog item + 2026-07-05 session note."
-next_action: "Backlog #1 [ops] orphan reap [tier: Sonnet inline; Opus only for the hook-guard/process-tree safety review], or promote the scheduled/usage-aware autonomous-continuation feature (see Open, unscheduled + the 2026-07-05 session note). Hub work continues in ~/projects/horus-hub per its PRD (check the 02:51 scheduled run's held PR, then Phase 5 / detach-launch)."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md — note the model-tier rule + per-step tier tags. v0.0.25 is armed. Candidates: backlog #1 orphan reap (Sonnet), the scheduled-continuation feature (Open, unscheduled), or hub Phase 5 / detach-launch in ~/projects/horus-hub. Default worker tier = Sonnet; Opus for the verify gate."
-execution_recommendation: "continue-as-is for orphan reap (small, Sonnet/inline) and grooming the scheduled-continuation idea. plan-execution if implementing the scheduled-continuation primitives (several horus run flags + a scheduler — a real batch: Opus supervisor + Sonnet workers). Default worker tier = Sonnet; reserve Opus for design + the verify/accept gate; Haiku for mechanical sweeps."
+next_action: "Backlog #6 [feature] enforce commit-and-push for every Horus-managed project (owner-requested 2026-07-07 after hub work lingered unpushed) — design + build in a FRESH harness session: extend `horus close --check` to fail on a dirty tree / unpushed commits (portable core), then a harness-managed Stop hook that runs it (warn by default; the guard-host hook in native_hooks.py is the install precedent). Read backlog #6 for the design options + considerations (warn-vs-block, branch-first, opt-out). [tier: Opus for the design + gate; Sonnet for the mechanical hook wiring.] Alternatives if deprioritized: #1 orphan reap, or the scheduled/usage-aware autonomous-continuation feature (Open, unscheduled)."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md — note the model-tier rule + per-step tier tags. v0.0.25 is armed. LEAD next action: backlog #6 — enforce commit-and-push for every Horus-managed project (extend `horus close --check` for git clean/pushed + a harness-managed Stop hook to run it; see #6 for design options). Alternatives: #1 orphan reap (Sonnet), the scheduled-continuation feature (Open, unscheduled), or hub work in ~/projects/horus-hub. Default worker tier = Sonnet; Opus for design + the verify gate."
+execution_recommendation: "continue-as-is for backlog #6 (commit-and-push enforcement) — it's a small, well-scoped two-part change (a `horus close --check` extension + one Stop hook reusing native_hooks machinery); a single Opus thread that designs the warn-vs-block/branch-first/opt-out semantics and reproduces the gate live is the right shape, not a fan-out. Also continue-as-is for orphan reap (Sonnet/inline). plan-execution only if implementing the scheduled-continuation primitives (several horus run flags + a scheduler — a real batch: Opus supervisor + Sonnet workers). Default worker tier = Sonnet; reserve Opus for design + the verify/accept gate; Haiku for mechanical sweeps."
 last_updated: 2026-07-07
 ---
 
@@ -64,6 +64,25 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    `rafaelmjf/horus-hub` (its PRD + execution.md). Parked here: JSONL heartbeat
    events; `--worktree` auto-cleanup; `--worker` could infer the agent from
    `--agent` (took a usage-error bounce 2026-07-04).
+6. **[feature] Enforce commit-and-push as the standard for every Horus-managed
+   project.** Motivation (2026-07-07): hub work repeatedly lingered uncommitted/
+   unpushed on one machine — the working-discipline "bound each step to a
+   committed-and-pushed checkpoint" is a habit, not a guard, so nothing catches a
+   session that ends with a dirty tree or unpushed commits. Make it enforced, not
+   remembered, in harness so every scaffolded project inherits it. Design (pick in a
+   fresh session): **(a) portable core** — extend `horus close --check` (the existing
+   freshness/signal gate) to ALSO fail on an unclean tree or unpushed commits in a
+   `.horus` repo. Agent-agnostic (works for Codex too), fits the "signal + verify"
+   philosophy, and already backs a pre-merge CI check. **(b) enforcement** — a
+   harness-managed **Stop hook** (same install machinery as the guard-host hook in
+   `native_hooks.py`) that on session end runs that check and warns (default) or
+   blocks. Claude-specific, so it layers on top of (a), not instead of it.
+   Considerations: **warn vs block** (blocking mid-work is a footgun — reserve block
+   for explicit close, warn otherwise); respect the **branch-first rule** (don't auto-
+   push to a protected default branch — surface, don't force); an **opt-out** for repos
+   that intentionally don't push; interplay with the existing merge freshness gate.
+   Precedent: the guard-host native hook is exactly this shape (a harness-installed
+   Stop/PreToolUse hook every project gets).
 
 ### Open, unscheduled
 
