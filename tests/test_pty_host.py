@@ -99,6 +99,51 @@ def test_host_streams_writes_resizes_and_persists(tmp_path, monkeypatch):
     assert any("event: status\ndata: exited" in f for f in frames)
 
 
+def _fake_host(tmp_path, monkeypatch):
+    fake = _FakePty()
+    monkeypatch.setattr(pty_host, "spawn_pty", lambda *a, **k: fake)
+    h = pty_host.PtyHost()
+    tid = h.start(agent="fake", project_dir=tmp_path)
+    return h, tid, fake
+
+
+def test_subscribe_announces_live_on_attach_to_running_terminal(tmp_path, monkeypatch):
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    fake.feed(b"boot")
+    frames = list(itertools.islice(h.subscribe(tid, heartbeat=0.05), 2))
+    # A viewer attaching to a *live* session is told so before any output — this is
+    # how the client distinguishes "ended while watching" from "was already dead".
+    assert frames[0] == "event: status\ndata: live\n\n"
+    assert frames[1].startswith("event: output")
+
+
+def test_subscribe_skips_live_for_dead_terminal(tmp_path, monkeypatch):
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    fake.eof()
+    assert _wait(lambda: not h.get(tid).alive)
+    frames = list(itertools.islice(h.subscribe(tid, heartbeat=0.05), 1))
+    assert frames[0] == "event: status\ndata: exited\n\n"
+
+
+def test_close_kills_and_forgets_terminal(tmp_path, monkeypatch):
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    assert h.close(tid) is True
+    assert fake.isalive() is False          # a live session is terminated…
+    assert h.get(tid) is None               # …and no tab renders for it again
+    assert h.close(tid) is False            # idempotent: already forgotten
+
+
+def test_reap_dead_respects_grace(tmp_path, monkeypatch):
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    assert h.reap_dead() == []              # alive -> never reaped
+    fake.eof()
+    assert _wait(lambda: not h.get(tid).alive)
+    assert h.reap_dead() == []              # freshly dead -> kept (crash stays readable)
+    h.get(tid).ended_at = time.monotonic() - 601
+    assert h.reap_dead() == [tid]           # past the grace -> forgotten
+    assert h.get(tid) is None
+
+
 def test_host_write_resize_unknown_terminal(tmp_path):
     h = pty_host.PtyHost()
     assert h.write("nope", b"x") is False

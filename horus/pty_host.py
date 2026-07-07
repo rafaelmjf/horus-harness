@@ -19,6 +19,7 @@ import base64
 import itertools
 import os
 import threading
+import time
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -45,6 +46,7 @@ class PtyTerminal:
     cols: int = 80
     rows: int = 24
     alive: bool = True
+    ended_at: float | None = None   # monotonic time of exit; None while alive
     _pty: PtySession | None = field(default=None, repr=False)
     _buf: bytearray = field(default_factory=bytearray, repr=False)
     _base: int = 0          # absolute offset of _buf[0] (grows as the front is trimmed)
@@ -64,6 +66,7 @@ class PtyTerminal:
     def _mark_dead(self) -> None:
         with self._cond:
             self.alive = False
+            self.ended_at = time.monotonic()
             self._cond.notify_all()
 
 
@@ -177,6 +180,33 @@ class PtyHost:
         term._pty.terminate()
         return True
 
+    def close(self, term_id: str) -> bool:
+        """Kill (if still alive) and *forget* a terminal — no tab renders for it
+        again. Attached viewers keep their object reference, so they still drain
+        the scrollback and receive the final ``exited`` frame."""
+        with self._lock:
+            term = self._terms.pop(term_id, None)
+        if term is None:
+            return False
+        if term._pty is not None and term.alive:
+            term._pty.terminate()
+        return True
+
+    def reap_dead(self, *, grace: float = 600.0) -> list[str]:
+        """Forget terminals whose process exited more than ``grace`` seconds ago;
+        return their ids. Recently-exited ones are kept so a crash right after a
+        launch stays inspectable (its scrollback holds the error) until it is
+        explicitly closed or the grace lapses."""
+        now = time.monotonic()
+        with self._lock:
+            dead = [
+                tid for tid, t in self._terms.items()
+                if not t.alive and t.ended_at is not None and now - t.ended_at > grace
+            ]
+            for tid in dead:
+                del self._terms[tid]
+        return dead
+
     # --- reads ----------------------------------------------------------------
 
     def get(self, term_id: str) -> PtyTerminal | None:
@@ -197,6 +227,12 @@ class PtyHost:
         if term is None:
             yield "event: status\ndata: unknown\n\n"
             return
+        # Tell the viewer it attached to a *live* session. A viewer that saw this
+        # knows a later ``exited`` means the session ended under its feet (its tab
+        # can go away); attaching straight to a dead terminal skips it, so the
+        # scrollback of an already-crashed session stays on screen for reading.
+        if term.alive:
+            yield "event: status\ndata: live\n\n"
         cursor = 0
         while True:
             with term._cond:

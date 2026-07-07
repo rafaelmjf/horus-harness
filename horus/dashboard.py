@@ -1639,6 +1639,14 @@ def gather_sessions() -> list[registry.SessionRecord]:
     return sorted(reg.all(), key=lambda r: r.updated_at, reverse=True)
 
 
+def _open_terminals() -> list["pty_host.PtyTerminal"]:
+    """The PTY terminals worth a tab: live ones plus recent exits. Reaps terminals
+    whose process ended past the grace window first, so a session closed a while
+    ago never resurfaces as a ghost tab on a reload."""
+    pty_host.host.reap_dead()
+    return pty_host.host.terminals()
+
+
 def render_sessions(
     terminals: list["pty_host.PtyTerminal"] | None,
     records: list[registry.SessionRecord],
@@ -2798,8 +2806,12 @@ def _terminal_panel(terminals: list[pty_host.PtyTerminal]) -> str:
         panes.append(
             f"<div class='term-pane' data-tid='{tid}'>"
             f"<div class='term-bar'><span class='muted'>{title}</span>"
+            "<span style='display:flex;gap:12px'>"
             f"<button class='popout linkbtn' data-tid='{tid}' title='Open this session in its own window'>"
-            "&#10696; pop out</button></div>"
+            "&#10696; pop out</button>"
+            f"<button class='termclose linkbtn' data-tid='{tid}' "
+            "title='End this session (if still running) and remove its tab'>"
+            "&#10005; close</button></span></div>"
             f"<div class='xterm-host' id='x-{tid}'></div></div>"
         )
     return (
@@ -2822,7 +2834,7 @@ _TERMINAL_HEAD = (
 
 _XTERM_ATTACH_JS = """
 <script>
-window.horusAttachTerm = function(hostId, tid){
+window.horusAttachTerm = function(hostId, tid, onExit){
   if(typeof Terminal==='undefined') return null;
   function b64bytes(b64){var s=atob(b64);var a=new Uint8Array(s.length);
     for(var i=0;i<s.length;i++){a[i]=s.charCodeAt(i);} return a;}
@@ -2840,12 +2852,19 @@ window.horusAttachTerm = function(hostId, tid){
   term.onResize(function(s){ if(s.cols>0 && s.rows>0){ post('/pty/resize',{id:tid, cols:s.cols, rows:s.rows}); } });
   var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid));
   es.addEventListener('output', function(e){ term.write(b64bytes(e.data)); });
+  // sawLive: the host sends `live` when a viewer attaches to a running session.
+  // A later `exited` then means the session ended while being watched, so its
+  // tab may be removed; attaching straight to an already-dead terminal skips
+  // `live`, keeping the (possibly crashed) scrollback on screen for reading.
+  var sawLive=false;
   es.addEventListener('status', function(e){
+    if(e.data==='live'){ sawLive=true; }
     if(e.data==='exited'){ term.write('\\r\\n\\x1b[2m[process exited]\\x1b[0m\\r\\n'); es.close();
-      var d=document.querySelector('.term-tab[data-tid="'+tid+'"] .tdot'); if(d){d.className='tdot s-exited';} }
+      var d=document.querySelector('.term-tab[data-tid="'+tid+'"] .tdot'); if(d){d.className='tdot s-exited';}
+      if(onExit){ onExit(sawLive); } }
   });
   setTimeout(sync, 30);
-  return {term:term, fit:fit, sync:sync};
+  return {term:term, fit:fit, sync:sync, es:es};
 };
 </script>
 """
@@ -2855,14 +2874,33 @@ _TERMINAL_JS = """
 (function(){
   if(typeof Terminal==='undefined') return;
   var terms={};
-  document.querySelectorAll('.term-pane').forEach(function(p){
-    terms[p.dataset.tid]=window.horusAttachTerm('x-'+p.dataset.tid, p.dataset.tid);
-  });
   function activate(tid){
     document.querySelectorAll('.term-tab').forEach(function(t){t.classList.toggle('active', t.dataset.tid===tid);});
     document.querySelectorAll('.term-pane').forEach(function(p){p.classList.toggle('active', p.dataset.tid===tid);});
     var t=terms[tid]; if(t){ t.sync(); t.term.focus(); }
   }
+  function removeTab(tid){
+    var t=terms[tid]; delete terms[tid];
+    if(t){ try{t.es.close();}catch(_){ } try{t.term.dispose();}catch(_){ } }
+    var tab=document.querySelector('.term-tab[data-tid="'+tid+'"]');
+    var pane=document.querySelector('.term-pane[data-tid="'+tid+'"]');
+    var wasActive=!!(tab&&tab.classList.contains('active'));
+    if(tab){tab.remove();} if(pane){pane.remove();}
+    var rest=document.querySelectorAll('.term-tab');
+    if(rest.length===0){
+      var panel=document.querySelector('.termpanel');
+      if(panel){panel.innerHTML="<h2>Terminal</h2><p class='muted'>No in-app terminals open.</p>";}
+    } else if(wasActive){ activate(rest[0].dataset.tid); }
+  }
+  document.querySelectorAll('.term-pane').forEach(function(p){
+    var tid=p.dataset.tid;
+    // Session ended while being watched -> its tab goes away (a beat later, so
+    // the [process exited] note registers). A tab attached to an already-dead
+    // session stays until closed, keeping crash output readable.
+    terms[tid]=window.horusAttachTerm('x-'+tid, tid, function(sawLive){
+      if(sawLive){ setTimeout(function(){removeTab(tid);}, 1500); }
+    });
+  });
   document.querySelectorAll('.term-tab').forEach(function(t){
     t.addEventListener('click', function(){activate(t.dataset.tid);});
   });
@@ -2870,6 +2908,12 @@ _TERMINAL_JS = """
     b.addEventListener('click', function(e){ e.stopPropagation();
       window.open('/pty/term?id='+encodeURIComponent(b.dataset.tid), 'horus-'+b.dataset.tid,
         'width=940,height=640'); });
+  });
+  document.querySelectorAll('.termclose').forEach(function(b){
+    b.addEventListener('click', function(e){ e.stopPropagation();
+      fetch('/pty/close',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:'id='+encodeURIComponent(b.dataset.tid)});
+      removeTab(b.dataset.tid); });
   });
   window.addEventListener('resize', function(){
     var a=document.querySelector('.term-pane.active'); if(a&&terms[a.dataset.tid]){terms[a.dataset.tid].sync();}
@@ -3313,7 +3357,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(render_index(
                 [], gather_sessions(),
                 notice=_notice(parse_qs(parsed.query)), defer=True,
-                terminals=pty_host.host.terminals(),
+                terminals=_open_terminals(),
             ))
             return
         if parsed.path == "/github-catalog":
@@ -3327,7 +3371,7 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/sessions":
             recs = gather_sessions()
             self._send(render_sessions(
-                pty_host.host.terminals(), recs,
+                _open_terminals(), recs,
                 notice=_notice(parse_qs(parsed.query)),
             ))
             return
@@ -3442,7 +3486,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(render_project(
                 project, index=idx,
                 notice=_notice(parse_qs(parsed.query)),
-                terminals=pty_host.host.terminals(),
+                terminals=_open_terminals(),
             ))
             return
         self._send(_page("Not found", "<p>Not found.</p>"), 404)
@@ -3563,6 +3607,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/pty/input",
             "/pty/resize",
             "/pty/kill",
+            "/pty/close",
         ):
             self._send(_page("Not found", "<p>Not found.</p>"), 404)
             return
@@ -3633,6 +3678,12 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/pty/kill":
             pty_host.host.kill(self._read_form().get("id", ""))
+            self._no_content()
+            return
+        if parsed.path == "/pty/close":
+            # The tab's "× close": end the session (if still running) and forget
+            # the terminal, so no page renders a tab for it again.
+            pty_host.host.close(self._read_form().get("id", ""))
             self._no_content()
             return
         if parsed.path == "/github-refresh":

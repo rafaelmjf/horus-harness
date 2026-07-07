@@ -1119,6 +1119,31 @@ def test_terminal_panel_renders_xterm_wiring(tmp_path, monkeypatch):
     assert "/pty/input" in page and "/pty/resize" in page  # keystroke + resize wiring
     assert "horusAttachTerm" in page                    # shared attach fn (panel + pop-out)
     assert "class='popout linkbtn' data-tid='pty-7'" in page  # pop-out control per terminal
+    assert "class='termclose linkbtn' data-tid='pty-7'" in page  # per-tab close control
+    assert "/pty/close" in page                          # close wiring posts to the host
+
+
+def test_pty_close_route_forgets_terminal(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    closed = []
+    monkeypatch.setattr(dashboard.pty_host.host, "close", lambda tid: closed.append(tid) or True)
+    resp = _post("/pty/close", {"id": "pty-3"})
+    assert resp["status"] == 204
+    assert closed == ["pty-3"]
+
+
+def test_open_terminals_reaps_long_dead_sessions(tmp_path, monkeypatch):
+    """A session that exited past the grace never resurfaces as a ghost tab."""
+    import time as _time
+
+    host = dashboard.pty_host.PtyHost()
+    term = dashboard.pty_host.PtyTerminal(
+        term_id="pty-old", agent="claude", project_dir=tmp_path,
+        alive=False, ended_at=_time.monotonic() - 601,
+    )
+    host._terms["pty-old"] = term
+    monkeypatch.setattr(dashboard.pty_host, "host", host)
+    assert dashboard._open_terminals() == []
 
 
 def test_pty_term_page_is_a_standalone_viewer():
