@@ -102,6 +102,58 @@ def test_commit_continuity_survives_missing_artifact_paths(tmp_path, monkeypatch
     assert did and "committed" in detail
 
 
+def _checkpoint_msgs(root):
+    return [(f.level, f.message) for f in closure.checkpoint_gate(root)]
+
+
+def test_checkpoint_gate_clean_tree_no_upstream(tmp_path, monkeypatch):
+    """Fresh committed repo, no remote: tree clean, and the unpushed check is skipped
+    (no upstream to push to) — so the gate is healthy."""
+    _setup(tmp_path, monkeypatch)
+    msgs = _checkpoint_msgs(tmp_path)
+    assert any("working tree clean" in m for _, m in msgs)
+    assert all(level == "ok" for level, _ in msgs)
+
+
+def test_checkpoint_gate_warns_on_dirty_tree(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    (tmp_path / "scratch.py").write_text("x = 1\n", encoding="utf-8")  # untracked = dirty
+    msgs = _checkpoint_msgs(tmp_path)
+    assert any(level == "warn" and "uncommitted change" in m for level, m in msgs)
+
+
+def test_checkpoint_gate_warns_on_unpushed_commits(tmp_path, monkeypatch):
+    a, _ = _setup_two_clones(tmp_path, monkeypatch)
+    # a is at origin/master; make a local commit that is not pushed.
+    (a / "work.py").write_text("y = 2\n", encoding="utf-8")
+    _run(a, "add", "work.py")
+    _run(a, "commit", "-m", "local work")
+    msgs = _checkpoint_msgs(a)
+    assert any(level == "warn" and "not pushed" in m for level, m in msgs)
+    # After pushing, the unpushed warning clears.
+    _run(a, "push", "origin", "HEAD")
+    msgs = _checkpoint_msgs(a)
+    assert not any("not pushed" in m for _, m in msgs)
+
+
+def test_checkpoint_gate_push_opt_out(tmp_path, monkeypatch):
+    """`enforce_push: false` in PRD frontmatter skips the unpushed-commits check."""
+    a, _ = _setup_two_clones(tmp_path, monkeypatch)
+    (a / "work.py").write_text("y = 2\n", encoding="utf-8")
+    _run(a, "add", "work.py")
+    _run(a, "commit", "-m", "local work")
+    prd = a / ".horus" / "PRD.md"
+    prd.write_text("---\nenforce_push: false\n---\n# PRD\n", encoding="utf-8")
+    msgs = _checkpoint_msgs(a)
+    assert not any("not pushed" in m for _, m in msgs)
+    # The dirty-tree half still applies even when push is opted out.
+    assert any(level == "warn" and "uncommitted change" in m for level, m in msgs)
+
+
+def test_checkpoint_gate_silent_outside_repo(tmp_path):
+    assert closure.checkpoint_gate(tmp_path) == []
+
+
 def _setup_two_clones(tmp_path, monkeypatch):
     """A bare origin with two clones — the one-person-two-machines scenario."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))

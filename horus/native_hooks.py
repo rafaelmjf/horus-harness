@@ -24,6 +24,7 @@ _HORUS_USAGE_MARKER = "horus usage check"
 _HORUS_MERGE_MARKER = "horus close --hook"
 _HORUS_GUARD_MARKER = "horus guard-host"
 _HORUS_USAGE_GUARD_MARKER = "horus usage guard"
+_HORUS_CHECKPOINT_MARKER = "horus checkpoint --hook"
 
 
 # Committed hook files reach every machine and collaborator the repo does, including
@@ -95,6 +96,20 @@ def _codex_usage_guard_hook_command() -> dict[str, Any]:
     }
 
 
+def _codex_checkpoint_hook_command() -> dict[str, Any]:
+    # Stop-event gate: on session end, warns (default) when the working tree is dirty
+    # or has unpushed commits. Same `horus` console-script spelling as every other
+    # committed hook; POSIX + PowerShell guards keep it a silent no-op without the CLI.
+    command = "horus checkpoint --hook"
+    return {
+        "type": "command",
+        "command": _guard_posix(command),
+        "commandWindows": _guard_windows(command),
+        "timeout": 30,
+        "statusMessage": "Checking Horus checkpoint",
+    }
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -129,27 +144,47 @@ def _is_horus_usage_guard_hook(handler: Any) -> bool:
     return _handler_has_marker(handler, _HORUS_USAGE_GUARD_MARKER)
 
 
+def _is_horus_checkpoint_hook(handler: Any) -> bool:
+    return _handler_has_marker(handler, _HORUS_CHECKPOINT_MARKER)
+
+
 def _merge_codex_usage_hook(hooks: dict[str, Any], event: str, threshold: float) -> None:
-    groups = hooks.setdefault(event, [])
+    _merge_codex_stop_hook(hooks, event, _codex_hook_command(threshold), _is_horus_usage_hook)
+
+
+def _merge_codex_stop_hook(
+    hooks: dict[str, Any], event: str, handler: dict[str, Any], is_mine: Any
+) -> None:
+    """Replace any prior Horus handler (matched by ``is_mine``) for a Codex turn-boundary
+    event with ``handler`` *in place*, appending a new group only when none is found.
+
+    Position-stable on purpose: two Horus hooks can share one event (usage + checkpoint
+    both live on ``Stop``), and a remove-then-append merge would reorder the groups on
+    every re-run, so `upgrade-project` / projection-sync would report a perpetual
+    "would-update". Preserves non-Horus hooks and drops groups left empty."""
+    groups = hooks.get(event)
     if not isinstance(groups, list):
         groups = []
-
+    inserted = False
+    new_groups = []
     for group in groups:
-        if not isinstance(group, dict):
+        if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+            new_groups.append(group)
             continue
-        handlers = group.get("hooks")
-        if not isinstance(handlers, list):
-            continue
-        kept = [h for h in handlers if not _is_horus_usage_hook(h)]
-        if len(kept) != len(handlers):
+        kept = []
+        for existing in group["hooks"]:
+            if is_mine(existing):
+                if not inserted:
+                    kept.append(handler)
+                    inserted = True
+            else:
+                kept.append(existing)
+        if kept:
             group["hooks"] = kept
-
-    groups = [
-        group for group in groups
-        if not (isinstance(group, dict) and isinstance(group.get("hooks"), list) and not group["hooks"])
-    ]
-    groups.append({"hooks": [_codex_hook_command(threshold)]})
-    hooks[event] = groups
+            new_groups.append(group)
+    if not inserted:
+        new_groups.append({"hooks": [handler]})
+    hooks[event] = new_groups
 
 
 def _merge_codex_pretooluse_hook(
@@ -285,6 +320,30 @@ def install_codex_usage_guard_hook(project_root: Path) -> HookAction:
     return HookAction("updated" if old_text is not None else "created", f"installed Codex usage guard hook in {path}")
 
 
+def install_codex_checkpoint_hook(project_root: Path) -> HookAction:
+    """Install/update a project-local Codex Stop hook that, on session end, warns when
+    the working tree is dirty or has unpushed commits (the committed-and-pushed
+    checkpoint discipline, enforced not remembered). Warn-only; never blocks a stop."""
+    codex_dir = project_root / ".codex"
+    path = codex_dir / "hooks.json"
+    data = _load_json(path)
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        hooks = {}
+        data["hooks"] = hooks
+
+    _merge_codex_stop_hook(hooks, "Stop", _codex_checkpoint_hook_command(), _is_horus_checkpoint_hook)
+    data["hooks"] = hooks
+
+    codex_dir.mkdir(parents=True, exist_ok=True)
+    new_text = json.dumps(data, indent=2) + "\n"
+    old_text = path.read_text(encoding="utf-8") if path.exists() else None
+    if old_text == new_text:
+        return HookAction("exists", f"Codex checkpoint hook already installed in {path}")
+    path.write_text(new_text, encoding="utf-8")
+    return HookAction("updated" if old_text is not None else "created", f"installed Codex checkpoint hook in {path}")
+
+
 # --------------------------------------------------------------------------- #
 # Claude Code
 # --------------------------------------------------------------------------- #
@@ -331,6 +390,17 @@ def _claude_usage_guard_hook_command() -> dict[str, Any]:
     return {
         "type": "command",
         "command": _guard_posix("horus usage guard --target claude --hook"),
+    }
+
+
+def _claude_checkpoint_hook_command() -> dict[str, Any]:
+    # Stop-event gate. On session end it warns (default) when the working tree is dirty
+    # or has unpushed commits — the committed-and-pushed checkpoint discipline as an
+    # observed signal. Warn-only by default; never blocks a stop unless installed with
+    # `--block` (reserved for repos that opt into hard enforcement).
+    return {
+        "type": "command",
+        "command": _guard_posix("horus checkpoint --hook"),
     }
 
 
@@ -446,6 +516,21 @@ def install_claude_usage_guard_hook(project_root: Path) -> HookAction:
     return _persist_hook(path, data, "Claude usage guard hook")
 
 
+def install_claude_checkpoint_hook(project_root: Path) -> HookAction:
+    """Install/update a Claude `Stop` hook that, on session end, warns when the working
+    tree is dirty or has unpushed commits — the committed-and-pushed checkpoint
+    discipline enforced in tooling, not left to memory. Warn-only by default (a
+    non-blocking notice); the command supports `--block` for repos that opt into hard
+    enforcement, but the installed default never blocks a stop. Coexists with the usage
+    Stop hook (own marker)."""
+    path, data, hooks = _claude_hooks_dict(project_root)
+    _merge_event_hook(
+        hooks, "Stop", _claude_checkpoint_hook_command(), is_mine=_is_horus_checkpoint_hook,
+    )
+    data["hooks"] = hooks
+    return _persist_hook(path, data, "Claude checkpoint hook")
+
+
 # The full per-target hook set — the single list `init`, `upgrade-project`, and any
 # other bulk installer should iterate so no surface gets a partial projection.
 HOOK_INSTALLERS = {
@@ -454,12 +539,14 @@ HOOK_INSTALLERS = {
         install_claude_merge_hook,
         install_claude_guard_hook,
         install_claude_usage_guard_hook,
+        install_claude_checkpoint_hook,
     ),
     "codex": (
         install_codex_usage_hook,
         install_codex_merge_hook,
         install_codex_guard_hook,
         install_codex_usage_guard_hook,
+        install_codex_checkpoint_hook,
     ),
 }
 
@@ -474,6 +561,7 @@ def _is_any_horus_hook(handler: Any) -> bool:
         or _is_horus_merge_hook(handler)
         or _is_horus_guard_hook(handler)
         or _is_horus_usage_guard_hook(handler)
+        or _is_horus_checkpoint_hook(handler)
     )
 
 

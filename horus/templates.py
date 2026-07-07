@@ -819,6 +819,28 @@ USAGE_RESCUE_ADVISORY = (
 )
 
 
+CHECKPOINT_ADVISORY = (
+    "[Horus checkpoint] This session is ending with {detail}. Working discipline is to "
+    "bound each step to a committed-and-pushed checkpoint so nothing is stranded only "
+    "on this machine — commit the work and push it (if the default branch is "
+    "protected, put it on a branch and open a PR rather than force-pushing). "
+    "`horus close --commit --push` captures continuity. This is a reminder, not a "
+    "block."
+)
+
+
+CHECKPOINT_STOP_INSTRUCTION = (
+    "[Horus checkpoint] You are stopping with work that is not yet checkpointed: "
+    "{detail}. Before you stop, reach a committed-and-pushed checkpoint so nothing is "
+    "stranded only on this machine: (1) commit the work; (2) push it to its remote — "
+    "if the default branch is protected, put the work on a branch and open a PR rather "
+    "than force-pushing to it; (3) if this is a real close, run the horus-consolidate "
+    "skill to fold this session into `.horus/`, then `horus close --commit --push`. If "
+    "you are deliberately leaving work uncommitted, tell the user why instead of "
+    "silently stopping."
+)
+
+
 MERGE_CLOSURE_INSTRUCTION = (
     "This `gh pr merge` was blocked by Horus: the project's `.horus/` continuity "
     "lanes are stale, so the dashboard would not reflect this work once it lands on "

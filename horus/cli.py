@@ -856,9 +856,11 @@ def cmd_close(args: argparse.Namespace) -> int:
         # Gate mode (scriptable / CI): only dashboard-freshness signals, verdict + exit
         # code, no ritual prompt and no usage/drift noise.
         print(f"Closure freshness check: {root}\n")
-        healthy = _print_findings(closure.freshness_gate(root))
-        print("\nFresh — the dashboard reflects this session." if healthy
-              else "\nStale — update the lanes (run the horus-consolidate skill) before closing/merging.")
+        findings = closure.freshness_gate(root) + closure.checkpoint_gate(root)
+        healthy = _print_findings(findings)
+        print("\nFresh — the dashboard reflects this session and work is checkpointed." if healthy
+              else "\nStale — update the lanes (run the horus-consolidate skill) and commit/push "
+              "before closing/merging.")
         return 0 if healthy else 1
 
     print(f"Closure check: {root}\n")
@@ -1131,6 +1133,49 @@ def cmd_usage_guard(args: argparse.Namespace) -> int:
     return 0
 
 
+def _checkpoint_hook(root: Path, *, block: bool) -> int:
+    """Stop-hook mode: warn (default) or block (opt-in) when the working tree is dirty
+    or has unpushed commits. Silent + exit 0 when the checkpoint is clean or on any
+    trouble — the hook signals only via stdout JSON and never a non-zero exit, so the
+    `|| exit 0` guard can't mask a real decision."""
+    try:
+        findings = closure.checkpoint_gate(root)
+    except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
+        return 0
+    warnings = [f.message for f in findings if f.level in ("warn", "fail")]
+    if not warnings:
+        return 0  # already checkpointed — stay quiet
+
+    hook_input = _read_hook_stdin()
+    # Avoid a Stop → block → Stop loop (the agent sets this once a hook fired the stop).
+    if hook_input.get("stop_hook_active") or hook_input.get("stopHookActive"):
+        return 0
+    session_id = _guard_session_id(hook_input)
+    # Fire once per re-arm window so a dirty-tree turn doesn't nag every stop.
+    if native_hooks.sentinel_fired(session_id, kind="checkpoint"):
+        return 0
+    native_hooks.mark_sentinel_fired(session_id, kind="checkpoint")
+
+    detail = "; ".join(warnings)
+    if block:
+        print(json.dumps({"decision": "block", "reason": templates.CHECKPOINT_STOP_INSTRUCTION.format(detail=detail)}))
+    else:
+        print(json.dumps({"systemMessage": templates.CHECKPOINT_ADVISORY.format(detail=detail)}))
+    return 0
+
+
+def cmd_checkpoint(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    if getattr(args, "hook", False):
+        return _checkpoint_hook(root, block=getattr(args, "block", False))
+    # Non-hook invocation (scriptable / CI): the git-checkpoint verdict + exit code.
+    print(f"Checkpoint check: {root}\n")
+    healthy = _print_findings(closure.checkpoint_gate(root))
+    print("\nCheckpointed — working tree committed and local commits pushed." if healthy
+          else "\nNot checkpointed — commit and push (see above) before closing.")
+    return 0 if healthy else 1
+
+
 def cmd_hook_install(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
@@ -1150,6 +1195,11 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
             print(f"[{action.status}] {action.message}")
             print("PreToolUse gate: inside a Horus-hosted PTY session, blocks a Bash command")
             print("that would restart/kill the dashboard process hosting the session.")
+        if kind in ("checkpoint", "all"):
+            action = native_hooks.install_codex_checkpoint_hook(root)
+            print(f"[{action.status}] {action.message}")
+            print("Stop hook: on session end, warns when the working tree is dirty or has")
+            print("unpushed commits (the committed-and-pushed checkpoint discipline).")
         print("Codex may ask you to review/trust this project hook with /hooks before it runs.")
         return 0
     if args.target == "claude":
@@ -1170,6 +1220,12 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
             print("PreToolUse gate: inside a Horus-hosted PTY session, blocks a Bash command")
             print("that would restart/kill the dashboard process hosting the session (so an")
             print("in-app agent can't kill itself). No effect outside a hosted session.")
+        if kind in ("checkpoint", "all"):
+            action = native_hooks.install_claude_checkpoint_hook(root)
+            print(f"[{action.status}] {action.message}")
+            print("Stop hook: on session end, warns (non-blocking) when the working tree is")
+            print("dirty or has unpushed commits — the committed-and-pushed checkpoint")
+            print("discipline as an observed signal, not a remembered habit.")
         return 0
     print(f"unsupported hook target: {args.target}")
     return 2
@@ -2083,6 +2139,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_guard.set_defaults(func=cmd_guard_host)
 
+    p_checkpoint = sub.add_parser(
+        "checkpoint",
+        help="check the git commit-and-push checkpoint (working tree clean + commits pushed)",
+    )
+    p_checkpoint.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_checkpoint.add_argument(
+        "--hook", action="store_true",
+        help="Stop-hook mode: warn (default) when the tree is dirty or has unpushed "
+             "commits; always exit 0, signalling only via stdout JSON",
+    )
+    p_checkpoint.add_argument(
+        "--block", action="store_true",
+        help="with --hook: block the stop and instruct the agent to checkpoint "
+             "(reserved for repos that opt into hard enforcement; warn-only otherwise)",
+    )
+    p_checkpoint.set_defaults(func=cmd_checkpoint)
+
     p_usage = sub.add_parser("usage", help="inspect native app usage signals")
     usage_sub = p_usage.add_subparsers(dest="usage_cmd", required=True)
     p_usage_check = usage_sub.add_parser("check", help="check whether usage is near a closure threshold")
@@ -2126,11 +2199,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_hook_install.add_argument("--path", default=".", help="project root (default: cwd)")
     p_hook_install.add_argument("--target", choices=("codex", "claude"), required=True, help="native app target")
     p_hook_install.add_argument(
-        "--kind", choices=("usage", "merge", "guard", "all"), default="usage",
-        help="which hook(s): usage = quota→closure (default); merge = Claude PreToolUse "
-             "gate on `gh pr merge`; guard = Claude PreToolUse gate that stops a hosted "
-             "session restarting/killing its own host; all = every applicable hook. "
-             "merge and guard are Claude-only.",
+        "--kind", choices=("usage", "merge", "guard", "checkpoint", "all"), default="usage",
+        help="which hook(s): usage = quota→closure (default); merge = PreToolUse gate on "
+             "`gh pr merge`; guard = PreToolUse gate that stops a hosted session "
+             "restarting/killing its own host; checkpoint = Stop hook that warns on a "
+             "dirty tree / unpushed commits; all = every applicable hook.",
     )
     p_hook_install.add_argument(
         "--threshold",
