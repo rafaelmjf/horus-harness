@@ -4,7 +4,7 @@ current_focus: "v0.0.25 ARMED 2026-07-05 (uv tool install --force --python 3.12 
 next_action: "Backlog #1 [ops] orphan reap [tier: Sonnet inline; Opus only for the hook-guard/process-tree safety review], or promote the scheduled/usage-aware autonomous-continuation feature (see Open, unscheduled + the 2026-07-05 session note). Hub work continues in ~/projects/horus-hub per its PRD (check the 02:51 scheduled run's held PR, then Phase 5 / detach-launch)."
 next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md — note the model-tier rule + per-step tier tags. v0.0.25 is armed. Candidates: backlog #1 orphan reap (Sonnet), the scheduled-continuation feature (Open, unscheduled), or hub Phase 5 / detach-launch in ~/projects/horus-hub. Default worker tier = Sonnet; Opus for the verify gate."
 execution_recommendation: "continue-as-is for orphan reap (small, Sonnet/inline) and grooming the scheduled-continuation idea. plan-execution if implementing the scheduled-continuation primitives (several horus run flags + a scheduler — a real batch: Opus supervisor + Sonnet workers). Default worker tier = Sonnet; reserve Opus for design + the verify/accept gate; Haiku for mechanical sweeps."
-last_updated: 2026-07-05
+last_updated: 2026-07-07
 ---
 
 # Horus — PRD
@@ -83,6 +83,19 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
   daemon / Persistent timer; continuity must pin a *specific* next task, not a
   vague "next item". Fuller learnings in the 2026-07-05 session note. Cross-ref:
   survival kit (v0.0.25), MVP3 autonomous closure.
+- **Project-declared machine requirements** (`doctor` + `resume` + dashboard):
+  a project may commit `.horus/requirements.md` — frontmatter contract
+  (`kind: machine-requirements`; `tools:` list of `name`/`probe`/`install`/
+  `needed_for`; optional `configs:` paths), body prose for non-probeable deps
+  (agent skills, CLI profiles). `horus doctor project` probes each declared
+  tool (`shutil.which` on the probe's first token, or run the probe) → warn
+  findings, silent when the file is absent; **`horus resume` prepends
+  "⚠ this machine is missing: …" to the seed prompt** (the identification has
+  to happen where sessions start — an agent on the wrong machine must know
+  before it tries `fab import`); dashboard project card gets a
+  machine-readiness badge. First consumer + live contract file:
+  fabric-metadata-driven-medallion (needs `fab` + `pbir` + PBI dev skills,
+  which live only on its deploy machine; declared there 2026-07-07).
 - **Execution-workflow tuning:** small phase-status vocabulary
   (planned/delegated/accepted/blocked) in the skill + template (the gate-command +
   failure-baseline handoff fields shipped in v0.0.22). Also propagate the **model-tier
