@@ -705,18 +705,26 @@ def _live_count(records: list[registry.SessionRecord]) -> int:
 
 
 def _nav(active: str, live: int = 0) -> str:
-    # Control (the session cockpit) was retired — its useful bits (account usage,
-    # start/resume) now live on the Projects tab. ``live`` is accepted for call
-    # compatibility but no longer renders a badge.
-    links = [("/", "Projects", "projects"), ("/skills", "Skills", "skills"), ("/settings", "Settings", "settings")]
+    # Sessions is the in-app terminal cockpit (revived from the retired Control tab):
+    # one drivable sub-tab per open PTY session. Its badge shows how many are live.
+    open_terms = sum(1 for t in pty_host.host.terminals() if t.alive)
+    links = [
+        ("/", "Projects", "projects"),
+        ("/sessions", "Sessions", "sessions"),
+        ("/skills", "Skills", "skills"),
+        ("/settings", "Settings", "settings"),
+    ]
     out = []
     for href, label, key in links:
+        badge = (
+            f"<span style='margin-left:6px;font-size:10px;font-weight:600;background:var(--seal,#c0563b);"
+            f"color:#fff;border-radius:9px;padding:1px 6px;vertical-align:middle'>{open_terms}</span>"
+            if key == "sessions" and open_terms else ""
+        )
         if key == active:
-            out.append(
-                f"<a class=\"active\" href='{href}'><span class='dot'></span>{label}</a>"
-            )
+            out.append(f"<a class=\"active\" href='{href}'><span class='dot'></span>{label}{badge}</a>")
         else:
-            out.append(f"<a href='{href}'>{label}</a>")
+            out.append(f"<a href='{href}'>{label}{badge}</a>")
     items = "".join(out)
     return f"<nav class='tabs'>{items}</nav>"
 
@@ -1629,6 +1637,27 @@ def gather_sessions() -> list[registry.SessionRecord]:
     """Reconcile the registry against live PIDs, then return records newest-first."""
     reg = registry.Registry.default()
     return sorted(reg.all(), key=lambda r: r.updated_at, reverse=True)
+
+
+def render_sessions(
+    terminals: list["pty_host.PtyTerminal"] | None,
+    records: list[registry.SessionRecord],
+    *,
+    notice: str = "",
+) -> str:
+    """The Sessions cockpit (revived from the retired Control tab): one drivable
+    sub-tab per open in-app terminal, plus the tracked-session registry list. The
+    post-launch ``?tab=`` activates the just-opened session."""
+    terminals = terminals or []
+    body = (
+        f"{notice}{_TERMINAL_HEAD}<section class='band'><div class='wrap'>"
+        "<h1 style='margin:0 0 16px'>Sessions</h1>"
+        f"{_terminal_panel(terminals)}"
+        f"{render_sessions_card(records)}"
+        f"</div></section>{_XTERM_ATTACH_JS}{_TERMINAL_JS}"
+        f"{_footer_html()}"
+    )
+    return _page("Horus — sessions", body, active="sessions", live=_live_count(records))
 
 
 def render_sessions_card(records: list[registry.SessionRecord]) -> str:
@@ -3297,7 +3326,10 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/sessions":
             recs = gather_sessions()
-            self._send(_page("Horus — sessions", render_sessions_card(recs), live=_live_count(recs)))
+            self._send(render_sessions(
+                pty_host.host.terminals(), recs,
+                notice=_notice(parse_qs(parsed.query)),
+            ))
             return
         if parsed.path == "/skills":
             self._send(_page("Horus — skills", render_skill_map(), active="skills"))
@@ -3708,10 +3740,14 @@ class _Handler(BaseHTTPRequestHandler):
 
         form = self._read_form()
         query = process_launch(form)
-        # PRG: redirect back to the project detail page (or the index for an account-only
-        # session) so a refresh doesn't re-submit the launch.
+        # PRG so a refresh doesn't re-submit. An in-app terminal launch (query
+        # ``tab=<id>``) lands on the Sessions cockpit with that sub-tab active;
+        # window/vscode/error redirect back to the project (or index) to show the notice.
         raw = (form.get("project") or "").strip()
-        self._redirect(f"/project?i={raw}&{query}" if raw.isdigit() else f"/?{query}")
+        if query.startswith("tab="):
+            self._redirect(f"/sessions?{query}")
+        else:
+            self._redirect(f"/project?i={raw}&{query}" if raw.isdigit() else f"/?{query}")
 
     def log_message(self, *args: Any) -> None:  # silence default stderr logging
         pass
