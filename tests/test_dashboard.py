@@ -692,6 +692,24 @@ def test_project_detail_renders_launch_controls(tmp_path, monkeypatch):
     assert "<select name='posture'>" in page
     # Copy-the-command fallback offers Claude + Codex.
     assert "horus open" in page and "--agent codex" in page
+    # No live PTY -> the xterm panel/assets are not embedded (CSS class defs aside).
+    assert "/assets/xterm/xterm.js" not in page
+
+
+def test_project_detail_embeds_terminal_panel_for_live_session(tmp_path, monkeypatch):
+    import types
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    p = dashboard.load_project(str(proj))
+    term = types.SimpleNamespace(term_id="term-xyz", title="claude", alive=True)
+    page = dashboard.render_project(p, index=0, terminals=[term])
+    # The in-app terminal panel + xterm bootstrap are embedded so a session opened
+    # with target=app (default on a headless host) has somewhere to attach.
+    assert "/assets/xterm/xterm.js" in page
+    assert "data-tid='term-xyz'" in page
+    assert "horusAttachTerm" in page
 
 
 def test_process_launch_window_routes_selected_agent(tmp_path, monkeypatch):
