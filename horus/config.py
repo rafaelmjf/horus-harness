@@ -12,7 +12,18 @@ from __future__ import annotations
 import hashlib
 import re
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
+
+
+class ConfigError(ValueError):
+    """Raised when a present-but-malformed config block should fail closed.
+
+    Tolerant loaders (projects, owners) return empty on a missing/garbled file;
+    the security-relevant ``[access]`` block is different — if it is present at
+    all it must be complete and well-formed, or the dashboard must refuse to
+    start rather than silently serve unguarded.
+    """
 
 # ---------------------------------------------------------------------------
 # Workflow policy constants
@@ -398,6 +409,71 @@ def account_login_dir(agent: str, alias: str) -> str:
     Windows; ``Path`` reads it back fine everywhere)."""
     safe = re.sub(r"[^A-Za-z0-9_-]", "-", alias.strip()) or "default"
     return (config_dir() / "accounts" / f"{agent}-{safe}").as_posix()
+
+
+# ---------------------------------------------------------------------------
+# Dashboard "exposed mode" — Cloudflare Access gate (opt-in via [access]).
+#
+# The local dashboard binds loopback and trusts its network. Hosting it behind
+# a private hostname (Cloudflare Access + tunnel) requires an app-side gate as a
+# second layer. When (and only when) an ``[access]`` block is present in
+# ``config.toml``, every dashboard route except ``/health`` demands the owner's
+# Access identity header AND a verified Access JWT. Absent block -> unchanged
+# loopback-local behavior.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class AccessConfig:
+    """Cloudflare Access parameters for verifying an Access JWT."""
+
+    team_domain: str
+    aud: str
+    jwks_url: str
+
+
+@dataclass(frozen=True)
+class DashboardAccess:
+    """The dashboard's exposed-mode gate config: owner identity + Access params."""
+
+    owner_email: str
+    access: AccessConfig
+
+
+def _require_str(table: dict, key: str, where: str) -> str:
+    value = table.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(f"{where}: missing or empty required string '{key}'.")
+    return value.strip()
+
+
+def load_dashboard_access() -> DashboardAccess | None:
+    """Load the optional ``[access]`` block that arms dashboard exposed mode.
+
+    Returns ``None`` when no ``[access]`` table is present (the common local
+    case). When the table IS present it must be complete — a missing or empty
+    field raises :class:`ConfigError` so the dashboard fails closed at startup
+    instead of serving an unguarded control plane.
+    """
+    path = config_path()
+    if not path.exists():
+        return None
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise ConfigError(f"config.toml unreadable: {exc}") from exc
+    access_raw = data.get("access")
+    if access_raw is None:
+        return None
+    if not isinstance(access_raw, dict):
+        raise ConfigError("[access] must be a table.")
+    owner_email = _require_str(access_raw, "owner_email", "[access]").lower()
+    access = AccessConfig(
+        team_domain=_require_str(access_raw, "team_domain", "[access]"),
+        aud=_require_str(access_raw, "aud", "[access]"),
+        jwks_url=_require_str(access_raw, "jwks_url", "[access]"),
+    )
+    return DashboardAccess(owner_email=owner_email, access=access)
 
 
 def alias_for(identifier: str | None) -> str | None:

@@ -31,6 +31,7 @@ from importlib import resources
 
 from horus import (
     __version__,
+    access_gate,
     adapters,
     brainstorm,
     cache_status,
@@ -60,6 +61,28 @@ from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_session
 
 _REMOTE_REFRESH_LOCK = threading.Lock()
 _REMOTE_REFRESHING: set[str] = set()
+
+# --------------------------------------------------------------------------- #
+# Exposed mode (Cloudflare Access gate). Off by default: the dashboard binds
+# loopback and trusts its network. When an ``[access]`` block is configured
+# (see config.load_dashboard_access), every route except /health requires the
+# owner Access identity header AND a verified Access JWT — a second layer behind
+# Cloudflare Access at the edge, never the only one. These module globals are
+# set once by _configure_access() at serve() startup (and by tests directly).
+# --------------------------------------------------------------------------- #
+_DASH_ACCESS: config.DashboardAccess | None = None
+_JWKS_CACHE: access_gate.JWKSCache | None = None
+
+
+def _configure_access() -> config.DashboardAccess | None:
+    """Load the optional [access] block and prime the JWKS cache. Fail closed:
+    a present-but-malformed block raises ConfigError before the server binds."""
+    global _DASH_ACCESS, _JWKS_CACHE
+    _DASH_ACCESS = config.load_dashboard_access()
+    _JWKS_CACHE = (
+        access_gate.JWKSCache(_DASH_ACCESS.access.jwks_url) if _DASH_ACCESS else None
+    )
+    return _DASH_ACCESS
 
 
 def load_project(path_str: str) -> dict[str, Any]:
@@ -3221,6 +3244,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
+        if not self._exposed_authorized(parsed.path):
+            self._send(_page("Forbidden", "<p>Forbidden.</p>"), 403)
+            return
         if parsed.path == "/":
             # Paint the shell immediately; the project grid (gather_projects ~1.2s)
             # loads async via /projects-grid, like the accounts strip and catalog.
@@ -3409,17 +3435,31 @@ class _Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionError, OSError):
             return  # client detached; the terminal stays alive on the host
 
+    def _exposed_authorized(self, path: str) -> bool:
+        """Exposed-mode gate. When an ``[access]`` block is configured, every
+        route except ``/health`` requires the owner Access identity header AND a
+        verified Access JWT; otherwise (local loopback mode) always allowed.
+        Checked before any route logic so a probe never reaches a handler."""
+        if _DASH_ACCESS is None:
+            return True
+        if path == "/health":
+            return True
+        return access_gate.authorized(self.headers, _DASH_ACCESS, _JWKS_CACHE)
+
     def _same_origin(self) -> bool:
-        """Reject cross-origin POSTs (CSRF guard for the loopback server).
+        """Reject cross-origin POSTs (CSRF guard).
 
         A browser sends ``Origin`` on cross-site form/fetch POSTs; if present it must
-        match our ``Host``. Absent ``Origin`` means a non-browser client (e.g. curl)
-        on loopback, which is allowed — the server binds 127.0.0.1 only.
+        match our ``Host``. In local loopback mode an absent ``Origin`` means a
+        non-browser client (e.g. curl) and is allowed. In exposed mode we require
+        ``Origin`` present and matching — an Access-authenticated browser always
+        sends it, and dropping the absent-Origin allowance closes cross-site POSTs
+        that would otherwise ride the Access cookie.
         """
         origin = self.headers.get("Origin")
-        if origin is None:
-            return True
         host = self.headers.get("Host", "")
+        if origin is None:
+            return _DASH_ACCESS is None
         return origin in (f"http://{host}", f"https://{host}")
 
     def _read_form(self) -> dict[str, str]:
@@ -3434,6 +3474,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
+        if not self._exposed_authorized(parsed.path):
+            self._send(_page("Forbidden", "<p>Forbidden.</p>"), 403)
+            return
         if parsed.path not in (
             "/launch",
             "/brainstorm",
@@ -3650,6 +3693,9 @@ class _SingleInstanceServer(ThreadingHTTPServer):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
+    # Load the optional [access] block first: a present-but-malformed block must
+    # fail closed here, before the server ever binds and serves a request.
+    access = _configure_access()
     try:
         server = _SingleInstanceServer((host, port), _Handler)
     except OSError:
@@ -3657,7 +3703,11 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
         return
     count = len(config.load_projects())
     print(f"Horus dashboard: http://{host}:{port}  ({count} project(s))")
-    print("Local-only (loopback). Launches in-app terminals on request. Press Ctrl+C to stop.")
+    if access is not None:
+        print(f"EXPOSED MODE: Cloudflare Access gate ON (owner {access.owner_email}); "
+              "every route but /health requires owner header + verified Access JWT.")
+    else:
+        print("Local-only (loopback). Launches in-app terminals on request. Press Ctrl+C to stop.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
