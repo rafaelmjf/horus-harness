@@ -626,6 +626,12 @@ button.linkbtn:hover { color: #b9c2d0; }
 .term-bar .popout { margin: 0; }
 .xterm-host { height: 420px; }
 .xterm-host .xterm { height: 100%; }
+.live-sessions-link { display: inline-flex; align-items: center; gap: 9px; font-size: 13px;
+    color: var(--ink-2); background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: var(--r-pill, 999px); padding: 8px 16px; text-decoration: none; }
+.live-sessions-link:hover { border-color: var(--border-strong); color: var(--ink); }
+.live-sessions-link b { color: var(--ink); font-weight: 600; }
+.live-sessions-link .go { color: var(--seal); font-weight: 500; margin-left: 4px; }
 /* Action buttons: green = refresh/upgrade (go), red = remove completely, neutral = keep. */
 /* legacy pill btn-go removed; .btn + .btn-go (sumi-e) own this now */
 button.btn-danger { font: inherit; font-size: 12px; cursor: pointer; color: #fff0f1;
@@ -2078,15 +2084,25 @@ def _prd_shipped_panel_html(prd: dict[str, Any]) -> str:
 
 
 def _terminal_section(terminals: list[pty_host.PtyTerminal] | None) -> str:
-    """Embed the in-app terminal panel (xterm assets + panel + bootstrap JS) when
-    any PTY sessions are live on the host. Rendered on the project/index pages so a
-    session launched with ``target=app`` (the default on a headless host) has a
-    place to attach — the ``?tab=`` in the post-launch redirect activates it."""
-    if not terminals:
+    """A compact "N live → Sessions" banner for the project/index pages.
+
+    The Sessions cockpit is the single home for live terminals: it alone embeds
+    xterm and opens the SSE streams. Project/index used to embed the full panel
+    too, so every one of those pages spun up its own duplicate viewer per PTY
+    (N pages × M terminals of streams). Here they just link across — an app launch
+    already redirects to ``/sessions?tab=<id>``, so nothing needs to attach here."""
+    live = [t for t in (terminals or []) if t.alive]
+    if not live:
         return ""
+    n = len(live)
+    plural = "session" if n == 1 else "sessions"
     return (
-        f"{_TERMINAL_HEAD}<section class='band'><div class='wrap'>"
-        f"{_terminal_panel(terminals)}</div></section>{_XTERM_ATTACH_JS}{_TERMINAL_JS}"
+        "<section class='band tight'><div class='wrap'>"
+        "<a class='live-sessions-link' href='/sessions'>"
+        f"<span class='tdot s-running'></span>"
+        f"<b>{n}</b>&nbsp;live in-app terminal {plural}"
+        "<span class='go'>open Sessions &rarr;</span></a>"
+        "</div></section>"
     )
 
 

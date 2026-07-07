@@ -57,7 +57,7 @@ def test_account_quick_button_uses_window_target_on_desktop(monkeypatch):
     assert "name='target' value='window'" in html
 
 
-# --- in-app terminal panel is embedded where launches land -------------------
+# --- project/index show a compact link, not a duplicate terminal -------------
 import types
 
 
@@ -65,19 +65,24 @@ def _fake_term(tid="term-abc", title="claude", alive=True):
     return types.SimpleNamespace(term_id=tid, title=title, alive=alive)
 
 
-def test_terminal_section_empty_without_terminals():
+def test_terminal_section_empty_without_live_terminals():
     assert dashboard._terminal_section(None) == ""
     assert dashboard._terminal_section([]) == ""
+    # All-dead terminals also render nothing — there is no live session to link to.
+    assert dashboard._terminal_section([_fake_term("t", alive=False)]) == ""
 
 
-def test_terminal_section_embeds_xterm_and_pane_for_live_terminal():
-    section = dashboard._terminal_section([_fake_term("term-abc")])
-    assert "/assets/xterm/xterm.js" in section          # assets loaded
-    assert "horusAttachTerm" in section                 # attach JS present
-    assert "data-tid='term-abc'" in section             # a pane for the PTY
-    assert "EventSource('/pty/stream" in section          # SSE wiring
-    # the bootstrap reads ?tab= to activate the launched session
-    assert "URLSearchParams(location.search).get('tab')" in section
+def test_terminal_section_is_a_compact_link_not_an_embedded_terminal():
+    section = dashboard._terminal_section([_fake_term("term-abc"), _fake_term("term-def")])
+    # The Sessions cockpit is the single terminal host: project/index only link over.
+    assert "href='/sessions'" in section                # a link across, not a viewer
+    assert "<b>2</b>" in section                          # counts the live terminals
+    assert "live-sessions-link" in section
+    # Crucially, it must NOT embed xterm assets or open an SSE stream (the old
+    # duplicate-viewer bug): those belong only to /sessions.
+    assert "/assets/xterm/xterm.js" not in section
+    assert "EventSource('/pty/stream" not in section
+    assert "horusAttachTerm" not in section
 
 
 # --- Sessions cockpit (revived Control tab) ----------------------------------

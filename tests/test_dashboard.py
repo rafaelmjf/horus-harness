@@ -696,7 +696,7 @@ def test_project_detail_renders_launch_controls(tmp_path, monkeypatch):
     assert "/assets/xterm/xterm.js" not in page
 
 
-def test_project_detail_embeds_terminal_panel_for_live_session(tmp_path, monkeypatch):
+def test_project_detail_links_to_sessions_without_embedding_terminal(tmp_path, monkeypatch):
     import types
     _init(tmp_path, monkeypatch)
     proj = tmp_path / "demo"
@@ -705,11 +705,17 @@ def test_project_detail_embeds_terminal_panel_for_live_session(tmp_path, monkeyp
     p = dashboard.load_project(str(proj))
     term = types.SimpleNamespace(term_id="term-xyz", title="claude", alive=True)
     page = dashboard.render_project(p, index=0, terminals=[term])
-    # The in-app terminal panel + xterm bootstrap are embedded so a session opened
-    # with target=app (default on a headless host) has somewhere to attach.
-    assert "/assets/xterm/xterm.js" in page
-    assert "data-tid='term-xyz'" in page
-    assert "horusAttachTerm" in page
+    # The Sessions cockpit is the single home for live terminals; the project page
+    # only links across (no duplicate SSE viewer / xterm embed per page).
+    assert "live in-app terminal session" in page   # the banner's distinctive copy
+    assert "open Sessions" in page
+    assert "/assets/xterm/xterm.js" not in page
+    assert "data-tid='term-xyz'" not in page
+    assert "EventSource('/pty/stream" not in page
+
+    # With no live terminal, the banner is absent entirely (CSS class defs aside).
+    page_none = dashboard.render_project(p, index=0, terminals=[])
+    assert "live in-app terminal" not in page_none
 
 
 def test_app_launch_redirects_to_sessions_cockpit(monkeypatch):
