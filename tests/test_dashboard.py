@@ -156,7 +156,8 @@ def test_control_usage_color_and_ring_by_threshold():
     assert ">--<" in dashboard._ring(None)  # unknown usage -> gray, no fill
 
 
-def test_accounts_strip_renders_usage_and_add_wizard():
+def test_accounts_strip_renders_usage_and_add_wizard(monkeypatch):
+    monkeypatch.setattr(dashboard.launcher, "has_display", lambda: True)  # desktop: no in-app target here
     accounts = [{"alias": "work", "agent": "claude", "five_pct": 62.0, "week_pct": 20.0,
                  "five_reset": "2026-06-26 18:00", "week_reset": ""}]
     strip = dashboard._accounts_strip(accounts)
@@ -171,12 +172,14 @@ def test_accounts_strip_empty_state():
     assert "No agent account detected" in dashboard._accounts_strip([])
 
 
-def test_accounts_strip_has_per_account_launch_and_remove():
+def test_accounts_strip_has_per_account_launch_and_remove(monkeypatch):
+    monkeypatch.setattr(dashboard.launcher, "has_display", lambda: True)  # desktop -> native terminal
     strip = dashboard._accounts_strip([
         {"alias": "work", "agent": "claude", "five_pct": 50.0, "week_pct": 10.0,
          "five_reset": "", "week_reset": ""},
     ])
-    # "+ session" launches a native terminal as that account (not the retired in-app PTY).
+    # "+ session" launches a native terminal as that account on a desktop (headless
+    # hosts post the in-app target instead — see test_launch_targets).
     assert "+ session" in strip and "value='window'" in strip and "value='app'" not in strip
     # Remove-account button (red, confirm).
     assert "action='/account-remove'" in strip and "btn-danger" in strip
@@ -663,6 +666,9 @@ def test_dashboard_surfaces_execution_plan(tmp_path, monkeypatch):
 
 def test_project_detail_renders_launch_controls(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
+    # Force a desktop session so native-terminal / VS Code targets are offered
+    # (a headless host would show only the in-app terminal — see test_launch_targets).
+    monkeypatch.setattr(dashboard.launcher, "has_display", lambda: True)
     proj = tmp_path / "demo"
     proj.mkdir()
     initialize.init_project(proj, assume_yes=True)
@@ -677,11 +683,12 @@ def test_project_detail_renders_launch_controls(tmp_path, monkeypatch):
     # Either agent can be launched in a native terminal window (not the Python TUI).
     assert "<select name='agent'>" in page
     assert ">Claude Code</option>" in page and ">Codex</option>" in page
-    # Launch destination choice: native terminal (default) or VS Code.
+    # Launch destinations: in-app terminal (default, works headless) plus native
+    # terminal / VS Code when a desktop session is present.
     assert "<select name='target'>" in page
+    assert "value='app'>In-app terminal" in page
     assert "value='window'>Native terminal" in page
     assert "value='vscode'>VS Code" in page
-    assert "value='app'" not in page  # retired in-app PTY target
     assert "<select name='posture'>" in page
     # Copy-the-command fallback offers Claude + Codex.
     assert "horus open" in page and "--agent codex" in page

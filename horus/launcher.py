@@ -15,6 +15,19 @@ import sys
 from pathlib import Path
 
 
+def has_display() -> bool:
+    """True if a desktop session is available to open a native terminal / VS Code.
+
+    On Windows/macOS a GUI is assumed present. On POSIX it requires an X11 or
+    Wayland display — which a headless host (e.g. the hosted dashboard under
+    systemd) does not have, so callers can hide window/VS Code launch targets
+    and offer the in-app terminal instead.
+    """
+    if sys.platform in ("win32", "darwin"):
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
 def open_terminal(argv: list[str], cwd: Path | str, env: dict[str, str] | None = None) -> int:
     """Launch ``argv`` in its own terminal window; return the child PID.
 
@@ -62,7 +75,7 @@ def open_vscode(project_dir: Path | str) -> int:
 
 
 def _posix_terminal_argv(argv: list[str], *, cwd: Path) -> list[str]:
-    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+    if not has_display():
         raise OSError(
             "no graphical display detected; run `horus open` from a desktop session "
             "or use the dashboard in-app terminal"
