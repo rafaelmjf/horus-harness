@@ -178,7 +178,10 @@ with usage rings + login-driven account wizard · settings/workflow-policy panel
 self-update pill + button (env-migrating, verify-on-land, v0.0.9) · stale-build
 artifact-write guard (v0.0.9) · startup-failure visibility: dashboard.log + mascot error
 surfacing (v0.0.12) · Live-sessions "Reviewed ✓" per-row dismiss + review-contract
-footer — the actionable side of the badge's awaiting-review (v0.0.17).
+footer — the actionable side of the badge's awaiting-review (v0.0.17) ·
+**mobile-friendly in-app terminal** (2026-07-08): touch full-screen mode, on-screen
+key strip (Esc/Tab/arrows/^C/Enter + scrollback + re-raise-keyboard), responsive
+tap targets, non-zoom viewport (PR #124, authored on-device).
 
 **GitHub bridge:** remote catalog (`discover github`, cached snapshots, incremental
 refresh) · onboard `github:owner/repo` (clone→init→integrate via workflow policy) ·
