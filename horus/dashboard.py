@@ -515,8 +515,8 @@ main { padding: 24px 28px; max-width: 1320px; }
 .copy { font-size: 11px; color: var(--seal); background: var(--bg-2); border: 1px solid var(--border-strong);
         border-radius: 6px; padding: 2px 9px; cursor: pointer; }
 .copy:hover { background: var(--raised); }
-.card { background: #151823; border: 1px solid #232733; border-radius: 10px;
-        padding: 16px 18px; margin: 0 0 14px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+        padding: 16px 18px; margin: 0 0 14px; color: var(--ink); }
 .card h2 { margin: 0 0 4px; font-size: 16px; }
 .muted { color: #8a93a6; }
 .badges span { display: inline-block; font-size: 12px; padding: 2px 8px;
@@ -560,7 +560,7 @@ code { background: var(--bg-2); padding: 1px 5px; border-radius: 4px; }
 .section { margin-top: 26px; }
 .back { font-size: 13px; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
-td, th { text-align: left; padding: 6px 10px; border-bottom: 1px solid #232733; }
+td, th { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--hairline); }
 nav { margin-top: 10px; display: flex; gap: 18px; align-items: center; }
 nav a { color: #8a93a6; font-size: 13px; padding-bottom: 4px; border-bottom: 2px solid transparent; }
 nav a.active { color: #e6e6e6; border-bottom-color: #6db3f2; }
