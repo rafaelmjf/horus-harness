@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Callable
 from contextlib import nullcontext
 from datetime import date
 from pathlib import Path
@@ -20,6 +21,23 @@ class UpgradeAction(NamedTuple):
 
 
 V2_LANES = ("project.md", "roadmap.md", "features.md", "decisions.md", "history.md", "execution.md")
+
+
+class StructureMigration(NamedTuple):
+    """One forward migration of the ``.horus/`` layout (e.g. six-lane v2 -> PRD v3).
+
+    The registry (``STRUCTURE_MIGRATIONS``) is the single place a new structure
+    generation is declared: append an entry and every surface — dashboard badge +
+    button, CLI — picks it up with no other change. That is the whole point of the
+    indirection, so a future v3->v4 does not mean re-plumbing the UI.
+    """
+
+    key: str  # stable id used by the dashboard route + CLI (e.g. "prd")
+    from_label: str  # human label of the structure being left, e.g. "six-lane (v2)"
+    to_label: str  # human label of the target structure, e.g. "PRD.md (v3)"
+    summary: str  # one-line advisory shown in the badge/panel
+    detect: Callable[[Path], bool]  # is this migration applicable to the project right now?
+    run: Callable[..., list["UpgradeAction"]]  # (root, *, apply) -> actions
 
 
 def upgrade_project(
@@ -90,6 +108,48 @@ def upgrade_structure_prd(project_root: Path, *, apply: bool = False) -> list[Up
         *[UpgradeAction("updated", f"archived .horus/{name} -> .horus/archive/{name}") for name in lanes],
         UpgradeAction("exists", ".horus/sessions/ and .horus/temp/ preserved"),
     ]
+
+
+def _v2_ready_for_prd(project_root: Path) -> bool:
+    """A six-lane (v2) project that can migrate forward: no PRD.md yet, and the lanes
+    ``upgrade_structure_prd`` requires are present. Cheap and side-effect-free so the
+    dashboard can call it on every render."""
+    hdir = project_root / ".horus"
+    if not hdir.is_dir() or (hdir / frontmatter.PRD_FILE).exists():
+        return False
+    present = {name for name in V2_LANES if (hdir / name).is_file()}
+    return {"project.md", "roadmap.md", "decisions.md"}.issubset(present)
+
+
+STRUCTURE_MIGRATIONS: tuple[StructureMigration, ...] = (
+    StructureMigration(
+        key="prd",
+        from_label="six-lane (v2)",
+        to_label="PRD.md (v3)",
+        summary="This project uses the older six-lane .horus/ layout; migrate it to the PRD.md (v3) structure.",
+        detect=_v2_ready_for_prd,
+        run=upgrade_structure_prd,
+    ),
+)
+
+
+def pending_structure_migration(project_root: Path) -> StructureMigration | None:
+    """The first available forward structure migration for this project, or None.
+
+    Registry-ordered, so adding a future v3->v4 migration is just another
+    ``STRUCTURE_MIGRATIONS`` entry — this resolver and every caller are unchanged.
+    """
+    for migration in STRUCTURE_MIGRATIONS:
+        try:
+            if migration.detect(project_root):
+                return migration
+        except OSError:
+            continue
+    return None
+
+
+def structure_migration_by_key(key: str) -> StructureMigration | None:
+    return next((m for m in STRUCTURE_MIGRATIONS if m.key == key), None)
 
 
 def _migration_git_safety(project_root: Path) -> str | None:

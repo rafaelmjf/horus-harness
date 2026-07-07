@@ -89,6 +89,8 @@ def load_project(path_str: str) -> dict[str, Any]:
         "findings": [],
         "artifacts_stale": False,
         "artifacts_stale_count": 0,
+        "structure_stale": False,
+        "structure_migration": None,
         "projection_sync": {"verdict": "unknown"},
         "next_action": "",
         "execution_recommendation": "",
@@ -199,6 +201,25 @@ def load_project(path_str: str) -> dict[str, Any]:
     except Exception:
         # never let a projection check break the dashboard render
         data["artifacts_stale"] = False
+
+    # Structure-version staleness is a *separate* axis from artifact staleness above:
+    # a project's .horus/ layout (six-lane v2 vs PRD v3, and any future generation)
+    # can be behind even when its managed block/skills/hooks are current. Detection is
+    # registry-driven (upgrade.STRUCTURE_MIGRATIONS) so future generations surface here
+    # with no change. Guarded like the artifact check — never break the render.
+    try:
+        migration = upgrade.pending_structure_migration(root)
+        if migration is not None:
+            data["structure_stale"] = True
+            data["structure_migration"] = {
+                "key": migration.key,
+                "from": migration.from_label,
+                "to": migration.to_label,
+                "summary": migration.summary,
+            }
+    except Exception:
+        data["structure_stale"] = False
+        data["structure_migration"] = None
 
     # Per-surface sync (Claude vs installed CLI, Codex vs installed CLI - never
     # surfaces to each other). Read-only and self-guarded; see projection_sync.
@@ -1377,6 +1398,8 @@ def _project_column(p: dict[str, Any], i: int, aliases: list[dict[str, Any]] | N
     status_badges = [f"<span class='badge'>status {html.escape(p['status']) or 'unknown'}</span>", f"<span class='badge'><b class='mono'>{len(p['sessions'])}</b>&nbsp;sessions</span>"]
     if p.get("artifacts_stale"):
         status_badges.append("<span class='badge seal'><span class='gd'></span>&#9888; artifacts outdated</span>")
+    if p.get("structure_stale"):
+        status_badges.append("<span class='badge warn'><span class='gd'></span>&#9888; structure outdated</span>")
     if p.get("cli_outdated"):
         status_badges.append("<span class='badge seal'><span class='gd'></span>&#9888; Horus CLI outdated</span>")
     if git.get("dirty"):
@@ -1398,6 +1421,8 @@ def _project_column(p: dict[str, Any], i: int, aliases: list[dict[str, Any]] | N
             f"<input type='hidden' name='project' value='{i}'>"
             "<button class='btn btn-warn' type='submit'>Refresh artifacts</button></form>"
         )
+    if p.get("structure_stale") and p.get("structure_migration"):
+        refresh += _migrate_structure_button(i, p["structure_migration"])
     return (
         "<article class='pcard'>"
         f"<a class='card-link' href='/project?i={i}' aria-label='Open project'></a>"
@@ -2059,6 +2084,8 @@ def render_project(p: dict[str, Any], *, index: int | None = None, notice: str =
             f"<p class='lead' style='font-size:13.5px'>&#9888; artifacts outdated - {html.escape(str(p.get('artifacts_stale_count', 0)))} item(s) behind the installed CLI. "
             "Run <code>horus upgrade-project --apply</code> or use Refresh artifacts.</p></div>"
         )
+    if p.get("structure_stale") and p.get("structure_migration") and index is not None:
+        main_parts.append(_structure_migration_panel(idx, p["structure_migration"]))
     if p.get("cli_outdated"):
         main_parts.append(
             "<div class='panel'><div class='ph'><span class='eyebrow'>Horus CLI outdated</span></div>"
@@ -2229,6 +2256,44 @@ def _upgrade_button(index: int) -> str:
         "<button class='btn btn-go' type='submit' "
         "title='Refresh Horus-managed artifacts to the installed version'>Refresh now</button>"
         "</form>"
+    )
+
+
+def _migrate_structure_button(index: int, migration: dict[str, str]) -> str:
+    """One-click structure migration (same-origin POST, project by index + migration key).
+
+    Safe to expose as a button because the migration is git-reversible by construction:
+    ``upgrade.upgrade_structure_prd`` refuses on a dirty/behind tree and *archives* the old
+    lanes rather than deleting them, so applying leaves nothing but a clean, revertable
+    working-tree delta. The confirm dialog states this; guard refusals surface as a banner."""
+    from_label = html.escape(migration.get("from", ""), quote=True)
+    to_label = html.escape(migration.get("to", ""), quote=True)
+    key = html.escape(migration.get("key", ""), quote=True)
+    return (
+        " <form method='post' action='/migrate-structure' style='display:inline' "
+        f"onsubmit='return confirm(\"Migrate .horus/ from {from_label} to {to_label}? "
+        "Old lane files are archived (not deleted); the change is a clean, git-reversible working-tree delta.\")'>"
+        f"<input type='hidden' name='project' value='{index}'>"
+        f"<input type='hidden' name='migration' value='{key}'>"
+        "<button class='btn btn-warn' type='submit' "
+        f"title='Run horus upgrade-project --structure {key} --apply'>Migrate structure</button></form>"
+    )
+
+
+def _structure_migration_panel(index: int, migration: dict[str, str]) -> str:
+    """Detail-page advisory panel + guarded button for a pending .horus/ structure migration."""
+    summary = html.escape(migration.get("summary", ""))
+    to_label = html.escape(migration.get("to", ""))
+    return (
+        "<div class='panel'><div class='ph'><span class='eyebrow'>Structure outdated</span>"
+        "<span class='x mono'>.horus/</span></div>"
+        f"<p class='lead' style='font-size:13.5px'>&#9888; {summary} "
+        "Old lane files are archived to <code>.horus/archive/</code> (not deleted) and the change "
+        "is a clean, git-reversible working-tree delta for you to review and commit. The migration "
+        "refuses to run on a dirty or behind-origin tree &mdash; commit or pull first.</p>"
+        f"{_migrate_structure_button(index, migration).strip()}"
+        f"<p class='muted' style='font-size:12px;margin-top:8px'>Migrates to {to_label}. "
+        "The generated PRD may carry agent-polish TODO markers to tidy afterwards.</p></div>"
     )
 
 
@@ -2983,6 +3048,29 @@ def process_upgrade_project(form: dict[str, str], *, projects: list[str] | None 
     return f"/project?i={idx}&upgraded={updated}"
 
 
+def process_migrate_structure(form: dict[str, str], *, projects: list[str] | None = None) -> str:
+    """Apply a registered `.horus/` structure migration (by project index + migration key).
+
+    Guarded like every other in-process write: refuses on a stale dashboard build, and
+    surfaces the migration's own git-safety refusals (dirty/behind tree) as an error
+    banner rather than leaving a half-applied tree."""
+    root, idx = _project_by_index(form, projects)
+    if root is None:
+        return "/?migrate_error=" + quote_plus("unknown project")
+    if _stale_build():
+        return f"/project?i={idx}&stale_build=1"
+    key = (form.get("migration") or "").strip()
+    migration = upgrade.structure_migration_by_key(key)
+    if migration is None:
+        return f"/project?i={idx}&migrate_error=" + quote_plus(f"unknown migration '{key}'")
+    actions = migration.run(root, apply=True)
+    errors = [a for a in actions if a.status == "error"]
+    if errors:
+        return f"/project?i={idx}&migrate_error=" + quote_plus(errors[0].message)
+    changed = sum(1 for a in actions if a.status in ("created", "updated"))
+    return f"/project?i={idx}&migrated={changed}&migrated_to=" + quote_plus(migration.to_label)
+
+
 def process_session_dismiss(form: dict[str, str]) -> str:
     """POST /session-dismiss: drop one *finished* worker record after review.
 
@@ -3039,6 +3127,17 @@ def _project_action_banner(params: dict[str, list[str]]) -> str:
         return f"<div class='banner ok'>Refreshed Horus artifacts &mdash; {n} item(s) updated.</div>"
     if "upgrade_error" in params:
         return f"<div class='banner err'>Upgrade failed: {html.escape(params['upgrade_error'][0])}</div>"
+    if "migrated" in params:
+        n = html.escape(params["migrated"][0])
+        to = html.escape(params.get("migrated_to", [""])[0])
+        dest = f" to {to}" if to else ""
+        return (
+            f"<div class='banner ok'>Migrated .horus/ structure{dest} &mdash; {n} file(s) changed. "
+            "Old lanes archived under <code>.horus/archive/</code>; review the generated "
+            "<code>PRD.md</code> (it may carry agent-polish TODO markers) and commit.</div>"
+        )
+    if "migrate_error" in params:
+        return f"<div class='banner err'>Structure migration failed: {html.escape(params['migrate_error'][0])}</div>"
     if "offboarded" in params:
         name = html.escape(params["offboarded"][0])
         extra = " and deleted its <code>.horus/</code> memory" if "purged" in params else " (<code>.horus/</code> kept)"
@@ -3440,6 +3539,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/settings",
             "/self-update",
             "/upgrade-project",
+            "/migrate-structure",
             "/offboard",
             "/open-lane",
             "/session-dismiss",
@@ -3487,6 +3587,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/upgrade-project":
             self._redirect(process_upgrade_project(self._read_form()))
+            return
+        if parsed.path == "/migrate-structure":
+            self._redirect(process_migrate_structure(self._read_form()))
             return
         if parsed.path == "/offboard":
             self._redirect(process_offboard(self._read_form()))
