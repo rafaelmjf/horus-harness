@@ -622,10 +622,22 @@ button.linkbtn:hover { color: #b9c2d0; }
 .term-pane { display: none; background: #0b0d12; border: 1px solid #284058;
             border-radius: 0 8px 8px 8px; padding: 8px; }
 .term-pane.active { display: block; }
+/* Full-screen mode: the pane becomes the whole viewport, exactly like the
+   pop-out window — no page scroll/zoom/keyboard fight. Auto-on for touch. */
+.term-pane.fs { position: fixed; inset: 0; z-index: 200; margin: 0;
+                border-radius: 0; padding: 8px; display: flex; flex-direction: column; }
+.term-pane.fs .xterm-host { flex: 1; height: auto; min-height: 0; }
+body.term-fs { overflow: hidden; }
 .term-bar { display: flex; justify-content: space-between; align-items: center; padding: 0 4px 6px; }
 .term-bar .popout { margin: 0; }
 .xterm-host { height: 420px; }
 .xterm-host .xterm { height: 100%; }
+/* Phones: taller terminal, bigger tap targets for the tab strip. */
+@media (max-width: 700px) {
+  .xterm-host { height: 62vh; }
+  .term-tab { font-size: 13px; padding: 9px 13px; }
+  .term-pane { padding: 6px 4px; }
+}
 .live-sessions-link { display: inline-flex; align-items: center; gap: 9px; font-size: 13px;
     color: var(--ink-2); background: var(--panel-2); border: 1px solid var(--border);
     border-radius: var(--r-pill, 999px); padding: 8px 16px; text-decoration: none; }
@@ -2824,6 +2836,8 @@ def _terminal_panel(terminals: list[pty_host.PtyTerminal]) -> str:
             f"<div class='term-pane' data-tid='{tid}'>"
             f"<div class='term-bar'><span class='muted'>{title}</span>"
             "<span style='display:flex;gap:12px'>"
+            f"<button class='termfs linkbtn' data-tid='{tid}' title='Full screen (best on mobile)'>"
+            "&#9974; full screen</button>"
             f"<button class='popout linkbtn' data-tid='{tid}' title='Open this session in its own window'>"
             "&#10696; pop out</button>"
             f"<button class='termclose linkbtn' data-tid='{tid}' "
@@ -2859,11 +2873,55 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     var body=Object.keys(obj).map(function(k){return k+'='+encodeURIComponent(obj[k]);}).join('&');
     fetch(path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});
   }
-  var term=new Terminal({convertEol:false, cursorBlink:true, fontSize:13,
+  var term=new Terminal({convertEol:false, cursorBlink:true, fontSize:13, scrollback:5000,
     fontFamily:'ui-monospace, SFMono-Regular, Consolas, monospace',
     theme:{background:'#0b0d12', foreground:'#e6e6e6'}});
   var fit=new FitAddon.FitAddon(); term.loadAddon(fit);
-  term.open(document.getElementById(hostId));
+  var host=document.getElementById(hostId);
+  term.open(host);
+  // Touch keybar: phone soft keyboards have no Esc/Tab/arrows/Ctrl, but agent
+  // TUIs need them to navigate, complete, cancel and interrupt. Show an on-screen
+  // key strip (bytes sent through the same /pty/input path) on coarse-pointer or
+  // narrow screens; the ⌨ button re-raises the OS keyboard for typing text.
+  var showBar=(window.matchMedia && matchMedia('(pointer:coarse)').matches) || window.innerWidth<800;
+  if(showBar && host && host.parentNode){
+    if(!document.getElementById('horus-keybar-style')){
+      var st=document.createElement('style'); st.id='horus-keybar-style';
+      st.textContent='.horus-keybar{display:flex;flex-wrap:wrap;gap:6px;padding:8px 4px;background:#0b0d12;'
+        +'border-top:1px solid #232733;}'
+        +'.horus-keybar button{flex:0 0 auto;min-width:44px;min-height:40px;font:inherit;font-size:14px;'
+        +'color:#cdd6e4;background:#191a1f;border:1px solid #3a4250;border-radius:8px;padding:6px 12px;'
+        +'cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;}'
+        +'.horus-keybar button:active{background:#2c3140;color:#fff;}';
+      document.head.appendChild(st);
+    }
+    var KEYS=[{t:'Esc',b:'\\x1b'},{t:'Tab',b:'\\t'},{t:'\\u2191',b:'\\x1b[A'},{t:'\\u2193',b:'\\x1b[B'},
+      {t:'\\u2190',b:'\\x1b[D'},{t:'\\u2192',b:'\\x1b[C'},{t:'^C',b:'\\x03'},{t:'\\u23ce',b:'\\r'}];
+    var bar=document.createElement('div'); bar.className='horus-keybar';
+    KEYS.forEach(function(k){
+      var btn=document.createElement('button'); btn.type='button'; btn.textContent=k.t;
+      btn.addEventListener('mousedown', function(e){ e.preventDefault(); });
+      btn.addEventListener('click', function(e){ e.preventDefault();
+        post('/pty/input',{id:tid, data:k.b}); term.focus(); });
+      bar.appendChild(btn);
+    });
+    // Scroll the scrollback buffer — touch can't wheel-scroll xterm and the
+    // scrollbar isn't reachable on a phone, so give explicit page up/down.
+    function actBtn(label, title, fn){
+      var b=document.createElement('button'); b.type='button'; b.textContent=label; b.title=title;
+      b.addEventListener('mousedown', function(e){ e.preventDefault(); });
+      b.addEventListener('click', function(e){ e.preventDefault(); fn(); });
+      bar.appendChild(b);
+    }
+    actBtn('\\u2912','Scroll up to older output', function(){ term.scrollLines(-Math.max(3, term.rows-1)); });
+    actBtn('\\u2913','Scroll down', function(){ term.scrollLines(Math.max(3, term.rows-1)); });
+    var kb=document.createElement('button'); kb.type='button'; kb.textContent='\\u2328';
+    kb.title='Show keyboard';
+    kb.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    kb.addEventListener('click', function(e){ e.preventDefault(); term.focus(); });
+    bar.appendChild(kb);
+    host.parentNode.insertBefore(bar, host.nextSibling);
+  }
   function sync(){ try{fit.fit();}catch(_){ } if(term.cols>0 && term.rows>0){ post('/pty/resize',{id:tid, cols:term.cols, rows:term.rows}); } }
   term.onData(function(d){ post('/pty/input',{id:tid, data:d}); });
   term.onResize(function(s){ if(s.cols>0 && s.rows>0){ post('/pty/resize',{id:tid, cols:s.cols, rows:s.rows}); } });
@@ -2894,7 +2952,19 @@ _TERMINAL_JS = """
   function activate(tid){
     document.querySelectorAll('.term-tab').forEach(function(t){t.classList.toggle('active', t.dataset.tid===tid);});
     document.querySelectorAll('.term-pane').forEach(function(p){p.classList.toggle('active', p.dataset.tid===tid);});
+    // In full-screen mode keep the overlay on the newly-active pane only.
+    if(document.body.classList.contains('term-fs')){
+      document.querySelectorAll('.term-pane').forEach(function(p){p.classList.toggle('fs', p.dataset.tid===tid);});
+    }
     var t=terms[tid]; if(t){ t.sync(); t.term.focus(); }
+  }
+  function toggleFs(tid, on){
+    var pane=document.querySelector('.term-pane[data-tid="'+tid+'"]'); if(!pane){return;}
+    var want=(on===undefined)? !pane.classList.contains('fs') : on;
+    pane.classList.toggle('fs', want);
+    document.body.classList.toggle('term-fs', want);
+    var btn=pane.querySelector('.termfs'); if(btn){ btn.innerHTML = want ? '\\u2715 exit full screen' : '\\u26f6 full screen'; }
+    var t=terms[tid]; if(t){ setTimeout(function(){ t.sync(); t.term.focus(); }, 60); }
   }
   function removeTab(tid){
     var t=terms[tid]; delete terms[tid];
@@ -2921,6 +2991,9 @@ _TERMINAL_JS = """
   document.querySelectorAll('.term-tab').forEach(function(t){
     t.addEventListener('click', function(){activate(t.dataset.tid);});
   });
+  document.querySelectorAll('.termfs').forEach(function(b){
+    b.addEventListener('click', function(e){ e.stopPropagation(); toggleFs(b.dataset.tid); });
+  });
   document.querySelectorAll('.popout').forEach(function(b){
     b.addEventListener('click', function(e){ e.stopPropagation();
       window.open('/pty/term?id='+encodeURIComponent(b.dataset.tid), 'horus-'+b.dataset.tid,
@@ -2939,6 +3012,12 @@ _TERMINAL_JS = """
   var first=document.querySelector('.term-tab');
   if(want && document.querySelector('.term-tab[data-tid="'+want+'"]')){activate(want);}
   else if(first){activate(first.dataset.tid);}
+  // Touch devices: open the active terminal full-screen so it behaves like the
+  // pop-out (which users found usable) instead of a cramped box in a scrolling page.
+  if(window.matchMedia && matchMedia('(pointer:coarse)').matches){
+    var a=document.querySelector('.term-tab.active');
+    if(a){ toggleFs(a.dataset.tid, true); }
+  }
 })();
 </script>
 """
@@ -2953,9 +3032,12 @@ def render_pty_term_page(term_id: str, title: str = "") -> str:
     label = html.escape(title or term_id)
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1, "
+        "maximum-scale=1, user-scalable=no'>"
         f"<title>Horus terminal — {label}</title>{_TERMINAL_HEAD}"
         "<style>html,body{margin:0;height:100%;background:#0b0d12;}"
-        "#term{position:fixed;inset:0;padding:6px;}</style></head><body>"
+        "body{display:flex;flex-direction:column;}"
+        "#term{flex:1;min-height:0;padding:6px;}</style></head><body>"
         f"<div id='term'></div>{_XTERM_ATTACH_JS}"
         f"<script>window.horusAttachTerm('term', '{tid}');</script>"
         "</body></html>"
