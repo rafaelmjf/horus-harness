@@ -78,3 +78,33 @@ def test_terminal_section_embeds_xterm_and_pane_for_live_terminal():
     assert "EventSource('/pty/stream" in section          # SSE wiring
     # the bootstrap reads ?tab= to activate the launched session
     assert "URLSearchParams(location.search).get('tab')" in section
+
+
+# --- Sessions cockpit (revived Control tab) ----------------------------------
+
+def test_nav_includes_sessions_link(monkeypatch):
+    monkeypatch.setattr(dashboard.pty_host.host, "terminals", lambda: [])
+    nav = dashboard._nav("projects")
+    assert "href='/sessions'" in nav and ">Sessions" in nav
+
+
+def test_nav_sessions_badge_counts_open_terminals(monkeypatch):
+    monkeypatch.setattr(dashboard.pty_host.host, "terminals",
+                        lambda: [_fake_term("a", alive=True), _fake_term("b", alive=True), _fake_term("c", alive=False)])
+    nav = dashboard._nav("sessions")
+    assert ">2<" in nav  # badge counts only the 2 alive terminals
+    assert 'class="active"' in nav  # Sessions highlighted when active
+
+
+def test_render_sessions_shows_cockpit_with_open_terminal():
+    page = dashboard.render_sessions([_fake_term("term-xyz", title="claude")], [])
+    assert "/assets/xterm/xterm.js" in page       # cockpit xterm assets
+    assert "data-tid='term-xyz'" in page          # a sub-tab/pane for the session
+    assert "horusAttachTerm" in page
+    assert ">Sessions<" in page                    # page heading
+
+
+def test_render_sessions_empty_state():
+    page = dashboard.render_sessions([], [])
+    assert "No in-app terminals yet" in page       # empty cockpit hint
+    assert "No tracked agent sessions" in page      # empty registry list

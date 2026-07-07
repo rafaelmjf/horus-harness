@@ -712,6 +712,21 @@ def test_project_detail_embeds_terminal_panel_for_live_session(tmp_path, monkeyp
     assert "horusAttachTerm" in page
 
 
+def test_app_launch_redirects_to_sessions_cockpit(monkeypatch):
+    # An in-app terminal launch (query "tab=<id>") lands on the Sessions cockpit.
+    monkeypatch.setattr(dashboard, "process_launch", lambda form, **kw: "tab=pty-9")
+    resp = _post("/launch", {"project": "0", "target": "app", "agent": "claude", "mode": "fresh"})
+    assert resp["status"] == 303
+    assert dict(resp["headers"]).get("Location") == "/sessions?tab=pty-9"
+
+
+def test_window_launch_still_redirects_to_project(monkeypatch):
+    monkeypatch.setattr(dashboard, "process_launch", lambda form, **kw: "launched=abcd1234")
+    resp = _post("/launch", {"project": "2", "target": "window", "agent": "claude", "mode": "fresh"})
+    assert resp["status"] == 303
+    assert dict(resp["headers"]).get("Location") == "/project?i=2&launched=abcd1234"
+
+
 def test_process_launch_window_routes_selected_agent(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     proj = tmp_path / "demo"
