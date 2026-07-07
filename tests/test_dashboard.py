@@ -887,6 +887,66 @@ def test_process_upgrade_project_unknown_index(tmp_path, monkeypatch):
     assert dashboard.process_upgrade_project({"project": "9"}).startswith("/?upgrade_error=")
 
 
+def _v2_project(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "v2proj"
+    hdir = proj / ".horus"
+    hdir.mkdir(parents=True)
+    (hdir / "project.md").write_text("---\nstatus: active\n---\n# Project\n\nVision.\n", encoding="utf-8")
+    (hdir / "roadmap.md").write_text("---\nstatus: active\n---\n# Roadmap\n\n## Now\n\n- [ ] Task\n", encoding="utf-8")
+    (hdir / "decisions.md").write_text("# Decisions\n\n- **Rule** — do it.\n", encoding="utf-8")
+    config.register_project(proj)
+    return proj
+
+
+def test_load_project_flags_structure_stale_for_v2(tmp_path, monkeypatch):
+    proj = _v2_project(tmp_path, monkeypatch)
+    p = dashboard.load_project(str(proj))
+    assert p["structure_stale"] is True
+    assert p["structure_migration"]["key"] == "prd"
+
+
+def test_project_column_shows_structure_badge_and_button(tmp_path, monkeypatch):
+    proj = _v2_project(tmp_path, monkeypatch)
+    col = dashboard._project_column(dashboard.load_project(str(proj)), 0)
+    assert "structure outdated" in col
+    assert "action='/migrate-structure'" in col and "Migrate structure" in col
+
+
+def test_render_project_shows_structure_panel(tmp_path, monkeypatch):
+    proj = _v2_project(tmp_path, monkeypatch)
+    detail = dashboard.render_project(dashboard.load_project(str(proj)), index=0)
+    assert "Structure outdated" in detail
+    assert "action='/migrate-structure'" in detail
+    assert "archived (not deleted)" in detail  # git-reversibility stated in the confirm
+
+
+def test_process_migrate_structure_applies_and_redirects(tmp_path, monkeypatch):
+    proj = _v2_project(tmp_path, monkeypatch)
+    out = dashboard.process_migrate_structure({"project": "0", "migration": "prd"})
+    assert out.startswith("/project?i=0&migrated=")
+    assert (proj / ".horus" / "PRD.md").is_file()
+    assert (proj / ".horus" / "archive" / "project.md").is_file()  # old lane archived, not deleted
+
+
+def test_process_migrate_structure_unknown_migration(tmp_path, monkeypatch):
+    _v2_project(tmp_path, monkeypatch)
+    out = dashboard.process_migrate_structure({"project": "0", "migration": "bogus"})
+    assert out.startswith("/project?i=0&migrate_error=")
+
+
+def test_process_migrate_structure_unknown_project(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    assert dashboard.process_migrate_structure({"project": "9", "migration": "prd"}).startswith("/?migrate_error=")
+
+
+def test_process_migrate_structure_refuses_stale_build(tmp_path, monkeypatch):
+    proj = _v2_project(tmp_path, monkeypatch)
+    _force_stale_build(monkeypatch)
+    assert dashboard.process_migrate_structure({"project": "0", "migration": "prd"}) == "/project?i=0&stale_build=1"
+    assert not (proj / ".horus" / "PRD.md").exists()  # nothing written
+
+
 def _force_stale_build(monkeypatch):
     monkeypatch.setattr(
         dashboard.selfupdate,

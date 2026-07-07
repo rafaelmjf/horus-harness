@@ -108,3 +108,42 @@ def test_legacy_unversioned_block_still_refreshes(tmp_path, monkeypatch):
 def test_shared_block_carries_version_marker():
     block = templates.shared_block("CLAUDE.md")
     assert f"<!-- horus-block-version: {templates.BLOCK_VERSION} -->" in block
+
+
+def _write_v2_lanes(root):
+    hdir = root / ".horus"
+    hdir.mkdir(parents=True, exist_ok=True)
+    (hdir / "project.md").write_text("---\nstatus: active\n---\n# Project\n\nVision.\n", encoding="utf-8")
+    (hdir / "roadmap.md").write_text("---\nstatus: active\n---\n# Roadmap\n\n## Now\n\n- [ ] Task\n", encoding="utf-8")
+    (hdir / "decisions.md").write_text("# Decisions\n\n- **Rule** — do it.\n", encoding="utf-8")
+    return hdir
+
+
+def test_pending_structure_migration_detects_v2(tmp_path):
+    _write_v2_lanes(tmp_path)
+    migration = upgrade.pending_structure_migration(tmp_path)
+    assert migration is not None
+    assert migration.key == "prd"
+    assert migration.from_label == "six-lane (v2)" and migration.to_label == "PRD.md (v3)"
+
+
+def test_pending_structure_migration_none_for_v3(tmp_path):
+    _write_v2_lanes(tmp_path)
+    (tmp_path / ".horus" / "PRD.md").write_text("---\nstatus: active\n---\n# PRD\n", encoding="utf-8")
+    assert upgrade.pending_structure_migration(tmp_path) is None
+
+
+def test_pending_structure_migration_none_when_required_lane_missing(tmp_path):
+    hdir = tmp_path / ".horus"
+    hdir.mkdir(parents=True)
+    (hdir / "project.md").write_text("# Project\n", encoding="utf-8")  # roadmap.md / decisions.md absent
+    assert upgrade.pending_structure_migration(tmp_path) is None
+
+
+def test_pending_structure_migration_none_without_horus_dir(tmp_path):
+    assert upgrade.pending_structure_migration(tmp_path) is None
+
+
+def test_structure_migration_by_key(tmp_path):
+    assert upgrade.structure_migration_by_key("prd") is not None
+    assert upgrade.structure_migration_by_key("nope") is None
