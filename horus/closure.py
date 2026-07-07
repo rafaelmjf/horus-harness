@@ -15,7 +15,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from horus import codex_usage, routines
+from horus import codex_usage, frontmatter, routines
 from horus.continuity import Finding, check_project, recent_sessions
 from horus.instructions import check_drift
 
@@ -87,6 +87,74 @@ def freshness_gate(root: Path) -> list[Finding]:
     return routines.freshness_signals(root)
 
 
+def _enforce_push(root: Path) -> bool:
+    """Whether the push half of the checkpoint applies to this repo.
+
+    A repo that intentionally never pushes (local-only, or no write access to origin)
+    opts out with ``enforce_push: false`` in its PRD.md (v3) or project.md (v2)
+    frontmatter. Absent or unparseable → enforce (the default). The dirty-tree half of
+    the checkpoint always applies — every repo wants its work committed."""
+    hdir = root / ".horus"
+    for name in (frontmatter.PRD_FILE, "project.md"):
+        doc = frontmatter.parse_file(hdir / name)
+        if doc is None:
+            continue
+        val = doc.front_matter.get("enforce_push")
+        if isinstance(val, str) and val.strip():
+            return val.strip().lower() not in ("false", "no", "off", "0")
+        return True  # continuity file present, key unset → enforce
+    return True
+
+
+def checkpoint_gate(root: Path) -> list[Finding]:
+    """Git-checkpoint signal for `close --check` / the Stop hook: is the working tree
+    committed and are local commits pushed?
+
+    This turns the working-discipline "bound each step to a committed-and-pushed
+    checkpoint" from a remembered habit into an observed signal, so a session can't
+    quietly end with a dirty tree or commits stranded only on this machine.
+
+    - **Dirty tree** — any uncommitted change (broader than the continuity-only check
+      in :func:`closure_status`); always checked.
+    - **Unpushed commits** — local commits the branch's upstream doesn't have. Skipped
+      when the repo opts out (``enforce_push: false``) or has no upstream to push to
+      (nowhere to push, and no protected-branch footgun to guard against).
+
+    Reports only — never pushes — so the branch-first rule is respected by construction
+    (an agent decides whether to push to a protected default). Errs toward silence on
+    any git trouble (a broken checker must never wedge a close)."""
+    if not is_git_repo(root):
+        return []
+    findings: list[Finding] = []
+
+    status = _git(root, "status", "--porcelain")
+    if status is None:
+        return findings  # git trouble → stay silent
+    dirty = [line for line in status.splitlines() if line.strip()]
+    if dirty:
+        findings.append(Finding(
+            "warn",
+            f"{len(dirty)} uncommitted change(s) in the working tree; commit before "
+            "closing (`horus close --commit` for continuity, or commit your work)",
+        ))
+    else:
+        findings.append(Finding("ok", "working tree clean"))
+
+    if _enforce_push(root):
+        upstream = _git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+        if upstream:
+            ahead = _git(root, "rev-list", "--count", "@{upstream}..HEAD")
+            if ahead and ahead.isdigit() and int(ahead) > 0:
+                findings.append(Finding(
+                    "warn",
+                    f"{ahead} local commit(s) not pushed to {upstream}; push before "
+                    "closing (`git push`, or `horus close --commit --push` for continuity)",
+                ))
+            else:
+                findings.append(Finding("ok", "local commits pushed to upstream"))
+    return findings
+
+
 def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding]:
     """Compose continuity health + instruction drift + git-aware closure signals."""
     findings = list(check_project(root))
@@ -119,6 +187,7 @@ def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding
         else:
             findings.append(Finding("ok", "continuity files committed"))
 
+    findings.extend(checkpoint_gate(root))
     return findings
 
 

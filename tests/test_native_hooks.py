@@ -289,6 +289,59 @@ def test_offboard_strips_the_usage_guard_hook(tmp_path):
     assert native_hooks.file_has_horus_hooks(native_hooks.claude_settings_path(tmp_path)) is False
 
 
+def test_install_claude_checkpoint_hook_creates_stop_hook(tmp_path):
+    action = native_hooks.install_claude_checkpoint_hook(tmp_path)
+    assert action.status == "created"
+    data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    group = data["hooks"]["Stop"][0]
+    assert group["hooks"][0]["command"] == "horus checkpoint --hook || exit 0"
+
+
+def test_install_claude_checkpoint_hook_idempotent(tmp_path):
+    native_hooks.install_claude_checkpoint_hook(tmp_path)
+    assert native_hooks.install_claude_checkpoint_hook(tmp_path).status == "exists"
+
+
+def test_checkpoint_coexists_with_usage_stop_hook(tmp_path):
+    """The Claude usage hook also lives on Stop — the two must not clobber each other
+    (distinct markers)."""
+    native_hooks.install_claude_usage_hook(tmp_path, threshold=90)
+    native_hooks.install_claude_checkpoint_hook(tmp_path)
+    native_hooks.install_claude_usage_hook(tmp_path, threshold=90)  # re-run must keep both
+    data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    commands = {g["hooks"][0]["command"] for g in data["hooks"]["Stop"]}
+    assert "horus checkpoint --hook || exit 0" in commands
+    assert any("horus usage check" in c for c in commands)
+
+
+def test_install_codex_checkpoint_hook_creates_stop_hook(tmp_path):
+    action = native_hooks.install_codex_checkpoint_hook(tmp_path)
+    assert action.status == "created"
+    data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    handler = data["hooks"]["Stop"][0]["hooks"][0]
+    assert handler["command"] == "horus checkpoint --hook || exit 0"
+    assert "Get-Command horus" in handler["commandWindows"]  # PS 5.1-safe guard
+
+
+def test_codex_checkpoint_coexists_with_usage_stop_hook(tmp_path):
+    native_hooks.install_codex_usage_hook(tmp_path, threshold=90)
+    native_hooks.install_codex_checkpoint_hook(tmp_path)
+    native_hooks.install_codex_usage_hook(tmp_path, threshold=90)
+    data = json.loads((tmp_path / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    commands = {g["hooks"][0]["command"] for g in data["hooks"]["Stop"]}
+    assert "horus checkpoint --hook || exit 0" in commands
+    assert any("horus usage check" in c for c in commands)
+
+
+def test_offboard_strips_the_checkpoint_hook(tmp_path):
+    native_hooks.install_claude_checkpoint_hook(tmp_path)
+    native_hooks.install_codex_checkpoint_hook(tmp_path)
+    native_hooks.remove_claude_hooks(tmp_path)
+    native_hooks.remove_codex_hooks(tmp_path)
+    assert native_hooks.file_has_horus_hooks(native_hooks.claude_settings_path(tmp_path)) is False
+    assert native_hooks.file_has_horus_hooks(native_hooks.codex_hooks_path(tmp_path)) is False
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="exercises the POSIX guard under /bin/sh")
 def test_guarded_hook_is_silent_noop_when_cli_missing(tmp_path):
     """A repo clone on a machine without Horus: the committed hook command must exit 0

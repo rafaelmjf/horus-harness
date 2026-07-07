@@ -48,7 +48,7 @@ horus session new "<title>"       # create a dated session summary from the temp
 horus close                       # verify continuity, Codex usage, and print the closure ritual
 horus close --usage-threshold 90  # warn when Codex context or rate-limit usage reaches a percent
 horus usage check                 # check the same native-app usage signal directly
-horus hook install --target codex --kind all # install Codex usage/merge/guard hooks
+horus hook install --target codex --kind all # install Codex usage/merge/guard/checkpoint hooks
 horus execution prompt --target codex # print a supervisor prompt for phased work
 horus execution handoff 1A        # create .horus/temp/1A.md worker note
 horus consolidate                 # route/prune/distill .horus lanes; prints the agent ritual
@@ -210,8 +210,10 @@ starting another large turn.
 
 For native Codex warnings and gates, run `horus hook install --target codex --kind all --path .`.
 That writes project-local `.codex/hooks.json` hooks for usage closure, pre-merge
-closure, and hosted-session self-restart safety. Codex may ask you to review/trust
-the hook with `/hooks` before it runs.
+closure, hosted-session self-restart safety, and a Stop-time commit-and-push
+checkpoint (warns when a session ends with a dirty tree or unpushed commits — opt out
+per repo with `enforce_push: false` in `.horus/PRD.md`). Codex may ask you to
+review/trust the hook with `/hooks` before it runs.
 
 ## License
 
