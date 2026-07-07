@@ -9,9 +9,32 @@ from urllib.parse import urlencode
 
 import json
 
+import pytest
+
 from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry
 from horus.registry import Registry, SessionRecord
 from horus.upgrade import UpgradeAction
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dashboard_access_globals():
+    """Snapshot and restore the exposed-mode gate globals around every test.
+
+    ``dashboard.serve()`` calls ``_configure_access()``, which reads the real
+    ``~/.horus/config.toml``. On a host where the dashboard is exposed (an
+    ``[access]`` block present) that sets the module-global ``_DASH_ACCESS`` to a
+    non-None gate, and it would otherwise leak into every later POST test — those
+    hit the exposed-mode guard and 403 instead of redirecting. That made full-suite
+    runs flaky (order-dependent), while isolated runs and CI (no ``[access]``)
+    stayed green. Contain the pollution at its source so no test can leak it.
+    """
+    saved_access = dashboard._DASH_ACCESS
+    saved_jwks = dashboard._JWKS_CACHE
+    try:
+        yield
+    finally:
+        dashboard._DASH_ACCESS = saved_access
+        dashboard._JWKS_CACHE = saved_jwks
 
 
 def _init(tmp_path, monkeypatch):
@@ -215,7 +238,11 @@ def test_dashboard_server_is_single_instance():
     assert dashboard._SingleInstanceServer.allow_reuse_address is (sys.platform != "win32")
 
 
-def test_serve_refuses_when_port_already_bound(monkeypatch, capsys):
+def test_serve_refuses_when_port_already_bound(tmp_path, monkeypatch, capsys):
+    # Hermetic HOME so serve()'s _configure_access() reads no real config (a host
+    # with an [access] block would otherwise arm exposed mode for the process).
+    _init(tmp_path, monkeypatch)
+
     class Taken(dashboard.ThreadingHTTPServer):
         def __init__(self, *a, **k):
             raise OSError("address in use")
