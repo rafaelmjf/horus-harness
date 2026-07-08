@@ -838,7 +838,7 @@ def _close_merge_hook(root: Path) -> int:
     tool = hook_input.get("tool_name") or hook_input.get("toolName") or ""
     tool_input = hook_input.get("tool_input") or hook_input.get("toolInput") or {}
     command = str(tool_input.get("command", "")) if isinstance(tool_input, dict) else ""
-    if tool != "Bash" or "gh pr merge" not in command:
+    if tool not in native_hooks.SHELL_TOOL_NAMES or "gh pr merge" not in command:
         return 0  # not a merge — let it through
 
     try:
@@ -981,7 +981,7 @@ def _guard_host_hook(root: Path) -> int:
     tool = hook_input.get("tool_name") or hook_input.get("toolName") or ""
     tool_input = hook_input.get("tool_input") or hook_input.get("toolInput") or {}
     command = str(tool_input.get("command", "")) if isinstance(tool_input, dict) else ""
-    if tool != "Bash" or not command:
+    if tool not in native_hooks.SHELL_TOOL_NAMES or not command:
         return 0
     host_pid = os.environ.get("HORUS_PTY_HOST_PID", "")
     if not _is_host_restart_command(command, host_pid):
