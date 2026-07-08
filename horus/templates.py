@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 6
+BLOCK_VERSION = 7
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -82,6 +82,17 @@ Working discipline (every session, whether or not the work is delegated):
   insufficient, size the spend to the task, and — unless already authorized for this
   session — get the user's confirmation. Thoroughness is a dial, not a default: match
   it to the question, and prefer the lightest tool that answers it.
+- **Fetch first, branch for features, PR to merge.** At session start, sync with the
+  remote (`git fetch --all --prune`) before trusting local refs or continuity prose.
+  Implement on a feature branch and land it via PR; do not commit straight to the
+  default branch unless the project's workflow policy or the user explicitly allows
+  it (continuity closure commits follow that same policy).
+- **Decide the execution mode while planning, not after.** Before implementing a
+  feature or fix, weigh staying inline in this session vs a delegated worker vs a
+  phased execution plan (volume × ambiguity × runtime), name the model tier the work
+  actually needs, and record the choice in the backlog item or
+  `execution_recommendation`. Prefer the lightest mode that fits — delegation buys
+  back the expensive session's context; it is not ceremony.
 
 Version floor (check before writing `.horus/`):
 

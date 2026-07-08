@@ -11,6 +11,17 @@
             "statusMessage": "Checking Horus usage"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "horus checkpoint --hook || exit 0",
+            "commandWindows": "if (Get-Command horus -ErrorAction SilentlyContinue) { horus checkpoint --hook }; exit 0",
+            "timeout": 30,
+            "statusMessage": "Checking Horus checkpoint"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

@@ -1,12 +1,12 @@
 # Claude Code Instructions
 
 > **PRD structure v3 (2026-07-03).** This repo's `.horus/` is **`PRD.md` +
-> `sessions/`** and the managed block below is PRD-native (block v6, tooling reads
+> `sessions/`** and the managed block below is PRD-native (block v7, tooling reads
 > PRD frontmatter directly — no shims). Retired v2 lanes are preserved in
 > `.horus/archive/`; do not restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 6 -->
+<!-- horus-block-version: 7 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -70,6 +70,17 @@ Working discipline (every session, whether or not the work is delegated):
   insufficient, size the spend to the task, and — unless already authorized for this
   session — get the user's confirmation. Thoroughness is a dial, not a default: match
   it to the question, and prefer the lightest tool that answers it.
+- **Fetch first, branch for features, PR to merge.** At session start, sync with the
+  remote (`git fetch --all --prune`) before trusting local refs or continuity prose.
+  Implement on a feature branch and land it via PR; do not commit straight to the
+  default branch unless the project's workflow policy or the user explicitly allows
+  it (continuity closure commits follow that same policy).
+- **Decide the execution mode while planning, not after.** Before implementing a
+  feature or fix, weigh staying inline in this session vs a delegated worker vs a
+  phased execution plan (volume × ambiguity × runtime), name the model tier the work
+  actually needs, and record the choice in the backlog item or
+  `execution_recommendation`. Prefer the lightest mode that fits — delegation buys
+  back the expensive session's context; it is not ceremony.
 
 Version floor (check before writing `.horus/`):
 
