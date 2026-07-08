@@ -40,6 +40,7 @@ from horus import (
     templates,
     upgrade,
     usage_snapshot,
+    versioning,
     vscode,
     worktree,
 )
@@ -64,8 +65,25 @@ def _print_findings(findings) -> bool:
     return healthy
 
 
+def _enforce_version_floor(root: Path | None) -> int | None:
+    """Refuse a state-mutating command when the running CLI is older than the
+    project's recorded `horus_min_version` (Lever B). Returns an exit code to return,
+    or None to proceed. `HORUS_IGNORE_VERSION_FLOOR=1` bypasses the gate."""
+    if root is None:  # unresolved path — let the caller's own None-check report it
+        return None
+    if os.environ.get("HORUS_IGNORE_VERSION_FLOOR") == "1":
+        return None
+    message = versioning.enforce(root, __version__)
+    if message is None:
+        return None
+    print(f"error: {message}", file=sys.stderr)
+    return 4
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
+    if (rc := _enforce_version_floor(root)) is not None:
+        return rc
     print(f"Initializing Horus continuity in {root}")
     actions = initialize.init_project(
         root,
@@ -653,6 +671,8 @@ def _phase_filename(text: str) -> str:
 
 def cmd_session(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
+    if (rc := _enforce_version_floor(root)) is not None:
+        return rc
     sessions = root / HORUS_DIR / SESSIONS_DIR
     if not (root / HORUS_DIR).is_dir():
         print(f"No {HORUS_DIR}/ here (run `horus init` first).")
@@ -847,6 +867,8 @@ def _close_merge_hook(root: Path) -> int:
 
 def cmd_close(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
+    if (rc := _enforce_version_floor(root)) is not None:
+        return rc
 
     if getattr(args, "hook", False):
         # PreToolUse merge-gate mode (reads the tool call from stdin).
@@ -1260,6 +1282,8 @@ def cmd_upgrade_project(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
         return 2
+    if (rc := _enforce_version_floor(root)) is not None:
+        return rc
     targets = _skill_targets(args.target)
     actions = upgrade.upgrade_project(
         root,
@@ -1626,6 +1650,8 @@ def cmd_unignore(args: argparse.Namespace) -> int:
 
 def cmd_consolidate(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
+    if (rc := _enforce_version_floor(root)) is not None:
+        return rc
     if root is None:
         return 2
     print(f"Consolidation check: {root}\n")
@@ -1650,6 +1676,8 @@ def cmd_consolidate(args: argparse.Namespace) -> int:
 
 def cmd_distill_history(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
+    if (rc := _enforce_version_floor(root)) is not None:
+        return rc
     if root is None:
         return 2
     source = routines.find_source_log(root, args.source)
@@ -1664,6 +1692,8 @@ def cmd_distill_history(args: argparse.Namespace) -> int:
 
 def cmd_infer(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
+    if (rc := _enforce_version_floor(root)) is not None:
+        return rc
     if root is None:
         return 2
     print(f"Infer check: {root}\n")
@@ -1722,6 +1752,8 @@ def cmd_skill_map(args: argparse.Namespace) -> int:
 
 def cmd_reconcile(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
+    if (rc := _enforce_version_floor(root)) is not None:
+        return rc
     agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
     if not agents.exists() or not claude.exists():
         missing = [p.name for p in (agents, claude) if not p.exists()]

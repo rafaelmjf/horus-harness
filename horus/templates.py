@@ -8,6 +8,8 @@ copies is the cross-reference line naming the *other* file; see
 
 from __future__ import annotations
 
+from horus.versioning import MIN_CLI_VERSION
+
 BLOCK_BEGIN = "<!-- HORUS:BEGIN shared-instructions -->"
 BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 
@@ -15,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 5
+BLOCK_VERSION = 6
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -80,6 +82,20 @@ Working discipline (every session, whether or not the work is delegated):
   insufficient, size the spend to the task, and — unless already authorized for this
   session — get the user's confirmation. Thoroughness is a dial, not a default: match
   it to the question, and prefer the lightest tool that answers it.
+
+Version floor (check before writing `.horus/`):
+
+- **An outdated `horus` CLI can silently regress this project to the retired six-lane
+  structure.** Before running any state-mutating `horus` command (`init`,
+  `upgrade-project`, `consolidate`, `close`, `reconcile`, `session new`, `infer`,
+  `distill-history`), confirm the installed CLI is new enough: run `horus --version`
+  and compare it to `horus_min_version` in `.horus/PRD.md` frontmatter (fall back to
+  `0.0.26` if this project predates that stamp).
+- If the installed version is **below** the floor — or `horus` errors that a
+  subcommand you need does not exist — **STOP.** Do not scaffold or write `.horus/`.
+  Tell the user to upgrade first (`uv tool install --force --python 3.12
+  horus-harness`) and re-launch. A read-only `horus resume` / reading `.horus/` by
+  hand is fine; only *writes* are gated.
 
 Instruction synchronization:
 
@@ -157,6 +173,7 @@ current_focus: "Fresh scaffold — fill from `horus infer` or the first working 
 next_action: "Run `horus infer` to bootstrap this PRD from existing docs, or replace this with the first concrete task."
 next_prompt: "Resume {project_name}. Read .horus/PRD.md (frontmatter + Backlog), then continue the next_action above."
 execution_recommendation: "continue-as-is"
+horus_min_version: {MIN_CLI_VERSION}
 last_updated: {date}
 ---
 

@@ -24,6 +24,7 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from horus import __version__, config
+from horus.versioning import version_tuple as _version_tuple
 
 PYPI_URL = "https://pypi.org/pypi/horus-harness/json"
 CACHE_TTL_SECONDS = 6 * 60 * 60  # a release cadence signal, not a live feed
@@ -31,14 +32,6 @@ CACHE_TTL_SECONDS = 6 * 60 * 60  # a release cadence signal, not a live feed
 
 def _cache_path() -> Path:
     return config.config_dir() / "update-check.json"
-
-
-def _version_tuple(version: str) -> tuple[int, ...]:
-    parts: list[int] = []
-    for piece in version.split("."):
-        digits = "".join(ch for ch in piece if ch.isdigit())
-        parts.append(int(digits) if digits else 0)
-    return tuple(parts)
 
 
 def is_newer(candidate: str, current: str) -> bool:
