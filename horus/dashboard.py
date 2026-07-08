@@ -41,6 +41,7 @@ from horus import (
     frontmatter,
     gitstate,
     github_catalog,
+    initialize,
     integration,
     launch,
     launcher,
@@ -1502,6 +1503,22 @@ def _remote_project_card(p: github_catalog.RemoteProject) -> str:
     )
 
 
+def _add_owner_form() -> str:
+    """Collapsible form to register a GitHub user/org into the remote catalog —
+    the UI peer of `horus discover github <owner> --save`."""
+    return (
+        "<details class='disc'><summary><span class='chev'>&#9656;</span>+ Add GitHub owner</summary>"
+        "<form class='lform disc-body' method='post' action='/github-add-owner'>"
+        "<div class='field'><label>User or org</label>"
+        "<input name='owner' placeholder='octocat' pattern='[A-Za-z0-9-]+' required></div>"
+        "<button class='btn btn-seal block' type='submit'>Add owner</button>"
+        "<p class='muted' style='font-size:12px;margin:0'>Uses this machine's "
+        "<code>gh</code> login to list the owner's repos (including private ones the "
+        "token can see). Stored per-machine in <code>~/.horus/config.toml</code>.</p>"
+        "</form></details>"
+    )
+
+
 def _refresh_forms() -> str:
     owners = config.load_github_owners()
     if not owners:
@@ -1578,8 +1595,7 @@ def render_remote_catalog(
                 "<p><strong>No GitHub owner configured on this machine.</strong></p>"
                 "<p class='muted'>GitHub owners and workspace paths are per-machine and are not"
                 " git-synced, so a fresh machine always starts empty.</p>"
-                "<p class='muted'>Run <code>horus discover github &lt;owner&gt; --save</code>"
-                " to add an owner and see your remote projects here.</p>"
+                f"{_add_owner_form()}"
                 "</div></div></details>"
             )
         return (
@@ -1623,6 +1639,7 @@ def render_remote_catalog(
         f"<h2>GitHub remote catalog</h2><span class='count'>{len(projects)}</span>"
         "<span class='grow'></span></summary><div class='fold-body'>"
         f"{_refresh_forms()}"
+        f"{_add_owner_form()}"
         f"{horus_grid}"
         "</div></details>"
         f"{untracked_section}"
@@ -1860,6 +1877,26 @@ def _footer_html() -> str:
     )
 
 
+def _add_local_form() -> str:
+    """Collapsible form to add a local project by path: register one that already
+    has `.horus/`, or scaffold it from zero when 'initialize' is ticked — the UI
+    peer of `horus init` / registering an existing project."""
+    return (
+        "<details class='disc'><summary><span class='chev'>&#9656;</span>+ Add local project</summary>"
+        "<form class='lform disc-body' method='post' action='/local-add'>"
+        "<div class='field'><label>Project path</label>"
+        "<input name='path' placeholder='/home/you/projects/my-repo' required></div>"
+        "<label class='field' style='flex-direction:row;align-items:center;gap:8px'>"
+        "<input type='checkbox' name='init' value='1'>"
+        "<span>Initialize <code>.horus/</code> if the folder doesn't have it yet</span></label>"
+        "<button class='btn btn-seal block' type='submit'>Add project</button>"
+        "<p class='muted' style='font-size:12px;margin:0'>A folder that already has "
+        "<code>.horus/</code> is just registered. Without it, tick initialize to scaffold "
+        "continuity from zero (runs <code>horus init</code>).</p>"
+        "</form></details>"
+    )
+
+
 def _projects_section_html(projects: list[dict[str, Any]]) -> str:
     """Greeting + needs-attention pill + the project card grid. Heavy: it needs the
     full gather_projects() data (~1.2s), so the index loads it lazily via
@@ -1869,7 +1906,8 @@ def _projects_section_html(projects: list[dict[str, Any]]) -> str:
     if not cards:
         cards = (
             "<div class='panel'><h3>No projects registered</h3>"
-            "<p class='muted'>Run <code>horus init</code> inside a project to register it here.</p></div>"
+            "<p class='muted'>Add one below, or run <code>horus init</code> inside a project.</p>"
+            f"{_add_local_form()}</div>"
         )
     attention = next((p for p in projects if p.get("artifacts_stale") or p.get("findings")), None)
     if attention:
@@ -1893,6 +1931,7 @@ def _projects_section_html(projects: list[dict[str, Any]]) -> str:
         f"{attn}</div>"
         "<div class='shead'><span class='eyebrow'>Under watch</span><h2>Projects</h2>"
         "<span class='meta'>local projects - tracked on this machine</span></div>"
+        f"{_add_local_form() if projects else ''}"
         f"<div class='grid'>{cards}</div>"
     )
 
@@ -3297,6 +3336,28 @@ def _project_action_banner(params: dict[str, list[str]]) -> str:
         )
     if "start_error" in params:
         return f"<div class='banner err'>Track failed: {html.escape(params['start_error'][0])}</div>"
+    if "owner_added" in params:
+        name = html.escape(params["owner_added"][0])
+        return (
+            f"<div class='banner ok'>Added GitHub owner <code>{name}</code> &mdash; "
+            "fetching their catalog in the background.</div>"
+        )
+    if "owner_exists" in params:
+        name = html.escape(params["owner_exists"][0])
+        return f"<div class='banner ok'>Already tracking GitHub owner <code>{name}</code>.</div>"
+    if "owner_error" in params:
+        return f"<div class='banner err'>Add owner failed: {html.escape(params['owner_error'][0])}</div>"
+    if "local_added" in params:
+        return f"<div class='banner ok'>Registered {html.escape(params['local_added'][0])} as a local project.</div>"
+    if "local_onboarded" in params:
+        return (
+            f"<div class='banner ok'>Initialized and registered {html.escape(params['local_onboarded'][0])} "
+            "&mdash; <code>.horus/</code> scaffolded.</div>"
+        )
+    if "local_exists" in params:
+        return f"<div class='banner ok'>{html.escape(params['local_exists'][0])} is already registered.</div>"
+    if "local_error" in params:
+        return f"<div class='banner err'>Add project failed: {html.escape(params['local_error'][0])}</div>"
     return ""
 
 
@@ -3715,10 +3776,12 @@ class _Handler(BaseHTTPRequestHandler):
             "/account-alias",
             "/account-remove",
             "/github-refresh",
+            "/github-add-owner",
             "/github-start",
             "/github-onboard",
             "/github-ignore",
             "/github-unignore",
+            "/local-add",
             "/pty/input",
             "/pty/resize",
             "/pty/kill",
@@ -3814,6 +3877,22 @@ class _Handler(BaseHTTPRequestHandler):
                 untracked=visible_untracked, hidden=hidden_untracked,
             ))
             return
+        if parsed.path == "/github-add-owner":
+            # UI peer of `horus discover github <owner> --save`: register the owner
+            # and kick a background refresh so the catalog fills in. PRG to the index.
+            form = self._read_form()
+            owner = (form.get("owner") or "").strip()
+            if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", owner):
+                self._redirect(
+                    "/?owner_error=" + quote_plus(f"invalid GitHub owner: {owner or '(empty)'}") + "#github-catalog"
+                )
+                return
+            if config.register_github_owner(owner):
+                _start_remote_refresh(owner, config.load_projects())
+                self._redirect("/?owner_added=" + quote_plus(owner) + "#github-catalog")
+            else:
+                self._redirect("/?owner_exists=" + quote_plus(owner) + "#github-catalog")
+            return
         if parsed.path == "/github-ignore":
             form = self._read_form()
             target = form.get("target", "")
@@ -3894,6 +3973,50 @@ class _Handler(BaseHTTPRequestHandler):
                 self._redirect(f"/project?i={idx}&{params}")
             else:
                 self._redirect(f"/?{params}#github-catalog")
+            return
+        if parsed.path == "/local-add":
+            # UI peer of registering a project / `horus init`: register a folder that
+            # already has `.horus/`, or scaffold it from zero when 'init' is ticked.
+            form = self._read_form()
+            raw = (form.get("path") or "").strip()
+            want_init = (form.get("init") or "").strip().lower() in ("1", "true", "on", "yes")
+            if not raw:
+                self._redirect("/?local_error=" + quote_plus("a project path is required"))
+                return
+            try:
+                root = Path(raw).expanduser().resolve()
+            except OSError as exc:
+                self._redirect("/?local_error=" + quote_plus(str(exc)))
+                return
+            if not root.is_dir():
+                self._redirect("/?local_error=" + quote_plus(f"not a directory: {root}"))
+                return
+            has_horus = (root / ".horus").is_dir()
+            if not has_horus:
+                if not want_init:
+                    self._redirect(
+                        "/?local_error="
+                        + quote_plus(f"no .horus/ in {root} — tick 'initialize' to scaffold it")
+                    )
+                    return
+                if _stale_build():
+                    self._redirect("/?stale_build=1")
+                    return
+                try:
+                    initialize.init_project(root, assume_yes=True, no_input=True)
+                except (OSError, RuntimeError, ValueError) as exc:
+                    self._redirect("/?local_error=" + quote_plus(f"init failed: {exc}"))
+                    return
+            created = config.register_project(root)
+            if has_horus and not created:
+                param = "local_exists=" + quote_plus(root.name)
+            else:
+                param = ("local_onboarded=" if not has_horus else "local_added=") + quote_plus(root.name)
+            idx = _project_index(root)
+            if idx is not None:
+                self._redirect(f"/project?i={idx}&{param}")
+            else:
+                self._redirect(f"/?{param}")
             return
 
         if parsed.path == "/brainstorm":
