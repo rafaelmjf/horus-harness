@@ -66,14 +66,18 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 5. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD +
    execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup; `--worker`
    inferring agent from `--agent` (usage-error bounce 2026-07-04).
-6. **[bug] Claude's PowerShell tool bypasses Bash-matched hooks:** `native_hooks.py`
-   registers the close/guard-host PreToolUse hooks under `matcher:"Bash"` only — on
-   Windows Claude sessions the agent works through the PowerShell tool, so the merge/
-   host guards (and any Bash-matched checkpoint hook) never fire. Live-observed in the
-   fabric session 2026-07-08 (all git via PowerShell, zero firings). Likely fix:
-   matcher regex `"Bash|PowerShell"` + regression test. Full findings drop (also
-   fetch-first signal gap, stale satellite hook generations, Copilot = the rulesync
-   trigger): `research/field-findings-2026-07-08-fabric.md`. [tier: Sonnet]
+6. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per
+   shell call (close + guard-host + usage guard), reaching PowerShell calls too since
+   the F1 matcher fix. Measure on a tool-heavy session; only if material, build a
+   single `horus pretool --hook` dispatcher (fabric suggestion 2026-07-08). [tier:
+   Haiku measure / Sonnet dispatcher]
+7. **Multi-developer continuity (design, evidence-gated):** PRD.md assumes one active
+   workstream — two devs closing sessions collide on frontmatter (`current_focus`/
+   `next_action`), the merge hot-spot; body sections merge like code and sessions are
+   already per-machine local. Direction: per-workstream focus (frontmatter keyed by
+   branch/dev, or `.horus/focus/<name>.md`) aggregated by `resolve_focus`/dashboard/
+   `resume`; fetch-first close guard already refuses stale closes. Per the ladder
+   rule, design now, build when a real second developer arrives. [tier: Opus design]
 
 ### Open, unscheduled
 
@@ -100,12 +104,15 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 - **Context-cache visibility:** how cold/expired sessions warn (companion/launch/hook/dashboard).
 - **Hook generation stamps:** hook configs are content-compared — version-mark like the
   managed block if payloads change, else an old CLI offers a downgrade "refresh".
-- **Git-aware overview (MVP2.5):** "fetch all" (never pull); behind-origin / uncommitted-
-  continuity staleness folded into the warning surface.
+- **Git-aware overview (MVP2.5):** session-start half shipped (v0.0.29 `fetch-check`
+  SessionStart hook); remaining: fold behind-origin / uncommitted-continuity staleness
+  into the dashboard warning surface ("fetch all", never pull).
 - **Doctor compat (observe):** per project, report what each agent would load (instructions/
-  skills/MCP/hooks). **Workflow-policy:** project the branch→PR→auto-merge default into the
-  managed block + per-project `.horus/` override. **CI gate promotion:** continuity check
-  advisory → required once proven; decide if `init` installs the merge gate by default.
+  skills/MCP/hooks). **Workflow-policy:** block v7 carries the branch→PR default as
+  instruction text (fabric field evidence: direct-to-main went unchallenged); remaining
+  per the ladder rule: per-project `.horus/` override, then **CI gate promotion** only
+  if the instruction rung observably fails again — continuity check advisory → required
+  once proven; decide if `init` installs the merge gate by default.
 - **Companion signals:** usage warnings, stale/uncommitted `.horus/`, per-project
   switching, configurable mascot background.
 
@@ -196,6 +203,16 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 
 - **Repo-local `.horus/` is the source of truth** — committed, vendor-neutral, works
   without Horus installed. Horus is a helper, never a required runtime.
+- **Controls climb a ladder: instruction → deterministic signal → hard gate.** New
+  controls start as instruction text; promote a rung only on an *observed field
+  failure* of the rung below (fabric 2026-07-08: fetch-first + branch→PR failed as
+  instructions → became a SessionStart signal + block v7 policy line). Never build
+  enforcement preemptively — this is the anti-over-engineering test for backlog items.
+- **Continuity must beat re-derivation.** Every `.horus/` capability names what a
+  fresh session gets that CLAUDE.md + git log alone couldn't, at less cost than
+  re-deriving it. PRD.md is *state*, not behavior; behavioral text belongs in the
+  managed block, and Rules stays project-specific invariants earned by failure —
+  otherwise this file drifts into a second CLAUDE.md.
 - **Closure reaches the remote, fetch-first** — `close --commit --push`; refuse when
   origin has newer continuity. At session start: `git fetch --all --prune` and verify
   against the remote before trusting local refs or continuity prose.
