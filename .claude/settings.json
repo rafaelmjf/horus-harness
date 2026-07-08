@@ -9,6 +9,15 @@
             "command": "horus usage check --target claude --hook --threshold 90 || exit 0"
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "horus checkpoint --hook || exit 0"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -24,7 +33,16 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "horus usage guard --target claude --hook || exit 0"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
@@ -33,20 +51,22 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
             "command": "horus guard-host --hook || exit 0"
           }
         ]
-      },
+      }
+    ],
+    "SessionStart": [
       {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "horus usage guard --target claude --hook || exit 0"
+            "command": "horus fetch-check --hook || exit 0"
           }
         ]
       }

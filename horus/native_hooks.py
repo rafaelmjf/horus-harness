@@ -25,6 +25,14 @@ _HORUS_MERGE_MARKER = "horus close --hook"
 _HORUS_GUARD_MARKER = "horus guard-host"
 _HORUS_USAGE_GUARD_MARKER = "horus usage guard"
 _HORUS_CHECKPOINT_MARKER = "horus checkpoint --hook"
+_HORUS_FETCH_CHECK_MARKER = "horus fetch-check --hook"
+
+# Claude's shell surface is two tools: Bash everywhere, plus a PowerShell tool that
+# agents prefer on Windows. A "Bash"-only matcher silently skips every shell guard
+# there (field-observed in fabric, 2026-07-08), so Claude shell matchers must cover
+# both — matchers are regex on the tool name. Codex keeps its own single-tool matcher.
+SHELL_TOOL_NAMES = ("Bash", "PowerShell")
+SHELL_TOOL_MATCHER = "|".join(SHELL_TOOL_NAMES)
 
 
 # Committed hook files reach every machine and collaborator the repo does, including
@@ -148,6 +156,10 @@ def _is_horus_checkpoint_hook(handler: Any) -> bool:
     return _handler_has_marker(handler, _HORUS_CHECKPOINT_MARKER)
 
 
+def _is_horus_fetch_check_hook(handler: Any) -> bool:
+    return _handler_has_marker(handler, _HORUS_FETCH_CHECK_MARKER)
+
+
 def _merge_codex_usage_hook(hooks: dict[str, Any], event: str, threshold: float) -> None:
     _merge_codex_stop_hook(hooks, event, _codex_hook_command(threshold), _is_horus_usage_hook)
 
@@ -208,10 +220,14 @@ def _merge_codex_pretooluse_hook(
         if not isinstance(handlers, list):
             new_groups.append(group)
             continue
+        # A prior handler sitting under a *different* matcher is dropped here and
+        # re-homed below — otherwise a matcher fix never reaches repos scaffolded
+        # under the old value (the group keeps its stale matcher forever).
+        same_matcher = str(group.get("matcher", "")) == matcher
         kept = []
         for existing in handlers:
             if is_mine(existing):
-                if not inserted:
+                if same_matcher and not inserted:
                     kept.append(handler)
                     inserted = True
             else:
@@ -413,7 +429,9 @@ def _merge_event_hook(
     is_mine: Any = _is_horus_usage_hook,
 ) -> None:
     """Replace any prior Horus handler for ``event`` (matched by ``is_mine``) with
-    ``handler``, under ``matcher``, with no duplicates."""
+    ``handler``, under ``matcher``, with no duplicates. A prior handler found under a
+    different matcher is moved into a group carrying the desired one, so matcher fixes
+    propagate to repos scaffolded under the old value."""
     groups = hooks.get(event)
     if not isinstance(groups, list):
         groups = []
@@ -423,10 +441,11 @@ def _merge_event_hook(
         if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
             new_groups.append(group)
             continue
+        same_matcher = str(group.get("matcher", "")) == matcher
         kept = []
         for existing in group["hooks"]:
             if is_mine(existing):
-                if not inserted:
+                if same_matcher and not inserted:
                     kept.append(handler)
                     inserted = True
             else:
@@ -481,7 +500,7 @@ def install_claude_merge_hook(project_root: Path) -> HookAction:
     path, data, hooks = _claude_hooks_dict(project_root)
     _merge_event_hook(
         hooks, "PreToolUse", _claude_merge_hook_command(),
-        matcher="Bash", is_mine=_is_horus_merge_hook,
+        matcher=SHELL_TOOL_MATCHER, is_mine=_is_horus_merge_hook,
     )
     data["hooks"] = hooks
     return _persist_hook(path, data, "Claude pre-merge closure hook")
@@ -495,7 +514,7 @@ def install_claude_guard_hook(project_root: Path) -> HookAction:
     path, data, hooks = _claude_hooks_dict(project_root)
     _merge_event_hook(
         hooks, "PreToolUse", _claude_guard_hook_command(),
-        matcher="Bash", is_mine=_is_horus_guard_hook,
+        matcher=SHELL_TOOL_MATCHER, is_mine=_is_horus_guard_hook,
     )
     data["hooks"] = hooks
     return _persist_hook(path, data, "Claude hosted-session guard hook")
@@ -514,6 +533,30 @@ def install_claude_usage_guard_hook(project_root: Path) -> HookAction:
     )
     data["hooks"] = hooks
     return _persist_hook(path, data, "Claude usage guard hook")
+
+
+def _claude_fetch_check_hook_command() -> dict[str, Any]:
+    # SessionStart: inject a behind-origin warning before the session starts trusting
+    # local refs (the fetch is TTL-cached and hard-timeouted; offline / non-repo /
+    # no-upstream is a silent no-op). Advisory context only — never blocks anything.
+    return {
+        "type": "command",
+        "command": _guard_posix("horus fetch-check --hook"),
+    }
+
+
+def install_claude_fetch_check_hook(project_root: Path) -> HookAction:
+    """Install/update a Claude `SessionStart` hook that fetches (TTL-cached) and
+    injects a behind-origin warning into the session context — the fetch-first rule
+    as a deterministic signal instead of instruction text (field gap, 2026-07-08).
+    Claude-only: Codex has no session-start hook event to attach the peer to."""
+    path, data, hooks = _claude_hooks_dict(project_root)
+    _merge_event_hook(
+        hooks, "SessionStart", _claude_fetch_check_hook_command(),
+        is_mine=_is_horus_fetch_check_hook,
+    )
+    data["hooks"] = hooks
+    return _persist_hook(path, data, "Claude fetch-check hook")
 
 
 def install_claude_checkpoint_hook(project_root: Path) -> HookAction:
@@ -540,6 +583,7 @@ HOOK_INSTALLERS = {
         install_claude_guard_hook,
         install_claude_usage_guard_hook,
         install_claude_checkpoint_hook,
+        install_claude_fetch_check_hook,
     ),
     "codex": (
         install_codex_usage_hook,

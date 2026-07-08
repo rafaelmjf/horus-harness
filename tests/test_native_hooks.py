@@ -196,7 +196,9 @@ def test_install_claude_merge_hook_creates_pretooluse_gate(tmp_path):
     assert action.status == "created"
     data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     group = data["hooks"]["PreToolUse"][0]
-    assert group["matcher"] == "Bash"  # matches the Bash tool; the command filters for the merge
+    # Both Claude shell tools: agents on Windows issue git/gh through PowerShell,
+    # and a Bash-only matcher never fires there. The command filters for the merge.
+    assert group["matcher"] == "Bash|PowerShell"
     assert group["hooks"][0]["command"] == "horus close --hook || exit 0"
 
 
@@ -220,13 +222,71 @@ def test_install_claude_guard_hook_creates_pretooluse_gate(tmp_path):
     assert action.status == "created"
     data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     group = data["hooks"]["PreToolUse"][0]
-    assert group["matcher"] == "Bash"
+    assert group["matcher"] == "Bash|PowerShell"
     assert group["hooks"][0]["command"] == "horus guard-host --hook || exit 0"
 
 
 def test_install_claude_guard_hook_idempotent(tmp_path):
     native_hooks.install_claude_guard_hook(tmp_path)
     assert native_hooks.install_claude_guard_hook(tmp_path).status == "exists"
+
+
+def test_install_claude_fetch_check_hook_creates_sessionstart_hook(tmp_path):
+    action = native_hooks.install_claude_fetch_check_hook(tmp_path)
+    assert action.status == "created"
+    data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    handler = data["hooks"]["SessionStart"][0]["hooks"][0]
+    assert handler["command"] == "horus fetch-check --hook || exit 0"
+
+
+def test_install_claude_fetch_check_hook_idempotent(tmp_path):
+    native_hooks.install_claude_fetch_check_hook(tmp_path)
+    assert native_hooks.install_claude_fetch_check_hook(tmp_path).status == "exists"
+
+
+def test_fetch_check_hook_is_in_claude_installer_set():
+    # upgrade-project projects HOOK_INSTALLERS — the fetch-check hook must ride it
+    # so satellites get the session-start signal on their next refresh.
+    assert native_hooks.install_claude_fetch_check_hook in native_hooks.HOOK_INSTALLERS["claude"]
+
+
+def test_install_claude_merge_hook_rehomes_stale_bash_matcher(tmp_path):
+    # A repo scaffolded before the PowerShell fix carries the handler under a
+    # "Bash"-only group; re-install must move it under the two-tool matcher, or the
+    # fix never reaches satellites via `upgrade-project`.
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps({"hooks": {"PreToolUse": [
+        {"matcher": "Bash", "hooks": [{"type": "command", "command": "horus close --hook || exit 0"}]},
+    ]}}), encoding="utf-8")
+
+    action = native_hooks.install_claude_merge_hook(tmp_path)
+
+    assert action.status == "updated"
+    groups = json.loads(settings.read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
+    assert len(groups) == 1
+    assert groups[0]["matcher"] == native_hooks.SHELL_TOOL_MATCHER
+    assert groups[0]["hooks"][0]["command"] == "horus close --hook || exit 0"
+
+
+def test_matcher_rehome_leaves_foreign_handlers_under_their_matcher(tmp_path):
+    # Only the Horus handler moves; a user's own hook sharing the stale group keeps
+    # its matcher untouched.
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps({"hooks": {"PreToolUse": [
+        {"matcher": "Bash", "hooks": [
+            {"type": "command", "command": "horus close --hook || exit 0"},
+            {"type": "command", "command": "echo user-hook"},
+        ]},
+    ]}}), encoding="utf-8")
+
+    native_hooks.install_claude_merge_hook(tmp_path)
+
+    groups = json.loads(settings.read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
+    by_matcher = {g["matcher"]: [h["command"] for h in g["hooks"]] for g in groups}
+    assert by_matcher["Bash"] == ["echo user-hook"]
+    assert by_matcher[native_hooks.SHELL_TOOL_MATCHER] == ["horus close --hook || exit 0"]
 
 
 def test_usage_merge_and_guard_hooks_coexist_without_clobber(tmp_path):

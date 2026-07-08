@@ -1254,13 +1254,25 @@ def test_merge_hook_ignores_non_merge_bash(monkeypatch, capsys):
     assert rc == 0 and out.strip() == ""
 
 
-def test_merge_hook_ignores_non_bash_tool(monkeypatch, capsys):
+def test_merge_hook_ignores_non_shell_tool(monkeypatch, capsys):
     rc, out = _merge_hook_run(
         monkeypatch, capsys,
         tool_input={"tool_name": "Edit", "tool_input": {"command": "gh pr merge"}},
         findings=[("fail", "lanes stale")],
     )
     assert rc == 0 and out.strip() == ""
+
+
+def test_merge_hook_gates_merge_from_powershell_tool(monkeypatch, capsys):
+    # On Windows the agent issues git/gh through the PowerShell tool; the gate must
+    # fire there exactly as for Bash (field regression: fabric 2026-07-08).
+    rc, out = _merge_hook_run(
+        monkeypatch, capsys,
+        tool_input={"tool_name": "PowerShell", "tool_input": {"command": "gh pr merge 15 --squash"}},
+        findings=[("warn", "lanes stale")],
+    )
+    assert rc == 0
+    assert json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 # --- hosted-session self-restart guard (`horus guard-host --hook`) ---
@@ -1304,6 +1316,15 @@ def test_guard_blocks_taskkill_of_python(monkeypatch, capsys):
 
 def test_guard_blocks_kill_of_host_pid(monkeypatch, capsys):
     _assert_denied(*_guard_hook_run(monkeypatch, capsys, command="kill -9 4242", host_pid="4242"))
+
+
+def test_guard_blocks_stop_process_from_powershell_tool(monkeypatch, capsys):
+    # The PowerShell tool + PowerShell kill idiom — both layers (tool filter and
+    # command detection) must cover the Windows spelling.
+    _assert_denied(*_guard_hook_run(
+        monkeypatch, capsys,
+        command="Stop-Process -Id 4242 -Force", host_pid="4242", tool="PowerShell",
+    ))
 
 
 def test_guard_blocks_kill_of_host_by_name(monkeypatch, capsys):
