@@ -1,8 +1,8 @@
 ---
 status: active
 current_focus: "SHIPPED 2026-07-08, both merged + CI green: (1) catalog add-UI (v0.0.27, PR #126) — in-app forms to register a GitHub owner (`/github-add-owner`) and add a local project (`/local-add`: register an existing `.horus/` or scaffold from zero via `initialize.init_project`), the UI peers of `discover github --save` / `horus init`; (2) shadow-install doctor guard (v0.0.28, PR #127) — `doctor machine._shadow_install_finding` warns when >1 `horus` executable is resolvable on PATH (via `_all_on_path`, PATHEXT-aware), the code companion to the version-floor safeguard. Both live-probed against a real dashboard server / crafted PATH, not just tests (906 green). Driven by a fresh-machine setup: empty catalog = per-machine `~/.horus/` config isn't git-synced; missing private repos = gh token scope on that box; `horus --version` = 0.0.5 = a stale `pip install` in `Python312\\Scripts` shadowing uv's `.local\\bin` shim."
-next_action: "v0.0.27 + v0.0.28 are on main but NOT yet on PyPI (publish fires only on a cut GitHub Release; latest release is v0.0.26). Cut a v0.0.28 GitHub Release so the add-UI + shadow guard reach PyPI, then upgrade the daily-driver installs. Next feature candidates: #1 [ops] orphan reap (Sonnet/inline — kill the session's process tree on a failed RESULT), or the scheduled/usage-aware autonomous-continuation feature (Open, unscheduled, Opus design). [tier: release = mechanical; Sonnet for orphan reap; Opus for continuation design.]"
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md — note the model-tier rule, per-step tier tags, and version-floor rule. v0.0.27 (catalog add-UI) + v0.0.28 (shadow-install guard) shipped to main; cut the v0.0.28 GitHub Release to publish. LEAD: cut release, then #1 orphan reap (Sonnet) or the scheduled-continuation feature (Opus design). Default worker tier = Sonnet; Opus for design + the verify gate."
+next_action: "v0.0.27 + v0.0.28 are on main but NOT yet on PyPI (publish fires only on a cut GitHub Release; latest release is v0.0.26). Cut a v0.0.28 GitHub Release so the add-UI + shadow guard reach PyPI, then upgrade the daily-driver installs. Also triage the 2026-07-08 fabric field-findings note (backlog #6 PowerShell-matcher bug + workflow-enforcement evidence). Next feature candidates: #6 PowerShell-matcher bug (Sonnet, small), #1 [ops] orphan reap (Sonnet/inline — kill the session's process tree on a failed RESULT), or the scheduled/usage-aware autonomous-continuation feature (Open, unscheduled, Opus design). [tier: release = mechanical; Sonnet for #6 + orphan reap; Opus for continuation design.]"
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md — note the model-tier rule, per-step tier tags, and version-floor rule. Then read sessions/2026-07-08 'Field findings from fabric session' — a findings drop from live fabric use (backlog #6 PowerShell-matcher bug + fetch-first/workflow-policy/Copilot-trigger evidence); triage it into the plan. v0.0.27 (catalog add-UI) + v0.0.28 (shadow-install guard) shipped to main; cut the v0.0.28 GitHub Release to publish. LEAD: cut release, then #6 PowerShell-matcher bug (Sonnet, small) or #1 orphan reap (Sonnet) or the scheduled-continuation feature (Opus design). Default worker tier = Sonnet; Opus for design + the verify gate."
 execution_recommendation: "continue-as-is: cutting the release is mechanical; orphan reap (#1, Sonnet/inline) is small with a clear gate. plan-execution only for the scheduled-continuation primitives (several horus run flags + a scheduler — Opus supervisor + Sonnet workers). Default worker tier = Sonnet; reserve Opus for design + the verify/accept gate; Haiku for mechanical sweeps."
 last_updated: 2026-07-08
 horus_min_version: 0.0.26
@@ -58,12 +58,22 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 3. **[ops] Windows machine:** `uv tool install --force --python 3.12 horus-harness` +
    `horus upgrade-project --all`; eyeball mascot failure dialog + Skills tab; confirm VS
    Code task keybindings under Flatpak. (2026-07-08: the `horus --version`=0.0.5 shadow
-   there was a stale `pip` copy ahead of the uv shim — now caught by the v0.0.28 guard.)
+   there was a stale `pip` copy ahead of the uv shim — now caught by the v0.0.28 guard.
+   Confirmed load-bearing same day: fabric's `.claude/settings.json` hooks predate
+   `commandWindows` + the checkpoint hook — stale until this runs.)
 4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI covers install/CLI/`/health`.
 5. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD +
    execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup; `--worker`
    inferring agent from `--agent` (usage-error bounce 2026-07-04).
+6. **[bug] Claude's PowerShell tool bypasses Bash-matched hooks:** `native_hooks.py`
+   registers the close/guard-host PreToolUse hooks under `matcher:"Bash"` only — on
+   Windows Claude sessions the agent works through the PowerShell tool, so the merge/
+   host guards (and any Bash-matched checkpoint hook) never fire. Live-observed in the
+   fabric session 2026-07-08 (all git via PowerShell, zero firings). Likely fix:
+   matcher regex `"Bash|PowerShell"` + regression test. Full findings drop (also
+   fetch-first signal gap, stale satellite hook generations, Copilot = the rulesync
+   trigger): sessions/2026-07-08 "Field findings from fabric session". [tier: Sonnet]
 
 ### Open, unscheduled
 
