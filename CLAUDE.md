@@ -1,12 +1,12 @@
 # Claude Code Instructions
 
 > **PRD structure v3 (2026-07-03).** This repo's `.horus/` is **`PRD.md` +
-> `sessions/`** and the managed block below is PRD-native (block v4, tooling reads
+> `sessions/`** and the managed block below is PRD-native (block v6, tooling reads
 > PRD frontmatter directly — no shims). Retired v2 lanes are preserved in
 > `.horus/archive/`; do not restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 4 -->
+<!-- horus-block-version: 6 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -63,6 +63,27 @@ Working discipline (every session, whether or not the work is delegated):
 - **Put safety in the code, not the reviewer.** Guards and invariants prevent the
   dangerous class of bug; review — human or model — misses things, so it is a help, not
   a guarantee.
+- **Ground token-intensive actions before spending.** Before an action that fans out
+  many subagents or otherwise burns a large amount of tokens (multi-agent workflows,
+  broad research sweeps, whole-repo re-reads, adversarial verification passes), first
+  state why the cheaper path (a direct search, a single agent, a targeted read) is
+  insufficient, size the spend to the task, and — unless already authorized for this
+  session — get the user's confirmation. Thoroughness is a dial, not a default: match
+  it to the question, and prefer the lightest tool that answers it.
+
+Version floor (check before writing `.horus/`):
+
+- **An outdated `horus` CLI can silently regress this project to the retired six-lane
+  structure.** Before running any state-mutating `horus` command (`init`,
+  `upgrade-project`, `consolidate`, `close`, `reconcile`, `session new`, `infer`,
+  `distill-history`), confirm the installed CLI is new enough: run `horus --version`
+  and compare it to `horus_min_version` in `.horus/PRD.md` frontmatter (fall back to
+  `0.0.26` if this project predates that stamp).
+- If the installed version is **below** the floor — or `horus` errors that a
+  subcommand you need does not exist — **STOP.** Do not scaffold or write `.horus/`.
+  Tell the user to upgrade first (`uv tool install --force --python 3.12
+  horus-harness`) and re-launch. A read-only `horus resume` / reading `.horus/` by
+  hand is fine; only *writes* are gated.
 
 Instruction synchronization:
 

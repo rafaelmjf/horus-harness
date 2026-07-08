@@ -43,6 +43,14 @@ def test_missing_block_reported():
     assert "CLAUDE.md" in report.detail
 
 
+def test_shared_block_carries_version_floor_instruction():
+    block = templates.shared_block("CLAUDE.md")
+    assert "Version floor" in block
+    assert "horus --version" in block
+    assert "horus_min_version" in block
+    assert "uv tool install --force" in block
+
+
 def test_normalize_ignores_trailing_whitespace_and_crlf():
     a = templates.shared_block("CLAUDE.md")
     b = a.replace("\n", "\r\n") + "   "

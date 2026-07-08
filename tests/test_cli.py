@@ -107,6 +107,47 @@ def test_session_new_refuses_without_horus(tmp_path, monkeypatch):
     assert main(["session", "new", "X", "--path", str(tmp_path)]) == 1
 
 
+def _stamp_prd(tmp_path, floor: str):
+    hdir = tmp_path / ".horus"
+    hdir.mkdir(parents=True, exist_ok=True)
+    (hdir / "sessions").mkdir(exist_ok=True)
+    (hdir / "PRD.md").write_text(
+        f"---\nstatus: active\nhorus_min_version: {floor}\nlast_updated: 2026-07-08\n---\n\n# P\n",
+        encoding="utf-8",
+    )
+
+
+def test_version_floor_refuses_mutating_command(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    monkeypatch.delenv("HORUS_IGNORE_VERSION_FLOOR", raising=False)
+    _stamp_prd(tmp_path, "9.9.9")
+
+    rc = main(["session", "new", "X", "--path", str(tmp_path)])
+    assert rc == 4
+    err = capsys.readouterr().err
+    assert "9.9.9" in err and "uv tool install" in err
+    # Gate ran before the mutation: no session file written.
+    assert not list((tmp_path / ".horus" / "sessions").glob("*.md"))
+
+
+def test_version_floor_override_env_bypasses(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    monkeypatch.setenv("HORUS_IGNORE_VERSION_FLOOR", "1")
+    _stamp_prd(tmp_path, "9.9.9")
+
+    rc = main(["session", "new", "X", "--path", str(tmp_path)])
+    assert rc == 0
+    assert list((tmp_path / ".horus" / "sessions").glob("*-x.md"))
+
+
+def test_version_floor_allows_when_met(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    monkeypatch.delenv("HORUS_IGNORE_VERSION_FLOOR", raising=False)
+    _stamp_prd(tmp_path, "0.0.1")
+
+    assert main(["session", "new", "X", "--path", str(tmp_path)]) == 0
+
+
 def test_focus_running_session_calls_raiser(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     Registry.default().upsert(SessionRecord(

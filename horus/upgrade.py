@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
-from horus import frontmatter, native_hooks, skills, templates
+from horus import frontmatter, native_hooks, skills, templates, versioning
 from horus.instructions import block_version, extract_block, replace_block
 
 
@@ -34,11 +34,60 @@ def upgrade_project(
     actions: list[UpgradeAction] = []
     if instructions:
         actions.extend(_upgrade_instructions(project_root, apply=apply))
+        actions.extend(_upgrade_min_version_stamp(project_root, apply=apply))
     if skills_:
         actions.extend(_upgrade_skills(project_root, apply=apply, targets=targets))
     if hooks:
         actions.extend(_upgrade_hooks(project_root, apply=apply, targets=targets))
     return actions
+
+
+def _upgrade_min_version_stamp(project_root: Path, *, apply: bool) -> list[UpgradeAction]:
+    """Ensure `.horus/PRD.md` records `horus_min_version` >= the current floor.
+
+    This is how an existing v3 project acquires (or raises) the structure-version
+    stamp when the user upgrades — the pairing repo-side data for both the agent
+    preflight (Lever A) and the CLI gate (`cli._enforce_version_floor`, Lever B).
+    Fresh scaffolds already carry it from `templates.prd_md`; v2 projects (no PRD.md)
+    are left alone.
+    """
+    prd = frontmatter.prd_path(project_root)
+    if not prd.is_file():
+        return []
+    text = prd.read_text(encoding="utf-8")
+    current = frontmatter.parse(text).front_matter.get(versioning.MIN_VERSION_KEY, "").strip()
+    floor = versioning.MIN_CLI_VERSION
+    if current and versioning.is_at_least(current, floor):
+        return [UpgradeAction("exists", f".horus/{frontmatter.PRD_FILE} {versioning.MIN_VERSION_KEY} is current ({current})")]
+    verb = "would raise" if current else "would add"
+    if not apply:
+        return [UpgradeAction("would-update", f"{verb} .horus/{frontmatter.PRD_FILE} {versioning.MIN_VERSION_KEY} -> {floor}")]
+    new_text = _set_frontmatter_key(text, versioning.MIN_VERSION_KEY, floor)
+    if new_text == text:
+        return [UpgradeAction("skipped", f".horus/{frontmatter.PRD_FILE} has no frontmatter; cannot stamp {versioning.MIN_VERSION_KEY}")]
+    prd.write_text(new_text, encoding="utf-8")
+    return [UpgradeAction("updated", f".horus/{frontmatter.PRD_FILE}: set {versioning.MIN_VERSION_KEY} -> {floor}")]
+
+
+def _set_frontmatter_key(text: str, key: str, value: str) -> str:
+    """Replace ``key``'s line inside the leading `---` frontmatter, or insert it just
+    before the closing fence. Returns ``text`` unchanged when there is no frontmatter."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return text
+    close = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if close is None:
+        return text
+    new_line = f"{key}: {value}"
+    for i in range(1, close):
+        stripped = lines[i].lstrip()
+        if stripped.startswith(f"{key}:") and not stripped.startswith("#"):
+            lines[i] = new_line
+            break
+    else:
+        lines.insert(close, new_line)
+    trailing = "\n" if text.endswith("\n") else ""
+    return "\n".join(lines) + trailing
 
 
 def upgrade_structure_prd(project_root: Path, *, apply: bool = False) -> list[UpgradeAction]:

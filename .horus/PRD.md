@@ -5,6 +5,7 @@ next_action: "Land the checkpoint PR: watch required pytest checks go green on t
 next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md — note the model-tier rule + per-step tier tags. Backlog #6 (commit-and-push checkpoint) shipped on branch feature/commit-push-checkpoint. If its PR hasn't merged, land it (watch required checks green, then merge) and cut the release (bump pyproject + __init__ + uv.lock together, rerun suite, install-smoke). Then LEAD: #1 orphan reap (Sonnet) or the scheduled-continuation feature (Open, unscheduled). Default worker tier = Sonnet; Opus for design + the verify gate."
 execution_recommendation: "continue-as-is to land + release the checkpoint PR (mechanical: watch CI, merge, three-file bump, rerun, smoke — Sonnet/inline). continue-as-is for orphan reap (#1, Sonnet/inline). plan-execution only if implementing the scheduled-continuation primitives (several horus run flags + a scheduler — a real batch: Opus supervisor + Sonnet workers). Default worker tier = Sonnet; reserve Opus for design + the verify/accept gate; Haiku for mechanical sweeps."
 last_updated: 2026-07-08
+horus_min_version: 0.0.26
 ---
 
 # Horus — PRD

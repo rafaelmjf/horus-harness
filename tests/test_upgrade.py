@@ -2,7 +2,7 @@
 
 import json
 
-from horus import initialize, skills, templates, upgrade
+from horus import frontmatter, initialize, skills, templates, upgrade
 
 
 def _home(tmp_path, monkeypatch):
@@ -108,3 +108,56 @@ def test_legacy_unversioned_block_still_refreshes(tmp_path, monkeypatch):
 def test_shared_block_carries_version_marker():
     block = templates.shared_block("CLAUDE.md")
     assert f"<!-- horus-block-version: {templates.BLOCK_VERSION} -->" in block
+
+
+def test_upgrade_backfills_min_version_stamp(tmp_path, monkeypatch):
+    from horus import versioning
+
+    _home(tmp_path, monkeypatch)
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    # A v3 PRD.md predating the stamp.
+    (hdir / "PRD.md").write_text(
+        "---\nstatus: active\nlast_updated: 2026-07-08\n---\n\n# P\n", encoding="utf-8"
+    )
+
+    dry = upgrade.upgrade_project(tmp_path, apply=False, hooks=False, skills_=False)
+    assert any(a.status == "would-update" and versioning.MIN_VERSION_KEY in a.message for a in dry)
+    assert versioning.MIN_VERSION_KEY not in (hdir / "PRD.md").read_text(encoding="utf-8")
+
+    upgrade.upgrade_project(tmp_path, apply=True, hooks=False, skills_=False)
+    doc = frontmatter.parse((hdir / "PRD.md").read_text(encoding="utf-8"))
+    assert doc.front_matter[versioning.MIN_VERSION_KEY] == versioning.MIN_CLI_VERSION
+
+    # Idempotent: a second apply reports "exists", not another write.
+    again = upgrade.upgrade_project(tmp_path, apply=True, hooks=False, skills_=False)
+    assert any(a.status == "exists" and versioning.MIN_VERSION_KEY in a.message for a in again)
+
+
+def test_upgrade_does_not_lower_a_higher_stamp(tmp_path, monkeypatch):
+    from horus import versioning
+
+    _home(tmp_path, monkeypatch)
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "PRD.md").write_text(
+        "---\nstatus: active\nhorus_min_version: 9.9.9\nlast_updated: 2026-07-08\n---\n\n# P\n",
+        encoding="utf-8",
+    )
+    actions = upgrade.upgrade_project(tmp_path, apply=True, hooks=False, skills_=False)
+    assert any(a.status == "exists" and versioning.MIN_VERSION_KEY in a.message for a in actions)
+    doc = frontmatter.parse((hdir / "PRD.md").read_text(encoding="utf-8"))
+    assert doc.front_matter[versioning.MIN_VERSION_KEY] == "9.9.9"
+
+
+def test_upgrade_skips_stamp_for_v2_project(tmp_path, monkeypatch):
+    from horus import versioning
+
+    _home(tmp_path, monkeypatch)
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "project.md").write_text(
+        "---\nstatus: active\nlast_updated: 2026-07-08\n---\n\n# P\n", encoding="utf-8"
+    )
+    actions = upgrade.upgrade_project(tmp_path, apply=True, hooks=False, skills_=False)
+    assert not any(versioning.MIN_VERSION_KEY in a.message for a in actions)

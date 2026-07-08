@@ -15,6 +15,11 @@ def test_init_creates_structure(tmp_path, monkeypatch):
 
     # A fresh project gets structure v3: PRD.md + sessions/, not the six v2 lanes.
     assert (tmp_path / ".horus" / "PRD.md").exists()
+    # The fresh PRD carries the structure-version floor stamp (Lever B pairing data).
+    from horus import versioning
+
+    prd_text = (tmp_path / ".horus" / "PRD.md").read_text(encoding="utf-8")
+    assert f"{versioning.MIN_VERSION_KEY}: {versioning.MIN_CLI_VERSION}" in prd_text
     assert not (tmp_path / ".horus" / "project.md").exists()
     assert not (tmp_path / ".horus" / "roadmap.md").exists()
     assert not (tmp_path / ".horus" / "decisions.md").exists()
