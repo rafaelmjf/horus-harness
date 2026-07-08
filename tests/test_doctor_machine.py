@@ -4,6 +4,7 @@ subprocess.run, dist metadata, the tkinter import) is monkeypatched so these tes
 depend on the host actually having gh/Tk/network."""
 
 import json
+import os
 import subprocess
 
 from horus import doctor_machine, native_hooks
@@ -15,6 +16,8 @@ def _stub_ok(monkeypatch):
     monkeypatch.setattr(doctor_machine.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
     monkeypatch.setattr(doctor_machine, "_dist_requires_python", lambda: None)
     monkeypatch.setattr(doctor_machine, "_tkinter_probe", lambda: True)
+    # One horus on PATH by default (no shadow); shadow tests override this.
+    monkeypatch.setattr(doctor_machine, "_all_on_path", lambda name: [f"/usr/bin/{name}"])
     monkeypatch.setattr(
         doctor_machine.subprocess,
         "run",
@@ -128,6 +131,57 @@ def test_everything_present_all_ok(tmp_path, monkeypatch):
 
     assert findings
     assert not any(f.level in ("warn", "fail") for f in findings)
+
+
+def test_shadow_install_warns_on_multiple_horus(monkeypatch):
+    _stub_ok(monkeypatch)
+    monkeypatch.setattr(
+        doctor_machine, "_all_on_path",
+        lambda name: [
+            r"C:\\Python312\\Scripts\\horus.exe",
+            r"C:\\Users\\User\\.local\\bin\\horus.exe",
+        ],
+    )
+
+    findings = doctor_machine.machine_findings()
+
+    warns = [f for f in findings if f.level == "warn"]
+    assert any("multiple `horus` executables" in f.message for f in warns)
+    # Names the winner (first on PATH) and the shadowed copy.
+    msg = next(f.message for f in warns if "multiple" in f.message)
+    assert r"C:\\Python312\\Scripts\\horus.exe" in msg
+    assert ".local" in msg
+
+
+def test_shadow_install_ok_on_single_horus(monkeypatch):
+    _stub_ok(monkeypatch)  # already stubs a single-entry _all_on_path
+
+    findings = doctor_machine.machine_findings()
+
+    assert any(f.level == "ok" and "single `horus`" in f.message for f in findings)
+    assert not any("multiple `horus`" in f.message for f in findings)
+
+
+def test_shadow_install_finding_none_when_no_horus(monkeypatch):
+    monkeypatch.setattr(doctor_machine, "_all_on_path", lambda name: [])
+    assert doctor_machine._shadow_install_finding() is None
+
+
+def test_all_on_path_dedupes_and_orders(tmp_path, monkeypatch):
+    # Two real dirs on PATH, each with an executable `horus`; a third PATH entry
+    # repeats the first dir (must not double-count).
+    d1, d2 = tmp_path / "a", tmp_path / "b"
+    for d in (d1, d2):
+        d.mkdir()
+        exe = d / "horus"
+        exe.write_text("#!/bin/sh\n")
+        exe.chmod(0o755)
+    monkeypatch.setattr(doctor_machine.sys, "platform", "linux")
+    monkeypatch.setenv("PATH", os.pathsep.join([str(d1), str(d2), str(d1)]))
+
+    found = doctor_machine._all_on_path("horus")
+
+    assert found == [str(d1 / "horus"), str(d2 / "horus")]
 
 
 def test_gh_missing_warns(monkeypatch):

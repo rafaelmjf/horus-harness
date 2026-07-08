@@ -13,6 +13,7 @@ available, is `gh` authenticated.
 from __future__ import annotations
 
 import importlib.metadata
+import os
 import shlex
 import shutil
 import subprocess
@@ -37,6 +38,59 @@ def _console_script_finding() -> Finding:
             "or the hooks are removed (`horus offboard --apply`)",
         )
     return Finding("ok", "`horus` console script on PATH")
+
+
+def _all_on_path(name: str) -> list[str]:
+    """Every distinct executable named ``name`` resolvable on PATH, in PATH order.
+
+    Mirrors shell resolution: the first entry is what actually runs; any others are
+    shadowed. Respects ``PATHEXT`` on Windows (``horus.exe``/``.cmd``/…) and the
+    executable bit on POSIX. Deduped by normalized real path, so the same file
+    reachable through two PATH entries (or a symlink) counts once."""
+    path_dirs = (os.environ.get("PATH") or os.defpath).split(os.pathsep)
+    if sys.platform == "win32":
+        exts = [e for e in (os.environ.get("PATHEXT") or ".EXE").split(os.pathsep) if e]
+        candidates = [name + e for e in exts] + [name]
+    else:
+        candidates = [name]
+    seen: set[str] = set()
+    out: list[str] = []
+    for directory in path_dirs:
+        if not directory:
+            continue
+        for cand in candidates:
+            full = os.path.join(directory, cand)
+            if os.path.isfile(full) and os.access(full, os.X_OK):
+                key = os.path.normcase(os.path.realpath(full))
+                if key not in seen:
+                    seen.add(key)
+                    out.append(full)
+    return out
+
+
+def _shadow_install_finding() -> Finding | None:
+    """Warn when more than one ``horus`` executable is resolvable on PATH.
+
+    The classic trap (seen on a live Windows machine): a stale ``pip install
+    horus-harness`` left ``horus.exe`` in the interpreter's ``Scripts`` dir, which
+    sits ahead of uv's ``~/.local/bin`` shim on PATH — so ``horus --version`` keeps
+    reporting the old release even after a fresh ``uv tool install``. The version is
+    baked into the source, so the number always reflects *which* executable ran; this
+    check surfaces the conflict instead of leaving it silent. Returns ``None`` when
+    zero are found (the console-script check already reports that)."""
+    found = _all_on_path("horus")
+    if not found:
+        return None
+    if len(found) == 1:
+        return Finding("ok", f"single `horus` executable on PATH ({found[0]})")
+    winner, *shadowed = found
+    return Finding(
+        "warn",
+        f"multiple `horus` executables on PATH — `{winner}` wins and shadows: "
+        f"{', '.join(shadowed)}. `horus --version` may report an old release even after a "
+        "fresh install. Remove the stale copy (e.g. `pip uninstall horus-harness`) or fix "
+        "PATH order so the uv shim (`~/.local/bin`) comes first.",
+    )
 
 
 def _dist_requires_python(dist_name: str = _DIST_NAME) -> str | None:
@@ -178,6 +232,10 @@ def machine_findings(root: Path | None = None) -> list[Finding]:
     """Machine-level `horus doctor` findings: is this the machine, not the project,
     getting in the way. Read-only — never mutates anything."""
     findings: list[Finding] = [_console_script_finding()]
+
+    shadow_finding = _shadow_install_finding()
+    if shadow_finding is not None:
+        findings.append(shadow_finding)
 
     floor_finding = _interpreter_floor_finding()
     if floor_finding is not None:
