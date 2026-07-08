@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.26 SHIPPED + RELEASED 2026-07-08 (PR #125 squash-merged; pytest 3.12/3.13 + freshness green on the commit, main push CI success, PyPI publish + install-smoke green on ubuntu/macOS/windows) — version-floor safeguards against an outdated CLI silently regressing `.horus/` to the retired six-lane structure. Two paired guards keyed off `horus_min_version` in PRD frontmatter: Lever A (agent-enforced) — new 'Version floor' section in the managed block (v5→v6) telling the session agent to check `horus --version` before any state-mutating command and STOP+upgrade if below (the only guard that binds an already-installed old CLI); Lever B (code-enforced) — `cli._enforce_version_floor` refuses (exit 4) when the running CLI is below the repo floor, wired into init/upgrade-project/close/reconcile/session/consolidate/infer/distill-history, `HORUS_IGNORE_VERSION_FLOOR=1` override. New `horus/versioning.py` owns the compare; scaffolds stamp via `templates.prd_md`, `upgrade-project` backfills/raises (never lowers). 895 tests green. Motivation: about to launch the fabric project on a machine still on horus 0.0.2."
-next_action: "v0.0.26 is on PyPI. On the fabric machine: `uv tool install --force --python 3.12 horus-harness`, verify `horus --version` = 0.0.26, then `horus upgrade-project --apply` in the fabric repo (gives it the v6 block + horus_min_version stamp; from then both guards are live). Next feature candidates: #1 [ops] orphan reap (Sonnet/inline — kill the session's process tree on a failed RESULT), or the scheduled/usage-aware autonomous-continuation feature (Open, unscheduled, Opus design). [tier: Sonnet for orphan reap; Opus for the continuation design.]"
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md — note the model-tier rule + per-step tier tags and the version-floor rule. v0.0.26 (version-floor safeguards) shipped + released. LEAD: #1 orphan reap (Sonnet) or the scheduled-continuation feature (Open, unscheduled, Opus design). Default worker tier = Sonnet; Opus for design + the verify gate."
-execution_recommendation: "continue-as-is for orphan reap (#1, Sonnet/inline — small, clear gate). plan-execution only if implementing the scheduled-continuation primitives (several horus run flags + a scheduler — Opus supervisor + Sonnet workers). Default worker tier = Sonnet; reserve Opus for design + the verify/accept gate; Haiku for mechanical sweeps."
+current_focus: "SHIPPED 2026-07-08, both merged + CI green: (1) catalog add-UI (v0.0.27, PR #126) — in-app forms to register a GitHub owner (`/github-add-owner`) and add a local project (`/local-add`: register an existing `.horus/` or scaffold from zero via `initialize.init_project`), the UI peers of `discover github --save` / `horus init`; (2) shadow-install doctor guard (v0.0.28, PR #127) — `doctor machine._shadow_install_finding` warns when >1 `horus` executable is resolvable on PATH (via `_all_on_path`, PATHEXT-aware), the code companion to the version-floor safeguard. Both live-probed against a real dashboard server / crafted PATH, not just tests (906 green). Driven by a fresh-machine setup: empty catalog = per-machine `~/.horus/` config isn't git-synced; missing private repos = gh token scope on that box; `horus --version` = 0.0.5 = a stale `pip install` in `Python312\\Scripts` shadowing uv's `.local\\bin` shim."
+next_action: "v0.0.27 + v0.0.28 are on main but NOT yet on PyPI (publish fires only on a cut GitHub Release; latest release is v0.0.26). Cut a v0.0.28 GitHub Release so the add-UI + shadow guard reach PyPI, then upgrade the daily-driver installs. Next feature candidates: #1 [ops] orphan reap (Sonnet/inline — kill the session's process tree on a failed RESULT), or the scheduled/usage-aware autonomous-continuation feature (Open, unscheduled, Opus design). [tier: release = mechanical; Sonnet for orphan reap; Opus for continuation design.]"
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md — note the model-tier rule, per-step tier tags, and version-floor rule. v0.0.27 (catalog add-UI) + v0.0.28 (shadow-install guard) shipped to main; cut the v0.0.28 GitHub Release to publish. LEAD: cut release, then #1 orphan reap (Sonnet) or the scheduled-continuation feature (Opus design). Default worker tier = Sonnet; Opus for design + the verify gate."
+execution_recommendation: "continue-as-is: cutting the release is mechanical; orphan reap (#1, Sonnet/inline) is small with a clear gate. plan-execution only for the scheduled-continuation primitives (several horus run flags + a scheduler — Opus supervisor + Sonnet workers). Default worker tier = Sonnet; reserve Opus for design + the verify/accept gate; Haiku for mechanical sweeps."
 last_updated: 2026-07-08
 horus_min_version: 0.0.26
 ---
@@ -55,74 +55,59 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
-3. **[ops] Windows machine:** one-time `uv tool install --force --python 3.12 horus-harness`
-   + `horus upgrade-project --all`; eyeball the mascot failure dialog + Skills tab on a
-   desktop session; confirm VS Code task keybindings work under Flatpak.
+3. **[ops] Windows machine:** `uv tool install --force --python 3.12 horus-harness` +
+   `horus upgrade-project --all`; eyeball mascot failure dialog + Skills tab; confirm VS
+   Code task keybindings under Flatpak. (2026-07-08: the `horus --version`=0.0.5 shadow
+   there was a stale `pip` copy ahead of the uv shim — now caught by the v0.0.28 guard.)
 4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
-   owned-window defaults, hook execution. Install-smoke CI already covers install/CLI/
-   dashboard `/health` per release.
-5. **horus-hub follow-ups (harness side):** hub work continues in
-   `rafaelmjf/horus-hub` (its PRD + execution.md). Parked here: JSONL heartbeat
-   events; `--worktree` auto-cleanup; `--worker` could infer the agent from
-   `--agent` (took a usage-error bounce 2026-07-04).
+   owned-window defaults, hook execution. Install-smoke CI covers install/CLI/`/health`.
+5. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD +
+   execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup; `--worker`
+   inferring agent from `--agent` (usage-error bounce 2026-07-04).
 
 ### Open, unscheduled
 
 - **Scheduled / usage-aware autonomous continuation** (proven hand-rolled 2026-07-05:
-  a systemd timer → `horus run` ran one pinned task and closed cleanly; the preflight
-  refused an exhausted-window spawn). Make it first-class on the survival-kit substrate:
-  `horus run --stop-at-usage <pct>` (self-checkpoint+close at a ceiling), `--at <time>` /
-  `--after-usage-reset` (defer via known `resets_at`; replaces the `sleep`+timer),
-  `--resume-plan` (cold session = `horus resume` handoff + "next *pinned* task → hold-merge
-  → close → stop-at-usage"), an unattended posture, and registry/dashboard record of the
-  run + PR. Local scheduling required (cloud routines can't reach local repos); continuity
-  must pin a *specific* task. Full learnings: 2026-07-05 session note. Cross-ref: survival
-  kit (v0.0.25), MVP3 autonomous closure.
-- **Project-declared machine requirements** (`doctor` + `resume` + dashboard):
-  a project commits `.horus/requirements.md` (frontmatter `kind: machine-requirements`
-  with `tools:` name/probe/install/needed_for + optional `configs:`; body prose for
-  non-probeable deps). `doctor project` probes each tool → warn findings (silent when
-  absent); **`horus resume` prepends "⚠ this machine is missing: …" to the seed prompt**
-  (must fire where sessions start); dashboard card gets a readiness badge. First consumer:
-  fabric-metadata-driven-medallion (needs `fab`/`pbir`/PBI skills, declared there 2026-07-07).
-- **Execution-workflow tuning:** small phase-status vocabulary
-  (planned/delegated/accepted/blocked) in the skill + template (the gate-command +
-  failure-baseline handoff fields shipped in v0.0.22). Also propagate the **model-tier
-  suggestion** (Haiku/Sonnet/Opus per the model-tier rule) into the fresh-project
-  template + execution skill + delegation rubric, so the per-step tier convention (now
-  in this repo's PRD frontmatter) reaches every project — optionally a first-class
-  `model_recommendation` frontmatter field wired through `resolve_focus`/dashboard
-  rather than folded into `execution_recommendation` prose.
-- **Skill map follow-ups** (gated on real use of the Skills tab): third-party skill
-  copy with provenance/diff/trust; invocation tracking; rulesync only at a 3rd tool.
-- **Context-cache visibility, active behavior:** decide how cold/expired sessions warn
-  (companion, launch flow, hook, or dashboard-only).
-- **Hook generation stamps:** hook configs are content-compared — an old CLI would offer
-  a downgrade "refresh"; version-mark them like the managed block if payloads change.
-- **Git-aware overview (MVP2.5):** "fetch all" refresh (fetch only, never pull);
-  behind-origin / uncommitted-continuity staleness folded into the warning surface.
-- **Doctor compat (observe):** per project, report what each installed agent would load
-  (instructions, skills, MCP, hooks). Skills half shipped as the Skill map.
-- **Workflow-policy refinements:** project the branch→PR→auto-merge default into the
-  managed block; per-project override in `.horus/`.
-- **Companion signals:** usage warnings, stale continuity, uncommitted `.horus/`,
-  per-project switching, configurable mascot background.
-- **CI gate promotion:** tests are required on this repo's main since v0.0.22;
-  continuity check stays advisory → required once proven; decide if `init` installs
-  the merge gate by default.
+  systemd timer → `horus run` ran one pinned task, closed cleanly; preflight refused an
+  exhausted-window spawn). Make first-class on the survival-kit substrate: `run
+  --stop-at-usage <pct>`, `--at <time>` / `--after-usage-reset` (defer via `resets_at`),
+  `--resume-plan` (cold session = `horus resume` + pinned-task → hold-merge → close),
+  unattended posture, registry/dashboard record of run + PR. Local scheduling required;
+  continuity must pin a *specific* task. Full learnings: 2026-07-05 note.
+- **Project-declared machine requirements** (`doctor` + `resume` + dashboard): a project
+  commits `.horus/requirements.md` (`kind: machine-requirements`, `tools:` name/probe/
+  install/needed_for + `configs:`; prose for non-probeable deps). `doctor project` probes →
+  warn findings; **`horus resume` prepends "⚠ this machine is missing: …" to the seed
+  prompt**; dashboard card gets a readiness badge. First consumer: fabric (needs `fab`/
+  `pbir`/PBI skills, declared there 2026-07-07).
+- **Execution-workflow tuning:** phase-status vocabulary (planned/delegated/accepted/
+  blocked) in skill + template; propagate the **model-tier suggestion** into the
+  fresh-project template + execution skill + delegation rubric so the per-step tier
+  convention reaches every project — optionally a first-class `model_recommendation`
+  frontmatter field via `resolve_focus`/dashboard rather than `execution_recommendation` prose.
+- **Skill map follow-ups** (gated on real Skills-tab use): third-party copy with
+  provenance/diff/trust; invocation tracking; rulesync only at a 3rd tool.
+- **Context-cache visibility:** how cold/expired sessions warn (companion/launch/hook/dashboard).
+- **Hook generation stamps:** hook configs are content-compared — version-mark like the
+  managed block if payloads change, else an old CLI offers a downgrade "refresh".
+- **Git-aware overview (MVP2.5):** "fetch all" (never pull); behind-origin / uncommitted-
+  continuity staleness folded into the warning surface.
+- **Doctor compat (observe):** per project, report what each agent would load (instructions/
+  skills/MCP/hooks). **Workflow-policy:** project the branch→PR→auto-merge default into the
+  managed block + per-project `.horus/` override. **CI gate promotion:** continuity check
+  advisory → required once proven; decide if `init` installs the merge gate by default.
+- **Companion signals:** usage warnings, stale/uncommitted `.horus/`, per-project
+  switching, configurable mascot background.
 
 ### Deferred (direction noted, not scheduled)
 
-- **MVP3 agent execution:** oversight terminate/resume from UI; autonomous closure
-  (edits restricted to `.horus/**` + managed blocks); LLM-based rich `infer`; SQLite
-  registry only when scale hurts.
-- **MVP5 app cohesion:** one lifecycle (mascot ⇄ dashboard window ⇄ server, owned
-  windows, single-instance, post-upgrade auto-respawn); proper native app tier
-  (PySide6/Electron/Tauri — pywebview tried and rejected).
-- **Cross-machine proper app:** machine snapshots (paths, running sessions, dirty state).
-- **`horus mcp` continuity server** — first Omnigent interop seam, only if adopted.
-- **Docs website** once the surface stabilizes.
-- Session-host daemon; remote attach; Telegram bridge; Tailscale dashboard;
+- **MVP3 agent execution:** UI terminate/resume; autonomous closure (`.horus/**` +
+  managed blocks only); LLM-rich `infer`; SQLite registry only when scale hurts.
+- **MVP5 app cohesion:** one lifecycle (mascot ⇄ dashboard ⇄ server, owned windows,
+  single-instance, post-upgrade respawn); native app tier (PySide6/Electron/Tauri —
+  pywebview rejected). **Cross-machine app:** machine snapshots (paths, sessions, dirty).
+- **`horus mcp` continuity server** (first Omnigent seam, if adopted); **docs website**
+  once stable; session-host daemon; remote attach; Telegram bridge; Tailscale dashboard;
   `reconcile --ai`; cross-repo managed-block propagation; VS Code full auto-run.
 
 ## Shipped
@@ -157,7 +142,9 @@ opt-out) in `close --check` + full `close`, plus a warn-default Stop hook
 (v0.0.26): `horus_min_version` PRD-frontmatter stamp + two guards — managed-block
 "Version floor" preflight (block v6, agent-enforced) and `cli._enforce_version_floor`
 (exit 4, code-enforced) across every `.horus/`-mutating command; `horus/versioning.py`
-owns the compare; `upgrade-project` backfills/raises the stamp; `HORUS_IGNORE_VERSION_FLOOR=1` override.
+owns the compare; `upgrade-project` backfills/raises the stamp; `HORUS_IGNORE_VERSION_FLOOR=1` override ·
+**shadow-install guard** (v0.0.28): `doctor machine` warns when >1 `horus` executable is resolvable on
+PATH (`_all_on_path`, PATHEXT-aware, real-path deduped) — a stale `pip install` shadowing the uv shim.
 
 **Dashboard:** read-mostly multi-project view, sumi-e design, async heavy panels ·
 project detail: launch card, context-cache estimate, recent-sessions (read-only
@@ -167,7 +154,9 @@ self-update pill + button (v0.0.9) · stale-build artifact-write guard (v0.0.9) 
 startup-failure visibility (dashboard.log + mascot error, v0.0.12) · Live-sessions
 "Reviewed ✓" per-row dismiss + review-contract footer (v0.0.17) · **mobile-friendly
 in-app terminal** (2026-07-08): touch full-screen, on-screen key strip, responsive
-tap targets, non-zoom viewport (PR #124, authored on-device).
+tap targets, non-zoom viewport (PR #124, authored on-device) · **catalog add-UI**
+(v0.0.27): in-app forms to register a GitHub owner (`/github-add-owner`) + add a
+local project (`/local-add`: register existing `.horus/` or scaffold from zero).
 
 **GitHub bridge:** remote catalog (`discover github`, cached incremental refresh) ·
 onboard `github:owner/repo` (clone→init→integrate via workflow policy) · integrate()
@@ -211,12 +200,12 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   Anything committed to the repo executes on every machine it reaches — strictest
   portability bar; the `horus` console script is the only guaranteed spelling.
 - **Hooks advise and ask, never override** — injected context defers to the user's
-  explicit command; Stop asks (close now vs push ahead); never strand uncommitted work.
-  The emergency state-save keeps this bar: never denies the tool call; worker tree =
-  full-tree commit to the disposable branch (+push, `-u origin` fallback); main
-  checkout = `.horus/**`-only rescue ref via a temp `GIT_INDEX_FILE` — never touching
-  the user's index/HEAD/worktree. Hook sentinels are machine-global under `/tmp`:
-  probe session ids must be unique across supervisor/worker probes (re-arm suppression).
+  command; Stop asks (close now vs push ahead); never strand uncommitted work. Emergency
+  state-save keeps this: never denies the tool call; worker tree = full-tree commit to the
+  disposable branch (+push, `-u origin` fallback); main checkout = `.horus/**`-only rescue
+  ref via a temp `GIT_INDEX_FILE`, never touching the user's index/HEAD/worktree. Hook
+  sentinels are machine-global under `/tmp` — probe session ids must be unique across
+  supervisor/worker probes.
 - **Three OS targets** (Windows/Linux/macOS); projections move together across agent
   surfaces (Claude + Codex), drift user-visible; sync compares each surface to the
   installed CLI, never surfaces to each other.
@@ -247,32 +236,29 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   read-only `.git` and no socket bind: the supervisor owns commit, push, and every
   runtime gate — write briefs accordingly.
 - **Model tier is a delegation dimension — match it to the work, don't default to
-  frontier.** Token burn ≈ (tool-call turns) × (resident context), and cache reads of
-  that context are ~80% of cost — so keep the *expensive* tier's context small: push
-  tool-heavy exploration/verification into subagents/workers that return distilled notes,
-  not file dumps. Tiers: **Haiku** — mechanical verifiable sweeps (never the judgment
-  gate); **Sonnet** — most implementation; **Opus** — design, ambiguity, the verify/accept
-  gate. The main-session model can't swap per call, so cheaper execution comes only via a
-  subagent/worker run on the **isolated** account (never the ambient one) — cheaper tier ×
-  separate account is the double win. Full rationale: 2026-07-04 session note.
-- **Orchestration (proven 2026-07-04, contract in execution skill v8):** parallel
-  features run orchestrator > supervisor > worker — worktree per worker; claude workers
-  `full-auto` (default posture stalls headless, exits 0 with zero diffs); bounce = resume
-  the same session with the exact failure; after each merge, watch main's push CI before
-  arming the next (non-strict checks let two green PRs land a red main). The orchestrator
-  implements nothing and alone edits continuity. **Commit continuity before cutting a
-  worker worktree from HEAD** (an uncommitted brief is invisible to the checkout) and
-  **name any unreviewed-output branch in the handoff prose** (a tree back on main looks
-  empty). Probe briefs must not hardcode port 8765 (the dashboard's). When a worker dies
-  mid-run: checkpoint its output, reap orphaned processes holding probe ports before your
-  own probes, and pass an explicit subject when squashing a single-commit branch.
-- **Platform traps to remember:** `uv tool install horus-harness` without
-  `--python 3.12` silently resolves an ancient version when uv's default python is below
-  the floor (Linux + Windows); after a release the app/mascot can still be the old `uv
-  tool` install — compare `horus --version` with `uv run horus --version`, then
-  `--force --python 3.12` reinstall and restart; ctypes needs argtypes/restype (64-bit
-  truncation); Windows GUI under `pythonw.exe` + reap the process tree; pin CI actions to
-  tags that exist; probe the HTTP server, not the companion process.
+  frontier.** Token burn ≈ (tool-call turns) × (resident context), cache reads of which are
+  ~80% of cost — keep the *expensive* tier's context small: push tool-heavy exploration/
+  verification into subagents/workers returning distilled notes, not file dumps. **Haiku** —
+  mechanical verifiable sweeps (never the judgment gate); **Sonnet** — most implementation;
+  **Opus** — design, ambiguity, the verify/accept gate. Main-session model can't swap per
+  call, so cheaper execution comes only via a worker on the **isolated** account (never the
+  ambient one) — cheaper tier × separate account is the double win. Rationale: 2026-07-04 note.
+- **Orchestration (proven 2026-07-04, contract in execution skill v8):** parallel features
+  run orchestrator > supervisor > worker — worktree per worker; claude workers `full-auto`
+  (default posture stalls headless, exits 0 with zero diffs); bounce = resume same session
+  with the exact failure; after each merge watch main's push CI before arming the next
+  (non-strict checks let two green PRs land a red main). Orchestrator implements nothing,
+  alone edits continuity. **Commit continuity before cutting a worktree from HEAD** and
+  **name any unreviewed-output branch in the handoff**. Probe briefs never hardcode port
+  8765; on a mid-run worker death checkpoint output + reap orphaned port-holders before
+  your own probes; pass an explicit subject when squashing a single-commit branch.
+- **Platform traps:** `uv tool install horus-harness` without `--python 3.12` silently
+  resolves an ancient version when uv's default python is below the floor; after a release
+  the app/mascot can still be the old install — compare `horus --version` with `uv run
+  horus --version`, `--force --python 3.12` reinstall + restart; a **stale `pip`-installed
+  `horus` on PATH shadows the uv shim** (v0.0.28 `doctor machine` flags it); ctypes needs
+  argtypes/restype; Windows GUI under `pythonw.exe` + reap the tree; pin CI actions to real
+  tags; probe the HTTP server, not the companion.
 
 ## Structure contract (prototype)
 
