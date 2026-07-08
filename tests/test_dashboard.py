@@ -1523,8 +1523,98 @@ def test_remote_catalog_shows_blank_owner_warning_when_no_owners_configured(tmp_
 
     assert "GitHub remote catalog" in html_out
     assert "No GitHub owner configured" in html_out
-    assert "horus discover github" in html_out
+    # CTA is now an in-app form (peer of `horus discover github <owner> --save`).
+    assert "/github-add-owner" in html_out
+    assert "Add GitHub owner" in html_out
     assert "per-machine" in html_out or "not git-synced" in html_out or "fresh machine" in html_out
+
+
+def test_github_add_owner_registers_and_redirects(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    # Don't let owner registration spawn a real `gh` background refresh.
+    monkeypatch.setattr(dashboard, "_start_remote_refresh", lambda *a, **k: None)
+    assert config.load_github_owners() == []
+
+    resp = _post("/github-add-owner", {"owner": "octocat"}, origin="http://127.0.0.1:8765")
+
+    assert resp["status"] == 303
+    location = dict(resp["headers"])["Location"]
+    assert "owner_added=octocat" in location
+    assert config.load_github_owners() == ["octocat"]
+
+
+def test_github_add_owner_rejects_invalid(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    monkeypatch.setattr(dashboard, "_start_remote_refresh", lambda *a, **k: None)
+
+    resp = _post("/github-add-owner", {"owner": "bad/name"}, origin="http://127.0.0.1:8765")
+
+    assert resp["status"] == 303
+    assert "owner_error" in dict(resp["headers"])["Location"]
+    assert config.load_github_owners() == []
+
+
+def test_github_add_owner_reports_already_tracking(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    monkeypatch.setattr(dashboard, "_start_remote_refresh", lambda *a, **k: None)
+    config.register_github_owner("octocat")
+
+    resp = _post("/github-add-owner", {"owner": "octocat"}, origin="http://127.0.0.1:8765")
+
+    assert "owner_exists=octocat" in dict(resp["headers"])["Location"]
+
+
+def test_local_add_registers_existing_horus_project(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "myrepo"
+    (proj / ".horus").mkdir(parents=True)
+
+    resp = _post("/local-add", {"path": str(proj)}, origin="http://127.0.0.1:8765")
+
+    assert resp["status"] == 303
+    location = dict(resp["headers"])["Location"]
+    assert "local_added=myrepo" in location or "i=" in location  # banner or project page
+    assert str(proj.resolve()) in config.load_projects()
+
+
+def test_local_add_without_horus_requires_init_flag(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "bare"
+    proj.mkdir()
+
+    resp = _post("/local-add", {"path": str(proj)}, origin="http://127.0.0.1:8765")
+
+    assert "local_error" in dict(resp["headers"])["Location"]
+    assert config.load_projects() == []
+
+
+def test_local_add_onboards_from_zero_when_init_ticked(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "fresh"
+    proj.mkdir()
+    monkeypatch.setattr(dashboard, "_stale_build", lambda: None)
+
+    def fake_init(root, **kwargs):
+        (root / ".horus").mkdir(exist_ok=True)
+        return []
+
+    monkeypatch.setattr(dashboard.initialize, "init_project", fake_init)
+
+    resp = _post("/local-add", {"path": str(proj), "init": "1"}, origin="http://127.0.0.1:8765")
+
+    assert resp["status"] == 303
+    location = dict(resp["headers"])["Location"]
+    assert "local_onboarded=fresh" in location or "i=" in location
+    assert str(proj.resolve()) in config.load_projects()
+
+
+def test_local_add_rejects_missing_directory(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+
+    resp = _post("/local-add", {"path": str(tmp_path / "nope")}, origin="http://127.0.0.1:8765")
+
+    assert "local_error" in dict(resp["headers"])["Location"]
+    assert config.load_projects() == []
 
 
 def test_remote_catalog_no_owner_warning_absent_when_owners_set(tmp_path, monkeypatch):
