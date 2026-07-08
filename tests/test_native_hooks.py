@@ -231,6 +231,25 @@ def test_install_claude_guard_hook_idempotent(tmp_path):
     assert native_hooks.install_claude_guard_hook(tmp_path).status == "exists"
 
 
+def test_install_claude_fetch_check_hook_creates_sessionstart_hook(tmp_path):
+    action = native_hooks.install_claude_fetch_check_hook(tmp_path)
+    assert action.status == "created"
+    data = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    handler = data["hooks"]["SessionStart"][0]["hooks"][0]
+    assert handler["command"] == "horus fetch-check --hook || exit 0"
+
+
+def test_install_claude_fetch_check_hook_idempotent(tmp_path):
+    native_hooks.install_claude_fetch_check_hook(tmp_path)
+    assert native_hooks.install_claude_fetch_check_hook(tmp_path).status == "exists"
+
+
+def test_fetch_check_hook_is_in_claude_installer_set():
+    # upgrade-project projects HOOK_INSTALLERS — the fetch-check hook must ride it
+    # so satellites get the session-start signal on their next refresh.
+    assert native_hooks.install_claude_fetch_check_hook in native_hooks.HOOK_INSTALLERS["claude"]
+
+
 def test_install_claude_merge_hook_rehomes_stale_bash_matcher(tmp_path):
     # A repo scaffolded before the PowerShell fix carries the handler under a
     # "Bash"-only group; re-install must move it under the two-tool matcher, or the

@@ -59,6 +59,17 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "horus fetch-check --hook || exit 0"
+          }
+        ]
+      }
     ]
   }
 }

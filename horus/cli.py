@@ -21,6 +21,7 @@ from horus import (
     codex_usage,
     config,
     dashboard,
+    fetchcheck,
     frontmatter,
     gitstate,
     github_catalog,
@@ -1198,6 +1199,43 @@ def cmd_checkpoint(args: argparse.Namespace) -> int:
     return 0 if healthy else 1
 
 
+def _fetch_check_hook(root: Path) -> int:
+    """SessionStart-hook mode: fetch (TTL-cached) and inject a behind-origin warning
+    as session context. Silent + exit 0 when fresh, offline, or on any trouble — the
+    fetch-first rule as a deterministic signal, advisory only (never blocks)."""
+    try:
+        state = fetchcheck.fetch_and_state(root)
+        message = fetchcheck.warning_line(state)
+    except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
+        return 0
+    if not message:
+        return 0
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": message,
+        }
+    }))
+    return 0
+
+
+def cmd_fetch_check(args: argparse.Namespace) -> int:
+    root = Path(args.path).resolve()
+    if getattr(args, "hook", False):
+        return _fetch_check_hook(root)
+    # Non-hook invocation (scriptable): fetch + behind/ahead verdict and exit code.
+    state = fetchcheck.fetch_and_state(root, ttl=0 if getattr(args, "fresh", False) else fetchcheck.TTL_SECONDS)
+    if state is None:
+        print(f"Not a git repository: {root}")
+        return 0
+    print(gitstate.summary(state))
+    message = fetchcheck.warning_line(state)
+    if message:
+        print(message)
+        return 1
+    return 0
+
+
 def cmd_hook_install(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
@@ -1248,6 +1286,11 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
             print("Stop hook: on session end, warns (non-blocking) when the working tree is")
             print("dirty or has unpushed commits — the committed-and-pushed checkpoint")
             print("discipline as an observed signal, not a remembered habit.")
+        if kind in ("fetch-check", "all"):
+            action = native_hooks.install_claude_fetch_check_hook(root)
+            print(f"[{action.status}] {action.message}")
+            print("SessionStart hook: fetches (TTL-cached) and injects a behind-origin")
+            print("warning into the session context — the fetch-first rule as a signal.")
         return 0
     print(f"unsupported hook target: {args.target}")
     return 2
@@ -2188,6 +2231,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_checkpoint.set_defaults(func=cmd_checkpoint)
 
+    p_fetch_check = sub.add_parser(
+        "fetch-check",
+        help="fetch (TTL-cached) and report whether local refs are behind origin",
+    )
+    p_fetch_check.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_fetch_check.add_argument(
+        "--hook", action="store_true",
+        help="SessionStart-hook mode: inject a behind-origin warning as session "
+             "context; always exit 0, signalling only via stdout JSON",
+    )
+    p_fetch_check.add_argument(
+        "--fresh", action="store_true",
+        help="skip the fetch TTL cache and fetch now",
+    )
+    p_fetch_check.set_defaults(func=cmd_fetch_check)
+
     p_usage = sub.add_parser("usage", help="inspect native app usage signals")
     usage_sub = p_usage.add_subparsers(dest="usage_cmd", required=True)
     p_usage_check = usage_sub.add_parser("check", help="check whether usage is near a closure threshold")
@@ -2231,11 +2290,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_hook_install.add_argument("--path", default=".", help="project root (default: cwd)")
     p_hook_install.add_argument("--target", choices=("codex", "claude"), required=True, help="native app target")
     p_hook_install.add_argument(
-        "--kind", choices=("usage", "merge", "guard", "checkpoint", "all"), default="usage",
+        "--kind", choices=("usage", "merge", "guard", "checkpoint", "fetch-check", "all"), default="usage",
         help="which hook(s): usage = quota→closure (default); merge = PreToolUse gate on "
              "`gh pr merge`; guard = PreToolUse gate that stops a hosted session "
              "restarting/killing its own host; checkpoint = Stop hook that warns on a "
-             "dirty tree / unpushed commits; all = every applicable hook.",
+             "dirty tree / unpushed commits; fetch-check = SessionStart behind-origin "
+             "warning (claude only); all = every applicable hook.",
     )
     p_hook_install.add_argument(
         "--threshold",

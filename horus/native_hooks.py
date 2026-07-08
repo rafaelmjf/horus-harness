@@ -25,6 +25,7 @@ _HORUS_MERGE_MARKER = "horus close --hook"
 _HORUS_GUARD_MARKER = "horus guard-host"
 _HORUS_USAGE_GUARD_MARKER = "horus usage guard"
 _HORUS_CHECKPOINT_MARKER = "horus checkpoint --hook"
+_HORUS_FETCH_CHECK_MARKER = "horus fetch-check --hook"
 
 # Claude's shell surface is two tools: Bash everywhere, plus a PowerShell tool that
 # agents prefer on Windows. A "Bash"-only matcher silently skips every shell guard
@@ -153,6 +154,10 @@ def _is_horus_usage_guard_hook(handler: Any) -> bool:
 
 def _is_horus_checkpoint_hook(handler: Any) -> bool:
     return _handler_has_marker(handler, _HORUS_CHECKPOINT_MARKER)
+
+
+def _is_horus_fetch_check_hook(handler: Any) -> bool:
+    return _handler_has_marker(handler, _HORUS_FETCH_CHECK_MARKER)
 
 
 def _merge_codex_usage_hook(hooks: dict[str, Any], event: str, threshold: float) -> None:
@@ -530,6 +535,30 @@ def install_claude_usage_guard_hook(project_root: Path) -> HookAction:
     return _persist_hook(path, data, "Claude usage guard hook")
 
 
+def _claude_fetch_check_hook_command() -> dict[str, Any]:
+    # SessionStart: inject a behind-origin warning before the session starts trusting
+    # local refs (the fetch is TTL-cached and hard-timeouted; offline / non-repo /
+    # no-upstream is a silent no-op). Advisory context only — never blocks anything.
+    return {
+        "type": "command",
+        "command": _guard_posix("horus fetch-check --hook"),
+    }
+
+
+def install_claude_fetch_check_hook(project_root: Path) -> HookAction:
+    """Install/update a Claude `SessionStart` hook that fetches (TTL-cached) and
+    injects a behind-origin warning into the session context — the fetch-first rule
+    as a deterministic signal instead of instruction text (field gap, 2026-07-08).
+    Claude-only: Codex has no session-start hook event to attach the peer to."""
+    path, data, hooks = _claude_hooks_dict(project_root)
+    _merge_event_hook(
+        hooks, "SessionStart", _claude_fetch_check_hook_command(),
+        is_mine=_is_horus_fetch_check_hook,
+    )
+    data["hooks"] = hooks
+    return _persist_hook(path, data, "Claude fetch-check hook")
+
+
 def install_claude_checkpoint_hook(project_root: Path) -> HookAction:
     """Install/update a Claude `Stop` hook that, on session end, warns when the working
     tree is dirty or has unpushed commits — the committed-and-pushed checkpoint
@@ -554,6 +583,7 @@ HOOK_INSTALLERS = {
         install_claude_guard_hook,
         install_claude_usage_guard_hook,
         install_claude_checkpoint_hook,
+        install_claude_fetch_check_hook,
     ),
     "codex": (
         install_codex_usage_hook,
