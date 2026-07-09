@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "SHIPPED 2026-07-09 (on main, commit 0973fe6, unreleased — CI green 3.12/3.13): stale running-dashboard detection in `doctor machine`. User's dashboard 'welcome-loop' root-caused to a forgotten `python -m horus dashboard --port 8771` serving v0.0.25 in memory since Jul 7 — the Update button upgraded the uv-tool install (→ v0.0.29) but the browser was on the ancient non-default-port process. New `_scan_running_dashboards`/`_stale_dashboard_findings` probe localhost 8765–8775 and warn when a live build is older than the installed CLI; verified live against the real stale pid, then reaped it. Closes the gap left by the PATH-only shadow guard + companion's reap-only-the-port-it-restarts. Prior: v0.0.29 (PR #128, released) fabric field-findings bundle — F1 PowerShell hook fix (both layers + matcher re-homing), `fetch-check` SessionStart signal, managed block v7."
-next_action: "Cut the next release to ship the on-main stale-dashboard doctor check (three-file bump + install smoke). Backlog lead: #1 [ops] orphan reap (Sonnet, small, clear gate: registry pid → kill process tree on failed RESULT) or #6 hook spawn-cost measurement (Haiku mechanical). PRD line diet + sessions archive sweep still pending (now 59 notes). Windows-only test failures (worktree path compare, registry exist_ok + real-home leakage, dashboard local-add) spawned as a separate background task. Scheduled/usage-aware continuation remains the Opus design item. [tier: Sonnet default; Haiku measurement; Opus continuation design.]"
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin (a SessionStart fetch-check hook now also warns when behind). Read .horus/PRD.md — note the new enforcement-ladder + continuity-value rules and per-step tier tags. v0.0.29 is released and installed on the daily driver; the four satellite repos carry uncommitted projection updates (commit them in each repo's next session). LEAD: backlog #1 orphan reap (Sonnet) or #6 hook spawn-cost measurement (Haiku); scheduled-continuation design is the Opus item. Copilot work, when it starts, begins at the rulesync decision."
-execution_recommendation: "continue-as-is: orphan reap is small with a clear gate; the spawn-cost measurement is a Haiku-tier sweep. plan-execution only for the scheduled-continuation primitives (several `horus run` flags + a scheduler — Opus supervisor + Sonnet workers). Delegation buys a cheaper tier only via a worker on the isolated account; per block v7 the execution-mode decision is made at planning time."
+current_focus: "SHIPPED this session: v0.0.30 (RELEASED, PyPI, install-smoke green) — removed the first-run welcome overlay (it looped on every launch: sessionStorage seen-flag reset on each new tab/window `horus app` opens) + `doctor machine` stale-running-dashboard scan. Then the **`--exposed` boundary** (on main e4fb8fd, PENDING RELEASE): the dashboard [access] gate is now an explicit `horus dashboard --exposed` launch flag — local mode NEVER reads [access], so a machine-global block no longer 403s local `horus app` (the owner's live bug); fail-closed if --exposed without [access]. Ops (this machine): hosted `horus-dashboard.service` (:8771, behind cloudflared+Access) now passes --exposed and runs 0.0.30 — RESTORED after I mistakenly killed it as a 'stale orphan' (it's the tunnel backend; doctor finding reworded to 'restart, never kill'). Architecture decided w/ owner: exposure + multi-machine belong to horus-hub; harness stays local+ungated and owns the LaunchBackend seam."
+next_action: "Cut v0.0.31 to ship the --exposed boundary + doctor reframe to the installed CLI (local `horus app` still 403s on 0.0.30 until then; hosted already fixed via the checkout). Then harness flagship P0 (backlog): extract a **LaunchBackend seam + LocalBackend** (config-driven, Option A per hub docs/multi-machine-launch-targets-design.md §9) — freeze the interface FIRST, then RemoteBackend + ContainerBackend delegate in parallel (GPT 5.5 → container, other Claude acct → remote/worker). [tier: Opus freeze the seam; Sonnet/GPT5.5 the backends.]"
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin. Read .horus/PRD.md. State: v0.0.30 released; the --exposed boundary is on main (e4fb8fd) but UNRELEASED — cut v0.0.31 so the uv-tool CLI (local `horus app`) stops 403ing under a machine-global [access] block. Hosted dashboard (systemd :8771) already fixed + secured with --exposed. NEXT ARC: multi-machine/container launch — harness owns the LaunchBackend seam (P0, freeze interface first); hub owns targets/provisioning (its PRD item 2 + design doc). Delegate backends to GPT 5.5 / other Claude account once the seam is frozen."
+execution_recommendation: "continue-as-is for v0.0.31 (mechanical release) + the LaunchBackend seam freeze (Opus: small refactor but the interface is the contract every backend implements — get it right inline). plan-execution once the seam is frozen: the RemoteBackend + ContainerBackend + hub worker/provisioning is high-volume, low-ambiguity, cross-repo — delegate to fresh sessions on the isolated accounts (GPT 5.5 / other Claude), one backend per worktree, --watch + review per owner preference."
 last_updated: 2026-07-09
 horus_min_version: 0.0.26
 ---
@@ -47,6 +47,18 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
+- **★ [flagship, important — not necessarily next] LaunchBackend seam + LocalBackend
+  (harness P0 of the multi-machine arc).** Extract the session-launch chokepoint
+  (`horus run` / adapters / `pty_host.start`) behind one interface —
+  `launch(brief)→handle · status · stream · stop` — with a config-driven `LocalBackend`
+  as the first impl (Option A in hub `docs/multi-machine-launch-targets-design.md` §9:
+  harness owns local/ssh/container backends reading a `[[targets]]` table; hub owns the
+  provisioning/probe/registry kit that writes it). **Freeze the interface first** — it's
+  the contract `RemoteBackend` (tailnet worker) and `ContainerBackend` (hub-launched
+  container) both implement, so once frozen those two backends parallelize as delegated
+  work (GPT 5.5 → container, other Claude account → remote/worker; one worktree each,
+  `--watch` + review). Pure refactor, no behavior change. Container launch = just the
+  third backend, not a separate epic. [tier: Opus for the freeze; Sonnet/GPT5.5 impls.]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
@@ -158,10 +170,14 @@ opt-out) in `close --check` + full `close`, plus a warn-default Stop hook
 owns the compare; `upgrade-project` backfills/raises the stamp; `HORUS_IGNORE_VERSION_FLOOR=1` override ·
 **shadow-install guard** (v0.0.28): `doctor machine` warns when >1 `horus` executable is resolvable on
 PATH (`_all_on_path`, PATHEXT-aware, real-path deduped) — a stale `pip install` shadowing the uv shim ·
-**stale running-dashboard scan** (2026-07-09, on main post-0.0.29): `doctor machine` probes localhost
-8765–8775 (`_scan_running_dashboards` via `companion.dashboard_identity`, pid-deduped) and warns when a
-live dashboard's in-memory build is older than the installed CLI — the forgotten-process trap a
-non-default-port dashboard slips through (companion only reaps the port it restarts) ·
+**stale running-dashboard scan** (v0.0.30): `doctor machine` probes localhost 8765–8775
+(`_scan_running_dashboards` via `companion.dashboard_identity`, pid-deduped) and warns when a live
+dashboard's build is older than the installed CLI — advises *restart*, never *kill* (may be a hosted
+systemd backend) · **welcome overlay removed** (v0.0.30): the decorative first-run splash looped on
+every launch (per-tab sessionStorage flag) — deleted, dashboard renders straight to content ·
+**`--exposed` boundary** (on main, pending v0.0.31): the `[access]` gate is an explicit
+`horus dashboard --exposed` launch flag (fail-closed without a block); local mode never reads
+`[access]`, ending the machine-global-config 403 of local `horus app` ·
 **v0.0.29 hooks bundle:** Claude shell guards match `Bash|PowerShell` (F1, both layers) with matcher
 re-homing so fixes propagate to scaffolded repos · `fetch-check` SessionStart fetch-first signal
 (TTL-cached, advisory) · block v7 (workflow + execution-mode planning discipline as instruction rungs).
@@ -253,7 +269,16 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   `versioning.MIN_CLI_VERSION` only on a real structure break.
 - **Dashboard contract:** read-mostly; every form POST is PRG; heavy/network panels load
   async, never in the page paint; a stale-build server never writes artifacts; empty
-  nudge fragments return empty (no false "all clear").
+  nudge fragments return empty (no false "all clear"); no first-run splash/overlay
+  (the welcome overlay looped and was removed — render straight to content).
+- **Exposure is an explicit launch property, never ambient config.** The `[access]`
+  Cloudflare gate arms ONLY under `horus dashboard --exposed`; local mode never reads
+  `[access]`, so a machine-global block can't 403 a local `horus app` (v0.0.31). Fail
+  closed: `--exposed` with no `[access]` block refuses to serve. A hosted backend must
+  pass `--exposed` (its systemd unit does) — flipping this default without updating the
+  unit would silently un-gate the public dashboard, so treat the harness flag + the
+  deploy unit as one lockstep change. Persist a client-side seen-flag in `localStorage`,
+  not `sessionStorage` (per-tab → resets on every new window Horus opens).
 - **Accounts:** login-driven setup into isolated dirs; TOFU identity adoption; the real
   email never lands in a commit; forward-slash every path written to TOML/JSON.
 - **Git policy:** branch → PR → auto-merge; this repo's main requires pytest checks
