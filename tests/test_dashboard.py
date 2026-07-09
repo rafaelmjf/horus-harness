@@ -171,6 +171,18 @@ def test_page_links_cache_busted_favicon(tmp_path, monkeypatch):
     assert "href='/assets/icon.png?v=" in page
 
 
+def test_welcome_overlay_flag_persists_across_windows(tmp_path, monkeypatch):
+    # The "Enter the dashboard" welcome-seen flag must live in localStorage, not
+    # sessionStorage: `horus app` opens a fresh tab/window on each launch, and a
+    # session-scoped flag reset every time — the overlay looped endlessly. Guard the
+    # regression by pinning the storage backend for the welcome flag.
+    _init(tmp_path, monkeypatch)
+    page = dashboard.render_index([])
+    assert "sessionStorage" not in page
+    assert page.count("localStorage.getItem('horusWelcome')") == 2
+    assert "localStorage.setItem('horusWelcome','1')" in page
+
+
 def test_control_usage_color_and_ring_by_threshold():
     assert dashboard._usage_color(95) == "#f08a8a"
     assert dashboard._usage_color(75) == "#e6c35c"

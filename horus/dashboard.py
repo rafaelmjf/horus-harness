@@ -868,14 +868,20 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "<script>try{if(localStorage.getItem('horus_skin')!=='dark')document.documentElement.classList.add('skin-light')}catch(e){document.documentElement.classList.add('skin-light')}</script>"
         "</head><body>"
         "<input type='checkbox' id='skin' onclick=\"var l=document.documentElement.classList.toggle('skin-light');try{localStorage.setItem('horus_skin',l?'light':'dark')}catch(e){};this.checked=l\">"
+        # `horusWelcome` MUST be localStorage, not sessionStorage: `horus app` opens the
+        # dashboard in a fresh tab/window each time (Linux `webbrowser.open(new=2)`; an
+        # owned Chromium `--app` that hands off to an existing session opens a new window),
+        # and every new window resets sessionStorage — so a session-scoped flag made the
+        # welcome overlay reappear on every open (observed as an endless "Enter the
+        # dashboard" loop). localStorage persists per-profile, so one dismissal sticks.
         "<input type='checkbox' id='welcome'>"
         "<div class='welcome'><div class='welcome-card'>"
         f"<img class='wm' src='/assets/mascot.png?v={icon_key}' alt=''>"
         "<h3>Horus is watching</h3>"
         "<p>Project continuity, account usage, and the next action are gathered here.</p>"
-        "<label class='btn btn-seal' for='welcome' onclick=\"sessionStorage.setItem('horusWelcome','1')\">Enter the dashboard</label>"
+        "<label class='btn btn-seal' for='welcome' onclick=\"try{localStorage.setItem('horusWelcome','1')}catch(e){}\">Enter the dashboard</label>"
         "</div></div>"
-        "<script>if(sessionStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');document.getElementById('welcome').checked=true;}</script>"
+        "<script>try{if(localStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');document.getElementById('welcome').checked=true;}}catch(e){}</script>"
         "<header class='top'><div class='wrap top-in'><div class='brand'>"
         "<span class='sun-mark' aria-hidden='true'></span>"
         "<div class='wordmark'><b>Horus</b><small>project continuity &amp; control panel</small></div>"
@@ -890,7 +896,7 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "</div></header>"
         f"<main{main_cls}>{_stale_build_banner()}{body}</main>"
         "<script>"
-        "if(sessionStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');}"
+        "try{if(localStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');}}catch(e){}"
         "function horusCopy(btn){"
         "var t=btn.closest('.resume').querySelector('.resume-text').textContent;"
         "navigator.clipboard.writeText(t).then(function(){"
