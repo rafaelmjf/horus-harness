@@ -1016,26 +1016,41 @@ def cmd_guard_host(args: argparse.Namespace) -> int:
     return 0
 
 
-def _usage_check_claude(args: argparse.Namespace) -> int:
-    report = claude_usage.latest_usage()
-    findings = claude_usage.usage_findings(threshold=args.threshold, report=report)
+def _usage_account(target: str) -> str | None:
+    """Alias of the account this session runs under (registered alias when known,
+    else the stable ``acct-<sha6>`` tag), so usage snapshots are keyed per account
+    and never cross-contaminate between accounts sharing one machine."""
+    try:
+        if target == "codex":
+            from horus import codex_usage as _codex_usage  # local import to keep the top lean
 
-    if not args.hook:
-        healthy = _print_findings(findings)
-        return 0 if healthy else 1
+            ident = _codex_usage.current_account()
+        else:
+            ident = claude_usage.current_account()
+        return config.alias_for(ident)
+    except Exception:  # noqa: BLE001 (identity is best-effort; None = default cache key)
+        return None
 
-    # Hook mode: drive the session into the closure routine when over budget.
-    if not claude_usage.is_over_threshold(args.threshold, report):
-        return 0
-    hook_input = _read_hook_stdin()
-    if hook_input.get("stop_hook_active"):  # we already triggered a Stop continuation
-        return 0
-    session_id = str(hook_input.get("session_id", "unknown"))
-    if native_hooks.closure_already_fired(session_id):  # re-arm window: avoid loops/nagging
-        return 0
-    native_hooks.mark_closure_fired(session_id)
 
-    event = hook_input.get("hook_event_name", "Stop")
+def _usage_bands(threshold: float) -> list[float]:
+    """Closure-escalation bands: the configured threshold plus the emergency band."""
+    return sorted({float(threshold), usage_snapshot.GUARD_EMERGENCY})
+
+
+def _current_band(percent: float, bands: list[float]) -> float | None:
+    """The highest band ``percent`` has crossed, or None while below all bands."""
+    crossed = [b for b in bands if percent >= b]
+    return crossed[-1] if crossed else None
+
+
+def _closure_sentinel_kind(event: str) -> str:
+    """Separate sentinels per hook event: the soft UserPromptSubmit advisory must
+    never consume the Stop hook's (stronger) closure prompt — sharing one marker let
+    a session sail from the threshold to the cutoff on a single soft nudge."""
+    return "closure-advisory" if event == "UserPromptSubmit" else "closure"
+
+
+def _emit_usage_closure(event: str, level: str) -> None:
     if event == "UserPromptSubmit":
         # Pre-task: inject usage *context* before the agent acts on the user's prompt.
         # Advisory only — it must defer to the user's explicit request (and push), never
@@ -1043,11 +1058,47 @@ def _usage_check_claude(args: argparse.Namespace) -> int:
         print(json.dumps({
             "hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",
-                "additionalContext": templates.USAGE_CLOSURE_ADVISORY,
+                "additionalContext": templates.USAGE_CLOSURE_ADVISORY.format(level=level),
             }
         }))
     else:  # Stop: block the stop and ask the user how to proceed (close now vs push ahead).
-        print(json.dumps({"decision": "block", "reason": templates.USAGE_CLOSURE_PROMPT}))
+        print(json.dumps({"decision": "block", "reason": templates.USAGE_CLOSURE_PROMPT.format(level=level)}))
+
+
+def _snapshot_level(snap: usage_snapshot.UsageSnapshot | None) -> str:
+    if snap is None or snap.percent is None:
+        return "near a limit"
+    return f"at {snap.percent:.0f}% (resets {snap.resets_at or 'unknown reset'})"
+
+
+def _usage_check_claude(args: argparse.Namespace) -> int:
+    if not args.hook:
+        report = claude_usage.latest_usage()
+        findings = claude_usage.usage_findings(threshold=args.threshold, report=report)
+        healthy = _print_findings(findings)
+        return 0 if healthy else 1
+
+    # Hook mode: drive the session into the closure routine when over budget. The
+    # cached snapshot is account-scoped and shared with the PreToolUse guard, so the
+    # Stop/UserPromptSubmit hot path costs a file read, not an OAuth fetch.
+    snap = usage_snapshot.cached_usage("claude", _usage_account("claude"))
+    if snap is None or snap.percent is None:
+        return 0
+    band = _current_band(snap.percent, _usage_bands(args.threshold))
+    if band is None:
+        return 0
+    hook_input = _read_hook_stdin()
+    if hook_input.get("stop_hook_active"):  # we already triggered a Stop continuation
+        return 0
+    session_id = str(hook_input.get("session_id", "unknown"))
+    event = hook_input.get("hook_event_name", "Stop")
+    kind = _closure_sentinel_kind(event)
+    # Band escalation, not a timer: fire once per band per usage window, so a user who
+    # chose to push ahead is re-asked only when usage crosses the next band.
+    if native_hooks.band_sentinel_fired(session_id, kind=kind, band=band, reset=snap.resets_at):
+        return 0
+    native_hooks.mark_band_sentinel(session_id, kind=kind, band=band, reset=snap.resets_at)
+    _emit_usage_closure(event, _snapshot_level(snap))
     return 0
 
 
@@ -1067,20 +1118,14 @@ def cmd_usage_check(args: argparse.Namespace) -> int:
         if hook_input.get("stop_hook_active") or hook_input.get("stopHookActive"):
             return 0
         session_id = str(hook_input.get("session_id") or hook_input.get("sessionId") or "unknown")
-        if native_hooks.closure_already_fired(session_id):
-            return 0
-        native_hooks.mark_closure_fired(session_id)
-
         event = hook_input.get("hook_event_name") or hook_input.get("hookEventName") or "Stop"
-        if event == "UserPromptSubmit":
-            print(json.dumps({
-                "hookSpecificOutput": {
-                    "hookEventName": "UserPromptSubmit",
-                    "additionalContext": templates.USAGE_CLOSURE_ADVISORY,
-                }
-            }))
-        else:
-            print(json.dumps({"decision": "block", "reason": templates.USAGE_CLOSURE_PROMPT}))
+        # Codex telemetry has no reliable band signal, so it keeps the time-based
+        # re-arm — but with per-event sentinels, matching the Claude path.
+        kind = _closure_sentinel_kind(event)
+        if native_hooks.sentinel_fired(session_id, kind=kind):
+            return 0
+        native_hooks.mark_sentinel_fired(session_id, kind=kind)
+        _emit_usage_closure(event, _snapshot_level(usage_snapshot.cached_usage("codex", _usage_account("codex"))))
         return 0
     healthy = _print_findings(findings)
     return 0 if healthy else 1
@@ -1123,7 +1168,7 @@ def _usage_guard_hook(root: Path, target: str) -> int:
     """PreToolUse usage guard: advisory near the limit, emergency state-save at the
     top. Always stdout JSON + exit 0; a missing/unreadable snapshot is a silent pass."""
     try:
-        snap = usage_snapshot.cached_usage(target)
+        snap = usage_snapshot.cached_usage(target, _usage_account(target))
     except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
         return 0
     if snap is None or snap.percent is None:
@@ -1152,7 +1197,7 @@ def cmd_usage_guard(args: argparse.Namespace) -> int:
     if getattr(args, "hook", False):
         return _usage_guard_hook(root, args.target)
     # Non-hook invocation: report the current snapshot for this target.
-    snap = usage_snapshot.cached_usage(args.target)
+    snap = usage_snapshot.cached_usage(args.target, _usage_account(args.target))
     if snap is None or snap.percent is None:
         print(f"No {args.target} usage signal available.")
         return 0

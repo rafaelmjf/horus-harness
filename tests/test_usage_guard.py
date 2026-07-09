@@ -17,6 +17,7 @@ def _stub_snapshot(monkeypatch, percent, resets_at="2026-07-04 21:10"):
         usage_snapshot, "cached_usage",
         lambda *a, **k: UsageSnapshot(percent, resets_at),
     )
+    monkeypatch.setattr(cli, "_usage_account", lambda target: None)  # hermetic: no real config reads
 
 
 def _stub_stdin(monkeypatch, session_id):
@@ -110,6 +111,23 @@ def test_guard_falls_back_to_env_session_id(tmp_path, monkeypatch, capsys):
     rc = cli._usage_guard_hook(tmp_path, "claude")
     assert rc == 0
     assert "hookSpecificOutput" in json.loads(capsys.readouterr().out)
+
+
+def test_guard_scopes_snapshot_to_current_account(tmp_path, monkeypatch, capsys):
+    """The guard must read the *current account's* snapshot, not the shared default —
+    otherwise a low-usage account can mask another account near its limit."""
+    calls = []
+
+    def fake_cached(agent, account=None, **kwargs):
+        calls.append((agent, account))
+        return None  # silent pass; only the cache key matters here
+
+    monkeypatch.setattr(usage_snapshot, "cached_usage", fake_cached)
+    monkeypatch.setattr(cli, "_usage_account", lambda target: "work")
+    rc = cli._usage_guard_hook(tmp_path, "claude")
+    assert rc == 0
+    assert calls == [("claude", "work")]
+    assert capsys.readouterr().out == ""
 
 
 def test_guard_hook_installers_are_wired_into_hook_set():

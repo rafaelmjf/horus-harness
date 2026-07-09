@@ -450,3 +450,37 @@ def test_closure_sentinel_rearms_after_window(tmp_path, monkeypatch):
     assert native_hooks.closure_already_fired(sid) is True            # recent -> suppressed
     native_hooks._sentinel_path(sid).write_text("1", encoding="utf-8")  # 1970 -> beyond window
     assert native_hooks.closure_already_fired(sid) is False           # re-armed
+
+
+def test_band_sentinel_escalates_by_band_and_rearms_on_reset(tmp_path, monkeypatch):
+    monkeypatch.setattr(native_hooks.tempfile, "gettempdir", lambda: str(tmp_path))
+    sid = "bands"
+    kw = {"kind": "closure", "reset": "2026-07-10 04:29"}
+    assert native_hooks.band_sentinel_fired(sid, band=90.0, **kw) is False
+    native_hooks.mark_band_sentinel(sid, band=90.0, **kw)
+    assert native_hooks.band_sentinel_fired(sid, band=90.0, **kw) is True   # same band -> quiet
+    assert native_hooks.band_sentinel_fired(sid, band=97.0, **kw) is False  # higher band -> fire
+    # a new usage window re-arms every band
+    assert native_hooks.band_sentinel_fired(sid, kind="closure", band=90.0, reset="2026-07-10 09:29") is False
+    # kinds are independent (advisory must not consume the stop prompt)
+    assert native_hooks.band_sentinel_fired(sid, kind="closure-advisory", band=90.0, reset=kw["reset"]) is False
+
+
+def test_band_sentinel_falls_back_to_time_rearm_without_reset(tmp_path, monkeypatch):
+    monkeypatch.setattr(native_hooks.tempfile, "gettempdir", lambda: str(tmp_path))
+    sid = "bands-noreset"
+    native_hooks.mark_band_sentinel(sid, kind="closure", band=90.0, reset=None)
+    assert native_hooks.band_sentinel_fired(sid, kind="closure", band=90.0, reset=None) is True
+    # age the marker past the fallback window -> re-armed
+    path = native_hooks._sentinel_path(sid, "closure")
+    state = json.loads(path.read_text(encoding="utf-8"))
+    state["ts"] = 1.0
+    path.write_text(json.dumps(state), encoding="utf-8")
+    assert native_hooks.band_sentinel_fired(sid, kind="closure", band=90.0, reset=None) is False
+
+
+def test_band_sentinel_ignores_legacy_timestamp_marker(tmp_path, monkeypatch):
+    monkeypatch.setattr(native_hooks.tempfile, "gettempdir", lambda: str(tmp_path))
+    sid = "bands-legacy"
+    native_hooks.mark_closure_fired(sid)  # old-format marker: bare timestamp
+    assert native_hooks.band_sentinel_fired(sid, kind="closure", band=90.0, reset=None) is False

@@ -797,8 +797,8 @@ is a SEPARATE pass — only when asked, not every close.
 # committed work must be pushed so another machine never resumes from stale state.
 
 USAGE_CLOSURE_ADVISORY = (
-    "[Horus usage advisory — context, not a command] You are near your 5-hour usage "
-    "limit and could be cut off soon. This note is background; the user's message is "
+    "[Horus usage advisory — context, not a command] Your 5-hour usage is {level} "
+    "and you could be cut off soon. This note is background; the user's message is "
     "what you must act on. Carry out their request FULLY — and if it involves "
     "committing or finishing work, \"fully\" includes pushing committed work to its "
     "remote so nothing is stranded only on this machine. Do NOT replace or narrow "
@@ -811,17 +811,19 @@ USAGE_CLOSURE_ADVISORY = (
 
 
 USAGE_CLOSURE_PROMPT = (
-    "[Horus usage check] You are near your 5-hour usage limit and could be cut off "
+    "[Horus usage check] Your 5-hour usage is {level} — you could be cut off "
     "mid-task. Do NOT unilaterally stop or force a closure. Instead, ASK the user how "
     "to proceed and then wait for their answer, offering two clear options: (a) run "
     "the closure ritual NOW — use the horus-consolidate skill (it can see THIS "
     "conversation, which a file-only script cannot) to fold the session's decisions, "
     "what shipped, dead ends, and the next step into .horus, then "
     "`horus close --commit --push`; or (b) push ahead with the current work for now. "
-    "Whichever they choose, first make sure any committed work is actually pushed to "
-    "its remote — leaving commits local-only risks resuming from stale state on "
-    "another machine. If there is uncommitted work, say so when you ask, so the user "
-    "can decide with that in mind."
+    "This check escalates by usage band, not on a timer: if the user already chose to "
+    "push ahead at a lower level in this window, do not relitigate that choice — state "
+    "the new level in one line and re-ask concisely. Whichever they choose, first make "
+    "sure any committed work is actually pushed to its remote — leaving commits "
+    "local-only risks resuming from stale state on another machine. If there is "
+    "uncommitted work, say so when you ask, so the user can decide with that in mind."
 )
 
 
