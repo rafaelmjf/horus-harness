@@ -690,7 +690,6 @@ a{color:var(--seal);text-decoration:none} a:hover{color:var(--seal-strong);text-
 .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
 .eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
 .mono{font-family:var(--mono)} .muted{color:var(--ink-3)}
-#welcome{position:absolute;opacity:0;pointer-events:none}.welcome{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:24px;background:color-mix(in srgb,var(--bg-2) 80%, transparent);backdrop-filter:blur(8px)}#welcome:checked~.welcome,body.welcome-seen .welcome{display:none}.welcome-card{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-lift);padding:28px;max-width:360px;text-align:center}.welcome-card .wm{height:152px;width:auto;image-rendering:pixelated;display:block;margin:6px auto 4px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}.skin-light .welcome-card .wm{filter:drop-shadow(0 6px 14px rgba(40,38,32,.22))}.welcome-card h3{margin:6px 0 8px;font-size:22px;font-weight:600;letter-spacing:.02em}.welcome-card p{margin:0 0 22px;font-size:13.5px;color:var(--ink-2);line-height:1.6}.welcome-card .btn{padding:11px 22px;font-size:14px}
 header.top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--bg) 86%, transparent);backdrop-filter:saturate(1.1) blur(12px);border-bottom:1px solid var(--hairline);padding:0}
 .top-in{display:flex;align-items:center;gap:22px;height:64px}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}.sun-mark{width:26px;height:26px;border-radius:50%;flex:none;background:radial-gradient(circle at 38% 35%, color-mix(in srgb,var(--seal) 78%, #fff 34%), var(--seal) 64%, var(--seal-strong) 100%)}
@@ -868,20 +867,6 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "<script>try{if(localStorage.getItem('horus_skin')!=='dark')document.documentElement.classList.add('skin-light')}catch(e){document.documentElement.classList.add('skin-light')}</script>"
         "</head><body>"
         "<input type='checkbox' id='skin' onclick=\"var l=document.documentElement.classList.toggle('skin-light');try{localStorage.setItem('horus_skin',l?'light':'dark')}catch(e){};this.checked=l\">"
-        # `horusWelcome` MUST be localStorage, not sessionStorage: `horus app` opens the
-        # dashboard in a fresh tab/window each time (Linux `webbrowser.open(new=2)`; an
-        # owned Chromium `--app` that hands off to an existing session opens a new window),
-        # and every new window resets sessionStorage — so a session-scoped flag made the
-        # welcome overlay reappear on every open (observed as an endless "Enter the
-        # dashboard" loop). localStorage persists per-profile, so one dismissal sticks.
-        "<input type='checkbox' id='welcome'>"
-        "<div class='welcome'><div class='welcome-card'>"
-        f"<img class='wm' src='/assets/mascot.png?v={icon_key}' alt=''>"
-        "<h3>Horus is watching</h3>"
-        "<p>Project continuity, account usage, and the next action are gathered here.</p>"
-        "<label class='btn btn-seal' for='welcome' onclick=\"try{localStorage.setItem('horusWelcome','1')}catch(e){}\">Enter the dashboard</label>"
-        "</div></div>"
-        "<script>try{if(localStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');document.getElementById('welcome').checked=true;}}catch(e){}</script>"
         "<header class='top'><div class='wrap top-in'><div class='brand'>"
         "<span class='sun-mark' aria-hidden='true'></span>"
         "<div class='wordmark'><b>Horus</b><small>project continuity &amp; control panel</small></div>"
@@ -896,7 +881,6 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "</div></header>"
         f"<main{main_cls}>{_stale_build_banner()}{body}</main>"
         "<script>"
-        "try{if(localStorage.getItem('horusWelcome')==='1'){document.body.classList.add('welcome-seen');}}catch(e){}"
         "function horusCopy(btn){"
         "var t=btn.closest('.resume').querySelector('.resume-text').textContent;"
         "navigator.clipboard.writeText(t).then(function(){"
