@@ -1,7 +1,7 @@
 ---
 status: active
-current_focus: "SHIPPED 2026-07-09: v0.0.29 (PR #128, CI green, released, PyPI verified, daily driver reinstalled) — the fabric field-findings bundle. F1 PowerShell hook bypass fixed at BOTH layers (install matchers `Bash|PowerShell` + the in-command tool filters in cli.py), with matcher *re-homing* in the merge helpers so matcher fixes actually reach already-scaffolded repos; `horus fetch-check` SessionStart fetch-first signal (TTL-cached fetch, advisory additionalContext, live-probed on a real behind clone); managed block v7 (fetch-first/branch→PR workflow + execution-mode/model-tier planning decision as instruction rungs). `upgrade-project --all` refreshed all 5 registered projects — fabric's guards verified live on both shell tools. Also: v0.0.28 released/installed first (was main-only); `horus app` wedge root-caused to stale `python -m horus app` companions holding the port-8764 singleton lock (reaped; never launch via `python -m horus` on Windows)."
-next_action: "Backlog lead: #1 [ops] orphan reap (Sonnet, small, clear gate: registry pid → kill process tree on failed RESULT) or #6 hook spawn-cost measurement (Haiku mechanical). PRD line diet + sessions archive sweep at next consolidate (58 notes pending). Windows-only test failures (worktree path compare, registry exist_ok + real-home leakage, dashboard local-add) spawned as a separate background task. Scheduled/usage-aware continuation remains the Opus design item. [tier: Sonnet default; Haiku measurement; Opus continuation design.]"
+current_focus: "SHIPPED 2026-07-09 (on main, commit 0973fe6, unreleased — CI green 3.12/3.13): stale running-dashboard detection in `doctor machine`. User's dashboard 'welcome-loop' root-caused to a forgotten `python -m horus dashboard --port 8771` serving v0.0.25 in memory since Jul 7 — the Update button upgraded the uv-tool install (→ v0.0.29) but the browser was on the ancient non-default-port process. New `_scan_running_dashboards`/`_stale_dashboard_findings` probe localhost 8765–8775 and warn when a live build is older than the installed CLI; verified live against the real stale pid, then reaped it. Closes the gap left by the PATH-only shadow guard + companion's reap-only-the-port-it-restarts. Prior: v0.0.29 (PR #128, released) fabric field-findings bundle — F1 PowerShell hook fix (both layers + matcher re-homing), `fetch-check` SessionStart signal, managed block v7."
+next_action: "Cut the next release to ship the on-main stale-dashboard doctor check (three-file bump + install smoke). Backlog lead: #1 [ops] orphan reap (Sonnet, small, clear gate: registry pid → kill process tree on failed RESULT) or #6 hook spawn-cost measurement (Haiku mechanical). PRD line diet + sessions archive sweep still pending (now 59 notes). Windows-only test failures (worktree path compare, registry exist_ok + real-home leakage, dashboard local-add) spawned as a separate background task. Scheduled/usage-aware continuation remains the Opus design item. [tier: Sonnet default; Haiku measurement; Opus continuation design.]"
 next_prompt: "Resume Horus. FIRST git fetch --all --prune and verify against origin (a SessionStart fetch-check hook now also warns when behind). Read .horus/PRD.md — note the new enforcement-ladder + continuity-value rules and per-step tier tags. v0.0.29 is released and installed on the daily driver; the four satellite repos carry uncommitted projection updates (commit them in each repo's next session). LEAD: backlog #1 orphan reap (Sonnet) or #6 hook spawn-cost measurement (Haiku); scheduled-continuation design is the Opus item. Copilot work, when it starts, begins at the rulesync decision."
 execution_recommendation: "continue-as-is: orphan reap is small with a clear gate; the spawn-cost measurement is a Haiku-tier sweep. plan-execution only for the scheduled-continuation primitives (several `horus run` flags + a scheduler — Opus supervisor + Sonnet workers). Delegation buys a cheaper tier only via a worker on the isolated account; per block v7 the execution-mode decision is made at planning time."
 last_updated: 2026-07-09
@@ -99,8 +99,8 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 - **Skill map follow-ups** (gated on real Skills-tab use): third-party copy with
   provenance/diff/trust; invocation tracking; rulesync only at a 3rd tool.
 - **Context-cache visibility:** how cold/expired sessions warn (companion/launch/hook/dashboard).
-- **Hook generation stamps:** hook configs are content-compared — version-mark like the
-  managed block if payloads change, else an old CLI offers a downgrade "refresh".
+  **Hook generation stamps:** version-mark content-compared hook configs like the managed
+  block if payloads change, else an old CLI offers a downgrade "refresh".
 - **Git-aware overview (MVP2.5):** session-start half shipped (v0.0.29 `fetch-check`
   SessionStart hook); remaining: fold behind-origin / uncommitted-continuity staleness
   into the dashboard warning surface ("fetch all", never pull).
@@ -115,14 +115,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Deferred (direction noted, not scheduled)
 
-- **MVP3 agent execution:** UI terminate/resume; autonomous closure (`.horus/**` +
-  managed blocks only); LLM-rich `infer`; SQLite registry only when scale hurts.
-- **MVP5 app cohesion:** one lifecycle (mascot ⇄ dashboard ⇄ server, owned windows,
-  single-instance, post-upgrade respawn); native app tier (PySide6/Electron/Tauri —
-  pywebview rejected). **Cross-machine app:** machine snapshots (paths, sessions, dirty).
-- **`horus mcp` continuity server** (first Omnigent seam, if adopted); **docs website**
-  once stable; session-host daemon; remote attach; Telegram bridge; Tailscale dashboard;
-  `reconcile --ai`; cross-repo managed-block propagation; VS Code full auto-run.
+- **MVP3 agent execution:** UI terminate/resume; autonomous closure; LLM-rich `infer`;
+  SQLite registry only when scale hurts. **MVP5 app cohesion:** one lifecycle
+  (mascot ⇄ dashboard ⇄ server, owned/single-instance, post-upgrade respawn); native app
+  tier (PySide6/Electron/Tauri, pywebview rejected); cross-machine machine snapshots.
+- **`horus mcp` continuity server** (first Omnigent seam); docs website; session-host
+  daemon; remote attach; Telegram bridge; Tailscale dashboard; `reconcile --ai`;
+  cross-repo managed-block propagation; VS Code full auto-run.
 
 ## Shipped
 
@@ -159,6 +158,10 @@ opt-out) in `close --check` + full `close`, plus a warn-default Stop hook
 owns the compare; `upgrade-project` backfills/raises the stamp; `HORUS_IGNORE_VERSION_FLOOR=1` override ·
 **shadow-install guard** (v0.0.28): `doctor machine` warns when >1 `horus` executable is resolvable on
 PATH (`_all_on_path`, PATHEXT-aware, real-path deduped) — a stale `pip install` shadowing the uv shim ·
+**stale running-dashboard scan** (2026-07-09, on main post-0.0.29): `doctor machine` probes localhost
+8765–8775 (`_scan_running_dashboards` via `companion.dashboard_identity`, pid-deduped) and warns when a
+live dashboard's in-memory build is older than the installed CLI — the forgotten-process trap a
+non-default-port dashboard slips through (companion only reaps the port it restarts) ·
 **v0.0.29 hooks bundle:** Claude shell guards match `Bash|PowerShell` (F1, both layers) with matcher
 re-homing so fixes propagate to scaffolded repos · `fetch-check` SessionStart fetch-first signal
 (TTL-cached, advisory) · block v7 (workflow + execution-mode planning discipline as instruction rungs).
