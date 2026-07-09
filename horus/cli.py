@@ -155,7 +155,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_dashboard(args: argparse.Namespace) -> int:
-    dashboard.serve(host=args.host, port=args.port)
+    try:
+        dashboard.serve(host=args.host, port=args.port, exposed=args.exposed)
+    except config.ConfigError as exc:
+        print(f"dashboard: {exc}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -1937,6 +1941,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_dash = sub.add_parser("dashboard", help="serve the read-only multi-project dashboard")
     p_dash.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
     p_dash.add_argument("--port", type=int, default=8765, help="bind port (default: 8765)")
+    p_dash.add_argument(
+        "--exposed", action="store_true",
+        help="enforce the [access] Cloudflare gate (for a tunnel-exposed dashboard); "
+             "refuses to start without an [access] block. Local mode never reads it.",
+    )
     p_dash.set_defaults(func=cmd_dashboard)
 
     p_status = sub.add_parser("status", help="print git freshness + latest session for all registered projects")

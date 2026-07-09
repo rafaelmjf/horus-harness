@@ -200,7 +200,9 @@ def test_stale_dashboard_warns(monkeypatch):
     warns = [f for f in findings if f.level == "warn"]
     msg = next((f.message for f in warns if "old build" in f.message), "")
     assert "v0.0.25" in msg and "v0.0.29" in msg
-    assert "8771" in msg and "kill 4242" in msg
+    assert "8771" in msg and "pid 4242" in msg
+    # Advises restart, never a `kill <pid>` command — a hit may be a hosted backend.
+    assert "restart" in msg and "kill 4242" not in msg
 
 
 def test_current_dashboard_does_not_warn(monkeypatch):

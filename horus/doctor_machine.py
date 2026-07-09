@@ -29,10 +29,11 @@ _DIST_NAME = "horus-harness"
 _GH_AUTH_TIMEOUT = 5.0
 
 # Ports a Horus dashboard is reachable on: the default (8765) plus a small band for
-# the occasional custom `--port`. A stale dashboard the user forgot about (observed:
-# a v0.0.25 process serving for days on 8771) sits on one of these, and nothing reaps
-# it — the companion only replaces a stale server on the exact port it is
-# (re)starting, so one on any other port lives on invisibly.
+# the occasional custom `--port`. A dashboard on a non-default port can drift behind
+# the installed CLI without anyone noticing (the companion only replaces a stale
+# server on the exact port it is (re)starting). Note a hit here is NOT necessarily a
+# forgotten orphan: a service-managed backend (systemd unit fronting a tunnel) also
+# runs on one of these — hence the finding says "restart", never "kill".
 _DASHBOARD_SCAN_PORTS = tuple(range(8765, 8776))
 
 
@@ -128,9 +129,12 @@ def _stale_dashboard_findings() -> list[Finding]:
     """Warn about a running Horus dashboard whose in-memory build is older than the
     installed CLI. Such a server keeps serving the stale build until restarted — and
     its own "Update" button upgrades the *install*, not the running process — so an
-    upgrade can land while the window never changes. This is the exact failure a
-    forgotten v0.0.25 dashboard caused: the update succeeded, the old build stayed up.
-    Silent on a bare checkout (no install metadata to compare against)."""
+    upgrade can land while the dashboard never changes.
+
+    Advises **restart**, never "kill": a hit may be a service-managed hosted backend
+    (a systemd unit fronting a Cloudflare tunnel), where killing the pid takes the
+    site down — restart the service instead. Silent on a bare checkout (no install
+    metadata to compare against)."""
     disk = installed_disk_version()
     if not disk:
         return []
@@ -141,15 +145,14 @@ def _stale_dashboard_findings() -> list[Finding]:
             continue
         pid = dash.get("pid")
         port = dash.get("port")
-        has_pid = isinstance(pid, int) and pid > 0
-        where = f", pid {pid}" if has_pid else ""
-        stop = f"stop it (`kill {pid}`)" if has_pid else "stop it"
+        where = f", pid {pid}" if isinstance(pid, int) and pid > 0 else ""
         findings.append(
             Finding(
                 "warn",
                 f"a Horus dashboard on port {port} is serving an old build (v{running}{where}) "
-                f"while the installed CLI is v{disk} — it will not pick up the upgrade until "
-                f"restarted; {stop} and re-run `horus app`.",
+                f"while the installed CLI is v{disk} — restart it to pick up the upgrade. If it's "
+                f"a service-managed/hosted backend (e.g. a systemd unit behind a tunnel), restart "
+                f"that service rather than killing the pid.",
             )
         )
     return findings

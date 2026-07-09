@@ -75,15 +75,27 @@ _DASH_ACCESS: config.DashboardAccess | None = None
 _JWKS_CACHE: access_gate.JWKSCache | None = None
 
 
-def _configure_access() -> config.DashboardAccess | None:
-    """Load the optional [access] block and prime the JWKS cache. Fail closed:
-    a present-but-malformed block raises ConfigError before the server binds."""
+def _configure_access(exposed: bool) -> config.DashboardAccess | None:
+    """Load the [access] gate — ONLY in exposed mode. Local (loopback) mode never
+    reads it, so a machine-global ``[access]`` block can't accidentally gate a local
+    ``horus app`` dashboard (the exposure decision is a launch property, not ambient
+    config). Fail closed twice: ``--exposed`` with no ``[access]`` block would serve
+    an ungated public dashboard — refuse; a present-but-malformed block raises
+    ConfigError before the server binds."""
     global _DASH_ACCESS, _JWKS_CACHE
-    _DASH_ACCESS = config.load_dashboard_access()
-    _JWKS_CACHE = (
-        access_gate.JWKSCache(_DASH_ACCESS.access.jwks_url) if _DASH_ACCESS else None
-    )
-    return _DASH_ACCESS
+    if not exposed:
+        _DASH_ACCESS = None
+        _JWKS_CACHE = None
+        return None
+    access = config.load_dashboard_access()
+    if access is None:
+        raise config.ConfigError(
+            "--exposed requires an [access] block in the Horus config (owner_email, "
+            "team_domain, aud, jwks_url); refusing to serve an ungated public dashboard."
+        )
+    _DASH_ACCESS = access
+    _JWKS_CACHE = access_gate.JWKSCache(access.access.jwks_url)
+    return access
 
 
 def load_project(path_str: str) -> dict[str, Any]:
@@ -4047,10 +4059,11 @@ class _SingleInstanceServer(ThreadingHTTPServer):
     allow_reuse_address = sys.platform != "win32"
 
 
-def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
-    # Load the optional [access] block first: a present-but-malformed block must
-    # fail closed here, before the server ever binds and serves a request.
-    access = _configure_access()
+def serve(host: str = "127.0.0.1", port: int = 8765, exposed: bool = False) -> None:
+    # Configure the access gate first (exposed mode only): a present-but-malformed
+    # block, or --exposed with no [access] block, must fail closed here before the
+    # server ever binds and serves a request.
+    access = _configure_access(exposed)
     try:
         server = _SingleInstanceServer((host, port), _Handler)
     except OSError:

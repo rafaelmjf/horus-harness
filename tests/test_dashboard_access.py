@@ -81,6 +81,45 @@ def test_load_access_owner_email_lowercased(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# _configure_access: exposure is a launch property, not ambient config
+# --------------------------------------------------------------------------- #
+
+def test_configure_access_local_ignores_access_block(tmp_path, monkeypatch):
+    # An [access] block is present, but local mode (exposed=False) must NOT read it —
+    # otherwise a machine-global block gates every local `horus app` (the 403 bug).
+    _home(tmp_path, monkeypatch)
+    _write_config(tmp_path, _ACCESS_BLOCK)
+    try:
+        assert dashboard._configure_access(exposed=False) is None
+        assert dashboard._DASH_ACCESS is None
+        assert dashboard._JWKS_CACHE is None
+    finally:
+        dashboard._DASH_ACCESS = None
+        dashboard._JWKS_CACHE = None
+
+
+def test_configure_access_exposed_without_block_fails_closed(tmp_path, monkeypatch):
+    # --exposed with no [access] block would serve an ungated public dashboard — refuse.
+    _home(tmp_path, monkeypatch)
+    _write_config(tmp_path, 'projects = ["/x"]\n')
+    with pytest.raises(config.ConfigError):
+        dashboard._configure_access(exposed=True)
+
+
+def test_configure_access_exposed_with_block_arms(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    _write_config(tmp_path, _ACCESS_BLOCK)
+    try:
+        da = dashboard._configure_access(exposed=True)
+        assert da is not None and da.owner_email == OWNER_EMAIL
+        assert dashboard._DASH_ACCESS is da
+        assert dashboard._JWKS_CACHE is not None
+    finally:
+        dashboard._DASH_ACCESS = None
+        dashboard._JWKS_CACHE = None
+
+
+# --------------------------------------------------------------------------- #
 # Handler gate
 # --------------------------------------------------------------------------- #
 
