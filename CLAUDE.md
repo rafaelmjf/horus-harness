@@ -106,3 +106,17 @@ Instruction synchronization:
 
 - Prefer planning before larger edits.
 - Keep the project lightweight and shaped around current user needs.
+
+## Releasing horus-harness
+
+- **Invariant: publish a new version → update the hosted app.** Publishing a release
+  (three-file bump → tag → `gh release create` → PyPI publish) does NOT update the
+  hosted dashboard at `horus.rafaelfigueiredo.com` — it runs a pinned install that only
+  advances on an explicit upgrade + `systemctl restart`. So the LAST step of every
+  release is to run **`scripts/deploy-hosted.sh`** (upgrades the pinned uv-tool install
+  with an index refresh, restarts `horus-dashboard.service`, verifies `/health` +
+  that `/` still 403s). This is the instruction rung; a self-hosted-runner/webhook
+  automation is the eventual hard guarantee (see `.horus` backlog).
+- Upgrade horus with `uv tool install --force --refresh`, never `uv tool upgrade
+  --reinstall` — the latter re-reads uv's cached index and silently stays on the old
+  version (observed 0.0.30→0.0.31).
