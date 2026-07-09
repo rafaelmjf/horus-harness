@@ -18,6 +18,9 @@ def _stub_ok(monkeypatch):
     monkeypatch.setattr(doctor_machine, "_tkinter_probe", lambda: True)
     # One horus on PATH by default (no shadow); shadow tests override this.
     monkeypatch.setattr(doctor_machine, "_all_on_path", lambda name: [f"/usr/bin/{name}"])
+    # No running dashboards by default — never probe the real host, and never let a
+    # dashboard actually running on this machine leak a warn into unrelated tests.
+    monkeypatch.setattr(doctor_machine, "_scan_running_dashboards", lambda: [])
     monkeypatch.setattr(
         doctor_machine.subprocess,
         "run",
@@ -182,6 +185,78 @@ def test_all_on_path_dedupes_and_orders(tmp_path, monkeypatch):
     found = doctor_machine._all_on_path("horus")
 
     assert found == [str(d1 / "horus"), str(d2 / "horus")]
+
+
+def test_stale_dashboard_warns(monkeypatch):
+    _stub_ok(monkeypatch)
+    monkeypatch.setattr(doctor_machine, "installed_disk_version", lambda: "0.0.29")
+    monkeypatch.setattr(
+        doctor_machine, "_scan_running_dashboards",
+        lambda: [{"app": "horus-dashboard", "version": "0.0.25", "pid": 4242, "port": 8771}],
+    )
+
+    findings = doctor_machine.machine_findings()
+
+    warns = [f for f in findings if f.level == "warn"]
+    msg = next((f.message for f in warns if "old build" in f.message), "")
+    assert "v0.0.25" in msg and "v0.0.29" in msg
+    assert "8771" in msg and "kill 4242" in msg
+
+
+def test_current_dashboard_does_not_warn(monkeypatch):
+    _stub_ok(monkeypatch)
+    monkeypatch.setattr(doctor_machine, "installed_disk_version", lambda: "0.0.29")
+    monkeypatch.setattr(
+        doctor_machine, "_scan_running_dashboards",
+        lambda: [{"app": "horus-dashboard", "version": "0.0.29", "pid": 4242, "port": 8765}],
+    )
+
+    findings = doctor_machine.machine_findings()
+
+    assert not any("old build" in f.message for f in findings)
+
+
+def test_dashboard_ahead_of_install_does_not_warn(monkeypatch):
+    # A dev checkout whose running build is *newer* than the install metadata is not
+    # stale in the harmful sense (mirrors selfupdate.build_state's "disk newer" rule).
+    _stub_ok(monkeypatch)
+    monkeypatch.setattr(doctor_machine, "installed_disk_version", lambda: "0.0.25")
+    monkeypatch.setattr(
+        doctor_machine, "_scan_running_dashboards",
+        lambda: [{"app": "horus-dashboard", "version": "0.0.29", "pid": 4242, "port": 8765}],
+    )
+
+    assert doctor_machine._stale_dashboard_findings() == []
+
+
+def test_stale_dashboard_silent_without_install_metadata(monkeypatch):
+    # Bare checkout: no install to compare a running build against — never warn.
+    monkeypatch.setattr(doctor_machine, "installed_disk_version", lambda: None)
+    monkeypatch.setattr(
+        doctor_machine, "_scan_running_dashboards",
+        lambda: [{"app": "horus-dashboard", "version": "0.0.25", "pid": 4242, "port": 8771}],
+    )
+
+    assert doctor_machine._stale_dashboard_findings() == []
+
+
+def test_scan_running_dashboards_dedupes_by_pid(monkeypatch):
+    # The same process answering on two probed ports counts once.
+    def fake_identity(url):
+        return {"app": "horus-dashboard", "version": "0.0.29", "pid": 7}
+
+    monkeypatch.setattr(doctor_machine.companion, "dashboard_identity", fake_identity)
+
+    found = doctor_machine._scan_running_dashboards(ports=[8765, 8766])
+
+    assert len(found) == 1
+    assert found[0]["pid"] == 7
+
+
+def test_scan_running_dashboards_skips_dead_ports(monkeypatch):
+    monkeypatch.setattr(doctor_machine.companion, "dashboard_identity", lambda url: None)
+
+    assert doctor_machine._scan_running_dashboards(ports=[8765, 8766]) == []
 
 
 def test_gh_missing_warns(monkeypatch):

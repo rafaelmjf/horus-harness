@@ -19,13 +19,21 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, Iterable
 
-from horus import native_hooks
+from horus import companion, native_hooks
 from horus.continuity import Finding
-from horus.selfupdate import _python_floor
+from horus.selfupdate import _python_floor, installed_disk_version, is_newer
 
 _DIST_NAME = "horus-harness"
 _GH_AUTH_TIMEOUT = 5.0
+
+# Ports a Horus dashboard is reachable on: the default (8765) plus a small band for
+# the occasional custom `--port`. A stale dashboard the user forgot about (observed:
+# a v0.0.25 process serving for days on 8771) sits on one of these, and nothing reaps
+# it — the companion only replaces a stale server on the exact port it is
+# (re)starting, so one on any other port lives on invisibly.
+_DASHBOARD_SCAN_PORTS = tuple(range(8765, 8776))
 
 
 def _console_script_finding() -> Finding:
@@ -91,6 +99,60 @@ def _shadow_install_finding() -> Finding | None:
         "fresh install. Remove the stale copy (e.g. `pip uninstall horus-harness`) or fix "
         "PATH order so the uv shim (`~/.local/bin`) comes first.",
     )
+
+
+def _scan_running_dashboards(
+    ports: Iterable[int] = _DASHBOARD_SCAN_PORTS,
+) -> list[dict[str, Any]]:
+    """``/health`` identities of Horus dashboards listening on localhost, one entry
+    per distinct pid (with the ``port`` it answered on folded in). Best-effort and
+    fast: a closed localhost port refuses the connection instantly, so scanning the
+    whole band stays sub-second on a normal machine. A foreign server is skipped
+    (``dashboard_identity`` only returns Horus's own ``/health`` shape)."""
+    seen_pids: set[object] = set()
+    out: list[dict[str, Any]] = []
+    for port in ports:
+        identity = companion.dashboard_identity(f"http://127.0.0.1:{port}")
+        if not identity:
+            continue
+        pid = identity.get("pid")
+        key: object = pid if isinstance(pid, int) else f"port:{port}"
+        if key in seen_pids:
+            continue
+        seen_pids.add(key)
+        out.append({**identity, "port": port})
+    return out
+
+
+def _stale_dashboard_findings() -> list[Finding]:
+    """Warn about a running Horus dashboard whose in-memory build is older than the
+    installed CLI. Such a server keeps serving the stale build until restarted — and
+    its own "Update" button upgrades the *install*, not the running process — so an
+    upgrade can land while the window never changes. This is the exact failure a
+    forgotten v0.0.25 dashboard caused: the update succeeded, the old build stayed up.
+    Silent on a bare checkout (no install metadata to compare against)."""
+    disk = installed_disk_version()
+    if not disk:
+        return []
+    findings: list[Finding] = []
+    for dash in _scan_running_dashboards():
+        running = dash.get("version")
+        if not isinstance(running, str) or not is_newer(disk, running):
+            continue
+        pid = dash.get("pid")
+        port = dash.get("port")
+        has_pid = isinstance(pid, int) and pid > 0
+        where = f", pid {pid}" if has_pid else ""
+        stop = f"stop it (`kill {pid}`)" if has_pid else "stop it"
+        findings.append(
+            Finding(
+                "warn",
+                f"a Horus dashboard on port {port} is serving an old build (v{running}{where}) "
+                f"while the installed CLI is v{disk} — it will not pick up the upgrade until "
+                f"restarted; {stop} and re-run `horus app`.",
+            )
+        )
+    return findings
 
 
 def _dist_requires_python(dist_name: str = _DIST_NAME) -> str | None:
@@ -240,6 +302,8 @@ def machine_findings(root: Path | None = None) -> list[Finding]:
     floor_finding = _interpreter_floor_finding()
     if floor_finding is not None:
         findings.append(floor_finding)
+
+    findings.extend(_stale_dashboard_findings())
 
     if root is not None:
         findings.extend(_hook_command_findings(root))
