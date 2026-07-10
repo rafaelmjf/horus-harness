@@ -435,6 +435,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     With ``--worktree <branch>`` the session runs in a per-branch git worktree
     (created or reused), so the registry row records that worktree's path.
     """
+    # argparse cannot distinguish an omitted option from its default unless the
+    # default is None. Let the worker's named agent select the matching adapter;
+    # an explicit --agent remains authoritative.
+    args.agent = args.agent or args.worker or "claude"
     root = Path(args.path).resolve()
     if getattr(args, "worktree", None):
         try:
@@ -2154,7 +2158,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_run = sub.add_parser("run", help="spawn (or resume) an agent session, tracked in the registry")
     p_run.add_argument("prompt", help="the prompt to send the agent")
-    p_run.add_argument("--agent", default="claude", help="adapter to use (claude | codex | fake; default: claude)")
+    p_run.add_argument(
+        "--agent",
+        default=None,
+        help="adapter to use (claude | codex | fake; default: match --worker, otherwise claude)",
+    )
     p_run.add_argument("--account", default=None, help="account alias to run under (uses its isolated config dir)")
     p_run.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
     p_run.add_argument(
@@ -2167,9 +2175,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--worker",
         default=None,
         choices=sorted(_WORKER_POSTURE),
-        help="posture preset for an unattended worker: claude=full-auto, codex=auto-edit "
+        help="agent + posture preset for an unattended worker: claude=full-auto, codex=auto-edit "
              "(the default posture stalls a headless claude — it exits 0 with zero diffs; "
-             "codex auto-edits inside a gated sandbox). --posture wins if also given.",
+             "codex auto-edits inside a gated sandbox). Infers --agent when omitted; "
+             "--agent and --posture win if also given.",
     )
     p_run.add_argument("--resume", metavar="SESSION_ID", help="resume an existing session by id")
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
