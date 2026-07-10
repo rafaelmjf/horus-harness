@@ -129,6 +129,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         "projection_sync": {"verdict": "unknown"},
         "next_action": "",
         "execution_recommendation": "",
+        "continuity_source": "",
         "latest": None,
         "latest_body": "",
         "progress": {"done": 0, "total": 0, "pct": 0},
@@ -146,6 +147,7 @@ def load_project(path_str: str) -> dict[str, Any]:
     data["next_prompt"] = focus["next_prompt"]
     data["next_action"] = focus["next_action"]
     data["execution_recommendation"] = focus["execution_recommendation"]
+    data["continuity_source"] = frontmatter.continuity_source(root)
 
     project_md = hdir / "project.md"
     if project_md.is_file():

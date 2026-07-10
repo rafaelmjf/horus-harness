@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "v0.0.35 released and live on PyPI — patch shipping `horus run --effort` (#140) + hardened usage preflight (#141, multi-window + closing-window notice + unknown surfacing), both already merged to main; publish→install verified E2E in a clean venv. NOTE: the hosted dashboard is now behind Cloudflare Access, so `/health` no longer reads unauthenticated — the hosted-version release check needs Access creds or the deploy-hook logs, not a plain curl. Draft PRs #138 (`horus wiki`) / #139 (`horus capabilities`) still out for cockpit review. Flagship next step unchanged: the LaunchBackend seam."
-next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc). Separately, review draft PRs #138/#139 — decide keep/shape/merge on each; see backlog cards."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. Use Opus inline for the LaunchBackend + LocalBackend seam freeze (harness P0 of the multi-machine arc)."
+current_focus: "v0.0.35 released and live on PyPI — patch shipping `horus run --effort` (#140) + hardened usage preflight (#141), both merged to main; publish→install verified E2E in a clean venv. NOTE: the hosted dashboard is now behind Cloudflare Access, so `/health` no longer reads unauthenticated — the hosted-version release check needs Access creds or the deploy-hook logs, not a plain curl. Fleet truth + source attribution (`horus status`/`horus fleet` now flag gone branches and name their continuity source) shipped as PR #142, open — automerge pending. Draft PRs #138 (`horus wiki`) / #139 (`horus capabilities`) still out for cockpit review. Flagship next step unchanged: the LaunchBackend seam."
+next_action: "Confirm PR #142 (fleet truth + source attribution) merges cleanly via branch-pr-automerge, then Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc). Separately, review draft PRs #138/#139 — decide keep/shape/merge on each; see backlog cards."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. Confirm PR #142 merged clean, then use Opus inline for the LaunchBackend + LocalBackend seam freeze (harness P0 of the multi-machine arc)."
 execution_recommendation: "continue-as-is — the interface freeze stays Opus inline because its judgment defines every backend contract. plan-execution only after that seam is frozen, when RemoteBackend + ContainerBackend + hub provisioning become high-volume, low-ambiguity cross-repo work suitable for isolated workers."
 last_updated: 2026-07-10
 horus_min_version: 0.0.26
@@ -45,15 +45,10 @@ session notes + fetch-first; the six-lane taxonomy was the overhead — hence th
 Prioritized open work. Features and bugs in one list; jump order is allowed — this list
 is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
-**Card pilot (2026-07-10):** backlog items below "Now / next" live as **one card per
-file in `.horus/backlog/`** — frontmatter `status: open|claimed|done` + `priority:
-now|next|later|deferred` + `tier` + `created`; the body is a self-contained,
-dispatch-ready brief. Add work = add a card (conflict-free); finish = delete the card
-+ one Shipped line (git remembers); pick up a card = set `status: claimed`, commit and
-push early. "Now / next" here stays the small human-curated order; new cards at
-`priority: now` should also get a pointer line there. If two sessions racing this file
-was the disease, cards are the treatment — log any friction in session notes (this
-pilot is the evidence for/against making cards the scaffold default).
+**Card pilot (2026-07-10):** items below "Now / next" live as one card per file in
+`.horus/backlog/` (mechanics in Structure contract, below) — add work = add a card;
+finish = delete the card + one Shipped line; "Now / next" stays the small
+human-curated order, with a pointer line for any new `priority: now` card.
 
 ### Now / next candidates
 
@@ -108,11 +103,10 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
 **Usage-preflight hardening** (2026-07-10, PR #141, released v0.0.35): `horus run`'s preflight now reads BOTH the 5h and weekly windows and gates on the more-constraining one (`UsageSnapshot` gains defaulted weekly fields + `worst()`, cache round-trips both); a `[50,80)` closing-window `Note:` surfaces percent+reset (visibility, not a runtime predictor); an unknown signal is surfaced (`capacity unknown …`) instead of proceeding as if healthy, with opt-in `--refuse-on-unknown` for critical launches — the PreToolUse guard's fail-open hot path is deliberately untouched.
 **Reasoning-effort passthrough** (2026-07-10, PR #140, released v0.0.35): `horus run --effort {low,medium,high,xhigh,max}` reaches both adapters via `SpawnSpec.effort` — claude forwards `--effort` verbatim (documented enum, confirmed live); codex maps to `-c model_reasoning_effort=<value>` (server-validated).
+**Fleet truth + source attribution** (2026-07-10, PR #142, open — automerge pending): `horus status`/`horus fleet` (one line per registered non-cockpit project) do a read-only TTL-cached `git fetch` (reusing the `fetchcheck` primitive) then flag a checkout on a merged-and-deleted branch (`⚠ upstream gone`, `vs <default>: +N/-M` via `for-each-ref`/`origin/HEAD`), name which continuity file backed the row (`continuity_source`, always the working-checkout copy), and hint when the local default branch is meaningfully behind origin — reporting-layer only, no auto-pull, no prose edits. Live-verified: caught `fabric-metadata-driven-medallion`'s actual gone branch.
 **Fleet capability catalog prototype** (2026-07-10, draft PR #139): `horus capabilities` aggregates every registered project's Shipped ledger (+ harness's own 52-command argparse surface) into a deterministic queryable JSON index at `~/.horus/capabilities.json` — agent-first alternative to the `horus wiki` spike (#138).
 **Refresh-artifacts honors workflow policy** (2026-07-10, PR #137): the dashboard's Refresh artifacts action now dispatches through `integration.integrate()` for an automatic commit policy — branch + PR (+ automerge) instead of dirtying a `branch-pr-automerge` repo's main — closing `bugs/refresh-artifacts-leaves-dirty-worktree.md` and the downstream `bugs/checkpoint-warning-after-artifact-refresh.md` symptom (both write-ups deleted, resolved).
-**Codex worker posture guidance** (2026-07-10, released v0.0.34): the run help and adapter docs keep `auto-edit` safe while making `full-auto` mandatory and explicit for networked git/PR and local-server/browser verification.
-**Worker adapter inference** (2026-07-10): `horus run --worker codex|claude` selects the matching adapter when `--agent` is omitted, while explicit agent/posture flags remain authoritative.
-**Fleet dispatch view** (2026-07-10): `horus fleet` prints one line per registered non-cockpit project with git freshness, latest session, and PRD-resolved focus/action/prompt.
+**Codex worker posture guidance + adapter inference** (2026-07-10, v0.0.34): run help/adapter docs keep `auto-edit` safe while making `full-auto` mandatory for networked git/PR and local-server/browser verification; `horus run --worker codex|claude` selects the matching adapter when `--agent` is omitted (explicit flags stay authoritative).
 **Hosted deploy runtime version gate** (2026-07-10, PR #131 + `horus-hub` #30): exhausted installs fail before restart; `/health.version` must exactly match the target; the hub receiver now waits for PyPI's JSON API to actually advance before deploying, fixing an observed race against this repo's own `publish.yml` upload (webhook E2E now confirmed clean, not just theorized).
 **Card-per-file backlog pilot** (2026-07-10): `.horus/backlog/` holds dispatch-ready cards that can be claimed/finished without racing PRD.md; the first Codex claim→push→finish flow was frictionless; `rafaelmjf/horus-agent` is the first cross-project consumer.
 **Config round-trip safety** (v0.0.33): `_write_config` preserves unmanaged top-level tables/keys, notably the security-critical `[access]` gate; `deploy-hosted.sh` also pins/retries while PyPI's simple index catches up.
@@ -146,6 +140,11 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Closure reaches the remote, fetch-first** — `close --commit --push`; refuse when
   origin has newer continuity. At session start: `git fetch --all --prune` and verify
   against the remote before trusting local refs or continuity prose.
+- **One fetch-first primitive, reused, not reinvented.** `fetchcheck.fetch_and_state`
+  (TTL-cached, read-only `git fetch --all --prune`, never a pull) is the single fetch
+  path for every reporting surface that needs fresh remote-tracking refs — the
+  session-start hook and `status`/`fleet`'s gone-branch/staleness signals (2026-07-10)
+  both call it rather than each shelling a fetch of their own.
 - **Three disciplines, every session:** reproduce the gate via a deterministic signal
   you observe yourself — a *required* CI check green on the exact commit counts for
   the test gate; the *runtime* gate always stays yours (drive the real surface once,

@@ -201,18 +201,105 @@ def test_fleet_prints_one_line_per_project_with_next_step_and_skips_cockpit(
             "current_focus": "Fleet dispatch",
             "next_action": "Land the next ticket",
             "next_prompt": "Resume the widget.",
+            "continuity_source": ".horus/PRD.md (working checkout)",
         }
 
     monkeypatch.setattr("horus.cli.dashboard.load_project", fake_load)
+    monkeypatch.setattr("horus.cli.fetchcheck.fetch_and_state", lambda root, **kw: None)
 
     assert main(["fleet"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert len(lines) == 1
     assert lines[0] == (
         "widget | git: main · 2 hours ago · behind 1 | "
+        "src: .horus/PRD.md (working checkout) | "
         "last: 2026-07-10 — Shipped the widget | focus: Fleet dispatch | "
         "next: Land the next ticket | prompt: Resume the widget."
     )
+
+
+def test_fleet_and_status_fetch_readonly_before_reading_git_state(tmp_path, monkeypatch, capsys):
+    """`fleet` and `status` must refresh remotes (fetch) before rendering git state,
+    but only ever fetch — never anything that could mutate the working tree."""
+    project = tmp_path / "widget"
+    monkeypatch.setattr(config, "load_projects", lambda: [str(project)])
+    monkeypatch.setattr("horus.cli.dashboard.load_project", lambda path: {
+        "name": Path(path).name, "git": None, "latest": None,
+    })
+    fetched = []
+    monkeypatch.setattr("horus.cli.fetchcheck.fetch_and_state", lambda root, **kw: fetched.append(root) or None)
+
+    assert main(["fleet"]) == 0
+    assert main(["status"]) == 0
+
+    assert fetched == [project, project]  # one read-only fetch per project, per command
+
+
+def test_fleet_and_status_flag_gone_branch_without_mutating_the_working_tree(
+    tmp_path, monkeypatch, capsys,
+):
+    """End-to-end regression for the concrete failure this feature targets: a
+    working checkout left on a branch whose upstream was merged and deleted (the
+    GitHub squash-merge pattern) must be visibly flagged as `gone`, its continuity
+    source named, and reading this state must never fetch-then-pull or otherwise
+    touch the working tree.
+    """
+    _home(tmp_path, monkeypatch)
+    from horus import initialize
+
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)], check=True, capture_output=True)
+    project = tmp_path / "widget"
+    subprocess.run(["git", "clone", str(origin), str(project)], check=True, capture_output=True)
+    _git(project, "config", "user.email", "t@example.com")
+    _git(project, "config", "user.name", "Test")
+    initialize.init_project(project, assume_yes=True)
+    _git(project, "add", "-A")
+    _git(project, "commit", "-m", "init")
+    _git(project, "push", "origin", "main")
+
+    _git(project, "checkout", "-b", "feature")
+    (project / "note.txt").write_text("feature work\n", encoding="utf-8")
+    _git(project, "add", "-A")
+    _git(project, "commit", "-m", "feature work")
+    _git(project, "push", "-u", "origin", "feature")
+
+    # GitHub-style merge: the remote branch is deleted while the local checkout
+    # stays on it — exactly the misleading state this feature must catch.
+    subprocess.run(["git", "-C", str(origin), "branch", "-D", "feature"], check=True, capture_output=True)
+
+    monkeypatch.setattr(config, "load_projects", lambda: [str(project)])
+
+    before_head = _git(project, "rev-parse", "HEAD").stdout.strip()
+    before_branch = _git(project, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    before_status = _git(project, "status", "--porcelain").stdout
+
+    assert main(["fleet"]) == 0
+    fleet_out = capsys.readouterr().out
+    assert main(["status"]) == 0
+    status_out = capsys.readouterr().out
+
+    after_head = _git(project, "rev-parse", "HEAD").stdout.strip()
+    after_branch = _git(project, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    after_status = _git(project, "status", "--porcelain").stdout
+
+    # No mutation: same HEAD, same branch, same (clean) status before and after.
+    assert after_head == before_head
+    assert after_branch == before_branch
+    assert after_status == before_status == ""
+
+    # Proof a real fetch happened (not just a stale local read): the deleted
+    # remote branch's tracking ref was pruned.
+    prune_check = subprocess.run(
+        ["git", "-C", str(project), "rev-parse", "--verify", "-q", "refs/remotes/origin/feature"],
+        capture_output=True, text=True,
+    )
+    assert prune_check.returncode != 0
+
+    assert "⚠ upstream gone" in fleet_out
+    assert "⚠ upstream gone" in status_out
+    assert "src: .horus/PRD.md (working checkout)" in fleet_out
+    assert "source: .horus/PRD.md (working checkout)" in status_out
 
 
 def test_sessions_cmd_lists_and_prunes(tmp_path, monkeypatch, capsys):

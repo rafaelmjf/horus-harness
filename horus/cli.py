@@ -164,6 +164,20 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def _fleet_fetch(path: str) -> None:
+    """Refresh remote-tracking refs before reading fleet/status git state: a
+    TTL-cached, read-only `git fetch` (never a pull, never touches the working
+    tree) — the same fetch-first primitive as the session-start hook
+    (`_fetch_check_hook`), reused here so ahead/behind/gone reflects the fetched
+    remote rather than however stale the local refs happen to be. Best-effort:
+    any failure (offline, no remote, git error) silently falls back to whatever
+    refs are already on disk."""
+    try:
+        fetchcheck.fetch_and_state(Path(path))
+    except Exception:  # noqa: BLE001 (signal refresh only — never break status/fleet)
+        pass
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """Headless peer of the dashboard overview: git freshness + latest session."""
     projects = config.load_projects()
@@ -171,6 +185,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         print("No projects registered (run `horus init` inside a project).")
         return 0
     for path in projects:
+        _fleet_fetch(path)
         p = dashboard.load_project(path)
         git = gitstate.summary(p.get("git")) or "not a git repo"
         latest = p.get("latest")
@@ -179,7 +194,11 @@ def cmd_status(args: argparse.Namespace) -> int:
             sess = f"{latest.get('date', '')} — {label}".strip(" —")
         else:
             sess = "no sessions"
-        print(f"{p['name']}\n  git:  {git}\n  last: {sess}")
+        source = p.get("continuity_source") or "-"
+        print(f"{p['name']}\n  git:  {git}\n  source: {source}\n  last: {sess}")
+        hint = gitstate.staleness_hint(p.get("git"))
+        if hint:
+            print(f"  note: {hint}")
     return 0
 
 
@@ -198,6 +217,7 @@ def cmd_fleet(args: argparse.Namespace) -> int:
         return text or fallback
 
     for path in projects:
+        _fleet_fetch(path)
         project = dashboard.load_project(path)
         git = gitstate.summary(project.get("git")) or "not a git repo"
         latest = project.get("latest")
@@ -206,12 +226,17 @@ def cmd_fleet(args: argparse.Namespace) -> int:
             session = f"{latest.get('date', '')} — {label}".strip(" —")
         else:
             session = "no sessions"
-        print(
-            f"{project['name']} | git: {compact(git)} | last: {compact(session)} | "
+        row = (
+            f"{project['name']} | git: {compact(git)} | src: {compact(project.get('continuity_source'))} | "
+            f"last: {compact(session)} | "
             f"focus: {compact(project.get('current_focus'))} | "
             f"next: {compact(project.get('next_action'))} | "
             f"prompt: {compact(project.get('next_prompt'))}"
         )
+        hint = gitstate.staleness_hint(project.get("git"))
+        if hint:
+            row += f" | note: {compact(hint)}"
+        print(row)
     return 0
 
 

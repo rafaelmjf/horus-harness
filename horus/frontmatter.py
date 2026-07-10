@@ -80,6 +80,18 @@ def has_prd(project_root: Path) -> bool:
     return prd_path(project_root).is_file()
 
 
+def continuity_source(project_root: Path) -> str:
+    """Which continuity file `resolve_focus` reads, for display attribution.
+
+    Fleet/status views render this so a stale local PRD is attributable to a
+    specific file rather than presented as if it were fetched-remote truth — this
+    is always the *working-checkout* copy, never a fetched remote's version.
+    """
+    if has_prd(project_root):
+        return f".horus/{PRD_FILE} (working checkout)"
+    return ".horus/project.md+roadmap.md (working checkout, v2)"
+
+
 def parse_file(path: Path) -> Document | None:
     """Parse a Markdown file into a Document, or None when it doesn't exist."""
     if not path.is_file():
