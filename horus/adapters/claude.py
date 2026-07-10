@@ -7,6 +7,9 @@ Built against Claude Code 2.1.191's headless surface:
 - spawn:  ``claude -p <prompt> --output-format stream-json --verbose``
 - resume: ``... --resume <session_id>`` (the id is echoed in the ``system/init`` event)
 - per-account isolation: ``CLAUDE_CONFIG_DIR`` (a distinct config/home dir per account)
+- reasoning effort: ``--effort <level>`` (probed live on 2.1.206 — Claude Code's own CLI
+  help documents exactly ``low|medium|high|xhigh|max``, the same enum Horus exposes via
+  ``horus run --effort``; forwarded verbatim, no translation needed)
 
 Subscription-auth only: it runs the user's own logged-in ``claude``; no API key.
 """
@@ -72,6 +75,8 @@ class ClaudeAdapter(AgentAdapter):
             argv += ["--resume", resume_id]
         if spec.model:
             argv += ["--model", spec.model]
+        if spec.effort:
+            argv += ["--effort", spec.effort]
         argv += self.permission_flags(spec.posture)
         if spec.allowed_tools:
             argv += ["--allowedTools", ",".join(spec.allowed_tools)]

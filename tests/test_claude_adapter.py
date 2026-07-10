@@ -52,6 +52,19 @@ def test_build_command_resume_and_model_and_tools():
     assert argv[argv.index("--disallowedTools") + 1] == "Bash"
 
 
+def test_build_command_effort_flag():
+    # Claude Code's own CLI documents `--effort <level>` (probed live, 2.1.206) —
+    # forwarded verbatim, no adapter-side translation.
+    argv = ClaudeAdapter().build_command(_spec(effort="xhigh"))
+    assert ["--effort", "xhigh"] == [argv[argv.index("--effort")], argv[argv.index("--effort") + 1]]
+
+
+def test_build_command_no_effort_flag_by_default():
+    # Default behavior unchanged when --effort is omitted.
+    argv = ClaudeAdapter().build_command(_spec())
+    assert "--effort" not in argv
+
+
 def test_permission_flags_map_every_posture():
     a = ClaudeAdapter()
     assert a.permission_flags(PermissionPosture.PLAN) == ["--permission-mode", "plan"]

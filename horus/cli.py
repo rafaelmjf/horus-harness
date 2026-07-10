@@ -484,6 +484,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         account=args.account,
         posture=adapters.PermissionPosture(_resolve_run_posture(args.posture, getattr(args, "worker", None))),
         model=args.model,
+        effort=args.effort,
         worker=bool(getattr(args, "worker", None)),
         run_session_id=uuid.uuid4().hex[:16],
     )
@@ -517,6 +518,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                     "prompt": spec.prompt,
                     "posture": spec.posture.value,
                     "model": spec.model,
+                    "effort": spec.effort,
                     "resume": args.resume,
                 },
             )
@@ -2191,6 +2193,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.add_argument("--account", default=None, help="account alias to run under (uses its isolated config dir)")
     p_run.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
+    p_run.add_argument(
+        "--effort",
+        default=None,
+        choices=adapters.EFFORT_LEVELS,
+        help="reasoning effort for the launched worker (default: the agent's own default). "
+             "codex: mapped to `-c model_reasoning_effort=<level>` (server-validated — an "
+             "unsupported level for the target model fails the turn, not silently ignored). "
+             "claude: mapped directly to the CLI's own `--effort <level>` flag.",
+    )
     p_run.add_argument(
         "--posture",
         default=None,

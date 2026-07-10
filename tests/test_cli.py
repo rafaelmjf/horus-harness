@@ -1466,10 +1466,37 @@ def _capture_run_posture(monkeypatch):
     def spy(self, spec):
         captured["posture"] = spec.posture.value
         captured["project"] = str(spec.project_dir)
+        captured["effort"] = spec.effort
         return original(self, spec)
 
     monkeypatch.setattr(FakeAdapter, "spawn", spy)
     return captured
+
+
+# --- horus run: --effort passthrough ------------------------------------------
+
+def test_run_effort_reaches_spawn_spec(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    captured = _capture_run_posture(monkeypatch)
+    rc = main(["run", "hi", "--agent", "fake", "--effort", "xhigh", "--path", str(tmp_path)])
+    assert rc == 0
+    assert captured["effort"] == "xhigh"
+
+
+def test_run_effort_defaults_to_none(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    captured = _capture_run_posture(monkeypatch)
+    rc = main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
+    assert rc == 0
+    assert captured["effort"] is None  # default behavior unchanged when --effort omitted
+
+
+def test_run_effort_rejects_unknown_level(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        main(["run", "hi", "--agent", "fake", "--effort", "ultra", "--path", str(tmp_path)])
+    assert exc.value.code == 2
+    assert "invalid choice" in capsys.readouterr().err
 
 
 def test_run_worker_preset_maps_claude_to_full_auto(tmp_path, monkeypatch):
