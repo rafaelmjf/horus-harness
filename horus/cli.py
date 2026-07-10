@@ -43,6 +43,7 @@ from horus import (
     usage_snapshot,
     versioning,
     vscode,
+    wiki,
     worktree,
 )
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
@@ -211,6 +212,25 @@ def cmd_fleet(args: argparse.Namespace) -> int:
             f"next: {compact(project.get('next_action'))} | "
             f"prompt: {compact(project.get('next_prompt'))}"
         )
+    return 0
+
+
+def cmd_wiki(args: argparse.Namespace) -> int:
+    """EXPERIMENTAL: generate a read-only Obsidian vault projecting fleet continuity.
+
+    A derived read-model over the git-backed `.horus/` files — never a second store.
+    Read-only over all sources, idempotent, no fetching. See `horus/wiki.py`.
+    """
+    out_dir = Path(args.out).expanduser() if args.out else wiki.default_out_dir()
+    projects = config.load_projects()
+    if not projects:
+        print("No projects registered (run `horus init` inside a project).")
+        return 0
+    written = wiki.generate(projects, out_dir)
+    print(f"[experimental] wiki generated: {out_dir} ({len(written)} note(s))")
+    for path in written:
+        print(f"  {path.relative_to(out_dir)}")
+    print(f"Open in Obsidian: point a vault at {out_dir}")
     return 0
 
 
@@ -2054,6 +2074,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="print one-line git/session/next-step context for every project except horus-agent",
     )
     p_fleet.set_defaults(func=cmd_fleet)
+
+    p_wiki = sub.add_parser(
+        "wiki",
+        help="[experimental] generate a read-only Obsidian vault projecting fleet continuity",
+    )
+    p_wiki.add_argument(
+        "--out",
+        default=None,
+        help="output vault directory (default: ~/.horus/wiki/)",
+    )
+    p_wiki.set_defaults(func=cmd_wiki)
 
     p_discover = sub.add_parser("discover", help="discover remote Horus projects")
     p_discover.add_argument("source", choices=["github"], help="remote catalog source")
