@@ -1210,6 +1210,14 @@ def _checkpoint_hook(root: Path, *, block: bool) -> int:
     or has unpushed commits. Silent + exit 0 when the checkpoint is clean or on any
     trouble — the hook signals only via stdout JSON and never a non-zero exit, so the
     `|| exit 0` guard can't mask a real decision."""
+    # Incremental consolidation, automatic + token-free: fold any commits made this turn
+    # into the session note (deterministic, marker-gated) so continuity keeps pace without
+    # a manual `consolidate`. Piggybacks on the already-installed Stop hook — the turn
+    # boundary is a natural, frequent checkpoint. Never let it wedge the hook.
+    try:
+        closure.harvest_checkpoint(root)
+    except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
+        pass
     try:
         findings = closure.checkpoint_gate(root)
     except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
@@ -1238,6 +1246,15 @@ def _checkpoint_hook(root: Path, *, block: bool) -> int:
 
 def cmd_checkpoint(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
+    if getattr(args, "harvest", False):
+        # Deterministic incremental consolidation. Never errors out (hook-safe).
+        try:
+            n, note = closure.harvest_checkpoint(root)
+        except Exception:  # noqa: BLE001 (guard invariant: a harvest must never wedge a commit)
+            return 0
+        if not getattr(args, "hook", False):
+            print(f"Harvested {n} commit(s) into {note}" if n else "No new commits to harvest.")
+        return 0
     if getattr(args, "hook", False):
         return _checkpoint_hook(root, block=getattr(args, "block", False))
     # Non-hook invocation (scriptable / CI): the git-checkpoint verdict + exit code.
@@ -2282,6 +2299,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--block", action="store_true",
         help="with --hook: block the stop and instruct the agent to checkpoint "
              "(reserved for repos that opt into hard enforcement; warn-only otherwise)",
+    )
+    p_checkpoint.add_argument(
+        "--harvest", action="store_true",
+        help="incremental consolidation: append commit messages since the last "
+             "harvest to the latest session note + advance the marker (deterministic, "
+             "no LLM). Meant for a PostToolUse(git commit) hook; combine with --hook to "
+             "stay silent.",
     )
     p_checkpoint.set_defaults(func=cmd_checkpoint)
 

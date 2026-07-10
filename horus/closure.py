@@ -13,11 +13,19 @@ the printed ritual. No agent is spawned here.
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from horus import codex_usage, frontmatter, routines
 from horus.continuity import Finding, check_project, recent_sessions
 from horus.instructions import check_drift
+
+# Checkpoint harvest: the commit message the agent already wrote IS the continuity
+# delta, so a per-commit hook can append it to the session note for zero LLM tokens.
+# The marker (last-harvested HEAD, local/gitignored like sessions) makes it
+# idempotent — a commit is never harvested twice.
+CHECKPOINT_MARKER = ".consolidated-to"
+_HARVEST_HEADING = "## Checkpoints (auto-harvested)"
 
 # Projected agent artifacts (hooks + skills) are committed, not gitignored — they
 # must reach every machine the repo does, and the missing-CLI hook guards make them
@@ -153,6 +161,87 @@ def checkpoint_gate(root: Path) -> list[Finding]:
             else:
                 findings.append(Finding("ok", "local commits pushed to upstream"))
     return findings
+
+
+def _harvest_records(root: Path, since: str | None) -> list[tuple[str, str, str]]:
+    """(short_sha, subject, body) for commits after ``since`` (exclusive), oldest
+    first; just the tip commit when ``since`` is None or unknown (e.g. rebased away).
+    Field/record separators (\\x1f/\\x1e) survive multi-line bodies."""
+    fmt = "%h%x1f%s%x1f%b%x1e"
+    args = ["log", "--reverse", f"--format={fmt}"]
+    args.append(f"{since}..HEAD" if since else "-1")
+    out = _git(root, *args)
+    if out is None and since:  # unknown marker → fall back to the tip commit
+        out = _git(root, "log", "--reverse", f"--format={fmt}", "-1")
+    records: list[tuple[str, str, str]] = []
+    for rec in (out or "").split("\x1e"):
+        if not rec.strip():
+            continue
+        parts = rec.strip("\n").split("\x1f")
+        if len(parts) >= 2 and parts[0].strip():
+            body = parts[2].strip() if len(parts) > 2 else ""
+            records.append((parts[0].strip(), parts[1].strip(), body))
+    return records
+
+
+def _latest_or_new_session_note(root: Path) -> Path:
+    """The newest session note to append checkpoints to; create a minimal dated one
+    when the session hasn't authored a note yet (capture-by-default)."""
+    recent = recent_sessions(root, limit=1)
+    if recent:
+        return recent[0]
+    sessions = root / ".horus" / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    now = datetime.now()
+    note = sessions / f"{now:%Y-%m-%d-%H%M%S}-session.md"
+    note.write_text(
+        f"---\ndate: {now:%Y-%m-%dT%H:%M:%S}\nproject: {root.name}\n"
+        f'status: in-progress\nsummary: "session checkpoints (auto)"\n---\n\n'
+        f"# Session {now:%Y-%m-%d}\n",
+        encoding="utf-8",
+    )
+    return note
+
+
+_TRAILER_PREFIXES = ("co-authored-by:", "signed-off-by:", "co-committed-by:")
+
+
+def _append_checkpoints(note: Path, records: list[tuple[str, str, str]]) -> None:
+    text = note.read_text(encoding="utf-8")
+    chunk: list[str] = []
+    if _HARVEST_HEADING not in text:
+        chunk.append(f"\n{_HARVEST_HEADING}\n")
+    for sha, subject, body in records:
+        chunk.append(f"\n- `{sha}` {subject}")
+        for line in body.splitlines():
+            if line.strip() and not line.strip().lower().startswith(_TRAILER_PREFIXES):
+                chunk.append(f"\n  {line.rstrip()}")
+    with note.open("a", encoding="utf-8") as fh:
+        fh.write("".join(chunk) + "\n")
+
+
+def harvest_checkpoint(root: Path) -> tuple[int, Path | None]:
+    """Append commit messages since the last harvest to the latest session note and
+    advance the marker. Deterministic, no LLM. Because the append bumps the note's
+    mtime, the "work commits since summary" freshness nudge clears automatically — the
+    checkpoints ARE the running consolidation. Returns (n_harvested, note_path|None);
+    a silent no-op when not a git repo, no ``.horus/``, or nothing new."""
+    if not is_git_repo(root) or not (root / ".horus").is_dir():
+        return 0, None
+    head = _git(root, "rev-parse", "HEAD")
+    if not head:
+        return 0, None
+    marker = root / ".horus" / CHECKPOINT_MARKER
+    since = marker.read_text(encoding="utf-8").strip() if marker.is_file() else None
+    if since == head:
+        return 0, None  # already harvested to HEAD
+    records = _harvest_records(root, since)
+    note: Path | None = None
+    if records:
+        note = _latest_or_new_session_note(root)
+        _append_checkpoints(note, records)
+    marker.write_text(head + "\n", encoding="utf-8")  # advance even if empty, to avoid rescan
+    return len(records), note
 
 
 def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding]:

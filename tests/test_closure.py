@@ -201,3 +201,89 @@ def test_push_allowed_without_upstream_or_remote(tmp_path, monkeypatch):
     did, detail = closure.commit_continuity(tmp_path, "close", push=True)
     assert did  # the guard errs toward allowing; only the push itself fails
     assert "push failed" in detail
+
+
+# --------------------------------------------------------------------------- #
+# Checkpoint harvest — incremental consolidation
+# --------------------------------------------------------------------------- #
+
+def _session_note(root, name="2026-07-10-120000-test.md"):
+    p = root / ".horus" / "sessions" / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        "---\ndate: 2026-07-10T12:00:00\nproject: x\nstatus: in-progress\nsummary: t\n---\n\n# Test\n",
+        encoding="utf-8",
+    )
+    return p
+
+
+def _work_commit(root, fname, content, msg):
+    (root / fname).write_text(content, encoding="utf-8")
+    _run(root, "add", "-A")
+    _run(root, "commit", "-m", msg)
+
+
+def test_harvest_appends_commit_to_note(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    note = _session_note(tmp_path)
+    _work_commit(tmp_path, "app.py", "print(1)\n", "feat: add app entry point")
+    n, out = closure.harvest_checkpoint(tmp_path)
+    assert n == 1 and out == note
+    text = note.read_text(encoding="utf-8")
+    assert "feat: add app entry point" in text and closure._HARVEST_HEADING in text
+    assert (tmp_path / ".horus" / closure.CHECKPOINT_MARKER).is_file()
+
+
+def test_harvest_idempotent(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    _session_note(tmp_path)
+    _work_commit(tmp_path, "app.py", "print(1)\n", "feat: one")
+    closure.harvest_checkpoint(tmp_path)
+    n, out = closure.harvest_checkpoint(tmp_path)
+    assert n == 0 and out is None
+    note = closure.recent_sessions(tmp_path, limit=1)[0]
+    assert note.read_text(encoding="utf-8").count("feat: one") == 1
+
+
+def test_harvest_first_run_takes_tip_only(tmp_path, monkeypatch):
+    # No marker yet → harvest just the tip commit, not the whole history.
+    _setup(tmp_path, monkeypatch)
+    _session_note(tmp_path)
+    _work_commit(tmp_path, "a.py", "1\n", "feat: first")
+    _work_commit(tmp_path, "b.py", "2\n", "feat: second")
+    n, _ = closure.harvest_checkpoint(tmp_path)
+    assert n == 1
+
+
+def test_harvest_multiple_commits_since_marker_in_order(tmp_path, monkeypatch):
+    # With a marker, a later harvest catches every commit since it, oldest first
+    # (the missed-commit / multi-commit-per-op path).
+    _setup(tmp_path, monkeypatch)
+    _session_note(tmp_path)
+    _work_commit(tmp_path, "a.py", "1\n", "feat: first")
+    closure.harvest_checkpoint(tmp_path)  # marker → 'first'
+    _work_commit(tmp_path, "b.py", "2\n", "feat: second")
+    _work_commit(tmp_path, "c.py", "3\n", "feat: third")
+    n, note = closure.harvest_checkpoint(tmp_path)
+    assert n == 2
+    text = note.read_text(encoding="utf-8")
+    assert text.index("feat: second") < text.index("feat: third")
+
+
+def test_harvest_autocreates_note_when_none(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    assert closure.recent_sessions(tmp_path, limit=1) == []
+    _work_commit(tmp_path, "app.py", "1\n", "feat: x")
+    n, note = closure.harvest_checkpoint(tmp_path)
+    assert n == 1 and note is not None and note.exists()
+
+
+def test_harvest_clears_summary_freshness(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    note = _session_note(tmp_path)
+    old = note.stat().st_mtime - 3600  # backdate so the work commit is "newer"
+    os.utime(note, (old, old))
+    _work_commit(tmp_path, "app.py", "1\n", "feat: work")
+    assert any("work commit(s) since" in m for m in _msgs(tmp_path))
+    closure.harvest_checkpoint(tmp_path)
+    assert not any("work commit(s) since" in m for m in _msgs(tmp_path))

@@ -78,3 +78,25 @@ def test_checker_exception_is_silent(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(closure, "checkpoint_gate", boom)
     assert cli._checkpoint_hook(tmp_path, block=False) == 0
     assert capsys.readouterr().out == ""
+
+
+def test_hook_runs_harvest(tmp_path, monkeypatch):
+    # The Stop hook folds new commits into the session note (incremental consolidation).
+    _use_temp_sentinels(monkeypatch, tmp_path)
+    called = []
+    monkeypatch.setattr(closure, "harvest_checkpoint", lambda root: (called.append(root), (0, None))[1])
+    _stub_findings(monkeypatch, [Finding("ok", "working tree clean")])
+    _stub_stdin(monkeypatch, {"session_id": _sid()})
+    cli._checkpoint_hook(tmp_path, block=False)
+    assert called == [tmp_path]
+
+
+def test_hook_harvest_errors_are_swallowed(tmp_path, monkeypatch):
+    # A harvest failure must never wedge the Stop hook (guard invariant).
+    _use_temp_sentinels(monkeypatch, tmp_path)
+    def boom(root):
+        raise RuntimeError("harvest blew up")
+    monkeypatch.setattr(closure, "harvest_checkpoint", boom)
+    _stub_findings(monkeypatch, [Finding("ok", "working tree clean")])
+    _stub_stdin(monkeypatch, {"session_id": _sid()})
+    assert cli._checkpoint_hook(tmp_path, block=False) == 0
