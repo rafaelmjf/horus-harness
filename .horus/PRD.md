@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.33 remains live and gated; PR #131 landed the missing hosted-deploy runtime gate: install exhaustion fails before restart, and the restarted /health version must equal the target. Full local pytest + a direct stale-version probe passed, and required CI was green. The card-per-file pilot's first claim/finish flow was frictionless."
-next_action: "Harness flagship P0 — freeze the LaunchBackend seam + LocalBackend (Opus inline; Option A per hub §9/§11), then delegate RemoteBackend/ContainerBackend. Owner checks: on the next real release, let the webhook deploy and observe hosted /health flip to the target (do not pre-empt manually); retry the mobile live-terminal and report the visible error. Refresh-artifacts P1/P2 remains self-contained Sonnet work."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune. Read .horus/PRD.md. State: v0.0.33 is live/gated; PR #131 hardened deploy-hosted.sh with fail-before-restart install success and post-restart /health target-version equality. On the next release, do not run deploy-hosted.sh manually: observe the webhook flip hosted /health to the new version. Main lead: freeze LaunchBackend + LocalBackend (Opus inline), then delegate RemoteBackend/ContainerBackend; also open: Refresh-artifacts P1/P2 (Sonnet) and owner mobile-terminal retry. horus-hub PRD item 2 + §11 hold the multi-machine decisions."
-execution_recommendation: "continue-as-is for the LaunchBackend seam freeze (Opus inline — the interface is the contract every backend implements) and the bugs/checkpoint tooling (small, self-contained). plan-execution once the seam is frozen: RemoteBackend + ContainerBackend + hub worker/provisioning is high-volume, low-ambiguity, cross-repo — delegate to fresh sessions on the isolated accounts (GPT 5.5 / other Claude), one backend per worktree, --watch + review per owner preference."
+current_focus: "Fleet-cockpit dispatch ergonomics landed on main via PRs #134–#136: `horus fleet` gives the full non-cockpit registry picture, `--worker` infers its matching adapter, and Codex's `full-auto` requirement for git/browser work is discoverable. Each micro-PR passed a full local suite and required CI; all three cards are removed. v0.0.33 remains live, so these changes await a patch release."
+next_action: "Sonnet direct: cut the next patch release for PRs #134–#136, then let the webhook deploy it and observe hosted `/health` flip to the target without pre-empting it manually. After that, Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation; Refresh-artifacts P1/P2 remains self-contained Sonnet work."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. PRs #134–#136 are merged and locally/CI green but not released: `horus fleet`, worker→adapter inference, and Codex full-auto guidance. Use Sonnet to cut the next patch release; do not run deploy-hosted.sh manually—observe the webhook update hosted `/health` to the target. Then use Opus inline for the LaunchBackend + LocalBackend seam freeze."
+execution_recommendation: "continue-as-is — the immediate patch release and webhook observation are bounded Sonnet work; the following interface freeze stays Opus inline because its judgment defines every backend contract. plan-execution only after that seam is frozen, when RemoteBackend + ContainerBackend + hub provisioning become high-volume, low-ambiguity cross-repo work suitable for isolated workers."
 last_updated: 2026-07-10
 horus_min_version: 0.0.26
 ---
@@ -92,8 +92,7 @@ pilot is the evidence for/against making cards the scaffold default).
 4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
    owned-window defaults, hook execution. Install-smoke CI covers install/CLI/`/health`.
 5. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD +
-   execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup; `--worker`
-   inferring agent from `--agent` (usage-error bounce 2026-07-04).
+   execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup.
 6. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per
    shell call (close + guard-host + usage guard), reaching PowerShell calls too since
    the F1 matcher fix. Measure on a tool-heavy session; only if material, build a
@@ -109,10 +108,9 @@ pilot is the evidence for/against making cards the scaffold default).
 
 ### Open / deferred — see `.horus/backlog/`
 
-Everything formerly listed here is now one card per file in `.horus/backlog/`
-(priority in each card's frontmatter). Notable: `horus-fleet-seed-read`
-(gated on fleet-cockpit friction), `scheduled-usage-aware-continuation`,
-`project-machine-requirements`, `deferred-*` for MVP3/MVP5 + continuity seams.
+Everything formerly listed here is now one card per file in `.horus/backlog/` (priority
+in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
+`project-machine-requirements`, and `deferred-*` for MVP3/MVP5 + continuity seams.
 
 ## Shipped
 
@@ -249,5 +247,4 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   (Haiku/Sonnet/Opus per the model-tier rule). If the user proposes starting a session
   on a heavier model than the work needs, pushing back — recommend the lower tier, or a
   delegated worker on the isolated account — is expected, not overstepping.
-- **Closure:** update this file's frontmatter + backlog/shipped + session note +
-  `close --commit --push`. One `consolidate` pass at most; do not chase warnings.
+- **Closure:** update frontmatter + backlog/shipped + session note; run `close --commit --push`. One `consolidate` pass at most; do not chase warnings.
