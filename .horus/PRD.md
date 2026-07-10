@@ -117,6 +117,7 @@ Everything formerly listed here is now one card per file in `.horus/backlog/`
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Fleet dispatch view** (2026-07-10): `horus fleet` prints one line per registered non-cockpit project with git freshness, latest session, and PRD-resolved focus/action/prompt.
 **Hosted deploy runtime version gate** (2026-07-10, PR #131): exhausted installs fail before restart; after restart `/health.version` must exactly match the target; unresolved targets stay explicitly unconfirmed; the hub receiver was verified to execute this checkout's live script.
 **Card-per-file backlog pilot** (2026-07-10): `.horus/backlog/` holds dispatch-ready cards that can be claimed/finished without racing PRD.md; the first Codex claim→push→finish flow was frictionless; `rafaelmjf/horus-agent` is the first cross-project consumer.
 **Config round-trip safety** (v0.0.33): `_write_config` preserves unmanaged top-level tables/keys, notably the security-critical `[access]` gate; `deploy-hosted.sh` also pins/retries while PyPI's simple index catches up.
