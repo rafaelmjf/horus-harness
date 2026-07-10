@@ -24,6 +24,7 @@ GITIGNORE_RULES = (
     "sessions/archive/",
     "temp/*",
     "!temp/.gitkeep",
+    ".consolidated-to",
 )
 GITIGNORE_BLOCK = "\n".join(GITIGNORE_RULES) + "\n"
 

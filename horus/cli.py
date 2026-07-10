@@ -1238,6 +1238,15 @@ def _checkpoint_hook(root: Path, *, block: bool) -> int:
 
 def cmd_checkpoint(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
+    if getattr(args, "harvest", False):
+        # Deterministic incremental consolidation. Never errors out (hook-safe).
+        try:
+            n, note = closure.harvest_checkpoint(root)
+        except Exception:  # noqa: BLE001 (guard invariant: a harvest must never wedge a commit)
+            return 0
+        if not getattr(args, "hook", False):
+            print(f"Harvested {n} commit(s) into {note}" if n else "No new commits to harvest.")
+        return 0
     if getattr(args, "hook", False):
         return _checkpoint_hook(root, block=getattr(args, "block", False))
     # Non-hook invocation (scriptable / CI): the git-checkpoint verdict + exit code.
@@ -2282,6 +2291,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--block", action="store_true",
         help="with --hook: block the stop and instruct the agent to checkpoint "
              "(reserved for repos that opt into hard enforcement; warn-only otherwise)",
+    )
+    p_checkpoint.add_argument(
+        "--harvest", action="store_true",
+        help="incremental consolidation: append commit messages since the last "
+             "harvest to the latest session note + advance the marker (deterministic, "
+             "no LLM). Meant for a PostToolUse(git commit) hook; combine with --hook to "
+             "stay silent.",
     )
     p_checkpoint.set_defaults(func=cmd_checkpoint)
 

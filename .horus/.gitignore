@@ -4,3 +4,4 @@ sessions/*.md
 temp/*
 !temp/.gitkeep
 sessions/archive/
+.consolidated-to
