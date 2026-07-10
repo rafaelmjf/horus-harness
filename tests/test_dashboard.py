@@ -1,11 +1,12 @@
 """Tests for dashboard data gathering and HTML rendering (no socket)."""
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
 from io import BytesIO
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import json
 
@@ -961,10 +962,98 @@ def _scaffolded_project(tmp_path, monkeypatch):
     return proj
 
 
+def _git(repo: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def _commit_scaffold(repo: Path) -> None:
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Horus Test")
+    _git(repo, "config", "user.email", "horus@example.test")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "scaffold")
+
+
 def test_process_upgrade_project_applies_and_redirects(tmp_path, monkeypatch):
     _scaffolded_project(tmp_path, monkeypatch)
     out = dashboard.process_upgrade_project({"project": "0"})
     assert out.startswith("/project?i=0&upgraded=")
+
+
+def test_process_upgrade_project_blocks_dirty_checkout_without_git_mutation(tmp_path, monkeypatch):
+    proj = _scaffolded_project(tmp_path, monkeypatch)
+    staged = proj / "staged.txt"
+    unstaged = proj / "unstaged.txt"
+    staged.write_text("clean\n", encoding="utf-8")
+    unstaged.write_text("clean\n", encoding="utf-8")
+    _commit_scaffold(proj)
+
+    staged.write_text("staged change\n", encoding="utf-8")
+    _git(proj, "add", staged.name)
+    unstaged.write_text("unstaged change\n", encoding="utf-8")
+    untracked = proj / "untracked.txt"
+    untracked.write_text("untracked\n", encoding="utf-8")
+
+    calls: list[bool] = []
+
+    def fake_upgrade(root: Path, *, apply: bool = False):
+        calls.append(apply)
+        if apply:
+            (root / "should-not-exist").write_text("mutated", encoding="utf-8")
+        return [UpgradeAction("would-update", "would refresh AGENTS.md", "AGENTS.md")]
+
+    monkeypatch.setattr(dashboard.upgrade, "upgrade_project", fake_upgrade)
+    before_status = _git(proj, "status", "--porcelain=v1")
+    before_head = _git(proj, "rev-parse", "HEAD")
+    before_stash = _git(proj, "stash", "list")
+    before_contents = {path.name: path.read_bytes() for path in (staged, unstaged, untracked)}
+
+    response = _post("/upgrade-project", {"project": "0"})
+    assert response["status"] == 303
+    location = dict(response["headers"])["Location"]
+    params = parse_qs(urlparse(location).query)
+    banner = dashboard._project_action_banner(params)
+
+    assert calls == [False]
+    assert "Refresh blocked" in banner
+    assert all(name in banner for name in (staged.name, unstaged.name, untracked.name))
+    assert "AGENTS.md" in banner
+    assert "Launch reconciliation session" in banner
+    assert not (proj / "should-not-exist").exists()
+    assert _git(proj, "status", "--porcelain=v1") == before_status
+    assert _git(proj, "rev-parse", "HEAD") == before_head
+    assert _git(proj, "stash", "list") == before_stash
+    assert {path.name: path.read_bytes() for path in (staged, unstaged, untracked)} == before_contents
+
+
+def test_process_upgrade_project_clean_manual_lists_uncommitted_paths(tmp_path, monkeypatch):
+    proj = _scaffolded_project(tmp_path, monkeypatch)
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        path = proj / name
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("horus-block-version: 7", "horus-block-version: 6"), encoding="utf-8")
+    _commit_scaffold(proj)
+    config.set_workflow_policy(commit="manual")
+
+    location = dashboard.process_upgrade_project({"project": "0"})
+    params = parse_qs(urlparse(location).query)
+    changed_paths = json.loads(params["upgrade_paths"][0])
+    banner = dashboard._project_action_banner(params)
+
+    assert changed_paths == ["AGENTS.md", "CLAUDE.md"]
+    assert params["upgrade_manual"] == ["1"]
+    assert "Tracked files are now uncommitted" in banner
+    assert all(path in banner for path in changed_paths)
+    assert f"git -C {proj} add -- AGENTS.md CLAUDE.md" in banner
+    assert f"git -C {proj} commit -m &#x27;Refresh Horus artifacts&#x27;" in banner
+    dirty_paths = set(_git(proj, "diff", "--name-only").splitlines())
+    assert dirty_paths == set(changed_paths)
 
 
 def test_process_upgrade_project_unknown_index(tmp_path, monkeypatch):

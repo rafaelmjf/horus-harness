@@ -17,6 +17,7 @@ from horus.instructions import block_version, extract_block, replace_block
 class UpgradeAction(NamedTuple):
     status: str  # "would-update" | "updated" | "exists" | "created" | "skipped" | "error"
     message: str
+    path: str | None = None
 
 
 V2_LANES = ("project.md", "roadmap.md", "features.md", "decisions.md", "history.md", "execution.md")
@@ -61,12 +62,20 @@ def _upgrade_min_version_stamp(project_root: Path, *, apply: bool) -> list[Upgra
         return [UpgradeAction("exists", f".horus/{frontmatter.PRD_FILE} {versioning.MIN_VERSION_KEY} is current ({current})")]
     verb = "would raise" if current else "would add"
     if not apply:
-        return [UpgradeAction("would-update", f"{verb} .horus/{frontmatter.PRD_FILE} {versioning.MIN_VERSION_KEY} -> {floor}")]
+        return [UpgradeAction(
+            "would-update",
+            f"{verb} .horus/{frontmatter.PRD_FILE} {versioning.MIN_VERSION_KEY} -> {floor}",
+            f".horus/{frontmatter.PRD_FILE}",
+        )]
     new_text = _set_frontmatter_key(text, versioning.MIN_VERSION_KEY, floor)
     if new_text == text:
         return [UpgradeAction("skipped", f".horus/{frontmatter.PRD_FILE} has no frontmatter; cannot stamp {versioning.MIN_VERSION_KEY}")]
     prd.write_text(new_text, encoding="utf-8")
-    return [UpgradeAction("updated", f".horus/{frontmatter.PRD_FILE}: set {versioning.MIN_VERSION_KEY} -> {floor}")]
+    return [UpgradeAction(
+        "updated",
+        f".horus/{frontmatter.PRD_FILE}: set {versioning.MIN_VERSION_KEY} -> {floor}",
+        f".horus/{frontmatter.PRD_FILE}",
+    )]
 
 
 def _set_frontmatter_key(text: str, key: str, value: str) -> str:
@@ -364,9 +373,9 @@ def _upgrade_instructions(project_root: Path, *, apply: bool) -> list[UpgradeAct
         if not path.exists():
             if apply:
                 path.write_text(templates.instruction_file(title, other, notes_heading), encoding="utf-8")
-                actions.append(UpgradeAction("created", f"created {filename} with current managed block"))
+                actions.append(UpgradeAction("created", f"created {filename} with current managed block", filename))
             else:
-                actions.append(UpgradeAction("would-update", f"would create {filename} with current managed block"))
+                actions.append(UpgradeAction("would-update", f"would create {filename} with current managed block", filename))
             continue
 
         text = path.read_text(encoding="utf-8")
@@ -391,9 +400,9 @@ def _upgrade_instructions(project_root: Path, *, apply: bool) -> list[UpgradeAct
             continue
         if apply:
             path.write_text(new_text, encoding="utf-8")
-            actions.append(UpgradeAction("updated", f"{filename}: refreshed managed block"))
+            actions.append(UpgradeAction("updated", f"{filename}: refreshed managed block", filename))
         else:
-            actions.append(UpgradeAction("would-update", f"would refresh {filename} managed block"))
+            actions.append(UpgradeAction("would-update", f"would refresh {filename} managed block", filename))
     return actions
 
 
@@ -403,17 +412,25 @@ def _upgrade_skills(project_root: Path, *, apply: bool, targets: tuple[str, ...]
         for skill in skills.SKILLS:
             if apply:
                 a = skills.write_skill(skill, project_root, target=target)
-                actions.append(UpgradeAction(a.status, a.message))
+                actions.append(UpgradeAction(a.status, a.message, skill.rel_path(target=target)))
                 continue
             path = skills.skill_path(skill, project_root, target=target)
             if not path.exists():
-                actions.append(UpgradeAction("would-update", f"would create {skill.rel_path(target=target)}"))
+                actions.append(UpgradeAction(
+                    "would-update",
+                    f"would create {skill.rel_path(target=target)}",
+                    skill.rel_path(target=target),
+                ))
                 continue
             current = skills.installed_version(path.read_text(encoding="utf-8"))
             if current is None:
                 actions.append(UpgradeAction("skipped", f"{skill.name} ({target}): present without a version marker"))
             elif current < skill.version:
-                actions.append(UpgradeAction("would-update", f"would update {skill.name} ({target}) v{current} -> v{skill.version}"))
+                actions.append(UpgradeAction(
+                    "would-update",
+                    f"would update {skill.name} ({target}) v{current} -> v{skill.version}",
+                    skill.rel_path(target=target),
+                ))
             else:
                 actions.append(UpgradeAction("exists", f"{skill.name} ({target}): up to date (v{current})"))
     return actions
@@ -433,12 +450,13 @@ def _upgrade_hook_target(root: Path, *, project_root: Path, target: str, apply: 
     installers = native_hooks.HOOK_INSTALLERS.get(target)
     if installers is None:
         return actions
+    rel_path = ".claude/settings.json" if target == "claude" else ".codex/hooks.json"
     for install in installers:
         a = install(root)
         status = a.status
         if not apply and status in ("created", "updated"):
             status = "would-update"
-        actions.append(UpgradeAction(status, _retarget_message(a.message, root, project_root)))
+        actions.append(UpgradeAction(status, _retarget_message(a.message, root, project_root), rel_path))
     return actions
 
 
