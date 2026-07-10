@@ -1,7 +1,7 @@
 ---
 status: active
-current_focus: "v0.0.34 released and live. Side items out for cockpit review, none auto-merge: `horus wiki` (draft PR #138), `horus capabilities` (draft PR #139), `horus run --effort` (PR #140), and now an overseer-dispatched usage-preflight hardening (PR #141 — multi-window + closing-window notice + unknown surfacing; required CI green). None touch the seam below. Flagship next step is unchanged: the LaunchBackend seam."
-next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc). Separately, review PRs #138/#139/#140/#141 — decide keep/shape/merge on each; see backlog cards."
+current_focus: "v0.0.35 released and live on PyPI — patch shipping `horus run --effort` (#140) + hardened usage preflight (#141, multi-window + closing-window notice + unknown surfacing), both already merged to main; publish→install verified E2E in a clean venv. NOTE: the hosted dashboard is now behind Cloudflare Access, so `/health` no longer reads unauthenticated — the hosted-version release check needs Access creds or the deploy-hook logs, not a plain curl. Draft PRs #138 (`horus wiki`) / #139 (`horus capabilities`) still out for cockpit review. Flagship next step unchanged: the LaunchBackend seam."
+next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc). Separately, review draft PRs #138/#139 — decide keep/shape/merge on each; see backlog cards."
 next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. Use Opus inline for the LaunchBackend + LocalBackend seam freeze (harness P0 of the multi-machine arc)."
 execution_recommendation: "continue-as-is — the interface freeze stays Opus inline because its judgment defines every backend contract. plan-execution only after that seam is frozen, when RemoteBackend + ContainerBackend + hub provisioning become high-volume, low-ambiguity cross-repo work suitable for isolated workers."
 last_updated: 2026-07-10
@@ -106,8 +106,8 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**Usage-preflight hardening** (2026-07-10, PR #141, overseer-dispatched, unmerged): `horus run`'s preflight now reads BOTH the 5h and weekly windows and gates on the more-constraining one (`UsageSnapshot` gains defaulted weekly fields + `worst()`, cache round-trips both); a `[50,80)` closing-window `Note:` surfaces percent+reset (visibility, not a runtime predictor); an unknown signal is surfaced (`capacity unknown …`) instead of proceeding as if healthy, with opt-in `--refuse-on-unknown` for critical launches — the PreToolUse guard's fail-open hot path is deliberately untouched.
-**Reasoning-effort passthrough** (2026-07-10, PR #140, overseer-dispatched, unmerged): `horus run --effort {low,medium,high,xhigh,max}` reaches both adapters via `SpawnSpec.effort` — claude forwards `--effort` verbatim (documented enum, confirmed live); codex maps to `-c model_reasoning_effort=<value>` (server-validated).
+**Usage-preflight hardening** (2026-07-10, PR #141, released v0.0.35): `horus run`'s preflight now reads BOTH the 5h and weekly windows and gates on the more-constraining one (`UsageSnapshot` gains defaulted weekly fields + `worst()`, cache round-trips both); a `[50,80)` closing-window `Note:` surfaces percent+reset (visibility, not a runtime predictor); an unknown signal is surfaced (`capacity unknown …`) instead of proceeding as if healthy, with opt-in `--refuse-on-unknown` for critical launches — the PreToolUse guard's fail-open hot path is deliberately untouched.
+**Reasoning-effort passthrough** (2026-07-10, PR #140, released v0.0.35): `horus run --effort {low,medium,high,xhigh,max}` reaches both adapters via `SpawnSpec.effort` — claude forwards `--effort` verbatim (documented enum, confirmed live); codex maps to `-c model_reasoning_effort=<value>` (server-validated).
 **Fleet capability catalog prototype** (2026-07-10, draft PR #139): `horus capabilities` aggregates every registered project's Shipped ledger (+ harness's own 52-command argparse surface) into a deterministic queryable JSON index at `~/.horus/capabilities.json` — agent-first alternative to the `horus wiki` spike (#138).
 **Refresh-artifacts honors workflow policy** (2026-07-10, PR #137): the dashboard's Refresh artifacts action now dispatches through `integration.integrate()` for an automatic commit policy — branch + PR (+ automerge) instead of dirtying a `branch-pr-automerge` repo's main — closing `bugs/refresh-artifacts-leaves-dirty-worktree.md` and the downstream `bugs/checkpoint-warning-after-artifact-refresh.md` symptom (both write-ups deleted, resolved).
 **Codex worker posture guidance** (2026-07-10, released v0.0.34): the run help and adapter docs keep `auto-edit` safe while making `full-auto` mandatory and explicit for networked git/PR and local-server/browser verification.
@@ -170,7 +170,11 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   OSes; tests on the `requires-python` floor (uv provisions it — floor tracks uv, not
   distro pythons). The bump is **three files together** — `pyproject.toml` +
   `horus/__init__.py` + `uv.lock` — each missed once (0.0.15, 0.0.19-broken); rerun
-  the suite *after* the bump (the stale-build guard test catches a skew).
+  the suite *after* the bump (the stale-build guard test catches a skew). Verify
+  publish→install E2E (PyPI JSON+simple index serve it, then a clean-venv install shows
+  it) — a green `publish.yml` alone bit back on v0.0.34. Hosted-version verification is
+  no longer a plain `/health` curl: the hosted dashboard now sits behind Cloudflare
+  Access — confirm the flip via Access-authenticated access or deploy-hook logs (v0.0.35).
 - **An outdated CLI must never silently regress `.horus/` structure.** Repos stamp
   `horus_min_version` (PRD frontmatter); two guards honor it — the managed-block
   Version-floor preflight (agent checks `horus --version`; the only guard that binds an
