@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "RELEASED v0.0.33 this session (2026-07-10); local + hosted both on 0.0.33, hosted gated. Shipped: (1) **checkpoint-based incremental consolidation** (`horus checkpoint --harvest` auto-runs in the Stop hook, zero-LLM, marker-gated); (2) **Refresh-artifacts P0** (dashboard POST refuses a dirty checkout + reports exact paths — delegated to a GPT-5.5/Codex worker in a worktree, supervisor-reviewed, its out-of-scope PRD rewrite discarded); (3) **mobile live-terminal visibility** (dead SSE stream + rejected input now surface a visible notice — best-effort; could NOT reproduce the root cause headless, so OWNER MUST retry on mobile against the now-updated hosted dashboard and report the visible error to pin it); (4) **CRITICAL config fix (v0.0.33)** — `_write_config` was dropping the `[access]` table on every write, which took the exposed dashboard DOWN mid-session when `horus init` (agentic-travel-guide) rewrote config.toml → `--exposed` crash-looped; restored [access] live + fixed the serializer to round-trip unmanaged tables (proven live). Also: deploy-hosted.sh now version-pins with retries (was racing PyPI's index lag). Prior: v0.0.31 --exposed boundary; hosted auto-deploys on release via ops/deploy-hook webhook. PARALLEL session same day: fleet-cockpit workspace shipped (`rafaelmjf/horus-agent` — instruction rung, one point of contact dispatching via `horus run`; capability stays in harness) + **card-per-file backlog pilot** (`.horus/backlog/`, 12 cards; PRD keeps the curated now-list)."
-next_action: "Harness flagship P0 — freeze the **LaunchBackend seam + LocalBackend** (Opus inline; Option A per hub §9/§11) → then delegate RemoteBackend/ContainerBackend (GPT5.5/other-Claude, one worktree each). OPEN owner action: retry the mobile live-terminal against the hosted dashboard (now on 0.0.33) and report the now-visible error to pin the headless-unreproducible root cause. Also open: **[ops] deploy-hosted version-assertion** (`bugs/deploy-hosted-silent-stale-version.md` — the script can restart+pass /health+403 on the OLD build if the retry loop exhausts; add a `/health` version check; small, ships next release + observe the webhook E2E on that release), Refresh-artifacts P1/P2, checkpoint gate provenance. [tier: Opus for the seam; Sonnet/GPT5.5 for backends + ops.] CARD PILOT test in flight: a Codex session claims `.horus/backlog/deploy-hosted-version-assertion.md` (status: claimed + push early) and fixes it."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune (a second session is/was active in this repo). Read .horus/PRD.md. State: main clean; **v0.0.33 released** (local + hosted both on 0.0.33, gated); hosted was deployed **manually** via deploy-hosted.sh this session — the release webhook proved to race PyPI's simple-index lag (patched with version-pin + 8×/20s retry, but NOT yet observed under a real webhook-triggered release). LEADS: (a) freeze the LaunchBackend seam (P0, Opus inline) then delegate the backends; (b) [ops] deploy-hosted version-assertion (`bugs/deploy-hosted-silent-stale-version.md`, self-contained); (c) Refresh-artifacts P1/P2 (bugs/, self-contained). horus-hub PRD item 2 + §11 hold the multi-machine decisions. NOTE: backlog items below now/next are cards in .horus/backlog/ (convention in PRD ## Backlog)."
+current_focus: "v0.0.33 remains live and gated; PR #131 adds the missing hosted-deploy runtime gate: install exhaustion fails before restart, and the restarted /health version must equal the target. Full local pytest + a direct stale-version probe passed; auto-merge is armed. The card-per-file pilot's first claim/finish flow was frictionless."
+next_action: "Harness flagship P0 — freeze the LaunchBackend seam + LocalBackend (Opus inline; Option A per hub §9/§11), then delegate RemoteBackend/ContainerBackend. Owner checks: on the next real release, let the webhook deploy and observe hosted /health flip to the target (do not pre-empt manually); retry the mobile live-terminal and report the visible error. Refresh-artifacts P1/P2 remains self-contained Sonnet work."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune. Read .horus/PRD.md. State: v0.0.33 is live/gated; PR #131 hardened deploy-hosted.sh with fail-before-restart install success and post-restart /health target-version equality. On the next release, do not run deploy-hosted.sh manually: observe the webhook flip hosted /health to the new version. Main lead: freeze LaunchBackend + LocalBackend (Opus inline), then delegate RemoteBackend/ContainerBackend; also open: Refresh-artifacts P1/P2 (Sonnet) and owner mobile-terminal retry. horus-hub PRD item 2 + §11 hold the multi-machine decisions."
 execution_recommendation: "continue-as-is for the LaunchBackend seam freeze (Opus inline — the interface is the contract every backend implements) and the bugs/checkpoint tooling (small, self-contained). plan-execution once the seam is frozen: RemoteBackend + ContainerBackend + hub worker/provisioning is high-volume, low-ambiguity, cross-repo — delegate to fresh sessions on the isolated accounts (GPT 5.5 / other Claude), one backend per worktree, --watch + review per owner preference."
 last_updated: 2026-07-10
 horus_min_version: 0.0.26
@@ -110,115 +110,25 @@ pilot is the evidence for/against making cards the scaffold default).
 ### Open / deferred — see `.horus/backlog/`
 
 Everything formerly listed here is now one card per file in `.horus/backlog/`
-(priority in each card's frontmatter). Notable: `deploy-hosted-version-assertion`
-(priority **now** — also in frontmatter `next_action`), `horus-fleet-seed-read`
+(priority in each card's frontmatter). Notable: `horus-fleet-seed-read`
 (gated on fleet-cockpit friction), `scheduled-usage-aware-continuation`,
 `project-machine-requirements`, `deferred-*` for MVP3/MVP5 + continuity seams.
 
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-
-**Card-per-file backlog pilot** (2026-07-10): `.horus/backlog/` — dispatch-ready card per
-item, add/finish/claim without racing PRD.md; plus the fleet-cockpit workspace
-(`rafaelmjf/horus-agent`) as its first cross-project consumer.
-
-**Config round-trip safety** (v0.0.33): `_write_config` preserves every top-level table/key
-it doesn't manage (notably the security-critical `[access]` gate) — any write
-(`register_project`, `set_workflow_policy`, `ignore_repo`) previously dropped `[access]`,
-which took the exposed dashboard down when a `horus init` rewrite made `--exposed` crash-loop
-on the missing block. Plus `deploy-hosted.sh` version-pins with retries (was racing PyPI's
-simple-index lag on the release webhook).
-
-**Dashboard robustness** (2026-07-10): Refresh-artifacts P0 — the POST refuses a dirty
-checkout (mutation-path guard, lists dirty + planned paths + dry-run cmd), reports exact
-changed paths, and warns/lists on manual-commit policy (`UpgradeAction.path` provenance);
-never stashes/resets/commits. Plus: live terminals surface a dead SSE stream + rejected
-input instead of failing silently (the "opens but can't see/control" symptom → visible,
-diagnosable notice).
-
-**Checkpoint-based incremental consolidation** (2026-07-10): `horus checkpoint --harvest`
-appends commit messages since a local `consolidated-to` marker to the latest session note
-(deterministic, zero-LLM, idempotent, trailer-stripped) — runs automatically inside the
-existing Stop checkpoint hook, so continuity keeps pace per turn and the "work commits since
-summary" nudge clears itself; close becomes light hygiene over a small delta instead of a
-whole-log distillation. Commit-message quality = continuity granularity.
-
-**Continuity core:** `horus init` (scaffold + managed AGENTS/CLAUDE blocks, never
-clobbers) · `close` (verify-first; `--commit --push`, fetch-first cross-machine guard) ·
-`session new` (account-aliased) · `doctor` (project/instructions/machine) · `consolidate` /
-`distill-history` / `infer` (deterministic pre-pass + agent ritual; bundled Claude+Codex
-skills) · `reconcile instructions` · closure freshness gate (`close --check`) + CI
-continuity check + local pre-merge hook · sessions archive · `horus resume` handoff ·
-**v3 PRD+sessions structure** (v0.0.21) · **signal-based acceptance** (v0.0.22: required
-pytest on main + live-proven auto-merge) · **orchestration pilot** (v0.0.23: Ideas/
-Brainstorm card + `horus brainstorm`, liveness-verified badges, hub design, skill v8) ·
-**hub pre-work** (v0.0.24: JSONL run-event sidecars + `run --worktree`/`--worker`).
-
-**Hooks & projections:** usage→closure hooks for Claude (OAuth `/usage`) + Codex
-(rollouts), advisory + ask-never-force · pre-merge gates both agents · hooks guarded to
-silent no-op on horus-less machines (v0.0.11) · projected artifacts committed as
-continuity (v0.0.11) · `upgrade-project` (direction-aware managed block; `--all`
-registry-wide) · projection-sync badge (per-surface vs installed CLI) · Skill map:
-`horus skill map` + dashboard Skills tab, read-only presence across scopes (v0.0.13) ·
-**usage-limit survival kit** (v0.0.25): 60s-cached usage snapshots, `horus run`
-preflight (warn ≥80 / refuse ≥95 / `--force`, spawns export `HORUS_RUN_SESSION_ID`/
-`HORUS_RUN_WORKER`), PreToolUse guard — 90% advisory + worker-aware emergency
-state-save at ≥97%, never-deny · **commit-and-push checkpoint** (2026-07-08):
-`closure.checkpoint_gate` (dirty working tree + unpushed commits, `enforce_push:false`
-opt-out) in `close --check` + full `close`, plus a warn-default Stop hook
-`horus checkpoint --hook` (`--block` opt-in) installed for Claude+Codex via
-`HOOK_INSTALLERS`; merge gate stays freshness-only · **version-floor safeguards**
-(v0.0.26): `horus_min_version` PRD-frontmatter stamp + two guards — managed-block
-"Version floor" preflight (block v6, agent-enforced) and `cli._enforce_version_floor`
-(exit 4, code-enforced) across every `.horus/`-mutating command; `horus/versioning.py`
-owns the compare; `upgrade-project` backfills/raises the stamp; `HORUS_IGNORE_VERSION_FLOOR=1` override ·
-**shadow-install guard** (v0.0.28): `doctor machine` warns when >1 `horus` executable is resolvable on
-PATH (`_all_on_path`, PATHEXT-aware, real-path deduped) — a stale `pip install` shadowing the uv shim ·
-**stale running-dashboard scan** (v0.0.30): `doctor machine` probes localhost 8765–8775
-(`_scan_running_dashboards` via `companion.dashboard_identity`, pid-deduped) and warns when a live
-dashboard's build is older than the installed CLI — advises *restart*, never *kill* (may be a hosted
-systemd backend) · **welcome overlay removed** (v0.0.30): the decorative first-run splash looped on
-every launch (per-tab sessionStorage flag) — deleted, dashboard renders straight to content ·
-**`--exposed` boundary** (on main, pending v0.0.31): the `[access]` gate is an explicit
-`horus dashboard --exposed` launch flag (fail-closed without a block); local mode never reads
-`[access]`, ending the machine-global-config 403 of local `horus app` ·
-**v0.0.29 hooks bundle:** Claude shell guards match `Bash|PowerShell` (F1, both layers) with matcher
-re-homing so fixes propagate to scaffolded repos · `fetch-check` SessionStart fetch-first signal
-(TTL-cached, advisory) · block v7 (workflow + execution-mode planning discipline as instruction rungs).
-
-**Dashboard:** read-mostly multi-project view, sumi-e design, async heavy panels ·
-project detail: launch card, context-cache estimate, recent-sessions (read-only
-transcript discovery), open-continuity-PR nudge, token-overhead report · accounts rail
-with usage rings + login-driven account wizard · settings/workflow-policy panel ·
-self-update pill + button (v0.0.9) · stale-build artifact-write guard (v0.0.9) ·
-startup-failure visibility (dashboard.log + mascot error, v0.0.12) · Live-sessions
-"Reviewed ✓" per-row dismiss + review-contract footer (v0.0.17) · **mobile-friendly
-in-app terminal** (2026-07-08): touch full-screen, on-screen key strip, responsive
-tap targets, non-zoom viewport (PR #124, authored on-device) · **catalog add-UI**
-(v0.0.27): in-app forms to register a GitHub owner (`/github-add-owner`) + add a
-local project (`/local-add`: register existing `.horus/` or scaffold from zero).
-
-**GitHub bridge:** remote catalog (`discover github`, cached incremental refresh) ·
-onboard `github:owner/repo` (clone→init→integrate via workflow policy) · integrate()
-direct-merge fallback for free-plan private repos (v0.0.12) + return-to-default-branch
-(v0.0.14) · catalog dedup + Track-on-this-machine · ignore/unignore · `horus start`.
-
-**Execution & adapters:** adapter contract + Fake/Claude/Codex adapters (multi-account
-via `CLAUDE_CONFIG_DIR`/`CODEX_HOME`) · `run`/`open`/`focus` · execution workflow
-(`prompt`/`handoff`, delegation rubric volume×ambiguity×runtime) · cross-agent worker
-marking · hub-orchestrated cross-project delegation proven · per-run logs + `horus tail`
-+ `run --watch` (v0.0.18) · run status from the terminal RESULT event · aware-UTC
-registry timestamps · in-app PTY cockpit **retired 2026-06-30**.
-
-**Companion & launch:** Tk mascot (windowless Windows, layered background Linux) · mascot
-worker badge (per-agent running/awaiting-review/failed, click→dashboard, Dismiss menu,
-v0.0.16) · owned dashboard window · VS Code launch + `vscode-task` resume/fresh tasks ·
-same-version `/health` adoption guard.
-
-**Distribution:** PyPI trusted publishing (uv, OIDC) · tests CI on floor+latest with
-compileall gate · post-publish install smoke on ubuntu/windows/macos per release ·
-Apache-2.0.
+**Hosted deploy runtime version gate** (2026-07-10, PR #131): exhausted installs fail before restart; after restart `/health.version` must exactly match the target; unresolved targets stay explicitly unconfirmed; the hub receiver was verified to execute this checkout's live script.
+**Card-per-file backlog pilot** (2026-07-10): `.horus/backlog/` holds dispatch-ready cards that can be claimed/finished without racing PRD.md; the first Codex claim→push→finish flow was frictionless; `rafaelmjf/horus-agent` is the first cross-project consumer.
+**Config round-trip safety** (v0.0.33): `_write_config` preserves unmanaged top-level tables/keys, notably the security-critical `[access]` gate; `deploy-hosted.sh` also pins/retries while PyPI's simple index catches up.
+**Dashboard robustness** (2026-07-10): refresh-artifacts P0 refuses dirty checkouts and reports exact paths/policy warnings; live terminals surface dead SSE streams and rejected input instead of failing silently.
+**Checkpoint-based incremental consolidation** (2026-07-10): `horus checkpoint --harvest` marker-gates deterministic, idempotent commit-message harvesting into the latest session note and runs from the Stop hook.
+**Continuity core:** init/close/session/doctor/consolidate/distill/infer/reconcile; PRD+sessions v3; fetch-first freshness/merge gates; sessions archive/resume; brainstorm/orchestration and JSONL run-event/worktree/worker foundations.
+**Hooks & projections:** cross-agent usage/closure and pre-merge hooks; upgrade/sync/skill-map surfaces; usage-limit survival kit; commit/push checkpoints; version-floor and shadow-install guards; stale-dashboard scan; `--exposed` boundary; cross-shell fetch-first block-v7 bundle.
+**Dashboard:** read-mostly async multi-project UI; project/session/cache/PR/usage views; accounts/settings/self-update/startup visibility; reviewed sessions; mobile terminal; GitHub-owner and local-project add flows.
+**GitHub bridge:** cached remote discovery, onboard/integrate policy with private-repo fallback, default-branch restoration, catalog dedup/tracking/ignore controls, and `horus start`.
+**Execution & adapters:** Fake/Claude/Codex adapters, multi-account run/open/focus, workflow handoffs, worker marking, hub orchestration, run logs/tail/watch/status, and aware-UTC registry timestamps; in-app PTY cockpit retired.
+**Companion & launch:** cross-platform Tk mascot, worker badges, owned dashboard windows, VS Code resume/fresh tasks, and same-version `/health` adoption.
+**Distribution:** PyPI trusted publishing, floor/latest pytest + compileall, three-OS post-publish install smoke, Apache-2.0.
 
 ## Rules (load-bearing)
 
