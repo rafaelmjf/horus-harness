@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "Omnigent LaunchBackend fit spike complete: strong optional fit for Linux native sessions and named managed-container providers; explicit native-Windows gap; same-host multi-subscription isolation remains unverified. The strategic boundary holds — no Horus-owned worker/cockpit. Draft PRs #138/#139 remain out for review; flagship next step remains the LaunchBackend seam."
-next_action: "Review draft PRs #138/#139, then Opus inline freezes LaunchBackend + LocalBackend using `research/omnigent-fit-2026-07-10.md`: keep Omnigent optional, reject unsupported native-Windows targets honestly, and defer any backend implementation until the seam is fixed."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus `research/omnigent-fit-2026-07-10.md`. Review draft PRs #138/#139, then use Opus inline for the LaunchBackend + LocalBackend seam freeze."
-execution_recommendation: "continue-as-is — the Opus interface freeze is small but contract-defining. Plan execution only after the seam and the Windows/account-isolation product choices are fixed; an Omnigent adapter/provider integration is then high-volume, low-ambiguity work suitable for isolated workers."
-last_updated: 2026-07-10
+current_focus: "LaunchBackend seam FROZEN (horus/backend.py): minimal contract launch(brief)->handle · status · stream · stop, with a behavior-preserving LocalBackend wrapping today's attended launcher (full suite green, PR out via automerge). Omnigent stays optional (no Horus dependency); native-Windows terminals are an explicit gap, rejected honestly. Prior-spike PRs resolved on main: #138 CLOSED, #139 MERGED (capabilities), #144 MERGED (Omnigent fit verdict), #145 MERGED (Codex usage stale-cache). Next flagship step: config-driven target selection over the frozen seam."
+next_action: "After the seam PR merges (watch main push CI green), wire config-driven backend/target selection through the frozen LaunchBackend (Option A: harness reads a [[targets]] table; hub writes it) so `horus open`/dashboard route through a backend instead of calling launch_interactive directly — still LocalBackend-only. Defer any OmnigentBackend until its two blocking gates clear (same-host two-account isolation E2E; secure-exposure profile). [tier: Sonnet wiring; Opus only if the routing contract is ambiguous.]"
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. The LaunchBackend seam is frozen in horus/backend.py (LocalBackend only). Next: route `horus open`/dashboard launches through the seam via config-driven target selection, staying LocalBackend-only; do NOT build an OmnigentBackend yet."
+execution_recommendation: "continue-as-is — routing existing call sites through the frozen seam is a bounded, low-ambiguity refactor (Sonnet-suitable, or an isolated worker). Plan-execution only becomes worth it once an OmnigentBackend is authorized (its blocking isolation/exposure gates clear first)."
+last_updated: 2026-07-11
 horus_min_version: 0.0.26
 ---
 
@@ -47,16 +47,16 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **★ [flagship, important — not necessarily next] LaunchBackend seam + LocalBackend
-  (harness P0 of the multi-machine arc).** Extract the session-launch chokepoint
-  (`horus run` / adapters / `pty_host.start`) behind one interface —
-  `launch(brief)→handle · status · stream · stop` — with a config-driven `LocalBackend`
-  as the first impl (Option A in hub `docs/multi-machine-launch-targets-design.md` §9:
-  harness reads a `[[targets]]` table; hub writes it). **Freeze the interface first.**
-  Evidence in `research/omnigent-fit-2026-07-10.md`: an optional Omnigent driver fits
-  Linux native + named container providers, not native Windows; do not build a full
-  Horus worker/cockpit under the current boundary. First step is a pure refactor with no
-  behavior change. [tier: Opus freeze; Sonnet/GPT5.5 later adapters.]
+- **★ [flagship] Route launches through the frozen LaunchBackend seam (multi-machine
+  arc, P0 continued).** The interface is now **frozen** in `horus/backend.py`
+  (`launch(brief)→handle · status · stream · stop`) with a behavior-preserving
+  `LocalBackend`. Remaining: make it load-bearing — route `horus open` / the dashboard
+  Control-tab launch through the backend + config-driven target selection (Option A in
+  hub `docs/multi-machine-launch-targets-design.md` §9: harness reads a `[[targets]]`
+  table; hub writes it), staying LocalBackend-only. Do NOT build an `OmnigentBackend`
+  yet — its blocking gates (same-host two-account isolation E2E; secure-exposure profile)
+  must clear first (`research/omnigent-fit-2026-07-10.md`); no Horus worker/cockpit under
+  the current boundary. [tier: Sonnet wiring; Sonnet/GPT5.5 later adapters.]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
@@ -94,7 +94,8 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**Omnigent LaunchBackend fit spike** (2026-07-10): source-grounded matrix recommends an optional backend for Linux native + named managed containers, rejects native Windows support, leaves same-host multi-subscription isolation Unknown pending a two-account E2E, and preserves Horus as the memory plane (`research/omnigent-fit-2026-07-10.md`).
+**LaunchBackend seam frozen + LocalBackend** (2026-07-11): new `horus/backend.py` fixes the minimal contract `launch(brief)->handle · status · stream · stop` (frozen per `research/omnigent-fit-2026-07-10.md`) with neutral `LaunchBrief`/`Handle`/`SessionStatus`/`StreamEvent` types; `LocalBackend` wraps today's attended launcher with no behavior change (same identity guard/registry row/terminal spawn — 21 existing launch tests unchanged), maps `status` to the registry, `stop` to a best-effort pid-tree terminate, and honestly refuses non-local targets (native-Windows terminals are an explicit gap, no silent fallback). Omnigent stays optional — the module imports nothing Omnigent and permits an `OmnigentBackend` later with no Horus dependency; session *fork* deliberately stays out of the minimal contract. Full suite green (1052 passed).
+**Omnigent LaunchBackend fit spike** (2026-07-10, PR #144): source-grounded matrix (`research/omnigent-fit-2026-07-10.md`) — optional backend fits Linux native + named managed containers, rejects native Windows, leaves same-host multi-subscription isolation Unknown pending a two-account E2E; Horus stays the memory plane.
 **Honest dispatch receipts** (2026-07-10, PR #143): a non-clean `horus run` session (`failed`/`stale`) no longer collapses to a bare status — new `horus/delivery.py` derives pushed SHA / opened PR / continuity-closed post-hoc from the worker's own worktree/branch on disk (`integration.pr_for_branch` new, not scoped to `horus/`-prefixed branches), rendered as `<status>-but-delivered · pushed <sha> · PR #N · continuity closed` alongside the real status; `horus sessions` also now sorts running-first/recency and hides rows idle >24h behind a new `--all` flag (`registry.is_recent`). Every probe degrades to nothing on a gone branch or git/gh failure.
 **Usage-preflight hardening** (2026-07-10, PR #141, released v0.0.35): `horus run`'s preflight now reads BOTH the 5h and weekly windows and gates on the more-constraining one (`UsageSnapshot` gains defaulted weekly fields + `worst()`, cache round-trips both); a `[50,80)` closing-window `Note:` surfaces percent+reset (visibility, not a runtime predictor); an unknown signal is surfaced (`capacity unknown …`) instead of proceeding as if healthy, with opt-in `--refuse-on-unknown` for critical launches — the PreToolUse guard's fail-open hot path is deliberately untouched.
 **Reasoning-effort passthrough** (2026-07-10, PR #140, released v0.0.35): `horus run --effort {low,medium,high,xhigh,max}` reaches both adapters via `SpawnSpec.effort` — claude forwards `--effort` verbatim (documented enum, confirmed live); codex maps to `-c model_reasoning_effort=<value>` (server-validated).
