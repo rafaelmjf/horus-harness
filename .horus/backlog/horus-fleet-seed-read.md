@@ -1,6 +1,6 @@
 ---
-status: open
-priority: later
+status: claimed
+priority: now
 tier: sonnet
 created: 2026-07-10
 ---
