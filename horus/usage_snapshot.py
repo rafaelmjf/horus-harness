@@ -1,7 +1,8 @@
 """Cached usage snapshot — the shared substrate for the usage-limit survival kit.
 
-A tiny, best-effort helper that returns the freshest *5-hour window* usage percent
-for a target agent+account, backed by a short-lived file cache under
+A tiny, best-effort helper that returns the freshest usage percents for a target
+agent+account — both the fast *5-hour window* and the slower *weekly window* (claude's
+seven-day limit / codex's secondary window) — backed by a short-lived file cache under
 ``~/.horus/cache/``. Two callers depend on it:
 
 - ``horus run`` preflight (warn/refuse before launching into a closing window);
@@ -32,6 +33,7 @@ CACHE_TTL = 60.0
 FETCH_TIMEOUT = 5.0
 
 # Threshold bands shared by the survival-kit callers (single source of truth).
+PREFLIGHT_CLOSING = 50.0  # `horus run`: closing-window notice (surface percent + reset)
 PREFLIGHT_WARN = 80.0     # `horus run`: warn, continue
 PREFLIGHT_REFUSE = 95.0   # `horus run`: refuse (exit 2) unless --force
 GUARD_ADVISORY = 90.0     # PreToolUse: inject an advisory (existing 90% semantics)
@@ -39,8 +41,30 @@ GUARD_EMERGENCY = 97.0    # PreToolUse: emergency state-save, once per window
 
 
 class UsageSnapshot(NamedTuple):
-    percent: float | None   # 5-hour window utilization percent (None = unknown)
-    resets_at: str | None   # human-readable local reset time, or None
+    percent: float | None            # 5-hour window utilization percent (None = unknown)
+    resets_at: str | None            # human-readable local reset time, or None
+    # Second, slower window: claude's weekly (seven_day) limit, codex's secondary
+    # window. Defaulted so every existing positional ``UsageSnapshot(pct, reset)``
+    # caller keeps working; the ``PreToolUse`` guard reads only the 5h fields above.
+    weekly_percent: float | None = None   # weekly/secondary window percent (None = unknown)
+    weekly_resets_at: str | None = None   # weekly reset time, or None
+
+    def worst(self) -> tuple[float | None, str | None, str]:
+        """The MORE-CONSTRAINING window as ``(percent, reset, label)``.
+
+        A higher utilization percent is closer to that window's own limit, so it is
+        the more constraining of (5h, weekly). Windows with no reading are ignored;
+        ``(None, None, "5h")`` when neither window has a percent.
+        """
+        candidates = [
+            c for c in (
+                (self.percent, self.resets_at, "5h"),
+                (self.weekly_percent, self.weekly_resets_at, "weekly"),
+            ) if c[0] is not None
+        ]
+        if not candidates:
+            return (None, None, "5h")
+        return max(candidates, key=lambda c: c[0])
 
 
 class _Cached(NamedTuple):
@@ -78,7 +102,14 @@ def _read_claude(account: str | None, *, timeout: float) -> UsageSnapshot | None
     report = claude_usage.latest_usage(cred_path=cred_path, timeout=timeout)
     if report is None:
         return None
-    return UsageSnapshot(report.five_hour_percent, claude_usage._fmt_reset(report.five_hour_resets_at))
+    week_pct = report.seven_day_percent
+    week_reset = claude_usage._fmt_reset(report.seven_day_resets_at) if week_pct is not None else None
+    return UsageSnapshot(
+        report.five_hour_percent,
+        claude_usage._fmt_reset(report.five_hour_resets_at),
+        week_pct,
+        week_reset,
+    )
 
 
 def _read_codex(account: str | None) -> UsageSnapshot | None:
@@ -92,7 +123,14 @@ def _read_codex(account: str | None) -> UsageSnapshot | None:
     report = codex_usage.latest_account_usage(home=home)
     if report is None:
         return None
-    return UsageSnapshot(report.primary_percent, codex_usage._fmt_reset(report.primary_resets_at))
+    sec_pct = report.secondary_percent
+    sec_reset = codex_usage._fmt_reset(report.secondary_resets_at) if sec_pct is not None else None
+    return UsageSnapshot(
+        report.primary_percent,
+        codex_usage._fmt_reset(report.primary_resets_at),
+        sec_pct,
+        sec_reset,
+    )
 
 
 def _read_live(agent: str, account: str | None, *, timeout: float) -> UsageSnapshot | None:
@@ -130,7 +168,16 @@ def _load_cache(path: Path, *, ttl: float, now: float) -> _Cached | None:
     pct = data.get("percent")
     percent = float(pct) if isinstance(pct, int | float) else None
     resets = data.get("resets_at")
-    return _Cached(UsageSnapshot(percent, resets if isinstance(resets, str) else None))
+    # Weekly fields absent in caches written before multi-window support -> None.
+    wpct = data.get("weekly_percent")
+    weekly_percent = float(wpct) if isinstance(wpct, int | float) else None
+    wresets = data.get("weekly_resets_at")
+    return _Cached(UsageSnapshot(
+        percent,
+        resets if isinstance(resets, str) else None,
+        weekly_percent,
+        wresets if isinstance(wresets, str) else None,
+    ))
 
 
 def _write_cache(path: Path, snapshot: UsageSnapshot | None, *, now: float) -> None:
@@ -139,7 +186,14 @@ def _write_cache(path: Path, snapshot: UsageSnapshot | None, *, now: float) -> N
         if snapshot is None:
             payload: dict[str, object] = {"ts": now, "ok": False}
         else:
-            payload = {"ts": now, "ok": True, "percent": snapshot.percent, "resets_at": snapshot.resets_at}
+            payload = {
+                "ts": now,
+                "ok": True,
+                "percent": snapshot.percent,
+                "resets_at": snapshot.resets_at,
+                "weekly_percent": snapshot.weekly_percent,
+                "weekly_resets_at": snapshot.weekly_resets_at,
+            }
         path.write_text(json.dumps(payload), encoding="utf-8")
     except OSError:
         pass
