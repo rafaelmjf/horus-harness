@@ -23,19 +23,39 @@ PYTHON="${HORUS_TOOL_PYTHON:-3.12}"
 # JSON API by a minute or two — so a plain `--refresh` install races the index and
 # silently grabs the PREVIOUS version (observed 0.0.31 for the 0.0.32 release). Install
 # `==<latest>` and retry until the index has it.
-latest="${HORUS_DEPLOY_VERSION:-$(curl -s https://pypi.org/pypi/horus-harness/json \
-  | grep -oE '"version":"[^"]+"' | head -1 | cut -d'"' -f4)}"
-echo "[deploy-hosted] target version: ${latest:-<latest-available>}"
+latest="${HORUS_DEPLOY_VERSION:-}"
+if [ -z "$latest" ]; then
+  latest="$(curl -s https://pypi.org/pypi/horus-harness/json \
+    | grep -oE '"version":"[^"]+"' | head -1 | cut -d'"' -f4 || true)"
+fi
+if [ -n "$latest" ]; then
+  echo "[deploy-hosted] target version: $latest"
+else
+  echo "[deploy-hosted] WARNING: target version could not be resolved; installing latest available." >&2
+fi
 installed=""
 for attempt in 1 2 3 4 5 6 7 8; do
   if [ -n "$latest" ]; then
-    uv tool install --force --refresh --python "$PYTHON" "horus-harness==$latest" && { installed="$latest"; break; }
+    if uv tool install --force --refresh --python "$PYTHON" "horus-harness==$latest"; then
+      installed="$latest"
+      break
+    fi
   else
-    uv tool install --force --refresh --python "$PYTHON" horus-harness && break
+    if uv tool install --force --refresh --python "$PYTHON" horus-harness; then
+      installed="<latest-available>"
+      break
+    fi
   fi
-  echo "[deploy-hosted] v$latest not in the index yet (attempt $attempt) — retrying in 20s..."
-  sleep 20
+  if [ "$attempt" != "8" ]; then
+    echo "[deploy-hosted] install unavailable (attempt $attempt) — retrying in 20s..."
+    sleep 20
+  fi
 done
+
+if [ -z "$installed" ]; then
+  echo "[deploy-hosted] ERROR: install of '${latest:-<latest-available>}' never succeeded after 8 attempts; refusing to restart $SERVICE." >&2
+  exit 1
+fi
 
 echo "[deploy-hosted] restarting $SERVICE ..."
 sudo systemctl restart "$SERVICE"
@@ -52,4 +72,17 @@ if [ "$root_code" != "403" ]; then
   echo "[deploy-hosted]          ungated. Confirm the unit passes --exposed." >&2
   exit 1
 fi
-echo "[deploy-hosted] done."
+
+health_version="$(printf '%s' "$health" | python3 -c \
+  'import json, sys; value = json.load(sys.stdin).get("version", ""); print(value if isinstance(value, str) else "")' \
+  2>/dev/null || true)"
+if [ -n "$latest" ]; then
+  if [ "$health_version" != "$latest" ]; then
+    echo "[deploy-hosted] ERROR: running version '${health_version:-<missing>}' does not match target '$latest' (install completed for '$installed')." >&2
+    exit 1
+  fi
+  echo "[deploy-hosted] done; running version $health_version matches target."
+else
+  echo "[deploy-hosted] WARNING: install succeeded, but the running version '${health_version:-<missing>}' could not be confirmed against an unresolved target." >&2
+  echo "[deploy-hosted] done with target version unconfirmed."
+fi
