@@ -1,7 +1,7 @@
 ---
 status: active
-current_focus: "v0.0.34 released and live: PRs #134-136 (`horus fleet`, `--worker` adapter inference, Codex full-auto guidance) are shipped and hosted `/health` confirms 0.0.34. Refresh-artifacts is now fully closed: PR #137 fixed the dashboard's Refresh artifacts action to honor `[workflow]` integration policy (branch+PR instead of dirtying main on a branch-pr-automerge repo), which also resolved the downstream checkpoint-warning-provenance symptom."
-next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc)."
+current_focus: "v0.0.34 released and live (PRs #134-137). Side spike out for cockpit review: `horus wiki` — a read-only, idempotent Obsidian-vault projection of the fleet's `.horus/PRD.md` continuity (derived read-model, never a second store) landed as DRAFT PR #138 (do not merge; decide keep/shape). Flagship next step is unchanged: the LaunchBackend seam."
+next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc). Separately, review draft PR #138 (`horus wiki` spike) — see backlog/wiki-read-model-productionize.md."
 next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. Use Opus inline for the LaunchBackend + LocalBackend seam freeze (harness P0 of the multi-machine arc)."
 execution_recommendation: "continue-as-is — the interface freeze stays Opus inline because its judgment defines every backend contract. plan-execution only after that seam is frozen, when RemoteBackend + ContainerBackend + hub provisioning become high-volume, low-ambiguity cross-repo work suitable for isolated workers."
 last_updated: 2026-07-10
