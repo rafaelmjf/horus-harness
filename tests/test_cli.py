@@ -1124,16 +1124,18 @@ def test_skill_install_codex_target_cli(tmp_path, monkeypatch):
     assert not (tmp_path / ".claude").exists()
 
 
-def _claude_hook_run(monkeypatch, tmp_path, capsys, *, percent, threshold, stdin):
-    """Drive `usage check --target claude --hook` with a mocked usage report + stdin."""
+def _claude_hook_run(monkeypatch, tmp_path, capsys, *, percent, threshold, stdin, reset=None):
+    """Drive `usage check --target claude --hook` with a mocked usage snapshot + stdin."""
     import io
 
-    from horus import claude_usage, native_hooks
+    from horus import cli as cli_mod
+    from horus import native_hooks, usage_snapshot
 
     monkeypatch.setattr(
-        claude_usage, "latest_usage",
-        lambda **k: claude_usage.UsageReport(percent, None, 0.0, None),
+        usage_snapshot, "cached_usage",
+        lambda *a, **k: usage_snapshot.UsageSnapshot(percent, reset),
     )
+    monkeypatch.setattr(cli_mod, "_usage_account", lambda target: None)
     monkeypatch.setattr(native_hooks.tempfile, "gettempdir", lambda: str(tmp_path))
     monkeypatch.setattr("sys.stdin", io.StringIO(stdin))
     rc = main(["usage", "check", "--target", "claude", "--hook", "--threshold", str(threshold)])
@@ -1185,6 +1187,48 @@ def test_claude_hook_fires_once_per_session(tmp_path, monkeypatch, capsys):
     _, out1 = _claude_hook_run(monkeypatch, tmp_path, capsys, percent=92.0, threshold=90, stdin=stdin)
     _, out2 = _claude_hook_run(monkeypatch, tmp_path, capsys, percent=92.0, threshold=90, stdin=stdin)
     assert out1.strip() and out2.strip() == ""  # second call suppressed by sentinel
+
+
+def test_claude_advisory_does_not_suppress_stop_block(tmp_path, monkeypatch, capsys):
+    """Regression: the soft UserPromptSubmit advisory must not consume the Stop
+    hook's closure prompt — they track separate sentinels."""
+    _, out1 = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=92.0, threshold=90,
+        stdin='{"session_id":"split","hook_event_name":"UserPromptSubmit"}',
+    )
+    assert "additionalContext" in out1  # advisory fired
+    _, out2 = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=93.0, threshold=90,
+        stdin='{"session_id":"split","stop_hook_active":false}',
+    )
+    payload = json.loads(out2.strip())
+    assert payload["decision"] == "block"  # Stop prompt still fires
+
+
+def test_claude_stop_reasks_only_on_band_crossing(tmp_path, monkeypatch, capsys):
+    """Within one usage window the Stop prompt escalates by band, not by timer:
+    quiet while usage creeps inside the same band, one re-ask past the next band."""
+    stdin = '{"session_id":"bands","stop_hook_active":false}'
+    _, out1 = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=91.0, threshold=90, stdin=stdin, reset="2026-07-10 04:29")
+    assert json.loads(out1.strip())["decision"] == "block"
+    _, out2 = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=95.0, threshold=90, stdin=stdin, reset="2026-07-10 04:29")
+    assert out2.strip() == ""  # same band (90) — user already answered, stay quiet
+    _, out3 = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=98.0, threshold=90, stdin=stdin, reset="2026-07-10 04:29")
+    reason = json.loads(out3.strip())["reason"]
+    assert "98%" in reason  # emergency band crossed — one concrete re-ask
+
+
+def test_claude_bands_rearm_on_window_reset(tmp_path, monkeypatch, capsys):
+    stdin = '{"session_id":"rollover","stop_hook_active":false}'
+    _, out1 = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=92.0, threshold=90, stdin=stdin, reset="2026-07-10 04:29")
+    assert out1.strip()
+    _, out2 = _claude_hook_run(
+        monkeypatch, tmp_path, capsys, percent=92.0, threshold=90, stdin=stdin, reset="2026-07-10 09:29")
+    assert json.loads(out2.strip())["decision"] == "block"  # new window — bands re-armed
 
 
 def test_claude_hook_respects_stop_hook_active(tmp_path, monkeypatch, capsys):

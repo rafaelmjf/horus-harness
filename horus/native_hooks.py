@@ -731,3 +731,52 @@ def closure_already_fired(session_id: str, *, rearm_seconds: float = REARM_SECON
 
 def mark_closure_fired(session_id: str) -> None:
     mark_sentinel_fired(session_id, kind="closure")
+
+
+# --------------------------------------------------------------------------- #
+# Band sentinels (usage escalation: fire once per band per usage window)
+# --------------------------------------------------------------------------- #
+
+# Without a usable window-reset stamp, a fired band stays armed for this long
+# (mirrors the emergency-rescue re-arm, i.e. roughly one usage window).
+BAND_FALLBACK_REARM_SECONDS = RESCUE_REARM_SECONDS
+
+
+def band_sentinel_fired(session_id: str, *, kind: str, band: float, reset: str | None) -> bool:
+    """True when ``kind`` already fired for this session at ``band`` or higher in the
+    same usage window.
+
+    Escalation semantics, deliberately not a timer: a nudge fires once per band, fires
+    again only when usage crosses a *higher* band, and a new usage window (a different
+    ``reset`` stamp) re-arms every band. This lets a user who chose to push ahead work
+    through the tail of a window without being re-asked on every stop.
+    """
+    path = _sentinel_path(session_id, kind)
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(state, dict):
+        return False  # legacy timestamp-only sentinel: treat as unarmed
+    fired_band = state.get("band")
+    if not isinstance(fired_band, int | float):
+        return False
+    fired_reset = state.get("reset")
+    if reset and isinstance(fired_reset, str) and fired_reset:
+        if fired_reset != reset:
+            return False  # window rolled over — re-arm all bands
+    else:
+        # No reliable reset stamp on one side: fall back to a window-length re-arm.
+        ts = state.get("ts")
+        if not isinstance(ts, int | float) or (time.time() - ts) >= BAND_FALLBACK_REARM_SECONDS:
+            return False
+    return float(fired_band) >= band
+
+
+def mark_band_sentinel(session_id: str, *, kind: str, band: float, reset: str | None) -> None:
+    try:
+        _sentinel_path(session_id, kind).write_text(
+            json.dumps({"ts": time.time(), "band": band, "reset": reset}), encoding="utf-8"
+        )
+    except OSError:
+        pass

@@ -59,6 +59,41 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
   work (GPT 5.5 → container, other Claude account → remote/worker; one worktree each,
   `--watch` + review). Pure refactor, no behavior change. Container launch = just the
   third backend, not a separate epic. [tier: Opus for the freeze; Sonnet/GPT5.5 impls.]
+- **★ [meta, important] Checkpoint-based incremental consolidation.** Consolidation
+  today distills the WHOLE session log at close — back-loaded, O(session length), and
+  lost/expensive when a session is cut off mid-task (hit 2026-07-09: a parallel session
+  pushed usage >100%, forcing a paid resume just to consolidate). Fix: fold a small
+  continuity delta at each *green commit checkpoint* (what shipped + decision + next,
+  appended to the session note) and stamp a "consolidated-to-here" marker; then close/
+  resume only distills the tail since the last checkpoint. Natural hook point: the
+  existing Stop/commit-and-push checkpoint gate — extend it to also capture the delta.
+  The checkpoints ARE the distillation; close becomes light hygiene over a small delta.
+  Observed working manually this session (PRD frontmatter updated per commit; only the
+  session note was batched, which is exactly what warned at close).
+  **Automatic + token-efficient design (2026-07-10 refinement):** the trigger must fire
+  without a "run consolidate?" confirm, and stay cheap. Key split — hooks run blind
+  (can't see the conversation) so they do the DETERMINISTIC part for **zero LLM tokens**;
+  only the agent authors the semantic residue. (1) *Reuse artifacts you already write*:
+  the commit message IS the checkpoint delta. A PostToolUse(git commit) hook runs
+  `horus checkpoint --harvest-last-commit`: appends the commit subject/body to the session
+  note and bumps a `consolidated-to:<SHA>` marker. No LLM, append-only (no re-read),
+  marker-gated (never reprocess a commit twice → this is how redundant re-parsing is
+  avoided). (2) The single *semantic* pass happens once at close/resume, over just
+  `git log <marker>..HEAD` (small, pre-summarized) — never the whole log or all lanes.
+  (3) Residual agent work = only what commits don't capture: a `current_focus`/`next_action`
+  refresh (tiny overwrite, nudged by a Stop hook) + any decision/dead-end not in a commit.
+  Honest cost: continuity granularity = commit-message quality (a `wip` commit = a `wip`
+  checkpoint) — aligns with the bind-to-green-checkpoint discipline but is the real
+  dependency. Refines this item; ready to spec as `horus checkpoint` + the two hooks.
+- **[bug] Refresh artifacts leaves a dirty worktree + confuses the checkpoint gate.** Two
+  reports filed 2026-07-10 in `bugs/` (against 0.0.31): the dashboard **Refresh artifacts**
+  action runs `upgrade-project` directly on the project checkout, leaving tracked generated
+  files uncommitted without explaining provenance or honoring the `[workflow]` policy
+  (`bugs/refresh-artifacts-leaves-dirty-worktree.md`); downstream, the Stop checkpoint hook
+  then reports N uncommitted changes it can't attribute (`bugs/checkpoint-warning-after-
+  artifact-refresh.md`). Fix direction: Refresh should commit/branch per workflow policy (or
+  clearly mark the generated diff as Horus-authored). **Work these in a fresh session** —
+  the reports are self-contained.
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
