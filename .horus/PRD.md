@@ -99,6 +99,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open, unscheduled
 
+- **`horus fleet` seed-prompt read (gated on observed friction):** aggregate every
+  registered project's PRD frontmatter (`resolve_focus`) + `status`-style freshness into
+  one fleet seed prompt. Consumer: the fleet-cockpit workspace (`rafaelmjf/horus-agent`,
+  instruction rung scaffolded 2026-07-10 — CLAUDE.md ritual: status + frontmatter sweep +
+  usage check + dispatch via `horus run`). Promote only when its hand-rolled ritual is
+  logged as repeated friction, per the ladder rule. [tier: Sonnet]
 - **Scheduled / usage-aware autonomous continuation** (proven hand-rolled 2026-07-05:
   systemd timer → `horus run` ran one pinned task, closed cleanly; preflight refused an
   exhausted-window spawn). Make first-class on the survival-kit substrate: `run
