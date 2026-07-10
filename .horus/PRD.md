@@ -1,7 +1,7 @@
 ---
 status: active
-current_focus: "v0.0.34 released and live (PRs #134-137). Side spike out for cockpit review: `horus wiki` — a read-only, idempotent Obsidian-vault projection of the fleet's `.horus/PRD.md` continuity (derived read-model, never a second store) landed as DRAFT PR #138 (do not merge; decide keep/shape). Flagship next step is unchanged: the LaunchBackend seam."
-next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc). Separately, review draft PR #138 (`horus wiki` spike) — see backlog/wiki-read-model-productionize.md."
+current_focus: "v0.0.34 released and live (PRs #134-137). Two side prototypes out for cockpit review, neither auto-merges: `horus wiki` (draft PR #138, Obsidian read-model) and `horus capabilities` (draft PR #139, JSON fleet capability catalog — replaces #138's goal with an agent-first index instead of a human graph). Flagship next step is unchanged: the LaunchBackend seam."
+next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc). Separately, review draft PR #138 (`horus wiki` spike) and draft PR #139 (`horus capabilities` catalog) — decide keep/shape on each; see backlog cards."
 next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. Use Opus inline for the LaunchBackend + LocalBackend seam freeze (harness P0 of the multi-machine arc)."
 execution_recommendation: "continue-as-is — the interface freeze stays Opus inline because its judgment defines every backend contract. plan-execution only after that seam is frozen, when RemoteBackend + ContainerBackend + hub provisioning become high-volume, low-ambiguity cross-repo work suitable for isolated workers."
 last_updated: 2026-07-10
@@ -106,6 +106,7 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Fleet capability catalog prototype** (2026-07-10, draft PR #139): `horus capabilities` aggregates every registered project's Shipped ledger (+ harness's own extracted argparse CLI surface, 52 commands) into a deterministic, queryable JSON index at `~/.horus/capabilities.json`, cross-referencing Shipped lines to the commands they mention — agent-first alternative to the `horus wiki` spike's human graph (#138, unaffected).
 **Refresh-artifacts honors workflow policy** (2026-07-10, PR #137): the dashboard's Refresh artifacts action now dispatches through `integration.integrate()` for an automatic commit policy — branch + PR (+ automerge) instead of dirtying a `branch-pr-automerge` repo's main — closing `bugs/refresh-artifacts-leaves-dirty-worktree.md` and the downstream `bugs/checkpoint-warning-after-artifact-refresh.md` symptom (both write-ups deleted, resolved).
 **Codex worker posture guidance** (2026-07-10, released v0.0.34): the run help and adapter docs keep `auto-edit` safe while making `full-auto` mandatory and explicit for networked git/PR and local-server/browser verification.
 **Worker adapter inference** (2026-07-10): `horus run --worker codex|claude` selects the matching adapter when `--agent` is omitted, while explicit agent/posture flags remain authoritative.
