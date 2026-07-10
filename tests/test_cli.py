@@ -5,7 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from horus import config, github_catalog, launcher, registry, remote_start, upgrade
+from horus import adapters, config, github_catalog, launcher, registry, remote_start, upgrade
 from horus.cli import main
 from horus.instructions import check_drift
 from horus.registry import Registry, SessionRecord
@@ -1483,6 +1483,23 @@ def test_run_worker_preset_maps_codex_to_auto_edit(tmp_path, monkeypatch):
     captured = _capture_run_posture(monkeypatch)
     rc = main(["run", "hi", "--agent", "fake", "--worker", "codex", "--path", str(tmp_path)])
     assert rc == 0
+    assert captured["posture"] == "auto-edit"
+
+
+def test_run_worker_infers_matching_agent_when_agent_omitted(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    captured = _capture_run_posture(monkeypatch)
+    selected = {}
+    original = adapters.get_adapter
+
+    def capture_agent(name):
+        selected["agent"] = name
+        return original("fake")
+
+    monkeypatch.setattr(adapters, "get_adapter", capture_agent)
+    rc = main(["run", "hi", "--worker", "codex", "--path", str(tmp_path)])
+    assert rc == 0
+    assert selected["agent"] == "codex"
     assert captured["posture"] == "auto-edit"
 
 
