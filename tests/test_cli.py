@@ -5,6 +5,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from horus import adapters, config, github_catalog, launcher, registry, remote_start, upgrade
 from horus.cli import main
 from horus.instructions import check_drift
@@ -1501,6 +1503,17 @@ def test_run_worker_infers_matching_agent_when_agent_omitted(tmp_path, monkeypat
     assert rc == 0
     assert selected["agent"] == "codex"
     assert captured["posture"] == "auto-edit"
+
+
+def test_run_help_explains_codex_worker_full_auto_requirement(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["run", "--help"])
+    assert exc.value.code == 0
+    out = " ".join(capsys.readouterr().out.split())
+    assert "network/socket access off" in out
+    assert "fetch/push/PR" in out
+    assert "local-server/browser verification require --posture full-auto" in out
+    assert "bypasses approvals and sandbox" in out
 
 
 def test_run_explicit_posture_beats_worker_preset(tmp_path, monkeypatch):
