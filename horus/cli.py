@@ -418,29 +418,51 @@ def _resolve_run_posture(explicit: str | None, worker: str | None) -> str:
     return "default"
 
 
-def _run_usage_preflight(agent: str, account: str | None, *, force: bool) -> int | None:
+def _run_usage_preflight(
+    agent: str, account: str | None, *, force: bool, refuse_on_unknown: bool = False
+) -> int | None:
     """Best-effort usage gate before a run spawns. Returns an exit code to refuse the
     run, or ``None`` to proceed.
 
     Only claude/codex are checked (the fake adapter has no usage and tests depend on
-    it). A warning at ≥80% still proceeds; ≥95% refuses (exit 2) unless ``--force``.
-    An unreadable window proceeds silently — the preflight is a courtesy, never a wall.
+    it). Both the 5-hour and weekly windows are read; the bands below apply to the MORE
+    CONSTRAINING of the two (the higher-utilization window):
+
+    - ≥95% refuses (exit 2) unless ``--force`` — the window would die mid-run;
+    - ≥80% warns (a closing window) and proceeds;
+    - ≥50% surfaces a closing-window notice with the percent and reset time, so a long
+      dispatch is not silently green-lit — this is point-in-time visibility, NOT a
+      runtime predictor.
+
+    An unknown signal (no snapshot, or neither window readable) is SURFACED rather than
+    treated as healthy: by default it prints a notice and proceeds (a courtesy, not a
+    wall); with ``refuse_on_unknown`` it refuses (exit 2) for a critical launch.
     """
     if agent not in ("claude", "codex"):
         return None
     snap = usage_snapshot.cached_usage(agent, account)
-    if snap is None or snap.percent is None:
-        return None
-    pct = snap.percent
-    reset = snap.resets_at or "unknown reset"
     who = f"{agent}{f' account {account}' if account else ''}"
+    pct, reset, window = snap.worst() if snap is not None else (None, None, "5h")
+
+    if pct is None:
+        # Unknown != healthy: make the blind spot visible instead of proceeding green.
+        print(f"Capacity unknown for {who} — no usage signal (offline, missing creds, or schema drift).")
+        if refuse_on_unknown:
+            print("Refusing to run: --refuse-on-unknown is set for this critical launch.")
+            return 2
+        print("Proceeding anyway (preflight is a courtesy); pass --refuse-on-unknown to gate on this.")
+        return None
+
+    reset = reset or "unknown reset"
     if pct >= usage_snapshot.PREFLIGHT_REFUSE and not force:
-        print(f"Refusing to run: {who} 5h usage is {pct:.0f}% (resets {reset}).")
+        print(f"Refusing to run: {who} {window} usage is {pct:.0f}% (resets {reset}).")
         print("The window is nearly exhausted — the session would likely die mid-run.")
         print("Pass --force to launch anyway, or wait for the reset.")
         return 2
     if pct >= usage_snapshot.PREFLIGHT_WARN:
-        print(f"Warning: {who} 5h usage is {pct:.0f}% (resets {reset}) — launching into a closing window.")
+        print(f"Warning: {who} {window} usage is {pct:.0f}% (resets {reset}) — launching into a closing window.")
+    elif pct >= usage_snapshot.PREFLIGHT_CLOSING:
+        print(f"Note: {who} {window} usage is {pct:.0f}% (resets {reset}) — a long dispatch may not finish this window.")
     return None
 
 
@@ -474,7 +496,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(exc)
         return 2
 
-    refusal = _run_usage_preflight(args.agent, args.account, force=getattr(args, "force", False))
+    refusal = _run_usage_preflight(
+        args.agent,
+        args.account,
+        force=getattr(args, "force", False),
+        refuse_on_unknown=getattr(args, "refuse_on_unknown", False),
+    )
     if refusal is not None:
         return refusal
 
@@ -2236,7 +2263,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument(
         "--force",
         action="store_true",
-        help="launch even when the target account's 5h usage is near exhaustion (skips the preflight refusal)",
+        help="launch even when the target account's 5h/weekly usage is near exhaustion (skips the preflight refusal)",
+    )
+    p_run.add_argument(
+        "--refuse-on-unknown",
+        action="store_true",
+        help="for a critical launch: refuse (exit 2) when usage capacity is unknown for the "
+             "target agent+account, instead of the default courtesy notice + proceed",
     )
     p_run.set_defaults(func=cmd_run)
 
