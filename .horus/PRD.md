@@ -1,21 +1,18 @@
 ---
 status: active
-current_focus: "v0.0.35 released and live on PyPI — patch shipping `horus run --effort` (#140) + hardened usage preflight (#141), both merged to main; publish→install verified E2E in a clean venv. NOTE: the hosted dashboard is now behind Cloudflare Access, so `/health` no longer reads unauthenticated — the hosted-version release check needs Access creds or the deploy-hook logs, not a plain curl. Fleet truth + source attribution (PR #142) and honest dispatch receipts — failed-but-delivered facts + sessions recency default (PR #143) both merged to main. Draft PRs #138 (`horus wiki`) / #139 (`horus capabilities`) still out for cockpit review. Flagship next step unchanged: the LaunchBackend seam."
-next_action: "Review draft PRs #138/#139 — decide keep/shape/merge on each (see backlog cards). Then Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc)."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. Review draft PRs #138/#139 (keep/shape/merge), then use Opus inline for the LaunchBackend + LocalBackend seam freeze (harness P0 of the multi-machine arc)."
-execution_recommendation: "continue-as-is — the interface freeze stays Opus inline because its judgment defines every backend contract. plan-execution only after that seam is frozen, when RemoteBackend + ContainerBackend + hub provisioning become high-volume, low-ambiguity cross-repo work suitable for isolated workers."
+current_focus: "Omnigent LaunchBackend fit spike complete: strong optional fit for Linux native sessions and named managed-container providers; explicit native-Windows gap; same-host multi-subscription isolation remains unverified. The strategic boundary holds — no Horus-owned worker/cockpit. Draft PRs #138/#139 remain out for review; flagship next step remains the LaunchBackend seam."
+next_action: "Review draft PRs #138/#139, then Opus inline freezes LaunchBackend + LocalBackend using `research/omnigent-fit-2026-07-10.md`: keep Omnigent optional, reject unsupported native-Windows targets honestly, and defer any backend implementation until the seam is fixed."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus `research/omnigent-fit-2026-07-10.md`. Review draft PRs #138/#139, then use Opus inline for the LaunchBackend + LocalBackend seam freeze."
+execution_recommendation: "continue-as-is — the Opus interface freeze is small but contract-defining. Plan execution only after the seam and the Windows/account-isolation product choices are fixed; an Omnigent adapter/provider integration is then high-volume, low-ambiguity work suitable for isolated workers."
 last_updated: 2026-07-10
 horus_min_version: 0.0.26
 ---
 
 # Horus — PRD
 
-The one maintained continuity file. Structure: **PRD.md + sessions/** (prototype,
-2026-07-03). The tooling reads this file's frontmatter directly (dashboard NEXT box,
-`horus resume`, merge freshness gate — `resolve_focus`, Phase 1 of the v3-tooling
-plan); the `project.md`/`roadmap.md` shims are deleted. The retired lanes
-(`features.md`, `decisions.md`, `history.md`, `execution.md`) are preserved verbatim
-in `archive/` and in git history.
+The one maintained continuity file: **PRD.md + sessions/** (prototype, 2026-07-03).
+Tooling reads its frontmatter directly; the deleted shims and retired lanes remain in
+`archive/` and git history.
 
 ## Vision
 
@@ -45,10 +42,8 @@ session notes + fetch-first; the six-lane taxonomy was the overhead — hence th
 Prioritized open work. Features and bugs in one list; jump order is allowed — this list
 is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
-**Card pilot (2026-07-10):** items below "Now / next" live as one card per file in
-`.horus/backlog/` (mechanics in Structure contract, below) — add work = add a card;
-finish = delete the card + one Shipped line; "Now / next" stays the small
-human-curated order, with a pointer line for any new `priority: now` card.
+**Card pilot (2026-07-10):** deferred items live one-per-file in `.horus/backlog/`;
+"Now / next" stays the small human-curated order.
 
 ### Now / next candidates
 
@@ -57,13 +52,11 @@ human-curated order, with a pointer line for any new `priority: now` card.
   (`horus run` / adapters / `pty_host.start`) behind one interface —
   `launch(brief)→handle · status · stream · stop` — with a config-driven `LocalBackend`
   as the first impl (Option A in hub `docs/multi-machine-launch-targets-design.md` §9:
-  harness owns local/ssh/container backends reading a `[[targets]]` table; hub owns the
-  provisioning/probe/registry kit that writes it). **Freeze the interface first** — it's
-  the contract `RemoteBackend` (tailnet worker) and `ContainerBackend` (hub-launched
-  container) both implement, so once frozen those two backends parallelize as delegated
-  work (GPT 5.5 → container, other Claude account → remote/worker; one worktree each,
-  `--watch` + review). Pure refactor, no behavior change. Container launch = just the
-  third backend, not a separate epic. [tier: Opus for the freeze; Sonnet/GPT5.5 impls.]
+  harness reads a `[[targets]]` table; hub writes it). **Freeze the interface first.**
+  Evidence in `research/omnigent-fit-2026-07-10.md`: an optional Omnigent driver fits
+  Linux native + named container providers, not native Windows; do not build a full
+  Horus worker/cockpit under the current boundary. First step is a pure refactor with no
+  behavior change. [tier: Opus freeze; Sonnet/GPT5.5 later adapters.]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
@@ -101,6 +94,7 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Omnigent LaunchBackend fit spike** (2026-07-10): source-grounded matrix recommends an optional backend for Linux native + named managed containers, rejects native Windows support, leaves same-host multi-subscription isolation Unknown pending a two-account E2E, and preserves Horus as the memory plane (`research/omnigent-fit-2026-07-10.md`).
 **Honest dispatch receipts** (2026-07-10, PR #143): a non-clean `horus run` session (`failed`/`stale`) no longer collapses to a bare status — new `horus/delivery.py` derives pushed SHA / opened PR / continuity-closed post-hoc from the worker's own worktree/branch on disk (`integration.pr_for_branch` new, not scoped to `horus/`-prefixed branches), rendered as `<status>-but-delivered · pushed <sha> · PR #N · continuity closed` alongside the real status; `horus sessions` also now sorts running-first/recency and hides rows idle >24h behind a new `--all` flag (`registry.is_recent`). Every probe degrades to nothing on a gone branch or git/gh failure.
 **Usage-preflight hardening** (2026-07-10, PR #141, released v0.0.35): `horus run`'s preflight now reads BOTH the 5h and weekly windows and gates on the more-constraining one (`UsageSnapshot` gains defaulted weekly fields + `worst()`, cache round-trips both); a `[50,80)` closing-window `Note:` surfaces percent+reset (visibility, not a runtime predictor); an unknown signal is surfaced (`capacity unknown …`) instead of proceeding as if healthy, with opt-in `--refuse-on-unknown` for critical launches — the PreToolUse guard's fail-open hot path is deliberately untouched.
 **Reasoning-effort passthrough** (2026-07-10, PR #140, released v0.0.35): `horus run --effort {low,medium,high,xhigh,max}` reaches both adapters via `SpawnSpec.effort` — claude forwards `--effort` verbatim (documented enum, confirmed live); codex maps to `-c model_reasoning_effort=<value>` (server-validated).
