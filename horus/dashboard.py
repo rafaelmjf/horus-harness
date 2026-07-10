@@ -2910,9 +2910,16 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   if(typeof Terminal==='undefined') return null;
   function b64bytes(b64){var s=atob(b64);var a=new Uint8Array(s.length);
     for(var i=0;i<s.length;i++){a[i]=s.charCodeAt(i);} return a;}
+  var postErr=false;
   function post(path, obj){
     var body=Object.keys(obj).map(function(k){return k+'='+encodeURIComponent(obj[k]);}).join('&');
-    fetch(path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});
+    // Surface a rejected keystroke/resize once, so "can't control it" isn't silent
+    // (a blocked POST — auth/proxy/CSRF — otherwise looks exactly like a dead key).
+    fetch(path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body})
+      .then(function(r){ if(!r.ok && !postErr && typeof term!=='undefined'){ postErr=true;
+        term.write('\\r\\n\\x1b[31m[input not delivered ('+r.status+')]\\x1b[0m\\x1b[2m — connection blocked (auth/proxy)? reload the page.\\x1b[0m\\r\\n'); } })
+      .catch(function(){ if(!postErr && typeof term!=='undefined'){ postErr=true;
+        term.write('\\r\\n\\x1b[31m[input not delivered — network error]\\x1b[0m\\r\\n'); } });
   }
   var term=new Terminal({convertEol:false, cursorBlink:true, fontSize:13, scrollback:5000,
     fontFamily:'ui-monospace, SFMono-Regular, Consolas, monospace',
@@ -2968,6 +2975,16 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   term.onResize(function(s){ if(s.cols>0 && s.rows>0){ post('/pty/resize',{id:tid, cols:s.cols, rows:s.rows}); } });
   var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid));
   es.addEventListener('output', function(e){ term.write(b64bytes(e.data)); });
+  // Surface a dead stream instead of failing silently: a session that opens but shows
+  // nothing (SSE blocked by an auth gate / proxy, session gone, or network dropped)
+  // used to look identical to an idle one. readyState 2 = EventSource gave up
+  // reconnecting; write the notice once so a broken connection is visible + diagnosable.
+  var streamErr=false;
+  es.onerror=function(){
+    if(es.readyState===2 && !streamErr){ streamErr=true;
+      term.write('\\r\\n\\x1b[31m[terminal stream disconnected]\\x1b[0m\\x1b[2m — reload the page; '
+        +'if it persists the session may have ended or the connection was blocked (auth/proxy).\\x1b[0m\\r\\n'); }
+  };
   // sawLive: the host sends `live` when a viewer attaches to a running session.
   // A later `exited` then means the session ended while being watched, so its
   // tab may be removed; attaching straight to an already-dead terminal skips
