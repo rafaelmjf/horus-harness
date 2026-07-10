@@ -3256,7 +3256,15 @@ def _project_by_index(form: dict[str, str], projects: list[str] | None) -> tuple
 
 
 def process_upgrade_project(form: dict[str, str], *, projects: list[str] | None = None) -> str:
-    """Apply `upgrade-project` to a registered project only from a clean checkout."""
+    """Apply `upgrade-project` to a registered project only from a clean checkout,
+    then integrate the result per the project's `[workflow]` policy.
+
+    A manual commit policy keeps the pre-existing behavior: apply in place and
+    hand back the exact `git add`/`commit` command, since the checkout is left
+    uncommitted on purpose. Any automatic-commit policy instead dispatches through
+    `integration.integrate` — the same branch/commit/push/PR/merge flow `onboard`
+    already uses — so a `branch-pr-*` policy never leaves the live checkout dirty
+    on its default branch (see bugs/refresh-artifacts-leaves-dirty-worktree.md)."""
     root, idx = _project_by_index(form, projects)
     if root is None:
         return "/?upgrade_error=" + quote_plus("unknown project")
@@ -3282,14 +3290,35 @@ def process_upgrade_project(form: dict[str, str], *, projects: list[str] | None 
         f"/project?i={idx}&upgraded={len(changed_paths)}"
         f"&upgrade_paths={_path_list_param(changed_paths)}"
     )
-    if config.load_workflow_policy()["commit"] == "manual" and changed_paths:
-        commit_command = shlex.join(["git", "-C", str(root), "add", "--", *changed_paths])
-        commit_command += " && " + shlex.join([
-            "git", "-C", str(root), "commit", "-m", "Refresh Horus artifacts",
-        ])
-        location += (
-            f"&upgrade_manual=1&upgrade_commit_command={quote_plus(commit_command)}"
+    policy = config.load_workflow_policy()
+    if policy["commit"] == "manual":
+        if changed_paths:
+            commit_command = shlex.join(["git", "-C", str(root), "add", "--", *changed_paths])
+            commit_command += " && " + shlex.join([
+                "git", "-C", str(root), "commit", "-m", "Refresh Horus artifacts",
+            ])
+            location += (
+                f"&upgrade_manual=1&upgrade_commit_command={quote_plus(commit_command)}"
+            )
+        return location
+
+    # Automatic commit policy: never leave the refresh sitting uncommitted on the
+    # live checkout. Non-Git projects keep the pre-existing no-op behavior — there
+    # is nothing for `integrate` to do without a repo.
+    if changed_paths and (root / ".git").exists():
+        integ = integration.integrate(
+            root,
+            message="chore(horus): refresh Horus artifacts",
+            files=changed_paths,
+            title="Refresh Horus artifacts",
+            body="Automated `horus upgrade-project` refresh of instructions/skills/hooks, "
+            "triggered by the dashboard's Refresh artifacts action.",
+            policy=policy,
         )
+        if integ.pr_url:
+            location += f"&upgrade_pr={quote_plus(integ.pr_url)}"
+        if not integ.ok:
+            location += f"&upgrade_detail={quote_plus(integ.detail)}"
     return location
 
 
@@ -3449,10 +3478,21 @@ def _project_action_banner(params: dict[str, list[str]]) -> str:
                 "<p><strong>Tracked files are now uncommitted.</strong> Review the diff, then run "
                 f"<code>{command}</code>.</p>"
             )
-        return (
+        if "upgrade_pr" in params:
+            pr = params["upgrade_pr"][0]
+            detail += (
+                f"<p>Integration PR: <a href='{html.escape(pr, quote=True)}'>{html.escape(pr)}</a>.</p>"
+            )
+        out = (
             f"<div class='banner ok'>Refreshed Horus artifacts &mdash; {n} item(s) updated."
             f"{detail}</div>"
         )
+        if "upgrade_detail" in params:
+            out += (
+                "<div class='banner err'>Integration incomplete: "
+                f"{html.escape(params['upgrade_detail'][0])}</div>"
+            )
+        return out
     if "upgrade_error" in params:
         return f"<div class='banner err'>Upgrade failed: {html.escape(params['upgrade_error'][0])}</div>"
     if "offboarded" in params:
