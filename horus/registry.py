@@ -18,7 +18,7 @@ import json
 import os
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from horus.adapters.base import AgentSession
@@ -111,6 +111,28 @@ class SessionRecord:
             status=session.status,
             returncode=session.returncode,
         )
+
+
+# How long a terminal (non-running) row stays in `horus sessions`'s default view
+# before it's hidden behind ``--all`` — long enough to catch "what happened
+# yesterday", short enough that months of dead workers don't bury a live session.
+RECENCY_HORIZON_HOURS = 24.0
+
+
+def is_recent(record: SessionRecord, *, now: datetime | None = None, horizon_hours: float = RECENCY_HORIZON_HOURS) -> bool:
+    """Whether ``record`` was updated within ``horizon_hours`` of ``now``.
+
+    Used to de-emphasize (not delete) long-stale rows in the default `horus
+    sessions` view. An unparseable timestamp fails open (stays visible) rather
+    than silently disappearing a row."""
+    now = now or datetime.now(timezone.utc)
+    try:
+        stamp = datetime.fromisoformat(record.updated_at)
+    except (ValueError, TypeError):
+        return True
+    if stamp.tzinfo is None:
+        stamp = stamp.astimezone()
+    return (now - stamp) <= timedelta(hours=horizon_hours)
 
 
 def process_alive(pid: int | None) -> bool:
