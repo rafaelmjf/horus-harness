@@ -1210,6 +1210,14 @@ def _checkpoint_hook(root: Path, *, block: bool) -> int:
     or has unpushed commits. Silent + exit 0 when the checkpoint is clean or on any
     trouble — the hook signals only via stdout JSON and never a non-zero exit, so the
     `|| exit 0` guard can't mask a real decision."""
+    # Incremental consolidation, automatic + token-free: fold any commits made this turn
+    # into the session note (deterministic, marker-gated) so continuity keeps pace without
+    # a manual `consolidate`. Piggybacks on the already-installed Stop hook — the turn
+    # boundary is a natural, frequent checkpoint. Never let it wedge the hook.
+    try:
+        closure.harvest_checkpoint(root)
+    except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
+        pass
     try:
         findings = closure.checkpoint_gate(root)
     except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
