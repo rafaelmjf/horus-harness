@@ -45,6 +45,16 @@ session notes + fetch-first; the six-lane taxonomy was the overhead — hence th
 Prioritized open work. Features and bugs in one list; jump order is allowed — this list
 is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
+**Card pilot (2026-07-10):** backlog items below "Now / next" live as **one card per
+file in `.horus/backlog/`** — frontmatter `status: open|claimed|done` + `priority:
+now|next|later|deferred` + `tier` + `created`; the body is a self-contained,
+dispatch-ready brief. Add work = add a card (conflict-free); finish = delete the card
++ one Shipped line (git remembers); pick up a card = set `status: claimed`, commit and
+push early. "Now / next" here stays the small human-curated order; new cards at
+`priority: now` should also get a pointer line there. If two sessions racing this file
+was the disease, cards are the treatment — log any friction in session notes (this
+pilot is the evidence for/against making cards the scaffold default).
+
 ### Now / next candidates
 
 - **★ [flagship, important — not necessarily next] LaunchBackend seam + LocalBackend
@@ -97,58 +107,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    `resume`; fetch-first close guard already refuses stale closes. Per the ladder
    rule, design now, build when a real second developer arrives. [tier: Opus design]
 
-### Open, unscheduled
+### Open / deferred — see `.horus/backlog/`
 
-- **`horus fleet` seed-prompt read (gated on observed friction):** aggregate every
-  registered project's PRD frontmatter (`resolve_focus`) + `status`-style freshness into
-  one fleet seed prompt. Consumer: the fleet-cockpit workspace (`rafaelmjf/horus-agent`,
-  instruction rung scaffolded 2026-07-10 — CLAUDE.md ritual: status + frontmatter sweep +
-  usage check + dispatch via `horus run`). Promote only when its hand-rolled ritual is
-  logged as repeated friction, per the ladder rule. [tier: Sonnet]
-- **Scheduled / usage-aware autonomous continuation** (proven hand-rolled 2026-07-05:
-  systemd timer → `horus run` ran one pinned task, closed cleanly; preflight refused an
-  exhausted-window spawn). Make first-class on the survival-kit substrate: `run
-  --stop-at-usage <pct>`, `--at <time>` / `--after-usage-reset` (defer via `resets_at`),
-  `--resume-plan` (cold session = `horus resume` + pinned-task → hold-merge → close),
-  unattended posture, registry/dashboard record of run + PR. Local scheduling required;
-  continuity must pin a *specific* task. Full learnings: 2026-07-05 note.
-- **Project-declared machine requirements** (`doctor` + `resume` + dashboard): a project
-  commits `.horus/requirements.md` (`kind: machine-requirements`, `tools:` name/probe/
-  install/needed_for + `configs:`; prose for non-probeable deps). `doctor project` probes →
-  warn findings; **`horus resume` prepends "⚠ this machine is missing: …" to the seed
-  prompt**; dashboard card gets a readiness badge. First consumer: fabric (needs `fab`/
-  `pbir`/PBI skills, declared there 2026-07-07).
-- **Execution-workflow tuning:** phase-status vocabulary (planned/delegated/accepted/
-  blocked) in skill + template; propagate the **model-tier suggestion** into the
-  fresh-project template + execution skill + delegation rubric so the per-step tier
-  convention reaches every project — optionally a first-class `model_recommendation`
-  frontmatter field via `resolve_focus`/dashboard rather than `execution_recommendation` prose.
-- **Skill map follow-ups** (gated on real Skills-tab use): third-party copy with
-  provenance/diff/trust; invocation tracking; rulesync only at a 3rd tool.
-- **Context-cache visibility:** how cold/expired sessions warn (companion/launch/hook/dashboard).
-  **Hook generation stamps:** version-mark content-compared hook configs like the managed
-  block if payloads change, else an old CLI offers a downgrade "refresh".
-- **Git-aware overview (MVP2.5):** session-start half shipped (v0.0.29 `fetch-check`
-  SessionStart hook); remaining: fold behind-origin / uncommitted-continuity staleness
-  into the dashboard warning surface ("fetch all", never pull).
-- **Doctor compat (observe):** per project, report what each agent would load (instructions/
-  skills/MCP/hooks). **Workflow-policy:** block v7 carries the branch→PR default as
-  instruction text (fabric field evidence: direct-to-main went unchallenged); remaining
-  per the ladder rule: per-project `.horus/` override, then **CI gate promotion** only
-  if the instruction rung observably fails again — continuity check advisory → required
-  once proven; decide if `init` installs the merge gate by default.
-- **Companion signals:** usage warnings, stale/uncommitted `.horus/`, per-project
-  switching, configurable mascot background.
-
-### Deferred (direction noted, not scheduled)
-
-- **MVP3 agent execution:** UI terminate/resume; autonomous closure; LLM-rich `infer`;
-  SQLite registry only when scale hurts. **MVP5 app cohesion:** one lifecycle
-  (mascot ⇄ dashboard ⇄ server, owned/single-instance, post-upgrade respawn); native app
-  tier (PySide6/Electron/Tauri, pywebview rejected); cross-machine machine snapshots.
-- **`horus mcp` continuity server** (first Omnigent seam); docs website; session-host
-  daemon; remote attach; Telegram bridge; Tailscale dashboard; `reconcile --ai`;
-  cross-repo managed-block propagation; VS Code full auto-run.
+Everything formerly listed here is now one card per file in `.horus/backlog/`
+(priority in each card's frontmatter). Notable: `deploy-hosted-version-assertion`
+(priority **now** — also in frontmatter `next_action`), `horus-fleet-seed-read`
+(gated on fleet-cockpit friction), `scheduled-usage-aware-continuation`,
+`project-machine-requirements`, `deferred-*` for MVP3/MVP5 + continuity seams.
 
 ## Shipped
 
@@ -354,6 +319,9 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines: new
   shipped items are one line; done backlog items are deleted (git remembers); bugs get
   appended to the backlog as found.
+- **`backlog/` (card pilot 2026-07-10):** one card per item, self-contained brief,
+  status/priority/tier in frontmatter; done = delete the card + a Shipped line here;
+  `consolidate` sweeps for stale `claimed` cards.
 - **`sessions/`** unchanged: one note per session (`horus session new`), operational
   facts welcome (gates verified, tokens to rotate, dead ends). Distilled notes →
   `sessions/archive/` (local).
