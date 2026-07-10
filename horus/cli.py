@@ -15,6 +15,7 @@ from horus import (
     __version__,
     adapters,
     brainstorm,
+    capabilities,
     claude_usage,
     closure,
     companion,
@@ -211,6 +212,23 @@ def cmd_fleet(args: argparse.Namespace) -> int:
             f"next: {compact(project.get('next_action'))} | "
             f"prompt: {compact(project.get('next_prompt'))}"
         )
+    return 0
+
+
+def cmd_capabilities(args: argparse.Namespace) -> int:
+    """EXPERIMENTAL: read-only fleet capability catalog (see horus/capabilities.py)."""
+    projects = config.load_projects()
+    if not projects:
+        print("No projects registered (run `horus init` inside a project).")
+        return 0
+    out_path = Path(args.out) if args.out else capabilities.default_out_path()
+    text = capabilities.generate(projects, out_path)
+    if args.stdout:
+        print(text, end="")
+    else:
+        data = json.loads(text)
+        total = sum(len(p["capabilities"]) for p in data["projects"])
+        print(f"Wrote {len(data['projects'])} project(s), {total} capability entrie(s) to {out_path}")
     return 0
 
 
@@ -2054,6 +2072,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="print one-line git/session/next-step context for every project except horus-agent",
     )
     p_fleet.set_defaults(func=cmd_fleet)
+
+    p_capabilities = sub.add_parser(
+        "capabilities",
+        help="EXPERIMENTAL: read-only fleet capability catalog (Shipped ledgers + CLI surface) as JSON",
+    )
+    p_capabilities.add_argument("--out", default=None, help="output JSON path (default: ~/.horus/capabilities.json)")
+    p_capabilities.add_argument("--stdout", action="store_true", help="print the full JSON to stdout instead of a summary")
+    p_capabilities.set_defaults(func=cmd_capabilities)
 
     p_discover = sub.add_parser("discover", help="discover remote Horus projects")
     p_discover.add_argument("source", choices=["github"], help="remote catalog source")
