@@ -1,7 +1,7 @@
 ---
 status: active
-current_focus: "All reconciled to main (2026-07-10): PR #129 (usage-hook band escalation + per-event sentinels + account-scoped snapshots) MERGED; v0.0.31 released (the `--exposed` boundary — [access] gate is now an explicit `horus dashboard --exposed` flag, local mode never reads it; + doctor 'restart not kill' reframe; + v0.0.30 welcome-removal & stale-dashboard scan). Hosted dashboard runs the pinned install + `--exposed` with a LIVE release→deploy webhook (publish a release → hosted auto-updates; wiring in horus-hub ops/deploy-hook/). Local `horus app` + hosted both 0.0.31, both gated/ungated correctly. Filed two bugs in bugs/ (Refresh artifacts leaves a dirty worktree + the checkpoint gate can't attribute it). Architecture decided w/ owner: exposure + multi-machine belong to horus-hub; harness stays local+ungated and owns the LaunchBackend seam. Main clean, nothing stranded."
-next_action: "Pick one: (a) harness flagship P0 — freeze the **LaunchBackend seam + LocalBackend** (Opus, inline; Option A per hub docs/multi-machine-launch-targets-design.md §9/§11), then delegate RemoteBackend + ContainerBackend (GPT 5.5 → container, other Claude → remote/worker); (b) the **Refresh-artifacts dirty-worktree** bugs (self-contained reports in bugs/, fresh session); (c) **checkpoint-based incremental consolidation** (backlog has the automatic harvest-hook + marker design — directly cuts close-time token cost). [tier: Opus for the seam freeze; Sonnet for the bugs + checkpoint tooling.]"
+current_focus: "SHIPPED to main this session (2026-07-10), pending a v0.0.32 release: (1) **checkpoint-based incremental consolidation** — `horus checkpoint --harvest` auto-runs in the Stop hook, folding commit messages into the session note (zero-LLM, marker-gated); (2) **Refresh-artifacts P0** — dashboard POST refuses a dirty checkout + reports exact paths (delegated to a GPT-5.5/Codex worker, supervisor-reviewed; its out-of-scope PRD rewrite discarded); (3) **mobile live-terminal visibility** — dead SSE stream + rejected input now surface a visible notice instead of failing silently (best-effort for the 'opens but can't see/control' report — could NOT reproduce headless; the visible error will make the root cause diagnosable once it auto-deploys to hosted). Prior arc: v0.0.31 --exposed boundary; hosted auto-deploys on release via ops/deploy-hook webhook."
+next_action: "Cut **v0.0.32** (three-file bump + tag) — bundles checkpoint-harvest + Refresh-artifacts P0 + mobile-terminal visibility; the ops/deploy-hook webhook then auto-updates the hosted dashboard, where the owner can retry the mobile terminal and read the now-visible error (needed to pin that root cause — it was un-reproducible headless). Then: harness flagship P0 — freeze the **LaunchBackend seam + LocalBackend** (Opus inline; Option A per hub §9/§11) → delegate RemoteBackend/ContainerBackend. Also open: Refresh-artifacts P1/P2 (backlog), checkpoint gate provenance. [tier: Opus for the seam; Sonnet/GPT5.5 for backends + P1/P2.]"
 next_prompt: "Resume Horus. FIRST git fetch --all --prune. Read .horus/PRD.md. State: main clean, everything reconciled (PR #129 merged; v0.0.31 released; hosted auto-deploys on release via the ops/deploy-hook webhook). LEADS: (a) freeze the LaunchBackend seam (P0, Opus inline) then delegate the backends; (b) fix the Refresh-artifacts dirty-worktree bugs (bugs/, self-contained); (c) build checkpoint-based incremental consolidation (backlog has the automatic harvest-hook design). horus-hub PRD item 2 + §11 hold the multi-machine decisions."
 execution_recommendation: "continue-as-is for the LaunchBackend seam freeze (Opus inline — the interface is the contract every backend implements) and the bugs/checkpoint tooling (small, self-contained). plan-execution once the seam is frozen: RemoteBackend + ContainerBackend + hub worker/provisioning is high-volume, low-ambiguity, cross-repo — delegate to fresh sessions on the isolated accounts (GPT 5.5 / other Claude), one backend per worktree, --watch + review per owner preference."
 last_updated: 2026-07-10
@@ -59,15 +59,15 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
   work (GPT 5.5 → container, other Claude account → remote/worker; one worktree each,
   `--watch` + review). Pure refactor, no behavior change. Container launch = just the
   third backend, not a separate epic. [tier: Opus for the freeze; Sonnet/GPT5.5 impls.]
-- **[bug] Refresh artifacts leaves a dirty worktree + confuses the checkpoint gate.** Two
-  reports filed 2026-07-10 in `bugs/` (against 0.0.31): the dashboard **Refresh artifacts**
-  action runs `upgrade-project` directly on the project checkout, leaving tracked generated
-  files uncommitted without explaining provenance or honoring the `[workflow]` policy
-  (`bugs/refresh-artifacts-leaves-dirty-worktree.md`); downstream, the Stop checkpoint hook
-  then reports N uncommitted changes it can't attribute (`bugs/checkpoint-warning-after-
-  artifact-refresh.md`). Fix direction: Refresh should commit/branch per workflow policy (or
-  clearly mark the generated diff as Horus-authored). **Work these in a fresh session** —
-  the reports are self-contained.
+- **[bug] Refresh artifacts — P1/P2 remain (P0 shipped 2026-07-10).** P0 done: the dashboard
+  POST now refuses a dirty checkout (mutation-path guard, names dirty+planned paths), reports
+  exact changed paths, and warns on manual-commit policy (see Shipped). Still open, per
+  `bugs/refresh-artifacts-leaves-dirty-worktree.md`: **P1** provenance receipt
+  (`.horus/cache/last-artifact-refresh.json` — needs a `.horus/cache/` ignore rule first, since
+  writing it would itself dirty the tree) + a checkpoint advisory that classifies generated vs
+  authored dirty paths (`bugs/checkpoint-warning-after-artifact-refresh.md`); **P2** run the
+  refresh through `[workflow]` (isolated branch → commit → push → PR → merge) for automatic
+  policies. Self-contained; delegatable.
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
@@ -147,6 +147,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+
+**Dashboard robustness** (2026-07-10): Refresh-artifacts P0 — the POST refuses a dirty
+checkout (mutation-path guard, lists dirty + planned paths + dry-run cmd), reports exact
+changed paths, and warns/lists on manual-commit policy (`UpgradeAction.path` provenance);
+never stashes/resets/commits. Plus: live terminals surface a dead SSE stream + rejected
+input instead of failing silently (the "opens but can't see/control" symptom → visible,
+diagnosable notice).
 
 **Checkpoint-based incremental consolidation** (2026-07-10): `horus checkpoint --harvest`
 appends commit messages since a local `consolidated-to` marker to the latest session note
