@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import time
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -495,7 +496,14 @@ def _run_usage_preflight(
     """
     if agent not in ("claude", "codex"):
         return None
+    now = time.time()
     snap = usage_snapshot.cached_usage(agent, account)
+    if snap is not None and snap.has_expired_window(now=now):
+        refreshed = usage_snapshot.refresh_usage(agent, account, now=now)
+        if refreshed is not None:
+            snap = refreshed
+    if snap is not None:
+        snap = snap.without_expired_windows(now=now)
     who = f"{agent}{f' account {account}' if account else ''}"
     pct, reset, window = snap.worst() if snap is not None else (None, None, "5h")
 

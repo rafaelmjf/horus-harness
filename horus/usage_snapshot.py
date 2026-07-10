@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
@@ -48,6 +49,30 @@ class UsageSnapshot(NamedTuple):
     # caller keeps working; the ``PreToolUse`` guard reads only the 5h fields above.
     weekly_percent: float | None = None   # weekly/secondary window percent (None = unknown)
     weekly_resets_at: str | None = None   # weekly reset time, or None
+
+    def has_expired_window(self, *, now: float | None = None) -> bool:
+        now = time.time() if now is None else now
+        return _window_expired(self.resets_at, now) or _window_expired(self.weekly_resets_at, now)
+
+    def without_expired_windows(self, *, now: float | None = None) -> "UsageSnapshot":
+        """Return a copy with any reset-past window marked unknown.
+
+        The native apps report capacity by window. Once a window's reset time is in
+        the past, its cached percent is no longer evidence of current capacity; the
+        two windows expire independently.
+        """
+        now = time.time() if now is None else now
+        percent = self.percent
+        resets_at = self.resets_at
+        weekly_percent = self.weekly_percent
+        weekly_resets_at = self.weekly_resets_at
+        if _window_expired(resets_at, now):
+            percent = None
+            resets_at = None
+        if _window_expired(weekly_resets_at, now):
+            weekly_percent = None
+            weekly_resets_at = None
+        return UsageSnapshot(percent, resets_at, weekly_percent, weekly_resets_at)
 
     def worst(self) -> tuple[float | None, str | None, str]:
         """The MORE-CONSTRAINING window as ``(percent, reset, label)``.
@@ -145,6 +170,25 @@ def _read_live(agent: str, account: str | None, *, timeout: float) -> UsageSnaps
     return None
 
 
+def refresh_usage(
+    agent: str,
+    account: str | None = None,
+    *,
+    timeout: float = FETCH_TIMEOUT,
+    now: float | None = None,
+) -> UsageSnapshot | None:
+    """Best-effort live refresh used when a cached window is known expired.
+
+    A failed refresh does not overwrite a previous positive cache entry; callers can
+    still use any unexpired window from the cached snapshot.
+    """
+    now = time.time() if now is None else now
+    snapshot = _read_live(agent, account, timeout=timeout)
+    if snapshot is not None:
+        _write_cache(_cache_path(agent, account), snapshot, now=now)
+    return snapshot
+
+
 # --------------------------------------------------------------------------- #
 # Cache
 # --------------------------------------------------------------------------- #
@@ -178,6 +222,27 @@ def _load_cache(path: Path, *, ttl: float, now: float) -> _Cached | None:
         weekly_percent,
         wresets if isinstance(wresets, str) else None,
     ))
+
+
+def _reset_timestamp(value: str | None) -> float | None:
+    if not value:
+        return None
+    text = value.strip()
+    if not text or text == "unknown reset":
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            dt = datetime.strptime(text, "%Y-%m-%d %H:%M")
+        except ValueError:
+            return None
+    return dt.timestamp()
+
+
+def _window_expired(reset: str | None, now: float) -> bool:
+    ts = _reset_timestamp(reset)
+    return ts is not None and ts <= now
 
 
 def _write_cache(path: Path, snapshot: UsageSnapshot | None, *, now: float) -> None:
