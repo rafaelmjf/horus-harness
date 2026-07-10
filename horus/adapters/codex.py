@@ -15,6 +15,12 @@ Event stream (JSONL under ``--json``):
   ``{"type":"turn.completed","usage":{...}}``         → RESULT
 
 Subscription-auth only: it runs the user's own logged-in ``codex``; no API key.
+
+Worker posture: Horus deliberately keeps ``--worker codex`` on the safe
+``AUTO_EDIT`` / ``--sandbox workspace-write`` preset. That sandbox disables the
+network/socket access needed for git fetch/push/PR and local-server or headless-
+browser verification. Git-integrated or browser-verified dispatch must add
+``--posture full-auto``, which bypasses both approvals and the sandbox.
 """
 
 from __future__ import annotations

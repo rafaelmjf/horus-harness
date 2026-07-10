@@ -2175,10 +2175,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--worker",
         default=None,
         choices=sorted(_WORKER_POSTURE),
-        help="agent + posture preset for an unattended worker: claude=full-auto, codex=auto-edit "
-             "(the default posture stalls a headless claude — it exits 0 with zero diffs; "
-             "codex auto-edits inside a gated sandbox). Infers --agent when omitted; "
-             "--agent and --posture win if also given.",
+        help="agent + posture preset for an unattended worker: claude=full-auto, codex=auto-edit. "
+             "The safe codex workspace-write sandbox has network/socket access off; git "
+             "fetch/push/PR and local-server/browser verification require --posture full-auto "
+             "(bypasses approvals and sandbox). The default posture stalls a headless claude. "
+             "Infers --agent when omitted; --agent and --posture win if also given.",
     )
     p_run.add_argument("--resume", metavar="SESSION_ID", help="resume an existing session by id")
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
