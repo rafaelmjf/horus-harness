@@ -18,8 +18,24 @@ SERVICE="${HORUS_HOSTED_SERVICE:-horus-dashboard.service}"
 PORT="${HORUS_HOSTED_PORT:-8771}"
 PYTHON="${HORUS_TOOL_PYTHON:-3.12}"
 
-echo "[deploy-hosted] upgrading pinned horus-harness (index-refresh)..."
-uv tool install --force --refresh --python "$PYTHON" horus-harness
+# Pin the exact latest version and retry: the release webhook fires the instant a
+# release is published, but PyPI's *simple index* (what uv resolves against) lags its
+# JSON API by a minute or two — so a plain `--refresh` install races the index and
+# silently grabs the PREVIOUS version (observed 0.0.31 for the 0.0.32 release). Install
+# `==<latest>` and retry until the index has it.
+latest="${HORUS_DEPLOY_VERSION:-$(curl -s https://pypi.org/pypi/horus-harness/json \
+  | grep -oE '"version":"[^"]+"' | head -1 | cut -d'"' -f4)}"
+echo "[deploy-hosted] target version: ${latest:-<latest-available>}"
+installed=""
+for attempt in 1 2 3 4 5 6 7 8; do
+  if [ -n "$latest" ]; then
+    uv tool install --force --refresh --python "$PYTHON" "horus-harness==$latest" && { installed="$latest"; break; }
+  else
+    uv tool install --force --refresh --python "$PYTHON" horus-harness && break
+  fi
+  echo "[deploy-hosted] v$latest not in the index yet (attempt $attempt) — retrying in 20s..."
+  sleep 20
+done
 
 echo "[deploy-hosted] restarting $SERVICE ..."
 sudo systemctl restart "$SERVICE"

@@ -99,6 +99,49 @@ def _write_projects(projects: list[str]) -> None:
     _write_config(projects, load_github_owners(), load_workspace_root())
 
 
+# Top-level keys the hand-rolled serializer manages itself. Anything else in the
+# file (notably the security-critical `[access]` table) MUST be round-tripped, or a
+# routine write (register a project, set a policy) silently drops it — which took the
+# exposed dashboard down mid-session (2026-07-10) when `[access]` vanished on a
+# `register_project` write.
+_MANAGED_KEYS = frozenset({"workspace_root", "projects", "github_owners", "ignored_repos", "workflow"})
+
+
+def _toml_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
+    return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _unmanaged_entries() -> tuple[list[str], list[str]]:
+    """(scalar_lines, table_lines) for top-level config entries the serializer doesn't
+    own, read from the current file so a rewrite preserves them. Scalars belong above
+    the tables; tables (e.g. ``[access]``) go last. Flat scalar/list values only —
+    the shapes Horus configs actually use."""
+    path = config_path()
+    if not path.exists():
+        return [], []
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return [], []
+    scalars: list[str] = []
+    tables: list[str] = []
+    for key, val in data.items():
+        if key in _MANAGED_KEYS:
+            continue
+        if isinstance(val, dict):
+            tables += ["", f"[{key}]"]
+            tables += [f"{k} = {_toml_value(v)}" for k, v in val.items()]
+        else:
+            scalars.append(f"{key} = {_toml_value(val)}")
+    return scalars, tables
+
+
 def _write_config(
     projects: list[str],
     github_owners: list[str],
@@ -114,7 +157,11 @@ def _write_config(
     # Preserve the current ignored-repos list when the caller doesn't supply one.
     if ignored_repos is None:
         ignored_repos = load_ignored_repos()
-    lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"', "", "projects = ["]
+    # Round-trip any table/key we don't manage (e.g. [access]) — read before we write.
+    extra_scalars, extra_tables = _unmanaged_entries()
+    lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"']
+    lines += extra_scalars
+    lines += ["", "projects = ["]
     lines += [f'  "{p}",' for p in projects]
     lines += ["]", "", "github_owners = ["]
     lines += [f'  "{o}",' for o in github_owners]
@@ -123,9 +170,10 @@ def _write_config(
     lines.append("]")
     # [workflow] table goes at the end so it doesn't accidentally swallow the
     # top-level keys above it in a strict TOML parse (tables extend until the
-    # next table header or EOF).
+    # next table header or EOF). Preserved tables ([access]) follow it, still last.
     lines += ["", "[workflow]"]
     lines += [f'{k} = "{v}"' for k, v in workflow.items()]
+    lines += extra_tables
     config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

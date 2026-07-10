@@ -126,3 +126,41 @@ def test_account_aliases_and_config_dirs_coexist(tmp_path, monkeypatch):
 def test_config_dirs_empty_by_default(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     assert config.load_account_config_dirs() == {}
+
+
+# --------------------------------------------------------------------------- #
+# Unmanaged tables (e.g. [access]) must survive a config rewrite — regression for
+# the 2026-07-10 outage where register_project dropped [access] and the exposed
+# dashboard crash-looped on the missing gate.
+# --------------------------------------------------------------------------- #
+
+def _home_cfg(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    from horus import config
+    config.config_dir().mkdir(parents=True, exist_ok=True)
+    config.config_path().write_text(
+        'workspace_root = "/x"\n\nprojects = [\n]\n\ngithub_owners = [\n]\n\n'
+        '[workflow]\ncommit = "auto"\n\n[access]\n'
+        'owner_email = "o@example.com"\nteam_domain = "t.cloudflareaccess.com"\n'
+        'aud = "abc123"\njwks_url = "https://t/certs"\n',
+        encoding="utf-8",
+    )
+    return config
+
+
+def test_register_project_preserves_access_block(tmp_path, monkeypatch):
+    config = _home_cfg(tmp_path, monkeypatch)
+    assert config.register_project(tmp_path / "proj") is True
+    access = config.load_dashboard_access()
+    assert access is not None
+    assert access.owner_email == "o@example.com"
+    assert access.access.aud == "abc123"
+    assert str(tmp_path / "proj") in config.load_projects()  # the write still did its job
+
+
+def test_set_workflow_policy_preserves_access_block(tmp_path, monkeypatch):
+    config = _home_cfg(tmp_path, monkeypatch)
+    config.set_workflow_policy(commit="manual")
+    assert config.load_dashboard_access() is not None
+    assert config.load_workflow_policy()["commit"] == "manual"
