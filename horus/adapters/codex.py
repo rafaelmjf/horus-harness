@@ -7,6 +7,15 @@ Built against the real Codex CLI's exec surface (probed directly):
 - spawn:  ``codex exec --json <prompt>``
 - resume: ``codex exec resume --json <session_id> [prompt]``
 - per-account isolation: ``CODEX_HOME`` (a distinct config/home dir per account)
+- reasoning effort: Codex's CLI has no dedicated ``--effort``/``--reasoning`` flag
+  (probed via ``codex exec --help``); instead its generic config override,
+  ``-c model_reasoning_effort=<value>``, is the documented mechanism (this machine's
+  own ``~/.codex/config.toml`` already sets it), forwarded verbatim for both the
+  spawn and resume argv shapes. Codex validates the value server-side, not client-side
+  (a bogus value is accepted by the CLI and only fails once the request reaches the
+  model) — so an unsupported level (e.g. ``xhigh``/``max`` on a model that only
+  understands low/medium/high) surfaces as a real turn-failure from Codex, not a
+  silently-ignored flag.
 
 Event stream (JSONL under ``--json``):
   ``{"type":"thread.started","thread_id":"<uuid>"}``  → SESSION_STARTED
@@ -79,6 +88,8 @@ class CodexAdapter(AgentAdapter):
             argv = [self.executable, "exec", "resume", "--json"]
             if spec.model:
                 argv += ["-m", spec.model]
+            if spec.effort:
+                argv += ["-c", f"model_reasoning_effort={spec.effort}"]
             if spec.posture is PermissionPosture.FULL_AUTO:
                 argv.append("--dangerously-bypass-approvals-and-sandbox")
             argv += list(spec.extra_args)
@@ -90,6 +101,8 @@ class CodexAdapter(AgentAdapter):
             argv = [self.executable, "exec", "--json"]
             if spec.model:
                 argv += ["-m", spec.model]
+            if spec.effort:
+                argv += ["-c", f"model_reasoning_effort={spec.effort}"]
             argv += self.permission_flags(spec.posture)
             argv += list(spec.extra_args)
             argv.append(spec.prompt)

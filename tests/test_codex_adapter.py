@@ -66,6 +66,27 @@ def test_build_command_resume_no_sandbox_flag():
     assert "--dangerously-bypass-approvals-and-sandbox" in full
 
 
+def test_build_command_effort_flag_spawn():
+    # Codex has no dedicated --effort flag (probed via `codex exec --help`); the
+    # documented mechanism is the generic config override, confirmed live against
+    # this machine's own ~/.codex/config.toml (`model_reasoning_effort = "high"`).
+    argv = CodexAdapter().build_command(_spec(effort="high"))
+    assert "-c" in argv
+    assert "model_reasoning_effort=high" == argv[argv.index("-c") + 1]
+
+
+def test_build_command_effort_flag_resume():
+    argv = CodexAdapter().build_command(_spec(effort="low"), resume_id="thread-uuid")
+    assert "-c" in argv
+    assert "model_reasoning_effort=low" == argv[argv.index("-c") + 1]
+
+
+def test_build_command_no_effort_flag_by_default():
+    # Default behavior unchanged when --effort is omitted.
+    assert "-c" not in CodexAdapter().build_command(_spec())
+    assert "-c" not in CodexAdapter().build_command(_spec(), resume_id="thread-uuid")
+
+
 def test_build_command_resume_empty_prompt_not_appended():
     argv = CodexAdapter().build_command(_spec(prompt=""), resume_id="x")
     # Empty prompt should not be appended; session id is the last arg.

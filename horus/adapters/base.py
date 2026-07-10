@@ -49,6 +49,13 @@ class EventType(str, Enum):
     RAW = "raw"                              # recognized line we don't model yet
 
 
+# Reasoning-effort levels accepted by `horus run --effort`. Matches Claude Code's
+# own `--effort` enum exactly (probed live, Claude Code 2.1.206); Codex has no
+# fixed enum of its own (`-c model_reasoning_effort=<value>` is a free-form TOML
+# override validated server-side), so this is the canonical set both adapters share.
+EFFORT_LEVELS: tuple[str, ...] = ("low", "medium", "high", "xhigh", "max")
+
+
 @dataclass(frozen=True)
 class SpawnSpec:
     """Everything an adapter needs to start (or resume) a session, tool-neutral."""
@@ -59,6 +66,7 @@ class SpawnSpec:
     environment: str = "host"
     posture: PermissionPosture = PermissionPosture.DEFAULT
     model: str | None = None
+    effort: str | None = None           # reasoning effort (one of EFFORT_LEVELS); adapter-specific wiring
     allowed_tools: tuple[str, ...] = ()
     disallowed_tools: tuple[str, ...] = ()
     extra_args: tuple[str, ...] = ()
@@ -207,6 +215,7 @@ __all__ = [
     "AgentEvent",
     "AgentRun",
     "AgentSession",
+    "EFFORT_LEVELS",
     "EventType",
     "PermissionPosture",
     "SpawnSpec",
