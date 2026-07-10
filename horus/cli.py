@@ -8,7 +8,7 @@ import os
 import re
 import sys
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from horus import (
@@ -22,6 +22,7 @@ from horus import (
     codex_usage,
     config,
     dashboard,
+    delivery,
     fetchcheck,
     frontmatter,
     gitstate,
@@ -380,7 +381,16 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 
 def cmd_sessions(args: argparse.Namespace) -> int:
-    """List tracked agent sessions, reconciling live state against real PIDs first."""
+    """List tracked agent sessions, reconciling live state against real PIDs first.
+
+    Default view surfaces running sessions first, then recently-updated ones;
+    rows untouched for more than a day are hidden (not deleted) unless ``--all``
+    is passed, so a registry that's accumulated months of dead workers doesn't
+    bury the one session that's actually running or just finished. A non-clean
+    row (``failed``/``stale``) gets a best-effort delivery-receipt suffix when the
+    worker's own worktree/branch shows it pushed a commit, opened a PR, or closed
+    its continuity before its process died — see :mod:`horus.delivery`.
+    """
     reg = registry.Registry.default()
     reg.reconcile()  # correct records left "running" by a crashed/closed run
     if args.prune:
@@ -388,13 +398,33 @@ def cmd_sessions(args: argparse.Namespace) -> int:
         print(f"Pruned {len(removed)} finished session(s).")
         return 0
     records = sorted(reg.all(), key=lambda r: r.updated_at, reverse=True)
+    records.sort(key=lambda r: r.status != "running")  # stable: running first, recency preserved within each group
+
+    hidden = 0
+    if not args.all:
+        now = datetime.now(timezone.utc)
+        visible = [r for r in records if r.status == "running" or registry.is_recent(r, now=now)]
+        hidden = len(records) - len(visible)
+        records = visible
+
     if not records:
-        print("No tracked sessions.")
+        if hidden:
+            print(f"No running or recent sessions ({hidden} older session(s) hidden — pass --all to show them).")
+        else:
+            print("No tracked sessions.")
         return 0
+
     for r in records:
         proj = Path(r.project).name
         rc = "" if r.returncode is None else f" rc={r.returncode}"
-        print(f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} pid={r.pid or '-'} {r.session_id}{rc}")
+        line = f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} pid={r.pid or '-'} {r.session_id}{rc}"
+        if r.status in delivery.NONCLEAN_STATUSES:
+            suffix = delivery.render_receipt(r.status, delivery.delivery_receipt(r.project))
+            if suffix:
+                line += f" · {suffix}"
+        print(line)
+    if hidden:
+        print(f"\n{hidden} older session(s) hidden — pass --all to show them.")
     return 0
 
 
@@ -2230,6 +2260,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_sessions = sub.add_parser("sessions", help="list tracked agent sessions (reconciles live state)")
     p_sessions.add_argument("--prune", action="store_true", help="drop finished/dead sessions instead of listing")
+    p_sessions.add_argument(
+        "--all", action="store_true",
+        help="show every tracked session, including long-stale ones (default: running + last 24h only)",
+    )
     p_sessions.set_defaults(func=cmd_sessions)
 
     p_focus = sub.add_parser("focus", help="raise a running session's terminal window (best-effort, Windows)")

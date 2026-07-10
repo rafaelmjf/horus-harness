@@ -3,11 +3,12 @@
 import subprocess
 import sys
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from horus import runlog
 from horus.adapters import FakeAdapter, SpawnSpec
-from horus.registry import Registry, SessionRecord, process_alive, track
+from horus.registry import Registry, SessionRecord, is_recent, process_alive, track
 
 
 def _reg(tmp_path) -> Registry:
@@ -137,6 +138,21 @@ def test_prune_drops_only_terminal(tmp_path):
     removed = reg.prune()
     assert removed == ["ex"]
     assert {r.session_id for r in reg.all()} == {"run"}
+
+
+# --- recency (default-view de-emphasis for horus sessions) -------------------
+
+def test_is_recent_true_within_horizon_false_beyond_it():
+    now = datetime.now(timezone.utc)
+    fresh = _rec(updated_at=(now - timedelta(hours=1)).isoformat(timespec="seconds"))
+    old = _rec(updated_at=(now - timedelta(hours=48)).isoformat(timespec="seconds"))
+    assert is_recent(fresh, now=now) is True
+    assert is_recent(old, now=now) is False
+
+
+def test_is_recent_fails_open_on_unparseable_timestamp():
+    assert is_recent(_rec(updated_at="not-a-timestamp")) is True
+    assert is_recent(_rec(updated_at="")) is True
 
 
 # --- bridge from the adapter -------------------------------------------------

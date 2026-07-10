@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -315,6 +316,113 @@ def test_sessions_cmd_lists_and_prunes(tmp_path, monkeypatch, capsys):
 
     assert main(["sessions", "--prune"]) == 0
     assert reg.all() == []
+
+
+def test_sessions_default_view_hides_long_stale_rows_behind_all_flag(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    reg = Registry.default()
+    old_ts = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat(timespec="seconds")
+    reg.upsert(
+        SessionRecord(session_id="ancient", agent="claude", project="/proj", pid=999999, status="exited", returncode=0),
+        now=old_ts,
+    )
+    reg.upsert(SessionRecord(session_id="fresh", agent="claude", project="/proj", pid=os.getpid(), status="running"))
+
+    assert main(["sessions"]) == 0
+    out = capsys.readouterr().out
+    assert "fresh" in out
+    assert "ancient" not in out
+    assert "1 older session(s) hidden" in out
+
+    assert main(["sessions", "--all"]) == 0
+    out_all = capsys.readouterr().out
+    assert "ancient" in out_all and "fresh" in out_all
+
+
+def test_sessions_running_sorted_before_recent_terminal_rows(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    reg = Registry.default()
+    # Upserted in this order so a plain recency sort would put "done-recent"
+    # first; the running-first tiebreak must still surface "running-now" above it.
+    reg.upsert(SessionRecord(session_id="running-now", agent="claude", project="/proj", pid=os.getpid(), status="running"))
+    reg.upsert(SessionRecord(session_id="done-recent", agent="claude", project="/proj", pid=999999, status="exited", returncode=0))
+
+    assert main(["sessions"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("running-now") < out.index("done-recent")
+
+
+def _bare_origin_and_worker_clone(tmp_path: Path) -> Path:
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)], check=True, capture_output=True)
+    worker = tmp_path / "worker"
+    subprocess.run(["git", "clone", str(origin), str(worker)], check=True, capture_output=True)
+    _git(worker, "config", "user.email", "t@example.com")
+    _git(worker, "config", "user.name", "Test")
+    (worker / "README.md").write_text("hi\n", encoding="utf-8")
+    _git(worker, "add", "-A")
+    _git(worker, "commit", "-m", "init")
+    _git(worker, "push", "origin", "main")
+    return worker
+
+
+def _patch_gh(monkeypatch, stdout: str) -> None:
+    """Fake `gh` only; every `git` call passes through to the real subprocess.run
+    (same module object every `import subprocess` binds to, so a blanket patch
+    would also swallow this test's own git fixture setup)."""
+    from horus import integration as intmod
+
+    real_run = subprocess.run
+
+    def fake(cmd, *a, **k):
+        if cmd and cmd[0] == "gh":
+            return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
+        return real_run(cmd, *a, **k)
+
+    monkeypatch.setattr(intmod.subprocess, "run", fake)
+
+
+def test_sessions_renders_delivery_receipt_for_failed_but_delivered_worker(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    worker = _bare_origin_and_worker_clone(tmp_path)
+    _git(worker, "checkout", "-b", "worker/feature")
+    (worker / "f.txt").write_text("work", encoding="utf-8")
+    _git(worker, "add", "-A")
+    _git(worker, "commit", "-m", "do work")
+    (worker / ".horus").mkdir()
+    (worker / ".horus" / "PRD.md").write_text("# PRD\n", encoding="utf-8")
+    _git(worker, "add", "-A")
+    _git(worker, "commit", "-m", "Update Horus continuity (closure)")
+    _git(worker, "push", "-u", "origin", "worker/feature")
+    _patch_gh(monkeypatch, '[{"number": 4, "url": "https://gh/pr/4", "state": "OPEN", "title": "x"}]')
+
+    reg = Registry.default()
+    reg.upsert(SessionRecord(
+        session_id="worker1", agent="claude", project=str(worker), pid=None, status="failed", returncode=1,
+    ))
+
+    assert main(["sessions"]) == 0
+    out = capsys.readouterr().out
+    assert "failed" in out and "worker1" in out  # the real, non-clean status is kept, not papered over
+    assert "failed-but-delivered" in out
+    assert "pushed " in out
+    assert "PR #4" in out
+    assert "continuity closed" in out
+
+
+def test_sessions_plain_failure_when_nothing_delivered(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    _patch_gh(monkeypatch, "[]")
+    reg = Registry.default()
+    reg.upsert(SessionRecord(
+        session_id="nodeliver", agent="claude", project=str(tmp_path / "gone"), pid=None,
+        status="failed", returncode=1,
+    ))
+
+    assert main(["sessions"]) == 0
+    out = capsys.readouterr().out
+    assert "nodeliver" in out
+    assert "but-delivered" not in out
 
 
 def test_session_new_records_alias_not_email(tmp_path, monkeypatch):

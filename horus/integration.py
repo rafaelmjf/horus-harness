@@ -168,6 +168,49 @@ def open_horus_prs(root: str | Path, *, timeout: float = _PR_LIST_TIMEOUT) -> li
     ]
 
 
+def pr_for_branch(root: str | Path, branch: str, *, timeout: float = _PR_LIST_TIMEOUT) -> dict[str, Any] | None:
+    """Any PR (open, merged, or closed) whose head is ``branch``, or ``None`` when
+    there is none or the answer is unknowable (no ``gh``, unauthenticated, no
+    GitHub remote, timeout).
+
+    Unlike :func:`open_horus_prs` this is not scoped to Horus-created branches —
+    it backs the failed-but-delivered receipt, which needs to know about a PR a
+    worker opened on ITS OWN branch before its `horus run` process died. Never
+    raises.
+    """
+    if not (Path(root) / ".git").exists():  # covers dirs and worktree files
+        return None
+    try:
+        r = subprocess.run(  # noqa: S603
+            ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state,title"],
+            cwd=str(Path(root)),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            **_NO_WINDOW,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        prs = json.loads(r.stdout or "[]")
+    except ValueError:
+        return None
+    if not isinstance(prs, list) or not prs:
+        return None
+    pr = prs[0]
+    if not isinstance(pr, dict):
+        return None
+    number = pr.get("number")
+    return {
+        "number": number if isinstance(number, int) else None,
+        "url": str(pr.get("url", "")),
+        "state": str(pr.get("state", "")),
+        "title": str(pr.get("title", "")),
+    }
+
+
 def continuity_pr_findings(root: str | Path) -> list[Finding]:
     """Doctor findings for Horus PRs sitting open — one warn per PR, nothing when
     there are none or the state is unknowable (gh absent is `doctor machine`'s
