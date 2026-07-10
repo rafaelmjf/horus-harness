@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "v0.0.34 released and live: PRs #134-136 (`horus fleet`, `--worker` adapter inference, Codex full-auto guidance) are shipped and hosted `/health` confirms 0.0.34. The webhook E2E surfaced a real bug rather than just confirming success: the release-published webhook raced this repo's own publish.yml upload, so the first attempt silently deployed the stale version. Fixed and verified via a proper branch→PR→merge in `horus-hub` (receiver now waits for PyPI to actually advance) plus a webhook redelivery — no manual deploy-hosted.sh run."
-next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation; Refresh-artifacts P1/P2 remains self-contained Sonnet work."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. v0.0.34 is released and hosted is confirmed live on it. Use Opus inline for the LaunchBackend + LocalBackend seam freeze (harness P0 of the multi-machine arc)."
+current_focus: "v0.0.34 released and live: PRs #134-136 (`horus fleet`, `--worker` adapter inference, Codex full-auto guidance) are shipped and hosted `/health` confirms 0.0.34. Refresh-artifacts is now fully closed: PR #137 fixed the dashboard's Refresh artifacts action to honor `[workflow]` integration policy (branch+PR instead of dirtying main on a branch-pr-automerge repo), which also resolved the downstream checkpoint-warning-provenance symptom."
+next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation (harness P0 of the multi-machine arc)."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. Use Opus inline for the LaunchBackend + LocalBackend seam freeze (harness P0 of the multi-machine arc)."
 execution_recommendation: "continue-as-is — the interface freeze stays Opus inline because its judgment defines every backend contract. plan-execution only after that seam is frozen, when RemoteBackend + ContainerBackend + hub provisioning become high-volume, low-ambiguity cross-repo work suitable for isolated workers."
 last_updated: 2026-07-10
 horus_min_version: 0.0.26
@@ -69,15 +69,6 @@ pilot is the evidence for/against making cards the scaffold default).
   work (GPT 5.5 → container, other Claude account → remote/worker; one worktree each,
   `--watch` + review). Pure refactor, no behavior change. Container launch = just the
   third backend, not a separate epic. [tier: Opus for the freeze; Sonnet/GPT5.5 impls.]
-- **[bug] Refresh artifacts — P1/P2 remain (P0 shipped 2026-07-10).** P0 done: the dashboard
-  POST now refuses a dirty checkout (mutation-path guard, names dirty+planned paths), reports
-  exact changed paths, and warns on manual-commit policy (see Shipped). Still open, per
-  `bugs/refresh-artifacts-leaves-dirty-worktree.md`: **P1** provenance receipt
-  (`.horus/cache/last-artifact-refresh.json` — needs a `.horus/cache/` ignore rule first, since
-  writing it would itself dirty the tree) + a checkpoint advisory that classifies generated vs
-  authored dirty paths (`bugs/checkpoint-warning-after-artifact-refresh.md`); **P2** run the
-  refresh through `[workflow]` (isolated branch → commit → push → PR → merge) for automatic
-  policies. Self-contained; delegatable.
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
@@ -115,6 +106,7 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Refresh-artifacts honors workflow policy** (2026-07-10, PR #137): the dashboard's Refresh artifacts action now dispatches through `integration.integrate()` for an automatic commit policy — branch + PR (+ automerge) instead of dirtying a `branch-pr-automerge` repo's main — closing `bugs/refresh-artifacts-leaves-dirty-worktree.md` and the downstream `bugs/checkpoint-warning-after-artifact-refresh.md` symptom (both write-ups deleted, resolved).
 **Codex worker posture guidance** (2026-07-10, released v0.0.34): the run help and adapter docs keep `auto-edit` safe while making `full-auto` mandatory and explicit for networked git/PR and local-server/browser verification.
 **Worker adapter inference** (2026-07-10): `horus run --worker codex|claude` selects the matching adapter when `--agent` is omitted, while explicit agent/posture flags remain authoritative.
 **Fleet dispatch view** (2026-07-10): `horus fleet` prints one line per registered non-cockpit project with git freshness, latest session, and PRD-resolved focus/action/prompt.
