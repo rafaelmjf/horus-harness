@@ -980,6 +980,46 @@ def _commit_scaffold(repo: Path) -> None:
     _git(repo, "commit", "-m", "scaffold")
 
 
+def _commit_scaffold_with_origin(repo: Path, tmp_path: Path) -> None:
+    """Like `_commit_scaffold`, but on branch `main` with a real local bare
+    `origin` remote — real `git push`/branch/checkout all work with no network,
+    only `gh` needs faking."""
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.name", "Horus Test")
+    _git(repo, "config", "user.email", "horus@example.test")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "scaffold")
+    bare = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], capture_output=True, text=True, check=True)
+    _git(repo, "remote", "add", "origin", str(bare))
+    _git(repo, "push", "-u", "origin", "main")
+
+
+def _fake_git_real_gh_faked(pr_create_ok: bool = True, merge_ok: bool = True):
+    """`integration._run` stand-in: real `git` subprocesses (so branch/commit/push
+    against the local bare origin genuinely happen), but `gh` is faked since it
+    needs real GitHub auth that tests don't have."""
+
+    def _runner(cmd: list[str], cwd) -> subprocess.CompletedProcess:
+        if cmd and cmd[0] == "git":
+            return subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True)
+        if cmd[:3] == ["gh", "pr", "create"]:
+            if pr_create_ok:
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="https://github.com/example/repo/pull/1\n", stderr=""
+                )
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="gh pr create failed: no auth")
+        if cmd[:3] == ["gh", "pr", "merge"]:
+            if merge_ok:
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="auto-merge disabled")
+        if cmd[:2] == ["gh", "api"]:
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="not found")
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="unexpected command in test")
+
+    return _runner
+
+
 def test_process_upgrade_project_applies_and_redirects(tmp_path, monkeypatch):
     _scaffolded_project(tmp_path, monkeypatch)
     out = dashboard.process_upgrade_project({"project": "0"})
@@ -1054,6 +1094,54 @@ def test_process_upgrade_project_clean_manual_lists_uncommitted_paths(tmp_path, 
     assert f"git -C {proj} commit -m &#x27;Refresh Horus artifacts&#x27;" in banner
     dirty_paths = set(_git(proj, "diff", "--name-only").splitlines())
     assert dirty_paths == set(changed_paths)
+
+
+def test_process_upgrade_project_clean_automerge_dispatches_branch_pr_and_leaves_main_clean(
+    tmp_path, monkeypatch
+):
+    """Locks bugs/refresh-artifacts-leaves-dirty-worktree.md: with the default
+    (branch-pr-automerge) workflow policy, a clean refresh must not leave the
+    live checkout's default branch dirty — the change lands via a Horus branch
+    + PR instead."""
+    proj = _scaffolded_project(tmp_path, monkeypatch)
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        path = proj / name
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("horus-block-version: 7", "horus-block-version: 6"), encoding="utf-8")
+    _commit_scaffold_with_origin(proj, tmp_path)
+    monkeypatch.setattr(dashboard.integration, "_run", _fake_git_real_gh_faked())
+
+    location = dashboard.process_upgrade_project({"project": "0"})
+    params = parse_qs(urlparse(location).query)
+
+    assert params.get("upgrade_pr") == ["https://github.com/example/repo/pull/1"]
+    assert "upgrade_detail" not in params  # ok=True: no failure to surface
+
+    # The regression this locks: main is not left dirty against a branch-pr policy.
+    assert _git(proj, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+    assert _git(proj, "status", "--porcelain") == ""
+    assert _git(proj, "branch", "--list", "horus/*")  # the refresh landed on a branch
+
+
+def test_process_upgrade_project_clean_automerge_records_integration_failure(tmp_path, monkeypatch):
+    """A failed PR/merge step still must not strand the change dirty on main — the
+    commit already moved to the feature branch before the failure, and the
+    failure detail is surfaced instead of silently claiming success."""
+    proj = _scaffolded_project(tmp_path, monkeypatch)
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        path = proj / name
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("horus-block-version: 7", "horus-block-version: 6"), encoding="utf-8")
+    _commit_scaffold_with_origin(proj, tmp_path)
+    monkeypatch.setattr(dashboard.integration, "_run", _fake_git_real_gh_faked(pr_create_ok=False))
+
+    location = dashboard.process_upgrade_project({"project": "0"})
+    params = parse_qs(urlparse(location).query)
+
+    assert "upgrade_detail" in params
+    assert "gh pr create failed" in params["upgrade_detail"][0]
+    assert _git(proj, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+    assert _git(proj, "status", "--porcelain") == ""
 
 
 def test_process_upgrade_project_unknown_index(tmp_path, monkeypatch):
@@ -1180,6 +1268,24 @@ def test_onboard_banner_success_with_pr_and_detail():
     })
     assert "Integration incomplete" in incomplete
     assert "auto-merge could not be enabled" in incomplete
+
+
+def test_upgrade_banner_shows_integration_pr_and_incomplete_detail():
+    out = dashboard._project_action_banner({
+        "upgraded": ["2"],
+        "upgrade_paths": ['["AGENTS.md", "CLAUDE.md"]'],
+        "upgrade_pr": ["https://github.com/me/demo/pull/9"],
+    })
+    assert "Integration PR" in out
+    assert "https://github.com/me/demo/pull/9" in out
+
+    incomplete = dashboard._project_action_banner({
+        "upgraded": ["2"],
+        "upgrade_paths": ['["AGENTS.md"]'],
+        "upgrade_detail": ["gh pr create failed: no auth"],
+    })
+    assert "Integration incomplete" in incomplete
+    assert "gh pr create failed" in incomplete
 
 
 def test_onboard_banner_error():
