@@ -18,6 +18,7 @@ import html
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import threading
@@ -3238,16 +3239,106 @@ def _project_by_index(form: dict[str, str], projects: list[str] | None) -> tuple
 
 
 def process_upgrade_project(form: dict[str, str], *, projects: list[str] | None = None) -> str:
-    """Apply `upgrade-project` to a registered project (by index). Returns a redirect
-    location back to the project detail page with a result count."""
+    """Apply `upgrade-project` to a registered project only from a clean checkout."""
     root, idx = _project_by_index(form, projects)
     if root is None:
         return "/?upgrade_error=" + quote_plus("unknown project")
     if _stale_build():
         return f"/project?i={idx}&stale_build=1"
+
+    planned_actions = upgrade.upgrade_project(root, apply=False)
+    planned_paths = _upgrade_action_paths(planned_actions, {"would-update"})
+    dirty_paths, git_error = _dirty_worktree_paths(root)
+    if git_error:
+        return f"/project?i={idx}&upgrade_error={quote_plus(git_error)}"
+    if dirty_paths:
+        dry_run = shlex.join(["horus", "upgrade-project", "--path", str(root)])
+        return (
+            f"/project?i={idx}&upgrade_blocked={_path_list_param(dirty_paths)}"
+            f"&upgrade_planned={_path_list_param(planned_paths)}"
+            f"&upgrade_dry_run={quote_plus(dry_run)}"
+        )
+
     actions = upgrade.upgrade_project(root, apply=True)
-    updated = sum(1 for a in actions if a.status in ("updated", "created"))
-    return f"/project?i={idx}&upgraded={updated}"
+    changed_paths = _upgrade_action_paths(actions, {"updated", "created"})
+    location = (
+        f"/project?i={idx}&upgraded={len(changed_paths)}"
+        f"&upgrade_paths={_path_list_param(changed_paths)}"
+    )
+    if config.load_workflow_policy()["commit"] == "manual" and changed_paths:
+        commit_command = shlex.join(["git", "-C", str(root), "add", "--", *changed_paths])
+        commit_command += " && " + shlex.join([
+            "git", "-C", str(root), "commit", "-m", "Refresh Horus artifacts",
+        ])
+        location += (
+            f"&upgrade_manual=1&upgrade_commit_command={quote_plus(commit_command)}"
+        )
+    return location
+
+
+def _upgrade_action_paths(
+    actions: list[upgrade.UpgradeAction], statuses: set[str]
+) -> list[str]:
+    """Return the exact, de-duplicated generated paths recorded by upgrade actions."""
+    return sorted({action.path for action in actions if action.status in statuses and action.path})
+
+
+def _path_list_param(paths: list[str]) -> str:
+    return quote_plus(json.dumps(paths, ensure_ascii=False))
+
+
+def _path_list_value(params: dict[str, list[str]], key: str) -> list[str]:
+    try:
+        value = json.loads(params.get(key, ["[]"])[0])
+    except (json.JSONDecodeError, TypeError):
+        return []
+    return [str(path) for path in value] if isinstance(value, list) else []
+
+
+def _dirty_worktree_paths(root: Path) -> tuple[list[str], str | None]:
+    """Return every staged, unstaged, and untracked path without changing Git state.
+
+    Non-Git projects retain the pre-existing refresh behavior. Once Git recognizes a
+    checkout, failure to inspect it blocks the mutation rather than guessing it clean.
+    """
+    try:
+        probe = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [], f"could not inspect Git worktree: {exc}"
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        return [], None
+    try:
+        status = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [], f"could not inspect Git worktree: {exc}"
+    if status.returncode != 0:
+        detail = status.stderr.strip() or "git status failed"
+        return [], f"could not inspect Git worktree: {detail}"
+    return _parse_porcelain_paths(status.stdout), None
+
+
+def _parse_porcelain_paths(raw: str) -> list[str]:
+    entries = raw.split("\0")
+    paths: list[str] = []
+    index = 0
+    while index < len(entries):
+        entry = entries[index]
+        index += 1
+        if len(entry) < 4:
+            continue
+        path = entry[3:]
+        if "R" in entry[:2] or "C" in entry[:2]:
+            if index < len(entries) and entries[index]:
+                path = f"{entries[index]} -> {path}"
+                index += 1
+        paths.append(path)
+    return sorted(paths)
 
 
 def process_session_dismiss(form: dict[str, str]) -> str:
@@ -3286,6 +3377,13 @@ def _notice(params: dict[str, list[str]]) -> str:
     return _project_action_banner(params) or _launch_notice(params)
 
 
+def _path_list_html(paths: list[str], empty: str = "none") -> str:
+    if not paths:
+        return f"<span class='muted'>{html.escape(empty)}</span>"
+    items = "".join(f"<li><code>{html.escape(path)}</code></li>" for path in paths)
+    return f"<ul>{items}</ul>"
+
+
 def _project_action_banner(params: dict[str, list[str]]) -> str:
     """Banner for upgrade/offboard POST redirects (index + project pages)."""
     if "selfupdated" in params:
@@ -3301,9 +3399,43 @@ def _project_action_banner(params: dict[str, list[str]]) -> str:
             "an in-process write would stamp the project with an outdated artifact generation. "
             "Restart Horus, then retry.</div>"
         )
+    if "upgrade_blocked" in params:
+        dirty_paths = _path_list_value(params, "upgrade_blocked")
+        planned_paths = _path_list_value(params, "upgrade_planned")
+        dry_run = html.escape(params.get("upgrade_dry_run", ["horus upgrade-project"])[0])
+        idx = html.escape(params.get("i", [""])[0], quote=True)
+        launch = ""
+        if idx.isdigit():
+            launch = (
+                "<form method='post' action='/launch' style='display:inline'>"
+                f"<input type='hidden' name='project' value='{idx}'>"
+                "<input type='hidden' name='agent' value='claude'>"
+                "<input type='hidden' name='mode' value='resume'>"
+                "<input type='hidden' name='target' value='app'>"
+                "<input type='hidden' name='posture' value='default'>"
+                "<button class='btn' type='submit'>Launch reconciliation session</button></form>"
+            )
+        return (
+            "<div class='banner err'><strong>Refresh blocked:</strong> the worktree already "
+            f"has changes. Existing dirty paths:{_path_list_html(dirty_paths)}"
+            f"Proposed generated paths:{_path_list_html(planned_paths, 'artifacts already current')}"
+            f"<p>Inspect the dry run with <code>{dry_run}</code>. No files were changed, "
+            f"committed, stashed, or reset.</p>{launch}</div>"
+        )
     if "upgraded" in params:
         n = html.escape(params["upgraded"][0])
-        return f"<div class='banner ok'>Refreshed Horus artifacts &mdash; {n} item(s) updated.</div>"
+        changed_paths = _path_list_value(params, "upgrade_paths")
+        detail = f"Changed paths:{_path_list_html(changed_paths)}"
+        if "upgrade_manual" in params and changed_paths:
+            command = html.escape(params.get("upgrade_commit_command", [""])[0])
+            detail += (
+                "<p><strong>Tracked files are now uncommitted.</strong> Review the diff, then run "
+                f"<code>{command}</code>.</p>"
+            )
+        return (
+            f"<div class='banner ok'>Refreshed Horus artifacts &mdash; {n} item(s) updated."
+            f"{detail}</div>"
+        )
     if "upgrade_error" in params:
         return f"<div class='banner err'>Upgrade failed: {html.escape(params['upgrade_error'][0])}</div>"
     if "offboarded" in params:
