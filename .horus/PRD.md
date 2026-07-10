@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Fleet-cockpit dispatch ergonomics landed on main via PRs #134–#136: `horus fleet` gives the full non-cockpit registry picture, `--worker` infers its matching adapter, and Codex's `full-auto` requirement for git/browser work is discoverable. Each micro-PR passed a full local suite and required CI; all three cards are removed. v0.0.33 remains live, so these changes await a patch release."
-next_action: "Sonnet direct: cut the next patch release for PRs #134–#136, then let the webhook deploy it and observe hosted `/health` flip to the target without pre-empting it manually. After that, Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation; Refresh-artifacts P1/P2 remains self-contained Sonnet work."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. PRs #134–#136 are merged and locally/CI green but not released: `horus fleet`, worker→adapter inference, and Codex full-auto guidance. Use Sonnet to cut the next patch release; do not run deploy-hosted.sh manually—observe the webhook update hosted `/health` to the target. Then use Opus inline for the LaunchBackend + LocalBackend seam freeze."
-execution_recommendation: "continue-as-is — the immediate patch release and webhook observation are bounded Sonnet work; the following interface freeze stays Opus inline because its judgment defines every backend contract. plan-execution only after that seam is frozen, when RemoteBackend + ContainerBackend + hub provisioning become high-volume, low-ambiguity cross-repo work suitable for isolated workers."
+current_focus: "v0.0.34 released and live: PRs #134-136 (`horus fleet`, `--worker` adapter inference, Codex full-auto guidance) are shipped and hosted `/health` confirms 0.0.34. The webhook E2E surfaced a real bug rather than just confirming success: the release-published webhook raced this repo's own publish.yml upload, so the first attempt silently deployed the stale version. Fixed and verified via a proper branch→PR→merge in `horus-hub` (receiver now waits for PyPI to actually advance) plus a webhook redelivery — no manual deploy-hosted.sh run."
+next_action: "Opus inline freezes the LaunchBackend seam + LocalBackend before RemoteBackend/ContainerBackend delegation; Refresh-artifacts P1/P2 remains self-contained Sonnet work."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md. v0.0.34 is released and hosted is confirmed live on it. Use Opus inline for the LaunchBackend + LocalBackend seam freeze (harness P0 of the multi-machine arc)."
+execution_recommendation: "continue-as-is — the interface freeze stays Opus inline because its judgment defines every backend contract. plan-execution only after that seam is frozen, when RemoteBackend + ContainerBackend + hub provisioning become high-volume, low-ambiguity cross-repo work suitable for isolated workers."
 last_updated: 2026-07-10
 horus_min_version: 0.0.26
 ---
@@ -115,10 +115,10 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**Codex worker posture guidance** (2026-07-10): the run help and adapter docs keep `auto-edit` safe while making `full-auto` mandatory and explicit for networked git/PR and local-server/browser verification.
+**Codex worker posture guidance** (2026-07-10, released v0.0.34): the run help and adapter docs keep `auto-edit` safe while making `full-auto` mandatory and explicit for networked git/PR and local-server/browser verification.
 **Worker adapter inference** (2026-07-10): `horus run --worker codex|claude` selects the matching adapter when `--agent` is omitted, while explicit agent/posture flags remain authoritative.
 **Fleet dispatch view** (2026-07-10): `horus fleet` prints one line per registered non-cockpit project with git freshness, latest session, and PRD-resolved focus/action/prompt.
-**Hosted deploy runtime version gate** (2026-07-10, PR #131): exhausted installs fail before restart; after restart `/health.version` must exactly match the target; unresolved targets stay explicitly unconfirmed; the hub receiver was verified to execute this checkout's live script.
+**Hosted deploy runtime version gate** (2026-07-10, PR #131 + `horus-hub` #30): exhausted installs fail before restart; `/health.version` must exactly match the target; the hub receiver now waits for PyPI's JSON API to actually advance before deploying, fixing an observed race against this repo's own `publish.yml` upload (webhook E2E now confirmed clean, not just theorized).
 **Card-per-file backlog pilot** (2026-07-10): `.horus/backlog/` holds dispatch-ready cards that can be claimed/finished without racing PRD.md; the first Codex claim→push→finish flow was frictionless; `rafaelmjf/horus-agent` is the first cross-project consumer.
 **Config round-trip safety** (v0.0.33): `_write_config` preserves unmanaged top-level tables/keys, notably the security-critical `[access]` gate; `deploy-hosted.sh` also pins/retries while PyPI's simple index catches up.
 **Dashboard robustness** (2026-07-10): refresh-artifacts P0 refuses dirty checkouts and reports exact paths/policy warnings; live terminals surface dead SSE streams and rejected input instead of failing silently.
