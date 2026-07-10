@@ -1,6 +1,7 @@
 """Cached usage snapshot substrate — TTL, negative caching, and failure paths."""
 
 import json
+from datetime import datetime, timezone
 
 from horus import usage_snapshot
 from horus.usage_snapshot import UsageSnapshot
@@ -112,6 +113,24 @@ def test_worst_ignores_absent_window_and_handles_none():
     assert UsageSnapshot(None, None, 70.0, "wk-reset").worst() == (70.0, "wk-reset", "weekly")
     # Neither known -> unknown.
     assert UsageSnapshot(None, None).worst() == (None, None, "5h")
+
+
+def test_without_expired_windows_drops_each_window_independently():
+    now = datetime(2026, 7, 4, 12, 0).timestamp()
+    snap = UsageSnapshot(100.0, "2026-07-04 11:59", 96.0, "2026-07-11 09:00")
+    assert snap.without_expired_windows(now=now) == UsageSnapshot(None, None, 96.0, "2026-07-11 09:00")
+
+    snap = UsageSnapshot(96.0, "2026-07-04 21:10", 100.0, "2026-07-04 11:59")
+    assert snap.without_expired_windows(now=now) == UsageSnapshot(96.0, "2026-07-04 21:10", None, None)
+
+
+def test_expired_window_includes_exact_reset_time_and_accepts_iso():
+    now = datetime(2026, 7, 4, 12, 0, tzinfo=timezone.utc).timestamp()
+    exact = UsageSnapshot(95.0, "2026-07-04T12:00:00+00:00")
+    future = UsageSnapshot(95.0, "2026-07-04T12:00:01+00:00")
+
+    assert exact.without_expired_windows(now=now).percent is None
+    assert future.without_expired_windows(now=now).percent == 95.0
 
 
 def test_weekly_fields_round_trip_through_cache(tmp_path, monkeypatch):
