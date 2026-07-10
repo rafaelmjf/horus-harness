@@ -179,6 +179,40 @@ def test_focus_window_for_pid_safe_on_no_pid():
     assert launcher.focus_window_for_pid(0) is False
 
 
+def test_fleet_prints_one_line_per_project_with_next_step_and_skips_cockpit(
+    tmp_path, monkeypatch, capsys,
+):
+    project = tmp_path / "widget"
+    cockpit = tmp_path / "horus-agent"
+    monkeypatch.setattr(config, "load_projects", lambda: [str(project), str(cockpit)])
+
+    def fake_load(path):
+        root = Path(path)
+        assert root.name != "horus-agent"
+        return {
+            "name": root.name,
+            "git": {
+                "branch": "main", "commit": {"rel": "2 hours ago"},
+                "upstream": "origin/main", "behind": 1, "ahead": 0, "dirty": False,
+            },
+            "latest": {"date": "2026-07-10", "summary": "Shipped the widget"},
+            "current_focus": "Fleet dispatch",
+            "next_action": "Land the next ticket",
+            "next_prompt": "Resume the widget.",
+        }
+
+    monkeypatch.setattr("horus.cli.dashboard.load_project", fake_load)
+
+    assert main(["fleet"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 1
+    assert lines[0] == (
+        "widget | git: main · 2 hours ago · behind 1 | "
+        "last: 2026-07-10 — Shipped the widget | focus: Fleet dispatch | "
+        "next: Land the next ticket | prompt: Resume the widget."
+    )
+
+
 def test_sessions_cmd_lists_and_prunes(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     from horus.registry import Registry, SessionRecord

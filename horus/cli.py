@@ -182,6 +182,38 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fleet(args: argparse.Namespace) -> int:
+    """One-line dispatch view for every registered project except the cockpit."""
+    projects = [
+        path for path in config.load_projects()
+        if Path(path).name.casefold() != "horus-agent"
+    ]
+    if not projects:
+        print("No fleet projects registered (the horus-agent cockpit is excluded).")
+        return 0
+
+    def compact(value: object, fallback: str = "-") -> str:
+        text = " ".join(str(value or "").split())
+        return text or fallback
+
+    for path in projects:
+        project = dashboard.load_project(path)
+        git = gitstate.summary(project.get("git")) or "not a git repo"
+        latest = project.get("latest")
+        if latest:
+            label = latest.get("summary") or latest.get("file", "")
+            session = f"{latest.get('date', '')} — {label}".strip(" —")
+        else:
+            session = "no sessions"
+        print(
+            f"{project['name']} | git: {compact(git)} | last: {compact(session)} | "
+            f"focus: {compact(project.get('current_focus'))} | "
+            f"next: {compact(project.get('next_action'))} | "
+            f"prompt: {compact(project.get('next_prompt'))}"
+        )
+    return 0
+
+
 def cmd_discover(args: argparse.Namespace) -> int:
     if args.source != "github":
         print(f"Unsupported discovery source: {args.source}")
@@ -2012,6 +2044,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="print git freshness + latest session for all registered projects")
     p_status.set_defaults(func=cmd_status)
+
+    p_fleet = sub.add_parser(
+        "fleet",
+        help="print one-line git/session/next-step context for every project except horus-agent",
+    )
+    p_fleet.set_defaults(func=cmd_fleet)
 
     p_discover = sub.add_parser("discover", help="discover remote Horus projects")
     p_discover.add_argument("source", choices=["github"], help="remote catalog source")
