@@ -59,6 +59,17 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
   work (GPT 5.5 → container, other Claude account → remote/worker; one worktree each,
   `--watch` + review). Pure refactor, no behavior change. Container launch = just the
   third backend, not a separate epic. [tier: Opus for the freeze; Sonnet/GPT5.5 impls.]
+- **★ [meta, important] Checkpoint-based incremental consolidation.** Consolidation
+  today distills the WHOLE session log at close — back-loaded, O(session length), and
+  lost/expensive when a session is cut off mid-task (hit 2026-07-09: a parallel session
+  pushed usage >100%, forcing a paid resume just to consolidate). Fix: fold a small
+  continuity delta at each *green commit checkpoint* (what shipped + decision + next,
+  appended to the session note) and stamp a "consolidated-to-here" marker; then close/
+  resume only distills the tail since the last checkpoint. Natural hook point: the
+  existing Stop/commit-and-push checkpoint gate — extend it to also capture the delta.
+  The checkpoints ARE the distillation; close becomes light hygiene over a small delta.
+  Observed working manually this session (PRD frontmatter updated per commit; only the
+  session note was batched, which is exactly what warned at close).
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
