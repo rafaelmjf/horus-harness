@@ -8,7 +8,9 @@ call ever happens.
 
 from __future__ import annotations
 
+import os
 import subprocess
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from horus import delivery, integration as intmod
@@ -16,6 +18,19 @@ from horus import delivery, integration as intmod
 
 def _git(root: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
+
+def _commit_at(root: Path, message: str, iso_time: str) -> str:
+    """Commit whatever is staged with an explicit author/committer date, so
+    attribution tests can control commit timestamps precisely instead of
+    racing real wall-clock resolution."""
+    env = {**os.environ, "GIT_AUTHOR_DATE": iso_time, "GIT_COMMITTER_DATE": iso_time}
+    subprocess.run(
+        ["git", "-C", str(root), "commit", "-am", message], check=True, capture_output=True, env=env,
+    )
+    return subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True,
+    ).stdout.strip()
 
 
 def _bare_origin_and_clone(tmp_path: Path) -> tuple[Path, Path]:
@@ -208,6 +223,77 @@ def test_delivery_receipt_degrades_gracefully_when_gh_raises(tmp_path, monkeypat
 
     assert receipt is not None
     assert receipt.pr_number is None
+
+
+# --- shared-branch attribution (killed attempt + retry) ------------------------
+
+
+def test_receipt_attributes_shared_branch_commits_by_session_time(tmp_path, monkeypatch):
+    """A killed attempt and its retry pushing to the SAME branch each opened
+    their own PR. Without time-correlation both sessions' delivery receipts
+    would resolve to the branch's current tip (the retry's commit and PR),
+    mis-attributing the retry's work to the killed session. Regression for the
+    bug observed live on commit 77bcc321."""
+    _origin, clone = _bare_origin_and_clone(tmp_path)
+    _git(clone, "checkout", "-b", "worker/shared-branch")
+
+    killed_time = "2024-01-01T00:00:00+00:00"
+    (clone / "f.txt").write_text("killed attempt work", encoding="utf-8")
+    killed_sha = _commit_at(clone, "killed attempt commit", killed_time)
+    _git(clone, "push", "origin", "worker/shared-branch")
+
+    retry_time = "2024-01-01T01:00:00+00:00"
+    (clone / "f.txt").write_text("retry work", encoding="utf-8")
+    retry_sha = _commit_at(clone, "retry commit", retry_time)
+    _git(clone, "push", "origin", "worker/shared-branch")
+
+    assert killed_sha != retry_sha
+
+    payload = (
+        '[{"number": 5, "url": "https://gh/pr/5", "state": "CLOSED", "title": "killed attempt PR", '
+        f'"headRefOid": "{killed_sha}"}}, '
+        '{"number": 7, "url": "https://gh/pr/7", "state": "OPEN", "title": "retry PR", '
+        f'"headRefOid": "{retry_sha}"}}]'
+    )
+    _patch_gh(monkeypatch, lambda *a, **k: _pr_json(payload))
+
+    killed_session_end = datetime.fromisoformat(killed_time) + timedelta(seconds=5)
+    retry_session_end = datetime.fromisoformat(retry_time) + timedelta(seconds=5)
+
+    killed_receipt = delivery.delivery_receipt(clone, session_end=killed_session_end)
+    retry_receipt = delivery.delivery_receipt(clone, session_end=retry_session_end)
+
+    assert killed_receipt is not None
+    assert retry_receipt is not None
+    assert killed_receipt.pushed_sha == killed_sha
+    assert killed_receipt.pr_number == 5
+    assert retry_receipt.pushed_sha == retry_sha
+    assert retry_receipt.pr_number == 7
+    # The whole point: each session gets its OWN delivery, not both collapsing
+    # onto the branch's current tip.
+    assert killed_receipt.pushed_sha != retry_receipt.pushed_sha
+    assert killed_receipt.pr_number != retry_receipt.pr_number
+
+
+def test_receipt_without_session_end_falls_back_to_branch_tip(tmp_path, monkeypatch):
+    """Documents the pre-fix behavior that's still correct when there's no
+    session end to correlate against: plain branch-tip attribution."""
+    _origin, clone = _bare_origin_and_clone(tmp_path)
+    _git(clone, "checkout", "-b", "worker/shared-branch")
+
+    (clone / "f.txt").write_text("killed attempt work", encoding="utf-8")
+    _commit_at(clone, "killed attempt commit", "2024-01-01T00:00:00+00:00")
+    _git(clone, "push", "origin", "worker/shared-branch")
+
+    (clone / "f.txt").write_text("retry work", encoding="utf-8")
+    retry_sha = _commit_at(clone, "retry commit", "2024-01-01T01:00:00+00:00")
+    _git(clone, "push", "origin", "worker/shared-branch")
+
+    _no_pr(monkeypatch)
+    receipt = delivery.delivery_receipt(clone)
+
+    assert receipt is not None
+    assert receipt.pushed_sha == retry_sha
 
 
 # --- render_receipt / NONCLEAN_STATUSES ----------------------------------------
