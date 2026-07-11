@@ -1,5 +1,6 @@
 """`.horus/backlog/` card parsing + claim-time overlap check."""
 
+import threading
 from pathlib import Path
 
 from horus import backlog
@@ -114,6 +115,47 @@ def test_claim_preserves_card_body_and_other_frontmatter(tmp_path):
     assert "status: claimed" in text
     assert "priority: later" in text
     assert "Some detail line." in text
+
+
+def test_claim_concurrent_overlapping_surface_is_serialized(tmp_path):
+    """TOCTOU regression: two concurrent claims on overlapping-surface cards
+    must never both succeed. Pre-fix, an unsynchronized load-check-write let
+    both racers read the backlog before either wrote `status: claimed`, so
+    the overlap check saw nothing in-progress and both claims went through
+    (~17% of trials in manual repro). Run enough trials to make that failure
+    mode near-certain if the lock regresses."""
+    trials = 60
+    name_a, name_b = "alpha", "gamma"
+    for i in range(trials):
+        # Fresh root per trial: a leftover `claimed` card from a prior trial
+        # would itself overlap `src/alpha.py` and mask the race being tested.
+        trial_root = tmp_path / f"trial{i}"
+        _mk_card(trial_root, name_a, surface="src/alpha.py")
+        _mk_card(trial_root, name_b, surface="src/alpha.py")
+
+        results = {}
+        barrier = threading.Barrier(2)
+
+        def run(name):
+            barrier.wait()
+            claimed, _ = backlog.claim(trial_root, name)
+            results[name] = claimed
+
+        t1 = threading.Thread(target=run, args=(name_a,))
+        t2 = threading.Thread(target=run, args=(name_b,))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        claimed_count = sum(1 for v in results.values() if v)
+        assert claimed_count == 1, f"trial {i}: expected exactly one claim, got {results}"
+
+        statuses = {
+            name_a: backlog.find_card(trial_root, name_a).status,
+            name_b: backlog.find_card(trial_root, name_b).status,
+        }
+        assert sorted(statuses.values()) == ["claimed", "open"]
 
 
 def test_surface_overlap_glob_matching():

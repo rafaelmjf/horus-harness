@@ -16,6 +16,8 @@ claim-time check + display), not a scheduler — no daemon, no auto-routing.
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import fnmatch
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +26,7 @@ from horus import frontmatter
 from horus.continuity import Finding
 
 BACKLOG_DIR = "backlog"
+_CLAIM_LOCK_FILE = ".claim.lock"
 
 # In-progress for claim-overlap purposes. Cards otherwise use "open" (default)
 # and are deleted on completion (see PRD's structure contract).
@@ -184,18 +187,37 @@ def _set_status(path: Path, new_status: str) -> None:
     path.write_text("\n".join(lines) + newline, encoding="utf-8")
 
 
+@contextlib.contextmanager
+def _claim_lock(root: Path):
+    """Serialize the load-check-write critical section across processes.
+
+    Two concurrent `claim()` calls both read the backlog before either writes
+    `status: claimed`, so without this lock neither sees the other as
+    in-progress and the overlap/exclusive guardrail can be bypassed (TOCTOU).
+    `flock` is held for the whole check-then-set-status section below."""
+    hdir = backlog_dir(root)
+    hdir.mkdir(parents=True, exist_ok=True)
+    with open(hdir / _CLAIM_LOCK_FILE, "w", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
 def claim(root: Path, name: str, *, force: bool = False) -> tuple[bool, list[Finding]]:
     """Attempt to claim card `name`. Returns (claimed, findings).
 
     Warnings block the claim unless `force=True`; a `fail` (card not found)
     always blocks. On success the card's `status` frontmatter is set to
     `claimed` in place — nothing else about the file changes."""
-    findings = claim_check(root, name)
-    if any(f.level == "fail" for f in findings):
-        return False, findings
-    if findings and not force:
-        return False, findings
-    target = find_card(root, name)
-    assert target is not None  # already checked above via claim_check
-    _set_status(target.path, "claimed")
-    return True, findings
+    with _claim_lock(root):
+        findings = claim_check(root, name)
+        if any(f.level == "fail" for f in findings):
+            return False, findings
+        if findings and not force:
+            return False, findings
+        target = find_card(root, name)
+        assert target is not None  # already checked above via claim_check
+        _set_status(target.path, "claimed")
+        return True, findings
