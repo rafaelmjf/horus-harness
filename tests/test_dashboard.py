@@ -785,7 +785,7 @@ def test_process_launch_window_routes_selected_agent(tmp_path, monkeypatch):
         from horus.launch import LaunchResult
         return LaunchResult(ok=True, agent=kwargs["agent"], project=kwargs["project_dir"], session_id="sid12345")
 
-    monkeypatch.setattr(dashboard.launch, "launch_interactive", fake_launch)
+    monkeypatch.setattr(dashboard.backend.launch, "launch_interactive", fake_launch)
     query = dashboard.process_launch(
         {"project": "0", "mode": "fresh", "agent": "codex", "target": "window"},
         projects=[str(proj)], known_aliases=set(),
@@ -836,7 +836,7 @@ def test_process_launch_vscode_opens_folder_without_spawning_agent(tmp_path, mon
         raise AssertionError("vscode target must not spawn an agent session")
 
     monkeypatch.setattr(dashboard.launcher, "open_vscode", fake_open_vscode)
-    monkeypatch.setattr(dashboard.launch, "launch_interactive", unexpected_launch)
+    monkeypatch.setattr(dashboard.backend.launch, "launch_interactive", unexpected_launch)
 
     query = dashboard.process_launch(
         {"project": "0", "mode": "resume", "target": "vscode"},

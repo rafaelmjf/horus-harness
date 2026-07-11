@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "LaunchBackend seam FROZEN (horus/backend.py): minimal contract launch(brief)->handle · status · stream · stop, with a behavior-preserving LocalBackend wrapping today's attended launcher (full suite green, PR out via automerge). Omnigent stays optional (no Horus dependency); native-Windows terminals are an explicit gap, rejected honestly. Prior-spike PRs resolved on main: #138 CLOSED, #139 MERGED (capabilities), #144 MERGED (Omnigent fit verdict), #145 MERGED (Codex usage stale-cache). Next flagship step: config-driven target selection over the frozen seam."
-next_action: "After the seam PR merges (watch main push CI green), wire config-driven backend/target selection through the frozen LaunchBackend (Option A: harness reads a [[targets]] table; hub writes it) so `horus open`/dashboard route through a backend instead of calling launch_interactive directly — still LocalBackend-only. Defer any OmnigentBackend until its two blocking gates clear (same-host two-account isolation E2E; secure-exposure profile). [tier: Sonnet wiring; Opus only if the routing contract is ambiguous.]"
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. The LaunchBackend seam is frozen in horus/backend.py (LocalBackend only). Next: route `horus open`/dashboard launches through the seam via config-driven target selection, staying LocalBackend-only; do NOT build an OmnigentBackend yet."
-execution_recommendation: "continue-as-is — routing existing call sites through the frozen seam is a bounded, low-ambiguity refactor (Sonnet-suitable, or an isolated worker). Plan-execution only becomes worth it once an OmnigentBackend is authorized (its blocking isolation/exposure gates clear first)."
+current_focus: "LaunchBackend seam is now LOAD-BEARING, still LocalBackend-only: `horus open` (cmd_open) and the dashboard Control-tab OS-window launch (process_launch's target=window branch, POST /launch) both route through `backend.LocalBackend().launch(LaunchBrief(...))` instead of calling `launch.launch_interactive` directly — same identity guard/registry row/terminal spawn, verified behavior-identical. Config-driven target selection deliberately NOT wired: hub's docs/multi-machine-launch-targets-design.md has no `[[targets]]` (or equivalent) contract yet as of hub HEAD 4a2b2ee — checked §9 end to end, only a boundary statement exists. Left a seam/TODO comment in dashboard.py instead of inventing one. Omnigent stays deferred (blocking gates unmet)."
+next_action: "Watch for hub to publish its [[targets]] (or equivalent) config contract in docs/multi-machine-launch-targets-design.md; once it lands, wire config-driven target/machine selection at the TODO comment in horus/dashboard.py's process_launch (and cmd_open), staying LocalBackend-only until an OmnigentBackend's blocking gates clear. Until then this flagship item is otherwise complete — next real work can come from elsewhere in the backlog. [tier: Sonnet wiring; Opus only if hub's contract shape is ambiguous.]"
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. horus open + the dashboard Control-tab launch now route through backend.LocalBackend — the flagship seam item is load-bearing. Check whether hub has published a [[targets]] config contract in docs/multi-machine-launch-targets-design.md (rafaelmjf/horus-hub); if not, pull the next backlog item instead of inventing one."
+execution_recommendation: "continue-as-is — this item is now done pending an external (hub-side) dependency; pick the next backlog item directly rather than pre-building config-driven target selection against an undefined contract."
 last_updated: 2026-07-11
 horus_min_version: 0.0.26
 ---
@@ -47,16 +47,14 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **★ [flagship] Route launches through the frozen LaunchBackend seam (multi-machine
-  arc, P0 continued).** The interface is now **frozen** in `horus/backend.py`
-  (`launch(brief)→handle · status · stream · stop`) with a behavior-preserving
-  `LocalBackend`. Remaining: make it load-bearing — route `horus open` / the dashboard
-  Control-tab launch through the backend + config-driven target selection (Option A in
-  hub `docs/multi-machine-launch-targets-design.md` §9: harness reads a `[[targets]]`
-  table; hub writes it), staying LocalBackend-only. Do NOT build an `OmnigentBackend`
-  yet — its blocking gates (same-host two-account isolation E2E; secure-exposure profile)
-  must clear first (`research/omnigent-fit-2026-07-10.md`); no Horus worker/cockpit under
-  the current boundary. [tier: Sonnet wiring; Sonnet/GPT5.5 later adapters.]
+- **★ [flagship] LaunchBackend seam is load-bearing (multi-machine arc, P0 continued)
+  — remaining slice blocked on hub.** `horus open` + dashboard Control-tab launch route
+  through `LocalBackend` (see Shipped). Only remaining work is config-driven
+  target/machine selection, gated on hub actually writing a `[[targets]]`-or-equivalent
+  contract in `docs/multi-machine-launch-targets-design.md` (not present as of hub HEAD
+  `4a2b2ee` §9 — a boundary statement only, do not invent the table from this side).
+  Do NOT build an `OmnigentBackend` yet — blocking gates unmet
+  (`research/omnigent-fit-2026-07-10.md`). [tier: Sonnet wiring once hub's contract lands.]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
@@ -94,7 +92,7 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**LaunchBackend seam frozen + LocalBackend** (2026-07-11): new `horus/backend.py` fixes the minimal contract `launch(brief)->handle · status · stream · stop` (frozen per `research/omnigent-fit-2026-07-10.md`) with neutral `LaunchBrief`/`Handle`/`SessionStatus`/`StreamEvent` types; `LocalBackend` wraps today's attended launcher with no behavior change (same identity guard/registry row/terminal spawn — 21 existing launch tests unchanged), maps `status` to the registry, `stop` to a best-effort pid-tree terminate, and honestly refuses non-local targets (native-Windows terminals are an explicit gap, no silent fallback). Omnigent stays optional — the module imports nothing Omnigent and permits an `OmnigentBackend` later with no Horus dependency; session *fork* deliberately stays out of the minimal contract. Full suite green (1052 passed).
+**LaunchBackend seam frozen, then made load-bearing** (2026-07-11): `horus/backend.py` fixes the minimal contract `launch(brief)->handle · status · stream · stop` with a behavior-preserving `LocalBackend` (native-Windows/other targets honestly refused, no fallback; Omnigent stays optional/undependend); `horus open` and the dashboard Control-tab OS-window launch (`POST /launch`) now route through `backend.LocalBackend().launch(...)` instead of calling `launch.launch_interactive` directly — same identity guard/registry row/terminal spawn. Config-driven target selection stays deferred pending hub's `[[targets]]`-or-equivalent contract (not yet written as of hub HEAD `4a2b2ee`); a TODO marks the plug-in point in `dashboard.py` rather than inventing one. Full suite green (1052 passed) + a live `horus open` probe (real registry row + spawned OS process).
 **Omnigent LaunchBackend fit spike** (2026-07-10, PR #144): source-grounded matrix (`research/omnigent-fit-2026-07-10.md`) — optional backend fits Linux native + named managed containers, rejects native Windows, leaves same-host multi-subscription isolation Unknown pending a two-account E2E; Horus stays the memory plane.
 **Honest dispatch receipts** (2026-07-10, PR #143): a non-clean `horus run` session (`failed`/`stale`) no longer collapses to a bare status — new `horus/delivery.py` derives pushed SHA / opened PR / continuity-closed post-hoc from the worker's own worktree/branch on disk (`integration.pr_for_branch` new, not scoped to `horus/`-prefixed branches), rendered as `<status>-but-delivered · pushed <sha> · PR #N · continuity closed` alongside the real status; `horus sessions` also now sorts running-first/recency and hides rows idle >24h behind a new `--all` flag (`registry.is_recent`). Every probe degrades to nothing on a gone branch or git/gh failure.
 **Usage-preflight hardening** (2026-07-10, PR #141, released v0.0.35): `horus run`'s preflight now reads BOTH the 5h and weekly windows and gates on the more-constraining one (`UsageSnapshot` gains defaulted weekly fields + `worst()`, cache round-trips both); a `[50,80)` closing-window `Note:` surfaces percent+reset (visibility, not a runtime predictor); an unknown signal is surfaced (`capacity unknown …`) instead of proceeding as if healthy, with opt-in `--refuse-on-unknown` for critical launches — the PreToolUse guard's fail-open hot path is deliberately untouched.
