@@ -2616,6 +2616,47 @@ def test_health_endpoint_identity():
     assert isinstance(data["pid"], int)
 
 
+def test_manifest_served_with_content_type_and_required_fields():
+    import json as _json
+
+    response = _get("/manifest.json")
+    assert response["status"] == 200
+    assert ("Content-Type", "application/manifest+json") in response["headers"]
+    manifest = _json.loads(response["body"])
+    assert manifest["name"]
+    assert manifest["short_name"]
+    assert manifest["start_url"] == "/"
+    assert manifest["display"] == "standalone"
+    assert manifest["background_color"] and manifest["theme_color"]
+    sizes = {icon["sizes"] for icon in manifest["icons"]}
+    assert {"192x192", "512x512"} <= sizes
+    for icon in manifest["icons"]:
+        assert icon["type"] == "image/png"
+
+
+def test_sw_served_with_content_type():
+    response = _get("/sw.js")
+    assert response["status"] == 200
+    assert ("Content-Type", "text/javascript") in response["headers"]
+    assert b"addEventListener('fetch'" in response["body"]
+
+
+def test_sw_only_precaches_static_shell_assets_never_gated_or_api_routes():
+    for gated in (
+        "/accounts-panel", "/accounts-refresh", "/projects-grid", "/health",
+        "/pty/stream", "/pty/term", "/update-check", "/github-catalog", "/sessions",
+    ):
+        assert gated not in dashboard._PWA_PRECACHE_PATHS
+    assert {"/assets/icon-192.png", "/assets/icon-512.png"} <= set(dashboard._PWA_PRECACHE_PATHS)
+
+
+def test_page_head_includes_manifest_link_and_sw_registration(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    page = dashboard.render_index([])
+    assert "<link rel='manifest' href='/manifest.json'>" in page
+    assert "serviceWorker.register('/sw.js')" in page
+
+
 def test_update_pill_renders_when_newer():
     out = dashboard._update_pill_html({"update_available": True, "latest": "9.9.9"})
     assert "/self-update" in out and "9.9.9" in out
