@@ -48,6 +48,76 @@ def test_expected_skills_registered():
     assert {"horus-consolidate", "horus-distill-history", "horus-infer", "horus-execution"} <= names
 
 
+def test_delegation_decision_skills_registered():
+    # Slice 2: the shared rubric + the two thin consumer skills.
+    names = {s.name for s in skills.SKILLS}
+    assert {"delegation-rubric", "execution-decision", "dispatch-decision"} <= names
+
+
+def test_delegation_rubric_is_the_shared_single_source_of_truth():
+    rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
+    # Reads the Slice 1 data-only surface, never a pick/router.
+    assert "horus capabilities --models" in rubric.content
+    assert "--for" in rubric.content  # explicitly forbids adding a pick mode
+    assert "data-only" in rubric.content.lower()
+    # Tier-trust ladder is data-driven, not hardcoded to a model.
+    assert "tier-trust" in rubric.content.lower()
+    assert "Proven" in rubric.content and "Unproven" in rubric.content
+    assert "clean_count" in rubric.content and "last_outcomes" in rubric.content
+    # The one lever sets BOTH the pick and the verification depth.
+    assert "same tier-trust sets BOTH" in rubric.content or "SAME tier-trust" in rubric.content
+    # Verification = observe a gate you didn't author; reproduction != re-run.
+    assert "did NOT author" in rubric.content
+    assert "Reproduction ≠ re-running" in rubric.content
+    assert "CI check green on the" in rubric.content
+    # Runtime/visual surface defaults to the owner.
+    assert "asking the OWNER" in rubric.content
+    # Owner caution/guard flags gate the pick (gpt-5.6 token-hunger + ceiling).
+    assert "caution" in rubric.content and "guard" in rubric.content
+    assert "token-hungry" in rubric.content and "usage ceiling" in rubric.content
+    # Hard boundary held.
+    assert "advisory" in rubric.content.lower()
+    assert "research/omnigent.md" in rubric.content
+
+
+def test_both_consumer_skills_import_the_shared_rubric():
+    # The logic lives once, in the rubric; each skill loads it by relative path.
+    for name in ("execution-decision", "dispatch-decision"):
+        skill = next(s for s in skills.SKILLS if s.name == name)
+        assert "../delegation-rubric/SKILL.md" in skill.content, name
+        assert "restate or fork" in skill.content, name
+        # The data-reading logic lives in the rubric, not forked here; each
+        # consumer still names the calibration surface it defers to.
+        assert "calibration" in skill.content, name
+        # Advisory boundary held in each thin consumer.
+        assert "never auto" in skill.content or "nothing here auto-runs" in skill.content, name
+
+
+def test_execution_decision_skill_is_in_project_subagents():
+    skill = next(s for s in skills.SKILLS if s.name == "execution-decision")
+    assert skill.version == 1
+    # Its mode vocabulary + the in-project verification specialization.
+    assert "`inline`" in skill.content and "`subagent-plan`" in skill.content
+    assert "RUNS the gate at the phase boundary" in skill.content
+    assert "TRUSTS the code" in skill.content
+    assert "execution_recommendation" in skill.content
+    assert "horus datum close" in skill.content
+
+
+def test_dispatch_decision_skill_is_cockpit_multiproject():
+    skill = next(s for s in skills.SKILLS if s.name == "dispatch-decision")
+    assert skill.version == 1
+    # Its mode vocabulary, account routing, and the overseer verification note.
+    assert "`inline-here`" in skill.content
+    assert "`dispatched-worker`" in skill.content
+    assert "`dispatched-plan`" in skill.content
+    assert "away from the overseer account" in skill.content
+    assert "horus usage check" in skill.content
+    # Observe CI green on the merge SHA; do not re-run the suite.
+    assert "required CI check green on the merge SHA" in skill.content
+    assert "Do NOT re-run" in skill.content
+
+
 def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
     # Phase 3 (v3-tooling): every rewritten skill keeps the six-lane guidance
     # reachable under an explicit, clearly-marked fallback heading.
