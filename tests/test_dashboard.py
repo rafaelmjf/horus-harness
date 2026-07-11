@@ -3,8 +3,9 @@
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -1595,7 +1596,14 @@ def _write_codex_auth(home, account_id="codex-acct-1"):
     )
 
 
-def _write_codex_rollout(home, primary=5.0, secondary=40.0):
+def _write_codex_rollout(home, primary=5.0, secondary=40.0, *, primary_reset=None, secondary_reset=None):
+    # Reset timestamps default to comfortably in the future (relative to wall-clock,
+    # not a fixed epoch) so this fixture keeps exercising the "current window" case
+    # regardless of when the suite runs; pass explicit past epochs to test expiry.
+    if primary_reset is None:
+        primary_reset = int(time.time()) + 3600
+    if secondary_reset is None:
+        secondary_reset = int(time.time()) + 7 * 86400
     path = home / "sessions" / "2026" / "06" / "26" / "rollout-d.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     event = {
@@ -1605,8 +1613,8 @@ def _write_codex_rollout(home, primary=5.0, secondary=40.0):
             "type": "token_count",
             "info": {"last_token_usage": {"total_tokens": 100}, "model_context_window": 1000},
             "rate_limits": {
-                "primary": {"used_percent": primary, "resets_at": 1782390000},
-                "secondary": {"used_percent": secondary, "resets_at": 1782990000},
+                "primary": {"used_percent": primary, "resets_at": primary_reset},
+                "secondary": {"used_percent": secondary, "resets_at": secondary_reset},
             },
         },
     }
@@ -1634,6 +1642,107 @@ def test_gather_accounts_codex_ring_from_rollout_rate_limits(tmp_path, monkeypat
     assert codex["week_pct"] == 40.0
     assert codex["five_reset"]  # primary reset formatted, not None
     assert codex["week_reset"]  # secondary (weekly) reset formatted, not None
+
+
+def test_gather_accounts_codex_past_reset_shows_available_not_stale_percent(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    home = tmp_path / "cx-home"
+    config.set_account_codex_home("codex-work", str(home))
+    past = int(time.time()) - 3600
+    _write_codex_rollout(home, primary=97.0, secondary=10.0, primary_reset=past)
+    codex = [a for a in dashboard.gather_accounts() if a.get("agent") == "codex"][0]
+    assert codex["five_pct"] is None  # stale 97% dropped, not shown
+    assert codex["five_reset"] is None
+    assert codex["five_reset_expired"] is True
+    # The still-current weekly window is untouched.
+    assert codex["week_pct"] == 10.0
+    assert codex["week_reset_expired"] is False
+
+
+def test_account_usage_past_reset_shows_available_not_stale_percent(monkeypatch):
+    past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    future = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+    report = dashboard.claude_usage.UsageReport(97.0, past, 12.0, future)
+    monkeypatch.setattr(dashboard.claude_usage, "latest_usage", lambda **kw: report)
+    account = dashboard._account_usage("me", None)
+    assert account["five_pct"] is None
+    assert account["five_reset"] is None
+    assert account["five_reset_expired"] is True
+    # The still-current weekly window renders its real percentage unchanged.
+    assert account["week_pct"] == 12.0
+    assert account["week_reset_expired"] is False
+
+
+def test_account_usage_current_window_percent_unchanged(monkeypatch):
+    future_five = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    future_week = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+    report = dashboard.claude_usage.UsageReport(55.0, future_five, 30.0, future_week)
+    monkeypatch.setattr(dashboard.claude_usage, "latest_usage", lambda **kw: report)
+    account = dashboard._account_usage("me", None)
+    assert account["five_pct"] == 55.0
+    assert account["five_reset_expired"] is False
+    assert account["week_pct"] == 30.0
+    assert account["week_reset_expired"] is False
+
+
+def test_account_usage_expiry_check_makes_no_network_or_cache_call(monkeypatch):
+    def _boom(*a, **k):
+        raise AssertionError("display-only expiry check must not touch network/cache")
+
+    monkeypatch.setattr(dashboard.usage_snapshot, "refresh_usage", _boom)
+    monkeypatch.setattr(dashboard.usage_snapshot, "cached_usage", _boom)
+    past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    report = dashboard.claude_usage.UsageReport(97.0, past, None, None)
+    monkeypatch.setattr(dashboard.claude_usage, "latest_usage", lambda **kw: report)
+    account = dashboard._account_usage("me", None)
+    assert account["five_pct"] is None
+    assert account["five_reset_expired"] is True
+
+
+def test_accounts_strip_shows_reset_copy_not_stale_percent_when_expired():
+    accounts = [{
+        "agent": "codex", "alias": "codex-work",
+        "five_pct": None, "week_pct": None,
+        "five_reset": None, "week_reset": None,
+        "five_reset_expired": True, "week_reset_expired": True,
+    }]
+    strip = dashboard._accounts_strip(accounts)
+    assert "5h window reset" in strip and "capacity available" in strip
+    assert "Weekly window reset" in strip
+    assert "83%" not in strip
+
+
+def test_accounts_panel_shows_reset_copy_not_stale_percent_when_expired(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    accounts = [{
+        "agent": "codex", "alias": "codex-work",
+        "five_pct": None, "week_pct": None,
+        "five_reset": None, "week_reset": None,
+        "five_reset_expired": True, "week_reset_expired": True,
+    }]
+    page = dashboard.render_control(dashboard.gather_projects(), accounts, [])
+    assert "5h window reset" in page and "capacity available" in page
+    assert "Weekly window reset" in page
+
+
+def test_control_session_card_codex_fallback_drops_stale_percent_on_expired_reset(monkeypatch):
+    rec = SessionRecord(session_id="s1", agent="codex", project="/tmp/proj-xyz", account="acct-x", status="running")
+    past_epoch = int(time.time()) - 3600
+    cu_report = dashboard.codex_usage.UsageReport(
+        rollout=Path("/tmp/r.jsonl"),
+        timestamp="2026-07-11T00:00:00Z",
+        context_tokens=100,
+        context_window=1000,
+        context_percent=10.0,
+        primary_percent=97.0,
+        primary_resets_at=past_epoch,
+        secondary_percent=None,
+        secondary_resets_at=None,
+    )
+    monkeypatch.setattr(dashboard.codex_usage, "latest_usage", lambda p: cu_report)
+    card = dashboard._control_session_card(rec, accounts=[])
+    assert "usage unknown" in card
+    assert "97%" not in card
 
 
 def test_accounts_panel_renders_weekly_bar_with_reset(tmp_path, monkeypatch):

@@ -22,6 +22,7 @@ import shlex
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -58,6 +59,7 @@ from horus import (
     selfupdate,
     session_discovery,
     upgrade,
+    usage_snapshot,
 )
 from horus.continuity import HORUS_DIR, check_project, horus_dir, recent_sessions
 
@@ -402,18 +404,42 @@ def _start_remote_refresh(owner: str, local_projects: list[str]) -> None:
     threading.Thread(target=refresh, daemon=True).start()
 
 
+def _reset_window_display(pct: float | None, reset: str | None) -> tuple[float | None, str | None, bool]:
+    """Apply PR #145's expired-window rule to a *displayed* percent/reset pair.
+
+    Once ``reset`` is in the past, the cached percent predates the window's own
+    rollover and is no longer evidence of current usage — same rule
+    ``usage_snapshot.without_expired_windows`` applies before ``horus run`` gates
+    on it. Here there's no live refetch: the caller just renders "reset, capacity
+    available" copy instead of the stale percent (never a fabricated hard 0%).
+    """
+    if reset and usage_snapshot._window_expired(reset, time.time()):
+        return None, None, True
+    return pct, reset, False
+
+
 def _account_usage(alias: str, cred_path: Path | None, *, config_dir: Path | None = None) -> dict[str, Any]:
     report = claude_usage.latest_usage(cred_path=cred_path)
     reset = report.five_hour_resets_at if report else None
     week_reset = report.seven_day_resets_at if report else None
+    five_pct, five_reset, five_expired = _reset_window_display(
+        report.five_hour_percent if report else None,
+        claude_usage._fmt_reset(reset) if reset else None,
+    )
+    week_pct, week_reset_fmt, week_expired = _reset_window_display(
+        report.seven_day_percent if report else None,
+        claude_usage._fmt_reset(week_reset) if week_reset else None,
+    )
     return {
         "agent": "claude",
         "alias": alias,
         "mapped_path": str(config_dir) if config_dir else "",
-        "five_pct": report.five_hour_percent if report else None,
-        "week_pct": report.seven_day_percent if report else None,
-        "five_reset": claude_usage._fmt_reset(reset) if reset else None,
-        "week_reset": claude_usage._fmt_reset(week_reset) if week_reset else None,
+        "five_pct": five_pct,
+        "week_pct": week_pct,
+        "five_reset": five_reset,
+        "week_reset": week_reset_fmt,
+        "five_reset_expired": five_expired,
+        "week_reset_expired": week_expired,
     }
 
 
@@ -429,14 +455,24 @@ def _codex_account_usage(alias: str, home: Path | None) -> dict[str, Any]:
     report = codex_usage.latest_account_usage(home=home)
     reset = report.primary_resets_at if report else None
     week_reset = report.secondary_resets_at if report else None
+    five_pct, five_reset, five_expired = _reset_window_display(
+        report.primary_percent if report else None,
+        codex_usage._fmt_reset(reset) if reset is not None else None,
+    )
+    week_pct, week_reset_fmt, week_expired = _reset_window_display(
+        report.secondary_percent if report else None,
+        codex_usage._fmt_reset(week_reset) if week_reset is not None else None,
+    )
     return {
         "agent": "codex",
         "alias": alias,
         "mapped_path": str(home) if home else "",
-        "five_pct": report.primary_percent if report else None,
-        "week_pct": report.secondary_percent if report else None,
-        "five_reset": codex_usage._fmt_reset(reset) if reset is not None else None,
-        "week_reset": codex_usage._fmt_reset(week_reset) if week_reset is not None else None,
+        "five_pct": five_pct,
+        "week_pct": week_pct,
+        "five_reset": five_reset,
+        "week_reset": week_reset_fmt,
+        "five_reset_expired": five_expired,
+        "week_reset_expired": week_expired,
     }
 
 
@@ -2482,6 +2518,8 @@ def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
         reset = (
             f"<div class='muted' style='font-size:11px'>5h resets {html.escape(a['five_reset'])}</div>"
             if a.get("five_reset")
+            else "<div class='muted' style='font-size:11px'>5h window reset — capacity available</div>"
+            if a.get("five_reset_expired")
             else ""
         )
         # Weekly usage as a full-card-width bar under the row (used%, like the ring).
@@ -2491,6 +2529,8 @@ def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
             if a.get("week_reset"):
                 label += f" · resets {a['week_reset']}"
             week_bar = _usage_bar(a["week_pct"], label)
+        elif a.get("week_reset_expired"):
+            week_bar = _usage_bar(None, "Weekly window reset — capacity available")
         rows.append(
             f"<div class='acct'>{_ring(a['five_pct'])}"
             f"<div><div class='who'>{html.escape(a['alias'])}{badge}</div>{reset}"
@@ -2527,13 +2567,21 @@ def _accounts_strip(accounts: list[dict[str, Any]]) -> str:
         agent = a.get("agent", "claude")
         provider_cls = " codex" if agent == "codex" else ""
         provider = "Codex" if agent == "codex" else "Claude"
-        reset = f"<span class='when2'>5h resets {html.escape(a['five_reset'])}</span>" if a.get("five_reset") else ""
+        reset = (
+            f"<span class='when2'>5h resets {html.escape(a['five_reset'])}</span>"
+            if a.get("five_reset")
+            else "<span class='when2'>5h window reset — capacity available</span>"
+            if a.get("five_reset_expired")
+            else ""
+        )
         week_bar = ""
         if a.get("week_pct") is not None:
             label = f"Weekly {a['week_pct']:.0f}%"
             if a.get("week_reset"):
                 label += f" - resets {a['week_reset']}"
             week_bar = _usage_bar(a["week_pct"], label)
+        elif a.get("week_reset_expired"):
+            week_bar = _usage_bar(None, "Weekly window reset — capacity available")
         rows.append(
             "<div class='acct-c'><div class='acct-row'>"
             f"{_ring(a['five_pct'])}<div class='info'>{_account_alias_form(a)}"
@@ -2732,7 +2780,8 @@ def _control_session_card(rec: registry.SessionRecord, accounts: list[dict[str, 
                 f"({cu.context_percent:.0f}%)</div>"
             )
             if pct is None and cu.primary_percent is not None:
-                pct = cu.primary_percent
+                cu_reset = codex_usage._fmt_reset(cu.primary_resets_at) if cu.primary_resets_at is not None else None
+                pct, _, _ = _reset_window_display(cu.primary_percent, cu_reset)
 
     cache_line = ""
     try:
