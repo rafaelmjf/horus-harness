@@ -1791,3 +1791,70 @@ def test_run_worktree_refuses_non_worktree_target(tmp_path, monkeypatch, capsys)
     assert rc == 2
     assert "Refusing to run" in capsys.readouterr().out
     assert Registry.default().all() == []  # nothing spawned
+
+
+def _write_backlog_card(root: Path, name: str, **fields):
+    hdir = root / ".horus" / "backlog"
+    hdir.mkdir(parents=True, exist_ok=True)
+    lines = ["---"] + [f"{k}: {v}" for k, v in fields.items()] + ["---", f"# {name}", ""]
+    (hdir / f"{name}.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def test_backlog_list_shows_parallel_safety_metadata(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(
+        tmp_path, "card-a", status="open", priority="later", tier="sonnet",
+        parallel="exclusive", surface="horus/dashboard.py",
+    )
+    _write_backlog_card(tmp_path, "card-b", status="open", priority="later", tier="sonnet")
+
+    assert main(["backlog", "list", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "card-a" in out and "parallel=exclusive" in out
+    assert "horus/dashboard.py" in out
+    assert "card-b" in out and "parallel=unstated" in out
+    assert "surface: unverified" in out
+
+
+def test_backlog_claim_back_compat_no_new_fields(tmp_path, monkeypatch, capsys):
+    """A card without parallel/surface — the pre-existing card shape — still claims."""
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "old-style", status="open", priority="later", tier="sonnet")
+
+    assert main(["backlog", "claim", "old-style", "--path", str(tmp_path)]) == 0
+    text = (tmp_path / ".horus" / "backlog" / "old-style.md").read_text(encoding="utf-8")
+    assert "status: claimed" in text
+
+
+def test_backlog_claim_warns_and_blocks_on_surface_overlap(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "a", status="claimed", surface="horus/dashboard.py")
+    _write_backlog_card(tmp_path, "b", status="open", surface="horus/dashboard.py")
+
+    rc = main(["backlog", "claim", "b", "--path", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "overlaps" in out
+    assert "re-run with --force" in out
+    assert (tmp_path / ".horus" / "backlog" / "b.md").read_text(encoding="utf-8").count("status: open") == 1
+
+    rc = main(["backlog", "claim", "b", "--path", str(tmp_path), "--force"])
+    assert rc == 0
+    text = (tmp_path / ".horus" / "backlog" / "b.md").read_text(encoding="utf-8")
+    assert "status: claimed" in text
+
+
+def test_backlog_claim_non_overlapping_proceeds_clean(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "a", status="claimed", surface="horus/dashboard.py")
+    _write_backlog_card(tmp_path, "b", status="open", surface="horus/pty_host.py")
+
+    rc = main(["backlog", "claim", "b", "--path", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Claimed: b" in out
+    assert "warn" not in out.lower()
