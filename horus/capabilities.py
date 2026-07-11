@@ -132,17 +132,63 @@ def _top_level_items(section_body: str) -> list[str]:
 
     Falls back to bold-paragraph items when there are no list markers at all —
     this repo's own live PRD writes ``## Shipped`` as ``**Title:** …`` blocks,
-    not bullets.
+    not bullets. Folds continuation lines (indented or nested content after a
+    top-level marker) into the item text, collapsing whitespace.
     """
-    matches: list[tuple[int, str]] = []
-    for line in section_body.splitlines():
+    lines = section_body.splitlines()
+
+    # First pass: identify all list markers and their indentation.
+    markers: list[tuple[int, int, str]] = []  # (line_num, indent, text_after_marker)
+    for i, line in enumerate(lines):
         m = _LIST_ITEM_RE.match(line)
         if m:
-            matches.append((len(m.group(1)), " ".join(m.group(2).split())))
-    if not matches:
+            indent = len(m.group(1))
+            text = m.group(2)
+            markers.append((i, indent, text))
+
+    if not markers:
         return _bold_paragraph_items(section_body)
-    base_indent = min(indent for indent, _ in matches)
-    return [text for indent, text in matches if indent == base_indent]
+
+    base_indent = min(indent for _, indent, _ in markers)
+
+    # Second pass: collect top-level items with their continuation lines.
+    items: list[str] = []
+    for idx, (marker_line_num, marker_indent, marker_text) in enumerate(markers):
+        if marker_indent != base_indent:
+            # Skip non-top-level markers; they fold into their parent.
+            continue
+
+        # Start with the marker line text.
+        text_parts = [" ".join(marker_text.split())]
+
+        # Find where this item ends: at the next top-level (or shallower) marker
+        # or end of section. This skips nested markers, which will be included.
+        next_marker_line = len(lines)
+        for j in range(idx + 1, len(markers)):
+            next_indent = markers[j][1]
+            if next_indent <= base_indent:
+                next_marker_line = markers[j][0]
+                break
+
+        # Collect continuation lines and nested items: all non-empty lines until
+        # the next top-level marker. Nested items (deeper indent) are folded in.
+        for i in range(marker_line_num + 1, next_marker_line):
+            line = lines[i]
+            m = _LIST_ITEM_RE.match(line)
+            if m:
+                # A list marker: include it if nested (deeper indent).
+                marker_indent_here = len(m.group(1))
+                if marker_indent_here > base_indent:
+                    text_parts.append(" ".join(m.group(2).split()))
+            else:
+                # Not a list marker: include if non-empty (continuation line).
+                stripped = line.strip()
+                if stripped:
+                    text_parts.append(stripped)
+
+        items.append(" ".join(text_parts))
+
+    return items
 
 
 def _bold_paragraph_items(section_body: str) -> list[str]:
