@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "PWA installability shipped (2026-07-11, PR #151, branch feat/pwa-installable, automerge squash armed): /manifest.json + /sw.js wired into the shared page head; service worker cache-first-precaches only a fixed whitelist of static app-shell assets (icon PNGs + vendored xterm CSS/JS), every HTML page and data/API route stays network-only. Side-fix: pyproject.toml package-data was silently excluding icon.ico/vendor/xterm/* from the published wheel — fixed in the same PR. Local pytest green (1085 passed) + live probe done; PR's own CI was still in progress at close time, not yet confirmed merged. One sibling bundle card remains open: mobile-terminal-interaction-regression (responsive-mobile-pass queued after it). Backlog parallel-safety gate (PR #148) still awaits its multi-worker contention test."
-next_action: "Two open threads, human picks: (a) continue the mobile-web-app bundle — next pick is mobile-terminal-interaction-regression (high priority, in-app terminal takes no input on hosted/mobile); or (b) run the parallel-safety gate's multi-worker contention test (dispatch 2+ workers to claim distinct backlog cards concurrently via `horus backlog claim`, confirm overlap/exclusive warns+blocks under real concurrent pushes). Either way, first confirm PR #151 actually merged (CI was in progress at close time). [tier: Sonnet for (a); Sonnet supervisor + Sonnet/Haiku workers for (b).]"
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. Confirm PR #151 (pwa-installable) merged cleanly. Then two open threads — ask which to pick: continue the sequential mobile-web-app bundle (next: mobile-terminal-interaction-regression, .horus/backlog/), or run the parallel-safety gate's multi-worker contention test (PR #148, claim 2+ distinct backlog cards from separate workers concurrently, confirm the gate behaves under real concurrent pushes)."
-execution_recommendation: "continue-as-is — both next options are single-focus (one bundle card, or one contention-test dispatch); pick per the human's answer, then re-evaluate delegation mode for whichever is chosen."
+current_focus: "Responsive mobile pass shipped (2026-07-11, PR #153, branch feat/responsive-mobile-pass, merged clean — CI green: freshness + pytest 3.12/3.13). Five phone-width CSS overflow bugs fixed in horus/dashboard.py's inline _STYLE (header reflow, minmax(0,1fr) grid fix, intent-row flex-wrap, .card table scroll rule); verified via Playwright + system chromium (no framework added to the repo). Mobile-web-app bundle now down to one remaining card: mobile-terminal-interaction-regression. Incidental bug filed (not fixed): accounts-refresh-button-invisible (PR #150's refresh button is opacity:0 on every viewport). Backlog parallel-safety gate (PR #148) still awaits its multi-worker contention test."
+next_action: "Two open threads, human picks: (a) mobile-terminal-interaction-regression (high priority, in-app terminal takes no input on hosted/mobile — last card in the mobile-web-app bundle); or (b) run the parallel-safety gate's multi-worker contention test (dispatch 2+ workers to claim distinct backlog cards concurrently via `horus backlog claim`, confirm overlap/exclusive warns+blocks under real concurrent pushes). Lower priority: accounts-refresh-button-invisible (medium, one-line CSS fix). [tier: Sonnet for (a) or the button fix; Sonnet supervisor + Sonnet/Haiku workers for (b).]"
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. Two open threads — ask which to pick: mobile-terminal-interaction-regression (.horus/backlog/, high priority, in-app terminal takes no input on hosted/mobile), or the parallel-safety gate's multi-worker contention test (PR #148, claim 2+ distinct backlog cards from separate workers concurrently, confirm the gate behaves under real concurrent pushes). accounts-refresh-button-invisible (.horus/backlog/) is a smaller one-line-fix option if neither fits the session."
+execution_recommendation: "continue-as-is — all open options are single-focus (one bug card, or one contention-test dispatch); pick per the human's answer, then re-evaluate delegation mode for whichever is chosen."
 last_updated: 2026-07-11
 horus_min_version: 0.0.26
 ---
@@ -54,11 +54,10 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
   (`research/omnigent-fit-2026-07-10.md`). [tier: Sonnet wiring once hub's contract lands.]
 - **Mobile-web-app bundle (sequential, one card at a time — mostly share
   `horus/dashboard.py`, do not parallelize):** `usage-reset-inference`,
-  `usage-refresh-button`, and `pwa-installable` shipped (see Shipped).
-  Remaining, each an open card in `.horus/backlog/`:
-  `mobile-terminal-interaction-regression` (high — in-app terminal takes no
-  input on hosted/mobile), `responsive-mobile-pass` (medium). [tier: Sonnet
-  each.]
+  `usage-refresh-button`, `pwa-installable`, and `responsive-mobile-pass`
+  shipped (see Shipped). Remaining: `mobile-terminal-interaction-regression`
+  (high — in-app terminal takes no input on hosted/mobile), open card in
+  `.horus/backlog/`. [tier: Sonnet]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
@@ -75,17 +74,14 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 5. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD +
    execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup.
 6. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per
-   shell call (close + guard-host + usage guard), reaching PowerShell calls too since
-   the F1 matcher fix. Measure on a tool-heavy session; only if material, build a
-   single `horus pretool --hook` dispatcher (fabric suggestion 2026-07-08). [tier:
-   Haiku measure / Sonnet dispatcher]
+   shell call (close + guard-host + usage guard); only if material, build a single
+   `horus pretool --hook` dispatcher (fabric suggestion 2026-07-08). [tier: Haiku
+   measure / Sonnet dispatcher]
 7. **Multi-developer continuity (design, evidence-gated):** PRD.md assumes one active
-   workstream — two devs closing sessions collide on frontmatter (`current_focus`/
-   `next_action`), the merge hot-spot; body sections merge like code and sessions are
-   already per-machine local. Direction: per-workstream focus (frontmatter keyed by
-   branch/dev, or `.horus/focus/<name>.md`) aggregated by `resolve_focus`/dashboard/
-   `resume`; fetch-first close guard already refuses stale closes. Per the ladder
-   rule, design now, build when a real second developer arrives. [tier: Opus design]
+   workstream — two devs closing sessions collide on frontmatter. Direction:
+   per-workstream focus (frontmatter keyed by branch/dev, or `.horus/focus/<name>.md`)
+   aggregated by `resolve_focus`/dashboard/`resume`. Per the ladder rule, design now,
+   build when a real second developer arrives. [tier: Opus design]
 
 ### Open / deferred — see `.horus/backlog/`
 
@@ -96,6 +92,7 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Responsive mobile pass** (2026-07-11, PR #153): five phone-width CSS overflow bugs fixed in `horus/dashboard.py`'s inline `_STYLE` (media queries/flex-wrap/`minmax(0,1fr)`, no framework, desktop unchanged) — the fixed-height header row pushed the theme toggle off-screen on every page; five `auto-fill` card grids had a `minmax()` floor wider than any phone (a bare `1fr` override doesn't fix this, needs explicit `minmax(0,1fr)` per the grid spec); the launch form's Resume/Fresh-session buttons lacked `flex-wrap`; the Sessions page's 8-column live-sessions table had no horizontal-scroll rule (`.card table` now mirrors `.panel table`). Verified via Playwright + system chromium against an isolated dashboard instance seeded with this repo's real projects/sessions: no horizontal overflow at 320/375/768px on every page, nav/launch button/terminal reachable, desktop unchanged, full suite green (1085 passed). Incidental find, filed separately not fixed here: `accounts-refresh-button-invisible` (the PR #150 refresh button is `opacity:0` on every viewport, not just mobile).
 **PWA installability** (2026-07-11, PR #151): `GET /manifest.json` (`application/manifest+json`; sumi-e `--bg`/`--seal` colors, standalone display, 192/512 icons resized from the existing `icon.ico` mascot) + `GET /sw.js` (`text/javascript`), wired into the shared page head; the service worker cache-first-precaches ONLY a fixed whitelist of static app-shell assets (icon PNGs + vendored xterm CSS/JS) — every HTML page and data/API route (`/accounts-*`, `/projects-grid`, `/health`, `/pty/*`, …) always hits the network, never cache, since the dashboard sits behind Cloudflare Access. Side-fix: `pyproject.toml` package-data was silently excluding `icon.ico`/`vendor/xterm/*` from the published wheel (verified via the installed 0.0.35 RECORD) — fixed, or the SW's `cache.addAll()` would 404 in production.
 **Usage-refresh-button, cheap-cache-reread scope** (2026-07-11): dashboard accounts strip gains a "refresh (cached)" control (`GET /accounts-refresh`) that re-reads `usage_snapshot`'s on-disk cache via new `usage_snapshot.read_cache_only` (no live-fetch fallback) and reapplies `_reset_window_display`'s past-reset inference against wall-clock time — zero network call, no CLI turn; Codex was already disk-only and needed no change.
 **Usage-reset-inference** (2026-07-11, PR #149): dashboard usage display (accounts strip/panel + Codex session-card fallback) reuses PR #145's expired-window rule on the display side — a cached window past its `resets_at` renders "window reset — capacity available" instead of the stale percent, never a fabricated 0%, no extra network/cache call (`horus/dashboard.py`'s `_reset_window_display`).
