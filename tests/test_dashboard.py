@@ -1768,6 +1768,98 @@ def test_gather_accounts_includes_ambient_codex(tmp_path, monkeypatch):
     assert codex[0]["alias"] != "codex-acct-1"
 
 
+def _write_usage_cache(alias, *, five_pct, five_reset_epoch, week_pct=None, week_reset_epoch=None):
+    """Write a claude usage_snapshot cache file directly, as `horus run` preflight
+    or the PreToolUse guard would — the on-disk artifact the refresh control reads."""
+    from horus import usage_snapshot as _us
+
+    five_reset = datetime.fromtimestamp(five_reset_epoch, tz=timezone.utc).isoformat() if five_reset_epoch else None
+    week_reset = datetime.fromtimestamp(week_reset_epoch, tz=timezone.utc).isoformat() if week_reset_epoch else None
+    snapshot = _us.UsageSnapshot(five_pct, five_reset, week_pct, week_reset)
+    _us._write_cache(_us._cache_path("claude", alias), snapshot, now=time.time())
+
+
+def test_cached_claude_account_usage_reads_disk_cache_no_live_call(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+
+    def _boom(*a, **k):
+        raise AssertionError("cache-only refresh must never call the live OAuth endpoint")
+
+    monkeypatch.setattr(dashboard.claude_usage, "latest_usage", _boom)
+    monkeypatch.setattr(dashboard.claude_usage, "fetch_usage", _boom)
+    monkeypatch.setattr(dashboard.usage_snapshot, "refresh_usage", _boom)
+    monkeypatch.setattr(dashboard.usage_snapshot, "cached_usage", _boom)
+
+    future = int(time.time()) + 3600
+    _write_usage_cache("me", five_pct=42.0, five_reset_epoch=future)
+    account = dashboard._cached_claude_account_usage("me")
+    assert account["five_pct"] == 42.0
+    assert account["five_reset_expired"] is False
+
+
+def test_cached_claude_account_usage_applies_past_reset_inference(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    past = int(time.time()) - 3600
+    _write_usage_cache("me", five_pct=97.0, five_reset_epoch=past)
+    account = dashboard._cached_claude_account_usage("me")
+    assert account["five_pct"] is None  # stale 97% dropped, not shown
+    assert account["five_reset_expired"] is True
+
+
+def test_cached_claude_account_usage_no_cache_file_is_unknown_not_error(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    account = dashboard._cached_claude_account_usage("never-run")
+    assert account["five_pct"] is None
+    assert account["five_reset_expired"] is False
+
+
+def test_gather_accounts_claude_cache_only_skips_live_fetch(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)  # isolate from the real dev session's account
+    config.set_account_config_dir("me", str(tmp_path / "cc-home"))
+
+    def _boom(*a, **k):
+        raise AssertionError("claude_cache_only must never touch the network")
+
+    monkeypatch.setattr(dashboard.claude_usage, "latest_usage", _boom)
+    future = int(time.time()) + 3600
+    _write_usage_cache("me", five_pct=10.0, five_reset_epoch=future)
+    accounts = dashboard.gather_accounts(claude_cache_only=True)
+    claude = [a for a in accounts if a["agent"] == "claude"]
+    assert len(claude) == 1
+    assert claude[0]["five_pct"] == 10.0
+
+
+def test_accounts_refresh_route_rerenders_from_cache_after_reset_passes(tmp_path, monkeypatch):
+    """End-to-end: hit /accounts-refresh after the cached window's reset has
+    passed since the (simulated) page load — the fragment must show the
+    'capacity available' copy, not the stale percent, with zero live calls."""
+    _init(tmp_path, monkeypatch)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)  # isolate from the real dev session's account
+    config.set_account_config_dir("me", str(tmp_path / "cc-home"))
+
+    def _boom(*a, **k):
+        raise AssertionError("no live call should happen on /accounts-refresh")
+
+    monkeypatch.setattr(dashboard.claude_usage, "latest_usage", _boom)
+    monkeypatch.setattr(dashboard.claude_usage, "fetch_usage", _boom)
+
+    past = int(time.time()) - 60
+    _write_usage_cache("me", five_pct=88.0, five_reset_epoch=past)
+    response = _get("/accounts-refresh")
+    assert response["status"] == 200
+    body = response["body"].decode("utf-8")
+    assert "88%" not in body
+    assert "capacity available" in body
+
+
+def test_accounts_refresh_button_labeled_cached_not_live(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    strip = dashboard._accounts_strip([])
+    assert "refresh (cached)" in strip
+    assert "/accounts-refresh" in strip or "horusRefreshAccounts" in strip
+
+
 def test_known_aliases_includes_codex_isolated_and_ambient(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     config.set_account_codex_home("codex-work", str(tmp_path / "cx-home"))

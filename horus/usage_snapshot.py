@@ -193,8 +193,13 @@ def refresh_usage(
 # Cache
 # --------------------------------------------------------------------------- #
 
-def _load_cache(path: Path, *, ttl: float, now: float) -> _Cached | None:
-    """Return a fresh cache entry, or ``None`` for a miss/stale/corrupt file."""
+def _load_cache(path: Path, *, ttl: float | None, now: float) -> _Cached | None:
+    """Return a cache entry, or ``None`` for a miss/stale/corrupt file.
+
+    ``ttl=None`` skips the freshness gate entirely — whatever is on disk is
+    returned regardless of age (used by ``read_cache_only``, which wants "what's
+    there" rather than "is it fresh enough to skip a live fetch").
+    """
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -205,7 +210,7 @@ def _load_cache(path: Path, *, ttl: float, now: float) -> _Cached | None:
     if not isinstance(ts, int | float):
         return None
     # Stale, or a clock that jumped backwards past the write — treat as a miss.
-    if now - ts >= ttl or now < ts:
+    if ttl is not None and (now - ts >= ttl or now < ts):
         return None
     if not data.get("ok"):
         return _Cached(None)
@@ -288,3 +293,19 @@ def cached_usage(
     snapshot = _read_live(agent, account, timeout=timeout)
     _write_cache(path, snapshot, now=now)
     return snapshot
+
+
+def read_cache_only(agent: str, account: str | None = None) -> UsageSnapshot | None:
+    """Whatever ``horus run`` preflight / the PreToolUse guard last wrote to disk
+    for ``agent``+``account`` — however old, and with no live-fetch fallback.
+
+    Distinct from ``cached_usage()``, which falls back to a live read on a stale
+    or missing cache (built for the hot path that needs a fresh signal). This is
+    for callers that must never touch the network — e.g. the dashboard's manual
+    "refresh (cached)" control — and rely on the caller to apply
+    ``UsageSnapshot.without_expired_windows``/reset-display logic for staleness
+    that matters (a reset boundary already turns an old percent into "unknown"
+    rather than a misleading stale figure).
+    """
+    cached = _load_cache(_cache_path(agent, account), ttl=None, now=time.time())
+    return cached.snapshot if cached is not None else None
