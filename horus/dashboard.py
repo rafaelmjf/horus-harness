@@ -942,6 +942,73 @@ def _project_prs_html(path: str) -> str:
     )
 
 
+# PWA installability. The service worker precaches ONLY this fixed list of
+# static app-shell assets — never HTML pages, never /accounts-*, /projects-grid,
+# /health, /pty/*, /update-check, or any other data/API route. The dashboard sits
+# behind Cloudflare Access in exposed mode, so gated/authenticated content and
+# usage data must never be served stale from a cache.
+_PWA_PRECACHE_PATHS = (
+    "/assets/icon-192.png",
+    "/assets/icon-512.png",
+    "/assets/xterm/xterm.css",
+    "/assets/xterm/xterm.js",
+    "/assets/xterm/xterm-addon-fit.js",
+)
+
+
+def _manifest_json() -> bytes:
+    # Colors match the sumi-e dark theme's --bg / --seal CSS custom properties
+    # (see _STYLE :root); the icon is the existing eyeball/mascot brand asset
+    # (horus/assets/icon.ico), just resized to the two required PWA sizes.
+    manifest = {
+        "name": "Horus — project continuity & control panel",
+        "short_name": "Horus",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "background_color": "#15161a",
+        "theme_color": "#df524a",
+        "icons": [
+            {"src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+    }
+    return json.dumps(manifest).encode("utf-8")
+
+
+def _service_worker_js() -> bytes:
+    precache = json.dumps(list(_PWA_PRECACHE_PATHS))
+    cache_name = f"horus-shell-{__version__}"
+    return (
+        f"const CACHE_NAME = {json.dumps(cache_name)};\n"
+        f"const PRECACHE_URLS = {precache};\n"
+        "\n"
+        "self.addEventListener('install', (event) => {\n"
+        "  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));\n"
+        "  self.skipWaiting();\n"
+        "});\n"
+        "\n"
+        "self.addEventListener('activate', (event) => {\n"
+        "  event.waitUntil(caches.keys().then((names) =>\n"
+        "    Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))\n"
+        "  ));\n"
+        "  self.clients.claim();\n"
+        "});\n"
+        "\n"
+        "// Cache-first for the precached static app-shell assets ONLY. Every other\n"
+        "// request (every HTML page, /accounts-*, /projects-grid, /health, /pty/*,\n"
+        "// /update-check, etc.) is never intercepted here, so it always goes straight\n"
+        "// to the network — gated/authenticated content and usage data are never\n"
+        "// served from cache.\n"
+        "self.addEventListener('fetch', (event) => {\n"
+        "  const url = new URL(event.request.url);\n"
+        "  if (event.request.method === 'GET' && PRECACHE_URLS.includes(url.pathname)) {\n"
+        "    event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));\n"
+        "  }\n"
+        "});\n"
+    ).encode("utf-8")
+
+
 def _page(title: str, body: str, active: str = "projects", wide: bool = False, live: int = 0) -> str:
     icon_key = html.escape(__version__, quote=True)
     main_cls = " class='wide'" if wide else ""
@@ -951,8 +1018,11 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         f"<title>{html.escape(title)}</title>"
         f"<link rel='icon' href='/favicon.ico?v={icon_key}' sizes='any'>"
         f"<link rel='icon' type='image/png' href='/assets/icon.png?v={icon_key}'>"
+        "<link rel='manifest' href='/manifest.json'>"
+        "<meta name='theme-color' content='#df524a'>"
         f"<style>{_STYLE}</style>"
         "<script>try{if(localStorage.getItem('horus_skin')!=='dark')document.documentElement.classList.add('skin-light')}catch(e){document.documentElement.classList.add('skin-light')}</script>"
+        "<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js')})}</script>"
         "</head><body>"
         "<input type='checkbox' id='skin' onclick=\"var l=document.documentElement.classList.toggle('skin-light');try{localStorage.setItem('horus_skin',l?'light':'dark')}catch(e){};this.checked=l\">"
         "<header class='top'><div class='wrap top-in'><div class='brand'>"
@@ -3909,6 +3979,34 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/update-check":
             # Async top-nav fragment; a failed/offline check renders as up-to-date.
             self._send(_update_pill_html())
+            return
+        if parsed.path == "/manifest.json":
+            payload = _manifest_json()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/manifest+json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "max-age=86400")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if parsed.path == "/sw.js":
+            payload = _service_worker_js()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/javascript")
+            self.send_header("Content-Length", str(len(payload)))
+            # Never let the browser HTTP-cache the SW script itself past a beat —
+            # that's the standard way a new SW (new CACHE_NAME) gets picked up
+            # promptly instead of the browser serving a stale sw.js from disk cache.
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Service-Worker-Allowed", "/")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if parsed.path == "/assets/icon-192.png":
+            self._send_package_asset("icon-192.png", "image/png")
+            return
+        if parsed.path == "/assets/icon-512.png":
+            self._send_package_asset("icon-512.png", "image/png")
             return
         if parsed.path == "/health":
             # Machine-readable identity for the companion: lets a starting mascot
