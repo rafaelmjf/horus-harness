@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry
+from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry, routines
 from horus.registry import Registry, SessionRecord
 from horus.upgrade import UpgradeAction
 
@@ -3054,3 +3054,84 @@ def test_projects_grid_fragment_renders_v3_and_v2_projects(tmp_path, monkeypatch
     assert "NEXT ACTION" in body and ">y<" in body
     assert "id='backlog'" not in body
     assert "/250 lines" not in body
+
+
+def test_projects_grid_survives_no_horus_dir_project(tmp_path, monkeypatch):
+    """A registered project whose path lost its .horus/ dir (or was deleted) used
+    to raise FileNotFoundError deep in _project_column (via _resume_html ->
+    routines.resume_prompt -> resume_context) and 500 the whole section.
+    routines.resume_prompt now degrades to "" for this case (see
+    test_resume_prompt_degrades_to_empty_without_horus_dir), so this concrete
+    trigger renders a normal (mostly empty) card with the existing "no .horus/"
+    badge — the fragment must never 500, and the other project must fully render."""
+    _init(tmp_path, monkeypatch)
+    good = tmp_path / "good"
+    initialize.init_project(good, assume_yes=True)
+
+    broken = tmp_path / "broken"
+    broken.mkdir()
+    config.register_project(broken)  # registered, but never got a .horus/ dir
+
+    response = _get("/projects-grid")
+
+    assert response["status"] == 200
+    body = response["body"].decode("utf-8")
+    assert "2 projects under watch" in body
+    assert "good" in body
+    assert "<details class='launch'>" in body  # the good project still fully renders
+    assert "broken" in body
+    assert "no .horus/" in body  # badge from _project_column's `missing` marker
+
+
+def test_projects_grid_error_card_for_unexpected_per_project_failure(tmp_path, monkeypatch):
+    """The generic per-project guard: for a failure mode that ISN'T the specific
+    "no .horus/ dir" case (e.g. any other exception raised while rendering one
+    project's column), the section must still return 200 with an error card for
+    that project and full rendering for every other project — this is the
+    primary fix, independent of the routines.resume_prompt degrade above."""
+    _init(tmp_path, monkeypatch)
+    good = tmp_path / "good"
+    initialize.init_project(good, assume_yes=True)
+    bad = tmp_path / "bad"
+    initialize.init_project(bad, assume_yes=True)
+
+    real_project_column = dashboard._project_column
+
+    def flaky(p, i, aliases=None):
+        if p["name"] == "bad":
+            raise RuntimeError("boom: simulated unexpected render failure")
+        return real_project_column(p, i, aliases)
+
+    monkeypatch.setattr(dashboard, "_project_column", flaky)
+
+    response = _get("/projects-grid")
+
+    assert response["status"] == 200
+    body = response["body"].decode("utf-8")
+    assert "2 projects under watch" in body
+    assert "good" in body
+    assert "<details class='launch'>" in body  # the good project still fully renders
+    assert "bad" in body
+    assert "failed to load" in body
+    assert "boom: simulated unexpected render failure" in body
+
+
+def test_project_column_safe_renders_error_card_on_raise(monkeypatch):
+    """Direct unit test of the guard: any exception from _project_column becomes
+    a compact error card instead of propagating."""
+
+    def boom(p, i, aliases=None):
+        raise FileNotFoundError("no .horus/ directory at /tmp/gone")
+
+    monkeypatch.setattr(dashboard, "_project_column", boom)
+    card = dashboard._project_column_safe({"name": "gone", "path": "/tmp/gone"}, 0)
+    assert "failed to load" in card
+    assert "gone" in card
+    assert "no .horus/ directory" in card
+
+
+def test_resume_prompt_degrades_to_empty_without_horus_dir(tmp_path):
+    """routines.resume_prompt should not raise for a project with no .horus/ dir —
+    the dashboard's per-project error-card guard is the primary defense, but the
+    routine itself should degrade gracefully for this specific, expected case."""
+    assert routines.resume_prompt(tmp_path) == ""

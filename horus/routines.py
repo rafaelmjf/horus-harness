@@ -171,7 +171,14 @@ def resume_context(root: Path) -> dict[str, str]:
 
 
 def resume_prompt(root: Path) -> str:
-    """Prompt for resuming a project without front-loading every Horus lane."""
+    """Prompt for resuming a project without front-loading every Horus lane.
+
+    Degrades to "" (nothing to resume) when the project has no ``.horus/``
+    directory yet, rather than propagating resume_context's FileNotFoundError —
+    callers rendering many projects at once (the dashboard) must not have one
+    uninitialized/deleted project take down the whole batch."""
+    if not horus_dir(root).is_dir():
+        return ""
     info = resume_context(root)
     project = info["project"]
     current_focus = info["current_focus"] or "(not set)"
