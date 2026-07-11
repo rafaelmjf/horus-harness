@@ -71,6 +71,23 @@ FEATURES_SIX_LANE = """# Features
 | Widget sync | not yet |
 """
 
+# A PRD with wrapped bullets in Shipped — regression test for truncation bug.
+GAMMA_PRD_WRAPPED_BULLETS = """---
+status: active
+---
+
+# gamma — PRD
+
+## Shipped
+
+- **Release → hosted auto-deploy + pinned-install switch (2026-07-09).** Closes item 5
+  of the roadmap; pinned-install switch flips hosts to the released wheel.
+- Simpler single-line bullet for contrast.
+- Top-level with nested sub-detail
+  - Indented sub-item under the parent.
+  - Another sub-item.
+"""
+
 
 def test_section_matches_qualified_heading():
     body = capabilities.frontmatter.parse(ALPHA_PRD).body
@@ -83,7 +100,7 @@ def test_top_level_items_bullets_and_numbers():
     body = capabilities.frontmatter.parse(ALPHA_PRD).body
     items = capabilities._top_level_items(capabilities._section(body, "Backlog"))
     assert items == [
-        "**First item** with a wrapped",
+        "**First item** with a wrapped continuation line that has no marker.",
         "Second item as a numbered entry.",
     ]
 
@@ -101,6 +118,27 @@ def test_shipped_lines_bold_paragraph_fallback():
 def test_shipped_lines_plain_bullets():
     body = capabilities.frontmatter.parse(BETA_PRD).body
     assert capabilities.shipped_lines(body) == ["**Only** a plain bullet.", "Another plain bullet."]
+
+
+def test_shipped_lines_wrapped_bullets_regression():
+    """Regression: multi-line bullets must extract as full joined text, not truncated.
+    Also verifies that top-level bullets with nested sub-items fold them in correctly."""
+    body = capabilities.frontmatter.parse(GAMMA_PRD_WRAPPED_BULLETS).body
+    items = capabilities.shipped_lines(body)
+    assert len(items) == 3
+    # First item: wrapped bullet with continuation line must be fully extracted.
+    assert items[0] == (
+        "**Release → hosted auto-deploy + pinned-install switch (2026-07-09).** "
+        "Closes item 5 of the roadmap; pinned-install switch flips hosts to the released wheel."
+    )
+    # Second item: simple single-line bullet.
+    assert items[1] == "Simpler single-line bullet for contrast."
+    # Third item: top-level bullet with nested sub-items must fold sub-items in.
+    assert items[2] == (
+        "Top-level with nested sub-detail "
+        "Indented sub-item under the parent. "
+        "Another sub-item."
+    )
 
 
 def test_six_lane_shipped_lines_from_features_table():
