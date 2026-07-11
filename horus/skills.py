@@ -724,11 +724,326 @@ durable results at closure (Step 6) likewise goes back to those lanes via
 """
 
 
+_DELEGATION_RUBRIC_SKILL = """\
+---
+name: delegation-rubric
+description: >-
+  Shared, data-backed reference for the two delegation-decision skills
+  (`execution-decision` and `dispatch-decision`). It encodes ONE calibration +
+  verification rubric: how to read `horus capabilities --models` (measured
+  datums + owner priors from the empirical spine), turn a task shape into a mode
+  + model-tier recommendation, and dial verification depth by how proven that
+  tier is. NOT invoked on its own — the two decision skills load it so the logic
+  lives in one place and a model re-tag (new datums) propagates to both flows.
+  Advisory only: it EMITS a recommendation the agent applies; it never
+  auto-selects a model or auto-routes a dispatch.
+---
+
+<!-- horus-skill-version: 1 -->
+
+# Delegation rubric — shared calibration + verification logic
+
+Single source of truth for the delegation-decision framework. Both
+`execution-decision` (in-project, subagents substrate) and `dispatch-decision`
+(cockpit, multi-project sessions substrate) LOAD this file and apply the steps
+below. They differ only in their substrate and their mode vocabulary; the
+calibration ladder and the verification logic are identical and live *here* — so
+a model re-tag in the datums moves both flows at once, and the same tier-trust
+sets BOTH the model pick AND how hard to verify.
+
+## Hard boundary (do not cross)
+
+This rubric is **advisory**. It produces a recommendation — mode + tier +
+verification depth — that the agent reads and APPLIES. Nothing here auto-selects
+a model, auto-routes a dispatch, or spends. `horus capabilities` stays
+data-only: there is no `--for`/pick mode and you must not add one. Orchestration
+is ceded to execution planes; Horus stays the memory plane that measures and
+displays (drift trigger: `research/omnigent.md`).
+
+## Step 1 — Read the calibration data
+
+Run `horus capabilities --models` (add `--stdout` for JSON). It is data only and
+names no model to pick. Per model it reports:
+
+- **`tier`** (owner prior) — the role the owner assigns: design/ambiguity/verify
+  gate, scoped-impl lead, mechanical, frontier, codex, …
+- **`clean_count` / `closed_datums` / `total_datums`** (measured) — how many
+  runs closed `clean` out of how many closed and seen total.
+- **`last_outcomes`** (measured, most-recent first) — the recent track record:
+  `clean` / `nudged` / `bounced` / `died`.
+- **`strength` / `caution` / `guard`** (owner priors, free text) — `caution` and
+  `guard` are HARD constraints on how the model may be used.
+
+## Step 2 — Read the task shape (four axes)
+
+- **Ambiguity** — is the goal + acceptance crisp, or exploratory/underspecified?
+- **Volume** — a small localized change, or high-volume / repetitive work?
+- **Runtime surface** — pure logic (tests are the gate), or a runtime/visual
+  surface (server, UI, CLI UX) a human must eyeball?
+- **Scope clarity** — are the files / blast-radius known and fenceable, or
+  open-ended?
+
+## Step 3 — Tier-trust ladder (data, not hardcode)
+
+Trust is READ from the data, never pinned to a model name:
+
+- **Proven** = many `clean` closed datums with a clean recent `last_outcomes`
+  streak (today: `sonnet-5`, 10 clean). Trust it on work matching its `tier`.
+  Well-matched proven work is the strongest delegation candidate.
+- **Unproven** = 0–few datums (today: `haiku-4.5` = 0; `opus-4.8` / `fable-5` /
+  `gpt-5.6` / `gpt-5.5` ≈ 1 each). Prefer it ONLY on well-matched, scoped work
+  where a clean gate will catch a miss — you are calibrating it, so the win is
+  the datum as much as the output. Never hand an unproven tier a large/loose
+  task.
+- **Owner flags gate the pick.** A `caution` or `guard` is a hard constraint —
+  read it before matching. Live example: `gpt-5.6` carries *"token-hungry —
+  needs tightly-scoped task + explicit stopping point + budget headroom"* and
+  *"do not dispatch near usage ceiling"* → fine for a crisp scoped task with
+  headroom; a poor fit for a large/loose task; off the table near the usage
+  ceiling.
+- **Match tier to shape** (this mirrors the managed-block model-tier rule; the
+  data tells you which concrete model fills each role now and how proven it is):
+  design / ambiguity / the verify gate → the design tier (`opus-4.8`); most
+  scoped implementation → the scoped-impl lead (`sonnet-5`); mechanical
+  verifiable sweeps → the mechanical tier (`haiku-4.5`) — never as the judgment
+  gate.
+
+## Step 4 — Shape → mode + tier
+
+The mode *vocabulary* belongs to the consuming skill; the shared axis is:
+
+- Small / ambiguous / exploratory / debugging → **stay inline** (orchestration
+  overhead + judgment loss dominate; delegation buys little).
+- High-volume / low-ambiguity / clear gate / fenceable scope → **delegate** to
+  the best-matched tier from Step 3, then reproduce the gate.
+- Large AND multi-phase / spans surfaces → **delegate as a phased plan**.
+- Runtime/visual surface where the *user* is the real reviewer → delegate the
+  build, but the gate is the owner's eyeball, not a code read.
+
+Pick the tier from Step 3: prefer a proven tier on matched work; an unproven
+tier only on scoped work with a clean gate; respect every `caution` / `guard`.
+
+## Step 5 — Verification depth, dialed by the SAME tier-trust
+
+The pick and the verification are two ends of one lever: the less proven the
+tier you chose, the harder you verify — because you are calibrating it.
+Verification means **observing a deterministic gate you did NOT author** — never
+re-running the worker's own narrative, never trusting a "tests pass" prose
+claim, whoever wrote it.
+
+- **Reproduction ≠ re-running the suite.** A *required* CI check green on the
+  exact commit reproduces the test gate — don't re-run what it already covers.
+  Reproduction is a deterministic signal you observe yourself.
+- **Proven + gate green → just observe** the gate and move on. No line-by-line
+  re-read; the diff review is for scope/risk, not as evidence it works.
+- **Unproven → verify more:** observe the gate AND add one independent probe of
+  the changed surface. You're building the datum, so spend a little more to
+  trust the result — then close the loop with `horus datum close` so the next
+  decision is better calibrated.
+- **Runtime / visual surface → default to asking the OWNER** to eyeball it. A
+  mocked test blesses nonexistent flags; only a live drive of the real surface
+  counts. Self-probe only when the owner is away AND has pre-authorized it for
+  this session.
+- Each consuming skill adds its substrate-specific gate (in-project: run the
+  gate at the phase boundary; overseer: observe required CI green on the merge
+  SHA). The dial above is the same in both.
+
+## Step 6 — Emit the recommendation
+
+Emit three things for the agent to APPLY (never auto-apply them):
+
+- **mode** — in the consuming skill's vocabulary,
+- **tier** — a concrete model, chosen from the data + shape,
+- **verification depth** — observe-only vs observe+probe vs owner-eyeball, with
+  the one deterministic gate you'll observe named explicitly.
+
+Always show the data that drove it (e.g. *"sonnet-5: 10 clean, tier=scoped-impl
+lead → matched"*). The agent decides and acts; you advise.
+
+## v2 six-lane projects (fallback)
+
+This rubric is **structure-agnostic** — it reads live `horus capabilities
+--models` data and the task shape, not any `.horus/` lane file — so v2
+(six-lane) and v3 (`PRD.md`) projects consume it identically. Nothing here
+changes with the continuity structure.
+"""
+
+
+_EXECUTION_DECISION_SKILL = """\
+---
+name: execution-decision
+description: >-
+  Decide HOW to execute an in-project task on the Claude/Codex subagents
+  substrate: recommend `inline` vs `subagent-plan`, a model tier, and a
+  verification depth. Use this at the planning boundary of a feature or fix
+  inside one repo — when `execution_recommendation` needs setting, when weighing
+  whether to spawn an implementation subagent/worker, or before writing an
+  `execution.md` phase plan. It reads live calibration data (`horus capabilities
+  --models`) through the shared delegation rubric so the recommendation reflects
+  the current datums. Advisory: it EMITS a recommendation you apply — it never
+  auto-selects a model or auto-spawns a worker. For cross-project cockpit
+  dispatch use `dispatch-decision` instead.
+---
+
+<!-- horus-skill-version: 1 -->
+
+# Execution decision (in-project, subagents substrate)
+
+Substrate: one repo, one working session, with native subagents / `horus run`
+workers available. You are choosing how to execute the NEXT in-project unit of
+work. This skill is the thin in-project consumer of the shared rubric — it adds
+the in-project mode vocabulary and one substrate note, nothing else. It pairs
+with `horus-execution`, which supervises the plan once you've decided to
+delegate.
+
+## Load the shared rubric first
+
+Read **`../delegation-rubric/SKILL.md`** and apply its six steps (read the data,
+read the task shape, the tier-trust ladder, shape→mode+tier, verification depth,
+emit). Everything about reading `horus capabilities --models` and dialing
+verification by tier-trust lives there — do not restate or fork it here.
+
+## Mode vocabulary (this skill's output for the rubric's Step 4 axis)
+
+- **`inline`** — do it in this session. The rubric's "stay inline" case: small,
+  or ambiguous/exploratory, or debugging. On a single-model runtime (no cheaper
+  worker tier reachable) inline is also right unless volume would flood the
+  context window — delegation then buys only context hygiene.
+- **`subagent-plan`** — delegate to a bounded subagent / `horus run` worker (one
+  phase at a time) via `horus-execution` / `execution.md`. The rubric's
+  "delegate" and "delegate as a phased plan" cases: high-volume, low-ambiguity,
+  fenceable scope, clear gate. Name the tier from the data and set
+  `delegation_basis` to what delegation actually buys here (context hygiene, and
+  on a tiered runtime a cheaper implementation tier).
+
+Feed the recommendation into `execution_recommendation` (`continue-as-is` ≈
+`inline`; `plan-execution` ≈ `subagent-plan`) and, when delegating, into the
+`execution.md` phase's `worker_tier` / `delegation_basis`.
+
+## In-project verification note (the substrate specialization of rubric Step 5)
+
+CI has NOT run yet inside the session — there is no merge SHA to observe. So the
+supervisor **RUNS the gate at the phase boundary** (the handoff note's one gate
+command + one live probe of the changed surface) and **TRUSTS the code** —
+reviews the diff for scope/risk, not line-by-line as evidence it works. Dial by
+tier-trust exactly as the rubric says: a proven worker → run the gate once and
+observe; an unproven worker → run the gate AND add an independent probe, then
+`horus datum close` the run so the tier earns a real datum. A runtime/visual
+surface still defaults to the owner's eyeball.
+
+## Emit (advisory — you apply it, nothing here auto-runs)
+
+`mode` (`inline` | `subagent-plan`) + `tier` (a concrete model from the data) +
+`verification depth` (observe-only | observe+probe | owner-eyeball, with the
+gate command named). Show the calibration that drove it. Spawning the subagent,
+selecting the model, and running the gate are all YOUR actions — this skill
+recommends, it does not route.
+
+## v2 six-lane projects (fallback)
+
+Structure-agnostic except where the recommendation lands: on a v3 project the
+`execution_recommendation` field is in `PRD.md` frontmatter; on a v2 (six-lane)
+project it's in `roadmap.md`. The decision logic, the shared rubric, and the
+modes are identical.
+"""
+
+
+_DISPATCH_DECISION_SKILL = """\
+---
+name: dispatch-decision
+description: >-
+  Decide HOW to dispatch a unit of work from the multi-project cockpit on the
+  sessions substrate: recommend `inline-here` vs `dispatched-worker` vs
+  `dispatched-plan`, which ACCOUNT to route it to (away from the overseer
+  account, gated on `horus usage check`), a model tier, and a verification
+  depth. Use this when triaging cross-project work from an overseer/cockpit
+  session — picking whether to do it here, hand it to a tracked `horus run`
+  worker, or stand up a phased plan. It reads live calibration data (`horus
+  capabilities --models`) through the shared delegation rubric. Advisory: it
+  EMITS a recommendation you apply — it never auto-selects a model, auto-routes
+  an account, or auto-spawns a worker. For choosing how to execute inside a
+  single repo use `execution-decision` instead.
+---
+
+<!-- horus-skill-version: 1 -->
+
+# Dispatch decision (cockpit / multi-project, sessions substrate)
+
+Substrate: an overseer/cockpit session triaging work across many registered
+projects, dispatching tracked sessions via `horus run --account <alias> --path
+<repo>`. Work lands back via PR + CI. This skill is the thin cross-project
+consumer of the shared rubric — it adds the dispatch mode vocabulary, account
+routing, and one substrate note.
+
+## Load the shared rubric first
+
+Read **`../delegation-rubric/SKILL.md`** and apply its six steps. All of the
+calibration-data reading and the verification-depth dial live there; do not
+restate or fork it.
+
+## Mode vocabulary (this skill's output for the rubric's Step 4 axis)
+
+- **`inline-here`** — do it in the overseer session. The rubric's "stay inline"
+  case (small / ambiguous / exploratory / debugging). Note the cost: it spends
+  the overseer account's context and usage on implementation — the whole point
+  of the cockpit is to keep that account free to oversee, so the bar for
+  `inline-here` is HIGHER than for `execution-decision`'s `inline`.
+- **`dispatched-worker`** — one tracked `horus run` worker for a bounded,
+  fenceable, clear-gate task. The rubric's "delegate" case.
+- **`dispatched-plan`** — a phased plan (orchestrator > supervisor > worker, one
+  worktree per worker) for large multi-phase work. The rubric's "delegate as a
+  phased plan" case.
+
+## Account routing (cockpit-specific, on top of the rubric)
+
+- **Route away from the overseer account.** A dispatched worker runs on an
+  ISOLATED account (a `horus account` alias → its own `CLAUDE_CONFIG_DIR` /
+  `CODEX_HOME`), never the ambient overseer login — that keeps the overseer free
+  AND, on a tiered setup, buys the cheaper-tier × separate-account double win.
+- **Gate the target account on `horus usage check`** (`--target claude|codex`
+  for the worker's agent). If the chosen account is near a closure threshold,
+  pick another isolated account or hold the dispatch — and heed the rubric's
+  `guard` flags (e.g. `gpt-5.6` "do not dispatch near usage ceiling"). This is a
+  check you OBSERVE, not an auto-throttle.
+
+## Overseer verification note (the substrate specialization of rubric Step 5)
+
+Dispatched work lands via **PR + CI**, so the deterministic gate already exists
+remotely: **OBSERVE the required CI check green on the merge SHA** — roughly one
+`gh` call (`gh pr checks` / the run conclusion on the head SHA). Do NOT re-run
+the suite locally; a required check green on the exact commit already reproduces
+the test gate. Dial by tier-trust as the rubric says: a proven worker → observe
+CI green and accept; an unproven worker → observe CI green AND drive one live
+probe of the changed runtime surface (a mocked green never blesses a runtime
+flag), then `horus datum close` the run. A runtime/visual surface still defaults
+to the owner's eyeball.
+
+## Emit (advisory — you apply it, nothing here auto-runs)
+
+`mode` (`inline-here` | `dispatched-worker` | `dispatched-plan`) + `account`
+(which isolated alias, or "hold — usage") + `tier` (a concrete model from the
+data) + `verification depth` (observe-CI | observe-CI+probe | owner-eyeball).
+Show the calibration + the usage-check result that drove it. Selecting the
+account, spawning the worker, and observing CI are all YOUR actions — this skill
+recommends; `horus` never auto-routes a dispatch (the hard boundary:
+`research/omnigent.md`).
+
+## v2 six-lane projects (fallback)
+
+Structure-agnostic: this skill operates at the cockpit level across projects and
+reads live `horus` data + the task shape, not any `.horus/` lane file. v2 and v3
+projects are dispatched identically.
+"""
+
+
 SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 9, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 3, _INFER_SKILL),
     Skill("horus-execution", 8, _EXECUTION_SKILL),
+    Skill("delegation-rubric", 1, _DELEGATION_RUBRIC_SKILL),
+    Skill("execution-decision", 1, _EXECUTION_DECISION_SKILL),
+    Skill("dispatch-decision", 1, _DISPATCH_DECISION_SKILL),
 )
 
 
