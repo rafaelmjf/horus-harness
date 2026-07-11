@@ -25,6 +25,7 @@ from horus import (
     codex_usage,
     config,
     dashboard,
+    datums,
     delivery,
     fetchcheck,
     frontmatter,
@@ -244,7 +245,21 @@ def cmd_fleet(args: argparse.Namespace) -> int:
 
 
 def cmd_capabilities(args: argparse.Namespace) -> int:
-    """EXPERIMENTAL: read-only fleet capability catalog (see horus/capabilities.py)."""
+    """EXPERIMENTAL: read-only fleet capability catalog (see horus/capabilities.py).
+
+    With ``--models``, prints the DATA-ONLY model-calibration roll-up instead —
+    measured datums (``~/.horus/datums.json``) joined with owner priors
+    (``~/.horus/capabilities.toml``). It describes what was measured and what the
+    owner flagged; it never names a model to pick (see horus/datums.py)."""
+    if getattr(args, "models", False):
+        rollups = datums.build_model_rollup(
+            datums.DatumStore.default().all(), datums.load_priors()
+        )
+        if args.stdout:
+            print(json.dumps(datums.rollup_to_dict(rollups), indent=2))
+        else:
+            print(datums.render_model_rollup(rollups), end="")
+        return 0
     projects = config.load_projects()
     if not projects:
         print("No projects registered (run `horus init` inside a project).")
@@ -257,6 +272,30 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
         data = json.loads(text)
         total = sum(len(p["capabilities"]) for p in data["projects"])
         print(f"Wrote {len(data['projects'])} project(s), {total} capability entrie(s) to {out_path}")
+    return 0
+
+
+def cmd_datum_close(args: argparse.Namespace) -> int:
+    """Attach the agent-supplied qualitative half to a measured datum.
+
+    The mechanical half (model/effort/account/runtime/exit…) is captured
+    automatically by `horus run`; this one structured command adds the judgment
+    the harness must never infer: ``outcome`` (clean/nudged/bounced/died), the
+    ``shape`` (ambiguity/volume/runtime), and a free note. Resolves the run id by
+    prefix, like `horus tail`."""
+    try:
+        datum = datums.DatumStore.default().close(
+            args.run_id, outcome=args.outcome, shape=args.shape, note=args.note
+        )
+    except (LookupError, ValueError) as exc:
+        print(exc)
+        return 2
+    bits = [f"outcome={datum.outcome}"]
+    if datum.shape:
+        bits.append(f"shape={datum.shape!r}")
+    if datum.note:
+        bits.append(f"note={datum.note!r}")
+    print(f"Closed datum {datum.session_id} ({datum.model or 'unknown model'}): {' | '.join(bits)}")
     return 0
 
 
@@ -589,6 +628,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     log = runlog.RunLog()
     watch_pending = getattr(args, "watch", False)
     event_log_started = False
+    store = datums.DatumStore.default()
+    run_started = time.monotonic()
+    saw_usage_signal = False
 
     def emit(line: str) -> None:
         print(line)
@@ -613,6 +655,25 @@ def cmd_run(args: argparse.Namespace) -> int:
                     "resume": args.resume,
                 },
             )
+            # Mechanical datum capture — the whole overhead win, zero agent cost.
+            # The qualitative half (outcome/shape/note) is added later via
+            # `horus datum close`. Best-effort inside the store; never blocks a run.
+            store.record_launch(
+                datums.Datum(
+                    session_id=run.session.session_id,
+                    model=spec.model,
+                    launched_at=runlog.utc_iso(),
+                    project=run.session.project_dir.as_posix(),
+                    account=run.session.account,
+                    effort=spec.effort,
+                    agent=run.session.agent,
+                    worker=spec.worker,
+                    posture=spec.posture.value,
+                    environment=run.session.environment,
+                )
+            )
+        if ev.type is adapters.EventType.ERROR and datums.looks_like_usage_death(ev.text):
+            saw_usage_signal = True
         if watch_pending and run.session.session_id:
             watch_pending = False
             _spawn_watcher(run.session.session_id, root)
@@ -633,6 +694,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         rc=s.returncode,
         ended_at=runlog.utc_iso(),
     )
+    if s.session_id:
+        store.record_completion(
+            s.session_id,
+            exit=datums.classify_exit(s.status, saw_usage_signal=saw_usage_signal),
+            runtime_seconds=round(time.monotonic() - run_started, 3),
+            returncode=s.returncode,
+        )
     emit(f"\n{s.status} — session {s.session_id} (account {s.account or '-'})")
     return 0 if s.status == "exited" else 1
 
@@ -2214,7 +2282,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_capabilities.add_argument("--out", default=None, help="output JSON path (default: ~/.horus/capabilities.json)")
     p_capabilities.add_argument("--stdout", action="store_true", help="print the full JSON to stdout instead of a summary")
+    p_capabilities.add_argument(
+        "--models",
+        action="store_true",
+        help="EXPERIMENTAL: print the DATA-ONLY model-calibration roll-up (measured datums "
+             "+ owner priors) instead of the fleet catalog — describes what was measured and "
+             "flagged; never recommends a model",
+    )
     p_capabilities.set_defaults(func=cmd_capabilities)
+
+    p_datum = sub.add_parser(
+        "datum",
+        help="EXPERIMENTAL: record the qualitative half of a measured run datum",
+    )
+    datum_sub = p_datum.add_subparsers(dest="datum_cmd", required=True)
+    p_datum_close = datum_sub.add_parser(
+        "close",
+        help="attach an agent-supplied outcome/shape/note to a run's auto-captured datum",
+    )
+    p_datum_close.add_argument("run_id", help="session id or unique prefix (see `horus sessions`)")
+    p_datum_close.add_argument(
+        "--outcome",
+        required=True,
+        choices=datums.OUTCOMES,
+        help="how the run went (agent's judgment — never inferred by the harness)",
+    )
+    p_datum_close.add_argument("--shape", default=None, help="the run's shape: ambiguity/volume/runtime, your words")
+    p_datum_close.add_argument("--note", default=None, help="a short free note")
+    p_datum_close.set_defaults(func=cmd_datum_close)
 
     p_discover = sub.add_parser("discover", help="discover remote Horus projects")
     p_discover.add_argument("source", choices=["github"], help="remote catalog source")
