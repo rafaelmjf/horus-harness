@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Usage-refresh-button shipped cheap-cache-reread scope (owner decision 2026-07-11): dashboard accounts strip gets a 'refresh (cached)' control (`GET /accounts-refresh`) that re-reads `usage_snapshot`'s on-disk cache (new `read_cache_only`) and reapplies PR #149's past-reset inference against wall-clock time — zero network/CLI cost. Two sibling bundle cards remain open: mobile-terminal-interaction-regression, pwa-installable, responsive-mobile-pass. Backlog parallel-safety gate (PR #148) still awaits its multi-worker contention test."
-next_action: "Two open threads, human picks: (a) continue the mobile-web-app bundle — next pick is likely mobile-terminal-interaction-regression (high priority, in-app terminal takes no input on hosted/mobile); or (b) run the parallel-safety gate's multi-worker contention test (dispatch 2+ workers to claim distinct backlog cards concurrently via `horus backlog claim`, confirm overlap/exclusive warns+blocks under real concurrent pushes). [tier: Sonnet for (a); Sonnet supervisor + Sonnet/Haiku workers for (b).]"
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. Two open threads — ask which to pick: continue the sequential mobile-web-app bundle (next: mobile-terminal-interaction-regression, .horus/backlog/), or run the parallel-safety gate's multi-worker contention test (PR #148, claim 2+ distinct backlog cards from separate workers concurrently, confirm the gate behaves under real concurrent pushes)."
+current_focus: "PWA installability shipped (2026-07-11, PR #151, branch feat/pwa-installable, automerge squash armed): /manifest.json + /sw.js wired into the shared page head; service worker cache-first-precaches only a fixed whitelist of static app-shell assets (icon PNGs + vendored xterm CSS/JS), every HTML page and data/API route stays network-only. Side-fix: pyproject.toml package-data was silently excluding icon.ico/vendor/xterm/* from the published wheel — fixed in the same PR. Local pytest green (1085 passed) + live probe done; PR's own CI was still in progress at close time, not yet confirmed merged. One sibling bundle card remains open: mobile-terminal-interaction-regression (responsive-mobile-pass queued after it). Backlog parallel-safety gate (PR #148) still awaits its multi-worker contention test."
+next_action: "Two open threads, human picks: (a) continue the mobile-web-app bundle — next pick is mobile-terminal-interaction-regression (high priority, in-app terminal takes no input on hosted/mobile); or (b) run the parallel-safety gate's multi-worker contention test (dispatch 2+ workers to claim distinct backlog cards concurrently via `horus backlog claim`, confirm overlap/exclusive warns+blocks under real concurrent pushes). Either way, first confirm PR #151 actually merged (CI was in progress at close time). [tier: Sonnet for (a); Sonnet supervisor + Sonnet/Haiku workers for (b).]"
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. Confirm PR #151 (pwa-installable) merged cleanly. Then two open threads — ask which to pick: continue the sequential mobile-web-app bundle (next: mobile-terminal-interaction-regression, .horus/backlog/), or run the parallel-safety gate's multi-worker contention test (PR #148, claim 2+ distinct backlog cards from separate workers concurrently, confirm the gate behaves under real concurrent pushes)."
 execution_recommendation: "continue-as-is — both next options are single-focus (one bundle card, or one contention-test dispatch); pick per the human's answer, then re-evaluate delegation mode for whichever is chosen."
 last_updated: 2026-07-11
 horus_min_version: 0.0.26
@@ -53,11 +53,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
   HEAD `4a2b2ee` §9). Do NOT build an `OmnigentBackend` yet — blocking gates unmet
   (`research/omnigent-fit-2026-07-10.md`). [tier: Sonnet wiring once hub's contract lands.]
 - **Mobile-web-app bundle (sequential, one card at a time — mostly share
-  `horus/dashboard.py`, do not parallelize):** `usage-reset-inference` and
-  `usage-refresh-button` shipped (see Shipped). Remaining, each an open card
-  in `.horus/backlog/`: `mobile-terminal-interaction-regression` (high — in-app
-  terminal takes no input on hosted/mobile), `pwa-installable` (medium),
-  `responsive-mobile-pass` (medium). [tier: Sonnet each.]
+  `horus/dashboard.py`, do not parallelize):** `usage-reset-inference`,
+  `usage-refresh-button`, and `pwa-installable` shipped (see Shipped).
+  Remaining, each an open card in `.horus/backlog/`:
+  `mobile-terminal-interaction-regression` (high — in-app terminal takes no
+  input on hosted/mobile), `responsive-mobile-pass` (medium). [tier: Sonnet
+  each.]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
@@ -70,7 +71,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
    (Windows); confirm VS Code task keybindings under Flatpak (Linux). The reinstall +
    `upgrade-project --all` halves shipped 2026-07-09 with v0.0.29.
 4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
-   owned-window defaults, hook execution. Install-smoke CI covers install/CLI/`/health`.
+   owned-window defaults, hook execution — install-smoke CI covers install/CLI/`/health`.
 5. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD +
    execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup.
 6. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per
@@ -95,6 +96,7 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**PWA installability** (2026-07-11, PR #151): `GET /manifest.json` (`application/manifest+json`; sumi-e `--bg`/`--seal` colors, standalone display, 192/512 icons resized from the existing `icon.ico` mascot) + `GET /sw.js` (`text/javascript`), wired into the shared page head; the service worker cache-first-precaches ONLY a fixed whitelist of static app-shell assets (icon PNGs + vendored xterm CSS/JS) — every HTML page and data/API route (`/accounts-*`, `/projects-grid`, `/health`, `/pty/*`, …) always hits the network, never cache, since the dashboard sits behind Cloudflare Access. Side-fix: `pyproject.toml` package-data was silently excluding `icon.ico`/`vendor/xterm/*` from the published wheel (verified via the installed 0.0.35 RECORD) — fixed, or the SW's `cache.addAll()` would 404 in production.
 **Usage-refresh-button, cheap-cache-reread scope** (2026-07-11): dashboard accounts strip gains a "refresh (cached)" control (`GET /accounts-refresh`) that re-reads `usage_snapshot`'s on-disk cache via new `usage_snapshot.read_cache_only` (no live-fetch fallback) and reapplies `_reset_window_display`'s past-reset inference against wall-clock time — zero network call, no CLI turn; Codex was already disk-only and needed no change.
 **Usage-reset-inference** (2026-07-11, PR #149): dashboard usage display (accounts strip/panel + Codex session-card fallback) reuses PR #145's expired-window rule on the display side — a cached window past its `resets_at` renders "window reset — capacity available" instead of the stale percent, never a fabricated 0%, no extra network/cache call (`horus/dashboard.py`'s `_reset_window_display`).
 **LaunchBackend seam frozen, then made load-bearing** (2026-07-11): `horus/backend.py` fixes the minimal contract `launch(brief)->handle · status · stream · stop` with a behavior-preserving `LocalBackend` (native-Windows/other targets honestly refused, no fallback; Omnigent stays optional/undependend); `horus open` and the dashboard Control-tab OS-window launch (`POST /launch`) now route through `backend.LocalBackend().launch(...)` instead of calling `launch.launch_interactive` directly — same identity guard/registry row/terminal spawn. Config-driven target selection stays deferred pending hub's `[[targets]]`-or-equivalent contract (not yet written as of hub HEAD `4a2b2ee`); a TODO marks the plug-in point in `dashboard.py` rather than inventing one. Full suite green (1052 passed) + a live `horus open` probe (real registry row + spawned OS process).
