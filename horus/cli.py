@@ -250,7 +250,14 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
     With ``--models``, prints the DATA-ONLY model-calibration roll-up instead —
     measured datums (``~/.horus/datums.json``) joined with owner priors
     (``~/.horus/capabilities.toml``). It describes what was measured and what the
-    owner flagged; it never names a model to pick (see horus/datums.py)."""
+    owner flagged; it never names a model to pick (see horus/datums.py).
+
+    With ``--project <name>`` — or with no flags at all when run from inside a
+    registered project's root (the self-document default) — regenerates a
+    provenance-stamped record for just that one project, writes it to
+    ``<project>/.horus/capabilities.json``, and prints the same JSON to stdout.
+    Every invocation regenerates from that project's live sources; the file is
+    a publishing artifact, not a cache read back."""
     if getattr(args, "models", False):
         rollups = datums.build_model_rollup(
             datums.DatumStore.default().all(), datums.load_priors()
@@ -260,7 +267,23 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
         else:
             print(datums.render_model_rollup(rollups), end="")
         return 0
+
     projects = config.load_projects()
+
+    if getattr(args, "project", None):
+        project_path = capabilities.resolve_project_path(args.project, projects)
+        if project_path is None:
+            print(f"No registered project named {args.project!r} (see `horus fleet`).")
+            return 1
+    else:
+        project_path = capabilities.project_path_for_cwd(Path.cwd(), projects)
+
+    if project_path is not None:
+        out_path = Path(args.out) if args.out else capabilities.project_out_path(project_path)
+        text = capabilities.generate_project(project_path, out_path)
+        print(text, end="")
+        return 0
+
     if not projects:
         print("No projects registered (run `horus init` inside a project).")
         return 0
@@ -2280,8 +2303,21 @@ def build_parser() -> argparse.ArgumentParser:
         "capabilities",
         help="EXPERIMENTAL: read-only fleet capability catalog (Shipped ledgers + CLI surface) as JSON",
     )
-    p_capabilities.add_argument("--out", default=None, help="output JSON path (default: ~/.horus/capabilities.json)")
+    p_capabilities.add_argument(
+        "--out",
+        default=None,
+        help="output JSON path (default: ~/.horus/capabilities.json fleet-wide, "
+             "or <project>/.horus/capabilities.json with --project)",
+    )
     p_capabilities.add_argument("--stdout", action="store_true", help="print the full JSON to stdout instead of a summary")
+    p_capabilities.add_argument(
+        "--project",
+        default=None,
+        help="regenerate ONE registered project's stamped capability record (resolved "
+             "by directory basename) instead of the fleet-wide catalog; writes "
+             "<project>/.horus/capabilities.json and prints it. Defaults to the current "
+             "project when run from inside its root with no --project",
+    )
     p_capabilities.add_argument(
         "--models",
         action="store_true",
