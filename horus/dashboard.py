@@ -476,7 +476,33 @@ def _codex_account_usage(alias: str, home: Path | None) -> dict[str, Any]:
     }
 
 
-def gather_accounts() -> list[dict[str, Any]]:
+def _cached_claude_account_usage(alias: str, *, config_dir: Path | None = None) -> dict[str, Any]:
+    """Same dict shape as ``_account_usage``, sourced ONLY from
+    ``usage_snapshot``'s on-disk cache (written by ``horus run`` preflight / the
+    PreToolUse guard) — no OAuth call, ever. Backs the dashboard's manual
+    "refresh (cached)" control, which must never touch the network.
+    """
+    snap = usage_snapshot.read_cache_only("claude", alias)
+    five_pct, five_reset, five_expired = _reset_window_display(
+        snap.percent if snap else None, snap.resets_at if snap else None,
+    )
+    week_pct, week_reset_fmt, week_expired = _reset_window_display(
+        snap.weekly_percent if snap else None, snap.weekly_resets_at if snap else None,
+    )
+    return {
+        "agent": "claude",
+        "alias": alias,
+        "mapped_path": str(config_dir) if config_dir else "",
+        "five_pct": five_pct,
+        "week_pct": week_pct,
+        "five_reset": five_reset,
+        "week_reset": week_reset_fmt,
+        "five_reset_expired": five_expired,
+        "week_reset_expired": week_expired,
+    }
+
+
+def gather_accounts(*, claude_cache_only: bool = False) -> list[dict[str, Any]]:
     """Every Horus-known account (Claude + Codex) with usage where available.
 
     Claude accounts: read ``CLAUDE_CONFIG_DIR`` isolation map + ambient login;
@@ -485,6 +511,11 @@ def gather_accounts() -> list[dict[str, Any]]:
     usage is the last-observed 5h/weekly rate-limit snapshot from rollouts (no
     live API), gray until a rollout has reported limits.
     Accounts are shown by alias, not raw email/id (alias privacy rule).
+
+    ``claude_cache_only=True`` skips the live OAuth call for Claude entries and
+    reads only ``usage_snapshot``'s on-disk cache instead (see
+    ``_cached_claude_account_usage``) — the manual refresh path. Codex is
+    already disk-only, so it is unaffected by this flag.
     """
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -492,11 +523,17 @@ def gather_accounts() -> list[dict[str, Any]]:
     # --- Claude accounts ---
     for alias, d in sorted(config.load_account_config_dirs().items()):
         cfg = Path(d)
-        out.append(_account_usage(alias, cfg / ".credentials.json", config_dir=cfg))
+        if claude_cache_only:
+            out.append(_cached_claude_account_usage(alias, config_dir=cfg))
+        else:
+            out.append(_account_usage(alias, cfg / ".credentials.json", config_dir=cfg))
         seen.add(alias)
     ambient_claude = config.alias_for(claude_usage.current_account())
     if ambient_claude and ambient_claude not in seen:
-        out.append(_account_usage(ambient_claude, None))
+        if claude_cache_only:
+            out.append(_cached_claude_account_usage(ambient_claude))
+        else:
+            out.append(_account_usage(ambient_claude, None))
         seen.add(ambient_claude)
 
     # --- Codex accounts ---
@@ -941,6 +978,15 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         "navigator.clipboard.writeText(btn.previousElementSibling.textContent).then(function(){"
         "var o=btn.textContent;btn.textContent='Copied';"
         "setTimeout(function(){btn.textContent=o;},1200);});}"
+        # Cache-only reread of the accounts/usage rail — never a live fetch (see
+        # /accounts-refresh); swaps the whole '.section' fragment like the shared
+        # data-horus-src loader below.
+        "function horusRefreshAccounts(btn){"
+        "var rail=btn.closest('.section');if(!rail)return;"
+        "var o=btn.textContent;btn.textContent='Refreshing…';btn.disabled=true;"
+        "fetch('/accounts-refresh').then(function(r){return r.text();})"
+        ".then(function(h){rail.outerHTML=h;})"
+        ".catch(function(){btn.textContent=o;btn.disabled=false;});}"
         "document.querySelectorAll('[data-horus-src]').forEach(function(el){"
         "fetch(el.getAttribute('data-horus-src')).then(function(r){return r.text();})"
         ".then(function(html){el.outerHTML=html;})"
@@ -2545,9 +2591,17 @@ def _accounts_panel(accounts: list[dict[str, Any]]) -> str:
 def _accounts_strip(accounts: list[dict[str, Any]]) -> str:
     """Sticky overview accounts rail: usage rings, alias editing, add/remove, launch."""
     add_form = _account_add_form()
+    refresh_btn = (
+        "<button type='button' class='icon-btn' style='float:right' "
+        "title='Re-reads the cached usage snapshot from disk and reapplies the "
+        "past-reset check against the current time — no live provider call, no "
+        "CLI turn' onclick='event.stopPropagation();horusRefreshAccounts(this)'>"
+        "refresh (cached)</button>"
+    )
     shell_start = (
         "<div class='section'><div class='rail'><details class='acct-panel' open>"
-        "<summary><span class='eyebrow'>Usage</span><h3>Accounts</h3><span class='chev'>&#9656;</span></summary>"
+        f"<summary><span class='eyebrow'>Usage</span><h3>Accounts</h3>{refresh_btn}"
+        "<span class='chev'>&#9656;</span></summary>"
     )
     shell_end = (
         "</details><p class='muted' style='font-size:11.5px;margin:13px 4px 0;line-height:1.5'>"
@@ -3809,6 +3863,13 @@ class _Handler(BaseHTTPRequestHandler):
         if parsed.path == "/accounts-panel":
             # Async fragment for the main-tab accounts/usage strip (network — loaded lazily).
             self._send(_accounts_strip(gather_accounts()))
+            return
+        if parsed.path == "/accounts-refresh":
+            # Manual "refresh (cached)" control: re-reads on-disk usage state and
+            # reapplies the past-reset display rule against the current wall clock
+            # (usage-refresh-button card, cheap-cache-reread scope) — never a live
+            # OAuth call or a CLI turn, so it carries zero extra usage cost.
+            self._send(_accounts_strip(gather_accounts(claude_cache_only=True)))
             return
         if parsed.path == "/projects-grid":
             # Async fragment for the index project section (greeting + grid); carries
