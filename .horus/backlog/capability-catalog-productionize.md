@@ -16,6 +16,11 @@ self-contained, `note` field marks it generated. Agent-first — deliberately
 **not** a link graph (that was `horus wiki`, draft PR #138, a separate
 prototype held for its own keep/shape decision).
 
+**Per-project self-documenting mode — DONE (2026-07-11, PR #159).** See PRD.md
+Shipped. `horus capabilities --project <name>` (or the self-document default
+from inside a registered project) regenerates a provenance-stamped
+`<project>/.horus/capabilities.json`. Remaining sub-items below are still open.
+
 Decide-then-build once the spike is reviewed:
 
 - **More surface extractors.** v1 only implements the CLI case
