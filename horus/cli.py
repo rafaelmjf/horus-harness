@@ -16,6 +16,7 @@ from horus import (
     __version__,
     adapters,
     backend,
+    backlog,
     brainstorm,
     capabilities,
     claude_usage,
@@ -915,6 +916,43 @@ def cmd_execution(args: argparse.Namespace) -> int:
         return 0
 
     print(f"Unsupported execution command: {args.execution_cmd}")
+    return 2
+
+
+def cmd_backlog(args: argparse.Namespace) -> int:
+    """`.horus/backlog/` cards: list (with parallel-safety metadata) or claim
+    (guarded by an overlap check against currently in-progress cards)."""
+    root = _resolve_dir(args.path)
+    if root is None:
+        return 2
+
+    if args.backlog_cmd == "list":
+        cards = backlog.load_cards(root)
+        if not cards:
+            print(f"No cards in {HORUS_DIR}/{backlog.BACKLOG_DIR}/.")
+            return 0
+        for c in cards:
+            parallel = c.parallel or "unstated"
+            surface = ", ".join(c.surface) if c.surface else "unverified"
+            print(f"{c.name}  [{c.status}]  priority={c.priority or '-'} tier={c.tier or '-'} parallel={parallel}")
+            print(f"    {c.title}")
+            print(f"    surface: {surface}")
+        return 0
+
+    if args.backlog_cmd == "claim":
+        if (rc := _enforce_version_floor(root)) is not None:
+            return rc
+        claimed, findings = backlog.claim(root, args.name, force=args.force)
+        healthy = _print_findings(findings)
+        if claimed:
+            print(f"{'Claimed' if healthy else 'Claimed (forced)'}: {args.name}")
+            return 0
+        if any(f.level == "fail" for f in findings):
+            return 2
+        print(f"error: refusing to claim '{args.name}' — resolve the warning(s) above, or re-run with --force")
+        return 1
+
+    print(f"Unsupported backlog command: {args.backlog_cmd}")
     return 2
 
 
@@ -2433,6 +2471,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_execution_handoff.add_argument("--model-tier", default="", help="frontier | standard | economy")
     p_execution_handoff.add_argument("--force", action="store_true", help="overwrite an existing handoff note")
     p_execution_handoff.set_defaults(func=cmd_execution)
+
+    p_backlog = sub.add_parser(
+        "backlog", help="work with .horus/backlog/ cards (parallel-safety metadata + claim check)"
+    )
+    backlog_sub = p_backlog.add_subparsers(dest="backlog_cmd", required=True)
+    p_backlog_list = backlog_sub.add_parser(
+        "list", help="list backlog cards with status/priority/tier/parallel/surface"
+    )
+    p_backlog_list.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_backlog_list.set_defaults(func=cmd_backlog)
+
+    p_backlog_claim = backlog_sub.add_parser(
+        "claim", help="claim a backlog card (warns on overlap with in-progress cards; --force to override)"
+    )
+    p_backlog_claim.add_argument("name", help="card filename stem, e.g. companion-signals")
+    p_backlog_claim.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_backlog_claim.add_argument("--force", action="store_true", help="claim despite overlap/exclusive warnings")
+    p_backlog_claim.set_defaults(func=cmd_backlog)
 
     p_account = sub.add_parser("account", help="show the detected agent account, alias, and isolation dir")
     p_account.add_argument("--agent", default="claude", help="which agent's account to inspect (default: claude)")

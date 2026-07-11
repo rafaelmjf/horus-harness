@@ -1,0 +1,201 @@
+"""`.horus/backlog/` card-per-file backlog: parsing, and a claim-time overlap check.
+
+Cards are self-contained Markdown files with simple frontmatter (`status`,
+`priority`, `tier`, `created`). This module adds two OPTIONAL fields read the
+same way:
+
+- `parallel: safe | exclusive` — human-authored intent. `exclusive` means this
+  card must not run concurrently with any other in-progress card.
+- `surface: <comma-separated globs>` — the code areas the card touches, e.g.
+  `surface: horus/dashboard.py, horus/pty_*`.
+
+Both are optional and back-compat: a card with neither field still claims,
+same as before this module existed. This is a guardrail (metadata + a
+claim-time check + display), not a scheduler — no daemon, no auto-routing.
+"""
+
+from __future__ import annotations
+
+import fnmatch
+from dataclasses import dataclass
+from pathlib import Path
+
+from horus import frontmatter
+from horus.continuity import Finding
+
+BACKLOG_DIR = "backlog"
+
+# In-progress for claim-overlap purposes. Cards otherwise use "open" (default)
+# and are deleted on completion (see PRD's structure contract).
+_IN_PROGRESS_STATUSES = ("claimed",)
+
+
+@dataclass(frozen=True)
+class Card:
+    path: Path
+    name: str  # filename stem, the identifier used to claim/reference a card
+    status: str
+    priority: str
+    tier: str
+    created: str
+    parallel: str  # "safe" | "exclusive" | "" (unstated)
+    surface: tuple[str, ...]
+    title: str
+
+
+def _parse_surface(raw: str) -> tuple[str, ...]:
+    raw = raw.strip()
+    if not raw:
+        return ()
+    if raw[0] == "[" and raw[-1] == "]":
+        raw = raw[1:-1]
+    parts = []
+    for token in raw.split(","):
+        token = token.strip().strip("'\"").strip()
+        if token:
+            parts.append(token)
+    return tuple(parts)
+
+
+def _title(body: str, fallback: str) -> str:
+    for line in body.splitlines():
+        line = line.strip()
+        if line.startswith("# "):
+            return line[2:].strip()
+    return fallback
+
+
+def backlog_dir(root: Path) -> Path:
+    return root / ".horus" / BACKLOG_DIR
+
+
+def _card_from_path(path: Path) -> Card:
+    doc = frontmatter.parse(path.read_text(encoding="utf-8"))
+    fm = doc.front_matter
+    return Card(
+        path=path,
+        name=path.stem,
+        status=fm.get("status", "open").strip().lower() or "open",
+        priority=fm.get("priority", "").strip(),
+        tier=fm.get("tier", "").strip(),
+        created=fm.get("created", "").strip(),
+        parallel=fm.get("parallel", "").strip().lower(),
+        surface=_parse_surface(fm.get("surface", "")),
+        title=_title(doc.body, path.stem),
+    )
+
+
+def load_cards(root: Path) -> list[Card]:
+    """All backlog cards, sorted by filename. Empty list if there's no backlog/."""
+    hdir = backlog_dir(root)
+    if not hdir.is_dir():
+        return []
+    return [_card_from_path(p) for p in sorted(hdir.glob("*.md")) if p.is_file()]
+
+
+def find_card(root: Path, name: str) -> Card | None:
+    """Look up a card by its filename stem, with or without a trailing `.md`."""
+    key = name[:-3] if name.endswith(".md") else name
+    for card in load_cards(root):
+        if card.name == key:
+            return card
+    return None
+
+
+def _pair_overlaps(a: str, b: str) -> bool:
+    """Heuristic glob-vs-glob overlap: does either pattern match the other read
+    as a literal candidate path? Catches the common cases (equal paths, a glob
+    matching a concrete sibling path) without claiming to be a full glob-vs-glob
+    intersection solver — this is a guardrail, not a hard scheduler."""
+    return fnmatch.fnmatch(a, b) or fnmatch.fnmatch(b, a)
+
+
+def surface_overlap(a: tuple[str, ...], b: tuple[str, ...]) -> list[tuple[str, str]]:
+    """Pairs of globs (one from `a`, one from `b`) that overlap."""
+    return [(x, y) for x in a for y in b if _pair_overlaps(x, y)]
+
+
+def claim_check(root: Path, name: str) -> list[Finding]:
+    """Findings for claiming card `name` against currently in-progress cards.
+
+    Only warns when there is another in-progress card to conflict with — a
+    card claimed while nothing else is in progress always claims clean,
+    regardless of whether it carries `parallel`/`surface` at all."""
+    target = find_card(root, name)
+    if target is None:
+        return [Finding("fail", f"no backlog card named '{name}'")]
+
+    others = [
+        c for c in load_cards(root)
+        if c.name != target.name and c.status in _IN_PROGRESS_STATUSES
+    ]
+    findings: list[Finding] = []
+    for other in others:
+        if target.parallel == "exclusive" or other.parallel == "exclusive":
+            exclusive_one = target.name if target.parallel == "exclusive" else other.name
+            findings.append(Finding(
+                "warn",
+                f"'{exclusive_one}' is marked parallel: exclusive — do not run "
+                f"'{target.name}' concurrently with in-progress '{other.name}'",
+            ))
+            continue
+        if not target.surface or not other.surface:
+            missing = target.name if not target.surface else other.name
+            findings.append(Finding(
+                "warn",
+                f"'{missing}' has no 'surface' — overlap with in-progress "
+                f"'{other.name}' can't be verified",
+            ))
+            continue
+        pairs = surface_overlap(target.surface, other.surface)
+        if pairs:
+            shown = ", ".join(f"{x} ~ {y}" for x, y in pairs)
+            findings.append(Finding(
+                "warn",
+                f"'{target.name}' surface overlaps in-progress '{other.name}': {shown}",
+            ))
+    return findings
+
+
+_STATUS_KEY = "status"
+
+
+def _set_status(path: Path, new_status: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise ValueError(f"{path}: no frontmatter fence to update status in")
+    end = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            end = i
+            break
+    if end is None:
+        raise ValueError(f"{path}: unterminated frontmatter fence")
+    for i in range(1, end):
+        key, sep, _ = lines[i].partition(":")
+        if sep and key.strip() == _STATUS_KEY:
+            lines[i] = f"{_STATUS_KEY}: {new_status}"
+            break
+    else:
+        lines.insert(end, f"{_STATUS_KEY}: {new_status}")
+        end += 1
+    newline = "\n" if text.endswith("\n") else ""
+    path.write_text("\n".join(lines) + newline, encoding="utf-8")
+
+
+def claim(root: Path, name: str, *, force: bool = False) -> tuple[bool, list[Finding]]:
+    """Attempt to claim card `name`. Returns (claimed, findings).
+
+    Warnings block the claim unless `force=True`; a `fail` (card not found)
+    always blocks. On success the card's `status` frontmatter is set to
+    `claimed` in place — nothing else about the file changes."""
+    findings = claim_check(root, name)
+    if any(f.level == "fail" for f in findings):
+        return False, findings
+    if findings and not force:
+        return False, findings
+    target = find_card(root, name)
+    assert target is not None  # already checked above via claim_check
+    _set_status(target.path, "claimed")
+    return True, findings
