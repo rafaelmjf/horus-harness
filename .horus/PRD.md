@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Per-project capability self-documentation shipped (2026-07-11, PR #159, merged 0894cc8): `horus capabilities --project <name>` (+ self-document default from inside a registered project) regenerates a provenance-stamped `<project>/.horus/capabilities.json` from live sources every run — v1 fleet-wide `horus capabilities`/`--models` verified unchanged. Builds on the COMPLETE empirical delegation-decision framework (both slices, 2026-07-11): Slice 1 (PR #157, data layer: horus/datums.py + `--models` roll-up) and Slice 2 (PR #158, consumer skills: delegation-rubric/execution-decision/dispatch-decision)."
-next_action: "No follow-up blocking. Remaining `capability-catalog-productionize` sub-items (web/lib surface extractors, cross-project cross-referencing, optional visualization) are later-priority, not urgent. Otherwise pick an open thread: mobile-terminal-interaction-regression (.horus/backlog/, high), the parallel-safety multi-worker contention test (PR #148), accounts-refresh-button-invisible (medium, one-line CSS). [tier: Sonnet for the bug cards.]"
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. Per-project `horus capabilities --project` shipped (PR #159). Pick an open thread: mobile-terminal-interaction-regression (.horus/backlog/, high), parallel-safety multi-worker contention test (PR #148), or accounts-refresh-button-invisible (one-line CSS). [tier: Sonnet]"
+current_focus: "Delivery-receipt attribution fix OPEN for review (2026-07-11, PR #162, branch fix/receipt-attribution-precision): `horus/delivery.py` used to key a session's delivery purely off the BRANCH, so a killed attempt and its retry sharing one branch both resolved to the branch's current tip — mis-attributing the retry's PR/commit to the killed session (observed live on commit 77bcc321). Now time-correlates the session's recorded end time against the pushed ref's ancestor commits and matches the PR by `headRefOid`, falling back to the prior branch-tip behavior when no session end is known. CI green (freshness + pytest 3.12/3.13); NOT YET MERGED — overseer reviews. Builds on per-project capability self-documentation (2026-07-11, PR #159) and the COMPLETE empirical delegation-decision framework (PRs #157/#158)."
+next_action: "Awaiting overseer review/merge of PR #162 — do not self-merge. Once merged, fold into Shipped and pick an open thread: mobile-terminal-interaction-regression (.horus/backlog/, high), the parallel-safety multi-worker contention test (PR #148), accounts-refresh-button-invisible (medium, one-line CSS). [tier: Sonnet for the bug cards.]"
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. Check PR #162 (delivery-receipt attribution fix) merge status; if merged, verify and fold into Shipped, then delete its session note. Otherwise pick an open thread: mobile-terminal-interaction-regression (.horus/backlog/, high), parallel-safety multi-worker contention test (PR #148), or accounts-refresh-button-invisible (one-line CSS). [tier: Sonnet]"
 execution_recommendation: "continue-as-is for any of the open bug threads (single-focus, Sonnet) — each is small and self-contained; delegation would buy only context hygiene at a higher orchestration cost."
 last_updated: 2026-07-11
 horus_min_version: 0.0.26
@@ -66,18 +66,17 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance
    on the untracked fold (user misread "only public repos visible" when 3 private repos
    were on the ignore list).
-3. **[ops] Machine validation leftovers:** eyeball mascot failure dialog + Skills tab
-   (Windows); confirm VS Code task keybindings under Flatpak (Linux). The reinstall +
-   `upgrade-project --all` halves shipped 2026-07-09 with v0.0.29.
-4. **macOS validation pass** (needs real hardware): mascot/Tk, terminal spawning,
-   owned-window defaults, hook execution — install-smoke CI covers install/CLI/`/health`.
-5. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD +
+3. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot
+   failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak;
+   macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution.
+   install-smoke CI covers install/CLI/`/health` on all three already.
+4. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD +
    execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup.
-6. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per
+5. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per
    shell call (close + guard-host + usage guard); only if material, build a single
    `horus pretool --hook` dispatcher (fabric suggestion 2026-07-08). [tier: Haiku
    measure / Sonnet dispatcher]
-7. **Multi-developer continuity (design, evidence-gated):** PRD.md assumes one active
+6. **Multi-developer continuity (design, evidence-gated):** PRD.md assumes one active
    workstream — two devs closing sessions collide on frontmatter. Direction:
    per-workstream focus (frontmatter keyed by branch/dev, or `.horus/focus/<name>.md`)
    aggregated by `resolve_focus`/dashboard/`resume`. Per the ladder rule, design now,

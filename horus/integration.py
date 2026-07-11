@@ -168,21 +168,27 @@ def open_horus_prs(root: str | Path, *, timeout: float = _PR_LIST_TIMEOUT) -> li
     ]
 
 
-def pr_for_branch(root: str | Path, branch: str, *, timeout: float = _PR_LIST_TIMEOUT) -> dict[str, Any] | None:
+def pr_for_branch(
+    root: str | Path, branch: str, *, head_sha: str | None = None, timeout: float = _PR_LIST_TIMEOUT
+) -> dict[str, Any] | None:
     """Any PR (open, merged, or closed) whose head is ``branch``, or ``None`` when
     there is none or the answer is unknowable (no ``gh``, unauthenticated, no
     GitHub remote, timeout).
 
     Unlike :func:`open_horus_prs` this is not scoped to Horus-created branches —
     it backs the failed-but-delivered receipt, which needs to know about a PR a
-    worker opened on ITS OWN branch before its `horus run` process died. Never
-    raises.
+    worker opened on ITS OWN branch before its `horus run` process died. A
+    branch can carry more than one PR over its life (a killed attempt and its
+    retry both pushing to the same branch, each opening their own PR) — when
+    ``head_sha`` is given, the PR whose ``headRefOid`` matches it is preferred
+    over the newest/first one, so an older PR isn't shadowed by a newer PR on
+    the same branch. Never raises.
     """
     if not (Path(root) / ".git").exists():  # covers dirs and worktree files
         return None
     try:
         r = subprocess.run(  # noqa: S603
-            ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state,title"],
+            ["gh", "pr", "list", "--head", branch, "--state", "all", "--json", "number,url,state,title,headRefOid"],
             cwd=str(Path(root)),
             capture_output=True,
             text=True,
@@ -200,6 +206,10 @@ def pr_for_branch(root: str | Path, branch: str, *, timeout: float = _PR_LIST_TI
     if not isinstance(prs, list) or not prs:
         return None
     pr = prs[0]
+    if head_sha:
+        matched = next((p for p in prs if isinstance(p, dict) and p.get("headRefOid") == head_sha), None)
+        if matched is not None:
+            pr = matched
     if not isinstance(pr, dict):
         return None
     number = pr.get("number")

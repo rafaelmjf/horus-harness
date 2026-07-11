@@ -483,7 +483,11 @@ def cmd_sessions(args: argparse.Namespace) -> int:
         rc = "" if r.returncode is None else f" rc={r.returncode}"
         line = f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} pid={r.pid or '-'} {r.session_id}{rc}"
         if r.status in delivery.NONCLEAN_STATUSES:
-            suffix = delivery.render_receipt(r.status, delivery.delivery_receipt(r.project))
+            try:
+                session_end = datetime.fromisoformat(r.updated_at) if r.updated_at else None
+            except ValueError:
+                session_end = None
+            suffix = delivery.render_receipt(r.status, delivery.delivery_receipt(r.project, session_end=session_end))
             if suffix:
                 line += f" · {suffix}"
         print(line)
