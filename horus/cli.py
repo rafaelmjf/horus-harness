@@ -15,6 +15,7 @@ from pathlib import Path
 from horus import (
     __version__,
     adapters,
+    backend,
     brainstorm,
     capabilities,
     claude_usage,
@@ -30,7 +31,6 @@ from horus import (
     github_catalog,
     initialize,
     integration,
-    launch,
     launcher,
     native_hooks,
     offboard,
@@ -716,22 +716,27 @@ def cmd_open(args: argparse.Namespace) -> int:
 
     The interactive counterpart to `horus run`: launches the CLI's TUI (the user
     types in it) under a chosen account + project, and registers it so it shows as
-    a live `running` session in `horus sessions` and the dashboard. Shares the
-    launch path with the dashboard's Control-tab buttons (`horus.launch`).
+    a live `running` session in `horus sessions` and the dashboard. Routes through
+    the frozen LaunchBackend seam (`horus.backend.LocalBackend`), which is a
+    behavior-preserving wrapper around `horus.launch.launch_interactive` — same
+    identity guard, registry row, and terminal spawn as before the seam existed.
     """
-    result = launch.launch_interactive(
-        agent=args.agent,
+    brief = backend.LaunchBrief(
         project_dir=args.path,
+        agent=args.agent,
         account=args.account,
         posture=args.posture,
         model=args.model,
         prompt=args.prompt or "",
     )
-    if not result.ok:
-        print(f"Refusing to open: {result.error}")
+    try:
+        handle = backend.LocalBackend().launch(brief)
+    except backend.LaunchFailed as exc:
+        print(f"Refusing to open: {exc}")
         return 2
-    print(f"Opened {result.agent} session in {result.project.name} as {result.account or 'ambient'} "
-          f"(pid {result.pid}, session {result.session_id}).")
+    project_name = Path(args.path).resolve().name
+    print(f"Opened {args.agent} session in {project_name} as {args.account or 'ambient'} "
+          f"(pid {handle.meta['pid']}, session {handle.session_id}).")
     return 0
 
 

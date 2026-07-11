@@ -34,6 +34,7 @@ from horus import (
     __version__,
     access_gate,
     adapters,
+    backend,
     brainstorm,
     cache_status,
     claude_usage,
@@ -44,7 +45,6 @@ from horus import (
     github_catalog,
     initialize,
     integration,
-    launch,
     launcher,
     markdown,
     offboard,
@@ -3130,7 +3130,7 @@ def render_control(
 
 
 # --------------------------------------------------------------------------- #
-# Launch (the one mutating action): POST /launch -> horus.launch
+# Launch (the one mutating action): POST /launch -> horus.backend.LocalBackend
 # --------------------------------------------------------------------------- #
 
 def _known_aliases() -> set[str]:
@@ -3625,12 +3625,17 @@ def process_launch(
             return "error=" + quote_plus(str(exc))
         return f"tab={quote_plus(term_id)}"
 
-    result = launch.launch_interactive(
-        agent=agent, project_dir=project_dir, account=account, posture=posture, prompt=prompt,
+    # Routes through the frozen LaunchBackend seam (LocalBackend-only today; a
+    # config-driven target/machine picker needs hub's `[[targets]]` contract from
+    # docs/multi-machine-launch-targets-design.md §9, which hub has not written yet).
+    brief = backend.LaunchBrief(
+        project_dir=project_dir, agent=agent, account=account, posture=posture, prompt=prompt,
     )
-    if not result.ok:
-        return "error=" + quote_plus(result.error or "launch failed")
-    return f"launched={result.session_id[:8]}"
+    try:
+        handle = backend.LocalBackend().launch(brief)
+    except backend.LaunchFailed as exc:
+        return "error=" + quote_plus(str(exc))
+    return f"launched={handle.session_id[:8]}"
 
 
 def process_brainstorm(
