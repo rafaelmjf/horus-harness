@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Backlog card parallel-safety gate shipped (PR #148, f772d5c): `.horus/backlog/` cards carry optional `parallel: safe|exclusive` + `surface: <globs>`; new `horus/backlog.py` (`horus backlog list`/`claim <name> [--force]`) is the first code path reading `.horus/backlog/` — claim warns+blocks on surface overlap or an `exclusive` card among currently-`claimed` cards, `--force` overrides, missing-surface warns 'can't verify'. Fully back-compat (no fields ⇒ claims clean when nothing else is in progress). This was explicitly the prerequisite safety gate before a multi-worker contention test on one shared backlog/ — that test is now unblocked. Also found + fixed a stale claim: the structure contract previously said `consolidate` sweeps stale `claimed` cards — it never did; text corrected, no sweep built (real gap, not this session's scope). LaunchBackend seam (prior focus) is still load-bearing and otherwise complete pending hub's [[targets]] contract (unpublished as of hub HEAD 4a2b2ee)."
-next_action: "Run the multi-worker contention test the parallel-safety gate exists for: dispatch 2+ workers to claim different `.horus/backlog/` cards concurrently (via `horus backlog claim`) and confirm non-overlapping claims proceed clean while an overlapping/exclusive claim warns and needs --force, under real concurrent git pushes. [tier: Sonnet supervisor + Sonnet/Haiku workers — mechanical dispatch, the judgment is in the gate already built.]"
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. The backlog parallel-safety gate (PR #148) is shipped — `horus backlog list`/`claim <name> [--force]` now warn+block overlapping/exclusive concurrent claims. Run the multi-worker contention test it was built for: claim 2+ distinct .horus/backlog/ cards from separate workers/sessions and confirm the gate behaves (clean on non-overlap, warns+blocks then --force on overlap) under real concurrent pushes."
-execution_recommendation: "plan-execution — the contention test needs 2+ genuinely distinct workers dispatched concurrently (a worktree each) to exercise real git-push races, not a single-session simulation; a Sonnet supervisor dispatching Sonnet/Haiku workers gets both context hygiene and a cheaper tier for the mechanical claim/push/finish loop."
+current_focus: "Usage-reset-inference shipped (PR #149, 81343d3), first card of a sequential mobile-web-app bundle: dashboard usage display (accounts strip/panel + Codex session-card fallback) now reuses PR #145's expired-window rule on the display side — a cached window past its `resets_at` renders 'window reset — capacity available' instead of a stale percent, no extra network call. Four sibling bundle cards authored as open `.horus/backlog/` items (parallel: exclusive, share dashboard.py) — not yet implemented: mobile-terminal-interaction-regression, pwa-installable, usage-refresh-button (needs-decision), responsive-mobile-pass. Backlog parallel-safety gate (PR #148) still awaits its multi-worker contention test."
+next_action: "Two open threads, human picks: (a) continue the mobile-web-app bundle — next pick is likely mobile-terminal-interaction-regression (high priority, in-app terminal takes no input on hosted/mobile); or (b) run the parallel-safety gate's multi-worker contention test (dispatch 2+ workers to claim distinct backlog cards concurrently via `horus backlog claim`, confirm overlap/exclusive warns+blocks under real concurrent pushes). [tier: Sonnet for (a); Sonnet supervisor + Sonnet/Haiku workers for (b).]"
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. Two open threads — ask which to pick: continue the sequential mobile-web-app bundle (next: mobile-terminal-interaction-regression, .horus/backlog/), or run the parallel-safety gate's multi-worker contention test (PR #148, claim 2+ distinct backlog cards from separate workers concurrently, confirm the gate behaves under real concurrent pushes)."
+execution_recommendation: "continue-as-is — both next options are single-focus (one bundle card, or one contention-test dispatch); pick per the human's answer, then re-evaluate delegation mode for whichever is chosen."
 last_updated: 2026-07-11
 horus_min_version: 0.0.26
 ---
@@ -47,14 +47,17 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **★ [flagship] LaunchBackend seam is load-bearing (multi-machine arc, P0 continued)
-  — remaining slice blocked on hub.** `horus open` + dashboard Control-tab launch route
-  through `LocalBackend` (see Shipped). Only remaining work is config-driven
-  target/machine selection, gated on hub actually writing a `[[targets]]`-or-equivalent
-  contract in `docs/multi-machine-launch-targets-design.md` (not present as of hub HEAD
-  `4a2b2ee` §9 — a boundary statement only, do not invent the table from this side).
-  Do NOT build an `OmnigentBackend` yet — blocking gates unmet
+- **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** See Shipped
+  for what landed. Only remaining work is config-driven target/machine selection,
+  gated on hub writing a `[[targets]]`-or-equivalent contract (not present as of hub
+  HEAD `4a2b2ee` §9). Do NOT build an `OmnigentBackend` yet — blocking gates unmet
   (`research/omnigent-fit-2026-07-10.md`). [tier: Sonnet wiring once hub's contract lands.]
+- **Mobile-web-app bundle (sequential, one card at a time — mostly share
+  `horus/dashboard.py`, do not parallelize):** `usage-reset-inference` shipped
+  (see Shipped). Remaining, each an open card in `.horus/backlog/`:
+  `mobile-terminal-interaction-regression` (high — in-app terminal takes no input
+  on hosted/mobile), `pwa-installable` (medium), `usage-refresh-button` (low,
+  needs-decision), `responsive-mobile-pass` (medium). [tier: Sonnet each.]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
    On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
@@ -92,6 +95,7 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Usage-reset-inference** (2026-07-11, PR #149): dashboard usage display (accounts strip/panel + Codex session-card fallback) reuses PR #145's expired-window rule on the display side — a cached window past its `resets_at` renders "window reset — capacity available" instead of the stale percent, never a fabricated 0%, no extra network/cache call (`horus/dashboard.py`'s `_reset_window_display`).
 **LaunchBackend seam frozen, then made load-bearing** (2026-07-11): `horus/backend.py` fixes the minimal contract `launch(brief)->handle · status · stream · stop` with a behavior-preserving `LocalBackend` (native-Windows/other targets honestly refused, no fallback; Omnigent stays optional/undependend); `horus open` and the dashboard Control-tab OS-window launch (`POST /launch`) now route through `backend.LocalBackend().launch(...)` instead of calling `launch.launch_interactive` directly — same identity guard/registry row/terminal spawn. Config-driven target selection stays deferred pending hub's `[[targets]]`-or-equivalent contract (not yet written as of hub HEAD `4a2b2ee`); a TODO marks the plug-in point in `dashboard.py` rather than inventing one. Full suite green (1052 passed) + a live `horus open` probe (real registry row + spawned OS process).
 **Omnigent LaunchBackend fit spike** (2026-07-10, PR #144): source-grounded matrix (`research/omnigent-fit-2026-07-10.md`) — optional backend fits Linux native + named managed containers, rejects native Windows, leaves same-host multi-subscription isolation Unknown pending a two-account E2E; Horus stays the memory plane.
 **Honest dispatch receipts** (2026-07-10, PR #143): a non-clean `horus run` session (`failed`/`stale`) no longer collapses to a bare status — new `horus/delivery.py` derives pushed SHA / opened PR / continuity-closed post-hoc from the worker's own worktree/branch on disk (`integration.pr_for_branch` new, not scoped to `horus/`-prefixed branches), rendered as `<status>-but-delivered · pushed <sha> · PR #N · continuity closed` alongside the real status; `horus sessions` also now sorts running-first/recency and hides rows idle >24h behind a new `--all` flag (`registry.is_recent`). Every probe degrades to nothing on a gone branch or git/gh failure.
