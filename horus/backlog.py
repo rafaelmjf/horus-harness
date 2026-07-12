@@ -24,7 +24,6 @@ claim-time check + display), not a scheduler — no daemon, no auto-routing.
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import fnmatch
 import re
 from dataclasses import dataclass
@@ -254,6 +253,17 @@ def _claim_lock(root: Path):
     `flock` is held for the whole check-then-set-status section below."""
     hdir = backlog_dir(root)
     hdir.mkdir(parents=True, exist_ok=True)
+    # fcntl is Unix-only; a top-level import broke `horus` entirely on Windows
+    # (install-smoke: ModuleNotFoundError on any CLI invocation). There the
+    # claim guard degrades to advisory (msvcrt locking isn't equivalent and
+    # single-user Windows overlap is theoretical), which matches the guard's
+    # intent — best-effort TOCTOU protection, not a correctness invariant.
+    try:
+        import fcntl
+    except ImportError:
+        with open(hdir / _CLAIM_LOCK_FILE, "w", encoding="utf-8"):
+            yield
+        return
     with open(hdir / _CLAIM_LOCK_FILE, "w", encoding="utf-8") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:

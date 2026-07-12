@@ -187,3 +187,17 @@ def test_claim_concurrent_overlapping_surface_is_serialized(tmp_path):
 def test_surface_overlap_glob_matching():
     assert backlog.surface_overlap(("horus/pty_*",), ("horus/pty_host.py",))
     assert not backlog.surface_overlap(("horus/dashboard.py",), ("horus/pty_host.py",))
+
+
+def test_claim_works_without_fcntl_like_windows(tmp_path, monkeypatch):
+    """fcntl is Unix-only: a top-level `import fcntl` broke every `horus` CLI
+    invocation on Windows (install-smoke, v0.0.36–v0.0.38). The claim lock must
+    degrade to advisory when fcntl is unavailable, not fail to import."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "fcntl", None)  # `import fcntl` -> ImportError
+    _mk_card(tmp_path, "win-card")
+    claimed, findings = backlog.claim(tmp_path, "win-card")
+    assert claimed
+    assert findings == []
+    assert backlog.find_card(tmp_path, "win-card").status == "claimed"
