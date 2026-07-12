@@ -36,17 +36,18 @@ Fleet inventory at decision time:
 
 ## Bug typing (fold in the `bugs/`-folder decision)
 
-Owner asked: separate `bugs/` folder vs. a `type` frontmatter field. **Recommendation:
-one `backlog/` folder + a `type: bug|feature|chore|task` frontmatter field, NOT a
-second folder.** Rationale = agent-overhead: one place to query, `horus backlog list
---type bug` is a single deterministic filter; visibility comes from the tooling
-(list groups/counts by type; dashboard shows a bug badge), not from folder
-separation. Collapse gym-coach's `bugs/` into `backlog/` with `type: bug` as the
-reference migration.
+**DECIDED (owner, 2026-07-12): one `backlog/` folder + a `type: bug|feature|chore|task`
+frontmatter field — NOT a separate `bugs/` folder.** Rationale = agent-overhead: one
+place to query, `horus backlog list --type bug` is a single deterministic filter;
+visibility comes from the tooling (list groups/counts by type; dashboard shows a bug
+badge), not folder separation. So: add the `type` field to the card schema + a
+`--type` filter to `horus backlog list`; default missing `type` to `task`.
 
-**OWNER DECISION PENDING before implementing:** owner leaned toward a folder for
-visibility. Lock folder-vs-type first. If type-field wins (recommended), add the
-`type` field to the card schema + `--type` filter to `backlog list`.
+**Cross-project cleanup (owner ask):** any project that already has a separate `bugs/`
+folder gets a cleanup card in its OWN backlog to collapse `bugs/` → `backlog/` with
+`type: bug` and default to this structure. At decision time only **agentic-gym-coach**
+has `bugs/`; a cleanup card was dropped there (`clean-up-bugs-folder-to-type-field`).
+Re-scan the fleet when this ships in case another project grew one.
 
 ## Enables
 

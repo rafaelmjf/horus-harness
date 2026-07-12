@@ -31,12 +31,18 @@ One view joining the two existing sources (do not fork a third source of truth):
 - **Shape → tier → verification** — the rubric's mapping (scoped-impl/novel/mechanical
   → tier; proven→observe-CI, unproven→CI+probe, runtime→owner-eyeball).
 
-## Shape decision (recommendation)
+## Shape decision (recommendation — owner input 2026-07-12)
 
-Prefer a **new discoverable subcommand `horus delegation`** (shows in `--help`; clean
-"how do we decide who to dispatch?" mental model) over a `capabilities --matrix` flag.
-Either is fine; lock with owner. Reuse `datums.render_model_rollup`; pull the
-shape→tier→verify table from the rubric essence so it stays single-sourced.
+**DISPLAY-ONLY — the name must NOT read like an action.** Owner flagged that a bare
+`horus delegation` sounds like it *starts* a delegation. It does not (and cannot — the
+hard boundary forbids auto-routing). Anchor it under the already-read-only command so
+the semantics are unambiguous: **recommended `horus capabilities --matrix`** (inherits
+"reads and prints, never acts"). If a top-level verb is preferred instead, it must
+carry an explicit display verb — `horus delegation show` — never the bare noun. Lock
+one with owner before building.
+
+Reuse `datums.render_model_rollup`; pull the shape→tier→verify table from the rubric
+essence so it stays single-sourced. No pick/route field — assert its absence in a test.
 
 ## Fold in: older-but-capable models stay in the roster
 
