@@ -4131,6 +4131,24 @@ def process_brainstorm(
 # Server
 # --------------------------------------------------------------------------- #
 
+def _geom_log(term_id: str, event: str) -> None:
+    """Terse PTY-geometry diagnostics on stderr (journald under systemd).
+
+    One line per resize/release with the applied result, so a multi-viewer
+    geometry fight (which viewer posted what, in which order, and what the
+    smallest-wins registry resolved to) is reconstructable from `journalctl`
+    instead of guessed from screenshots."""
+    term = pty_host.host.get(term_id)
+    effective = f"{term.cols}x{term.rows}" if term else "gone"
+    viewers = ""
+    if term is not None:
+        snapshot = dict(term._viewers)
+        viewers = " viewers=" + (",".join(
+            f"{v}:{c}x{r}" for v, (c, r) in sorted(snapshot.items())
+        ) or "none")
+    print(f"pty-geom {term_id}: {event} -> effective {effective}{viewers}", file=sys.stderr, flush=True)
+
+
 class _Handler(BaseHTTPRequestHandler):
     def _send(self, body: str, status: int = 200) -> None:
         encoded = body.encode("utf-8")
@@ -4537,12 +4555,14 @@ class _Handler(BaseHTTPRequestHandler):
                 self._no_content()
                 return
             vid = form.get("vid", "")
+            tid = form.get("id", "")
             if vid:
                 # Viewer-identified fit: smallest-wins across registered viewers.
-                pty_host.host.viewer_resize(form.get("id", ""), vid, cols, rows)
+                pty_host.host.viewer_resize(tid, vid, cols, rows)
             else:
                 # Legacy viewer (pre-vid page still open somewhere): direct set.
-                pty_host.host.resize(form.get("id", ""), cols, rows)
+                pty_host.host.resize(tid, cols, rows)
+            _geom_log(tid, f"{'vid=' + vid if vid else 'LEGACY'} posts {cols}x{rows}")
             self._no_content()
             return
         if parsed.path == "/pty/release":
@@ -4550,6 +4570,7 @@ class _Handler(BaseHTTPRequestHandler):
             # constraining the smallest-wins geometry until it reports back.
             form = self._read_form()
             pty_host.host.viewer_release(form.get("id", ""), form.get("vid", ""))
+            _geom_log(form.get("id", ""), f"release vid={form.get('vid', '')}")
             self._no_content()
             return
         if parsed.path == "/pty/kill":
