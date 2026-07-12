@@ -182,6 +182,18 @@ def test_focus_window_for_pid_safe_on_no_pid():
     assert launcher.focus_window_for_pid(0) is False
 
 
+def test_dashboard_reload_delegates_to_lifecycle_helper(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(
+        "horus.cli.companion.reload_dashboard",
+        lambda host, port: calls.append((host, port)) or (True, "Dashboard reloaded"),
+    )
+
+    assert main(["dashboard", "--host", "127.0.0.1", "--port", "8771", "--reload"]) == 0
+    assert calls == [("127.0.0.1", 8771)]
+    assert "Dashboard reloaded" in capsys.readouterr().out
+
+
 def test_fleet_prints_one_line_per_project_with_next_step_and_skips_cockpit(
     tmp_path, monkeypatch, capsys,
 ):

@@ -1173,7 +1173,7 @@ def test_stale_build_refuses_artifact_writes(tmp_path, monkeypatch):
 def test_stale_build_banner_on_pages_and_refusal_notice(monkeypatch):
     _force_stale_build(monkeypatch)
     page = dashboard._page("t", "<p>x</p>")
-    assert "running an old build" in page and "9.9.9" in page and "restart Horus" in page
+    assert "running an old build" in page and "9.9.9" in page and "horus dashboard --reload" in page
     notice = dashboard._project_action_banner({"stale_build": ["1"]})
     assert "Refused" in notice and "old build" in notice
 
@@ -2614,6 +2614,7 @@ def test_health_endpoint_identity():
     assert data["app"] == "horus-dashboard"
     assert data["version"] == dashboard.__version__
     assert isinstance(data["pid"], int)
+    assert data["exposed"] is False
 
 
 def test_manifest_served_with_content_type_and_required_fields():

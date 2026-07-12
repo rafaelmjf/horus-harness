@@ -213,6 +213,47 @@ def test_ensure_dashboard_spawns_horus_dashboard(monkeypatch):
     assert calls[0][0] == [sys.executable, "-m", "horus", "dashboard", "--host", "127.0.0.1", "--port", "9999"]
 
 
+def test_reload_dashboard_preserves_exposed_mode_and_reports_new_pid(monkeypatch):
+    old = {"app": "horus-dashboard", "pid": 111, "exposed": True}
+    new = {"app": "horus-dashboard", "pid": 222, "exposed": True}
+    identities = iter([old, None, new])
+    monkeypatch.setattr(companion, "dashboard_identity", lambda *a, **k: next(identities))
+    killed = []
+    monkeypatch.setattr(companion, "_kill_pid_tree", lambda pid, **k: killed.append(pid))
+    starts = []
+    monkeypatch.setattr(
+        companion,
+        "ensure_dashboard",
+        lambda host, port, **kw: starts.append((host, port, kw)) or companion.DashboardProcess("http://x", True, None),
+    )
+
+    ok, detail = companion.reload_dashboard("127.0.0.1", 8771)
+
+    assert ok is True and "111 -> 222" in detail
+    assert killed == [111]
+    assert starts == [("127.0.0.1", 8771, {"exposed": True})]
+
+
+def test_respawn_dashboard_if_needed_replaces_only_dead_owned_child(monkeypatch):
+    class Dead:
+        def poll(self):
+            return 9
+
+    current = companion.DashboardProcess("http://x", True, Dead())
+    replacement = companion.DashboardProcess("http://x", True, object())
+    calls = []
+    monkeypatch.setattr(
+        companion, "ensure_dashboard",
+        lambda host, port: calls.append((host, port)) or replacement,
+    )
+
+    assert companion.respawn_dashboard_if_needed(current, host="127.0.0.1", port=8765) is replacement
+    assert calls == [("127.0.0.1", 8765)]
+    assert companion.respawn_dashboard_if_needed(
+        companion.DashboardProcess("http://x", False, Dead()), host="127.0.0.1", port=8765,
+    ).started is False
+
+
 def test_ensure_dashboard_for_open_restarts_dead_spawned_dashboard(monkeypatch):
     events = []
     current = companion.DashboardProcess("http://127.0.0.1:8765", True, object())
