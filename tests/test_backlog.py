@@ -6,7 +6,7 @@ from pathlib import Path
 from horus import backlog
 
 
-def _mk_card(root: Path, name: str, *, status="open", parallel="", surface="", body="Card body.\n"):
+def _mk_card(root: Path, name: str, *, status="open", parallel="", surface="", type="", body="Card body.\n"):
     hdir = root / ".horus" / "backlog"
     hdir.mkdir(parents=True, exist_ok=True)
     lines = ["---", f"status: {status}", "priority: later", "tier: sonnet", "created: 2026-07-11"]
@@ -14,6 +14,8 @@ def _mk_card(root: Path, name: str, *, status="open", parallel="", surface="", b
         lines.append(f"parallel: {parallel}")
     if surface:
         lines.append(f"surface: {surface}")
+    if type:
+        lines.append(f"type: {type}")
     lines.append("---")
     text = "\n".join(lines) + f"\n# {name.replace('-', ' ').title()}\n\n{body}"
     (hdir / f"{name}.md").write_text(text, encoding="utf-8")
@@ -34,6 +36,18 @@ def test_load_cards_back_compat_no_new_fields(tmp_path):
     cards = backlog.load_cards(tmp_path)
     assert cards[0].parallel == ""
     assert cards[0].surface == ()
+
+
+def test_load_cards_type_defaults_to_task(tmp_path):
+    _mk_card(tmp_path, "untyped")
+    cards = backlog.load_cards(tmp_path)
+    assert cards[0].type == "task"
+
+
+def test_load_cards_reads_explicit_type(tmp_path):
+    _mk_card(tmp_path, "a-bug", type="bug")
+    cards = backlog.load_cards(tmp_path)
+    assert cards[0].type == "bug"
 
 
 def test_claim_no_other_in_progress_is_clean_even_without_fields(tmp_path):

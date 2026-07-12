@@ -177,6 +177,38 @@ last_updated: {date}
 """
 
 
+def backlog_pointer_block() -> str:
+    """The PRD's `## Backlog` section body once cards are the fleet standard:
+    a thin pointer to `.horus/backlog/`, not an inline list. Shared by the
+    fresh v3 scaffold (`prd_md`) and the inline-Backlog -> cards migration
+    (`horus backlog migrate`), so both land on identical wording."""
+    return (
+        "Prioritized open work lives in `.horus/backlog/` — one card per item "
+        "(`status`/`priority`/`type` in frontmatter; `type` defaults to `task` "
+        "when unstated). Run `horus backlog list` to see it, `horus backlog "
+        "claim <name>` to start one. This section is a pointer, not a list."
+    )
+
+
+def starter_backlog_card(date: str) -> str:
+    """The one card `horus init`/`infer` scaffold into a fresh `.horus/backlog/`
+    so the directory is never silently empty. Delete it once real cards exist."""
+    return f"""---
+status: open
+priority: low
+type: task
+created: {date}
+---
+
+# Replace this with your first backlog item
+
+Starter card for `.horus/backlog/` — one card per work item. Frontmatter carries
+`status` (open/claimed), `priority`, `tier`, and `type` (`bug`/`feature`/`chore`/
+`task`, defaults to `task`). See `horus backlog list` / `horus backlog claim
+<name>`. Delete this file once real cards exist.
+"""
+
+
 def prd_md(project_name: str, date: str) -> str:
     return f"""---
 status: active
@@ -202,20 +234,7 @@ explicit **out of scope** list once the project has one.
 
 ## Backlog
 
-Prioritized open work. Features and bugs in one list; jump order is allowed — this
-list is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
-
-### Now / next candidates
-
-1. First concrete next step.
-
-### Open, unscheduled
-
-- Direction noted, not yet scheduled.
-
-### Deferred
-
-- Direction noted, not scheduled; revisit later.
+{backlog_pointer_block()}
 
 ## Shipped
 
@@ -229,9 +248,10 @@ The invariants that constrain new work.
 
 ## Structure contract
 
-- **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines:
-  new shipped items are one line; done backlog items are deleted (git remembers);
-  bugs get appended to the backlog as found.
+- **This file** carries vision, shipped, rules, and a thin pointer to the backlog.
+  Keep it under ~250 lines: new shipped items are one line; done backlog cards are
+  deleted (git remembers); new work (including bugs) gets its own card in
+  `.horus/backlog/`.
 - **`sessions/`**: one note per session (`horus session new`), operational facts
   welcome (gates verified, tokens to rotate, dead ends). Distilled notes move to
   `sessions/archive/` (local).

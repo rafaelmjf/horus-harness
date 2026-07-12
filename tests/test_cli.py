@@ -1847,6 +1847,57 @@ def test_backlog_claim_warns_and_blocks_on_surface_overlap(tmp_path, monkeypatch
     assert "status: claimed" in text
 
 
+def test_backlog_list_type_filter(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "a-bug", status="open", priority="high", type="bug")
+    _write_backlog_card(tmp_path, "b-feature", status="open", priority="high", type="feature")
+    _write_backlog_card(tmp_path, "c-untyped", status="open", priority="high")
+
+    assert main(["backlog", "list", "--path", str(tmp_path), "--type", "bug"]) == 0
+    out = capsys.readouterr().out
+    assert "a-bug" in out
+    assert "b-feature" not in out
+    assert "c-untyped" not in out
+
+    assert main(["backlog", "list", "--path", str(tmp_path), "--type", "task"]) == 0
+    out = capsys.readouterr().out
+    assert "c-untyped" in out  # missing `type` defaults to task
+    assert "a-bug" not in out
+
+
+def test_backlog_migrate_dry_run_then_apply(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    prd_path = tmp_path / ".horus" / "PRD.md"
+    prd_path.write_text(
+        '---\nstatus: active\n---\n\n# demo — PRD\n\n## Backlog\n\n'
+        '### Now / next candidates\n\n1. **[bug]** Fix the thing.\n\n## Shipped\n',
+        encoding="utf-8",
+    )
+    for card in (tmp_path / ".horus" / "backlog").glob("*.md"):
+        card.unlink()
+
+    rc = main(["backlog", "migrate", "--path", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "would-create" in out
+    assert "Dry run only" in out
+    assert not any((tmp_path / ".horus" / "backlog").glob("*.md"))
+
+    rc = main(["backlog", "migrate", "--path", str(tmp_path), "--apply"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "created" in out
+    cards = list((tmp_path / ".horus" / "backlog").glob("*.md"))
+    assert len(cards) == 1
+
+    rc = main(["backlog", "migrate", "--path", str(tmp_path), "--apply"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "noop" in out
+
+
 def test_backlog_claim_non_overlapping_proceeds_clean(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes", "--no-skills"])

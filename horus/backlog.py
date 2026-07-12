@@ -12,6 +12,10 @@ same way:
 Both are optional and back-compat: a card with neither field still claims,
 same as before this module existed. This is a guardrail (metadata + a
 claim-time check + display), not a scheduler — no daemon, no auto-routing.
+
+- `type: bug | feature | chore | task` — one `backlog/` dir instead of a
+  separate `bugs/` folder; unset/blank defaults to "task". `horus backlog list
+  --type bug` is the query surface, not a folder split.
 """
 
 from __future__ import annotations
@@ -32,6 +36,12 @@ _CLAIM_LOCK_FILE = ".claim.lock"
 # and are deleted on completion (see PRD's structure contract).
 _IN_PROGRESS_STATUSES = ("claimed",)
 
+# `type` is a free-form-but-conventional field: one `backlog/` dir instead of a
+# separate `bugs/` folder, with visibility coming from tooling (this list + the
+# `--type` filter) rather than folder separation. Unset/blank defaults to "task".
+CARD_TYPES = ("bug", "feature", "chore", "task")
+DEFAULT_TYPE = "task"
+
 
 @dataclass(frozen=True)
 class Card:
@@ -43,6 +53,7 @@ class Card:
     created: str
     parallel: str  # "safe" | "exclusive" | "" (unstated)
     surface: tuple[str, ...]
+    type: str  # "bug" | "feature" | "chore" | "task" — defaults to "task" if unstated
     title: str
 
 
@@ -84,6 +95,7 @@ def _card_from_path(path: Path) -> Card:
         created=fm.get("created", "").strip(),
         parallel=fm.get("parallel", "").strip().lower(),
         surface=_parse_surface(fm.get("surface", "")),
+        type=fm.get("type", "").strip().lower() or DEFAULT_TYPE,
         title=_title(doc.body, path.stem),
     )
 
