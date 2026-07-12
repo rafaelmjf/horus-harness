@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-12
@@ -8,6 +8,8 @@ parallel: exclusive
 surface: horus/dashboard.py, horus/pty_host.py, horus/pty_session.py
 supersedes: mobile-terminal-legibility, mobile-terminal-interaction-regression
 proposal_doc: docs/terminal-mobile-desktop-diagnosis.md
+shipped_pr: 171
+shipped_sha: 68b41252f6cc00581ce632b80a08cd7d53e765cf
 shipped:
 ---
 
