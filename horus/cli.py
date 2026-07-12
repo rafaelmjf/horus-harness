@@ -162,6 +162,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_dashboard(args: argparse.Namespace) -> int:
+    if args.reload:
+        ok, detail = companion.reload_dashboard(args.host, args.port)
+        print(detail, file=sys.stderr if not ok else sys.stdout)
+        return 0 if ok else 1
     try:
         dashboard.serve(host=args.host, port=args.port, exposed=args.exposed)
     except config.ConfigError as exc:
@@ -2437,6 +2441,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--exposed", action="store_true",
         help="enforce the [access] Cloudflare gate (for a tunnel-exposed dashboard); "
              "refuses to start without an [access] block. Local mode never reads it.",
+    )
+    p_dash.add_argument(
+        "--reload", action="store_true",
+        help="restart the identified dashboard on this host/port from the current install; preserves exposed mode",
     )
     p_dash.set_defaults(func=cmd_dashboard)
 

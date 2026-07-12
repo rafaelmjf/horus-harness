@@ -898,7 +898,7 @@ def _stale_build_banner() -> str:
     return (
         "<div class='banner err'>This dashboard is running an old build "
         f"(v{html.escape(str(state['running']))} in memory; v{html.escape(str(state['disk']))} "
-        "is installed) &mdash; restart Horus to load it. Artifact writes are disabled and "
+        "is installed) &mdash; run <code>horus dashboard --reload</code> to load it. Artifact writes are disabled and "
         "staleness badges may be wrong until then.</div>"
     )
 
@@ -907,8 +907,8 @@ def _update_pill_html(status: dict[str, object] | None = None) -> str:
     """Top-nav "update available" pill + Update button, or "" when current.
 
     The button runs `uv tool upgrade horus-harness`; the running server keeps its
-    old in-memory build (no hot reload), so the post-upgrade banner says to
-    restart Horus rather than pretending the new version is live.
+    old in-memory build (no hot reload), so the post-upgrade banner gives the
+    explicit reload command rather than pretending the new version is live.
     """
     status = status if status is not None else selfupdate.check_update()
     if not status.get("update_available"):
@@ -916,7 +916,7 @@ def _update_pill_html(status: dict[str, object] | None = None) -> str:
     latest = html.escape(str(status.get("latest")))
     return (
         "<form method='post' action='/self-update' style='display:inline-block;margin-right:10px'"
-        f" onsubmit=\"return confirm('Upgrade horus-harness to v{latest}? Horus must be restarted afterwards to load it.')\">"
+        f" onsubmit=\"return confirm('Upgrade horus-harness to v{latest}? Then run horus dashboard --reload to load it.')\">"
         f"<button class='btn sm btn-seal' type='submit' title='Installed: v{html.escape(__version__)}'>"
         f"&#8599; Update to v{latest}</button></form>"
     )
@@ -3782,7 +3782,7 @@ def _project_action_banner(params: dict[str, list[str]]) -> str:
     if "selfupdated" in params:
         return (
             f"<div class='banner ok'>{html.escape(params['selfupdated'][0])} &mdash; "
-            "restart Horus to load the new version (the running server keeps its old build).</div>"
+            "run <code>horus dashboard --reload</code> to load the new version (the running server keeps its old build).</div>"
         )
     if "selfupdate_error" in params:
         return f"<div class='banner err'>Self-update failed: {html.escape(params['selfupdate_error'][0])}</div>"
@@ -4185,7 +4185,7 @@ class _Handler(BaseHTTPRequestHandler):
             # tell a current dashboard from a stale orphan (and from a foreign
             # server) before adopting the port.
             payload = json.dumps(
-                {"app": "horus-dashboard", "version": __version__, "pid": os.getpid()}
+                {"app": "horus-dashboard", "version": __version__, "pid": os.getpid(), "exposed": _DASH_ACCESS is not None}
             ).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

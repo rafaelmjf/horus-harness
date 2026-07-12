@@ -29,6 +29,14 @@ class DashboardProcess(NamedTuple):
     error: str | None = None  # definite startup failure (child died before /health)
 
 
+def _dashboard_command(host: str, port: int, *, exposed: bool = False) -> list[str]:
+    """Command for a fresh dashboard process from this installed CLI."""
+    command = [sys.executable, "-m", "horus", "dashboard", "--host", host, "--port", str(port)]
+    if exposed:
+        command.append("--exposed")
+    return command
+
+
 # --------------------------------------------------------------------------- #
 # Startup logs — the app's GUI processes run windowless (pythonw / DEVNULL), so
 # a startup crash used to vanish. Child output and companion events land in
@@ -198,7 +206,9 @@ def _replace_stale_dashboard(url: str, port: int, *, timeout: float = 3.0) -> bo
     return not dashboard_is_live(url)
 
 
-def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool = True) -> DashboardProcess:
+def ensure_dashboard(
+    host: str = "127.0.0.1", port: int = 8765, *, start: bool = True, exposed: bool = False,
+) -> DashboardProcess:
     url = dashboard_url(host, port)
     if not start:
         return DashboardProcess(url, False, None)
@@ -223,7 +233,7 @@ def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool =
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
     process = subprocess.Popen(
-        [sys.executable, "-m", "horus", "dashboard", "--host", host, "--port", str(port)],
+        _dashboard_command(host, port, exposed=exposed),
         **kwargs,
     )
     if log is not None:
@@ -239,6 +249,54 @@ def ensure_dashboard(host: str = "127.0.0.1", port: int = 8765, *, start: bool =
         )
         _log_line("dashboard", f"dashboard exited with code {process.returncode} before answering /health")
     return DashboardProcess(url, True, process, error)
+
+
+def reload_dashboard(host: str = "127.0.0.1", port: int = 8765, *, timeout: float = 3.0) -> tuple[bool, str]:
+    """Replace one identified dashboard with a fresh process from this install.
+
+    ``/health`` stays public even for an exposed dashboard, so this can preserve
+    its launch property without touching the tunnel that points at its port.
+    Foreign listeners are never stopped.
+    """
+    url = dashboard_url(host, port)
+    identity = dashboard_identity(url)
+    if identity is None or identity.get("app") != "horus-dashboard":
+        return False, f"No Horus dashboard found at {url}."
+    old_pid = identity.get("pid")
+    if not isinstance(old_pid, int) or old_pid <= 0:
+        return False, f"Dashboard at {url} did not provide a usable PID."
+    exposed = identity.get("exposed") is True
+    _kill_pid_tree(old_pid, timeout=timeout)
+
+    # An app supervisor may already have replaced its child. In that case it is
+    # the correct fresh process, and starting another one would only race it.
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        current = dashboard_identity(url)
+        if current is None:
+            break
+        if current.get("pid") != old_pid:
+            return True, f"Dashboard reloaded at {url} (pid {old_pid} -> {current.get('pid')})."
+        time.sleep(0.05)
+
+    fresh = ensure_dashboard(host, port, exposed=exposed)
+    if fresh.error:
+        return False, fresh.error
+    current = dashboard_identity(url)
+    if current is None or current.get("pid") == old_pid:
+        return False, f"Dashboard at {url} did not come back after reload."
+    return True, f"Dashboard reloaded at {url} (pid {old_pid} -> {current.get('pid')})."
+
+
+def respawn_dashboard_if_needed(
+    dashboard: DashboardProcess | None, *, host: str, port: int,
+) -> DashboardProcess | None:
+    """Replace a dead child owned by ``horus app``; adopted servers stay untouched."""
+    if dashboard is None or not dashboard.started or dashboard.process is None:
+        return dashboard
+    if dashboard.process.poll() is None:
+        return dashboard
+    return ensure_dashboard(host, port)
 
 
 def ensure_dashboard_for_open(
@@ -618,6 +676,7 @@ def run_companion(
     # click, and the shutdown path agree on the dashboard process + browser window.
     state: dict[str, Any] = {"dashboard": None, "browser_proc": None}
     state_lock = threading.Lock()
+    closing = threading.Event()
     # Startup-failure notice slot: written by ensure_open (any thread), drained by
     # the main-thread animate loop — Tk must never be touched off the main thread,
     # and animate must not contend on state_lock (a spawn holds it for seconds).
@@ -643,6 +702,16 @@ def run_companion(
     # of blocking on the dashboard coming live and (when pre-warming) the browser's
     # cold launch. The click handler reuses whatever this set up.
     threading.Thread(target=lambda: ensure_open(open_browser=open_on_start), daemon=True).start()
+
+    def respawn_dashboard_child() -> None:
+        """Keep the backend alive if the companion-owned child dies or is killed."""
+        while not closing.wait(0.5):
+            with state_lock:
+                state["dashboard"] = respawn_dashboard_if_needed(
+                    state["dashboard"], host=host, port=port,
+                )
+
+    threading.Thread(target=respawn_dashboard_child, daemon=True).start()
 
     # Worker badge: registry polled off the main thread (file IO + PID liveness
     # checks), rendered by the animate loop — same main-thread-only Tk rule as
@@ -836,6 +905,7 @@ def run_companion(
         # Don't leave the dashboard server — or our owned dashboard window — running
         # once the mascot is gone. (Owned-window close is safe: dedicated profile.)
         with state_lock:
+            closing.set()
             stop_browser(state["browser_proc"])
             stop_dashboard(state["dashboard"])
     return 0
