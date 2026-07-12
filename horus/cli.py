@@ -17,6 +17,7 @@ from horus import (
     adapters,
     backend,
     backlog,
+    backlog_migrate,
     brainstorm,
     capabilities,
     claude_usage,
@@ -1023,15 +1024,33 @@ def cmd_backlog(args: argparse.Namespace) -> int:
 
     if args.backlog_cmd == "list":
         cards = backlog.load_cards(root)
+        if args.type:
+            cards = [c for c in cards if c.type == args.type]
         if not cards:
-            print(f"No cards in {HORUS_DIR}/{backlog.BACKLOG_DIR}/.")
+            scope = f" with type={args.type}" if args.type else ""
+            print(f"No cards in {HORUS_DIR}/{backlog.BACKLOG_DIR}/{scope}.")
             return 0
         for c in cards:
             parallel = c.parallel or "unstated"
             surface = ", ".join(c.surface) if c.surface else "unverified"
-            print(f"{c.name}  [{c.status}]  priority={c.priority or '-'} tier={c.tier or '-'} parallel={parallel}")
+            print(f"{c.name}  [{c.status}]  priority={c.priority or '-'} tier={c.tier or '-'} type={c.type} parallel={parallel}")
             print(f"    {c.title}")
             print(f"    surface: {surface}")
+        return 0
+
+    if args.backlog_cmd == "migrate":
+        if args.apply and (rc := _enforce_version_floor(root)) is not None:
+            return rc
+        actions = backlog_migrate.migrate_inline_backlog(root, apply=args.apply)
+        mode = "Applying" if args.apply else "Checking"
+        print(f"{mode} inline '## Backlog' -> cards migration in {root}\n")
+        for a in actions:
+            print(f"  [{a.status}] {a.message}")
+        if any(a.status == "error" for a in actions):
+            return 2
+        if not args.apply and any(a.status in ("would-create", "would-update") for a in actions):
+            print("\nDry run only. Re-run with `--apply` to write these cards and update PRD.md.")
+            return 1
         return 0
 
     if args.backlog_cmd == "claim":
@@ -2612,10 +2631,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     backlog_sub = p_backlog.add_subparsers(dest="backlog_cmd", required=True)
     p_backlog_list = backlog_sub.add_parser(
-        "list", help="list backlog cards with status/priority/tier/parallel/surface"
+        "list", help="list backlog cards with status/priority/tier/type/parallel/surface"
     )
     p_backlog_list.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_backlog_list.add_argument(
+        "--type", choices=backlog.CARD_TYPES, default="",
+        help="filter to one card type (bug|feature|chore|task); default: no filter",
+    )
     p_backlog_list.set_defaults(func=cmd_backlog)
+
+    p_backlog_migrate = backlog_sub.add_parser(
+        "migrate",
+        help="migrate an inline PRD '## Backlog' section to one card per item (idempotent, per-project)",
+    )
+    p_backlog_migrate.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_backlog_migrate.add_argument("--apply", action="store_true", help="write cards + update PRD.md (default is dry-run/report)")
+    p_backlog_migrate.set_defaults(func=cmd_backlog)
 
     p_backlog_claim = backlog_sub.add_parser(
         "claim", help="claim a backlog card (warns on overlap with in-progress cards; --force to override)"

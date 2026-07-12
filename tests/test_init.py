@@ -45,6 +45,53 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     assert (tmp_path / ".codex" / "hooks.json").exists()
 
 
+def test_init_scaffolds_backlog_dir_with_starter_card(tmp_path, monkeypatch):
+    """Card-per-file backlog is the fleet standard: `horus init` on a fresh
+    project scaffolds `.horus/backlog/` with a starter card, and the PRD's
+    `## Backlog` is a thin pointer, not an inline list."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    from horus import backlog
+
+    actions = initialize.init_project(tmp_path, assume_yes=True)
+
+    bdir = tmp_path / ".horus" / "backlog"
+    assert bdir.is_dir()
+    cards = list(bdir.glob("*.md"))
+    assert len(cards) == 1
+    assert any(a.status == "created" and "backlog" in a.message for a in actions)
+
+    loaded = backlog.load_cards(tmp_path)
+    assert len(loaded) == 1
+    assert loaded[0].type == "task"
+
+    prd_text = (tmp_path / ".horus" / "PRD.md").read_text(encoding="utf-8")
+    assert "one card per item" in prd_text
+    assert "Now / next candidates" not in prd_text
+
+
+def test_init_never_clobbers_populated_backlog_dir(tmp_path, monkeypatch):
+    """A project that already has real cards must never get the starter card
+    injected alongside them."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    initialize.init_project(tmp_path, assume_yes=True)
+    bdir = tmp_path / ".horus" / "backlog"
+    for card in bdir.glob("*.md"):
+        card.unlink()
+    (bdir / "real-card.md").write_text(
+        "---\nstatus: open\npriority: high\ntype: task\ncreated: 2026-07-12\n---\n# Real card\n",
+        encoding="utf-8",
+    )
+
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    cards = sorted(p.name for p in bdir.glob("*.md"))
+    assert cards == ["real-card.md"]
+
+
 def test_init_fresh_prd_scaffold_passes_close_check(tmp_path, monkeypatch):
     """A freshly scaffolded PRD.md must clear the freshness gate immediately —
     its bootstrap frontmatter values are non-empty (no session exists yet to be
@@ -99,6 +146,8 @@ def test_init_on_existing_v3_project_never_creates_six_lanes(tmp_path, monkeypat
     assert "hand-authored" in (hdir / "PRD.md").read_text(encoding="utf-8")
     for lane in ("project.md", "roadmap.md", "features.md", "decisions.md", "history.md", "execution.md"):
         assert not (hdir / lane).exists()
+    # An existing v3 project without a backlog/ dir yet also gets scaffolded.
+    assert list((hdir / "backlog").glob("*.md"))
 
 
 def test_init_v3_scaffold_is_idempotent(tmp_path, monkeypatch):

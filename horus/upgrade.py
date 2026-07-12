@@ -126,7 +126,7 @@ def upgrade_structure_prd(project_root: Path, *, apply: bool = False) -> list[Up
         return [UpgradeAction("error", f"archive target already exists: {', '.join('.horus/archive/' + n for n in collisions)}")]
 
     if apply:
-        safety = _migration_git_safety(project_root)
+        safety = migration_git_safety(project_root)
         if safety:
             return [UpgradeAction("error", safety)]
 
@@ -150,7 +150,7 @@ def upgrade_structure_prd(project_root: Path, *, apply: bool = False) -> list[Up
     ]
 
 
-def _migration_git_safety(project_root: Path) -> str | None:
+def migration_git_safety(project_root: Path) -> str | None:
     if _git(project_root, "rev-parse", "--is-inside-work-tree") != "true":
         return None
     if _git(project_root, "fetch", "--all", "--prune") is None:

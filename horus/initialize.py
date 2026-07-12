@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
-from horus import config, frontmatter, native_hooks, skills, templates
+from horus import backlog, config, frontmatter, native_hooks, skills, templates
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, TEMP_DIR
 from horus.instructions import extract_block
 
@@ -91,6 +91,7 @@ def init_project(
         actions.append(
             _write_if_missing(hdir / "README.md", templates.readme_md_v3(), f"{HORUS_DIR}/README.md")
         )
+        actions.append(_ensure_backlog_dir(hdir, today))
     elif is_v2:
         actions.append(
             _write_if_missing(hdir / "README.md", templates.readme_md(), f"{HORUS_DIR}/README.md")
@@ -148,6 +149,7 @@ def init_project(
                 f"{HORUS_DIR}/{frontmatter.PRD_FILE}",
             )
         )
+        actions.append(_ensure_backlog_dir(hdir, today))
 
     actions.append(
         _write_if_missing(
@@ -197,6 +199,21 @@ def init_project(
         actions.append(Action("exists", "project already in ~/.horus/config.toml"))
 
     return actions
+
+
+def _ensure_backlog_dir(hdir: Path, today: str) -> Action:
+    """Card-per-file backlog is the fleet standard: scaffold `.horus/backlog/`
+    with a starter card so a fresh project's backlog dir is never silently
+    empty. Never-clobber: only writes the starter card when the dir has no
+    cards yet — an already-populated backlog/ (this project's own, or one a
+    prior `init` already seeded) is left untouched."""
+    bdir = hdir / backlog.BACKLOG_DIR
+    bdir.mkdir(parents=True, exist_ok=True)
+    if any(bdir.glob("*.md")):
+        return Action("exists", f"{HORUS_DIR}/{backlog.BACKLOG_DIR}/ already has card(s)")
+    starter = bdir / "first-card.md"
+    starter.write_text(templates.starter_backlog_card(today), encoding="utf-8")
+    return Action("created", f"created {HORUS_DIR}/{backlog.BACKLOG_DIR}/{starter.name}")
 
 
 def _ensure_gitignore(horus_dir_path: Path) -> Action:
