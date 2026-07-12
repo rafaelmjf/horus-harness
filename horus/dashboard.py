@@ -737,7 +737,12 @@ body.term-fs { overflow: hidden; }
 .term-mini { flex: 0 0 auto; font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer;
     color: #8a93a6; background: #12141b; border: 1px solid #232733; border-radius: 6px; padding: 4px 9px; }
 .term-mini.active { background: #0b0d12; color: #e6e6e6; border-color: #284058; }
-.xterm-host { flex: 1; min-height: 0; overscroll-behavior: contain; touch-action: pan-y; }
+/* touch-action:none — pan-y let the browser own vertical drags, so a touch-scroll
+   panned the PAGE under the terminal; xterm's own touch handlers still receive the
+   events. overscroll-behavior must sit on .xterm-viewport (the element that actually
+   scrolls) — on the non-scrolling host it never stopped the chain to the page. */
+.xterm-host { flex: 1; min-height: 0; overscroll-behavior: contain; touch-action: none; }
+.xterm-host .xterm-viewport { overscroll-behavior: contain; }
 .xterm-host .xterm { height: 100%; }
 /* Phones: taller terminal, bigger tap targets for the tab strip. */
 @media (max-width: 700px) {
@@ -3207,7 +3212,14 @@ window.horusAttachTerm = function(hostId, tid, onExit){
       .catch(function(){ if(!postErr && typeof term!=='undefined'){ postErr=true;
         term.write('\\r\\n\\x1b[31m[input not delivered — network error or expired access session]\\x1b[0m\\x1b[2m — reload the page.\\x1b[0m\\r\\n'); } });
   }
-  var term=new Terminal({convertEol:false, cursorBlink:true, fontSize:13, scrollback:5000,
+  // fontSize >= 16 on touch: iOS zooms the whole page when a focused input's
+  // font-size is under 16px — xterm's hidden helper textarea inherits the cell
+  // font, so 13px made every keyboard focus zoom the page and shear the cell
+  // grid (glyphs overlapping, cursor drawn off the text). 16 removes the
+  // trigger and is more legible at phone DPR anyway; tracked live so a
+  // mobile<->desktop transition re-picks the size.
+  function termFontSize(){ return (window.horusCompact && window.horusCompact()) ? 16 : 13; }
+  var term=new Terminal({convertEol:false, cursorBlink:true, fontSize:termFontSize(), scrollback:5000,
     fontFamily:'ui-monospace, SFMono-Regular, Consolas, monospace',
     theme:{background:'#0b0d12', foreground:'#e6e6e6'}});
   var fit=new FitAddon.FitAddon(); term.loadAddon(fit);
@@ -3303,7 +3315,11 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     visualViewport.addEventListener('resize', requestSync);
     visualViewport.addEventListener('scroll', requestSync);
   }
-  window.addEventListener('horus:compactchange', requestSync);
+  window.addEventListener('horus:compactchange', function(){
+    var fs=termFontSize();
+    if(term.options.fontSize!==fs){ term.options.fontSize=fs; }
+    requestSync();
+  });
   document.addEventListener('visibilitychange', function(){ if(!document.hidden){ requestSync(); } });
   var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid));
   es.addEventListener('output', function(e){ term.write(b64bytes(e.data)); });

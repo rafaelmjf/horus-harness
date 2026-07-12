@@ -21,12 +21,16 @@ terminal supports mode 2026**.
 
 ## Levers in our control (small, bounded)
 
-1. **Upgrade the vendored xterm.js** (`horus/assets/vendor/xterm/`, vendored 2026-06-26,
-   pre-`@xterm`-scope package; `grep -c 2026 xterm.js` → 0, so no synchronized-output
-   support). Vendor current `@xterm/xterm` + `@xterm/addon-fit`; verify the new bundle
-   handles mode 2026 (grep for it) so Claude's sync-output path actually engages.
-2. **On-device renderer check** (owner-only): DOM vs canvas renderer legibility at
-   phone DPR — pending from the ux-hardening card's verification gate.
+1. ~~**Upgrade the vendored xterm.js**~~ **DONE (2026-07-12):** vendored
+   `@xterm/xterm` 6.0.0 + `@xterm/addon-fit` (mode-2026 synchronized output
+   confirmed in the bundle; same UMD globals; full CDP harness green). Same
+   session also fixed the on-phone scramble root cause: compact-mode
+   `fontSize: 16` (iOS zooms the page on focusing an input under 16px — xterm's
+   helper textarea carries the cell font, shearing the grid) and moved scroll
+   containment onto `.xterm-viewport` (the actual scroller) with
+   `touch-action: none` on the host.
+2. **On-device check** (owner-only): legibility + touch-scroll behavior at phone
+   DPR after the 6.0.0/fontSize/containment deploy — pending owner.
 3. Do NOT set `CLAUDE_CODE_NO_FLICKER` globally — it destroys scrollback (#41965);
    re-evaluate per upstream releases.
 

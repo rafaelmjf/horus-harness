@@ -1434,6 +1434,21 @@ def test_terminal_js_surfaces_gone_sessions(tmp_path, monkeypatch):
     assert "[session gone" in page           # visible, not silent
 
 
+def test_terminal_mobile_rendering_guards(tmp_path, monkeypatch):
+    """Compact mode must use a >=16px cell font (iOS zooms the page on focusing
+    an input under 16px — xterm's helper textarea carries the cell font, which
+    sheared the grid on phones), and scroll containment must sit on the element
+    that actually scrolls (.xterm-viewport), not only the non-scrolling host."""
+    _init(tmp_path, monkeypatch)
+    term = dashboard.pty_host.PtyTerminal(
+        term_id="pty-7", agent="claude", project_dir=tmp_path, title="demo · work",
+    )
+    page = dashboard.render_control([], [], [], terminals=[term])
+    assert "termFontSize" in page and "? 16 : 13" in page
+    assert ".xterm-host .xterm-viewport { overscroll-behavior: contain; }" in page
+    assert "touch-action: none" in page
+
+
 def test_open_terminals_reaps_long_dead_sessions(tmp_path, monkeypatch):
     """A session that exited past the grace never resurfaces as a ghost tab."""
     import time as _time
