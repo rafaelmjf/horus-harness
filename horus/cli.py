@@ -29,6 +29,7 @@ from horus import (
     datums,
     delivery,
     fetchcheck,
+    fleet_backlog,
     frontmatter,
     gitstate,
     github_catalog,
@@ -208,7 +209,13 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_fleet(args: argparse.Namespace) -> int:
-    """One-line dispatch view for every registered project except the cockpit."""
+    """One-line dispatch view for every registered project except the cockpit,
+    or (with `--backlog`) the fleet-wide backlog card roll-up (all registered
+    projects, cockpit included — its own backlog is as much fleet work as any
+    other project's)."""
+    if getattr(args, "backlog", False):
+        return _cmd_fleet_backlog(args)
+
     projects = [
         path for path in config.load_projects()
         if Path(path).name.casefold() != "horus-agent"
@@ -242,6 +249,36 @@ def cmd_fleet(args: argparse.Namespace) -> int:
         if hint:
             row += f" | note: {compact(hint)}"
         print(row)
+    return 0
+
+
+def _cmd_fleet_backlog(args: argparse.Namespace) -> int:
+    """`horus fleet --backlog`: deterministic, read-only fleet-wide backlog
+    card roll-up (see horus/fleet_backlog.py). No network/fetch — a pure read
+    of each registered project's live `.horus/backlog/` (or best-effort inline
+    `## Backlog` count for projects not yet migrated, per PR #164)."""
+    projects = config.load_projects()
+    if not projects:
+        print("No projects registered (run `horus init` inside a project).")
+        return 0
+
+    project_filter = getattr(args, "project", None) or ""
+    if project_filter:
+        match = capabilities.resolve_project_path(project_filter, projects)
+        if match is None:
+            print(f"No registered project named {project_filter!r} (see `horus fleet`).")
+            return 1
+        projects = [match]
+
+    type_filter = getattr(args, "type", "") or ""
+    rollups = fleet_backlog.apply_filters(
+        fleet_backlog.load_fleet_rollup(projects), type_filter=type_filter
+    )
+
+    if getattr(args, "stdout", False):
+        print(fleet_backlog.render_json(rollups, type_filter=type_filter, project_filter=project_filter), end="")
+    else:
+        print(fleet_backlog.render_text(rollups), end="")
     return 0
 
 
@@ -2319,6 +2356,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_fleet = sub.add_parser(
         "fleet",
         help="print one-line git/session/next-step context for every project except horus-agent",
+    )
+    p_fleet.add_argument(
+        "--backlog", action="store_true",
+        help="print the fleet-wide backlog card roll-up instead (all registered "
+             "projects, cockpit included) — deterministic, read-only, no fetch",
+    )
+    p_fleet.add_argument(
+        "--stdout", action="store_true",
+        help="with --backlog: print the full JSON roll-up instead of the human-readable view",
+    )
+    p_fleet.add_argument(
+        "--type", choices=backlog.CARD_TYPES, default="",
+        help="with --backlog: filter to one card type (bug|feature|chore|task)",
+    )
+    p_fleet.add_argument(
+        "--project", default=None,
+        help="with --backlog: roll up just ONE registered project (matched by directory basename)",
     )
     p_fleet.set_defaults(func=cmd_fleet)
 

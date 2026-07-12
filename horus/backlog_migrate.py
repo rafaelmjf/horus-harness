@@ -147,6 +147,26 @@ def _find_backlog_section(lines: list[str]) -> tuple[int, int] | None:
     return None
 
 
+def inline_backlog_item_count(project_root: Path) -> int | None:
+    """Best-effort count of inline `## Backlog` list items in `.horus/PRD.md`,
+    for fleet-wide roll-up rendering (see `horus/fleet_backlog.py`). ``None``
+    when there's no PRD.md or no `## Backlog` heading to read; ``0`` when the
+    section is already thin (migrated pointer, or genuinely empty)."""
+    prd_path = project_root / ".horus" / frontmatter.PRD_FILE
+    if not prd_path.is_file():
+        return None
+    lines = prd_path.read_text(encoding="utf-8").splitlines()
+    located = _find_backlog_section(lines)
+    if located is None:
+        return None
+    start_idx, end_idx = located
+    section_body = "\n".join(lines[start_idx:end_idx])
+    if section_body.strip().startswith(templates.backlog_pointer_block()):
+        return 0
+    items, _leftover = _split_backlog_items(section_body)
+    return len(items)
+
+
 def migrate_inline_backlog(project_root: Path, *, apply: bool = False) -> list[MigrateAction]:
     """Convert `project_root`'s `.horus/PRD.md` inline `## Backlog` items into
     cards under `.horus/backlog/`. Dry-run (`apply=False`, the default) reports
