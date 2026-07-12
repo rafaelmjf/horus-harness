@@ -186,7 +186,8 @@ def backlog_pointer_block() -> str:
         "Prioritized open work lives in `.horus/backlog/` — one card per item "
         "(`status`/`priority`/`type` in frontmatter; `type` defaults to `task` "
         "when unstated). Run `horus backlog list` to see it, `horus backlog "
-        "claim <name>` to start one. This section is a pointer, not a list."
+        "claim <name>` to start one, and `horus backlog ship <name> --pr N --sha "
+        "SHA` after merge. This section is a pointer, not a list."
     )
 
 
@@ -203,9 +204,10 @@ created: {date}
 # Replace this with your first backlog item
 
 Starter card for `.horus/backlog/` — one card per work item. Frontmatter carries
-`status` (open/claimed), `priority`, `tier`, and `type` (`bug`/`feature`/`chore`/
-`task`, defaults to `task`). See `horus backlog list` / `horus backlog claim
-<name>`. Delete this file once real cards exist.
+`status` (open/claimed/shipped), `priority`, `tier`, and `type`
+(`bug`/`feature`/`chore`/`task`, defaults to `task`). See `horus backlog list` /
+`horus backlog claim <name>` / `horus backlog ship <name> --pr N --sha SHA`.
+Delete this placeholder once real cards exist; shipped real cards remain in place.
 """
 
 
@@ -249,9 +251,9 @@ The invariants that constrain new work.
 ## Structure contract
 
 - **This file** carries vision, shipped, rules, and a thin pointer to the backlog.
-  Keep it under ~250 lines: new shipped items are one line; done backlog cards are
-  deleted (git remembers); new work (including bugs) gets its own card in
-  `.horus/backlog/`.
+  Keep it under ~250 lines: new shipped items are one line; shipped backlog cards
+  stay in place with `status: shipped` plus PR/SHA provenance; new work (including
+  bugs) gets its own card in `.horus/backlog/`.
 - **`sessions/`**: one note per session (`horus session new`), operational facts
   welcome (gates verified, tokens to rotate, dead ends). Distilled notes move to
   `sessions/archive/` (local).
@@ -710,8 +712,9 @@ installed. Read this first.
   (worker/subagent handoffs, review gates). Fluid: replaced when the next
   substantial item starts, not preserved as a timeline.
 
-Keep PRD.md under ~250 lines: shipped items are one line, done backlog items are
-deleted (git remembers). Closure = update PRD.md (frontmatter + backlog/shipped) +
+Keep PRD.md under ~250 lines: shipped ledger items are one line; card-backed work
+is marked `status: shipped` in place with PR/SHA provenance. Closure = update PRD.md
+(frontmatter + backlog/shipped) +
 a session note, then `horus close --commit --push`. One `horus consolidate` pass at
 most; do not chase warnings.
 
@@ -948,8 +951,9 @@ CONSOLIDATE_PROMPT_V3 = """Consolidation routine (PRD structure) - a light backl
 Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.md).
 Never invent status, dates, or versions; when intent is unclear, leave it and flag it.
 
-1. Size: keep PRD.md under the ~250-line cap - shipped entries are one line each;
-   delete done backlog items outright (git remembers).
+1. Size: keep PRD.md under the ~250-line cap - shipped entries are one line each.
+   For card-backed work, retain the card and run `horus backlog ship <name> --pr N
+   --sha SHA`; delete only stale legacy/inline done items.
 2. Freshness: refresh the frontmatter handoff fields (current_focus / next_action /
    next_prompt / execution_recommendation / last_updated) to reflect this session.
 3. Backlog hygiene: de-duplicate backlog titles; move work that shipped to the

@@ -1866,6 +1866,59 @@ def test_backlog_list_type_filter(tmp_path, monkeypatch, capsys):
     assert "a-bug" not in out
 
 
+def test_backlog_list_hides_shipped_cards_unless_all_requested(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "active", status="open", priority="high")
+    _write_backlog_card(
+        tmp_path, "already-shipped", status="shipped", priority="high",
+        shipped_pr="42", shipped_sha="abc123",
+    )
+
+    assert main(["backlog", "list", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "active" in out
+    assert "already-shipped" not in out
+
+    assert main(["backlog", "list", "--all", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "already-shipped" in out
+    assert "pr=42 sha=abc123" in out
+
+
+def test_backlog_ship_cli_flips_status_and_stamps_provenance(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "to-ship", status="open", priority="high")
+
+    assert main([
+        "backlog", "ship", "to-ship", "--pr", "42", "--sha", "abc123", "--path", str(tmp_path),
+    ]) == 0
+    assert "Shipped: to-ship (PR #42, abc123)" in capsys.readouterr().out
+    text = (tmp_path / ".horus" / "backlog" / "to-ship.md").read_text(encoding="utf-8")
+    assert "status: shipped" in text
+    assert "shipped_pr: 42" in text
+    assert "shipped_sha: abc123" in text
+
+
+def test_close_check_warns_on_lingering_done_and_shipped_but_open_card(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from tests.test_routines import _mk_fresh
+
+    _mk_fresh(tmp_path)
+    _write_backlog_card(
+        tmp_path, "drifted-card", status="open", priority="high",
+        shipped_pr="42", shipped_sha="abc123",
+    )
+    card_path = tmp_path / ".horus" / "backlog" / "drifted-card.md"
+    card_path.write_text(card_path.read_text(encoding="utf-8") + "- [x] merged work\n", encoding="utf-8")
+
+    assert main(["close", "--check", "--path", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "lingering done" in out
+    assert "shipped provenance but status is 'open'" in out
+
+
 def test_backlog_migrate_dry_run_then_apply(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes", "--no-skills"])

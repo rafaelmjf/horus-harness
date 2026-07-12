@@ -1,4 +1,4 @@
-"""`.horus/backlog/` card-per-file backlog: parsing, and a claim-time overlap check.
+"""`.horus/backlog/` card-per-file backlog: parsing, claim, and ship provenance.
 
 Cards are self-contained Markdown files with simple frontmatter (`status`,
 `priority`, `tier`, `created`). This module adds two OPTIONAL fields read the
@@ -16,6 +16,9 @@ claim-time check + display), not a scheduler — no daemon, no auto-routing.
 - `type: bug | feature | chore | task` — one `backlog/` dir instead of a
   separate `bugs/` folder; unset/blank defaults to "task". `horus backlog list
   --type bug` is the query surface, not a folder split.
+- `status: shipped` plus `shipped_pr` / `shipped_sha` records immutable merge
+  provenance in the card itself. Shipped cards stay in place for git history;
+  active views hide them unless explicitly requested.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import fnmatch
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,6 +46,12 @@ _IN_PROGRESS_STATUSES = ("claimed",)
 CARD_TYPES = ("bug", "feature", "chore", "task")
 DEFAULT_TYPE = "task"
 
+_LINGERING_DONE_RE = re.compile(
+    r"^\s*(?:(?:[-*]|\d+\.)\s*)?(?:\[x\]\s*)?DONE\b\s*(?:$|:|[-—])",
+    re.IGNORECASE,
+)
+_CHECKED_ITEM_RE = re.compile(r"^\s*(?:[-*]|\d+\.)\s*\[x\]", re.IGNORECASE)
+
 
 @dataclass(frozen=True)
 class Card:
@@ -54,6 +64,9 @@ class Card:
     parallel: str  # "safe" | "exclusive" | "" (unstated)
     surface: tuple[str, ...]
     type: str  # "bug" | "feature" | "chore" | "task" — defaults to "task" if unstated
+    shipped_pr: str
+    shipped_sha: str
+    shipped: str  # legacy free-text shipped note, used only to detect unflipped drift
     title: str
 
 
@@ -96,6 +109,9 @@ def _card_from_path(path: Path) -> Card:
         parallel=fm.get("parallel", "").strip().lower(),
         surface=_parse_surface(fm.get("surface", "")),
         type=fm.get("type", "").strip().lower() or DEFAULT_TYPE,
+        shipped_pr=fm.get("shipped_pr", "").strip(),
+        shipped_sha=fm.get("shipped_sha", "").strip(),
+        shipped=fm.get("shipped", "").strip(),
         title=_title(doc.body, path.stem),
     )
 
@@ -115,6 +131,30 @@ def find_card(root: Path, name: str) -> Card | None:
         if card.name == key:
             return card
     return None
+
+
+def hygiene_findings(root: Path) -> list[Finding]:
+    """Report card lifecycle drift for consolidate and the recurring close gate."""
+    findings: list[Finding] = []
+    for card in load_cards(root):
+        body = frontmatter.parse(card.path.read_text(encoding="utf-8")).body
+        lingering_done = card.status == "done" or any(
+            _CHECKED_ITEM_RE.match(line) or _LINGERING_DONE_RE.match(line)
+            for line in body.splitlines()
+        )
+        if lingering_done:
+            findings.append(Finding(
+                "warn",
+                f"backlog card '{card.name}' is lingering done — mark it shipped with "
+                "`horus backlog ship` (or remove stale data)",
+            ))
+        if card.status != "shipped" and (card.shipped_pr or card.shipped_sha or card.shipped):
+            findings.append(Finding(
+                "warn",
+                f"backlog card '{card.name}' has shipped provenance but status is "
+                f"'{card.status}' — run `horus backlog ship {card.name} --pr … --sha …`",
+            ))
+    return findings
 
 
 def _pair_overlaps(a: str, b: str) -> bool:
@@ -175,7 +215,8 @@ def claim_check(root: Path, name: str) -> list[Finding]:
 _STATUS_KEY = "status"
 
 
-def _set_status(path: Path, new_status: str) -> None:
+def _set_front_matter(path: Path, updates: dict[str, str]) -> None:
+    updates = dict(updates)
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
@@ -189,14 +230,18 @@ def _set_status(path: Path, new_status: str) -> None:
         raise ValueError(f"{path}: unterminated frontmatter fence")
     for i in range(1, end):
         key, sep, _ = lines[i].partition(":")
-        if sep and key.strip() == _STATUS_KEY:
-            lines[i] = f"{_STATUS_KEY}: {new_status}"
-            break
-    else:
-        lines.insert(end, f"{_STATUS_KEY}: {new_status}")
+        key = key.strip()
+        if sep and key in updates:
+            lines[i] = f"{key}: {updates.pop(key)}"
+    for key, value in updates.items():
+        lines.insert(end, f"{key}: {value}")
         end += 1
     newline = "\n" if text.endswith("\n") else ""
     path.write_text("\n".join(lines) + newline, encoding="utf-8")
+
+
+def _set_status(path: Path, new_status: str) -> None:
+    _set_front_matter(path, {_STATUS_KEY: new_status})
 
 
 @contextlib.contextmanager
@@ -233,3 +278,21 @@ def claim(root: Path, name: str, *, force: bool = False) -> tuple[bool, list[Fin
         assert target is not None  # already checked above via claim_check
         _set_status(target.path, "claimed")
         return True, findings
+
+
+def ship(root: Path, name: str, *, pr: str, sha: str) -> Card | None:
+    """Mark a card shipped in place and stamp its merged-PR provenance.
+
+    The card is deliberately retained under ``.horus/backlog/``. Its ``shipped``
+    status removes it from active views without losing the work item's context.
+    """
+    with _claim_lock(root):
+        target = find_card(root, name)
+        if target is None:
+            return None
+        _set_front_matter(target.path, {
+            "status": "shipped",
+            "shipped_pr": pr,
+            "shipped_sha": sha,
+        })
+        return find_card(root, name)

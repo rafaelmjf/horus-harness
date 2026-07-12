@@ -12,7 +12,7 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
-from horus import frontmatter, roadmap, templates
+from horus import backlog, frontmatter, roadmap, templates
 from horus.continuity import (
     HORUS_DIR,
     RECOMMENDED_FILES,
@@ -374,6 +374,8 @@ def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
                 "warn",
                 f"backlog item '{title or _short(text)}' is done — delete it (git remembers)",
             ))
+
+    findings.extend(backlog.hygiene_findings(root))
 
     if not any(f.level in ("warn", "fail") for f in findings):
         findings.append(Finding(
