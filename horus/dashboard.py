@@ -3273,6 +3273,15 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     window.addEventListener('horus:compactchange', updateBar);
   }
   var lastSent=null;
+  // One PTY geometry serves every viewer (pty_host holds a single cols/rows),
+  // so a phone attaching after a desktop viewer — or vice versa — can be stuck
+  // rendering a grid the PTY no longer has: its own box never changed, so the
+  // key!==lastSent guard suppressed the repost forever (observed live: ~90-col
+  // PTY wrapped mid-word all over a 44-col phone). claimSize() drops the guard
+  // so the NEXT sync reposts even an "unchanged" fit: the viewer the user is
+  // actually looking at (visible / focused / touched) claims the geometry, and
+  // the TUI redraws for it.
+  function claimSize(){ lastSent=null; requestSync(); }
   function sync(){
     // A backgrounded viewer (a pop-out window you tabbed away from, or an
     // inactive browser tab) skips posting: pty_host holds one geometry per
@@ -3320,7 +3329,31 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     if(term.options.fontSize!==fs){ term.options.fontSize=fs; }
     requestSync();
   });
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ requestSync(); } });
+  // Becoming visible/focused again (tab switch, PWA resume, bfcache restore) or
+  // touching the terminal claims the PTY geometry for THIS viewer — another
+  // viewer may have resized it while this one was away.
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ claimSize(); } });
+  window.addEventListener('focus', claimSize);
+  window.addEventListener('pageshow', claimSize);
+  host.addEventListener('touchstart', claimSize, {passive:true});
+  // Touch-drag scrolls the terminal, not the page: translate the drag into
+  // synthetic wheel events so xterm's own wheel pipeline applies its usual
+  // semantics (scrollback scroll in the normal buffer; alternate-scroll arrow
+  // keys for full-screen TUIs that enable it — same as a desktop mouse wheel).
+  var touchY=null;
+  host.addEventListener('touchstart', function(e){
+    touchY = (e.touches.length===1) ? e.touches[0].clientY : null;
+  }, {passive:true});
+  host.addEventListener('touchmove', function(e){
+    if(touchY===null || e.touches.length!==1) return;
+    var y=e.touches[0].clientY, dy=touchY-y;
+    if(Math.abs(dy)<2) return;
+    touchY=y;
+    e.preventDefault();
+    var screen=host.querySelector('.xterm-screen')||host;
+    screen.dispatchEvent(new WheelEvent('wheel',{deltaY:dy, deltaMode:0, bubbles:true, cancelable:true}));
+  }, {passive:false});
+  host.addEventListener('touchend', function(){ touchY=null; }, {passive:true});
   var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid));
   es.addEventListener('output', function(e){ term.write(b64bytes(e.data)); });
   // Surface a dead stream instead of failing silently: a session that opens but shows

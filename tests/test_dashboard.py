@@ -1449,6 +1449,23 @@ def test_terminal_mobile_rendering_guards(tmp_path, monkeypatch):
     assert "touch-action: none" in page
 
 
+def test_terminal_js_multi_viewer_geometry_and_touch_scroll(tmp_path, monkeypatch):
+    """One PTY geometry serves all viewers: a viewer must re-claim it when the
+    user returns to it (pageshow/focus/visibility/touch), or it stays stuck
+    rendering a grid another viewer set. And touch-drags must feed xterm's
+    wheel pipeline instead of scrolling nothing."""
+    _init(tmp_path, monkeypatch)
+    term = dashboard.pty_host.PtyTerminal(
+        term_id="pty-7", agent="claude", project_dir=tmp_path, title="demo · work",
+    )
+    page = dashboard.render_control([], [], [], terminals=[term])
+    assert "function claimSize()" in page
+    assert "window.addEventListener('pageshow', claimSize)" in page
+    assert "window.addEventListener('focus', claimSize)" in page
+    assert "claimSize(); } });" in page          # visibilitychange -> claim
+    assert "new WheelEvent('wheel'" in page      # touch-drag -> wheel pipeline
+
+
 def test_open_terminals_reaps_long_dead_sessions(tmp_path, monkeypatch):
     """A session that exited past the grace never resurfaces as a ghost tab."""
     import time as _time
