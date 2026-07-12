@@ -6,12 +6,7 @@ created: 2026-07-12
 created_by: overseer
 parallel: true
 surface: capabilities.toml (owner priors), horus/datums.py, horus capabilities --models/--matrix
-shipped:
-  - 2026-07-12: parse optional price/capability_note/researched_at fields on the
-    capabilities.toml model-prior schema (back-compat); surface pricing +
-    capability note in `horus capabilities --models`/`--matrix`; non-blocking
-    staleness WARNING (>14d or missing researched_at) on those display commands.
-    Web-research refresh itself is a separate agent-run pass, not this PR.
+shipped: "2026-07-12 — capability built, PR open (branch feat/model-roster-pricing, PR #167). Extended the capabilities.toml owner-prior schema with optional back-compatible price_in/price_out/capability_note/researched_at fields (horus/datums.py: ModelRollup, build_model_rollup, _researched_at_str); surfaced pricing + capability note in `horus capabilities --models`/`--matrix`; added a non-blocking staleness WARNING (stderr, exit 0 unaffected) via datums.staleness_warning when the freshest researched_at is >14 days old or absent from every model. 23 new tests in test_datums.py, full suite green (1199). The actual web-research refresh (real price/capability data for active models) is NOT this PR — a separate agent-run pass, still open."
 ---
 
 # Pricing-aware model-roster research process
