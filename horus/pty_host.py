@@ -189,6 +189,30 @@ class PtyHost:
             term._pty.resize(cols, rows)
         except OSError:
             return False
+        # Geometry epoch: scrollback written for the OLD grid poisons any viewer
+        # that replays it on a different grid (its terminal wraps those lines
+        # differently, corrupting every later relative cursor move — observed
+        # live as a permanently scrambled phone). The TUI repaints on SIGWINCH
+        # anyway, so drop the stale bytes; future attaches replay only bytes
+        # consistent with the current geometry.
+        with term._cond:
+            term._buf.clear()
+            term._base = term._total
+        return True
+
+    def redraw(self, term_id: str) -> bool:
+        """Force the TUI to repaint its full screen: a double TIOCSWINSZ jiggle
+        (rows-1 then rows), tmux's refresh trick. Used by a viewer that just
+        reset its screen after attaching across a geometry change. Bypasses the
+        debounce and the viewer registry — geometry ends where it started."""
+        term = self.get(term_id)
+        if term is None or term._pty is None or not term.alive or term.rows <= 1:
+            return False
+        try:
+            term._pty.resize(term.cols, term.rows - 1)
+            term._pty.resize(term.cols, term.rows)
+        except OSError:
+            return False
         return True
 
     # --- multi-viewer geometry (smallest-wins) ---------------------------------
@@ -302,6 +326,11 @@ class PtyHost:
         yield from self._subscribe_frames(term, heartbeat)
 
     def _subscribe_frames(self, term: PtyTerminal, heartbeat: float) -> Iterator[str]:
+        # Announce the PTY's current geometry before anything else: a viewer
+        # whose own fit differs knows the replayed scrollback was written for a
+        # different grid and can reset + request a repaint instead of rendering
+        # poisoned wrap state.
+        yield f"event: geometry\ndata: {term.cols}x{term.rows}\n\n"
         # Tell the viewer it attached to a *live* session. A viewer that saw this
         # knows a later ``exited`` means the session ended under its feet (its tab
         # can go away); attaching straight to a dead terminal skips it, so the
