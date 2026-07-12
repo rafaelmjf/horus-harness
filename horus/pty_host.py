@@ -62,6 +62,8 @@ class PtyTerminal:
     _total: int = 0         # total bytes ever produced
     _cond: threading.Condition = field(default_factory=threading.Condition, repr=False)
     _last_resize_at: float | None = field(default=None, repr=False)
+    # viewer id -> (cols, rows) it can render; PTY takes the per-dimension min.
+    _viewers: dict[str, tuple[int, int]] = field(default_factory=dict, repr=False)
 
     def _append(self, data: bytes) -> None:
         with self._cond:
@@ -189,6 +191,52 @@ class PtyHost:
             return False
         return True
 
+    # --- multi-viewer geometry (smallest-wins) ---------------------------------
+    #
+    # One PTY holds one cols/rows for every viewer, so two simultaneously visible
+    # viewers of different sizes cannot BOTH get a private geometry — last-writer-
+    # wins garbled whichever screen wrote earlier (observed live: desktop repaints
+    # scattering across a phone's narrower grid). tmux's answer, adopted here:
+    # each viewer registers the size it fits, and the PTY takes the per-dimension
+    # MINIMUM over registered viewers — every screen can render the full grid;
+    # larger viewers simply show margins. A viewer is dropped when its stream
+    # disconnects (subscribe() finally) or it reports itself hidden (/pty/release),
+    # so a closed/backgrounded desktop tab stops constraining the phone.
+
+    def viewer_resize(self, term_id: str, viewer_id: str, cols: int, rows: int) -> bool:
+        """Register viewer `viewer_id`'s fitted size and apply the smallest-wins
+        effective geometry. Returns False only for a gone/dead terminal."""
+        term = self.get(term_id)
+        if term is None or term._pty is None or not term.alive:
+            return False
+        if cols <= 0 or rows <= 0:
+            return True  # ignore nonsense fits; keep the viewer's previous entry
+        with self._lock:
+            term._viewers[viewer_id] = (cols, rows)
+        self._apply_effective(term)
+        return True
+
+    def viewer_release(self, term_id: str, viewer_id: str) -> None:
+        """Drop a viewer (hidden page or disconnected stream) and re-apply the
+        smallest-wins geometry over whoever is left. No viewers left keeps the
+        last effective size — nothing is watching, so nothing needs a resize."""
+        term = self.get(term_id)
+        if term is None:
+            return
+        with self._lock:
+            term._viewers.pop(viewer_id, None)
+            remaining = bool(term._viewers)
+        if remaining:
+            self._apply_effective(term)
+
+    def _apply_effective(self, term: PtyTerminal) -> None:
+        with self._lock:
+            if not term._viewers:
+                return
+            cols = min(c for c, _ in term._viewers.values())
+            rows = min(r for _, r in term._viewers.values())
+        self.resize(term.term_id, cols, rows)
+
     def kill(self, term_id: str) -> bool:
         term = self.get(term_id)
         if term is None or term._pty is None:
@@ -235,14 +283,25 @@ class PtyHost:
 
     # --- attach (SSE) ---------------------------------------------------------
 
-    def subscribe(self, term_id: str, *, heartbeat: float = 15.0) -> Iterator[str]:
+    def subscribe(self, term_id: str, *, heartbeat: float = 15.0, viewer_id: str | None = None) -> Iterator[str]:
         """Yield SSE frames for a viewer: the scrollback, then live output, then a
         final ``status: exited``. A heartbeat comment when idle lets the HTTP handler
-        notice a disconnected client on its next write."""
+        notice a disconnected client on its next write. A ``viewer_id`` ties this
+        stream to the viewer's registered geometry: when the stream ends (client
+        gone), the viewer stops constraining the smallest-wins PTY size."""
         term = self.get(term_id)
         if term is None:
             yield "event: status\ndata: unknown\n\n"
             return
+        if viewer_id is not None:
+            try:
+                yield from self._subscribe_frames(term, heartbeat)
+            finally:
+                self.viewer_release(term_id, viewer_id)
+            return
+        yield from self._subscribe_frames(term, heartbeat)
+
+    def _subscribe_frames(self, term: PtyTerminal, heartbeat: float) -> Iterator[str]:
         # Tell the viewer it attached to a *live* session. A viewer that saw this
         # knows a later ``exited`` means the session ended under its feet (its tab
         # can go away); attaching straight to a dead terminal skips it, so the

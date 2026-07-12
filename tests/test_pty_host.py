@@ -180,6 +180,52 @@ def test_subscribe_unknown_terminal_emits_status():
     assert frames[0] == "event: status\ndata: unknown\n\n"
 
 
+def test_viewer_resize_smallest_wins_across_viewers(tmp_path, monkeypatch):
+    """Two simultaneously visible viewers must BOTH be able to render the full
+    grid: the PTY takes the per-dimension minimum, tmux-style, instead of the
+    last writer garbling the other viewer."""
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    assert h.viewer_resize(tid, "desktop", 110, 24) is True
+    assert fake.size == (110, 24)
+    h.get(tid)._last_resize_at -= pty_host.RESIZE_DEBOUNCE_S * 2
+    assert h.viewer_resize(tid, "phone", 38, 26) is True
+    assert fake.size == (38, 24)  # min cols from phone, min rows from desktop
+
+
+def test_viewer_release_restores_remaining_viewer_size(tmp_path, monkeypatch):
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    h.viewer_resize(tid, "desktop", 110, 24)
+    h.get(tid)._last_resize_at -= pty_host.RESIZE_DEBOUNCE_S * 2
+    h.viewer_resize(tid, "phone", 38, 26)
+    h.get(tid)._last_resize_at -= pty_host.RESIZE_DEBOUNCE_S * 2
+    h.viewer_release(tid, "phone")          # phone went hidden/disconnected
+    assert fake.size == (110, 24)           # desktop gets its full size back
+    h.viewer_release(tid, "desktop")        # nobody left -> size kept as-is
+    assert fake.size == (110, 24)
+
+
+def test_viewer_resize_gone_terminal_is_false(tmp_path):
+    h = pty_host.PtyHost()
+    assert h.viewer_resize("nope", "v1", 80, 24) is False
+    h.viewer_release("nope", "v1")  # must not raise
+
+
+def test_subscribe_with_viewer_id_releases_geometry_on_disconnect(tmp_path, monkeypatch):
+    """A viewer that vanishes without posting /pty/release (killed tab, dropped
+    network) must stop constraining the smallest-wins size when its SSE stream
+    dies — the stream teardown is the cleanup backstop."""
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    h.viewer_resize(tid, "desktop", 110, 24)
+    h.get(tid)._last_resize_at -= pty_host.RESIZE_DEBOUNCE_S * 2
+    h.viewer_resize(tid, "phone", 38, 26)
+    assert fake.size == (38, 24)
+    stream = h.subscribe(tid, heartbeat=0.05, viewer_id="phone")
+    next(stream)                            # attach ('live')
+    h.get(tid)._last_resize_at -= pty_host.RESIZE_DEBOUNCE_S * 2
+    stream.close()                          # client detached
+    assert fake.size == (110, 24)           # phone no longer constrains
+
+
 def test_spawn_pty_runs_a_real_command(tmp_path):
     """Integration: a real PTY echoes output (platform-native ConPTY / stdlib pty)."""
     argv = ["cmd", "/c", "echo PTYOK"] if sys.platform == "win32" else ["sh", "-c", "echo PTYOK"]

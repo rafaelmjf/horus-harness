@@ -3187,6 +3187,12 @@ if(!window.__horusCompactWatch){
 
 window.horusAttachTerm = function(hostId, tid, onExit){
   if(typeof Terminal==='undefined') return null;
+  // Viewer identity for smallest-wins geometry: each attached viewer registers
+  // the size it fits under this id; the host sizes the PTY to the per-dimension
+  // minimum over registered viewers, so a phone and a desktop watching the same
+  // session BOTH render cleanly (the larger one gets margins) instead of the
+  // last writer garbling the other.
+  var vid = 'v' + Math.random().toString(36).slice(2, 10);
   function b64bytes(b64){var s=atob(b64);var a=new Uint8Array(s.length);
     for(var i=0;i<s.length;i++){a[i]=s.charCodeAt(i);} return a;}
   var postErr=false, gone=false;
@@ -3292,7 +3298,7 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     try{ fit.fit(); }catch(_){ return; }
     if(term.cols>0 && term.rows>0){
       var key=term.cols+'x'+term.rows;
-      if(key!==lastSent){ lastSent=key; post('/pty/resize',{id:tid, cols:term.cols, rows:term.rows}); }
+      if(key!==lastSent){ lastSent=key; post('/pty/resize',{id:tid, vid:vid, cols:term.cols, rows:term.rows}); }
     }
   }
   var syncQueued=false;
@@ -3303,7 +3309,7 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   term.onData(function(d){ post('/pty/input',{id:tid, data:d}); });
   term.onResize(function(s){ if(s.cols>0 && s.rows>0){
     var key=s.cols+'x'+s.rows;
-    if(key!==lastSent){ lastSent=key; post('/pty/resize',{id:tid, cols:s.cols, rows:s.rows}); }
+    if(key!==lastSent){ lastSent=key; post('/pty/resize',{id:tid, vid:vid, cols:s.cols, rows:s.rows}); }
   }});
   // Layout-settled initial fit + ongoing self-observation. A ResizeObserver's
   // first callback fires only once the host has a real, laid-out box —
@@ -3330,11 +3336,24 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     requestSync();
   });
   // Becoming visible/focused again (tab switch, PWA resume, bfcache restore) or
-  // touching the terminal claims the PTY geometry for THIS viewer — another
-  // viewer may have resized it while this one was away.
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ claimSize(); } });
+  // touching the terminal re-registers THIS viewer's geometry; going hidden
+  // releases it, so a backgrounded tab stops constraining the smallest-wins
+  // size for the viewers still watching. sendBeacon: a normal fetch can be
+  // dropped when the page is being backgrounded.
+  function releaseSize(){
+    var body='id='+encodeURIComponent(tid)+'&vid='+encodeURIComponent(vid);
+    if(navigator.sendBeacon){
+      navigator.sendBeacon('/pty/release', new Blob([body], {type:'application/x-www-form-urlencoded'}));
+    } else {
+      post('/pty/release',{id:tid, vid:vid});
+    }
+  }
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden){ releaseSize(); } else { claimSize(); }
+  });
   window.addEventListener('focus', claimSize);
   window.addEventListener('pageshow', claimSize);
+  window.addEventListener('pagehide', releaseSize);
   host.addEventListener('touchstart', claimSize, {passive:true});
   // Touch-drag scrolls the terminal, not the page: translate the drag into
   // synthetic wheel events so xterm's own wheel pipeline applies its usual
@@ -3354,7 +3373,7 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     screen.dispatchEvent(new WheelEvent('wheel',{deltaY:dy, deltaMode:0, bubbles:true, cancelable:true}));
   }, {passive:false});
   host.addEventListener('touchend', function(){ touchY=null; }, {passive:true});
-  var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid));
+  var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid)+'&vid='+encodeURIComponent(vid));
   es.addEventListener('output', function(e){ term.write(b64bytes(e.data)); });
   // Surface a dead stream instead of failing silently: a session that opens but shows
   // nothing (SSE blocked by an auth gate / proxy, session gone, or network dropped)
@@ -4260,8 +4279,9 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.write(payload)
             return
         if parsed.path == "/pty/stream":
-            term_id = parse_qs(parsed.query).get("id", [""])[0]
-            self._stream_sse(term_id)
+            query = parse_qs(parsed.query)
+            term_id = query.get("id", [""])[0]
+            self._stream_sse(term_id, viewer_id=query.get("vid", [None])[0])
             return
         if parsed.path == "/pty/term":
             # Pop-out window: a standalone viewer for one host-owned terminal. Render
@@ -4347,10 +4367,11 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _stream_sse(self, term_id: str) -> None:
+    def _stream_sse(self, term_id: str, viewer_id: str | None = None) -> None:
         """Stream a PTY terminal's bytes as Server-Sent Events until the client
         disconnects (a broken pipe on write ends the loop). The session keeps
-        running on the host — detaching a viewer does not kill the terminal."""
+        running on the host — detaching a viewer does not kill the terminal,
+        but does release its smallest-wins geometry registration."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -4358,7 +4379,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("X-Accel-Buffering", "no")  # don't let a proxy buffer the stream
         self.end_headers()
         try:
-            for frame in pty_host.host.subscribe(term_id):
+            for frame in pty_host.host.subscribe(term_id, viewer_id=viewer_id):
                 self.wfile.write(frame.encode("utf-8"))
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionError, OSError):
@@ -4434,6 +4455,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/local-add",
             "/pty/input",
             "/pty/resize",
+            "/pty/release",
             "/pty/kill",
             "/pty/close",
         ):
@@ -4510,9 +4532,24 @@ class _Handler(BaseHTTPRequestHandler):
                 self._gone()
                 return
             try:
-                pty_host.host.resize(form.get("id", ""), int(form.get("cols", 0)), int(form.get("rows", 0)))
+                cols, rows = int(form.get("cols", 0)), int(form.get("rows", 0))
             except ValueError:
-                pass
+                self._no_content()
+                return
+            vid = form.get("vid", "")
+            if vid:
+                # Viewer-identified fit: smallest-wins across registered viewers.
+                pty_host.host.viewer_resize(form.get("id", ""), vid, cols, rows)
+            else:
+                # Legacy viewer (pre-vid page still open somewhere): direct set.
+                pty_host.host.resize(form.get("id", ""), cols, rows)
+            self._no_content()
+            return
+        if parsed.path == "/pty/release":
+            # A viewer went hidden (tab switch, PWA backgrounded): it stops
+            # constraining the smallest-wins geometry until it reports back.
+            form = self._read_form()
+            pty_host.host.viewer_release(form.get("id", ""), form.get("vid", ""))
             self._no_content()
             return
         if parsed.path == "/pty/kill":
