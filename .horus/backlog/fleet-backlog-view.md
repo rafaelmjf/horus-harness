@@ -1,0 +1,44 @@
+---
+status: open
+priority: medium
+tier: sonnet
+created: 2026-07-12
+created_by: overseer
+parallel: true
+surface: horus/cli.py, horus/backlog.py, horus/fleet or status renderer
+shipped:
+---
+
+# `horus fleet --backlog` — deterministic fleet-wide backlog roll-up
+
+**Owner ask (2026-07-12):** a command that cleanly displays each registered
+project's backlog items, parsed deterministically, instead of relying on an agent to
+open and parse every PRD/backlog by hand at fleet-resume.
+
+**No overlap with existing surface (confirmed):** `horus backlog list`/`claim` are
+single-project (cwd/`--path`); `horus status`/`fleet` show git freshness + latest
+session, never cards. A fleet-wide backlog aggregation is new.
+
+## Scope
+
+- `horus fleet --backlog` (or `horus backlog --fleet`) reads the registry
+  (`projects` in `~/.horus/config.toml`), loads each project's `.horus/backlog/`
+  cards, and renders a grouped roll-up: per project, the open cards with
+  `status`/`priority`/`tier`/`type`/`surface`. Deterministic, read-only, no fetching
+  (same discipline as `capabilities`/`status`).
+- **Agent-first:** `--stdout` JSON so an agent consumes it directly; human-readable
+  default. This is the fleet-resume input the cockpit currently derives by hand.
+- Sort/filter sensible defaults (e.g. by priority, `--type bug`, `--project`).
+
+## Depends on
+
+`unify-backlog-cards-fleet-standard` — a fleet roll-up only reads cleanly when every
+project is on cards. Until then, degrade gracefully for inline-`## Backlog` projects
+(best-effort or skip-with-note), don't crash a project's row (cf. the projects-section
+resilience rule).
+
+## Verification
+
+Fixture registry with 2–3 projects (mixed priorities/types) renders a stable grouped
+roll-up; `--stdout` emits valid JSON; a project with no `backlog/` degrades without
+erroring. CI green. Overseer probe: run it against the live fleet and eyeball.
