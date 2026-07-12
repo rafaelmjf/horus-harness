@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Backlog-card ship lifecycle hygiene implemented on branch card-lifecycle-provenance: `horus backlog ship <slug> --pr N --sha SHA` stamps status + provenance in place; active list/fleet views hide shipped cards; `close --check` now warns on lingering-done and shipped-but-open cards. Full pytest: 1223 passed. PR pending; do not mark this implementation card shipped until merged."
-next_action: "Open/monitor the lifecycle-hygiene PR. The recurring close gate deliberately reports five legacy cards with a `shipped:` note but `status: open`; resolve each only after confirming its merged PR/SHA. The originating implementation card is tracked outside this repo."
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest session note. Check the card-lifecycle-provenance PR/CI; do not merge without explicit user direction. Then triage the five legacy shipped-but-open card warnings using real merge provenance."
-execution_recommendation: "continue-as-is — the next lifecycle work is bounded provenance cleanup after merge verification; delegation would buy only context hygiene."
+current_focus: "Branch fix-consolidated-to-marker fixes the closure hook's self-referential dirty warning: upgrade-project untracks legacy generated markers, init coverage locks the ignore rule, and cleanliness checks exclude their own marker. Full suite: 1220 passed; live tracked-marker repro reports clean. Awaiting PR + required CI; do not merge."
+next_action: "Observe required CI on consolidated-to-marker PR #174 and stop without merging. After owner review/merge, resume main's backlog-card lifecycle provenance cleanup."
+next_prompt: "Resume Horus. Fetch first, read PRD.md and the newest session note, then check consolidated-to-marker PR #174. If required CI is green, leave it open for owner review; do not merge unless explicitly asked. After it lands, return to the backlog-card lifecycle provenance cleanup recorded on main."
+execution_recommendation: "continue-as-is — remaining work is only PR/CI observation; delegation adds no useful context or cost benefit."
 last_updated: 2026-07-12
 horus_min_version: 0.0.26
 ---

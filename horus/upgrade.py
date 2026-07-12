@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
-from horus import frontmatter, native_hooks, skills, templates, versioning
+from horus import frontmatter, initialize, native_hooks, skills, templates, versioning
 from horus.instructions import block_version, extract_block, replace_block
 
 
@@ -33,6 +33,7 @@ def upgrade_project(
     instructions: bool = True,
 ) -> list[UpgradeAction]:
     actions: list[UpgradeAction] = []
+    actions.extend(_upgrade_generated_state(project_root, apply=apply))
     if instructions:
         actions.extend(_upgrade_instructions(project_root, apply=apply))
         actions.extend(_upgrade_min_version_stamp(project_root, apply=apply))
@@ -40,6 +41,61 @@ def upgrade_project(
         actions.extend(_upgrade_skills(project_root, apply=apply, targets=targets))
     if hooks:
         actions.extend(_upgrade_hooks(project_root, apply=apply, targets=targets))
+    return actions
+
+
+def _upgrade_generated_state(project_root: Path, *, apply: bool) -> list[UpgradeAction]:
+    """Ignore generated continuity state and untrack legacy marker files.
+
+    Older projects may have committed a checkpoint marker before it became local
+    state.  The marker necessarily changes at every checkpoint, so keeping it in
+    the index makes the cleanliness hook report the write it just caused.
+    """
+    hdir = project_root / ".horus"
+    if not hdir.is_dir():
+        return []
+
+    ignore_path = hdir / ".gitignore"
+    existing = ignore_path.read_text(encoding="utf-8") if ignore_path.is_file() else ""
+    lines = {line.strip() for line in existing.splitlines()}
+    missing = [rule for rule in initialize.GITIGNORE_RULES if rule not in lines]
+    tracked = [
+        f".horus/{rule}"
+        for rule in initialize.GITIGNORE_RULES
+        if not rule.startswith(("!", "sessions/", "temp/"))
+        and _git(project_root, "ls-files", "--error-unmatch", f".horus/{rule}") is not None
+    ]
+
+    actions: list[UpgradeAction] = []
+    if missing:
+        if apply:
+            action = initialize._ensure_gitignore(hdir)
+            actions.append(UpgradeAction("updated", action.message, ".horus/.gitignore"))
+        else:
+            actions.append(UpgradeAction(
+                "would-update",
+                f"would add generated-state ignore rule(s): {', '.join(missing)}",
+                ".horus/.gitignore",
+            ))
+    else:
+        actions.append(UpgradeAction("exists", ".horus/.gitignore ignores generated continuity state"))
+
+    if tracked:
+        if apply:
+            result = _git(project_root, "rm", "--cached", "-f", "--", *tracked)
+            status = "updated" if result is not None else "error"
+            message = (
+                f"stopped tracking generated continuity state: {', '.join(tracked)}"
+                if result is not None else
+                f"could not stop tracking generated continuity state: {', '.join(tracked)}"
+            )
+            actions.append(UpgradeAction(status, message, tracked[0]))
+        else:
+            actions.append(UpgradeAction(
+                "would-update",
+                f"would stop tracking generated continuity state: {', '.join(tracked)}",
+                tracked[0],
+            ))
     return actions
 
 

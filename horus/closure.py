@@ -25,6 +25,7 @@ from horus.instructions import check_drift
 # The marker (last-harvested HEAD, local/gitignored like sessions) makes it
 # idempotent — a commit is never harvested twice.
 CHECKPOINT_MARKER = ".consolidated-to"
+_GENERATED_STATE_PATHS = (f".horus/{CHECKPOINT_MARKER}",)
 _HARVEST_HEADING = "## Checkpoints (auto-harvested)"
 
 # Projected agent artifacts (hooks + skills) are committed, not gitignored — they
@@ -135,7 +136,10 @@ def checkpoint_gate(root: Path) -> list[Finding]:
         return []
     findings: list[Finding] = []
 
-    status = _git(root, "status", "--porcelain")
+    status = _git(
+        root, "status", "--porcelain", "--", ".",
+        *[f":(exclude){path}" for path in _GENERATED_STATE_PATHS],
+    )
     if status is None:
         return findings  # git trouble → stay silent
     dirty = [line for line in status.splitlines() if line.strip()]
@@ -267,7 +271,10 @@ def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding
 
     findings.extend(_summary_freshness(root))
     if is_git_repo(root):
-        status = _git(root, "status", "--porcelain", "--", *_CONTINUITY_PATHSPEC)
+        status = _git(
+            root, "status", "--porcelain", "--", *_CONTINUITY_PATHSPEC,
+            *[f":(exclude){path}" for path in _GENERATED_STATE_PATHS],
+        )
         changed = [line for line in (status or "").splitlines() if line.strip()]
         if changed:
             findings.append(
