@@ -359,6 +359,48 @@ def test_capabilities_matrix_stdout_is_json(tmp_path, monkeypatch, capsys):
     assert {row["tier_trust"] for row in data["verification_dial"]} >= {"proven", "unproven", "runtime"}
 
 
+def test_capabilities_models_concise_default_omits_last_column(tmp_path, monkeypatch, capsys):
+    # sonnet-5 is backfilled with 10 clean datums (see DatumStore.default()'s
+    # seed) — its LAST column would read "clean clean clean clean clean" if
+    # rendered. The concise default must drop that per-run judgment entirely.
+    _home(tmp_path, monkeypatch)
+    assert main(["capabilities", "--models"]) == 0
+    out = capsys.readouterr().out
+    assert "LAST" not in out
+    assert "clean clean" not in out
+
+
+def test_capabilities_models_verbose_restores_last_column(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    assert main(["capabilities", "--models", "--verbose"]) == 0
+    out = capsys.readouterr().out
+    assert "LAST" in out
+    assert "clean clean clean clean clean" in out  # sonnet-5's backfilled outcomes
+
+
+def test_capabilities_models_full_is_an_alias_for_verbose(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    assert main(["capabilities", "--models", "--full"]) == 0
+    out = capsys.readouterr().out
+    assert "LAST" in out
+
+
+def test_capabilities_matrix_concise_default_omits_last_column(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    assert main(["capabilities", "--matrix"]) == 0
+    out = capsys.readouterr().out
+    assert "LAST" not in out
+    assert "clean clean" not in out
+
+
+def test_capabilities_matrix_verbose_restores_last_column(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    assert main(["capabilities", "--matrix", "--verbose"]) == 0
+    out = capsys.readouterr().out
+    assert "LAST" in out
+    assert "clean clean clean clean clean" in out
+
+
 def test_capabilities_matrix_has_no_pick_or_route_field(tmp_path, monkeypatch, capsys):
     """BOUNDARY TEST: display-only means no key in the payload ever spells out a
     pick/route decision field — the command renders the rubric, it never
@@ -441,11 +483,76 @@ def test_render_model_rollup_shows_price_and_capability_when_present(tmp_path):
     rollups = datums.build_model_rollup([], datums.load_priors(path))
     text = datums.render_model_rollup(rollups)
     assert "$1.5/$6" in text  # price column
-    assert "still strong for scoped mechanical work" in text  # capability column
-    assert "2026-07-01" in text  # researched column
+    assert "still strong for scoped mechanical work" in text  # short enough not to truncate
+    assert "2026-07-01" not in text  # RESEARCHED column omitted from the concise default
     matrix = datums.render_delegation_matrix(rollups, [], [])
     assert "$1.5/$6" in matrix
     assert "still strong for scoped mechanical work" in matrix
+    assert "2026-07-01" not in matrix
+
+    verbose_text = datums.render_model_rollup(rollups, verbose=True)
+    assert "2026-07-01" in verbose_text  # --verbose/--full restores RESEARCHED
+    verbose_matrix = datums.render_delegation_matrix(rollups, [], [], verbose=True)
+    assert "2026-07-01" in verbose_matrix
+
+
+def test_concise_capability_column_is_word_safe_truncated_when_note_is_long(tmp_path):
+    # Mirrors a real ~/.horus/capabilities.toml capability_note (paragraph-length
+    # price-for-capability prose) with no dedicated capability_summary set.
+    long_note = (
+        "PRICE-DOMINATED by gpt-5.6-Terra, newer AND cheaper at comparable "
+        "capability; no value case, candidate to drop from roster entirely"
+    )
+    path = tmp_path / "capabilities.toml"
+    path.write_text(
+        f'[models."gpt-5.5"]\ntier = "codex (early)"\ncapability_note = "{long_note}"\n',
+        encoding="utf-8",
+    )
+    rollups = datums.build_model_rollup([], datums.load_priors(path))
+    cell = datums._capability_cell(rollups[0], verbose=False)
+    assert cell != long_note  # concise: not the full paragraph
+    assert cell.endswith("…")
+    stem_words = cell[:-1].split()  # strip the ellipsis, split the truncated stem
+    assert long_note.split()[: len(stem_words)] == stem_words  # a clean word-boundary prefix
+
+    text = datums.render_model_rollup(rollups)
+    assert long_note not in text
+    # Full text is always in --stdout JSON regardless of table truncation.
+    data = datums.rollup_to_dict(rollups)
+    assert data["models"][0]["capability_note"] == long_note
+
+
+def test_capability_summary_field_preferred_over_derived_truncation(tmp_path):
+    path = tmp_path / "capabilities.toml"
+    path.write_text(
+        '[models."old-but-cheap"]\n'
+        'tier = "prior-frontier / value"\n'
+        'capability_note = "a much longer paragraph of researched price-for-capability prose"\n'
+        'capability_summary = "cheap scoped work"\n',
+        encoding="utf-8",
+    )
+    rollups = datums.build_model_rollup([], datums.load_priors(path))
+    assert rollups[0].capability_summary == "cheap scoped work"
+    text = datums.render_model_rollup(rollups)
+    assert "cheap scoped work" in text
+    assert "a much longer paragraph" not in text  # concise: summary wins, not the note
+    # Full note is still complete in --stdout JSON.
+    data = datums.rollup_to_dict(rollups)
+    assert data["models"][0]["capability_note"] == (
+        "a much longer paragraph of researched price-for-capability prose"
+    )
+    assert data["models"][0]["capability_summary"] == "cheap scoped work"
+
+
+def test_capabilities_models_stdout_json_keeps_last_and_capability_note_complete(tmp_path, monkeypatch, capsys):
+    # --stdout JSON must stay COMPLETE regardless of the concise default —
+    # nothing removed, including per-run LAST outcomes and the full note.
+    _home(tmp_path, monkeypatch)
+    assert main(["capabilities", "--models", "--stdout"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    sonnet = next(m for m in data["models"] if m["model"] == "sonnet-5")
+    assert sonnet["last_outcomes"] == ["clean"] * 5
+    assert "capability_note" in sonnet and "capability_summary" in sonnet
 
 
 # --- staleness warning (non-blocking nudge) -----------------------------------

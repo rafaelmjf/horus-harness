@@ -395,8 +395,11 @@ PRIORS_SEED = """\
 # guesses and never fetched by this CLI:
 #   price_in = 3.00           # USD per Mtok, input
 #   price_out = 15.00         # USD per Mtok, output
-#   capability_note = "..."   # short: what it's good for, so price reads next
-#                             # to capability, not in isolation
+#   capability_note = "..."   # what it's good for — can run long; full text
+#                             # only ever shown in --stdout JSON / --verbose
+#   capability_summary = "scoped-impl lead"  # a few words for the concise
+#                             # table's CAPABILITY column; omit to fall back to
+#                             # a word-safe truncation of capability_note
 #   researched_at = 2026-07-10  # date this price/note was last checked; a
 #                                # display command warns (non-blocking) when the
 #                                # freshest researched_at across all models is
@@ -476,6 +479,7 @@ class ModelRollup:
     price_in: float | None = None       # USD per Mtok, input
     price_out: float | None = None      # USD per Mtok, output
     capability_note: str | None = None  # short free-text: what it's good for
+    capability_summary: str | None = None  # a few words, for the concise table
     researched_at: str | None = None    # ISO date (YYYY-MM-DD) last checked
 
 
@@ -524,6 +528,7 @@ def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[Mod
                 price_in=prior.get("price_in"),
                 price_out=prior.get("price_out"),
                 capability_note=prior.get("capability_note"),
+                capability_summary=prior.get("capability_summary"),
                 researched_at=_researched_at_str(prior.get("researched_at")),
             )
         )
@@ -532,12 +537,16 @@ def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[Mod
 
 
 # Table columns for the tier ladder, shared by `render_model_rollup` and
-# `render_delegation_matrix` — model/tier/datums/last/price/capability/
-# researched, in that order, so a mixed roster compares at a glance instead of
-# the old vertical line-per-field block. Free-text strength/caution/guard
-# flags don't fit a column (they'd blow out alignment) so they render as a
-# separate Notes section below the table instead of being dropped.
-_TABLE_COLUMNS: tuple[str, ...] = ("model", "tier", "datums", "last", "price", "capability", "researched")
+# `render_delegation_matrix`. The CONCISE set (default — a CLI glance) is
+# model/tier/price/datums/capability; the FULL set (--verbose/--full, power
+# users) restores LAST (per-run outcome history) and RESEARCHED. LAST is
+# insider delegation-quality judgment (clean/nudged/bounced/died), not
+# CI/exit status — it needs a legend to read, so it's opt-in, never dropped
+# from `--stdout` JSON. Free-text strength/caution/guard flags don't fit a
+# column (they'd blow out alignment) so they render as a separate Notes
+# section below the table instead of being dropped, in either mode.
+_CONCISE_COLUMNS: tuple[str, ...] = ("model", "tier", "price", "datums", "capability")
+_FULL_COLUMNS: tuple[str, ...] = ("model", "tier", "datums", "last", "price", "capability", "researched")
 _TABLE_HEADERS: dict[str, str] = {
     "model": "MODEL",
     "tier": "TIER",
@@ -547,23 +556,50 @@ _TABLE_HEADERS: dict[str, str] = {
     "capability": "CAPABILITY",
     "researched": "RESEARCHED",
 }
-_CAPABILITY_NOTE_MAX = 60
+_CAPABILITY_NOTE_MAX = 60  # --verbose/--full capability column (fuller, still bounded)
+_CAPABILITY_SUMMARY_MAX = 40  # concise capability column — a few words, not a paragraph
 
 
-def _table_row(r: ModelRollup) -> dict[str, str]:
+def _table_row(r: ModelRollup, *, verbose: bool) -> dict[str, str]:
     return {
         "model": r.model,
         "tier": r.tier or "-",
         "datums": f"{r.clean_count}/{r.total_datums}",
         "last": " ".join(r.last_outcomes) if r.last_outcomes else "-",
         "price": _format_price(r),
-        "capability": _truncate(r.capability_note, _CAPABILITY_NOTE_MAX) if r.capability_note else "-",
+        "capability": _capability_cell(r, verbose=verbose),
         "researched": r.researched_at or "-",
     }
 
 
+def _capability_cell(r: ModelRollup, *, verbose: bool) -> str:
+    """CAPABILITY column text. ``--verbose``/``--full`` shows a fuller (still
+    bounded) slice of `capability_note`; the concise default shows a dedicated
+    `capability_summary` when the owner authored one, else a word-safe
+    truncation of `capability_note` — a few words, never a mid-word chop. The
+    full text is always available in ``--stdout`` JSON regardless of mode."""
+    if verbose:
+        return _truncate(r.capability_note, _CAPABILITY_NOTE_MAX) if r.capability_note else "-"
+    if r.capability_summary:
+        return r.capability_summary
+    if r.capability_note:
+        return _word_truncate(r.capability_note, _CAPABILITY_SUMMARY_MAX)
+    return "-"
+
+
 def _truncate(text: str, width: int) -> str:
     return text if len(text) <= width else text[: width - 1].rstrip() + "…"
+
+
+def _word_truncate(text: str, width: int) -> str:
+    """Truncate at a word boundary (never mid-word) for a short "a few words"
+    glance, unlike `_truncate`'s mid-word char cut used for the fuller view."""
+    if len(text) <= width:
+        return text
+    cut = text[:width]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(",;.:—- ") + "…"
 
 
 def _format_price(r: ModelRollup) -> str:
@@ -576,18 +612,22 @@ def _format_price(r: ModelRollup) -> str:
     return f"{p_in}/{p_out}"
 
 
-def render_tier_table(rollups: list[ModelRollup]) -> list[str]:
+def render_tier_table(rollups: list[ModelRollup], *, verbose: bool = False) -> list[str]:
     """Aligned tier-ladder table lines (no title/sources header — callers add
-    their own framing). Returns a placeholder line when there are no rollups."""
+    their own framing). Returns a placeholder line when there are no rollups.
+
+    Concise by default (model/tier/price/datums/capability, for a CLI glance);
+    pass ``verbose=True`` to restore LAST and RESEARCHED for power users."""
     if not rollups:
         return ["(no models — no datums recorded and no owner priors seeded yet)"]
-    rows = [_table_row(r) for r in rollups]
+    columns = _FULL_COLUMNS if verbose else _CONCISE_COLUMNS
+    rows = [_table_row(r, verbose=verbose) for r in rollups]
     widths = {
-        col: max(len(_TABLE_HEADERS[col]), *(len(row[col]) for row in rows)) for col in _TABLE_COLUMNS
+        col: max(len(_TABLE_HEADERS[col]), *(len(row[col]) for row in rows)) for col in columns
     }
 
     def fmt(values: dict[str, str]) -> str:
-        return "  ".join(values[col].ljust(widths[col]) for col in _TABLE_COLUMNS).rstrip()
+        return "  ".join(values[col].ljust(widths[col]) for col in columns).rstrip()
 
     return [fmt(_TABLE_HEADERS), *(fmt(row) for row in rows)]
 
@@ -611,15 +651,16 @@ def render_tier_notes(rollups: list[ModelRollup]) -> list[str]:
     return lines
 
 
-def render_model_rollup(rollups: list[ModelRollup]) -> str:
+def render_model_rollup(rollups: list[ModelRollup], *, verbose: bool = False) -> str:
     """Human-readable text of the roll-up. Data only — describes what was measured
-    and what the owner flagged; never names a model to pick."""
+    and what the owner flagged; never names a model to pick. Concise by default
+    (a CLI glance); ``verbose=True`` restores the LAST/RESEARCHED columns."""
     lines = [
         "Model calibration roll-up — DATA ONLY (the agent judges; this measures).",
         f"Sources: measured datums {datums_path()} · owner priors {priors_path()}",
         "",
     ]
-    lines.extend(render_tier_table(rollups))
+    lines.extend(render_tier_table(rollups, verbose=verbose))
     notes = render_tier_notes(rollups)
     if notes:
         lines.append("")
@@ -690,17 +731,20 @@ def render_delegation_matrix(
     rollups: list[ModelRollup],
     shape_tiers: list[dict],
     verification_dial: list[dict],
+    *,
+    verbose: bool = False,
 ) -> str:
     """Human-readable delegation decision matrix. DISPLAY-ONLY: renders the tier
     ladder (owner priors + measured datums) next to the rubric's shape->tier and
-    tier-trust->verification tables. Never picks or routes a model."""
+    tier-trust->verification tables. Never picks or routes a model. Concise tier
+    ladder by default; ``verbose=True`` restores the LAST/RESEARCHED columns."""
     lines = [
         "Delegation decision matrix — DISPLAY-ONLY (renders the rubric; never picks or routes a model).",
         f"Sources: measured datums {datums_path()} · owner priors {priors_path()}",
         "",
         "Tier ladder (owner priors + measured datums):",
     ]
-    lines.extend(f"  {line}" for line in render_tier_table(rollups))
+    lines.extend(f"  {line}" for line in render_tier_table(rollups, verbose=verbose))
     notes = render_tier_notes(rollups)
     if notes:
         lines.append("")
