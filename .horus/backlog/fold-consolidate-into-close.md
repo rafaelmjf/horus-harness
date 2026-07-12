@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-12
@@ -7,6 +7,8 @@ created_by: overseer
 parallel: true
 surface: horus/cli.py (close/consolidate), horus/consolidate.py
 shipped:
+shipped_pr: 172
+shipped_sha: 35099e9b8b29668355a700ed44cb54805fb8d810
 ---
 
 # Fold consolidate's signals into `close --check`; reserve the skill for heavy passes

@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 tier: sonnet
 type: feature
@@ -8,6 +8,8 @@ created_by: overseer
 parallel: true
 surface: horus/datums.py, horus/cli.py (capabilities render)
 shipped: "2026-07-12 — capability built, PR open (branch feat/model-name-normalization, PR #168). Real rename, not an alias: `horus run` now canonicalizes the captured model via datums.canonical_model_name(alias, resolved=...), preferring the adapter's own resolved model (Claude Code's system/init event carries e.g. \"claude-haiku-4-5-20251001\") over the small owner-maintained ALIAS_TO_CANONICAL fallback map (sonnet->sonnet-5, haiku->haiku-4.5, opus->opus-4.8), which only fires when no resolution is available (Codex's stream exposes none). One-time idempotent `horus datum migrate-names` (DatumStore.migrate_names()) renames bare-alias rows already in datums.json in place, preserving every field; a no-op re-run leaves the file byte-identical (verified manually: 11 sonnet + 2 haiku fixture rows migrated, re-run untouched). `capabilities --models`/`--matrix` now render an aligned table (model/tier/datums/last/price/capability/researched columns) instead of the vertical line-per-field block, with strength/caution/guard moved to a Notes section below (still surfaced, just not squeezed into a column); --stdout JSON shape and the no-pick/no-route boundary test are unchanged. 1208 tests green."
+shipped_pr: 168
+shipped_sha: 104b896f5f62d839dea1bb25e897a735e583fbca
 ---
 
 # Proper model names (rename, not alias) + datum migration + table rendering

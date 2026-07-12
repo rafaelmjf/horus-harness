@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-12
@@ -7,6 +7,8 @@ created_by: overseer
 parallel: true
 surface: horus/backlog.py, horus/infer.py, horus/init templates, PRD skeleton
 shipped: "2026-07-12 — capability built, PR open (branch feat/unify-backlog-cards). horus init/infer scaffold .horus/backlog/ + starter card; prd_md()'s ## Backlog is now a thin pointer (templates.backlog_pointer_block); new `horus backlog migrate` (idempotent, per-project, no --all) converts inline PRD Backlog items to cards, preserving item text byte-stably and folding unconverted prose into a 'Migrated notes' block rather than dropping it; Card.type field (default task) + `backlog list --type`. 1154 tests green. Per-project harmonization (horus-hub, agentic-ttrpg, agentic-travel-guide, fabric, agentic-gym-coach) is a follow-up run of the shipped command, not part of this PR."
+shipped_pr: 164
+shipped_sha: af53b57754fffb37fcd0a32fd987cc4c7fd96f44
 ---
 
 # Make card-per-file backlog the fleet standard (unify inline `## Backlog` → cards)
