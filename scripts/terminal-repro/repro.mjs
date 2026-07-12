@@ -214,6 +214,21 @@ async function main() {
     })()`);
     check("in fullscreen, the OTHER session's mini-switcher tab is tappable (not covered)", miniHit === true, miniHit);
 
+    // iOS zooms the page when a focused input's font-size is under 16px; the
+    // hidden helper textarea carries the cell font, so compact mode must
+    // render the terminal at >=16px or every keyboard focus shears the grid.
+    const compactFont = await evalJs(`(function(){
+      var rows = document.querySelector('.term-pane.active .xterm-rows');
+      return rows ? parseFloat(getComputedStyle(rows).fontSize) : null;
+    })()`);
+    check("compact mode renders the terminal at >=16px (no iOS focus-zoom)", compactFont !== null && compactFont >= 16, compactFont);
+
+    const viewportContain = await evalJs(`(function(){
+      var vp = document.querySelector('.term-pane.active .xterm-viewport');
+      return vp ? getComputedStyle(vp).overscrollBehavior : null;
+    })()`);
+    check("the SCROLLING element (.xterm-viewport) has overscroll containment", viewportContain === "contain", viewportContain);
+
     const switched = await evalJs(`(function(){
       document.querySelector('.term-mini[data-tid="pty-2"]').click();
       return document.querySelector('.term-pane[data-tid="pty-2"]').classList.contains('active')
