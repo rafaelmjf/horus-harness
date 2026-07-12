@@ -307,6 +307,12 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
     read it deterministically; it never auto-picks or auto-routes a model (see
     horus/datums.py: ``render_delegation_matrix`` / ``delegation_matrix_to_dict``).
 
+    Both ``--models`` and ``--matrix`` render a CONCISE tier-ladder table by
+    default (model/tier/price/datums/capability — a CLI glance, per-run LAST
+    outcomes and RESEARCHED date omitted); pass ``--verbose``/``--full`` to
+    restore those columns. ``--stdout`` JSON always carries every field
+    regardless of this flag.
+
     Both ``--models`` and ``--matrix`` print a non-blocking staleness WARNING to
     stderr when the price/capability priors look stale (see
     ``datums.staleness_warning``) — the command still exits 0 and its normal
@@ -331,7 +337,8 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
             ))
         else:
             print(datums.render_delegation_matrix(
-                rollups, skills.DELEGATION_SHAPE_TIERS, skills.DELEGATION_VERIFICATION_DIAL
+                rollups, skills.DELEGATION_SHAPE_TIERS, skills.DELEGATION_VERIFICATION_DIAL,
+                verbose=getattr(args, "verbose", False),
             ), end="")
         _warn_if_priors_stale(rollups)
         return 0
@@ -343,7 +350,7 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
         if args.stdout:
             print(json.dumps(datums.rollup_to_dict(rollups), indent=2))
         else:
-            print(datums.render_model_rollup(rollups), end="")
+            print(datums.render_model_rollup(rollups, verbose=getattr(args, "verbose", False)), end="")
         _warn_if_priors_stale(rollups)
         return 0
 
@@ -2475,6 +2482,15 @@ def build_parser() -> argparse.ArgumentParser:
              "ladder (measured datums + owner priors) joined with the shape->tier and "
              "verification-depth tables from the delegation-rubric skill; renders the "
              "rubric deterministically, never picks or routes a model",
+    )
+    p_capabilities.add_argument(
+        "--verbose", "--full",
+        dest="verbose",
+        action="store_true",
+        help="with --models/--matrix: restore the fuller tier-ladder columns (LAST "
+             "per-run outcomes, RESEARCHED date) on top of the concise default "
+             "(model/tier/price/datums/capability); --stdout JSON always carries "
+             "every field regardless of this flag",
     )
     p_capabilities.set_defaults(func=cmd_capabilities)
 
