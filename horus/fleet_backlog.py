@@ -24,10 +24,10 @@ from horus import backlog, backlog_migrate, frontmatter
 SCHEMA_VERSION = 1
 
 # Known priority values in urgency order (see `.horus/backlog/*.md` in the
-# wild: high/medium/low plus the roadmap-derived "later"/"deferred"). Priority
-# is a free-form field (see horus/backlog.py), so anything else sorts after
-# these, alphabetically, rather than raising on an unrecognized value.
-_PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2, "later": 3, "deferred": 4}
+# wild: now/next/high/medium/low plus the roadmap-derived "later"/"deferred").
+# Priority is a free-form field (see horus/backlog.py), so anything else sorts
+# after these, alphabetically, rather than raising on an unrecognized value.
+_PRIORITY_RANK = {"now": 0, "next": 1, "high": 2, "medium": 3, "low": 4, "later": 5, "deferred": 6}
 
 
 def _priority_sort_key(priority: str) -> tuple[int, str]:

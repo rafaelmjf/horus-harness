@@ -136,6 +136,22 @@ def test_apply_filters_sorts_by_priority_then_name(tmp_path):
     assert names == ["high-one", "medium-one", "low-one", "unstated"]
 
 
+def test_apply_filters_sorts_now_next_before_high_and_later_after(tmp_path):
+    """Regression: 'now' and 'next' priorities must sort FIRST (most urgent),
+    and 'later'/'deferred' must sort LAST. The urgency order is:
+    now < next < high < medium < low < later < deferred."""
+    _mk_card(tmp_path, "later-card", priority="later")
+    _mk_card(tmp_path, "now-card", priority="now")
+    _mk_card(tmp_path, "high-card", priority="high")
+    _mk_card(tmp_path, "next-card", priority="next")
+    _mk_card(tmp_path, "deferred-card", priority="deferred")
+
+    rollups = fleet_backlog.apply_filters(fleet_backlog.load_fleet_rollup([str(tmp_path)]))
+
+    names = [c.name for c in rollups[0].cards]
+    assert names == ["now-card", "next-card", "high-card", "later-card", "deferred-card"]
+
+
 def test_apply_filters_type_filter_narrows_cards(tmp_path):
     _mk_card(tmp_path, "a-bug", type="bug")
     _mk_card(tmp_path, "a-feature", type="feature")
