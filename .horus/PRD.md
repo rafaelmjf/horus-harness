@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "OpenWiki comparison research is complete on branch research-openwiki-comparison: sourced note recommends skip-but-watch until a stable 1.x contract plus a 30-change private/polyglot durability signal; PR to main is the remaining gate."
-next_action: "Review and merge the OpenWiki research PR; after merge, stamp card openwiki-vs-self-documenting-research shipped with PR/SHA provenance. Then choose mobile-terminal symptom 2 or orphan reap. [tier: Sonnet]"
-next_prompt: "Resume Horus. Fetch first, read PRD.md and the newest session note, then inspect the OpenWiki comparison PR. If merged, ship the card with PR/SHA provenance and close continuity; otherwise address review only."
-execution_recommendation: "continue-as-is — the only immediate work is bounded research-PR review/closure; the following candidates are exploratory investigation or a small ops fix, so a phased plan buys little. [tier: Sonnet]"
+current_focus: "Continuity closure + landing PR #177 (research-openwiki-comparison): OpenWiki-vs-self-documenting-catalog research delivered `research/openwiki-comparison-2026-07.md`; overseer+owner endorsed its skip-but-watch recommendation, card stamped shipped. No PR in flight after this merges."
+next_action: "No PR in flight. Pick up Backlog 'Now / next candidates': mobile-terminal symptom 2 (exposed-mode/POST-path input regression) is the most concrete open thread; ops item 1 (orphan reap) is the smallest. [tier: Sonnet]"
+next_prompt: "Resume Horus. Fetch first, read PRD.md and the newest session notes. No PR is in flight. Choose the next Backlog item — mobile-terminal symptom 2 (exposed-mode input regression) or ops item 1 (orphan reap after failed runs) — and start there."
+execution_recommendation: "continue-as-is — next candidates are exploratory investigation (symptom-2 root cause unknown) or a small ops fix; neither is high-volume/low-ambiguity enough to justify a phased plan."
 last_updated: 2026-07-12
 horus_min_version: 0.0.26
 ---
@@ -77,6 +77,7 @@ in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): compared OpenWiki against the Horus capability catalog + PRD continuity (`research/openwiki-comparison-2026-07.md`); overseer+owner endorsed skip-but-watch — no dependency, no competing doc engine now — revisit only if OpenWiki reaches a stable 1.x code mode with evidence across 30+ merged changes in a private polyglot repo, via an opt-in measured pilot (`.horus/backlog/openwiki-vs-self-documenting-research.md`).
 **`dashboard --reload`** (2026-07-12, PR #175): restarts a running Horus backend in place from currently-installed code via `/health` discovery + terminate + relaunch on the same host/port (exposed backends restart with `--exposed`); `horus app` polls and respawns its own dashboard child after a crash, never adopting one it didn't spawn.
 **Consolidated-to marker stops self-dirtying closure** (2026-07-12, PR #174): `init`/`upgrade-project` scaffold the ignore rule for the generated `.horus/.consolidated-to` marker, `upgrade-project --apply` untracks legacy tracked copies while preserving local state, and closure cleanliness checks exclude the marker so it can never itself fail `working tree clean`.
 **Fix Codex usage-limit account scope** (2026-07-12, PR #173): `horus usage check` sources 5h/weekly Codex limits from the newest account-wide rollout (not project-scoped) and flags an expired reset window as stale rather than current capacity.
