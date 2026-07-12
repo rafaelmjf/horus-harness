@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 tier: sonnet
 type: task
@@ -7,7 +7,8 @@ created: 2026-07-12
 created_by: overseer
 parallel: true
 surface: research/, capability-catalog (capabilities.py)
-shipped:
+shipped: researched — decision recorded
+shipped_pr: 177
 ---
 
 # Research: OpenWiki vs. our self-documenting capability catalog
@@ -41,3 +42,13 @@ A `research/openwiki-comparison-2026-07.md` note with the findings + recommendat
 
 Research note exists with sourced findings + an explicit adopt/skip/watch recommendation;
 overseer reads it and records the decision. (Research card — no CI-testable surface.)
+
+## Decision (2026-07-12, PR #177)
+
+**Skip-but-watch.** Overseer + owner reviewed `research/openwiki-comparison-2026-07.md`
+and endorsed its recommendation: do not adopt/integrate OpenWiki now — no dependency,
+no competing documentation engine built speculatively.
+
+**Revisit trigger:** OpenWiki reaches a stable 1.x code mode, with evidence across 30+
+merged changes in a private polyglot repository, followed by an opt-in measured pilot —
+only then is it worth reopening this comparison.
