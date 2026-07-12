@@ -282,13 +282,23 @@ def _cmd_fleet_backlog(args: argparse.Namespace) -> int:
     return 0
 
 
+def _warn_if_priors_stale(rollups: list[datums.ModelRollup]) -> None:
+    """Non-blocking nudge printed to stderr: never affects exit code or stdout."""
+    warning = datums.staleness_warning(rollups)
+    if warning:
+        print(f"WARNING: {warning}", file=sys.stderr)
+
+
 def cmd_capabilities(args: argparse.Namespace) -> int:
     """EXPERIMENTAL: read-only fleet capability catalog (see horus/capabilities.py).
 
     With ``--models``, prints the DATA-ONLY model-calibration roll-up instead —
     measured datums (``~/.horus/datums.json``) joined with owner priors
     (``~/.horus/capabilities.toml``). It describes what was measured and what the
-    owner flagged; it never names a model to pick (see horus/datums.py).
+    owner flagged; it never names a model to pick (see horus/datums.py). Owner
+    priors may also carry price-for-capability fields (price/capability
+    note/researched_at — see the ``older-models-in-roster`` backlog card), which
+    render here when present.
 
     With ``--matrix``, prints the DISPLAY-ONLY delegation decision matrix instead
     — the same tier ladder as ``--models``, joined with the shape->tier and
@@ -296,6 +306,11 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
     essence (``horus/skills.py``). It renders the rubric so any agent or user can
     read it deterministically; it never auto-picks or auto-routes a model (see
     horus/datums.py: ``render_delegation_matrix`` / ``delegation_matrix_to_dict``).
+
+    Both ``--models`` and ``--matrix`` print a non-blocking staleness WARNING to
+    stderr when the price/capability priors look stale (see
+    ``datums.staleness_warning``) — the command still exits 0 and its normal
+    output is unaffected either way.
 
     With ``--project <name>`` — or with no flags at all when run from inside a
     registered project's root (the self-document default) — regenerates a
@@ -318,6 +333,7 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
             print(datums.render_delegation_matrix(
                 rollups, skills.DELEGATION_SHAPE_TIERS, skills.DELEGATION_VERIFICATION_DIAL
             ), end="")
+        _warn_if_priors_stale(rollups)
         return 0
 
     if getattr(args, "models", False):
@@ -328,6 +344,7 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
             print(json.dumps(datums.rollup_to_dict(rollups), indent=2))
         else:
             print(datums.render_model_rollup(rollups), end="")
+        _warn_if_priors_stale(rollups)
         return 0
 
     projects = config.load_projects()
