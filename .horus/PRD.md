@@ -1,7 +1,7 @@
 ---
 status: active
-current_focus: "4-PR arc landed on main: backlog card ship-lifecycle provenance (#172), Codex usage-limit account-scope fix (#173), consolidated-to marker no longer self-dirties closure (#174), `dashboard --reload` (#175). Continuity was stale after these merged, which gated the pending card-stamp PR #176 (5 already-shipped cards) — this close refreshes PRD.md so the merge-freshness gate passes."
-next_action: "No PR in flight. Merge #176 (stamps 5 shipped cards), then pick up Backlog 'Now / next candidates': mobile-terminal symptom 2 (exposed-mode/POST-path input regression) is the most concrete open thread; ops item 1 (orphan reap) is the smallest. [tier: Sonnet]"
+current_focus: "4-PR arc landed on main: backlog card ship-lifecycle provenance (#172), Codex usage-limit account-scope fix (#173), consolidated-to marker no longer self-dirties closure (#174), `dashboard --reload` (#175). Continuity was stale after these merged, gating PR #176 (card-stamp); folded its 5 stamps plus 2 more (#166/#167) directly into main and closed #176 unmerged. `close --check` now passes."
+next_action: "No PR in flight — #176 was closed unmerged (its 5 stamps, plus 2 more it would have reverted, were folded straight into main). Pick up Backlog 'Now / next candidates': mobile-terminal symptom 2 (exposed-mode/POST-path input regression) is the most concrete open thread; ops item 1 (orphan reap) is the smallest. [tier: Sonnet]"
 next_prompt: "Resume Horus. Fetch first, read PRD.md and the newest session notes. No PR is in flight. Choose the next Backlog item — mobile-terminal symptom 2 (exposed-mode input regression) or ops item 1 (orphan reap after failed runs) — and start there."
 execution_recommendation: "continue-as-is — next candidates are exploratory investigation (symptom-2 root cause unknown) or a small ops fix; neither is high-volume/low-ambiguity enough to justify a phased plan."
 last_updated: 2026-07-12
