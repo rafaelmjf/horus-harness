@@ -151,6 +151,29 @@ def test_host_write_resize_unknown_terminal(tmp_path):
     assert h.get("nope") is None
 
 
+def test_resize_is_a_noop_when_size_is_unchanged(tmp_path, monkeypatch):
+    # A duplicate/redundant resize post (e.g. two viewers fitting to the same
+    # size) shouldn't re-issue a TIOCSWINSZ.
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    assert h.resize(tid, 100, 30) is True and fake.size == (100, 30)
+    fake.size = None  # prove the second call never touches the PTY again
+    assert h.resize(tid, 100, 30) is True and fake.size is None
+
+
+def test_resize_debounces_rapid_repeats(tmp_path, monkeypatch):
+    # pty_host holds one geometry per terminal shared by every viewer; a
+    # ResizeObserver/visualViewport-driven client (or two viewers at once) can
+    # post several different resizes in a burst. A resize arriving within the
+    # debounce floor of the last *applied* one is dropped — a later post
+    # (there always is one once the box settles) supersedes it.
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    assert h.resize(tid, 100, 30) is True and fake.size == (100, 30)
+    assert h.resize(tid, 90, 28) is False and fake.size == (100, 30)  # dropped: too soon
+    term = h.get(tid)
+    term._last_resize_at -= pty_host.RESIZE_DEBOUNCE_S * 2  # simulate the floor elapsing
+    assert h.resize(tid, 90, 28) is True and fake.size == (90, 28)  # now applies
+
+
 def test_subscribe_unknown_terminal_emits_status():
     h = pty_host.PtyHost()
     frames = list(itertools.islice(h.subscribe("ghost", heartbeat=0.05), 1))

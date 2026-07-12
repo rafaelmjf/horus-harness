@@ -33,6 +33,15 @@ from horus.pty_session import PtySession, spawn_pty
 # repaints on the next activity/resize, so the live screen still converges).
 SCROLLBACK_CAP = 1_000_000
 
+# Floor between applied resizes for one terminal. A terminal has exactly one
+# geometry shared by every viewer (a panel tab, a pop-out, a second device);
+# a ResizeObserver/visualViewport-driven client can post several resizes in a
+# burst (a fullscreen toggle, an orientation change, two viewers fitting at
+# once), and each applied resize is a TIOCSWINSZ that makes the TUI repaint.
+# This drops a resize that arrives too soon after the last applied one — a
+# later post (there always is one once the box settles) supersedes it.
+RESIZE_DEBOUNCE_S = 0.05
+
 
 @dataclass
 class PtyTerminal:
@@ -52,6 +61,7 @@ class PtyTerminal:
     _base: int = 0          # absolute offset of _buf[0] (grows as the front is trimmed)
     _total: int = 0         # total bytes ever produced
     _cond: threading.Condition = field(default_factory=threading.Condition, repr=False)
+    _last_resize_at: float | None = field(default=None, repr=False)
 
     def _append(self, data: bytes) -> None:
         with self._cond:
@@ -166,7 +176,13 @@ class PtyHost:
         term = self.get(term_id)
         if term is None or term._pty is None or not term.alive:
             return False
+        if term.cols == cols and term.rows == rows:
+            return True  # no-op: already this size (duplicate/redundant post)
+        now = time.monotonic()
+        if term._last_resize_at is not None and now - term._last_resize_at < RESIZE_DEBOUNCE_S:
+            return False  # dropped: too soon after the last applied resize
         term.cols, term.rows = cols, rows
+        term._last_resize_at = now
         try:
             term._pty.resize(cols, rows)
         except OSError:
