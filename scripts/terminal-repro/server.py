@@ -139,6 +139,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/pty/input":
             self._no_content()
             return
+        if parsed.path == "/pty/release":
+            self._no_content()
+            return
         if parsed.path == "/pty/close":
             form = self._read_form()
             with _lock:

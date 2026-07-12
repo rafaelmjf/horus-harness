@@ -1405,6 +1405,48 @@ def test_pty_resize_unknown_or_dead_session_is_410(tmp_path, monkeypatch):
     assert _post("/pty/resize", {"id": "pty-dead", "cols": "80", "rows": "24"})["status"] == 410
 
 
+def test_pty_resize_with_vid_registers_viewer_smallest_wins(tmp_path, monkeypatch):
+    """A vid-carrying resize goes through the viewer registry (smallest-wins),
+    not the raw last-writer-wins setter."""
+    _init(tmp_path, monkeypatch)
+    host = dashboard.pty_host.PtyHost()
+    host._terms["pty-1"] = dashboard.pty_host.PtyTerminal(
+        term_id="pty-1", agent="claude", project_dir=tmp_path,
+    )
+    monkeypatch.setattr(dashboard.pty_host, "host", host)
+    calls = []
+    monkeypatch.setattr(host, "viewer_resize", lambda tid, vid, c, r: calls.append((tid, vid, c, r)) or True)
+    resp = _post("/pty/resize", {"id": "pty-1", "vid": "vabc", "cols": "38", "rows": "26"})
+    assert resp["status"] == 204
+    assert calls == [("pty-1", "vabc", 38, 26)]
+
+
+def test_pty_release_drops_viewer(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    released = []
+    monkeypatch.setattr(
+        dashboard.pty_host.host, "viewer_release",
+        lambda tid, vid: released.append((tid, vid)),
+    )
+    resp = _post("/pty/release", {"id": "pty-1", "vid": "vabc"})
+    assert resp["status"] == 204
+    assert released == [("pty-1", "vabc")]
+
+
+def test_terminal_js_has_viewer_identity_wiring(tmp_path, monkeypatch):
+    """Every viewer registers under a vid (smallest-wins geometry) and releases
+    it when hidden, so a backgrounded tab stops constraining other viewers."""
+    _init(tmp_path, monkeypatch)
+    term = dashboard.pty_host.PtyTerminal(
+        term_id="pty-7", agent="claude", project_dir=tmp_path, title="demo · work",
+    )
+    page = dashboard.render_control([], [], [], terminals=[term])
+    assert "var vid = 'v' + Math.random()" in page
+    assert "vid:vid" in page                        # resize posts carry the vid
+    assert "'&vid='+encodeURIComponent(vid)" in page  # stream ties vid for cleanup
+    assert "/pty/release" in page and "sendBeacon" in page
+
+
 def test_pty_resize_debounce_drop_is_still_204(tmp_path, monkeypatch):
     """resize() returns False for a debounced repeat on a LIVE session too — that
     must never read as session-gone (410 is gated on existence, not return value)."""
@@ -1462,7 +1504,7 @@ def test_terminal_js_multi_viewer_geometry_and_touch_scroll(tmp_path, monkeypatc
     assert "function claimSize()" in page
     assert "window.addEventListener('pageshow', claimSize)" in page
     assert "window.addEventListener('focus', claimSize)" in page
-    assert "claimSize(); } });" in page          # visibilitychange -> claim
+    assert "if(document.hidden){ releaseSize(); } else { claimSize(); }" in page  # visibility -> release/claim
     assert "new WheelEvent('wheel'" in page      # touch-drag -> wheel pipeline
 
 
