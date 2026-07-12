@@ -10,6 +10,21 @@ surface: horus/dashboard.py, horus/assets/vendor/xterm/
 
 # Claude Code rendering in the webapp terminal: cheap levers, honest ceiling
 
+> **DEFINITIVE FINDING (2026-07-13, headless end-to-end repro):** with the whole
+> stack proven correct (smallest-wins registry, epoch handshake, lazy reset —
+> v0.0.42; PTY verified 38×34 via TIOCGWINSZ), **Claude Code paints a ~80-col
+> minimum regardless of PTY size** — welcome banner, status line, paragraphs all
+> overflow a 38-col phone grid (mid-word wraps + orphan right-edge glyphs).
+> **codex at the same 38 cols in the same viewer renders clean.** Also: Claude's
+> trust prompt never repaints on SIGWINCH (painted once at spawn size), and
+> post-trust Claude runs alt-screen + DEC 2026. Repro harness:
+> scratchpad phone-shot.mjs pattern — local ungated dashboard + real agent
+> session + phone-emulated CDP screenshots. Remaining options are product
+> decisions: (B) 80-col floor + horizontal pan on phone for claude sessions,
+> (C) per-agent min-cols (codex keeps native fit), (D) claude-on-phone via the
+> Claude app / remote control and webapp terminal for codex+monitoring,
+> (E) upstream issue / newer claude versions. Decide before building.
+
 **[improvement]** Claude Code's Ink-based TUI re-renders large screen regions per
 streaming chunk; xterm.js-family terminals (ours, VS Code's) turn that into flicker
 and scrambled frames, while codex's ratatui TUI does differential cell updates and
