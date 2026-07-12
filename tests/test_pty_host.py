@@ -80,15 +80,14 @@ def test_host_streams_writes_resizes_and_persists(tmp_path, monkeypatch):
     assert env.get("HORUS_PTY_HOST_PID")  # the host (dashboard) process PID
     assert env.get("TERM") == "xterm-256color"
 
-    # Keystrokes flow back to the PTY; resize is forwarded. (Resize BEFORE the
-    # output: an applied geometry change starts a new scrollback epoch.)
+    # Output the PTY produces is buffered on the host.
+    fake.feed(b"hello "); fake.feed(b"world")
+    assert _wait(lambda: term._total >= 11)
+
+    # Keystrokes flow back to the PTY; resize is forwarded.
     assert h.write(tid, b"abc") is True
     assert _wait(lambda: bytes(fake.written) == b"abc")
     assert h.resize(tid, 100, 30) is True and fake.size == (100, 30)
-
-    # Output the PTY produces is buffered on the host.
-    fake.feed(b"hello "); fake.feed(b"world")
-    assert _wait(lambda: term._total - term._base >= 11)
 
     # A late subscriber replays the scrollback, then sees the exit.
     fake.eof()
@@ -213,25 +212,26 @@ def test_viewer_resize_gone_terminal_is_false(tmp_path):
     h.viewer_release("nope", "v1")  # must not raise
 
 
-def test_resize_starts_a_new_scrollback_epoch(tmp_path, monkeypatch):
-    """Scrollback written for the old grid poisons a viewer that replays it on
-    a different grid (mismatched wrapping corrupts later relative cursor moves
-    — the scrambled-phone bug). An applied resize drops the stale bytes; the
-    TUI's SIGWINCH repaint refills the buffer consistently."""
+def test_resize_preserves_scrollback_replay(tmp_path, monkeypatch):
+    """A resize must NOT drop the buffer: it carries the TUI's mode-setting
+    sequences (alt-screen, sync output) a fresh viewer needs, and not every TUI
+    repaints on SIGWINCH (Claude Code's trust prompt doesn't — an eager clear
+    left viewers blank until a keypress). Replay-poison across grids is handled
+    viewer-side (geometry handshake + /pty/redraw + lazy reset)."""
     h, tid, fake = _fake_host(tmp_path, monkeypatch)
     term = h.get(tid)
     fake.feed(b"OLD-GRID-BYTES")
     assert _wait(lambda: term._total >= 14)
     assert h.resize(tid, 100, 30) is True
     fake.feed(b"NEW-GRID-BYTES")
-    assert _wait(lambda: term._total - term._base >= 14)
+    assert _wait(lambda: term._total >= 28)
     fake.eof()
     assert _wait(lambda: not term.alive)
     frames = list(itertools.islice(h.subscribe(tid, heartbeat=0.05), 5))
     outputs = [f for f in frames if f.startswith("event: output")]
     decoded = b"".join(base64.b64decode(f.split("data: ", 1)[1].strip()) for f in outputs)
+    assert b"OLD-GRID-BYTES" in decoded
     assert b"NEW-GRID-BYTES" in decoded
-    assert b"OLD-GRID-BYTES" not in decoded
 
 
 def test_redraw_jiggles_rows_to_force_full_repaint(tmp_path, monkeypatch):

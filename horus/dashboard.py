@@ -3207,16 +3207,18 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     var d=document.querySelector('.term-tab[data-tid="'+tid+'"] .tdot'); if(d){d.className='tdot s-exited';}
   }
   function post(path, obj){
-    if(gone) return;
+    if(gone) return Promise.resolve(null);
     var body=Object.keys(obj).map(function(k){return k+'='+encodeURIComponent(obj[k]);}).join('&');
     // Surface a rejected keystroke/resize once, so "can't control it" isn't silent
     // (a blocked POST — auth/proxy/CSRF — otherwise looks exactly like a dead key).
-    fetch(path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body})
-      .then(function(r){ if(r.status===410){ sessionGone(); return; }
+    return fetch(path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body})
+      .then(function(r){ if(r.status===410){ sessionGone(); return r; }
         if(!r.ok && !postErr && typeof term!=='undefined'){ postErr=true;
-        term.write('\\r\\n\\x1b[31m[input not delivered ('+r.status+')]\\x1b[0m\\x1b[2m — connection blocked (auth/proxy)? reload the page.\\x1b[0m\\r\\n'); } })
+        term.write('\\r\\n\\x1b[31m[input not delivered ('+r.status+')]\\x1b[0m\\x1b[2m — connection blocked (auth/proxy)? reload the page.\\x1b[0m\\r\\n'); }
+        return r; })
       .catch(function(){ if(!postErr && typeof term!=='undefined'){ postErr=true;
-        term.write('\\r\\n\\x1b[31m[input not delivered — network error or expired access session]\\x1b[0m\\x1b[2m — reload the page.\\x1b[0m\\r\\n'); } });
+        term.write('\\r\\n\\x1b[31m[input not delivered — network error or expired access session]\\x1b[0m\\x1b[2m — reload the page.\\x1b[0m\\r\\n'); }
+        return null; });
   }
   // fontSize >= 16 on touch: iOS zooms the whole page when a focused input's
   // font-size is under 16px — xterm's hidden helper textarea inherits the cell
@@ -3278,20 +3280,24 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     updateBar();
     window.addEventListener('horus:compactchange', updateBar);
   }
-  var lastSent=null, fitted=false, attachGeom=null, epochChecked=false;
+  var lastSent=null, fitted=false, attachGeom=null, epochChecked=false, pendingReset=false;
   // Geometry-epoch handshake: the server announces the PTY's grid at attach.
   // If OUR fit differs, the replayed scrollback was written for a different
-  // grid — rendering it corrupts the wrap/cursor state permanently (the
-  // scrambled-phone bug). Once both sides are known, wipe the screen and ask
-  // the TUI for a fresh full repaint at the size we just posted. The delay
-  // lets our /pty/resize apply first so the repaint targets OUR grid.
+  // grid — rendering it corrupts the wrap/cursor state (the scrambled-phone
+  // bug). Ask the TUI for a fresh full repaint at the size we just posted,
+  // then wipe the screen LAZILY — only when the repaint's bytes actually
+  // arrive. Not every TUI repaints on SIGWINCH (Claude Code's trust prompt
+  // doesn't): an eager reset left those viewers on a blank screen, while the
+  // lazy one keeps the readable replay until fresh content really lands.
+  // The delay lets our /pty/resize apply first so the repaint targets OUR grid.
   function maybeEpochReset(){
     if(epochChecked || attachGeom===null || !fitted) return;
     epochChecked=true;
     if(term.cols+'x'+term.rows === attachGeom) return;  // replay matched our grid
     setTimeout(function(){
-      term.reset();
-      post('/pty/redraw',{id:tid});
+      post('/pty/redraw',{id:tid}).then(function(r){
+        if(r && r.ok){ pendingReset=true; }
+      });
     }, 250);
   }
   // One PTY geometry serves every viewer (pty_host holds a single cols/rows),
@@ -3395,7 +3401,10 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   host.addEventListener('touchend', function(){ touchY=null; }, {passive:true});
   var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid)+'&vid='+encodeURIComponent(vid));
   es.addEventListener('geometry', function(e){ attachGeom=e.data; maybeEpochReset(); });
-  es.addEventListener('output', function(e){ term.write(b64bytes(e.data)); });
+  es.addEventListener('output', function(e){
+    if(pendingReset){ pendingReset=false; term.reset(); }
+    term.write(b64bytes(e.data));
+  });
   // Surface a dead stream instead of failing silently: a session that opens but shows
   // nothing (SSE blocked by an auth gate / proxy, session gone, or network dropped)
   // used to look identical to an idle one. readyState 2 = EventSource gave up

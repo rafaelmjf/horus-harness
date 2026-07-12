@@ -189,15 +189,15 @@ class PtyHost:
             term._pty.resize(cols, rows)
         except OSError:
             return False
-        # Geometry epoch: scrollback written for the OLD grid poisons any viewer
-        # that replays it on a different grid (its terminal wraps those lines
-        # differently, corrupting every later relative cursor move — observed
-        # live as a permanently scrambled phone). The TUI repaints on SIGWINCH
-        # anyway, so drop the stale bytes; future attaches replay only bytes
-        # consistent with the current geometry.
-        with term._cond:
-            term._buf.clear()
-            term._base = term._total
+        # NOTE: do NOT clear the scrollback here. It's tempting (bytes written
+        # for the old grid poison a differently-sized viewer's replay), but the
+        # buffer also carries the TUI's mode-setting sequences (alt-screen,
+        # synchronized output, mouse modes) a fresh viewer must replay — and
+        # not every TUI repaints on SIGWINCH (Claude Code's trust prompt
+        # doesn't; clearing left every viewer blank until a keypress). The
+        # replay-poison problem is handled viewer-side instead: the geometry
+        # attach handshake + /pty/redraw + a lazy screen reset applied when the
+        # repaint actually arrives.
         return True
 
     def redraw(self, term_id: str) -> bool:

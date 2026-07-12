@@ -1470,6 +1470,11 @@ def test_terminal_js_geometry_epoch_handshake(tmp_path, monkeypatch):
     assert "maybeEpochReset" in page and "term.reset()" in page
     assert "/pty/redraw" in page
     assert "if(fitted && s.cols>0" in page   # onResize gated on a real fit
+    # The reset is LAZY: armed only after a successful redraw request, applied
+    # when the repaint's bytes arrive — never eagerly (a TUI that ignores
+    # SIGWINCH, like Claude Code's trust prompt, must not leave a blank screen).
+    assert "if(r && r.ok){ pendingReset=true; }" in page
+    assert "if(pendingReset){ pendingReset=false; term.reset(); }" in page
 
 
 def test_pty_resize_debounce_drop_is_still_204(tmp_path, monkeypatch):
