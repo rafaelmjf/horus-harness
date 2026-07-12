@@ -270,6 +270,43 @@ async function main() {
     })()`);
     check("pop-out on touch does NOT call window.open (no mobile new-tab trap)", popoutTouch.openCalled === 0, popoutTouch);
     check("pop-out on touch engages in-app fullscreen instead", popoutTouch.fs === true, popoutTouch);
+
+    // ---- Phase 5: multi-viewer geometry claim + touch-drag -> wheel ----
+    // One PTY geometry serves all viewers; a viewer whose own box never changed
+    // must still RE-POST its fit when the user comes back to it (pageshow /
+    // focus / visibility / touch), or it stays stuck rendering a grid another
+    // viewer set (observed live: ~90-col PTY wrapped mid-word on a 44-col phone).
+    const beforeClaim = (await stateResizes()).length;
+    await evalJs(`window.dispatchEvent(new Event('pageshow')); 0`);
+    await delay(350);
+    const claimed = await stateResizes();
+    const activeTid = await evalJs(`document.querySelector('.term-pane.active').dataset.tid`);
+    const claimedNew = claimed.slice(beforeClaim).filter((r) => r.id === activeTid);
+    check("returning to a viewer (pageshow) re-claims the PTY geometry even at an unchanged size",
+      claimedNew.length >= 1, { newPosts: claimedNew, activeTid });
+
+    // Touch-drag over the terminal must feed xterm's wheel pipeline (synthetic
+    // WheelEvent), so drags scroll scrollback / alt-screen instead of nothing.
+    await evalJs(`window.__wheels=[]; document.addEventListener('wheel', function(e){ if(!e.isTrusted){ window.__wheels.push(e.deltaY); } }, {passive:true}); 0`);
+    const hostRect = await evalJs(`(function(){
+      var h = document.querySelector('.term-pane.active .xterm-host');
+      var r = h.getBoundingClientRect();
+      return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
+    })()`);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart",
+      touchPoints: [{ x: hostRect.x, y: hostRect.y }] }, sessionId);
+    for (let i = 1; i <= 4; i++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove",
+        touchPoints: [{ x: hostRect.x, y: hostRect.y - i * 15 }] }, sessionId);
+      await delay(30);
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] }, sessionId);
+    await delay(200);
+    const wheels = await evalJs(`window.__wheels`);
+    check("touch-drag on the terminal emits synthetic wheel events (scroll goes to xterm, not nowhere)",
+      Array.isArray(wheels) && wheels.length >= 1, wheels);
+    check("upward finger drag scrolls forward (positive wheel deltaY)",
+      Array.isArray(wheels) && wheels.length >= 1 && wheels.every((d) => d > 0), wheels);
   } finally {
     proc.kill();
   }
