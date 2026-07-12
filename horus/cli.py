@@ -401,6 +401,22 @@ def cmd_datum_close(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_datum_migrate_names(args: argparse.Namespace) -> int:
+    """One-time, idempotent rename of bare model aliases already captured in
+    ``datums.json`` (``sonnet``, ``haiku``, ``opus``) to their canonical
+    versioned name, so they join the same roll-up row as owner priors/pricing
+    instead of rendering as two half-complete rows. Safe to re-run: a repeat
+    call finds nothing left to rename and leaves the file untouched."""
+    renamed = datums.DatumStore.default().migrate_names()
+    if not renamed:
+        print("No bare-alias datums to migrate (already canonical, or no datums.json yet).")
+        return 0
+    for alias, count in sorted(renamed.items()):
+        canonical = datums.ALIAS_TO_CANONICAL[alias]
+        print(f"Renamed {count} datum(s): {alias!r} -> {canonical!r}")
+    return 0
+
+
 def cmd_discover(args: argparse.Namespace) -> int:
     if args.source != "github":
         print(f"Unsupported discovery source: {args.source}")
@@ -737,6 +753,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     store = datums.DatumStore.default()
     run_started = time.monotonic()
     saw_usage_signal = False
+    resolved_model: str | None = None
 
     def emit(line: str) -> None:
         print(line)
@@ -744,6 +761,14 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     for ev in registry.track(reg, run):
         log.bind(run.session.session_id)
+        # The adapter's own SESSION_STARTED event (Claude Code's system/init)
+        # may carry the concrete model that actually ran, e.g.
+        # "claude-haiku-4-5-20251001" even when spec.model was the bare alias
+        # "haiku" — prefer that resolved capture over the static alias map
+        # (see datums.canonical_model_name) since it stays correct across a
+        # family-default move a static map would mis-record.
+        if ev.type is adapters.EventType.SESSION_STARTED and ev.raw:
+            resolved_model = ev.raw.get("model") or resolved_model
         if not event_log_started and run.session.session_id:
             event_log_started = True
             runlog.append_event(
@@ -767,7 +792,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             store.record_launch(
                 datums.Datum(
                     session_id=run.session.session_id,
-                    model=spec.model,
+                    model=datums.canonical_model_name(spec.model, resolved=resolved_model),
                     launched_at=runlog.utc_iso(),
                     project=run.session.project_dir.as_posix(),
                     account=run.session.account,
@@ -2472,6 +2497,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_datum_close.add_argument("--shape", default=None, help="the run's shape: ambiguity/volume/runtime, your words")
     p_datum_close.add_argument("--note", default=None, help="a short free note")
     p_datum_close.set_defaults(func=cmd_datum_close)
+
+    p_datum_migrate = datum_sub.add_parser(
+        "migrate-names",
+        help="one-time idempotent rename of bare model aliases (sonnet/haiku/opus) to canonical versioned names",
+    )
+    p_datum_migrate.set_defaults(func=cmd_datum_migrate_names)
 
     p_discover = sub.add_parser("discover", help="discover remote Horus projects")
     p_discover.add_argument("source", choices=["github"], help="remote catalog source")

@@ -70,6 +70,55 @@ def _now_iso() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Canonical model names — a real rename, not an alias/mirror (see the
+# `model-name-normalization-and-datum-migration` backlog card). Measured
+# datums and owner priors/pricing must key on the SAME versioned name
+# (`sonnet-5`, not bare `sonnet`) or they render as two half-complete rows
+# that never join.
+# ---------------------------------------------------------------------------
+
+# Owner-maintained fallback map, small and living next to `capabilities.toml`.
+# Only consulted when an adapter didn't expose what actually ran (see
+# `canonical_model_name`) — a static map like this goes stale the moment a
+# family default moves (`sonnet` -> `sonnet-6` later), so resolved-capture is
+# always preferred and this is the fallback, not the primary path. GPT variants
+# already carry their suffix at the call site (`gpt-5.6-sol`, not bare
+# `gpt-5.6`) so they need no entry here.
+ALIAS_TO_CANONICAL: dict[str, str] = {
+    "sonnet": "sonnet-5",
+    "haiku": "haiku-4.5",
+    "opus": "opus-4.8",
+}
+
+# Matches a Claude Code resolved model id, e.g. "claude-haiku-4-5-20251001" or
+# "claude-sonnet-5-20260101" -> ("haiku", "4", "5") / ("sonnet", "5", None).
+_RESOLVED_MODEL_RE = re.compile(
+    r"^claude-(?P<family>sonnet|opus|haiku|fable)-(?P<major>\d+)(?:-(?P<minor>\d+))?-\d{8}$"
+)
+
+
+def canonical_model_name(alias: str | None, *, resolved: str | None = None) -> str | None:
+    """Normalize a captured model to its canonical versioned name.
+
+    Prefers ``resolved`` — the concrete model an adapter reports it actually ran
+    (e.g. Claude Code's ``system/init`` event carries ``"claude-haiku-4-5-
+    20251001"`` even when the run was launched with the bare alias ``haiku``) —
+    since that stays correct across a family-default move that a static map
+    would mis-record. Falls back to :data:`ALIAS_TO_CANONICAL` when no
+    resolution is available (e.g. Codex's stream reports no model at all). A
+    name that's already canonical, or unrecognized (GPT variants, a literal
+    version string), passes through unchanged."""
+    if resolved:
+        match = _RESOLVED_MODEL_RE.match(resolved)
+        if match:
+            family, major, minor = match.group("family", "major", "minor")
+            return f"{family}-{major}.{minor}" if minor else f"{family}-{major}"
+    if alias in ALIAS_TO_CANONICAL:
+        return ALIAS_TO_CANONICAL[alias]
+    return alias
+
+
+# ---------------------------------------------------------------------------
 # The datum row
 # ---------------------------------------------------------------------------
 
@@ -290,6 +339,35 @@ class DatumStore:
         self._save(rows)
         return Datum.from_row(row)
 
+    def migrate_names(self) -> dict[str, int]:
+        """One-time, idempotent rename of bare dispatch aliases already captured
+        in ``datums.json`` (``sonnet``, ``haiku``, ``opus``) to their canonical
+        versioned name, via :data:`ALIAS_TO_CANONICAL`. Every other field on the
+        row is preserved untouched; only the ``model`` value changes, so rows
+        naturally merge under the canonical name in the roll-up (grouping is by
+        that field, not a separate merge step).
+
+        Returns ``{bare_alias: count_renamed}``. A record already on its
+        canonical name has no entry in :data:`ALIAS_TO_CANONICAL` as a *key*
+        (only as a value), so it is left untouched — re-running finds nothing
+        left to rename and returns ``{}`` without writing the file at all,
+        making a repeat run a true no-op, byte-for-byte."""
+        if not self.path.exists():
+            return {}
+        rows = self._load()
+        renamed: dict[str, int] = {}
+        changed = False
+        for row in rows.values():
+            model = row.get("model")
+            canonical = ALIAS_TO_CANONICAL.get(model) if model else None
+            if canonical and canonical != model:
+                row["model"] = canonical
+                renamed[model] = renamed.get(model, 0) + 1
+                changed = True
+        if changed:
+            self._save(rows)
+        return renamed
+
 
 # ---------------------------------------------------------------------------
 # Owner priors (read-only here; seeded once, then hand-edited)
@@ -453,6 +531,86 @@ def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[Mod
     return rollups
 
 
+# Table columns for the tier ladder, shared by `render_model_rollup` and
+# `render_delegation_matrix` — model/tier/datums/last/price/capability/
+# researched, in that order, so a mixed roster compares at a glance instead of
+# the old vertical line-per-field block. Free-text strength/caution/guard
+# flags don't fit a column (they'd blow out alignment) so they render as a
+# separate Notes section below the table instead of being dropped.
+_TABLE_COLUMNS: tuple[str, ...] = ("model", "tier", "datums", "last", "price", "capability", "researched")
+_TABLE_HEADERS: dict[str, str] = {
+    "model": "MODEL",
+    "tier": "TIER",
+    "datums": "DATUMS",
+    "last": "LAST",
+    "price": "PRICE",
+    "capability": "CAPABILITY",
+    "researched": "RESEARCHED",
+}
+_CAPABILITY_NOTE_MAX = 60
+
+
+def _table_row(r: ModelRollup) -> dict[str, str]:
+    return {
+        "model": r.model,
+        "tier": r.tier or "-",
+        "datums": f"{r.clean_count}/{r.total_datums}",
+        "last": " ".join(r.last_outcomes) if r.last_outcomes else "-",
+        "price": _format_price(r),
+        "capability": _truncate(r.capability_note, _CAPABILITY_NOTE_MAX) if r.capability_note else "-",
+        "researched": r.researched_at or "-",
+    }
+
+
+def _truncate(text: str, width: int) -> str:
+    return text if len(text) <= width else text[: width - 1].rstrip() + "…"
+
+
+def _format_price(r: ModelRollup) -> str:
+    """``$in/$out`` per Mtok, compact for a table column (``-`` for an unset side,
+    or the whole cell when neither is set)."""
+    if r.price_in is None and r.price_out is None:
+        return "-"
+    p_in = f"${r.price_in:g}" if r.price_in is not None else "-"
+    p_out = f"${r.price_out:g}" if r.price_out is not None else "-"
+    return f"{p_in}/{p_out}"
+
+
+def render_tier_table(rollups: list[ModelRollup]) -> list[str]:
+    """Aligned tier-ladder table lines (no title/sources header — callers add
+    their own framing). Returns a placeholder line when there are no rollups."""
+    if not rollups:
+        return ["(no models — no datums recorded and no owner priors seeded yet)"]
+    rows = [_table_row(r) for r in rollups]
+    widths = {
+        col: max(len(_TABLE_HEADERS[col]), *(len(row[col]) for row in rows)) for col in _TABLE_COLUMNS
+    }
+
+    def fmt(values: dict[str, str]) -> str:
+        return "  ".join(values[col].ljust(widths[col]) for col in _TABLE_COLUMNS).rstrip()
+
+    return [fmt(_TABLE_HEADERS), *(fmt(row) for row in rows)]
+
+
+def render_tier_notes(rollups: list[ModelRollup]) -> list[str]:
+    """Free-text strength/caution/guard owner flags, one line per model that has
+    any — kept out of the table (they don't fit a column) but never dropped."""
+    flagged = [r for r in rollups if r.strength or r.caution or r.guard]
+    if not flagged:
+        return []
+    lines = ["Notes:"]
+    for r in flagged:
+        bits = []
+        if r.strength:
+            bits.append(f"strength: {r.strength}")
+        if r.caution:
+            bits.append(f"caution: {r.caution}")
+        if r.guard:
+            bits.append(f"guard: {r.guard}")
+        lines.append(f"  {r.model}: " + " | ".join(bits))
+    return lines
+
+
 def render_model_rollup(rollups: list[ModelRollup]) -> str:
     """Human-readable text of the roll-up. Data only — describes what was measured
     and what the owner flagged; never names a model to pick."""
@@ -461,40 +619,12 @@ def render_model_rollup(rollups: list[ModelRollup]) -> str:
         f"Sources: measured datums {datums_path()} · owner priors {priors_path()}",
         "",
     ]
-    if not rollups:
-        lines.append("(no models — no datums recorded and no owner priors seeded yet)")
-        return "\n".join(lines) + "\n"
-    for r in rollups:
-        tier = r.tier or "—"
-        clean = f"{r.clean_count} clean / {r.closed_datums} closed / {r.total_datums} total"
-        lines.append(f"{r.model:<12} tier: {tier}")
-        lines.append(f"{'':<12} datums: {clean}")
-        if r.last_outcomes:
-            lines.append(f"{'':<12} last: {' '.join(r.last_outcomes)}")
-        if r.price_in is not None or r.price_out is not None:
-            lines.append(f"{'':<12} price: {_format_price(r)} per Mtok")
-        if r.capability_note:
-            lines.append(f"{'':<12} capability: {r.capability_note}")
-        if r.researched_at:
-            lines.append(f"{'':<12} researched: {r.researched_at}")
-        if r.strength:
-            lines.append(f"{'':<12} strength: {r.strength}")
-        if r.caution:
-            lines.append(f"{'':<12} caution: {r.caution}")
-        if r.guard:
-            lines.append(f"{'':<12} guard: {r.guard}")
+    lines.extend(render_tier_table(rollups))
+    notes = render_tier_notes(rollups)
+    if notes:
         lines.append("")
+        lines.extend(notes)
     return "\n".join(lines).rstrip() + "\n"
-
-
-def _format_price(r: ModelRollup) -> str:
-    """``$X.XX in / $Y.YY out`` (or just the side that's set)."""
-    parts = []
-    if r.price_in is not None:
-        parts.append(f"${r.price_in:g} in")
-    if r.price_out is not None:
-        parts.append(f"${r.price_out:g} out")
-    return " / ".join(parts)
 
 
 def rollup_to_dict(rollups: list[ModelRollup]) -> dict:
@@ -570,26 +700,11 @@ def render_delegation_matrix(
         "",
         "Tier ladder (owner priors + measured datums):",
     ]
-    if not rollups:
-        lines.append("  (no models — no datums recorded and no owner priors seeded yet)")
-    else:
-        for r in rollups:
-            tier = r.tier or "—"
-            clean = f"{r.clean_count} clean / {r.closed_datums} closed / {r.total_datums} total"
-            lines.append(f"  {r.model:<12} tier: {tier}")
-            lines.append(f"  {'':<12} datums: {clean}")
-            if r.last_outcomes:
-                lines.append(f"  {'':<12} last: {' '.join(r.last_outcomes)}")
-            if r.price_in is not None or r.price_out is not None:
-                lines.append(f"  {'':<12} price: {_format_price(r)} per Mtok")
-            if r.capability_note:
-                lines.append(f"  {'':<12} capability: {r.capability_note}")
-            if r.researched_at:
-                lines.append(f"  {'':<12} researched: {r.researched_at}")
-            if r.caution:
-                lines.append(f"  {'':<12} caution: {r.caution}")
-            if r.guard:
-                lines.append(f"  {'':<12} guard: {r.guard}")
+    lines.extend(f"  {line}" for line in render_tier_table(rollups))
+    notes = render_tier_notes(rollups)
+    if notes:
+        lines.append("")
+        lines.extend(f"  {line}" for line in notes)
     lines.append("")
     lines.append("Shape -> tier role (delegation-rubric Step 3/4):")
     for row in shape_tiers:

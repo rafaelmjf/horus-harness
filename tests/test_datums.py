@@ -122,6 +122,98 @@ def test_relaunch_preserves_qualitative_half(tmp_path):
     assert d.outcome == "clean" and d.posture == "full-auto"
 
 
+# --- canonical model-name normalization ---------------------------------------
+
+def test_canonical_model_name_falls_back_to_alias_map():
+    assert datums.canonical_model_name("sonnet") == "sonnet-5"
+    assert datums.canonical_model_name("haiku") == "haiku-4.5"
+    assert datums.canonical_model_name("opus") == "opus-4.8"
+
+
+def test_canonical_model_name_prefers_resolved_over_alias_map():
+    # Family default moves (sonnet -> sonnet-6) would mis-record via the static
+    # map; resolved-capture (what the adapter says actually ran) stays correct.
+    assert datums.canonical_model_name("sonnet", resolved="claude-sonnet-6-20270101") == "sonnet-6"
+    assert datums.canonical_model_name("haiku", resolved="claude-haiku-4-5-20251001") == "haiku-4.5"
+    assert datums.canonical_model_name(None, resolved="claude-opus-4-8-20260601") == "opus-4.8"
+
+
+def test_canonical_model_name_passes_through_unrecognized():
+    assert datums.canonical_model_name("gpt-5.6-sol") == "gpt-5.6-sol"
+    assert datums.canonical_model_name("sonnet-5") == "sonnet-5"  # already canonical
+    assert datums.canonical_model_name(None) is None
+    assert datums.canonical_model_name("sonnet", resolved="not-a-recognized-id") == "sonnet-5"
+
+
+# --- datums.json bare->proper migration ---------------------------------------
+
+def test_migrate_names_merges_bare_into_canonical(tmp_path):
+    # Write the fixture straight to disk (bypassing record_launch's virtual
+    # backfill-becomes-concrete-on-first-write behavior) so the row count is
+    # exactly what this test put there.
+    store = _store(tmp_path)
+    rows = {}
+    for i in range(11):
+        rows[f"sonnet-run-{i}"] = {"session_id": f"sonnet-run-{i}", "model": "sonnet"}
+    for i in range(2):
+        rows[f"haiku-run-{i}"] = {"session_id": f"haiku-run-{i}", "model": "haiku"}
+    rows["already-canonical"] = {"session_id": "already-canonical", "model": "sonnet-5"}
+    rows["untouched"] = {"session_id": "untouched", "model": "gpt-5.6-sol"}
+    store.path.write_text(json.dumps({"datums": rows}, indent=2) + "\n", encoding="utf-8")
+
+    renamed = store.migrate_names()
+    assert renamed == {"sonnet": 11, "haiku": 2}
+
+    saved = json.loads(store.path.read_text(encoding="utf-8"))["datums"]
+    assert all(saved[f"sonnet-run-{i}"]["model"] == "sonnet-5" for i in range(11))
+    assert all(saved[f"haiku-run-{i}"]["model"] == "haiku-4.5" for i in range(2))
+    assert saved["already-canonical"]["model"] == "sonnet-5"
+    assert saved["untouched"]["model"] == "gpt-5.6-sol"
+    # Every record is preserved — nothing dropped by the merge.
+    assert len(saved) == 15
+
+    # One merged roll-up row per canonical model — no leftover half-complete row.
+    rollups = datums.build_model_rollup(store.all(), {})
+    by_model = {r.model: r for r in rollups}
+    assert "sonnet" not in by_model and "haiku" not in by_model
+    assert by_model["sonnet-5"].total_datums == 12  # 11 migrated + 1 already-canonical
+    assert by_model["haiku-4.5"].total_datums == 2
+
+
+def test_migrate_names_rerun_is_a_byte_stable_noop(tmp_path):
+    store = _store(tmp_path)
+    store.record_launch(datums.Datum(session_id="s1", model="sonnet"))
+    store.migrate_names()
+    before = store.path.read_text(encoding="utf-8")
+
+    renamed_again = store.migrate_names()
+
+    assert renamed_again == {}
+    assert store.path.read_text(encoding="utf-8") == before  # byte-stable no-op
+
+
+def test_migrate_names_noop_when_no_datums_file(tmp_path):
+    store = _store(tmp_path)
+    assert store.migrate_names() == {}
+    assert not store.path.exists()  # never creates a file just to migrate nothing
+
+
+def test_datum_migrate_names_cli(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    store = datums.DatumStore.default()
+    store.record_launch(datums.Datum(session_id="s1", model="sonnet"))
+    store.record_launch(datums.Datum(session_id="s2", model="haiku"))
+
+    assert main(["datum", "migrate-names"]) == 0
+    out = capsys.readouterr().out
+    assert "'sonnet' -> 'sonnet-5'" in out and "'haiku' -> 'haiku-4.5'" in out
+    assert store.get("s1").model == "sonnet-5" and store.get("s2").model == "haiku-4.5"
+
+    rc = main(["datum", "migrate-names"])
+    assert rc == 0
+    assert "No bare-alias datums to migrate" in capsys.readouterr().out
+
+
 # --- owner priors ------------------------------------------------------------
 
 def test_priors_seeded_and_parsed(tmp_path):
@@ -187,6 +279,30 @@ def test_run_fake_writes_mechanical_datum(tmp_path, monkeypatch):
     assert d.exit == "completed" and d.runtime_seconds is not None and d.outcome is None
 
 
+def test_run_captures_alias_as_canonical_via_fallback_map(tmp_path, monkeypatch):
+    # No resolved model in the adapter's stream (fake's default script carries
+    # none) -> falls back to the owner-maintained alias map.
+    _home(tmp_path, monkeypatch)
+    assert main(["run", "hello", "--agent", "fake", "--model", "sonnet", "--path", str(tmp_path)]) == 0
+    d = datums.DatumStore.default().get("fake-session")
+    assert d.model == "sonnet-5"
+
+
+def test_run_prefers_resolved_model_from_adapter_over_alias_map(tmp_path, monkeypatch):
+    from horus import adapters
+
+    _home(tmp_path, monkeypatch)
+    script = [
+        {"event": "init", "session_id": "resolved-session", "model": "claude-haiku-4-5-20251001"},
+        {"event": "text", "text": "hi"},
+        {"event": "result", "ok": True},
+    ]
+    monkeypatch.setattr(adapters, "get_adapter", lambda name: adapters.FakeAdapter(script=script))
+    assert main(["run", "hello", "--agent", "fake", "--model", "haiku", "--path", str(tmp_path)]) == 0
+    d = datums.DatumStore.default().get("resolved-session")
+    assert d is not None and d.model == "haiku-4.5"  # resolved capture, not the static map
+
+
 def test_datum_close_cli_attaches_outcome(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["run", "hi", "--agent", "fake", "--model", "opus-4.8", "--path", str(tmp_path)])
@@ -208,8 +324,8 @@ def test_capabilities_models_rollup_cli(tmp_path, monkeypatch, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "Model calibration roll-up" in out
-    assert "sonnet-5" in out and "10 clean" in out
-    assert "token-hungry" in out  # gpt-5.6 owner caution rendered
+    assert "sonnet-5" in out and "10/10" in out  # aligned table: 10 clean / 10 total
+    assert "token-hungry" in out  # gpt-5.6 owner caution rendered (Notes section)
 
 
 def test_capabilities_models_stdout_is_json(tmp_path, monkeypatch, capsys):
@@ -227,8 +343,8 @@ def test_capabilities_matrix_cli_renders_ladder_and_rubric_tables(tmp_path, monk
     out = capsys.readouterr().out
     assert "Delegation decision matrix" in out
     assert "DISPLAY-ONLY" in out
-    assert "sonnet-5" in out and "10 clean" in out
-    assert "token-hungry" in out  # gpt-5.6 owner caution still surfaces
+    assert "sonnet-5" in out and "10/10" in out  # aligned table: 10 clean / 10 total
+    assert "token-hungry" in out  # gpt-5.6 owner caution still surfaces (Notes section)
     assert "scoped-impl" in out and "mechanical" in out and "novel" in out  # shape->tier table
     assert "observe-CI" in out and "CI+probe" in out and "owner-eyeball" in out  # verification dial
 
@@ -324,12 +440,12 @@ def test_render_model_rollup_shows_price_and_capability_when_present(tmp_path):
     )
     rollups = datums.build_model_rollup([], datums.load_priors(path))
     text = datums.render_model_rollup(rollups)
-    assert "price: $1.5 in / $6 out per Mtok" in text
-    assert "capability: still strong for scoped mechanical work" in text
-    assert "researched: 2026-07-01" in text
+    assert "$1.5/$6" in text  # price column
+    assert "still strong for scoped mechanical work" in text  # capability column
+    assert "2026-07-01" in text  # researched column
     matrix = datums.render_delegation_matrix(rollups, [], [])
-    assert "price: $1.5 in / $6 out per Mtok" in matrix
-    assert "capability: still strong for scoped mechanical work" in matrix
+    assert "$1.5/$6" in matrix
+    assert "still strong for scoped mechanical work" in matrix
 
 
 # --- staleness warning (non-blocking nudge) -----------------------------------
