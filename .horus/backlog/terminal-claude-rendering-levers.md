@@ -24,6 +24,19 @@ surface: horus/dashboard.py, horus/assets/vendor/xterm/
 > (C) per-agent min-cols (codex keeps native fit), (D) claude-on-phone via the
 > Claude app / remote control and webapp terminal for codex+monitoring,
 > (E) upstream issue / newer claude versions. Decide before building.
+>
+> **OWNER COUNTER-DATUM (2026-07-13 ~00:20, investigate FIRST):** a session
+> launched from the **accounts menu** (ambient, home dir — in-app terminal,
+> since the hosted service is headless) rendered WELL on the phone, while
+> project-card sessions looked broken. Hypothesis: claude at 38 cols is
+> *conditionally* fine when the phone is the SOLE viewer from birth (its claim
+> lands before claude's first paint), and the ~80-col overflow is limited to
+> fixed-width elements (welcome banner, statusline) + anything painted before
+> the claim. If confirmed, the practical fix may be much cheaper than pan/floor:
+> a spawn-size hint from the launching client (so claude's first paint already
+> targets the phone grid), or simply documenting the "launch from the phone,
+> view solo" recipe. Reproduce with the headless phone harness (session note 2026-07-13:
+> `phone-shot.mjs`) comparing sole-viewer-from-birth vs late-attach.
 
 **[improvement]** Claude Code's Ink-based TUI re-renders large screen regions per
 streaming chunk; xterm.js-family terminals (ours, VS Code's) turn that into flicker

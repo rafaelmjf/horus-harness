@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "Continuity closure + landing PR #177 (research-openwiki-comparison): OpenWiki-vs-self-documenting-catalog research delivered `research/openwiki-comparison-2026-07.md`; overseer+owner endorsed its skip-but-watch recommendation, card stamped shipped. No PR in flight after this merges."
-next_action: "No PR in flight. Pick up Backlog 'Now / next candidates': mobile-terminal symptom 2 (exposed-mode/POST-path input regression) is the most concrete open thread; ops item 1 (orphan reap) is the smallest. [tier: Sonnet]"
-next_prompt: "Resume Horus. Fetch first, read PRD.md and the newest session notes. No PR is in flight. Choose the next Backlog item — mobile-terminal symptom 2 (exposed-mode input regression) or ops item 1 (orphan reap after failed runs) — and start there."
-execution_recommendation: "continue-as-is — next candidates are exploratory investigation (symptom-2 root cause unknown) or a small ops fix; neither is high-volume/low-ambiguity enough to justify a phased plan."
-last_updated: 2026-07-12
+current_focus: "Mobile-terminal marathon closed (v0.0.36–v0.0.42 all deployed): five stack bugs fixed (input black hole, iOS zoom shear, geometry claims, tmux smallest-wins, replay poison + lazy reset), Windows fcntl breakage fixed, xterm 6.0.0. Screenshot-proven verdict: stack correct; residual is Claude Code's ~80-col minimum (upstream) — codex renders clean at 38 cols."
+next_action: "Investigate owner counter-datum first (terminal-claude-rendering-levers card): accounts-menu session rendered WELL on phone — test sole-viewer-from-birth vs late-attach with the phone-shot.mjs harness; a spawn-size hint may beat the pan/floor options. Then owner picks the claude-on-phone option. [tier: Sonnet]"
+next_prompt: "Resume Horus. Fetch first, read PRD.md and sessions/2026-07-13-011925-terminal-mobile-marathon*. Ask the owner to pick a claude-on-phone option from .horus/backlog/terminal-claude-rendering-levers.md, then implement it; or pick up the orphan-reap ops card (fresh incident evidence in the session note)."
+execution_recommendation: "continue-as-is — the next step is an owner product decision plus a bounded single-surface implementation (dashboard.py terminal JS/CSS); no volume to delegate."
+last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
 
@@ -52,12 +52,14 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
   gated on hub writing a `[[targets]]`-or-equivalent contract (not present as of hub
   HEAD `4a2b2ee` §9). Do NOT build an `OmnigentBackend` yet — blocking gates unmet
   (`research/omnigent-fit-2026-07-10.md`). [tier: Sonnet wiring once hub's contract lands.]
-- **Mobile-web-app bundle:** shipped (see Shipped). `mobile-terminal-ux-hardening` (sizing+lifecycle+controls) merged (PR #171). Symptom 2 (`mobile-terminal-interaction-regression`, folded-in but tracked) is a separate exposed-mode/POST-path investigation, untouched. [tier: Sonnet]
+- **Claude-on-phone rendering decision:** stack fixed + proven (v0.0.36–42, see Shipped); residual is Claude Code's ~80-col minimum (upstream; codex clean at 38 cols). Owner picks an option on `terminal-claude-rendering-levers` card: 80-col floor + horizontal pan / per-agent min-cols / remote-control split / upstream issue. [tier: Sonnet after decision]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
-   ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04).
-   On a `failed` RESULT — or `horus reap <session-id>` — kill the session's
-   remaining process tree (registry has the pid); at minimum surface "pid still
-   has children" in `horus tail`/dashboard.
+   ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04;
+   2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h —
+   systemd showed dead, deploys no-opped "already running"; deploy-hosted.sh's
+   version check caught it). On a `failed` RESULT — or `horus reap <session-id>`
+   — kill the session's remaining process tree (registry has the pid); at
+   minimum surface "pid still has children" in `horus tail`/dashboard.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
 3. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak; macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution. install-smoke CI covers install/CLI/`/health` on all three already.
 4. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD + execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup.
@@ -82,6 +84,10 @@ One line per capability; details in `archive/features.md`, git history, and the 
 **Consolidated-to marker stops self-dirtying closure** (2026-07-12, PR #174): `init`/`upgrade-project` scaffold the ignore rule for the generated `.horus/.consolidated-to` marker, `upgrade-project --apply` untracks legacy tracked copies while preserving local state, and closure cleanliness checks exclude the marker so it can never itself fail `working tree clean`.
 **Fix Codex usage-limit account scope** (2026-07-12, PR #173): `horus usage check` sources 5h/weekly Codex limits from the newest account-wide rollout (not project-scoped) and flags an expired reset window as stale rather than current capacity.
 **Mobile/desktop terminal sizing + lifecycle + controls hardening** (2026-07-12, PR #171): `.xterm-host` fills its region via `ResizeObserver` + layout-settled initial fit (no stale 80×24 default); live `matchMedia` re-evaluation instead of load-once mobile/desktop latch; tabs reachable in fullscreen; larger tap targets; confirm-guard on closing a live session. Symptom 2 (exposed-mode/POST-path no-input regression) is untouched, tracked separately in Backlog.
+
+**Terminal multi-viewer/mobile stack overhaul** (2026-07-12/13, PRs #178–#185, v0.0.36–v0.0.42): gone-session 410 + visible notice; 16px compact font (iOS zoom shear) + viewport containment + xterm 6.0.0 (DEC 2026); geometry re-claim + touch-drag→wheel; tmux-style smallest-wins viewer registry; geometry-epoch handshake + `/pty/redraw` + lazy reset; `pty-geom` journald diagnostics; headless phone-emulated repro vs real sessions. Stack proven correct; Claude Code's ~80-col minimum is upstream (codex clean at 38 cols). Details: sessions/2026-07-13-011925.
+
+**Windows CLI un-broken** (2026-07-13, PR #181): Unix-only `fcntl` top-level import in `backlog.py` (since v0.0.36) killed every Windows invocation; lazy import, install-smoke green on all three OS.
 **Backlog card ship-lifecycle provenance** (2026-07-12, PR #172): `horus backlog ship <slug> --pr N --sha SHA` stamps `status: shipped` + PR/SHA in place; `backlog list`/`fleet --backlog` hide shipped cards by default (`--all`/`--shipped` opt in); `close --check` warns when a card carries shipped provenance but is still `open`.
 **Capabilities table rendering + model-name normalization** (2026-07-12, PRs #167/#168/#169): `capabilities --models`/`--matrix` render an aligned model/tier/datums/last/price/capability/researched table (concise default drops LAST/RESEARCHED, `--verbose`/`--full` restores them); `horus run` canonicalizes captured model names via `datums.canonical_model_name` (adapter-resolved model preferred over a small fallback alias map), `horus datum migrate-names` migrates existing rows in place; `capabilities.toml` owner priors gained optional `price_in`/`price_out`/`capability_note`/`researched_at` plus a >14-day staleness `WARNING`. Real price/capability data for older models is still open (`.horus/backlog/older-models-in-roster.md`). `--stdout` JSON shape unchanged throughout.
 **Per-project capability record + Vision extraction** (2026-07-11/12, PRs #159/#163): `horus capabilities --project <name>` (or the self-document default from inside a registered project's root) regenerates that ONE project's record from its live `.horus/` sources and writes a provenance-stamped, gitignored `<project>/.horus/capabilities.json`; `capabilities.vision_lead` adds each project's markdown-stripped `## Vision` lead sentence as the catalog's `vision` field (`null` when absent), answering "what IS it?" alongside the Shipped-derived "what can it do?". v1 fleet-wide `horus capabilities`/`--models` unchanged; see Rules for the freshness-reconciliation invariant.
