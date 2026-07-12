@@ -71,6 +71,26 @@ FEATURES_SIX_LANE = """# Features
 | Widget sync | not yet |
 """
 
+# A PRD with a `## Vision` section, modeled on the agentic-ttrpg orientation gap:
+# the runtime fact ("Claude Code as the runtime, no app to deploy") lives only
+# here, not in any Shipped bullet.
+DELTA_PRD = """---
+status: active
+---
+
+# delta — PRD
+
+## Vision
+
+A tabletop RPG engine that runs entirely inside **Claude Code as the runtime** — no
+app to deploy, no API keys. The rulebook is grown: rules are proposed by the AI and
+ratified by the table.
+
+## Shipped
+
+- **Map canvas** renders tokens and fog of war.
+"""
+
 # A PRD with wrapped bullets in Shipped — regression test for truncation bug.
 GAMMA_PRD_WRAPPED_BULLETS = """---
 status: active
@@ -146,6 +166,24 @@ def test_six_lane_shipped_lines_from_features_table():
 
 
 # ---------------------------------------------------------------------------
+# Vision extraction — the "what IS it?" one-liner, not the whole section.
+# ---------------------------------------------------------------------------
+
+
+def test_vision_lead_extracts_lead_sentence_not_whole_section():
+    body = capabilities.frontmatter.parse(DELTA_PRD).body
+    assert capabilities.vision_lead(body) == (
+        "A tabletop RPG engine that runs entirely inside Claude Code as the runtime "
+        "— no app to deploy, no API keys."
+    )
+
+
+def test_vision_lead_none_when_section_absent():
+    body = capabilities.frontmatter.parse(ALPHA_PRD).body
+    assert capabilities.vision_lead(body) is None
+
+
+# ---------------------------------------------------------------------------
 # CLI-surface extraction
 # ---------------------------------------------------------------------------
 
@@ -204,22 +242,39 @@ def test_related_commands_matches_whole_phrase_only():
 def test_build_project_catalog_prd_layer_with_cross_reference():
     catalog = capabilities.build_project_catalog("horus-harness", "/x/horus-harness", ALPHA_PRD, None)
     assert catalog.layer == "prd"
+    assert catalog.vision is None  # ALPHA_PRD has no `## Vision` section
     assert len(catalog.capabilities) == 2
     assert catalog.capabilities[0].related_commands == ["horus fleet"]
     assert catalog.capabilities[1].related_commands == []
     assert catalog.cli_surface is not None and len(catalog.cli_surface) > 0
 
 
+def test_build_project_catalog_extracts_vision_one_liner():
+    catalog = capabilities.build_project_catalog("delta", "/x/delta", DELTA_PRD, None)
+    assert catalog.vision == (
+        "A tabletop RPG engine that runs entirely inside Claude Code as the runtime "
+        "— no app to deploy, no API keys."
+    )
+
+
 def test_build_project_catalog_six_lane_layer():
     catalog = capabilities.build_project_catalog("widget", "/x/widget", None, FEATURES_SIX_LANE)
     assert catalog.layer == "six-lane"
+    assert catalog.vision is None  # this fixture's features.md has no `## Vision` section
     assert [c.text for c in catalog.capabilities] == ["Widget import", "Widget export"]
     assert catalog.cli_surface is None  # no extractor registered for "widget"
+
+
+def test_build_project_catalog_six_lane_vision_best_effort():
+    features_with_vision = "## Vision\n\nA best-effort six-lane vision line. More detail follows.\n"
+    catalog = capabilities.build_project_catalog("widget", "/x/widget", None, features_with_vision)
+    assert catalog.vision == "A best-effort six-lane vision line."
 
 
 def test_build_project_catalog_no_ledger_found():
     catalog = capabilities.build_project_catalog("widget", "/x/widget", None, None)
     assert catalog.layer == "none"
+    assert catalog.vision is None
     assert catalog.capabilities == []
 
 
@@ -327,15 +382,16 @@ def test_render_project_json_carries_stamp_and_payload():
 
 
 def test_generate_project_payload_idempotent_but_stamp_refreshes(tmp_path):
-    project = tmp_path / "alpha-proj"
+    project = tmp_path / "delta"
     (project / ".horus").mkdir(parents=True)
-    (project / ".horus" / "PRD.md").write_text(ALPHA_PRD, encoding="utf-8")
+    (project / ".horus" / "PRD.md").write_text(DELTA_PRD, encoding="utf-8")
     out_path = tmp_path / "out" / "capabilities.json"
 
     first = json.loads(capabilities.generate_project(str(project), out_path))
     second = json.loads(capabilities.generate_project(str(project), out_path))
 
     assert first["project"] == second["project"]  # payload is a pure function of the sources
+    assert first["project"]["vision"]  # non-null and stable across runs, incl. the vision field
     assert first["schema_version"] == second["schema_version"] == 1
     assert first["horus_version"] == second["horus_version"]
     assert first["generated_at"] != second["generated_at"]  # stamp refreshes every run
