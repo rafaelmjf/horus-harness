@@ -3278,7 +3278,22 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     updateBar();
     window.addEventListener('horus:compactchange', updateBar);
   }
-  var lastSent=null;
+  var lastSent=null, fitted=false, attachGeom=null, epochChecked=false;
+  // Geometry-epoch handshake: the server announces the PTY's grid at attach.
+  // If OUR fit differs, the replayed scrollback was written for a different
+  // grid — rendering it corrupts the wrap/cursor state permanently (the
+  // scrambled-phone bug). Once both sides are known, wipe the screen and ask
+  // the TUI for a fresh full repaint at the size we just posted. The delay
+  // lets our /pty/resize apply first so the repaint targets OUR grid.
+  function maybeEpochReset(){
+    if(epochChecked || attachGeom===null || !fitted) return;
+    epochChecked=true;
+    if(term.cols+'x'+term.rows === attachGeom) return;  // replay matched our grid
+    setTimeout(function(){
+      term.reset();
+      post('/pty/redraw',{id:tid});
+    }, 250);
+  }
   // One PTY geometry serves every viewer (pty_host holds a single cols/rows),
   // so a phone attaching after a desktop viewer — or vice versa — can be stuck
   // rendering a grid the PTY no longer has: its own box never changed, so the
@@ -3296,10 +3311,12 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     if(document.hidden) return;
     if(!host || host.clientWidth<=0 || host.clientHeight<=0) return;
     try{ fit.fit(); }catch(_){ return; }
+    fitted=true;
     if(term.cols>0 && term.rows>0){
       var key=term.cols+'x'+term.rows;
       if(key!==lastSent){ lastSent=key; post('/pty/resize',{id:tid, vid:vid, cols:term.cols, rows:term.rows}); }
     }
+    maybeEpochReset();
   }
   var syncQueued=false;
   function requestSync(){
@@ -3307,7 +3324,10 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     requestAnimationFrame(function(){ syncQueued=false; sync(); });
   }
   term.onData(function(d){ post('/pty/input',{id:tid, data:d}); });
-  term.onResize(function(s){ if(s.cols>0 && s.rows>0){
+  // fitted-gate: xterm fires onResize with its 80x24 constructor default during
+  // init, before any fit has measured the real box — committing that briefly
+  // resized the shared PTY to 80x24 for every viewer (seen in the field).
+  term.onResize(function(s){ if(fitted && s.cols>0 && s.rows>0){
     var key=s.cols+'x'+s.rows;
     if(key!==lastSent){ lastSent=key; post('/pty/resize',{id:tid, vid:vid, cols:s.cols, rows:s.rows}); }
   }});
@@ -3374,6 +3394,7 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   }, {passive:false});
   host.addEventListener('touchend', function(){ touchY=null; }, {passive:true});
   var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid)+'&vid='+encodeURIComponent(vid));
+  es.addEventListener('geometry', function(e){ attachGeom=e.data; maybeEpochReset(); });
   es.addEventListener('output', function(e){ term.write(b64bytes(e.data)); });
   // Surface a dead stream instead of failing silently: a session that opens but shows
   // nothing (SSE blocked by an auth gate / proxy, session gone, or network dropped)
@@ -4474,6 +4495,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/pty/input",
             "/pty/resize",
             "/pty/release",
+            "/pty/redraw",
             "/pty/kill",
             "/pty/close",
         ):
@@ -4572,6 +4594,16 @@ class _Handler(BaseHTTPRequestHandler):
             pty_host.host.viewer_release(form.get("id", ""), form.get("vid", ""))
             _geom_log(form.get("id", ""), f"release vid={form.get('vid', '')}")
             self._no_content()
+            return
+        if parsed.path == "/pty/redraw":
+            # A viewer reset its screen (attached across a geometry change) and
+            # asks the TUI for a full repaint: double-SIGWINCH jiggle.
+            form = self._read_form()
+            if pty_host.host.redraw(form.get("id", "")):
+                _geom_log(form.get("id", ""), "redraw jiggle")
+                self._no_content()
+            else:
+                self._gone()
             return
         if parsed.path == "/pty/kill":
             pty_host.host.kill(self._read_form().get("id", ""))

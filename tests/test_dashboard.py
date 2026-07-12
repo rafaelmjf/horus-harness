@@ -1447,6 +1447,31 @@ def test_terminal_js_has_viewer_identity_wiring(tmp_path, monkeypatch):
     assert "/pty/release" in page and "sendBeacon" in page
 
 
+def test_pty_redraw_jiggles_live_session_410_when_gone(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    monkeypatch.setattr(dashboard.pty_host, "host", dashboard.pty_host.PtyHost())
+    assert _post("/pty/redraw", {"id": "pty-gone"})["status"] == 410
+    jiggled = []
+    monkeypatch.setattr(dashboard.pty_host.host, "redraw", lambda tid: jiggled.append(tid) or True)
+    assert _post("/pty/redraw", {"id": "pty-1"})["status"] == 204
+    assert jiggled == ["pty-1"]
+
+
+def test_terminal_js_geometry_epoch_handshake(tmp_path, monkeypatch):
+    """A viewer attaching across a geometry change must reset its screen and
+    request a repaint instead of rendering scrollback written for another grid;
+    and xterm's pre-fit 80x24 default must never be posted."""
+    _init(tmp_path, monkeypatch)
+    term = dashboard.pty_host.PtyTerminal(
+        term_id="pty-7", agent="claude", project_dir=tmp_path, title="demo · work",
+    )
+    page = dashboard.render_control([], [], [], terminals=[term])
+    assert "es.addEventListener('geometry'" in page
+    assert "maybeEpochReset" in page and "term.reset()" in page
+    assert "/pty/redraw" in page
+    assert "if(fitted && s.cols>0" in page   # onResize gated on a real fit
+
+
 def test_pty_resize_debounce_drop_is_still_204(tmp_path, monkeypatch):
     """resize() returns False for a debounced repeat on a LIVE session too — that
     must never read as session-gone (410 is gated on existence, not return value)."""
