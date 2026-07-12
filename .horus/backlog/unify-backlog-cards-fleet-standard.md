@@ -49,6 +49,21 @@ folder gets a cleanup card in its OWN backlog to collapse `bugs/` → `backlog/`
 has `bugs/`; a cleanup card was dropped there (`clean-up-bugs-folder-to-type-field`).
 Re-scan the fleet when this ships in case another project grew one.
 
+## Application mode (how harmonization actually happens — owner Q, 2026-07-12)
+
+Build the capability HERE (this card, one dispatch). Then applying the migration to
+each existing inline/`bugs/` project is **mechanical, not authoring** — so:
+- Keep `horus backlog migrate` **per-project** (operates on + commits to ONE repo).
+  Do NOT add a cockpit `--all` that writes to N repos from the overseer session — that
+  re-concentrates the cross-repo writes the cockpit boundary exists to prevent.
+- Because it's idempotent + deterministic, harmonizing is just *running the command*:
+  the owner runs the one-liner in each project dir (zero agent overhead), OR a cheap
+  mechanical worker (Haiku-tier) does it per project and commits there. NOT the cockpit
+  hand-editing other projects; NOT a heavyweight full session per trivial migration.
+- Projects to migrate at decision time: inline `## Backlog` → cards for horus-hub,
+  agentic-ttrpg, agentic-travel-guide, fabric; `bugs/` collapse for agentic-gym-coach
+  (its own cleanup card).
+
 ## Enables
 
 `fleet-backlog-view` (a deterministic fleet-wide backlog roll-up) is clean only once
