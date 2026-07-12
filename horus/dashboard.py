@@ -3184,16 +3184,28 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   if(typeof Terminal==='undefined') return null;
   function b64bytes(b64){var s=atob(b64);var a=new Uint8Array(s.length);
     for(var i=0;i<s.length;i++){a[i]=s.charCodeAt(i);} return a;}
-  var postErr=false;
+  var postErr=false, gone=false;
+  // The session no longer exists on the host (dashboard restarted, terminal
+  // reaped): stop posting, stop the SSE reconnect loop, and say so visibly —
+  // a stale viewer otherwise looks exactly like a terminal with a dead keyboard.
+  function sessionGone(){
+    if(gone) return; gone=true;
+    try{ es.close(); }catch(_){ }
+    term.write('\\r\\n\\x1b[31m[session gone — it no longer exists on the host (dashboard restarted?)]\\x1b[0m'
+      +'\\x1b[2m — this tab shows its last screen; close it and launch a new session, or reload the page.\\x1b[0m\\r\\n');
+    var d=document.querySelector('.term-tab[data-tid="'+tid+'"] .tdot'); if(d){d.className='tdot s-exited';}
+  }
   function post(path, obj){
+    if(gone) return;
     var body=Object.keys(obj).map(function(k){return k+'='+encodeURIComponent(obj[k]);}).join('&');
     // Surface a rejected keystroke/resize once, so "can't control it" isn't silent
     // (a blocked POST — auth/proxy/CSRF — otherwise looks exactly like a dead key).
     fetch(path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body})
-      .then(function(r){ if(!r.ok && !postErr && typeof term!=='undefined'){ postErr=true;
+      .then(function(r){ if(r.status===410){ sessionGone(); return; }
+        if(!r.ok && !postErr && typeof term!=='undefined'){ postErr=true;
         term.write('\\r\\n\\x1b[31m[input not delivered ('+r.status+')]\\x1b[0m\\x1b[2m — connection blocked (auth/proxy)? reload the page.\\x1b[0m\\r\\n'); } })
       .catch(function(){ if(!postErr && typeof term!=='undefined'){ postErr=true;
-        term.write('\\r\\n\\x1b[31m[input not delivered — network error]\\x1b[0m\\r\\n'); } });
+        term.write('\\r\\n\\x1b[31m[input not delivered — network error or expired access session]\\x1b[0m\\x1b[2m — reload the page.\\x1b[0m\\r\\n'); } });
   }
   var term=new Terminal({convertEol:false, cursorBlink:true, fontSize:13, scrollback:5000,
     fontFamily:'ui-monospace, SFMono-Regular, Consolas, monospace',
@@ -3311,6 +3323,11 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   // `live`, keeping the (possibly crashed) scrollback on screen for reading.
   var sawLive=false;
   es.addEventListener('status', function(e){
+    // 'unknown': the host has no such terminal (restart reaped it). Without this
+    // branch the frame was silently ignored and EventSource re-connected forever
+    // (each attempt a fresh 200 + 'unknown'), so neither the disconnect notice
+    // nor any other signal ever fired on a stale viewer.
+    if(e.data==='unknown'){ sessionGone(); return; }
     if(e.data==='live'){ sawLive=true; }
     if(e.data==='exited'){ term.write('\\r\\n\\x1b[2m[process exited]\\x1b[0m\\r\\n'); es.close();
       var d=document.querySelector('.term-tab[data-tid="'+tid+'"] .tdot'); if(d){d.className='tdot s-exited';}
@@ -4335,6 +4352,12 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    def _gone(self) -> None:
+        """410 for a PTY route whose terminal no longer exists on this host."""
+        self.send_response(410)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_POST(self) -> None:  # noqa: N802 (stdlib naming)
         parsed = urlparse(self.path)
         if not self._exposed_authorized(parsed.path):
@@ -4420,12 +4443,23 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/pty/input":
             # Keystrokes from an xterm tab → the PTY. Bytes are UTF-8 of the data field.
+            # A write to an unknown/dead terminal MUST NOT 204: a stale viewer (page
+            # kept alive across a dashboard restart) would type into a black hole
+            # with no signal — 410 lets the client surface "session gone".
             form = self._read_form()
-            pty_host.host.write(form.get("id", ""), form.get("data", "").encode("utf-8"))
-            self._no_content()
+            if pty_host.host.write(form.get("id", ""), form.get("data", "").encode("utf-8")):
+                self._no_content()
+            else:
+                self._gone()
             return
         if parsed.path == "/pty/resize":
             form = self._read_form()
+            term = pty_host.host.get(form.get("id", ""))
+            if term is None or not term.alive:
+                # resize() also returns False for debounce-drops, so gate 410 on
+                # existence/liveness, not on its return value.
+                self._gone()
+                return
             try:
                 pty_host.host.resize(form.get("id", ""), int(form.get("cols", 0)), int(form.get("rows", 0)))
             except ValueError:

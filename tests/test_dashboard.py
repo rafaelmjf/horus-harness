@@ -1373,6 +1373,67 @@ def test_pty_close_route_forgets_terminal(tmp_path, monkeypatch):
     assert closed == ["pty-3"]
 
 
+def test_pty_input_unknown_session_is_410_not_silent_204(tmp_path, monkeypatch):
+    """A stale viewer (page kept alive across a dashboard restart) must get a
+    signal: input to a gone terminal is 410, not a silently-swallowing 204."""
+    _init(tmp_path, monkeypatch)
+    monkeypatch.setattr(dashboard.pty_host, "host", dashboard.pty_host.PtyHost())
+    resp = _post("/pty/input", {"id": "pty-stale", "data": "ls"})
+    assert resp["status"] == 410
+
+
+def test_pty_input_live_session_is_204(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    written = []
+    monkeypatch.setattr(
+        dashboard.pty_host.host, "write",
+        lambda tid, data: written.append((tid, data)) or True,
+    )
+    resp = _post("/pty/input", {"id": "pty-1", "data": "hi"})
+    assert resp["status"] == 204
+    assert written == [("pty-1", b"hi")]
+
+
+def test_pty_resize_unknown_or_dead_session_is_410(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    host = dashboard.pty_host.PtyHost()
+    host._terms["pty-dead"] = dashboard.pty_host.PtyTerminal(
+        term_id="pty-dead", agent="claude", project_dir=tmp_path, alive=False,
+    )
+    monkeypatch.setattr(dashboard.pty_host, "host", host)
+    assert _post("/pty/resize", {"id": "pty-missing", "cols": "80", "rows": "24"})["status"] == 410
+    assert _post("/pty/resize", {"id": "pty-dead", "cols": "80", "rows": "24"})["status"] == 410
+
+
+def test_pty_resize_debounce_drop_is_still_204(tmp_path, monkeypatch):
+    """resize() returns False for a debounced repeat on a LIVE session too — that
+    must never read as session-gone (410 is gated on existence, not return value)."""
+    _init(tmp_path, monkeypatch)
+    host = dashboard.pty_host.PtyHost()
+    host._terms["pty-1"] = dashboard.pty_host.PtyTerminal(
+        term_id="pty-1", agent="claude", project_dir=tmp_path,
+    )
+    monkeypatch.setattr(dashboard.pty_host, "host", host)
+    monkeypatch.setattr(host, "resize", lambda tid, cols, rows: False)
+    resp = _post("/pty/resize", {"id": "pty-1", "cols": "80", "rows": "24"})
+    assert resp["status"] == 204
+
+
+def test_terminal_js_surfaces_gone_sessions(tmp_path, monkeypatch):
+    """The viewer must handle both gone-session signals: the 'unknown' SSE status
+    (previously ignored → silent infinite reconnect loop) and a 410 input/resize
+    POST (previously a swallowed 204 → typing into a black hole)."""
+    _init(tmp_path, monkeypatch)
+    term = dashboard.pty_host.PtyTerminal(
+        term_id="pty-7", agent="claude", project_dir=tmp_path, title="demo · work",
+    )
+    page = dashboard.render_control([], [], [], terminals=[term])
+    assert "e.data==='unknown'" in page      # stale-id SSE frame handled
+    assert "r.status===410" in page          # gone-session POST handled
+    assert "sessionGone" in page             # shared one-time notice + es.close()
+    assert "[session gone" in page           # visible, not silent
+
+
 def test_open_terminals_reaps_long_dead_sessions(tmp_path, monkeypatch):
     """A session that exited past the grace never resurfaces as a ghost tab."""
     import time as _time
