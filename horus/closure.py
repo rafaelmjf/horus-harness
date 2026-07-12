@@ -16,7 +16,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from horus import codex_usage, frontmatter, routines
+from horus import backlog, codex_usage, frontmatter, routines
 from horus.continuity import Finding, check_project, recent_sessions
 from horus.instructions import check_drift
 
@@ -88,11 +88,11 @@ def freshness_gate(root: Path) -> list[Finding]:
     """The dashboard-freshness subset, for `horus close --check` / a CI pre-merge gate:
     are the lanes the dashboard renders current with this session?
 
-    Deliberately just :func:`routines.freshness_signals` — the reliable per-field
-    checks. The "work commits since summary" nudge (:func:`_summary_freshness`) and
-    usage/drift signals stay in the full `horus close`; they're informational and the
-    former mtime-nags within the very session being closed, so they don't gate."""
-    return routines.freshness_signals(root)
+    It includes the reliable per-field freshness checks plus deterministic card
+    lifecycle drift. The "work commits since summary" nudge (:func:`_summary_freshness`)
+    and usage/drift signals stay in the full `horus close`; they're informational and
+    the former mtime-nags within the very session being closed, so they don't gate."""
+    return routines.freshness_signals(root) + backlog.hygiene_findings(root)
 
 
 def _enforce_push(root: Path) -> bool:

@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "PR #169 (concise-cli-matrix-output) MERGED. This session implemented the authorized `mobile-terminal-ux-hardening` card (docs/terminal-mobile-desktop-diagnosis.md is the spec) — the sizing+lifecycle+controls cluster (symptoms 1,3,4,5,6,7,8; symptom 2 explicitly excluded, its own card) as one pass over dashboard.py's terminal CSS + _XTERM_ATTACH_JS + _TERMINAL_JS, plus pty_host.py resize dedupe/debounce for the shared-PTY-geometry constraint (doc §5.4). Built scripts/terminal-repro/ (in-repo headless-CDP harness, Node + chrome-headless-shell, no npm deps) as the reusable verification gate — 16/16 assertions pass (desktop load posts a real fit not 80x24, ResizeObserver refits on a host-box change with no window resize, tabs reachable via a new fullscreen-only mini-switcher, live matchMedia change drops fullscreen without reload, two-tap close guard, pop-out prefers in-app fullscreen on touch). 1218 tests green (2 new). PR #171 (branch mobile-terminal-ux-hardening) open against main, required CI green — NOT merged, card NOT marked shipped, per the task's STOP-AT-PR boundary: overseer reproduces the CDP gate, owner does on-device verify (glyph legibility at high DPR, touch-scroll feel, soft-keyboard, symptom 2) before accept."
-next_action: "Overseer: reproduce the CDP gate on PR #171 (scripts/terminal-repro/). Owner: on-device verify the items above; if all pass, merge PR #171, then mark mobile-terminal-ux-hardening.md shipped in this file. After that, the next distinct pick is symptom 2's own card (mobile-terminal-interaction-regression.md, folded-in but tracked separately — exposed-mode/Access/same-origin POST-path investigation, not sizing). Other open cards: model-roster-dashboard-tab, split-gpt-variants-per-pricing, openwiki-vs-self-documenting-research, model-ranking-synthesis. [tier: Sonnet.]"
-next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest .horus/sessions/ note. Check PR #171 (mobile-terminal-ux-hardening) merge status; if merged, verify and archive its session note, then pick up mobile-terminal-interaction-regression.md's separate POST-path investigation (symptom 2) or model-roster-dashboard-tab. If PR #171 is still open, do NOT merge it yourself unless the user explicitly asks — check whether the overseer/owner verification landed. [tier: Sonnet]"
-execution_recommendation: "continue-as-is for symptom 2's investigation (single-focus root-cause hunt on the exposed POST path, Sonnet) — delegation would buy only context hygiene at a higher orchestration cost."
+current_focus: "Backlog-card ship lifecycle hygiene implemented on branch card-lifecycle-provenance: `horus backlog ship <slug> --pr N --sha SHA` stamps status + provenance in place; active list/fleet views hide shipped cards; `close --check` now warns on lingering-done and shipped-but-open cards. Full pytest: 1223 passed. PR pending; do not mark this implementation card shipped until merged."
+next_action: "Open/monitor the lifecycle-hygiene PR. The recurring close gate deliberately reports five legacy cards with a `shipped:` note but `status: open`; resolve each only after confirming its merged PR/SHA. The originating implementation card is tracked outside this repo."
+next_prompt: "Resume Horus. FIRST git fetch --all --prune and read .horus/PRD.md plus the newest session note. Check the card-lifecycle-provenance PR/CI; do not merge without explicit user direction. Then triage the five legacy shipped-but-open card warnings using real merge provenance."
+execution_recommendation: "continue-as-is — the next lifecycle work is bounded provenance cleanup after merge verification; delegation would buy only context hygiene."
 last_updated: 2026-07-12
 horus_min_version: 0.0.26
 ---
@@ -229,13 +229,14 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 ## Structure contract (prototype)
 
 - **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines: new
-  shipped items are one line; done backlog items are deleted (git remembers); bugs get
-  appended to the backlog as found.
+  shipped items are one line; card-backed work stays in `backlog/` as `status: shipped`
+  with PR/SHA provenance; bugs get appended to the backlog as found.
 - **`backlog/` (card pilot 2026-07-10, claim gate 2026-07-11):** one card per item,
   `status`/`priority`/`tier`/`created` frontmatter plus optional `parallel: safe|exclusive` /
   `surface: <globs>`; claim via `horus backlog claim <name>` (warns, `--force` to override on
-  overlap/exclusive); done = delete the card + a Shipped line here. No stale-`claimed` sweep
-  exists — a real gap, not yet built.
+  overlap/exclusive); after merge, `horus backlog ship <name> --pr N --sha SHA` flips the card
+  in place and records provenance. `close --check` warns on lingering-done or shipped-but-open
+  cards. No stale-`claimed` sweep exists — a real gap, not yet built.
 - **`sessions/`** unchanged: one note per session (`horus session new`), operational
   facts welcome (gates verified, tokens to rotate, dead ends). Distilled notes →
   `sessions/archive/` (local).
