@@ -6,7 +6,7 @@ created: 2026-07-12
 created_by: overseer
 parallel: true
 surface: horus/cli.py, horus/backlog.py, horus/fleet or status renderer
-shipped:
+shipped: "2026-07-12 — capability built, PR open (branch feat/fleet-backlog-view). New `horus/fleet_backlog.py`: `horus fleet --backlog` reads every registered project's `.horus/backlog/` cards (excludes stray `status: done` cards left behind despite the delete-on-completion contract), sorts by priority then name, `--type`/`--project` filters, `--stdout` JSON or a human-readable grouped default. Projects still on inline PRD `## Backlog` (not yet migrated per PR #164) or missing `.horus/backlog/` entirely degrade to a skip-with-note row via a new `backlog_migrate.inline_backlog_item_count` best-effort counter — never crash that project's row. 24 new tests (20 in test_fleet_backlog.py, 4 in test_backlog_migrate.py), full suite green (1178). Verified against the real 7-project fleet registry: card-per-file projects roll up correctly, inline-backlog projects show a migrate-hint note, `--stdout` is valid JSON."
 ---
 
 # `horus fleet --backlog` — deterministic fleet-wide backlog roll-up

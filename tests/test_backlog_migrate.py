@@ -191,3 +191,49 @@ def test_migrate_no_cockpit_all_flag_exists():
 
     sig = inspect.signature(backlog_migrate.migrate_inline_backlog)
     assert "all" not in sig.parameters
+
+
+# ---------------------------------------------------------------------------
+# inline_backlog_item_count — best-effort count for horus/fleet_backlog.py
+# ---------------------------------------------------------------------------
+
+
+def test_inline_backlog_item_count_counts_items(tmp_path):
+    _write_prd(tmp_path, _FIXTURE_PRD)
+    assert backlog_migrate.inline_backlog_item_count(tmp_path) == 4
+
+
+def test_inline_backlog_item_count_zero_when_pointer_present(tmp_path):
+    from horus import templates
+
+    prd = f"""---
+status: active
+---
+
+# demo — PRD
+
+## Backlog
+
+{templates.backlog_pointer_block()}
+
+## Shipped
+"""
+    _write_prd(tmp_path, prd)
+    assert backlog_migrate.inline_backlog_item_count(tmp_path) == 0
+
+
+def test_inline_backlog_item_count_none_when_no_prd(tmp_path):
+    assert backlog_migrate.inline_backlog_item_count(tmp_path) is None
+
+
+def test_inline_backlog_item_count_none_when_no_backlog_heading(tmp_path):
+    prd = """---
+status: active
+---
+
+# demo — PRD
+
+## Shipped
+"""
+    _write_prd(tmp_path, prd)
+    assert backlog_migrate.inline_backlog_item_count(tmp_path) is None
