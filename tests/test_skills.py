@@ -80,6 +80,29 @@ def test_delegation_rubric_is_the_shared_single_source_of_truth():
     assert "research/omnigent.md" in rubric.content
 
 
+def test_delegation_rubric_keeps_older_capable_models_in_roster():
+    # Fold-in ask (delegation-matrix-display card): don't drop a model from the
+    # ladder on recency alone — pick by capability-for-the-task and keep
+    # gathering datums on it.
+    rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
+    assert "older-but-capable" in rubric.content.lower()
+    assert "not by release date" in rubric.content.lower() or "not recency" in rubric.content.lower()
+
+
+def test_delegation_shape_tiers_and_verification_dial_are_structured_and_single_sourced():
+    # `horus capabilities --matrix` reads these tables directly (see cli.py /
+    # datums.py) instead of forking a duplicate copy of the rubric's mapping.
+    shapes = {row["shape"] for row in skills.DELEGATION_SHAPE_TIERS}
+    assert {"scoped-impl", "novel", "mechanical"} <= shapes
+    for row in skills.DELEGATION_SHAPE_TIERS:
+        assert row["tier_role"] and row["description"]
+
+    trusts = {row["tier_trust"] for row in skills.DELEGATION_VERIFICATION_DIAL}
+    assert {"proven", "unproven", "runtime"} <= trusts
+    for row in skills.DELEGATION_VERIFICATION_DIAL:
+        assert row["verification"] and row["description"]
+
+
 def test_both_consumer_skills_import_the_shared_rubric():
     # The logic lives once, in the rubric; each skill loads it by relative path.
     for name in ("execution-decision", "dispatch-decision"):

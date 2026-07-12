@@ -739,7 +739,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -801,6 +801,13 @@ Trust is READ from the data, never pinned to a model name:
   *"do not dispatch near usage ceiling"* → fine for a crisp scoped task with
   headroom; a poor fit for a large/loose task; off the table near the usage
   ceiling.
+- **Keep older-but-capable models in the roster.** A prior-frontier model
+  (yesterday's `gpt-5.5`/`sonnet-4.6`-style predecessor) does not stop being
+  capable the day a newer model ships — it may still be the strongest AND
+  cheapest fit for scoped/mechanical work. Don't drop a model from the ladder on
+  recency alone: pick by capability-for-the-task, not by release date, and keep
+  gathering datums on it so the ladder reflects measured reality instead of
+  assumption.
 - **Match tier to shape** (this mirrors the managed-block model-tier rule; the
   data tells you which concrete model fills each role now and how proven it is):
   design / ambiguity / the verify gate → the design tier (`opus-4.8`); most
@@ -867,6 +874,48 @@ This rubric is **structure-agnostic** — it reads live `horus capabilities
 (six-lane) and v3 (`PRD.md`) projects consume it identically. Nothing here
 changes with the continuity structure.
 """
+
+# Shape -> tier-role mapping (the rubric's Step 3/4 essence) and tier-trust ->
+# verification-depth dial (Step 5), as structured data. This is the single source
+# `horus capabilities --matrix` reads to render the ladder — the CLI command joins
+# these tables with the live roll-up from `datums.build_model_rollup` rather than
+# forking a third copy of the rubric's logic. Keep this in sync with the prose
+# above when either changes; the two describe the same mapping.
+DELEGATION_SHAPE_TIERS: list[dict[str, str]] = [
+    {
+        "shape": "novel",
+        "tier_role": "design / ambiguity / verify gate",
+        "description": "Ambiguous, exploratory, or design work — also the verify gate.",
+    },
+    {
+        "shape": "scoped-impl",
+        "tier_role": "scoped-impl lead",
+        "description": "Most scoped implementation work — clear gate, fenceable scope.",
+    },
+    {
+        "shape": "mechanical",
+        "tier_role": "mechanical",
+        "description": "Mechanical, verifiable sweeps — never the judgment gate.",
+    },
+]
+
+DELEGATION_VERIFICATION_DIAL: list[dict[str, str]] = [
+    {
+        "tier_trust": "proven",
+        "verification": "observe-CI",
+        "description": "Proven tier + gate green -> just observe the gate.",
+    },
+    {
+        "tier_trust": "unproven",
+        "verification": "CI+probe",
+        "description": "Unproven tier -> observe the gate AND add one independent probe.",
+    },
+    {
+        "tier_trust": "runtime",
+        "verification": "owner-eyeball",
+        "description": "Runtime/visual surface -> default to asking the owner to eyeball it.",
+    },
+]
 
 
 _EXECUTION_DECISION_SKILL = """\
@@ -1041,7 +1090,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 3, _INFER_SKILL),
     Skill("horus-execution", 8, _EXECUTION_SKILL),
-    Skill("delegation-rubric", 1, _DELEGATION_RUBRIC_SKILL),
+    Skill("delegation-rubric", 2, _DELEGATION_RUBRIC_SKILL),
     Skill("execution-decision", 1, _EXECUTION_DECISION_SKILL),
     Skill("dispatch-decision", 1, _DISPATCH_DECISION_SKILL),
 )

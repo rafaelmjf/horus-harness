@@ -450,3 +450,78 @@ def rollup_to_dict(rollups: list[ModelRollup]) -> dict:
         ),
         "models": [asdict(r) for r in rollups],
     }
+
+
+# ---------------------------------------------------------------------------
+# Delegation matrix — the tier ladder joined with the rubric's shape/verification
+# tables (``horus capabilities --matrix``). DISPLAY-ONLY, like the roll-up above:
+# these functions take the shape/verification tables as plain data (owned by
+# ``horus.skills``) so this module stays free of a skills.py import; the CLI does
+# the joining. No pick/route field anywhere — that boundary is asserted in tests.
+# ---------------------------------------------------------------------------
+
+
+def render_delegation_matrix(
+    rollups: list[ModelRollup],
+    shape_tiers: list[dict],
+    verification_dial: list[dict],
+) -> str:
+    """Human-readable delegation decision matrix. DISPLAY-ONLY: renders the tier
+    ladder (owner priors + measured datums) next to the rubric's shape->tier and
+    tier-trust->verification tables. Never picks or routes a model."""
+    lines = [
+        "Delegation decision matrix — DISPLAY-ONLY (renders the rubric; never picks or routes a model).",
+        f"Sources: measured datums {datums_path()} · owner priors {priors_path()}",
+        "",
+        "Tier ladder (owner priors + measured datums):",
+    ]
+    if not rollups:
+        lines.append("  (no models — no datums recorded and no owner priors seeded yet)")
+    else:
+        for r in rollups:
+            tier = r.tier or "—"
+            clean = f"{r.clean_count} clean / {r.closed_datums} closed / {r.total_datums} total"
+            lines.append(f"  {r.model:<12} tier: {tier}")
+            lines.append(f"  {'':<12} datums: {clean}")
+            if r.last_outcomes:
+                lines.append(f"  {'':<12} last: {' '.join(r.last_outcomes)}")
+            if r.caution:
+                lines.append(f"  {'':<12} caution: {r.caution}")
+            if r.guard:
+                lines.append(f"  {'':<12} guard: {r.guard}")
+    lines.append("")
+    lines.append("Shape -> tier role (delegation-rubric Step 3/4):")
+    for row in shape_tiers:
+        lines.append(f"  {row['shape']:<12} -> {row['tier_role']}")
+        lines.append(f"  {'':<12}    {row['description']}")
+    lines.append("")
+    lines.append("Tier-trust -> verification depth (delegation-rubric Step 5):")
+    for row in verification_dial:
+        lines.append(f"  {row['tier_trust']:<10} -> {row['verification']}")
+        lines.append(f"  {'':<10}    {row['description']}")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def delegation_matrix_to_dict(
+    rollups: list[ModelRollup],
+    shape_tiers: list[dict],
+    verification_dial: list[dict],
+) -> dict:
+    """Machine-readable delegation matrix (for ``--stdout``/agent consumers).
+
+    Joins the live tier ladder (``tiers`` — owner priors + measured datums, the
+    same rows as ``rollup_to_dict``) with the rubric's ``roles`` (shape->tier)
+    and ``verification_dial`` (tier-trust->verification) tables. DISPLAY-ONLY:
+    no pick/route field anywhere — the agent applies this, nothing here
+    auto-selects a model or auto-routes a dispatch.
+    """
+    return {
+        "note": (
+            "Delegation decision matrix — DISPLAY-ONLY. Joins measured datums + owner "
+            "priors with the delegation-rubric's shape->tier and verification tables. "
+            "Advisory: the agent applies this; it never auto-picks or auto-routes a model."
+        ),
+        "tiers": [asdict(r) for r in rollups],
+        "roles": shape_tiers,
+        "verification_dial": verification_dial,
+    }
