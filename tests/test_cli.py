@@ -860,6 +860,33 @@ def test_upgrade_project_cli_apply_writes(tmp_path, monkeypatch, capsys):
     assert "Applying Horus project projections" in capsys.readouterr().out
 
 
+def test_upgrade_project_apply_untracks_legacy_checkpoint_marker(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import initialize
+
+    subprocess.run(["git", "-C", str(tmp_path), "init"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@example.com"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "Tester"], check=True)
+    initialize.init_project(tmp_path, assume_yes=True)
+    marker = tmp_path / ".horus" / ".consolidated-to"
+    marker.write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-f", ".horus/.consolidated-to"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "legacy init"], check=True, capture_output=True)
+    marker.write_text("new\n", encoding="utf-8")
+
+    rc = main(["upgrade-project", "--path", str(tmp_path), "--apply", "--no-hooks", "--no-skills", "--no-instructions"])
+
+    assert rc == 0
+    tracked = subprocess.run(
+        ["git", "-C", str(tmp_path), "ls-files", ".horus/.consolidated-to"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    assert tracked == ""
+    assert marker.read_text(encoding="utf-8") == "new\n"
+    assert "stopped tracking generated continuity state" in capsys.readouterr().out
+
+
 def test_upgrade_project_all_applies_to_every_registered_project(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     from horus import initialize

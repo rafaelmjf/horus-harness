@@ -122,6 +122,26 @@ def test_checkpoint_gate_warns_on_dirty_tree(tmp_path, monkeypatch):
     assert any(level == "warn" and "uncommitted change" in m for level, m in msgs)
 
 
+def test_checkpoint_gate_ignores_tracked_marker_rewritten_by_harvest(tmp_path, monkeypatch):
+    """A legacy tracked marker must not make the checkpoint hook warn about itself."""
+    _setup(tmp_path, monkeypatch)
+    marker = tmp_path / ".horus" / closure.CHECKPOINT_MARKER
+    marker.write_text("legacy\n", encoding="utf-8")
+    _run(tmp_path, "add", "-f", ".horus/.consolidated-to")
+    _run(tmp_path, "commit", "-m", "track legacy marker")
+    _work_commit(tmp_path, "app.py", "print(1)\n", "work after legacy closure")
+
+    closure.harvest_checkpoint(tmp_path)
+
+    assert " M .horus/.consolidated-to" in subprocess.run(
+        ["git", "-C", str(tmp_path), "status", "--short"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    msgs = _checkpoint_msgs(tmp_path)
+    assert any(level == "ok" and "working tree clean" in message for level, message in msgs)
+    assert not any(level == "warn" and "uncommitted change" in message for level, message in msgs)
+
+
 def test_checkpoint_gate_warns_on_unpushed_commits(tmp_path, monkeypatch):
     a, _ = _setup_two_clones(tmp_path, monkeypatch)
     # a is at origin/master; make a local commit that is not pushed.

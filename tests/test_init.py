@@ -37,6 +37,7 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     assert "!sessions/.gitkeep" in gitignore
     assert "temp/*" in gitignore
     assert "!temp/.gitkeep" in gitignore
+    assert ".consolidated-to" in gitignore
     assert not (tmp_path / ".gitignore").exists()  # no root .gitignore managed
     assert any(s == "created" for s in statuses.values())
     # Native hooks are part of the init projection set, so onboarding commits the
@@ -190,6 +191,9 @@ def test_init_is_idempotent(tmp_path, monkeypatch):
     ) == 1
     assert (tmp_path / ".horus" / ".gitignore").read_text(encoding="utf-8").count(
         "temp/*"
+    ) == 1
+    assert (tmp_path / ".horus" / ".gitignore").read_text(encoding="utf-8").count(
+        ".consolidated-to"
     ) == 1
 
 
