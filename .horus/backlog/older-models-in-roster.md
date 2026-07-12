@@ -5,38 +5,82 @@ tier: haiku
 created: 2026-07-12
 created_by: overseer
 parallel: true
-surface: capabilities.toml (owner priors), dispatch methodology
+surface: capabilities.toml (owner priors), horus/datums.py, horus capabilities --models/--matrix
 shipped:
+  - 2026-07-12: parse optional price/capability_note/researched_at fields on the
+    capabilities.toml model-prior schema (back-compat); surface pricing +
+    capability note in `horus capabilities --models`/`--matrix`; non-blocking
+    staleness WARNING (>14d or missing researched_at) on those display commands.
+    Web-research refresh itself is a separate agent-run pass, not this PR.
 ---
 
-# Keep older-but-capable models in the calibration roster
+# Pricing-aware model-roster research process
 
-**Owner methodology point (2026-07-12):** models that were frontier a few months ago
-(gpt-5.5/5.4, sonnet-4.6, etc.) are likely still strong — and cheaper — for much of
-the current scoped/mechanical work. Just as today's frontier will be "old" in a few
-months, age alone is not a reason to dismiss. Judge by capability-for-the-task, not
-recency; gather datums.
+**Owner redefinition (2026-07-12):** this card was originally "hand-seed old
+models into the roster." The owner reframed it: the roster question is never
+"is this model old?" — it's **"is this model CHEAPER than a current model at
+comparable capability?"** An older/prior-frontier model earns roster space only
+when price-for-capability says so. Age alone is never the reason to include OR
+dismiss a model; today's frontier will be a candidate "older" model in a few
+months, judged the same way.
 
-## Scope (mostly owner-prior data, not code)
+## Architecture (owner-confirmed)
 
-- Add owner-priors to `~/.horus/capabilities.toml` for the older models the owner
-  wants in rotation, tiered honestly (e.g. `tier = "prior-frontier / value"` with a
-  `strength`/`caution` note). `capabilities.toml` is hand-edited and explicitly
-  invites this — no code change to seed priors.
-  - Needs owner to confirm the exact **model keys/aliases** that are actually
-    reachable through the Claude/Codex adapters (`horus run --model <alias>`), so the
-    prior keys match the datum keys the adapters emit.
-- Then dispatch a few well-matched scoped tasks to each and `horus datum close` them —
-  re-tag from prior to measured as datums accrue (~3–5 clean).
+The AGENT does the web research on refresh and writes the data; the CLI only
+READS it and warns if stale. Concretely:
+
+- **Single source of truth**: the existing owner-priors file
+  `~/.horus/capabilities.toml` — extended, not forked. Three new optional
+  per-model fields, all back-compatible (a file/model without them parses and
+  renders exactly as before):
+  - `price_in` / `price_out` — USD per Mtok (million tokens), input/output.
+  - `capability_note` — a short free-text line on what the model is actually
+    good for, so price reads next to capability, not in isolation.
+  - `researched_at` — an ISO date (`YYYY-MM-DD`) stamping when that price/note
+    was last checked.
+- **Refresh = an agent process, not CLI code.** Refreshing the roster means: an
+  agent web-searches currently-active Claude + GPT/Codex models for current
+  pricing and rough capability, applies the price-for-capability filter below,
+  and hand-writes the resulting `price_in`/`price_out`/`capability_note`/
+  `researched_at` fields into `capabilities.toml`. This is a **separate run**,
+  done by an agent with web access — the CLI itself never fetches the network.
+  This PR ships the reading/display/staleness code only; a later run populates
+  real data.
+- **Staleness is a nudge, never a gate.** `horus capabilities --models` and
+  `--matrix` compute the freshest `researched_at` across all models and, when
+  it's more than 14 days old (or no model has one at all), print
+  `WARNING: model-roster priors are N days old — consider refreshing` (or the
+  "no researched_at" variant) to stderr. The command still exits 0 and still
+  prints its normal output — nothing blocks on this.
+
+## The price-for-capability filter (methodology, for the refresh run)
+
+For each candidate older/prior-frontier model, the refresh agent should judge:
+capability roughly comparable to a model already in rotation, AND price
+meaningfully lower (input or output per Mtok) → keep/add it with a
+`capability_note` explaining the comparable use case. Otherwise drop it — being
+merely *older* is not a qualifying signal either direction. This is the same
+judgment the `delegation-rubric` skill's tier-trust ladder already leans on (see
+`.claude/skills/delegation-rubric/SKILL.md` Step 1/3); the refresh run is what
+keeps that ladder's price/capability inputs current. No code encodes this
+filter — it is agent judgment applied at refresh time, same as `tier` /
+`strength` / `caution` already are.
 
 ## Relationship
 
-The *principle* (older models stay in the roster) is encoded in the
-`delegation-rubric` template by the `delegation-matrix-display` card. This card is the
-*data*: the actual priors + the datum-gathering. Also mirrored into the cockpit
-dispatch discipline (horus-agent CLAUDE.md/AGENTS.md).
+The *principle* (older models stay in the roster when cheap-for-capability) is
+encoded in the `delegation-rubric` skill template. This card is the *process*:
+the schema that carries price/capability data, the display surface, and the
+staleness nudge that reminds an agent to re-run the research. The actual
+price/capability datums for specific models are **not** this card's job to fill
+in — that's the separate agent research run described above.
 
 ## Verification
 
-`capabilities.toml` parses; `capabilities --models` renders the added models with
-their priors; a dispatch to one produces a datum keyed to the same model name.
+`capabilities.toml` with `price_in`/`price_out`/`capability_note`/
+`researched_at` set renders pricing and capability note in both `--models` and
+`--matrix`, and prints the staleness WARNING when `researched_at` is >14 days
+old; a `capabilities.toml` without any of the new fields renders identically to
+before (no crash, no warning suppressed incorrectly — absent `researched_at`
+across all models still warns, since silence about freshness is itself a
+staleness signal); the warning never changes the command's exit code (still 0).

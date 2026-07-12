@@ -13,6 +13,7 @@ recommends nothing — is asserted directly.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -260,3 +261,181 @@ def test_capabilities_matrix_has_no_pick_or_route_field(tmp_path, monkeypatch, c
                 _walk_keys(item)
 
     _walk_keys(data)
+
+
+# --- price-for-capability priors (older-models-in-roster) --------------------
+
+def test_priors_price_capability_fields_parsed(tmp_path):
+    path = tmp_path / "capabilities.toml"
+    path.write_text(
+        '[models."old-but-cheap"]\n'
+        'tier = "prior-frontier / value"\n'
+        'price_in = 1.5\n'
+        'price_out = 6.0\n'
+        'capability_note = "still strong for scoped mechanical work"\n'
+        'researched_at = "2026-07-01"\n',
+        encoding="utf-8",
+    )
+    rollups = datums.build_model_rollup([], datums.load_priors(path))
+    r = rollups[0]
+    assert r.price_in == 1.5 and r.price_out == 6.0
+    assert r.capability_note == "still strong for scoped mechanical work"
+    assert r.researched_at == "2026-07-01"
+
+
+def test_researched_at_accepts_native_toml_date(tmp_path):
+    # TOML lets a hand-editor write an unquoted date; tomllib parses that as a
+    # native `date`, not a string — it must still normalize to an ISO string.
+    path = tmp_path / "capabilities.toml"
+    path.write_text(
+        '[models."old-but-cheap"]\n'
+        "researched_at = 2026-07-01\n",
+        encoding="utf-8",
+    )
+    rollups = datums.build_model_rollup([], datums.load_priors(path))
+    assert rollups[0].researched_at == "2026-07-01"
+
+
+def test_priors_without_new_fields_render_back_compat(tmp_path):
+    # A model prior with none of the new fields must parse and render exactly
+    # as before — no price/capability/researched lines, no crash.
+    path = tmp_path / "capabilities.toml"
+    path.write_text('[models."plain"]\ntier = "handmade"\n', encoding="utf-8")
+    rollups = datums.build_model_rollup([], datums.load_priors(path))
+    r = rollups[0]
+    assert r.price_in is None and r.price_out is None
+    assert r.capability_note is None and r.researched_at is None
+    text = datums.render_model_rollup(rollups)
+    assert "price:" not in text and "capability:" not in text and "researched:" not in text
+    matrix = datums.render_delegation_matrix(rollups, [], [])
+    assert "price:" not in matrix and "capability:" not in matrix and "researched:" not in matrix
+
+
+def test_render_model_rollup_shows_price_and_capability_when_present(tmp_path):
+    path = tmp_path / "capabilities.toml"
+    path.write_text(
+        '[models."old-but-cheap"]\n'
+        'tier = "prior-frontier / value"\n'
+        'price_in = 1.5\n'
+        'price_out = 6.0\n'
+        'capability_note = "still strong for scoped mechanical work"\n'
+        'researched_at = "2026-07-01"\n',
+        encoding="utf-8",
+    )
+    rollups = datums.build_model_rollup([], datums.load_priors(path))
+    text = datums.render_model_rollup(rollups)
+    assert "price: $1.5 in / $6 out per Mtok" in text
+    assert "capability: still strong for scoped mechanical work" in text
+    assert "researched: 2026-07-01" in text
+    matrix = datums.render_delegation_matrix(rollups, [], [])
+    assert "price: $1.5 in / $6 out per Mtok" in matrix
+    assert "capability: still strong for scoped mechanical work" in matrix
+
+
+# --- staleness warning (non-blocking nudge) -----------------------------------
+
+def test_staleness_warning_none_when_fresh():
+    now = datetime(2026, 7, 12, tzinfo=timezone.utc)
+    rollups = [datums.ModelRollup(model="m", researched_at="2026-07-05")]  # 7 days old
+    assert datums.staleness_warning(rollups, now=now) is None
+
+
+def test_staleness_warning_at_exact_boundary_is_not_stale():
+    now = datetime(2026, 7, 12, tzinfo=timezone.utc)
+    rollups = [datums.ModelRollup(model="m", researched_at="2026-06-28")]  # exactly 14 days
+    assert datums.staleness_warning(rollups, now=now) is None
+
+
+def test_staleness_warning_when_older_than_14_days():
+    now = datetime(2026, 7, 12, tzinfo=timezone.utc)
+    rollups = [datums.ModelRollup(model="m", researched_at="2026-06-01")]  # 41 days
+    warning = datums.staleness_warning(rollups, now=now)
+    assert warning is not None and "41 days old" in warning
+
+
+def test_staleness_warning_uses_freshest_across_models():
+    now = datetime(2026, 7, 12, tzinfo=timezone.utc)
+    rollups = [
+        datums.ModelRollup(model="old", researched_at="2026-01-01"),
+        datums.ModelRollup(model="fresh", researched_at="2026-07-10"),  # 2 days old
+    ]
+    assert datums.staleness_warning(rollups, now=now) is None
+
+
+def test_staleness_warning_when_no_model_has_researched_at():
+    rollups = [datums.ModelRollup(model="m")]
+    warning = datums.staleness_warning(rollups)
+    assert warning is not None and "no researched_at" in warning
+
+
+def test_staleness_warning_ignores_unparseable_date():
+    now = datetime(2026, 7, 12, tzinfo=timezone.utc)
+    rollups = [datums.ModelRollup(model="m", researched_at="not-a-date")]
+    warning = datums.staleness_warning(rollups, now=now)
+    assert warning is not None and "no researched_at" in warning
+
+
+# --- CLI: staleness warning is a non-blocking nudge, never a gate ------------
+
+def test_capabilities_models_cli_warns_on_stale_priors_but_exits_ok(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    priors_path = tmp_path / "home" / ".horus" / "capabilities.toml"
+    priors_path.parent.mkdir(parents=True, exist_ok=True)
+    priors_path.write_text(
+        '[models."old-but-cheap"]\ntier = "value"\nresearched_at = "2026-01-01"\n',
+        encoding="utf-8",
+    )
+    rc = main(["capabilities", "--models"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "WARNING:" in captured.err and "days old" in captured.err
+    assert "old-but-cheap" in captured.out  # normal output still printed
+
+
+def test_capabilities_models_cli_default_seed_has_no_researched_at_and_warns(tmp_path, monkeypatch, capsys):
+    # The default seeded priors carry no researched_at anywhere yet — that is
+    # itself a staleness signal, so the nudge fires even with no fixture.
+    _home(tmp_path, monkeypatch)
+    rc = main(["capabilities", "--models"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "WARNING:" in captured.err and "no researched_at" in captured.err
+
+
+def test_capabilities_models_cli_fresh_priors_no_warning(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    priors_path = tmp_path / "home" / ".horus" / "capabilities.toml"
+    priors_path.parent.mkdir(parents=True, exist_ok=True)
+    today = datetime.now(timezone.utc).date().isoformat()
+    priors_path.write_text(
+        f'[models."old-but-cheap"]\ntier = "value"\nresearched_at = "{today}"\n',
+        encoding="utf-8",
+    )
+    rc = main(["capabilities", "--models"])
+    assert rc == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_capabilities_matrix_cli_also_warns_on_stale_priors(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    priors_path = tmp_path / "home" / ".horus" / "capabilities.toml"
+    priors_path.parent.mkdir(parents=True, exist_ok=True)
+    priors_path.write_text(
+        '[models."old-but-cheap"]\ntier = "value"\nresearched_at = "2026-01-01"\n',
+        encoding="utf-8",
+    )
+    rc = main(["capabilities", "--matrix"])
+    assert rc == 0
+    assert "WARNING:" in capsys.readouterr().err
+
+
+def test_capabilities_models_stdout_json_unaffected_by_warning(tmp_path, monkeypatch, capsys):
+    # --stdout must still emit clean, parseable JSON on stdout; the warning
+    # (if any) goes only to stderr.
+    _home(tmp_path, monkeypatch)
+    rc = main(["capabilities", "--models", "--stdout"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)  # would raise if the warning leaked into stdout
+    assert "models" in data
+    assert "WARNING:" in captured.err

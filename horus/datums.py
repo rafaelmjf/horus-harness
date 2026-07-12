@@ -15,7 +15,11 @@ Two data layers, kept strictly separate:
   ``horus datum close``.
 - **Owner priors** (``~/.horus/capabilities.toml``, hand-edited, fleet-global):
   per-model constraints/cautions that shape HOW to use a model — read here but
-  never written by a run.
+  never written by a run. This also carries the optional price-for-capability
+  fields (``price_in``/``price_out``/``capability_note``/``researched_at``) —
+  see the ``older-models-in-roster`` backlog card. Populating THOSE fields is a
+  separate agent web-research pass; this module only parses, displays, and
+  nudges on staleness (``staleness_warning``) — it never fetches the network.
 
 HARD BOUNDARY (do not cross): the harness MEASURES and DISPLAYS; the AGENT judges.
 ``outcome`` is ALWAYS agent-supplied, NEVER an auto-scoring function. Nothing here
@@ -29,7 +33,7 @@ import json
 import re
 import tomllib
 from dataclasses import asdict, dataclass, field, fields
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from horus import config
@@ -306,6 +310,19 @@ PRIORS_SEED = """\
 # engine. Nothing consumes it to auto-pick or auto-route a model.
 #
 # Edit freely; add models as the fleet gains experience with them.
+#
+# Optional price-for-capability fields (all back-compatible — omit entirely and
+# a model renders exactly as before). Filled in by a SEPARATE agent web-research
+# refresh pass (see the `older-models-in-roster` backlog card), never hand-typed
+# guesses and never fetched by this CLI:
+#   price_in = 3.00           # USD per Mtok, input
+#   price_out = 15.00         # USD per Mtok, output
+#   capability_note = "..."   # short: what it's good for, so price reads next
+#                             # to capability, not in isolation
+#   researched_at = 2026-07-10  # date this price/note was last checked; a
+#                                # display command warns (non-blocking) when the
+#                                # freshest researched_at across all models is
+#                                # more than 14 days old or absent entirely
 
 schema_version = 1
 
@@ -376,6 +393,25 @@ class ModelRollup:
     closed_datums: int = 0
     clean_count: int = 0
     last_outcomes: list[str] = field(default_factory=list)
+    # Price-for-capability fields (all optional, owner-prior, agent-researched —
+    # see PRIORS_SEED docstring and the `older-models-in-roster` backlog card).
+    price_in: float | None = None       # USD per Mtok, input
+    price_out: float | None = None      # USD per Mtok, output
+    capability_note: str | None = None  # short free-text: what it's good for
+    researched_at: str | None = None    # ISO date (YYYY-MM-DD) last checked
+
+
+def _researched_at_str(value: object) -> str | None:
+    """Normalize a prior's ``researched_at`` to an ISO date string.
+
+    TOML lets a hand-editor write an unquoted date (``2026-07-10``), which
+    ``tomllib`` parses as a native ``date``/``datetime`` — accept that form
+    alongside a plain quoted string so either style round-trips."""
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, str):
+        return value
+    return None
 
 
 def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[ModelRollup]:
@@ -407,6 +443,10 @@ def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[Mod
                 closed_datums=len(closed),
                 clean_count=sum(1 for d in closed if d.outcome == "clean"),
                 last_outcomes=list(reversed(last)),  # most-recent first
+                price_in=prior.get("price_in"),
+                price_out=prior.get("price_out"),
+                capability_note=prior.get("capability_note"),
+                researched_at=_researched_at_str(prior.get("researched_at")),
             )
         )
     rollups.sort(key=lambda r: (-r.clean_count, r.model))
@@ -431,6 +471,12 @@ def render_model_rollup(rollups: list[ModelRollup]) -> str:
         lines.append(f"{'':<12} datums: {clean}")
         if r.last_outcomes:
             lines.append(f"{'':<12} last: {' '.join(r.last_outcomes)}")
+        if r.price_in is not None or r.price_out is not None:
+            lines.append(f"{'':<12} price: {_format_price(r)} per Mtok")
+        if r.capability_note:
+            lines.append(f"{'':<12} capability: {r.capability_note}")
+        if r.researched_at:
+            lines.append(f"{'':<12} researched: {r.researched_at}")
         if r.strength:
             lines.append(f"{'':<12} strength: {r.strength}")
         if r.caution:
@@ -439,6 +485,16 @@ def render_model_rollup(rollups: list[ModelRollup]) -> str:
             lines.append(f"{'':<12} guard: {r.guard}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _format_price(r: ModelRollup) -> str:
+    """``$X.XX in / $Y.YY out`` (or just the side that's set)."""
+    parts = []
+    if r.price_in is not None:
+        parts.append(f"${r.price_in:g} in")
+    if r.price_out is not None:
+        parts.append(f"${r.price_out:g} out")
+    return " / ".join(parts)
 
 
 def rollup_to_dict(rollups: list[ModelRollup]) -> dict:
@@ -450,6 +506,45 @@ def rollup_to_dict(rollups: list[ModelRollup]) -> dict:
         ),
         "models": [asdict(r) for r in rollups],
     }
+
+
+# Non-blocking freshness nudge for the price/capability priors (see the
+# `older-models-in-roster` backlog card): a display command warns, never gates.
+STALE_PRIOR_DAYS = 14
+
+
+def staleness_warning(
+    rollups: list[ModelRollup], *, now: datetime | None = None, max_age_days: int = STALE_PRIOR_DAYS
+) -> str | None:
+    """A one-line non-blocking nudge when the price/capability priors look
+    stale, or ``None`` when they're fresh enough to skip the nudge.
+
+    "Fresh" is judged by the FRESHEST ``researched_at`` across all models —
+    one model researched today is enough to call the roster fresh, since a
+    partial refresh still moved the newest information forward. Warns when
+    that freshest date is more than ``max_age_days`` old, OR when no model
+    carries a ``researched_at`` at all (silence about freshness is itself a
+    staleness signal). Never raises on an unparseable date — treated as absent
+    for that model rather than failing the whole display command."""
+    now = now or datetime.now(timezone.utc)
+    freshest: datetime | None = None
+    for r in rollups:
+        if not r.researched_at:
+            continue
+        try:
+            parsed = datetime.fromisoformat(r.researched_at)
+        except ValueError:
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        if freshest is None or parsed > freshest:
+            freshest = parsed
+    if freshest is None:
+        return "model-roster priors have no researched_at date set — consider refreshing"
+    age_days = (now - freshest).days
+    if age_days > max_age_days:
+        return f"model-roster priors are {age_days} days old — consider refreshing"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -485,6 +580,12 @@ def render_delegation_matrix(
             lines.append(f"  {'':<12} datums: {clean}")
             if r.last_outcomes:
                 lines.append(f"  {'':<12} last: {' '.join(r.last_outcomes)}")
+            if r.price_in is not None or r.price_out is not None:
+                lines.append(f"  {'':<12} price: {_format_price(r)} per Mtok")
+            if r.capability_note:
+                lines.append(f"  {'':<12} capability: {r.capability_note}")
+            if r.researched_at:
+                lines.append(f"  {'':<12} researched: {r.researched_at}")
             if r.caution:
                 lines.append(f"  {'':<12} caution: {r.caution}")
             if r.guard:
