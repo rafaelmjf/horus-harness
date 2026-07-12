@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "4-PR arc landed on main: backlog card ship-lifecycle provenance (#172), Codex usage-limit account-scope fix (#173), consolidated-to marker no longer self-dirties closure (#174), `dashboard --reload` (#175). Continuity was stale after these merged, gating PR #176 (card-stamp); folded its 5 stamps plus 2 more (#166/#167) directly into main and closed #176 unmerged. `close --check` now passes."
-next_action: "No PR in flight — #176 was closed unmerged (its 5 stamps, plus 2 more it would have reverted, were folded straight into main). Pick up Backlog 'Now / next candidates': mobile-terminal symptom 2 (exposed-mode/POST-path input regression) is the most concrete open thread; ops item 1 (orphan reap) is the smallest. [tier: Sonnet]"
-next_prompt: "Resume Horus. Fetch first, read PRD.md and the newest session notes. No PR is in flight. Choose the next Backlog item — mobile-terminal symptom 2 (exposed-mode input regression) or ops item 1 (orphan reap after failed runs) — and start there."
-execution_recommendation: "continue-as-is — next candidates are exploratory investigation (symptom-2 root cause unknown) or a small ops fix; neither is high-volume/low-ambiguity enough to justify a phased plan."
+current_focus: "OpenWiki comparison research is complete on branch research-openwiki-comparison: sourced note recommends skip-but-watch until a stable 1.x contract plus a 30-change private/polyglot durability signal; PR to main is the remaining gate."
+next_action: "Review and merge the OpenWiki research PR; after merge, stamp card openwiki-vs-self-documenting-research shipped with PR/SHA provenance. Then choose mobile-terminal symptom 2 or orphan reap. [tier: Sonnet]"
+next_prompt: "Resume Horus. Fetch first, read PRD.md and the newest session note, then inspect the OpenWiki comparison PR. If merged, ship the card with PR/SHA provenance and close continuity; otherwise address review only."
+execution_recommendation: "continue-as-is — the only immediate work is bounded research-PR review/closure; the following candidates are exploratory investigation or a small ops fix, so a phased plan buys little. [tier: Sonnet]"
 last_updated: 2026-07-12
 horus_min_version: 0.0.26
 ---
