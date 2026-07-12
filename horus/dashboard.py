@@ -710,20 +710,38 @@ button.linkbtn:hover { color: #b9c2d0; }
 .tdot.s-exited { background: #3a4151; }
 .term-pane { display: none; background: #0b0d12; border: 1px solid #284058;
             border-radius: 0 8px 8px 8px; padding: 8px; }
-.term-pane.active { display: block; }
+/* The pane owns a real region (a fixed height outside fullscreen) and the
+   host fills it (flex:1/min-height:0) instead of pinning its own height —
+   one box model for inline and fullscreen alike. */
+.term-pane.active { display: flex; flex-direction: column; min-height: 0; }
+.term-pane.active:not(.fs) { height: 420px; }
 /* Full-screen mode: the pane becomes the whole viewport, exactly like the
-   pop-out window — no page scroll/zoom/keyboard fight. Auto-on for touch. */
-.term-pane.fs { position: fixed; inset: 0; z-index: 200; margin: 0;
-                border-radius: 0; padding: 8px; display: flex; flex-direction: column; }
-.term-pane.fs .xterm-host { flex: 1; height: auto; min-height: 0; }
+   pop-out window — no page scroll/zoom/keyboard fight. Auto-on for touch,
+   tracked live (not decided once at load) — see the compact-mode JS below. */
+.term-pane.fs { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; }
 body.term-fs { overflow: hidden; }
-.term-bar { display: flex; justify-content: space-between; align-items: center; padding: 0 4px 6px; }
+.term-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+            gap: 6px; padding: 0 4px 6px; }
 .term-bar .popout { margin: 0; }
-.xterm-host { height: 420px; }
+.term-bar .linkbtn { display: inline-flex; align-items: center; justify-content: center;
+    min-height: 40px; min-width: 40px; padding: 6px 14px; font-size: 13px; border-radius: 8px;
+    background: #191a1f; border: 1px solid #3a4250; color: #cdd6e4; text-decoration: none; }
+.term-bar .linkbtn:hover { background: #2c3140; color: #fff; }
+.term-bar .linkbtn.confirm-armed { background: var(--seal-soft); border-color: var(--seal-line); color: var(--seal); }
+/* Compact session switcher: shown only in fullscreen, where the out-of-pane
+   .term-tabs strip is physically covered by the fixed overlay (a static
+   sibling has no stacking context above a position:fixed one) — this keeps
+   session-switching reachable without restacking the whole tab strip. */
+.term-mini-bar { display: none; gap: 4px; overflow-x: auto; flex: 1 1 100%; order: 3; }
+.term-pane.fs .term-mini-bar { display: flex; }
+.term-mini { flex: 0 0 auto; font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer;
+    color: #8a93a6; background: #12141b; border: 1px solid #232733; border-radius: 6px; padding: 4px 9px; }
+.term-mini.active { background: #0b0d12; color: #e6e6e6; border-color: #284058; }
+.xterm-host { flex: 1; min-height: 0; overscroll-behavior: contain; touch-action: pan-y; }
 .xterm-host .xterm { height: 100%; }
 /* Phones: taller terminal, bigger tap targets for the tab strip. */
 @media (max-width: 700px) {
-  .xterm-host { height: 62vh; }
+  .term-pane.active:not(.fs) { height: 62vh; }
   .term-tab { font-size: 13px; padding: 9px 13px; }
   .term-pane { padding: 6px 4px; }
 }
@@ -3080,11 +3098,22 @@ def _terminal_panel(terminals: list[pty_host.PtyTerminal]) -> str:
         )
         return f"<div class='card termpanel'><h2>Terminal</h2>{empty}</div>"
 
-    tabs, panes = [], []
+    items = []
     for t in terminals:
         tid = html.escape(t.term_id, quote=True)
         title = html.escape(t.title or t.term_id)
         state = "running" if t.alive else "exited"
+        items.append((tid, title, state))
+
+    # Rendered into every pane's term-bar but only shown in fullscreen (CSS),
+    # so switching sessions stays reachable when the tab strip is covered.
+    mini_bar = "".join(
+        f"<button type='button' class='term-mini' data-tid='{tid}'>{title}</button>"
+        for tid, title, _ in items
+    )
+
+    tabs, panes = [], []
+    for tid, title, state in items:
         tabs.append(
             f"<button class='term-tab' data-tid='{tid}'>"
             f"<span class='tdot s-{state}'></span> {title}</button>"
@@ -3092,10 +3121,11 @@ def _terminal_panel(terminals: list[pty_host.PtyTerminal]) -> str:
         panes.append(
             f"<div class='term-pane' data-tid='{tid}'>"
             f"<div class='term-bar'><span class='muted'>{title}</span>"
-            "<span style='display:flex;gap:12px'>"
+            f"<div class='term-mini-bar'>{mini_bar}</div>"
+            "<span style='display:flex;gap:10px'>"
             f"<button class='termfs linkbtn' data-tid='{tid}' title='Full screen (best on mobile)'>"
             "&#9974; full screen</button>"
-            f"<button class='popout linkbtn' data-tid='{tid}' title='Open this session in its own window'>"
+            f"<button class='popout linkbtn' data-tid='{tid}' title='Full screen on touch, new window on desktop'>"
             "&#10696; pop out</button>"
             f"<button class='termclose linkbtn' data-tid='{tid}' "
             "title='End this session (if still running) and remove its tab'>"
@@ -3122,6 +3152,34 @@ _TERMINAL_HEAD = (
 
 _XTERM_ATTACH_JS = """
 <script>
+// One shared "is this a touch/narrow session" predicate feeds both the keybar
+// and the fullscreen default (previously two different triggers could disagree:
+// matchMedia(coarse)||innerWidth<800 for the keybar vs coarse-only for
+// fullscreen). Tracked live via a change listener rather than read once at
+// load, so a long-lived tab moving between mobile and desktop (or the
+// reverse) updates state instead of sticking at whatever it was on load.
+window.horusCompact = window.horusCompact || function(){
+  return (window.matchMedia && matchMedia('(pointer:coarse)').matches) || window.innerWidth < 800;
+};
+if(!window.__horusCompactWatch){
+  window.__horusCompactWatch = true;
+  window.__horusCompactState = window.horusCompact();
+  var _horusCheckCompact = function(){
+    var now = window.horusCompact();
+    if(now !== window.__horusCompactState){
+      window.__horusCompactState = now;
+      window.dispatchEvent(new CustomEvent('horus:compactchange', {detail:{compact: now}}));
+    }
+  };
+  window.addEventListener('resize', _horusCheckCompact);
+  if(window.visualViewport){ window.visualViewport.addEventListener('resize', _horusCheckCompact); }
+  if(window.matchMedia){
+    var _horusCoarseMq = matchMedia('(pointer:coarse)');
+    if(_horusCoarseMq.addEventListener){ _horusCoarseMq.addEventListener('change', _horusCheckCompact); }
+    else if(_horusCoarseMq.addListener){ _horusCoarseMq.addListener(_horusCheckCompact); }
+  }
+}
+
 window.horusAttachTerm = function(hostId, tid, onExit){
   if(typeof Terminal==='undefined') return null;
   function b64bytes(b64){var s=atob(b64);var a=new Uint8Array(s.length);
@@ -3144,15 +3202,16 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   var host=document.getElementById(hostId);
   term.open(host);
   // Touch keybar: phone soft keyboards have no Esc/Tab/arrows/Ctrl, but agent
-  // TUIs need them to navigate, complete, cancel and interrupt. Show an on-screen
-  // key strip (bytes sent through the same /pty/input path) on coarse-pointer or
-  // narrow screens; the ⌨ button re-raises the OS keyboard for typing text.
-  var showBar=(window.matchMedia && matchMedia('(pointer:coarse)').matches) || window.innerWidth<800;
-  if(showBar && host && host.parentNode){
+  // TUIs need them to navigate, complete, cancel and interrupt. Built once;
+  // its visibility tracks the shared compact predicate live (below) instead
+  // of a one-shot read, so it appears/disappears with the same signal that
+  // drives fullscreen.
+  if(host && host.parentNode){
     if(!document.getElementById('horus-keybar-style')){
       var st=document.createElement('style'); st.id='horus-keybar-style';
       st.textContent='.horus-keybar{display:flex;flex-wrap:wrap;gap:6px;padding:8px 4px;background:#0b0d12;'
         +'border-top:1px solid #232733;}'
+        +'.horus-keybar.hidden{display:none;}'
         +'.horus-keybar button{flex:0 0 auto;min-width:44px;min-height:40px;font:inherit;font-size:14px;'
         +'color:#cdd6e4;background:#191a1f;border:1px solid #3a4250;border-radius:8px;padding:6px 12px;'
         +'cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;}'
@@ -3185,10 +3244,55 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     kb.addEventListener('click', function(e){ e.preventDefault(); term.focus(); });
     bar.appendChild(kb);
     host.parentNode.insertBefore(bar, host.nextSibling);
+    var updateBar=function(){ bar.classList.toggle('hidden', !window.horusCompact()); };
+    updateBar();
+    window.addEventListener('horus:compactchange', updateBar);
   }
-  function sync(){ try{fit.fit();}catch(_){ } if(term.cols>0 && term.rows>0){ post('/pty/resize',{id:tid, cols:term.cols, rows:term.rows}); } }
+  var lastSent=null;
+  function sync(){
+    // A backgrounded viewer (a pop-out window you tabbed away from, or an
+    // inactive browser tab) skips posting: pty_host holds one geometry per
+    // terminal for every viewer, so only the visible viewer should own it —
+    // otherwise two differently-sized viewers fight and last-writer-wins.
+    if(document.hidden) return;
+    if(!host || host.clientWidth<=0 || host.clientHeight<=0) return;
+    try{ fit.fit(); }catch(_){ return; }
+    if(term.cols>0 && term.rows>0){
+      var key=term.cols+'x'+term.rows;
+      if(key!==lastSent){ lastSent=key; post('/pty/resize',{id:tid, cols:term.cols, rows:term.rows}); }
+    }
+  }
+  var syncQueued=false;
+  function requestSync(){
+    if(syncQueued) return; syncQueued=true;
+    requestAnimationFrame(function(){ syncQueued=false; sync(); });
+  }
   term.onData(function(d){ post('/pty/input',{id:tid, data:d}); });
-  term.onResize(function(s){ if(s.cols>0 && s.rows>0){ post('/pty/resize',{id:tid, cols:s.cols, rows:s.rows}); } });
+  term.onResize(function(s){ if(s.cols>0 && s.rows>0){
+    var key=s.cols+'x'+s.rows;
+    if(key!==lastSent){ lastSent=key; post('/pty/resize',{id:tid, cols:s.cols, rows:s.rows}); }
+  }});
+  // Layout-settled initial fit + ongoing self-observation. A ResizeObserver's
+  // first callback fires only once the host has a real, laid-out box —
+  // unlike the old fixed setTimeout(sync,30), which could race xterm's own
+  // char-cell measurement and lock in the 80x24 constructor default until a
+  // later window resize corrected it. Debounced (rAF-coalesced) since a
+  // fullscreen toggle or orientation change can fire several callbacks close
+  // together.
+  if(window.ResizeObserver){
+    var ro=new ResizeObserver(requestSync);
+    ro.observe(host);
+  } else {
+    requestAnimationFrame(function(){ requestAnimationFrame(sync); });
+  }
+  // visualViewport: the soft keyboard, PWA chrome show/hide, and pinch-zoom
+  // change the *visual* viewport without necessarily firing a host resize.
+  if(window.visualViewport){
+    visualViewport.addEventListener('resize', requestSync);
+    visualViewport.addEventListener('scroll', requestSync);
+  }
+  window.addEventListener('horus:compactchange', requestSync);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden){ requestSync(); } });
   var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid));
   es.addEventListener('output', function(e){ term.write(b64bytes(e.data)); });
   // Surface a dead stream instead of failing silently: a session that opens but shows
@@ -3212,8 +3316,7 @@ window.horusAttachTerm = function(hostId, tid, onExit){
       var d=document.querySelector('.term-tab[data-tid="'+tid+'"] .tdot'); if(d){d.className='tdot s-exited';}
       if(onExit){ onExit(sawLive); } }
   });
-  setTimeout(sync, 30);
-  return {term:term, fit:fit, sync:sync, es:es};
+  return {term:term, fit:fit, sync:requestSync, es:es};
 };
 </script>
 """
@@ -3225,6 +3328,7 @@ _TERMINAL_JS = """
   var terms={};
   function activate(tid){
     document.querySelectorAll('.term-tab').forEach(function(t){t.classList.toggle('active', t.dataset.tid===tid);});
+    document.querySelectorAll('.term-mini').forEach(function(t){t.classList.toggle('active', t.dataset.tid===tid);});
     document.querySelectorAll('.term-pane').forEach(function(p){p.classList.toggle('active', p.dataset.tid===tid);});
     // In full-screen mode keep the overlay on the newly-active pane only.
     if(document.body.classList.contains('term-fs')){
@@ -3246,6 +3350,7 @@ _TERMINAL_JS = """
     var tab=document.querySelector('.term-tab[data-tid="'+tid+'"]');
     var pane=document.querySelector('.term-pane[data-tid="'+tid+'"]');
     var wasActive=!!(tab&&tab.classList.contains('active'));
+    document.querySelectorAll('.term-mini[data-tid="'+tid+'"]').forEach(function(b){b.remove();});
     if(tab){tab.remove();} if(pane){pane.remove();}
     var rest=document.querySelectorAll('.term-tab');
     if(rest.length===0){
@@ -3265,32 +3370,58 @@ _TERMINAL_JS = """
   document.querySelectorAll('.term-tab').forEach(function(t){
     t.addEventListener('click', function(){activate(t.dataset.tid);});
   });
+  document.querySelectorAll('.term-mini').forEach(function(t){
+    t.addEventListener('click', function(){activate(t.dataset.tid);});
+  });
   document.querySelectorAll('.termfs').forEach(function(b){
     b.addEventListener('click', function(e){ e.stopPropagation(); toggleFs(b.dataset.tid); });
   });
   document.querySelectorAll('.popout').forEach(function(b){
     b.addEventListener('click', function(e){ e.stopPropagation();
-      window.open('/pty/term?id='+encodeURIComponent(b.dataset.tid), 'horus-'+b.dataset.tid,
-        'width=940,height=640'); });
+      var tid=b.dataset.tid;
+      // On touch, window.open() is unreliable/trap-like (a new mobile-browser
+      // tab with no easy way back). Prefer the same in-app fullscreen the
+      // pop-out was meant to emulate — the panel tab is untouched either way,
+      // and the PTY persists on the host so a real pop-out (desktop) can still
+      // re-attach to the same live screen.
+      if(window.horusCompact && window.horusCompact()){ toggleFs(tid, true); return; }
+      window.open('/pty/term?id='+encodeURIComponent(tid), 'horus-'+tid, 'width=940,height=640'); });
   });
   document.querySelectorAll('.termclose').forEach(function(b){
     b.addEventListener('click', function(e){ e.stopPropagation();
+      var tid=b.dataset.tid;
+      var dot=document.querySelector('.term-tab[data-tid="'+tid+'"] .tdot');
+      var alive=!!(dot && dot.classList.contains('s-running'));
+      // A live session needs a second tap ("tap again to end") before it's
+      // killed; an already-exited tab closes freely — it's just removing
+      // dead scrollback, nothing to guard.
+      if(alive && b.dataset.confirmArm!=='1'){
+        var orig=b.innerHTML;
+        b.dataset.confirmArm='1'; b.classList.add('confirm-armed');
+        b.innerHTML='&#10005; tap again to end';
+        setTimeout(function(){ delete b.dataset.confirmArm; b.classList.remove('confirm-armed'); b.innerHTML=orig; }, 3000);
+        return;
+      }
+      delete b.dataset.confirmArm; b.classList.remove('confirm-armed');
       fetch('/pty/close',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:'id='+encodeURIComponent(b.dataset.tid)});
-      removeTab(b.dataset.tid); });
-  });
-  window.addEventListener('resize', function(){
-    var a=document.querySelector('.term-pane.active'); if(a&&terms[a.dataset.tid]){terms[a.dataset.tid].sync();}
+        body:'id='+encodeURIComponent(tid)});
+      removeTab(tid); });
   });
   var want=new URLSearchParams(location.search).get('tab');
   var first=document.querySelector('.term-tab');
   if(want && document.querySelector('.term-tab[data-tid="'+want+'"]')){activate(want);}
   else if(first){activate(first.dataset.tid);}
-  // Touch devices: open the active terminal full-screen so it behaves like the
-  // pop-out (which users found usable) instead of a cramped box in a scrolling page.
-  if(window.matchMedia && matchMedia('(pointer:coarse)').matches){
+  // Touch/narrow state is tracked live (horus:compactchange, defined in the
+  // shared attach script) instead of decided once at load — a mobile<->desktop
+  // transition on a long-lived tab now updates the fullscreen default instead
+  // of sticking at whatever it was when the page opened.
+  function applyCompactFs(compact){
     var a=document.querySelector('.term-tab.active');
-    if(a){ toggleFs(a.dataset.tid, true); }
+    if(a){ toggleFs(a.dataset.tid, compact); }
+  }
+  if(window.horusCompact){
+    applyCompactFs(window.horusCompact());
+    window.addEventListener('horus:compactchange', function(e){ applyCompactFs(e.detail.compact); });
   }
 })();
 </script>
@@ -3311,7 +3442,8 @@ def render_pty_term_page(term_id: str, title: str = "") -> str:
         f"<title>Horus terminal — {label}</title>{_TERMINAL_HEAD}"
         "<style>html,body{margin:0;height:100%;background:#0b0d12;}"
         "body{display:flex;flex-direction:column;}"
-        "#term{flex:1;min-height:0;padding:6px;}</style></head><body>"
+        "#term{flex:1;min-height:0;padding:6px;overscroll-behavior:contain;touch-action:pan-y;}"
+        "</style></head><body>"
         f"<div id='term'></div>{_XTERM_ATTACH_JS}"
         f"<script>window.horusAttachTerm('term', '{tid}');</script>"
         "</body></html>"
