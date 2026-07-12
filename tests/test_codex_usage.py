@@ -76,6 +76,17 @@ def test_usage_findings_ok_when_absent(tmp_path):
     assert "no Codex usage signal" in findings[0].message
 
 
+def test_usage_findings_marks_expired_account_window_stale(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    home = tmp_path / "codex-home"
+    _write_rollout(home, _turn(project), _token("2026-06-25T10:02:00Z", 500, primary=83))
+
+    findings = codex_usage.usage_findings(project, home=home)
+    assert "5h limit snapshot stale" in findings[0].message
+    assert "5h limit 83%" not in findings[0].message
+
+
 def test_latest_account_usage_picks_newest_snapshot_ignoring_project(tmp_path):
     home = tmp_path / "codex-home"
     # Older rollout (one project) + a newer rollout (another project). Rate limits

@@ -775,6 +775,47 @@ def test_usage_check_cli_warns_and_codex_stop_hook_blocks_with_json(tmp_path, mo
     assert "horus close --commit --push" in reason  # closure always pushes
 
 
+def test_usage_check_uses_fresh_account_limits_not_stale_project_limits(tmp_path, monkeypatch, capsys):
+    """Rate limits are account-global; project context remains project-scoped."""
+    _home(tmp_path, monkeypatch)
+    codex_home = tmp_path / "codex-home"
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+    _write_codex_rollout(codex_home, tmp_path, total=500)
+
+    # The only rollout for this project has an expired 83% snapshot.
+    project_rollout = next((codex_home / "sessions").rglob("rollout-*.jsonl"))
+    events = [json.loads(line) for line in project_rollout.read_text(encoding="utf-8").splitlines()]
+    events[-1]["payload"]["rate_limits"] = {
+        "primary": {"used_percent": 83, "resets_at": 1},
+        "secondary": {"used_percent": 83, "resets_at": 1},
+    }
+    project_rollout.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+
+    # A newer rollout from another project is the account's current snapshot.
+    fresh_reset = 2_000_000_000
+    account_rollout = codex_home / "sessions" / "2026" / "07" / "12" / "rollout-account.jsonl"
+    account_rollout.parent.mkdir(parents=True)
+    account_rollout.write_text(json.dumps({
+        "timestamp": "2026-07-12T12:00:00Z",
+        "type": "event_msg",
+        "payload": {
+            "type": "token_count",
+            "info": {"last_token_usage": {"total_tokens": 100}, "model_context_window": 1000},
+            "rate_limits": {
+                "primary": {"used_percent": 56, "resets_at": fresh_reset},
+                "secondary": {"used_percent": 42, "resets_at": fresh_reset},
+            },
+        },
+    }) + "\n", encoding="utf-8")
+
+    assert main(["usage", "check", "--path", str(tmp_path), "--threshold", "90"]) == 0
+    out = capsys.readouterr().out
+    assert "Codex context 50.0%" in out
+    assert "5h limit 56%" in out
+    assert "weekly limit 42%" in out
+    assert "83%" not in out
+
+
 def test_codex_userpromptsubmit_hook_defers_to_user(tmp_path, monkeypatch, capsys):
     import io
 

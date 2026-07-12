@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -210,18 +211,38 @@ def _fmt_reset(ts: int | None) -> str:
 
 
 def usage_findings(project_root: Path, *, threshold: float = 90.0, home: Path | None = None) -> list[Finding]:
+    """Report project context and account-global rate limits.
+
+    Context usage belongs to the project's latest rollout, while Codex rate limits
+    belong to the account and therefore come from its newest rollout of any
+    project.  A reset in the past cannot describe a rolling window's current
+    capacity, so it is explicitly marked stale and never drives a warning.
+    """
     report = latest_usage(project_root, home=home)
-    if report is None:
+    account_report = latest_account_usage(home=home)
+    if report is None and account_report is None:
         return [Finding("ok", "no Codex usage signal found for this project")]
 
-    parts = [f"Codex context {report.context_percent:.1f}% ({report.context_tokens}/{report.context_window} tokens)"]
-    over = report.context_percent >= threshold
-    if report.primary_percent is not None:
-        parts.append(f"5h limit {report.primary_percent:.0f}% (resets {_fmt_reset(report.primary_resets_at)})")
-        over = over or report.primary_percent >= threshold
-    if report.secondary_percent is not None:
-        parts.append(f"weekly limit {report.secondary_percent:.0f}% (resets {_fmt_reset(report.secondary_resets_at)})")
-        over = over or report.secondary_percent >= threshold
+    parts: list[str] = []
+    over = False
+    if report is not None:
+        parts.append(f"Codex context {report.context_percent:.1f}% ({report.context_tokens}/{report.context_window} tokens)")
+        over = report.context_percent >= threshold
+
+    def add_limit(label: str, percent: float | None, resets_at: int | None) -> None:
+        nonlocal over
+        if percent is None:
+            return
+        reset = _fmt_reset(resets_at)
+        if resets_at is not None and resets_at <= time.time():
+            parts.append(f"{label} limit snapshot stale (reset {reset})")
+            return
+        parts.append(f"{label} limit {percent:.0f}% (resets {reset})")
+        over = over or percent >= threshold
+
+    if account_report is not None:
+        add_limit("5h", account_report.primary_percent, account_report.primary_resets_at)
+        add_limit("weekly", account_report.secondary_percent, account_report.secondary_resets_at)
 
     level = "warn" if over else "ok"
     suffix = "; run the closure ritual before starting another large turn" if over else ""
