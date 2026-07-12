@@ -52,10 +52,12 @@ def _card_to_dict(card: backlog.Card) -> dict:
         "tier": card.tier,
         "type": card.type,
         "surface": list(card.surface),
+        "shipped_pr": card.shipped_pr or None,
+        "shipped_sha": card.shipped_sha or None,
     }
 
 
-def load_project_rollup(path_str: str) -> ProjectRollup:
+def load_project_rollup(path_str: str, *, include_shipped: bool = False) -> ProjectRollup:
     """One project's backlog roll-up, read fresh from disk. Never raises — a
     project whose path has vanished, whose ``.horus/`` is gone, or whose cards
     fail to parse degrades to an ``"unreadable"`` row with a note rather than
@@ -69,11 +71,12 @@ def load_project_rollup(path_str: str) -> ProjectRollup:
             return ProjectRollup(name, str(root), "unreadable", note="no .horus/ found")
 
         if backlog.backlog_dir(root).is_dir():
-            # The structure contract deletes a card on completion (see backlog.py's
-            # module docstring), so a lingering `status: done` card is stray data
-            # hygiene in that other project, not open work — exclude it here so
-            # "open card(s)" stays a true count rather than surfacing the drift.
-            cards = [c for c in backlog.load_cards(root) if c.status != "done"]
+            # `status: done` is legacy lifecycle drift, not open work; shipped
+            # cards are deliberately retained but excluded from active views.
+            excluded = {"done"}
+            if not include_shipped:
+                excluded.add("shipped")
+            cards = [c for c in backlog.load_cards(root) if c.status not in excluded]
             return ProjectRollup(name, str(root), "cards", cards=cards)
 
         if frontmatter.has_prd(root):
@@ -93,9 +96,9 @@ def load_project_rollup(path_str: str) -> ProjectRollup:
         return ProjectRollup(name, str(root), "unreadable", note=f"error reading backlog: {exc}")
 
 
-def load_fleet_rollup(project_paths: list[str]) -> list[ProjectRollup]:
+def load_fleet_rollup(project_paths: list[str], *, include_shipped: bool = False) -> list[ProjectRollup]:
     """Every registered project's roll-up, sorted by name for determinism."""
-    rollups = [load_project_rollup(p) for p in project_paths]
+    rollups = [load_project_rollup(p, include_shipped=include_shipped) for p in project_paths]
     rollups.sort(key=lambda r: r.name.casefold())
     return rollups
 

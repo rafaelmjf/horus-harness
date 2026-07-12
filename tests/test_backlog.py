@@ -50,6 +50,18 @@ def test_load_cards_reads_explicit_type(tmp_path):
     assert cards[0].type == "bug"
 
 
+def test_ship_stamps_provenance_and_keeps_card_in_place(tmp_path):
+    _mk_card(tmp_path, "release-card")
+
+    card = backlog.ship(tmp_path, "release-card", pr="42", sha="abc123")
+
+    assert card is not None
+    assert card.status == "shipped"
+    assert card.shipped_pr == "42"
+    assert card.shipped_sha == "abc123"
+    assert (tmp_path / ".horus" / "backlog" / "release-card.md").is_file()
+
+
 def test_claim_no_other_in_progress_is_clean_even_without_fields(tmp_path):
     _mk_card(tmp_path, "solo")
     findings = backlog.claim_check(tmp_path, "solo")

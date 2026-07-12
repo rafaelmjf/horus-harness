@@ -1,8 +1,8 @@
 ---
 status: active
 current_focus: "Branch fix-consolidated-to-marker fixes the closure hook's self-referential dirty warning: upgrade-project untracks legacy generated markers, init coverage locks the ignore rule, and cleanliness checks exclude their own marker. Full suite: 1220 passed; live tracked-marker repro reports clean. Awaiting PR + required CI; do not merge."
-next_action: "Open the consolidated-to-marker PR against main, observe required CI green on its exact head SHA, and stop without merging."
-next_prompt: "Resume Horus. Fetch first, read PRD.md and the newest session note, then check the consolidated-to-marker PR. If required CI is green, leave it open for owner review; do not merge unless explicitly asked."
+next_action: "Observe required CI on consolidated-to-marker PR #174 and stop without merging. After owner review/merge, resume main's backlog-card lifecycle provenance cleanup."
+next_prompt: "Resume Horus. Fetch first, read PRD.md and the newest session note, then check consolidated-to-marker PR #174. If required CI is green, leave it open for owner review; do not merge unless explicitly asked. After it lands, return to the backlog-card lifecycle provenance cleanup recorded on main."
 execution_recommendation: "continue-as-is — remaining work is only PR/CI observation; delegation adds no useful context or cost benefit."
 last_updated: 2026-07-12
 horus_min_version: 0.0.26
@@ -229,13 +229,14 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 ## Structure contract (prototype)
 
 - **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines: new
-  shipped items are one line; done backlog items are deleted (git remembers); bugs get
-  appended to the backlog as found.
+  shipped items are one line; card-backed work stays in `backlog/` as `status: shipped`
+  with PR/SHA provenance; bugs get appended to the backlog as found.
 - **`backlog/` (card pilot 2026-07-10, claim gate 2026-07-11):** one card per item,
   `status`/`priority`/`tier`/`created` frontmatter plus optional `parallel: safe|exclusive` /
   `surface: <globs>`; claim via `horus backlog claim <name>` (warns, `--force` to override on
-  overlap/exclusive); done = delete the card + a Shipped line here. No stale-`claimed` sweep
-  exists — a real gap, not yet built.
+  overlap/exclusive); after merge, `horus backlog ship <name> --pr N --sha SHA` flips the card
+  in place and records provenance. `close --check` warns on lingering-done or shipped-but-open
+  cards. No stale-`claimed` sweep exists — a real gap, not yet built.
 - **`sessions/`** unchanged: one note per session (`horus session new`), operational
   facts welcome (gates verified, tokens to rotate, dead ends). Distilled notes →
   `sessions/archive/` (local).

@@ -62,6 +62,16 @@ def test_load_project_rollup_excludes_stray_done_cards(tmp_path):
     assert [c.name for c in rollup.cards] == ["still-open"]
 
 
+def test_load_project_rollup_hides_shipped_cards_unless_requested(tmp_path):
+    _mk_card(tmp_path, "still-open", status="open")
+    _mk_card(tmp_path, "already-shipped", status="shipped")
+
+    assert [c.name for c in fleet_backlog.load_project_rollup(str(tmp_path)).cards] == ["still-open"]
+    assert [c.name for c in fleet_backlog.load_project_rollup(
+        str(tmp_path), include_shipped=True,
+    ).cards] == ["already-shipped", "still-open"]
+
+
 def test_load_project_rollup_inline_not_migrated_degrades_with_note(tmp_path):
     _mk_prd(tmp_path, "- [bug] fix the widget\n- [feature] add the gadget")
 
