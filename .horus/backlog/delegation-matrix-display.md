@@ -6,7 +6,7 @@ created: 2026-07-12
 created_by: overseer
 parallel: true
 surface: horus/cli.py, horus/datums.py, horus/skills.py (rubric template)
-shipped:
+shipped: "2026-07-12 — capability built, PR open (branch feat/capabilities-matrix, PR #166). `horus capabilities --matrix` joins datums.build_model_rollup (tier ladder + measured datums) with new structured shape->tier / tier-trust->verification tables in skills.py (DELEGATION_SHAPE_TIERS, DELEGATION_VERIFICATION_DIAL) pulled from the delegation-rubric skill essence — no third source of truth. Display-only: --stdout emits JSON (tiers/roles/verification_dial), human default renders the ladder; a boundary test walks every JSON key and asserts no pick/route field. Delegation-rubric template also updated to keep older-but-capable/prior-frontier models in the roster (pick by capability, not recency) — skill version bumped 1->2. 1184 tests green."
 ---
 
 # Display the delegation decision matrix from the CLI (agent-first)

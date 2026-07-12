@@ -217,3 +217,46 @@ def test_capabilities_models_stdout_is_json(tmp_path, monkeypatch, capsys):
     data = json.loads(capsys.readouterr().out)
     assert "models" in data and any(m["model"] == "gpt-5.6" and m["caution"] for m in data["models"])
     assert "recommend" not in data["note"].lower()
+
+
+def test_capabilities_matrix_cli_renders_ladder_and_rubric_tables(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    rc = main(["capabilities", "--matrix"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Delegation decision matrix" in out
+    assert "DISPLAY-ONLY" in out
+    assert "sonnet-5" in out and "10 clean" in out
+    assert "token-hungry" in out  # gpt-5.6 owner caution still surfaces
+    assert "scoped-impl" in out and "mechanical" in out and "novel" in out  # shape->tier table
+    assert "observe-CI" in out and "CI+probe" in out and "owner-eyeball" in out  # verification dial
+
+
+def test_capabilities_matrix_stdout_is_json(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    assert main(["capabilities", "--matrix", "--stdout"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert set(data.keys()) >= {"note", "tiers", "roles", "verification_dial"}
+    assert any(m["model"] == "sonnet-5" and m["tier"] for m in data["tiers"])
+    assert {row["shape"] for row in data["roles"]} >= {"scoped-impl", "novel", "mechanical"}
+    assert {row["tier_trust"] for row in data["verification_dial"]} >= {"proven", "unproven", "runtime"}
+
+
+def test_capabilities_matrix_has_no_pick_or_route_field(tmp_path, monkeypatch, capsys):
+    """BOUNDARY TEST: display-only means no key in the payload ever spells out a
+    pick/route decision field — the command renders the rubric, it never
+    auto-selects or auto-routes a model."""
+    _home(tmp_path, monkeypatch)
+    assert main(["capabilities", "--matrix", "--stdout"]) == 0
+    data = json.loads(capsys.readouterr().out)
+
+    def _walk_keys(obj):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                assert "pick" not in k.lower() and "route" not in k.lower(), f"forbidden field: {k}"
+                _walk_keys(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                _walk_keys(item)
+
+    _walk_keys(data)

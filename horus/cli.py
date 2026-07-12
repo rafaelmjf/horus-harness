@@ -290,12 +290,36 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
     (``~/.horus/capabilities.toml``). It describes what was measured and what the
     owner flagged; it never names a model to pick (see horus/datums.py).
 
+    With ``--matrix``, prints the DISPLAY-ONLY delegation decision matrix instead
+    — the same tier ladder as ``--models``, joined with the shape->tier and
+    tier-trust->verification tables from the shared ``delegation-rubric`` skill
+    essence (``horus/skills.py``). It renders the rubric so any agent or user can
+    read it deterministically; it never auto-picks or auto-routes a model (see
+    horus/datums.py: ``render_delegation_matrix`` / ``delegation_matrix_to_dict``).
+
     With ``--project <name>`` — or with no flags at all when run from inside a
     registered project's root (the self-document default) — regenerates a
     provenance-stamped record for just that one project, writes it to
     ``<project>/.horus/capabilities.json``, and prints the same JSON to stdout.
     Every invocation regenerates from that project's live sources; the file is
     a publishing artifact, not a cache read back."""
+    if getattr(args, "matrix", False):
+        rollups = datums.build_model_rollup(
+            datums.DatumStore.default().all(), datums.load_priors()
+        )
+        if args.stdout:
+            print(json.dumps(
+                datums.delegation_matrix_to_dict(
+                    rollups, skills.DELEGATION_SHAPE_TIERS, skills.DELEGATION_VERIFICATION_DIAL
+                ),
+                indent=2,
+            ))
+        else:
+            print(datums.render_delegation_matrix(
+                rollups, skills.DELEGATION_SHAPE_TIERS, skills.DELEGATION_VERIFICATION_DIAL
+            ), end="")
+        return 0
+
     if getattr(args, "models", False):
         rollups = datums.build_model_rollup(
             datums.DatumStore.default().all(), datums.load_priors()
@@ -2401,6 +2425,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="EXPERIMENTAL: print the DATA-ONLY model-calibration roll-up (measured datums "
              "+ owner priors) instead of the fleet catalog — describes what was measured and "
              "flagged; never recommends a model",
+    )
+    p_capabilities.add_argument(
+        "--matrix",
+        action="store_true",
+        help="EXPERIMENTAL: print the DISPLAY-ONLY delegation decision matrix — the tier "
+             "ladder (measured datums + owner priors) joined with the shape->tier and "
+             "verification-depth tables from the delegation-rubric skill; renders the "
+             "rubric deterministically, never picks or routes a model",
     )
     p_capabilities.set_defaults(func=cmd_capabilities)
 
