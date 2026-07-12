@@ -1,13 +1,21 @@
 ---
-status: open
+status: folded-in
 priority: high
 tier: sonnet
 created: 2026-07-12
 created_by: overseer
 parallel: exclusive
 surface: horus/dashboard.py
+folded_into: mobile-terminal-ux-hardening
 shipped:
 ---
+
+> **FOLDED IN (2026-07-12) → `mobile-terminal-ux-hardening.md`** (symptom 1). The
+> diagnosis session confirmed this is the fixed-host-box + deferred-fit + no-refit
+> cluster (root causes F/C/B; live-reproduced), with the glyph-scramble half a
+> device-only renderer question. History kept here for provenance; do not action
+> this card on its own — implement via the consolidated card. See
+> `docs/terminal-mobile-desktop-diagnosis.md`.
 
 # Hosted terminal is not mobile-responsive (glyphs scramble, fixed size)
 
