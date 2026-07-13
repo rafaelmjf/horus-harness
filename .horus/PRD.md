@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Claude-on-phone is resolved operationally: the owner verified native iOS SSH over Tailscale → tmux → Claude renders and scrolls perfectly. The 39-column browser/xterm path remains best-effort because Claude's live renderer is unreliable there; the bounded web levers shipped through v0.0.45/PR #191 and the card is closed."
-next_action: "Take the next actionable backlog item: reproduce and bound orphan-process reaping after failed runs, then implement the smallest safety guard. [current Codex inline; no delegation unless the probe reveals a broad cross-platform sweep]"
-next_prompt: "Resume Horus. Fetch first and read PRD.md. Start the orphan-reap item by reproducing one failed-run child that survives its registry PID; inspect existing process-tree cleanup and define one deterministic Linux gate before editing. Keep work inline in the current Codex session unless scope expands materially."
-execution_recommendation: "continue-as-is — orphan reaping starts as ambiguous process-tree diagnosis with a small Linux probe; delegation adds little until the failure shape and cross-platform volume are known."
+current_focus: "Terminal-native Horus control is implemented on feature/terminal-app and open as PR #195: `horus app --terminal`/`horus tui` launch fresh or continuity-seeded Claude/Codex sessions in the current TTY or unique persistent tmux sessions. The browser/desktop defaults stay unchanged; 1,263 tests and a two-session live fake-agent tmux probe pass."
+next_action: "Let required CI pass on PR #195, merge it, release/install the new CLI, then have the owner run `horus app --terminal` from Termius and verify one real Claude/Codex launch plus reconnect. [current Codex inline; no delegation]"
+next_prompt: "Resume Horus on PR #195. Fetch first and read PRD.md. Confirm required pytest is green on the exact head, merge the terminal-native launcher, publish/install the next CLI release following the hosted-deploy invariant, then ask the owner to test `horus app --terminal` through Termius with a real account and reconnect."
+execution_recommendation: "continue-as-is — the remaining work is a deterministic CI/merge/release sequence plus an owner-only iPhone runtime gate; delegation adds no useful parallelism."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -40,6 +40,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 ### Now / next candidates
 
 - **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
+- **Terminal-native launcher rollout (PR #195):** implementation, full tests, SSH-mode UI, and two-session tmux probes pass; merge/release/install and the owner Termius real-agent/reconnect gate remain. [current Codex inline]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04;
    2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h —
@@ -65,9 +66,7 @@ One line per capability; details in `archive/features.md`, git history, and the 
 **Consolidated-to marker stops self-dirtying closure** (2026-07-12, PR #174): `init`/`upgrade-project` scaffold the ignore rule for the generated `.horus/.consolidated-to` marker, `upgrade-project --apply` untracks legacy tracked copies while preserving local state, and closure cleanliness checks exclude the marker so it can never itself fail `working tree clean`.
 **Fix Codex usage-limit account scope** (2026-07-12, PR #173): `horus usage check` sources 5h/weekly Codex limits from the newest account-wide rollout (not project-scoped) and flags an expired reset window as stale rather than current capacity.
 **Mobile/desktop terminal sizing + lifecycle + controls hardening** (2026-07-12, PR #171): `.xterm-host` fills its region via `ResizeObserver` + layout-settled initial fit (no stale 80×24 default); live `matchMedia` re-evaluation instead of load-once mobile/desktop latch; tabs reachable in fullscreen; larger tap targets; confirm-guard on closing a live session. Symptom 2 (exposed-mode/POST-path no-input regression) is untouched, tracked separately in Backlog.
-
 **Terminal multi-viewer/mobile stack + verified Claude phone route** (2026-07-12/13, PRs #178–#191, v0.0.36–v0.0.45): browser controls, lifecycle, geometry, xterm 6, phone-width spawn, retained exits, and ordered SSE reset markers shipped; owner testing proved Claude remains unreliable at a 39-column browser grid but works perfectly through native iOS Tailscale SSH → tmux at terminal-native geometry, using the isolated work-account launcher.
-
 **Windows CLI un-broken** (2026-07-13, PR #181): Unix-only `fcntl` top-level import in `backlog.py` (since v0.0.36) killed every Windows invocation; lazy import, install-smoke green on all three OS.
 **Backlog card ship-lifecycle provenance** (2026-07-12, PR #172): `horus backlog ship <slug> --pr N --sha SHA` stamps `status: shipped` + PR/SHA in place; `backlog list`/`fleet --backlog` hide shipped cards by default (`--all`/`--shipped` opt in); `close --check` warns when a card carries shipped provenance but is still `open`.
 **Capabilities table rendering + model-name normalization** (2026-07-12, PRs #167/#168/#169): `capabilities --models`/`--matrix` render an aligned model/tier/datums/last/price/capability/researched table (concise default drops LAST/RESEARCHED, `--verbose`/`--full` restores them); `horus run` canonicalizes captured model names via `datums.canonical_model_name` (adapter-resolved model preferred over a small fallback alias map), `horus datum migrate-names` migrates existing rows in place; `capabilities.toml` owner priors gained optional `price_in`/`price_out`/`capability_note`/`researched_at` plus a >14-day staleness `WARNING`. Real price/capability data for older models is still open (`.horus/backlog/older-models-in-roster.md`). `--stdout` JSON shape unchanged throughout.

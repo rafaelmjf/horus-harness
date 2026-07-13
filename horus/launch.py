@@ -31,6 +31,68 @@ class LaunchResult:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class PreparedInteractive:
+    """Validated attended-agent command shared by every local terminal surface."""
+
+    agent: str
+    project: Path
+    account: str | None
+    session_id: str
+    argv: list[str]
+    env: dict[str, str]
+
+
+def prepare_interactive(
+    *,
+    agent: str = "claude",
+    project_dir: Path | str,
+    account: str | None = None,
+    posture: str = "default",
+    model: str | None = None,
+    prompt: str = "",
+    session_id: str | None = None,
+) -> tuple[PreparedInteractive | None, str | None]:
+    """Validate and build an attended launch without choosing its terminal host."""
+    root = Path(project_dir).resolve()
+    try:
+        adapter = adapters.get_adapter(agent)
+    except KeyError as exc:
+        return None, str(exc)
+    if not hasattr(adapter, "interactive_command"):
+        return None, f"{agent!r} does not support interactive sessions yet."
+    try:
+        permission_posture = adapters.PermissionPosture(posture)
+    except ValueError:
+        return None, f"unknown permission posture: {posture!r}"
+
+    spec = adapters.SpawnSpec(
+        prompt=prompt,
+        project_dir=root,
+        account=account,
+        posture=permission_posture,
+        model=model,
+    )
+    # Never enter an attended session under a mapped alias whose login differs.
+    if account and getattr(adapter, "config_dirs", {}).get(account) and hasattr(adapter, "verify_account"):
+        check = adapter.verify_account(account)
+        if not check.ok:
+            return None, (
+                f"account {account!r} login mismatch "
+                f"(found {check.detected_email or 'no login'})."
+            )
+
+    sid = session_id or str(uuid.uuid4())
+    return PreparedInteractive(
+        agent=adapter.name,
+        project=root,
+        account=account,
+        session_id=sid,
+        argv=adapter.interactive_command(spec, session_id=sid),
+        env=adapter.build_env(spec),
+    ), None
+
+
 def launch_interactive(
     *,
     agent: str = "claude",
@@ -50,52 +112,31 @@ def launch_interactive(
     error), so both the CLI and the web handler can report them uniformly.
     """
     root = Path(project_dir).resolve()
-    try:
-        adapter = adapters.get_adapter(agent)
-    except KeyError as exc:
-        return LaunchResult(ok=False, agent=agent, project=root, account=account, error=str(exc))
-
-    if not hasattr(adapter, "interactive_command"):
-        return LaunchResult(
-            ok=False, agent=agent, project=root, account=account,
-            error=f"{agent!r} does not support interactive sessions yet.",
-        )
-
-    spec = adapters.SpawnSpec(
-        prompt=prompt,
+    prepared, error = prepare_interactive(
+        agent=agent,
         project_dir=root,
         account=account,
-        posture=adapters.PermissionPosture(posture),
+        posture=posture,
         model=model,
+        prompt=prompt,
     )
-
-    # Same identity guard as a headless spawn: refuse if a mapped account's login
-    # doesn't match the requested account (never run under the wrong login).
-    if account and getattr(adapter, "config_dirs", {}).get(account) and hasattr(adapter, "verify_account"):
-        check = adapter.verify_account(account)
-        if not check.ok:
-            return LaunchResult(
-                ok=False, agent=agent, project=root, account=account,
-                error=f"account {account!r} login mismatch (found {check.detected_email or 'no login'}).",
-            )
-
-    session_id = str(uuid.uuid4())
-    argv = adapter.interactive_command(spec, session_id=session_id)
+    if prepared is None:
+        return LaunchResult(ok=False, agent=agent, project=root, account=account, error=error)
     try:
-        pid = launcher.open_terminal(argv, cwd=root, env=adapter.build_env(spec))
+        pid = launcher.open_terminal(prepared.argv, cwd=root, env=prepared.env)
     except OSError as exc:
         return LaunchResult(
-            ok=False, agent=agent, project=root, account=account,
+            ok=False, agent=prepared.agent, project=root, account=account,
             error=f"failed to open a terminal: {exc}",
         )
 
     (reg or registry.Registry.default()).upsert(
         registry.SessionRecord(
-            session_id=session_id, agent=adapter.name, project=root.as_posix(),
+            session_id=prepared.session_id, agent=prepared.agent, project=root.as_posix(),
             account=account, pid=pid, status="running",
         )
     )
     return LaunchResult(
-        ok=True, agent=adapter.name, project=root, account=account,
-        session_id=session_id, pid=pid,
+        ok=True, agent=prepared.agent, project=root, account=account,
+        session_id=prepared.session_id, pid=pid,
     )
