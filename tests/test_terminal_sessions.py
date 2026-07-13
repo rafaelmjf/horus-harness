@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import os
@@ -5,7 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from horus import cli, config, registry, terminal_app, terminal_sessions, tmux_runner
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.output import DummyOutput
+
+from horus import cli, config, registry, terminal_app, terminal_sessions, terminal_tui, tmux_runner
 from horus.launch import LaunchResult
 from horus.registry import Registry, SessionRecord
 
@@ -187,6 +191,49 @@ def test_terminal_app_launches_selected_fresh_agent(tmp_path, monkeypatch):
     assert captured["agent"] == "claude" and captured["project_dir"] == root
     assert captured["prompt"] == "" and captured["account"] is None
     assert "Session 12345678 returned to Horus" in out.getvalue()
+
+
+def test_terminal_tui_down_sequence_scrolls_selection_without_becoming_text(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    for index in range(12):
+        config.register_project(_project(tmp_path, f"project-{index:02}"))
+
+    ui = terminal_tui.TerminalUI()
+    assert ui.selected == 0
+    ui.move(8)
+    assert ui.selected == 8
+    content = ui.body.create_content(width=39, height=15)
+    assert content.cursor_position.y > 15
+    rendered = "".join(
+        fragment[1]
+        for line_number in range(content.line_count)
+        for fragment in content.get_line(line_number)
+    )
+    assert "^[[B" not in rendered
+
+    async def drive_real_input():
+        with create_pipe_input() as pipe_input:
+            driven = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
+            task = asyncio.create_task(driven.application.run_async())
+            await asyncio.sleep(0.02)
+            pipe_input.send_bytes(b"\x1b[B")
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("q")
+            assert await asyncio.wait_for(task, timeout=1) == "quit"
+            return driven.selected
+
+    assert asyncio.run(drive_real_input()) == 1
+
+
+def test_terminal_tui_project_navigation_and_back(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    config.register_project(root)
+    ui = terminal_tui.TerminalUI()
+    ui.activate()
+    assert ui.screen == "project" and ui.project == root
+    ui.back()
+    assert ui.screen == "projects"
 
 
 def test_open_parser_exposes_scriptable_terminal_targets():

@@ -26,6 +26,7 @@ classifiers = [
 # Windows has no stdlib pseudo-console binding, so the in-app terminal needs
 # pywinpty there (ConPTY). macOS/Linux use the stdlib `pty` module — no dep.
 dependencies = [
+    "prompt-toolkit>=3.0,<4",
     "pywinpty>=2.0; sys_platform == 'win32'",
 ]
 
