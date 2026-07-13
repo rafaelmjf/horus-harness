@@ -55,8 +55,6 @@ def prepare_interactive(
 ) -> tuple[PreparedInteractive | None, str | None]:
     """Validate and build an attended launch without choosing its terminal host."""
     root = Path(project_dir).resolve()
-    if not root.is_dir():
-        return None, f"project directory does not exist: {root}"
     try:
         adapter = adapters.get_adapter(agent)
     except KeyError as exc:
