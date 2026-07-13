@@ -13,7 +13,7 @@ wheels = [
 
 [[package]]
 name = "horus-harness"
-version = "0.0.43"
+version = "0.0.44"
 source = { editable = "." }
 dependencies = [
     { name = "pywinpty", marker = "sys_platform == 'win32'" },
