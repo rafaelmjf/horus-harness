@@ -161,14 +161,83 @@ def test_launch_tmux_creates_unique_tracked_session(tmp_path, monkeypatch):
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     monkeypatch.setattr(terminal_sessions.subprocess, "run", fake_run)
-    first = terminal_sessions.launch_tmux(agent="fake", project_dir=root, attach=False)
+    first = terminal_sessions.launch_tmux(
+        agent="fake", project_dir=root, attach=False, cols=39, rows=24,
+    )
     second = terminal_sessions.launch_tmux(agent="fake", project_dir=root, attach=False)
     assert first.ok and second.ok and first.session_id != second.session_id
     records = Registry.default().all()
     assert {record.session_id for record in records} == {first.session_id, second.session_id}
     assert all(record.launch_target == "tmux" for record in records)
     assert all(record.target_ref.startswith("horus-") for record in records)
-    assert calls[0][0][:4] == ["tmux", "new-session", "-d", "-s"]
+    assert first.target_ref and first.target_ref.startswith("horus-")
+    assert calls[0][0][:8] == ["tmux", "new-session", "-d", "-x", "39", "-y", "24", "-s"]
+
+
+def test_launch_window_opens_tmux_viewer_when_supported(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    launched = LaunchResult(
+        True,
+        "fake",
+        root,
+        session_id="12345678-1234-1234-1234-123456789abc",
+        target_ref="horus-123456781234",
+    )
+    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "tmux")
+    monkeypatch.setattr(terminal_sessions, "launch_tmux", lambda **_kwargs: launched)
+    opened = {}
+
+    def fake_open(argv, cwd, env=None):
+        opened.update(argv=argv, cwd=cwd, env=env)
+        return 5150
+
+    monkeypatch.setattr(terminal_sessions.launcher, "open_terminal", fake_open)
+    result = terminal_sessions.launch_window(agent="fake", project_dir=root)
+    assert result.ok and result.pid == 5150
+    assert opened["argv"] == ["tmux", "attach-session", "-t", "horus-123456781234"]
+    assert opened["cwd"] == root
+
+
+def test_launch_window_preserves_direct_fallback(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    captured = {}
+    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "current")
+
+    def fake_launch(**kwargs):
+        captured.update(kwargs)
+        return LaunchResult(True, kwargs["agent"], Path(kwargs["project_dir"]), session_id="direct")
+
+    monkeypatch.setattr(terminal_sessions.launch, "launch_interactive", fake_launch)
+    result = terminal_sessions.launch_window(agent="codex", project_dir=root, account="work")
+    assert result.ok and result.session_id == "direct"
+    assert captured["agent"] == "codex" and captured["account"] == "work"
+
+
+def test_launch_window_rolls_back_tmux_when_viewer_fails(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    launched = LaunchResult(
+        True,
+        "fake",
+        root,
+        session_id="12345678-1234-1234-1234-123456789abc",
+        target_ref="horus-123456781234",
+    )
+    stopped = []
+    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "tmux")
+    monkeypatch.setattr(terminal_sessions, "launch_tmux", lambda **_kwargs: launched)
+    monkeypatch.setattr(
+        terminal_sessions.launcher,
+        "open_terminal",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("no window")),
+    )
+    monkeypatch.setattr(
+        terminal_sessions,
+        "stop_session",
+        lambda session_id, reg=None: stopped.append((session_id, reg)),
+    )
+    result = terminal_sessions.launch_window(agent="fake", project_dir=root)
+    assert not result.ok and "no window" in result.error
+    assert stopped == [(launched.session_id, None)]
 
 
 def test_launch_tmux_refuses_nested_attach(tmp_path, monkeypatch):

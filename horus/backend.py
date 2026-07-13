@@ -29,7 +29,7 @@ Design rules baked into this seam:
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -167,22 +167,28 @@ class LaunchBackend(Protocol):
 class LocalBackend:
     """Runs the session on *this* machine, wrapping today's attended local launcher.
 
-    A behavior-preserving adapter: :meth:`launch` is exactly ``launch_interactive``
-    (same identity guard, same registry row, same terminal spawn), just behind the seam.
-    It serves only the :data:`LOCAL` target — any other target, including the
-    :data:`NATIVE_WINDOWS` gap, is rejected honestly with no fallback.
+    The default is a behavior-preserving adapter around ``launch_interactive``. A local
+    presentation surface may inject another launch function that returns the same
+    :class:`~horus.launch.LaunchResult` contract (the web app uses its managed-tmux
+    window host). It serves only the :data:`LOCAL` target — any other target, including
+    the :data:`NATIVE_WINDOWS` gap, is rejected honestly with no fallback.
     """
 
     name = LOCAL
 
-    def __init__(self, reg: registry.Registry | None = None) -> None:
+    def __init__(
+        self,
+        reg: registry.Registry | None = None,
+        launch_fn: Callable[..., launch.LaunchResult] | None = None,
+    ) -> None:
         self._reg = reg
+        self._launch_fn = launch_fn or launch.launch_interactive
 
     # -- interface --
 
     def launch(self, brief: LaunchBrief) -> Handle:
         self._require_local(brief.target)
-        result = launch.launch_interactive(
+        result = self._launch_fn(
             agent=brief.agent,
             project_dir=brief.project_dir,
             account=brief.account,
@@ -193,7 +199,11 @@ class LocalBackend:
         )
         if not result.ok or not result.session_id:
             raise LaunchFailed(result.error or "launch failed")
-        return Handle(backend=self.name, session_id=result.session_id, meta={"pid": result.pid})
+        return Handle(
+            backend=self.name,
+            session_id=result.session_id,
+            meta={"pid": result.pid, "target_ref": result.target_ref},
+        )
 
     def status(self, handle: Handle) -> SessionStatus:
         self._own(handle)
@@ -212,6 +222,11 @@ class LocalBackend:
 
     def stop(self, handle: Handle) -> None:
         self._own(handle)
+        if handle.meta.get("target_ref"):
+            from horus import terminal_sessions
+
+            terminal_sessions.stop_session(handle.session_id, reg=self._registry())
+            return
         pid = handle.meta.get("pid")
         if pid:
             _terminate_process(int(pid))

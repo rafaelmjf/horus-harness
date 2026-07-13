@@ -6,8 +6,8 @@ side-effect-free and never touch arbitrary files (projects are addressed by thei
 index in the config list, never by a path from the request).
 
 The one mutating action is the Control tab's **launch** button (``POST /launch``):
-it opens an attended agent session in its own terminal via :mod:`horus.launch` —
-the same path as ``horus open``. Inputs are constrained to keep the read surface's
+it opens an attended agent session through the shared launch preparation and uses a
+managed tmux host where supported. Inputs are constrained to keep the read surface's
 guarantees: projects are still addressed by index, accounts validated against the
 known set, and the POST is same-origin-guarded (the server binds loopback only).
 """
@@ -58,6 +58,7 @@ from horus import (
     routines,
     selfupdate,
     session_discovery,
+    terminal_sessions,
     upgrade,
     usage_snapshot,
 )
@@ -3217,8 +3218,8 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   function sessionGone(){
     if(gone) return; gone=true;
     try{ es.close(); }catch(_){ }
-    term.write('\\r\\n\\x1b[31m[session gone — it no longer exists on the host (dashboard restarted?)]\\x1b[0m'
-      +'\\x1b[2m — this tab shows its last screen; close it and launch a new session, or reload the page.\\x1b[0m\\r\\n');
+    term.write('\\r\\n\\x1b[31m[session gone — its browser viewer no longer exists (dashboard restarted?)]\\x1b[0m'
+      +'\\x1b[2m — this tab shows its last screen; managed sessions remain attachable through horus tui.\\x1b[0m\\r\\n');
     var d=document.querySelector('.term-tab[data-tid="'+tid+'"] .tdot'); if(d){d.className='tdot s-exited';}
   }
   function post(path, obj){
@@ -4100,8 +4101,9 @@ def process_launch(
         prompt = _resume_prompt_text(load_project(str(project_dir)))
 
     if target == "app":
-        # In-app terminal: spawn the real agent TUI under a PTY in the session-host.
-        # Fresh opens an empty TUI; resume seeds it with the continuity prompt. A
+        # In-app terminal: host the agent in managed tmux where supported, then make
+        # the browser PTY a client of that same attachable session. Fresh opens an
+        # empty TUI; resume seeds it with the continuity prompt. A
         # compact launching browser estimates its future grid width so Claude's
         # FIRST paint is phone-sized instead of racing the post-redirect fit.
         try:
@@ -4114,7 +4116,7 @@ def process_launch(
             term_id = pty_host.host.start(
                 agent=agent, project_dir=project_dir, account=account,
                 posture=posture, prompt=(prompt if mode == "resume" else ""),
-                cols=spawn_cols,
+                cols=spawn_cols, managed=True,
             )
         except (ValueError, adapters.AccountMismatch) as exc:
             return "error=" + quote_plus(str(exc))
@@ -4127,7 +4129,7 @@ def process_launch(
         project_dir=project_dir, agent=agent, account=account, posture=posture, prompt=prompt,
     )
     try:
-        handle = backend.LocalBackend().launch(brief)
+        handle = backend.LocalBackend(launch_fn=terminal_sessions.launch_window).launch(brief)
     except backend.LaunchFailed as exc:
         return "error=" + quote_plus(str(exc))
     return f"launched={handle.session_id[:8]}"
@@ -4169,9 +4171,9 @@ def process_brainstorm(
 
     target = (form.get("target") or "app").strip()
     if target == "app":
-        # In-app terminal: the brainstorm TUI runs under a PTY in the session-host
-        # (like process_launch's app target) — works on a headless hosted dashboard,
-        # where launch.launch_interactive would fail wanting an OS window.
+        # In-app terminal: the brainstorm TUI uses the same managed tmux + browser
+        # PTY viewer path as a normal app launch. This works on a headless hosted
+        # dashboard, where launch.launch_interactive would want an OS window.
         try:
             term_id, _note = brainstorm.start_brainstorm_app(
                 project_dir=project_dir, topic=topic, agent=agent, account=account,
@@ -4184,6 +4186,7 @@ def process_brainstorm(
     try:
         result = brainstorm.start_brainstorm(
             project_dir=project_dir, topic=topic, agent=agent, account=account,
+            launch_fn=terminal_sessions.launch_window,
         )
     except (ValueError, adapters.AccountMismatch) as exc:
         return "error=" + quote_plus(str(exc))

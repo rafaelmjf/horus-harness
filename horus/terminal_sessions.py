@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from horus import config, launch, registry
+from horus import config, launch, launcher, registry
 
 CURRENT = "current"
 TMUX = "tmux"
@@ -113,6 +113,8 @@ def launch_tmux(
     model: str | None = None,
     prompt: str = "",
     attach: bool = True,
+    cols: int | None = None,
+    rows: int | None = None,
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
     """Create a unique detached tmux session, then optionally attach this TTY."""
@@ -154,8 +156,17 @@ def launch_tmux(
     # its own child PID. A failed tmux spawn is immediately corrected below.
     store.upsert(_record(prepared, pid=os.getpid(), target=TMUX, target_ref=tmux_name))
     runner = shlex.join([sys.executable, "-m", "horus.tmux_runner", prepared.session_id])
+    size_args = []
+    if cols is not None:
+        size_args.extend(["-x", str(cols)])
+    if rows is not None:
+        size_args.extend(["-y", str(rows)])
+    tmux_argv = [
+        "tmux", "new-session", "-d", *size_args,
+        "-s", tmux_name, "-c", str(prepared.project), runner,
+    ]
     created = subprocess.run(  # noqa: S603,S607 - fixed tmux argv; runner is shell-quoted
-        ["tmux", "new-session", "-d", "-s", tmux_name, "-c", str(prepared.project), runner],
+        tmux_argv,
         capture_output=True,
         text=True,
         check=False,
@@ -167,6 +178,7 @@ def launch_tmux(
         return launch.LaunchResult(
             False, prepared.agent, prepared.project, account=account,
             session_id=prepared.session_id,
+            target_ref=tmux_name,
             error=f"failed to create tmux session: {detail}",
         )
 
@@ -176,6 +188,7 @@ def launch_tmux(
             return launch.LaunchResult(
                 False, prepared.agent, prepared.project, account=account,
                 session_id=prepared.session_id,
+                target_ref=tmux_name,
                 error=attached,
             )
     return launch.LaunchResult(
@@ -184,7 +197,63 @@ def launch_tmux(
         prepared.project,
         account=account,
         session_id=prepared.session_id,
+        target_ref=tmux_name,
     )
+
+
+def launch_window(
+    *,
+    agent: str,
+    project_dir: Path | str,
+    account: str | None = None,
+    posture: str = "default",
+    model: str | None = None,
+    prompt: str = "",
+    reg: registry.Registry | None = None,
+) -> launch.LaunchResult:
+    """Open a web-requested native window, backed by tmux when supported."""
+    if default_target() != TMUX:
+        return launch.launch_interactive(
+            agent=agent,
+            project_dir=project_dir,
+            account=account,
+            posture=posture,
+            model=model,
+            prompt=prompt,
+            reg=reg,
+        )
+
+    result = launch_tmux(
+        agent=agent,
+        project_dir=project_dir,
+        account=account,
+        posture=posture,
+        model=model,
+        prompt=prompt,
+        attach=False,
+        reg=reg,
+    )
+    if not result.ok or not result.session_id or not result.target_ref:
+        return result
+    try:
+        viewer_pid = launcher.open_terminal(
+            ["tmux", "attach-session", "-t", result.target_ref],
+            cwd=result.project,
+            env={"TERM": os.environ.get("TERM") or "xterm-256color"},
+        )
+    except OSError as exc:
+        stop_session(result.session_id, reg=reg)
+        return launch.LaunchResult(
+            False,
+            result.agent,
+            result.project,
+            account=account,
+            session_id=result.session_id,
+            target_ref=result.target_ref,
+            error=f"failed to open tmux in a native terminal: {exc}",
+        )
+    result.pid = viewer_pid
+    return result
 
 
 def attach_session(session_id: str, *, reg: registry.Registry | None = None) -> str | None:

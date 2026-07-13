@@ -1,16 +1,10 @@
-"""The local session-host: owns real PTY terminals, persists them across viewers.
+"""The local browser session-host: owns PTY viewers for interactive terminals.
 
-This is the tmux-style half of the unified-terminal design. A terminal is spawned
-under a real pseudo-terminal (:mod:`horus.pty_session`) and **kept alive in this
-process regardless of who is watching** — a browser tab attaches by streaming the
-scrollback then live output, and detaches simply by disconnecting; the agent keeps
-running and can be re-attached (from another tab now; from another machine later).
-
-Scope today is deliberately local and in-process (the dashboard server is the host),
-so "re-attach" spans tabs/reloads while Horus runs. A standalone daemon (survive a
-Horus restart) and remote attach (over a tailnet, authenticated) are the planned
-next stages — the attach protocol here is intentionally transport-agnostic so they
-slot in without reshaping it.
+On a tmux-capable runtime the agent lives in a unique Horus-managed tmux session and
+the PTY owned here is one tmux client. Browser tabs stream that client's scrollback
+and input; another terminal can attach to the same agent, and the agent survives a
+browser or dashboard restart. Native Windows, no-tmux hosts, and explicitly direct
+launches retain the original in-process PTY host as a safe fallback.
 """
 
 from __future__ import annotations
@@ -25,7 +19,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from horus import adapters
+from horus import adapters, terminal_sessions
 from horus.pty_session import PtySession, spawn_pty
 
 # Cap the per-terminal scrollback kept for re-attach replay. Generous enough that a
@@ -51,6 +45,7 @@ class PtyTerminal:
     account: str | None = None
     title: str = ""
     session_id: str | None = None
+    target_ref: str | None = None
     pid: int | None = None
     cols: int = 80
     rows: int = 24
@@ -110,13 +105,29 @@ class PtyHost:
         cols: int = 80,
         rows: int = 24,
         title: str | None = None,
+        managed: bool = False,
     ) -> str:
         """Spawn an interactive agent under a PTY; return the terminal id.
 
         Reuses the adapter's ``interactive_command`` (the same argv as ``horus open``)
         and ``build_env`` (per-account isolation), plus the per-account identity guard.
         ``prompt`` seeds the TUI (e.g. a continuity/resume prompt); empty = fresh.
+        A managed launch creates the agent in tmux when the runtime supports it and
+        makes this PTY a viewer of that persistent session.
         """
+        if managed and terminal_sessions.default_target() == terminal_sessions.TMUX:
+            return self._start_managed_tmux(
+                agent=agent,
+                project_dir=project_dir,
+                account=account,
+                model=model,
+                posture=posture,
+                prompt=prompt,
+                cols=cols,
+                rows=rows,
+                title=title,
+            )
+
         adapter = adapters.get_adapter(agent)
         if not hasattr(adapter, "interactive_command"):
             raise ValueError(f"{agent!r} does not support interactive sessions yet.")
@@ -151,6 +162,65 @@ class PtyHost:
             term_id=term_id, agent=adapter.name, project_dir=root, account=account,
             title=title or f"{root.name} · {account or 'ambient'}",
             session_id=session_id, pid=pty.pid, cols=cols, rows=rows, _pty=pty,
+        )
+        with self._lock:
+            self._terms[term_id] = term
+        threading.Thread(target=self._reader, args=(term,), daemon=True).start()
+        return term_id
+
+    def _start_managed_tmux(
+        self,
+        *,
+        agent: str,
+        project_dir: Path | str,
+        account: str | None,
+        model: str | None,
+        posture: str,
+        prompt: str,
+        cols: int,
+        rows: int,
+        title: str | None,
+    ) -> str:
+        result = terminal_sessions.launch_tmux(
+            agent=agent,
+            project_dir=project_dir,
+            account=account,
+            model=model,
+            posture=posture,
+            prompt=prompt,
+            attach=False,
+            cols=cols,
+            rows=rows,
+        )
+        if not result.ok or not result.session_id or not result.target_ref:
+            raise ValueError(result.error or "failed to create managed tmux session")
+
+        env = {"TERM": os.environ.get("TERM") or "xterm-256color"}
+        try:
+            pty = spawn_pty(
+                ["tmux", "attach-session", "-t", result.target_ref],
+                cwd=result.project,
+                env=env,
+                cols=cols,
+                rows=rows,
+            )
+        except OSError as exc:
+            terminal_sessions.stop_session(result.session_id)
+            raise ValueError(f"failed to attach browser terminal to tmux: {exc}") from exc
+
+        term_id = f"pty-{next(self._ids)}"
+        term = PtyTerminal(
+            term_id=term_id,
+            agent=result.agent,
+            project_dir=result.project,
+            account=account,
+            title=title or f"{result.project.name} · {account or 'ambient'}",
+            session_id=result.session_id,
+            target_ref=result.target_ref,
+            pid=pty.pid,
+            cols=cols,
+            rows=rows,
+            _pty=pty,
         )
         with self._lock:
             self._terms[term_id] = term
@@ -281,7 +351,7 @@ class PtyHost:
         term = self.get(term_id)
         if term is None or term._pty is None:
             return False
-        term._pty.terminate()
+        self._terminate(term)
         return True
 
     def close(self, term_id: str) -> bool:
@@ -293,8 +363,16 @@ class PtyHost:
         if term is None:
             return False
         if term._pty is not None and term.alive:
-            term._pty.terminate()
+            self._terminate(term)
         return True
+
+    @staticmethod
+    def _terminate(term: PtyTerminal) -> None:
+        if term.session_id and term.target_ref:
+            if terminal_sessions.stop_session(term.session_id) is None:
+                return
+        if term._pty is not None:
+            term._pty.terminate()
 
     def reap_dead(self, *, grace: float = 600.0) -> list[str]:
         """Forget terminals whose process exited more than ``grace`` seconds ago;

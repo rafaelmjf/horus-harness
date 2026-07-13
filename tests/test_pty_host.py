@@ -9,6 +9,7 @@ import time
 import pytest
 
 from horus import pty_host
+from horus.launch import LaunchResult
 from horus.pty_session import spawn_pty
 
 
@@ -97,6 +98,86 @@ def test_host_streams_writes_resizes_and_persists(tmp_path, monkeypatch):
     decoded = b"".join(base64.b64decode(f.split("data: ", 1)[1].strip()) for f in outputs)
     assert b"hello world" in decoded
     assert any("event: status\ndata: exited" in f for f in frames)
+
+
+def test_managed_host_views_and_closes_same_tmux_session(tmp_path, monkeypatch):
+    fake = _FakePty()
+    captured = {}
+    stopped = []
+    monkeypatch.setattr(pty_host.terminal_sessions, "default_target", lambda: "tmux")
+    monkeypatch.setattr(
+        pty_host.terminal_sessions,
+        "launch_tmux",
+        lambda **kwargs: captured.update(launch=kwargs) or LaunchResult(
+            True,
+            kwargs["agent"],
+            tmp_path,
+            session_id="12345678-1234-1234-1234-123456789abc",
+            target_ref="horus-123456781234",
+        ),
+    )
+
+    def fake_spawn(argv, **kwargs):
+        captured.update(argv=argv, spawn=kwargs)
+        return fake
+
+    monkeypatch.setattr(pty_host, "spawn_pty", fake_spawn)
+    monkeypatch.setattr(
+        pty_host.terminal_sessions,
+        "stop_session",
+        lambda session_id: stopped.append(session_id),
+    )
+
+    h = pty_host.PtyHost()
+    tid = h.start(
+        agent="fake",
+        project_dir=tmp_path,
+        account="work",
+        cols=39,
+        rows=25,
+        managed=True,
+    )
+    term = h.get(tid)
+    assert term is not None and term.session_id == "12345678-1234-1234-1234-123456789abc"
+    assert term.target_ref == "horus-123456781234"
+    assert captured["launch"]["attach"] is False
+    assert captured["launch"]["cols"] == 39 and captured["launch"]["rows"] == 25
+    assert captured["argv"] == ["tmux", "attach-session", "-t", "horus-123456781234"]
+    assert captured["spawn"]["cols"] == 39 and captured["spawn"]["rows"] == 25
+
+    assert h.close(tid) is True
+    assert stopped == ["12345678-1234-1234-1234-123456789abc"]
+    assert h.get(tid) is None
+    fake.eof()
+
+
+def test_managed_host_rolls_back_tmux_when_browser_viewer_fails(tmp_path, monkeypatch):
+    stopped = []
+    monkeypatch.setattr(pty_host.terminal_sessions, "default_target", lambda: "tmux")
+    monkeypatch.setattr(
+        pty_host.terminal_sessions,
+        "launch_tmux",
+        lambda **kwargs: LaunchResult(
+            True,
+            kwargs["agent"],
+            tmp_path,
+            session_id="12345678-1234-1234-1234-123456789abc",
+            target_ref="horus-123456781234",
+        ),
+    )
+    monkeypatch.setattr(
+        pty_host,
+        "spawn_pty",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("no pty")),
+    )
+    monkeypatch.setattr(
+        pty_host.terminal_sessions,
+        "stop_session",
+        lambda session_id: stopped.append(session_id),
+    )
+    with pytest.raises(ValueError, match="failed to attach browser terminal"):
+        pty_host.PtyHost().start(agent="fake", project_dir=tmp_path, managed=True)
+    assert stopped == ["12345678-1234-1234-1234-123456789abc"]
 
 
 def _fake_host(tmp_path, monkeypatch):
