@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Terminal strategy + attach gate are both closed. A guarded tmux orphan-reaper (positive-orphan-confirmation invariant) shipped to PR #214, awaiting the owner's accept-gate."
-next_action: "Owner reviews/merges PR #214 (guarded orphan-reaper). Do not self-merge. On merge, cut the next release (three-file bump + install smoke + hosted deploy). [owner accept-gate; no model spend]"
-next_prompt: "Resume Horus after the guarded orphan-reaper PR. Fetch first and read PRD.md. If PR #214 is merged, cut the next release per the usual discipline; if it's still open, do not act on it further without new owner direction. Do not reopen terminal UX without new usage evidence."
-execution_recommendation: "continue-as-is — remaining step is the owner's PR accept-gate, then a routine release cut; no open design ambiguity."
+current_focus: "Two owner-facing terminal fixes landed on feat/tui-scroll-launch-defaults, PR #215 opened: scoped tmux mouse mode (fixes wheel-scroll-recalls-history bug) + a home-level Defaults screen for the TUI's launch permission posture. PR #214 (guarded orphan-reaper) is still awaiting the owner's accept-gate separately."
+next_action: "Owner reviews/merges PR #215 (tmux-mouse + launch-defaults) and PR #214 (guarded orphan-reaper). Do not self-merge either. On merge, cut the next release (three-file bump + install smoke + hosted deploy). [owner accept-gate; no model spend]"
+next_prompt: "Resume Horus after PR #215 (tmux-mouse/launch-defaults) and PR #214. Fetch first and read PRD.md. If both are merged, cut the next release per the usual discipline; if either is still open, do not act on it further without new owner direction. Do not reopen terminal UX without new usage evidence."
+execution_recommendation: "continue-as-is — remaining step is the owner's PR accept-gate on both PRs, then a routine release cut; no open design ambiguity."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -54,6 +54,13 @@ One line per capability; details in `archive/features.md`, git history, and the 
 **v0.0.52 attach gate: PASS** (2026-07-13, owner-verified): web-launched session attached
 cleanly from Termius/`horus tui` on a separate desktop; detach/reattach worked. This was
 the runtime gate the terminal-strategy work was blocked on; closes that thread.
+**Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215, unmerged
+pending owner accept-gate): `launch_tmux` scopes tmux mouse mode to just the new session
+(`-t`, never `-g`) right after `new-session`/before attach — fixes wheel-up recalling
+agent input history instead of scrolling; a config failure kills only that session.
+`horus tui` gained a home-level Defaults screen (`d` key) for the default launch
+permission posture (all five, full-auto labeled "bypass permissions"), persisted in
+`config.toml`'s `[launch]` table and applied to fresh/resume/card-resume launches.
 **Guarded tmux orphan-reaper** (2026-07-13, PR #214, unmerged pending owner accept-gate):
 `terminal_sessions.reap_orphans()` + `horus reap` kill an abandoned Horus-managed tmux
 session only under positive confirmation — a matching registry record whose status is

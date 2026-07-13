@@ -2,10 +2,12 @@ import asyncio
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
@@ -16,6 +18,7 @@ from horus import (
     cli,
     codex_usage,
     config,
+    launch,
     registry,
     terminal_app,
     terminal_sessions,
@@ -23,7 +26,7 @@ from horus import (
     tmux_runner,
     usage_snapshot,
 )
-from horus.launch import LaunchResult
+from horus.launch import LaunchResult, PreparedInteractive
 from horus.registry import Registry, SessionRecord
 
 
@@ -172,6 +175,130 @@ def test_launch_tmux_creates_unique_tracked_session(tmp_path, monkeypatch):
     assert all(record.target_ref.startswith("horus-") for record in records)
     assert first.target_ref and first.target_ref.startswith("horus-")
     assert calls[0][0][:8] == ["tmux", "new-session", "-d", "-x", "39", "-y", "24", "-s"]
+
+
+def test_launch_tmux_enables_scoped_mouse_mode_before_attach(tmp_path, monkeypatch):
+    """Regression pin (2026-07-13 report): launch_tmux used to create a session
+    and attach with mouse mode left off, so wheel-up reached the attended agent
+    as a raw terminal escape sequence (recalled shell/agent input history,
+    triggering accidental commands/interrupts) instead of entering tmux
+    scrollback. This asserts the `set-option ... mouse on` call exists, in the
+    right order, scoped to only the new session — the exact mechanism report."""
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(terminal_sessions.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.delenv("TMUX", raising=False)
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(terminal_sessions.subprocess, "run", fake_run)
+    result = terminal_sessions.launch_tmux(agent="fake", project_dir=root, attach=True)
+    assert result.ok, result.error
+    tmux_name = result.target_ref
+
+    # Command order: create the session, then scope mouse mode to it, then attach.
+    assert [call[1] for call in calls] == ["new-session", "set-option", "attach-session"]
+    mouse_call = calls[1]
+    assert mouse_call == ["tmux", "set-option", "-t", tmux_name, "mouse", "on"]
+    assert "-g" not in mouse_call  # never the tmux server/user default
+    for call in calls[1:]:
+        assert call[2] == "-t" and call[3] == tmux_name  # every follow-up call targets only the new session
+
+
+def test_launch_tmux_cleans_up_when_mouse_mode_configuration_fails(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(terminal_sessions.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.delenv("TMUX", raising=False)
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(argv)
+        if argv[1] == "set-option":
+            return subprocess.CompletedProcess(argv, 1, "", "no server running on socket")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(terminal_sessions.subprocess, "run", fake_run)
+    result = terminal_sessions.launch_tmux(agent="fake", project_dir=root, attach=False)
+    assert not result.ok
+    assert "mouse" in result.error
+
+    # New session created, mouse-mode configuration failed, and only that new
+    # session was torn down — never left half-configured, never a live attach.
+    assert [call[1] for call in calls] == ["new-session", "set-option", "kill-session"]
+    tmux_name = result.target_ref
+    assert calls[-1] == ["tmux", "kill-session", "-t", tmux_name]
+
+    record = Registry.default().get(result.session_id)
+    assert record.status == "failed"
+    assert not terminal_sessions._runner_spec_path(result.session_id).exists()
+
+
+def test_live_isolated_tmux_session_reports_mouse_on_and_leaves_global_untouched(tmp_path, monkeypatch):
+    """A real, isolated tmux server proves ``launch_tmux`` actually leaves the new
+    session with mouse mode on. Isolation is mandatory here (PRD Rules,
+    2026-07-13 incident): every tmux subprocess call this module makes is routed
+    through an explicit ``-S <path>`` socket for a throwaway server, so this can
+    never see or touch the default tmux server / any real session on it."""
+    if shutil.which("tmux") is None:
+        pytest.skip("tmux is not installed")
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    socket_path = tmp_path / "horus-mouse-probe.sock"
+    real_run = subprocess.run
+
+    def isolated_run(argv, **kwargs):
+        if argv and argv[0] == "tmux":
+            argv = ["tmux", "-S", str(socket_path), *argv[1:]]
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(terminal_sessions.subprocess, "run", isolated_run)
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.delenv("TMUX", raising=False)
+
+    # A real, short-lived process to keep the pane (and session) alive long
+    # enough to inspect it, without depending on any real agent CLI. Do not
+    # inject anything into a live Codex/Claude session — this spawns its own.
+    sleeper = [sys.executable, "-c", "import time; time.sleep(5)"]
+    monkeypatch.setattr(
+        launch,
+        "prepare_interactive",
+        lambda **kwargs: (
+            PreparedInteractive(
+                agent="fake",
+                project=root,
+                account=None,
+                session_id="12345678-1234-1234-1234-123456789abc",
+                argv=sleeper,
+                env={},
+            ),
+            None,
+        ),
+    )
+
+    try:
+        result = terminal_sessions.launch_tmux(agent="fake", project_dir=root, attach=False)
+        assert result.ok, result.error
+
+        session_mouse = real_run(
+            ["tmux", "-S", str(socket_path), "show-options", "-t", result.target_ref, "mouse"],
+            capture_output=True, text=True, check=False,
+        )
+        assert session_mouse.returncode == 0
+        assert session_mouse.stdout.strip() == "mouse on"
+
+        global_mouse = real_run(
+            ["tmux", "-S", str(socket_path), "show-options", "-g", "mouse"],
+            capture_output=True, text=True, check=False,
+        )
+        assert "on" not in global_mouse.stdout  # the server/user default was never touched
+    finally:
+        real_run(["tmux", "-S", str(socket_path), "kill-server"], capture_output=True, check=False)
 
 
 def test_launch_window_opens_tmux_viewer_when_supported(tmp_path, monkeypatch):
@@ -593,6 +720,134 @@ def test_terminal_tui_project_navigation_and_back(tmp_path, monkeypatch):
     assert ui.screen == "project" and ui.project == root
     ui.back()
     assert ui.screen == "projects"
+
+
+def test_terminal_tui_defaults_screen_lists_full_posture_vocabulary(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    ui = terminal_tui.TerminalUI()
+    ui._show("settings")
+    assert [value for _kind, value in ui.items] == list(config.LAUNCH_POSTURE_CHOICES)
+    assert ui.selected == config.LAUNCH_POSTURE_CHOICES.index("default")  # backward-compat default
+
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "full-auto" in rendered
+    assert "bypass permissions" in rendered  # full-auto must read unambiguously as dangerous
+
+
+def test_terminal_tui_d_key_opens_defaults_from_home(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+
+    async def drive():
+        with create_pipe_input() as pipe_input:
+            ui = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
+            task = asyncio.create_task(ui.application.run_async())
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("d")
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("q")
+            assert await asyncio.wait_for(task, timeout=1) == "quit"
+            return ui.screen
+
+    # "d" is consumed as the Defaults shortcut, not typed into the underlying
+    # terminal, and "q" back out lands on the settings screen's own quit binding.
+    assert asyncio.run(drive()) == "settings"
+
+
+def test_terminal_tui_defaults_screen_selection_persists_and_back_returns_home(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    ui = terminal_tui.TerminalUI()
+    ui._show("settings")
+
+    target = config.LAUNCH_POSTURE_CHOICES.index("auto-edit")
+    ui.move(target - ui.selected)
+    assert ui.selected == target
+    ui.activate()
+
+    assert config.load_launch_defaults() == {"posture": "auto-edit"}
+    assert "auto-edit" in ui.status
+    assert ui.screen == "settings"  # stays put so the new selection is visible
+
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "[current] auto-edit" in rendered
+
+    ui.back()
+    assert ui.screen == "projects"
+
+
+def test_terminal_tui_defaults_screen_reopens_with_persisted_selection(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.set_launch_default_posture("read-only")
+    ui = terminal_tui.TerminalUI()
+    ui._show("settings")
+    assert ui.selected == config.LAUNCH_POSTURE_CHOICES.index("read-only")
+
+
+def test_terminal_tui_run_applies_persisted_posture_to_new_launches(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    config.set_launch_default_posture("auto-edit")
+    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "current")
+    captured = {}
+
+    def fake_run_attached(**kwargs):
+        captured.update(kwargs)
+        return LaunchResult(True, kwargs["agent"], Path(kwargs["project_dir"]), session_id="12345678-rest")
+
+    monkeypatch.setattr(terminal_sessions, "run_attached", fake_run_attached)
+
+    results = iter([terminal_tui._Launch(root, "fake", "fresh", None, None), "quit"])
+
+    class _StubApp:
+        def run(self):
+            return next(results)
+
+    class _StubUI:
+        def __init__(self, status=""):
+            self.application = _StubApp()
+
+    monkeypatch.setattr(terminal_tui, "TerminalUI", _StubUI)
+
+    assert terminal_tui.run() == 0
+    assert captured["posture"] == "auto-edit"  # the persisted default reached the launch call
+    assert captured["agent"] == "fake" and captured["project_dir"] == root
+
+
+def test_terminal_tui_end_to_end_defaults_flow_via_real_application(tmp_path, monkeypatch):
+    """Drives the real prompt_toolkit Application (not a stub) through the whole
+    Defaults flow: open from home, move selection, save, back to home, quit."""
+    _home(tmp_path, monkeypatch)
+
+    async def drive():
+        with create_pipe_input() as pipe_input:
+            ui = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
+            task = asyncio.create_task(ui.application.run_async())
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("d")  # open Defaults from home
+            await asyncio.sleep(0.02)
+            pipe_input.send_bytes(b"\x1b[B")  # one step down from "default"
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("\r")  # save the new selection
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("b")  # back to home
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("q")
+            assert await asyncio.wait_for(task, timeout=1) == "quit"
+            return ui.screen
+
+    assert asyncio.run(drive()) == "projects"
+    assert config.load_launch_defaults()["posture"] == "auto-edit"  # one step down from "default"
+
+
+def test_terminal_tui_run_default_posture_flows_into_claude_interactive_argv(tmp_path, monkeypatch):
+    # One hop further than the plumbing test above: the persisted posture,
+    # loaded exactly as `terminal_tui.run()` loads it, must turn into the real
+    # adapter flag on the actual argv Claude would be launched with.
+    _home(tmp_path, monkeypatch)
+    config.set_launch_default_posture("full-auto")
+    posture = config.load_launch_defaults()["posture"]
+    prepared, error = launch.prepare_interactive(agent="claude", project_dir=tmp_path, posture=posture)
+    assert error is None
+    assert "bypassPermissions" in prepared.argv
 
 
 def test_terminal_tui_distinguishes_attachable_sessions(tmp_path, monkeypatch):
