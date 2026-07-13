@@ -39,7 +39,7 @@ _lock = threading.Lock()
 _resizes: list[dict] = []
 _closed: set[str] = set()
 _redraws: list[str] = []
-_subscribers: dict[str, list[queue.Queue[bytes]]] = {}
+_subscribers: dict[str, list[queue.Queue[tuple[str, bytes]]]] = {}
 
 TERMINALS = [
     pty_host.PtyTerminal(term_id="pty-1", agent="claude", project_dir=ROOT, title="alpha"),
@@ -104,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/pty/stream":
             tid = parse_qs(parsed.query).get("id", [""])[0]
-            output: queue.Queue[bytes] = queue.Queue()
+            output: queue.Queue[tuple[str, bytes]] = queue.Queue()
             with _lock:
                 _subscribers.setdefault(tid, []).append(output)
             self.send_response(200)
@@ -122,9 +122,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.flush()
                 while True:
                     try:
-                        chunk = output.get(timeout=1.0)
-                        encoded = base64.b64encode(chunk)
-                        self.wfile.write(b"event: output\ndata: " + encoded + b"\n\n")
+                        kind, chunk = output.get(timeout=1.0)
+                        if kind == "reset":
+                            self.wfile.write(b"event: reset\ndata: " + chunk + b"\n\n")
+                        else:
+                            encoded = base64.b64encode(chunk)
+                            self.wfile.write(b"event: output\ndata: " + encoded + b"\n\n")
                     except queue.Empty:
                         self.wfile.write(b": hb\n\n")
                     self.wfile.flush()
@@ -170,14 +173,15 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/pty/redraw":
             form = self._read_form()
             tid = form.get("id", "")
+            token = form.get("reset", "").encode()
             with _lock:
                 _redraws.append(tid)
                 listeners = list(_subscribers.get(tid, []))
-            # Reproduce the real race: TIOCSWINSZ makes the PTY reader publish
-            # repaint bytes while the POST handler is still returning. The
-            # browser must arm its lazy reset before issuing this request.
+            # Reproduce the real race: the ordered reset marker and repaint can
+            # both beat the redraw POST response on the independent SSE stream.
             for listener in listeners:
-                listener.put(f"FRESH-{tid}".encode())
+                listener.put(("reset", token))
+                listener.put(("output", f"FRESH-{tid}".encode()))
             time.sleep(0.15)
             self._no_content()
             return
@@ -188,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
             with _lock:
                 listeners = list(_subscribers.get(tid, []))
             for listener in listeners:
-                listener.put(data)
+                listener.put(("output", data))
             self._no_content()
             return
         if parsed.path == "/pty/close":

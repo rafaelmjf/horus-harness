@@ -3295,28 +3295,29 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     updateBar();
     window.addEventListener('horus:compactchange', updateBar);
   }
-  var lastSent=null, fitted=false, attachGeom=null, epochChecked=false, pendingReset=false;
+  var lastSent=null, fitted=false, attachGeom=null, epochChecked=false, pendingReset=null;
   // Geometry-epoch handshake: the server announces the PTY's grid at attach.
   // If OUR fit differs, the replayed scrollback was written for a different
   // grid — rendering it corrupts the wrap/cursor state (the scrambled-phone
   // bug). Ask the TUI for a fresh full repaint at the size we just posted,
-  // then wipe the screen LAZILY — only when the repaint's bytes actually
-  // arrive. Not every TUI repaints on SIGWINCH (Claude Code's trust prompt
-  // doesn't): an eager reset left those viewers on a blank screen, while the
-  // lazy one keeps the readable replay until fresh content really lands.
+  // The redraw endpoint inserts an ordered reset marker into this viewer's SSE
+  // stream immediately before the repaint bytes. Queueing RIS at that marker
+  // resets xterm at the exact old-replay/repaint boundary. The old lazy scheme
+  // guessed that the next output event was the repaint; on a large resume replay
+  // it could instead reset amid queued old bytes and produce mixed letters.
   // The delay lets our /pty/resize apply first so the repaint targets OUR grid.
   function maybeEpochReset(){
     if(epochChecked || attachGeom===null || !fitted) return;
     epochChecked=true;
     if(term.cols+'x'+term.rows === attachGeom) return;  // replay matched our grid
     setTimeout(function(){
-      // Arm BEFORE the request: redraw() jiggles TIOCSWINSZ synchronously, so
-      // the PTY reader can publish Claude's repaint over SSE before this fetch
-      // receives its 204. Arming in .then() missed that repaint and caused the
-      // next unrelated output to wipe the freshly-painted screen.
-      pendingReset=true;
-      post('/pty/redraw',{id:tid}).then(function(r){
-        if(!r || !r.ok){ pendingReset=false; }
+      // Arm BEFORE the request because the ordered SSE marker can beat the POST
+      // response on a separate connection. Only our random token can reset us;
+      // markers requested by another viewer are ignored.
+      var token=vid+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+      pendingReset=token;
+      post('/pty/redraw',{id:tid, reset:token}).then(function(r){
+        if((!r || !r.ok) && pendingReset===token){ pendingReset=null; }
       });
     }, 250);
   }
@@ -3421,8 +3422,15 @@ window.horusAttachTerm = function(hostId, tid, onExit){
   host.addEventListener('touchend', function(){ touchY=null; }, {passive:true});
   var es=new EventSource('/pty/stream?id='+encodeURIComponent(tid)+'&vid='+encodeURIComponent(vid));
   es.addEventListener('geometry', function(e){ attachGeom=e.data; maybeEpochReset(); });
+  es.addEventListener('reset', function(e){
+    if(e.data!==pendingReset) return;
+    pendingReset=null;
+    // Put a full terminal reset *in xterm's write queue*. EventSource preserves
+    // event order, and xterm preserves write-call order, so all old replay bytes
+    // parse first and the repaint bytes parse only after this reset.
+    term.write('\\x1bc');
+  });
   es.addEventListener('output', function(e){
-    if(pendingReset){ pendingReset=false; term.reset(); }
     term.write(b64bytes(e.data));
   });
   // Surface a dead stream instead of failing silently: a session that opens but shows
@@ -4635,7 +4643,12 @@ class _Handler(BaseHTTPRequestHandler):
             # A viewer reset its screen (attached across a geometry change) and
             # asks the TUI for a full repaint: double-SIGWINCH jiggle.
             form = self._read_form()
-            if pty_host.host.redraw(form.get("id", "")):
+            reset_token = form.get("reset", "")
+            # SSE data fields are single-line. Tokens are browser-generated but
+            # still untrusted input; bound and restrict them before broadcasting.
+            if len(reset_token) > 96 or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for ch in reset_token):
+                reset_token = ""
+            if pty_host.host.redraw(form.get("id", ""), reset_token or None):
                 _geom_log(form.get("id", ""), "redraw jiggle")
                 self._no_content()
             else:
