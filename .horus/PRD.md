@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.47 replaces the terminal launcher's line prompts with one full-screen, internally scrolling project/session UI for phone and desktop terminals. Termius down-arrow bytes, keyboard arrows, and mouse-wheel events move the highlighted row without echoing raw escapes; launch/attach still use the proven current-TTY/tmux substrate."
-next_action: "Owner upgrades/opens `horus tui` in Termius and verifies swipe/down-arrow scrolling, project open/back, account selection, and no printed `^[[B`; on PASS, choose the next responsive desktop/launch-sheet slice or return to orphan-process reaping. [owner runtime gate; current Codex inline]"
-next_prompt: "Resume Horus after the owner tests v0.0.47 through Termius. Fetch first and read PRD.md. Record whether swipe/down-arrow scrolling follows the highlighted project without raw escapes and whether open/back/account selection remain usable. Fix only a reproduced failure; on PASS, decide between the planned responsive desktop detail/launch sheet and the orphan-reap backlog item."
-execution_recommendation: "continue-as-is — the next step is an owner-only iPhone runtime gate; any reproduced navigation follow-up is a narrow runtime/UI fix where delegation adds no useful parallelism."
+current_focus: "v0.0.48 expands the owner-verified scrolling TUI into a phone/desktop project cockpit: cached account-window KPIs, named ambient/isolated accounts, per-project live-session and backlog/bug counts, unified Resume/Fresh account selection, priority/type backlog browsing, full card detail, and card-first resume."
+next_action: "Owner tests v0.0.48 in Termius: swipe-up moves options upward, account names/usage render, backlog drill-down works, and `Ctrl-b d` returns from one tmux agent so a second session can launch and both can be reattached from `s`. [owner runtime gate; current Codex inline]"
+next_prompt: "Resume Horus after the owner tests v0.0.48 through Termius. Fetch first and read PRD.md. Record touch direction, account/KPI accuracy, backlog/card-first resume, and the two-session detach/reattach flow. Fix only a reproduced failure; on PASS, return to the orphan-reap backlog item."
+execution_recommendation: "continue-as-is — the remaining work is an owner-only iPhone/tmux runtime gate; any follow-up should be a narrow reproduced TUI fix, so delegation adds no useful parallelism."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -60,7 +60,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**Scrollable terminal project/session UI** (2026-07-13, PRs #198/#199, v0.0.47): real TTYs now use a full-screen internally scrolling selector whose arrows, Termius swipe bytes, Page Up/Down, and mouse wheel move the highlighted row; blocking launch/attach actions run outside the alternate screen, while injected/non-TTY callers keep the legacy deterministic path.
+**Terminal project cockpit** (2026-07-13, PRs #198/#199/#201/#202, v0.0.47–0.0.48): the full-screen phone/desktop TUI internally scrolls projects/sessions; shows cached Claude/Codex account windows plus live-session/backlog/bug KPIs; names ambient accounts without changing their launch value; offers unified Resume/Fresh and priority/type backlog → full card → card-first resume flows; blocking tmux actions still leave the alternate screen cleanly.
 **Terminal-native Horus launcher** (2026-07-13, PRs #195/#196, v0.0.46): `horus app --terminal`/`horus tui` provides project/next-action selection, fresh/resume Claude/Codex account launches, live-session controls, current-TTY execution, and unique reconnectable tmux sessions; direct `open --target`, `attach`, and `stop` commands back shortcuts, with browser/desktop defaults unchanged.
 **OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): compared OpenWiki against the Horus capability catalog + PRD continuity (`research/openwiki-comparison-2026-07.md`); overseer+owner endorsed skip-but-watch — no dependency, no competing doc engine now — revisit only if OpenWiki reaches a stable 1.x code mode with evidence across 30+ merged changes in a private polyglot repo, via an opt-in measured pilot (`.horus/backlog/openwiki-vs-self-documenting-research.md`).
 **`dashboard --reload`** (2026-07-12, PR #175): restarts a running Horus backend in place from currently-installed code via `/health` discovery + terminate + relaunch on the same host/port (exposed backends restart with `--exposed`); `horus app` polls and respawns its own dashboard child after a crash, never adopting one it didn't spawn.
@@ -168,6 +168,8 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Terminal-app navigation stays inside the UI:** on a real TTY, swipe/wheel/arrows
   scroll the highlighted internal viewport and raw escape bytes never reach a line
   prompt; leave the alternate screen before blocking agent launch/attach commands.
+  Narrow SSH reverses mouse/touch events only (not arrows); account aliases are display
+  labels while ambient launches continue to pass `None` to the native agent adapter.
 - **Git policy:** branch → PR → auto-merge; this repo's main requires pytest checks
   (admins exempt so continuity pushes land directly; fallback direct merge only on
   repos without required checks); offboard keeps `.horus/` by default; `.vscode/` is
