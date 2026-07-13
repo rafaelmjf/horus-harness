@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Owner phone verdict on v0.0.43: project fresh now renders + scrolls correctly; Accounts fresh still fails. Hosted logs prove both received the same 39×26/27 PTY geometry. Differential found in Claude config: successful ambient launch had tui=fullscreen; isolated work account did not. The isolated account now has tui=fullscreen, pending one retest."
-next_action: "Owner launches ONE fresh session from Accounts and checks display + scroll; no resume test needed. If it passes, close the Claude rendering card as a per-account renderer-preference issue; if not, capture a screenshot without spending a model turn. [no Sonnet; current Codex inline only if debugging resumes]"
-next_prompt: "Resume Horus. Fetch first; read PRD.md and terminal-claude-rendering-levers.md. Ask whether the Accounts fresh session rendered correctly after setting tui=fullscreen in the isolated work account. Do not request a resume/model turn; close the card on PASS or inspect the screenshot on failure."
-execution_recommendation: "continue-as-is — only an owner visual check remains; no implementation volume and no reason to delegate or use Sonnet."
+current_focus: "v0.0.44 is published and hosted: compact launch forms now pass the phone's column estimate into PTY creation, so fast Accounts launches cannot paint once at the 80-col default before the viewer claims 39 cols. An exited process now leaves its final screen visible. Awaiting one owner Accounts-fresh verdict."
+next_action: "Owner hard-refreshes/restarts the PWA and launches ONE fresh Claude work-account session from Accounts. Check display + scroll without sending a prompt; if it exits, record the final visible screen (it will no longer auto-close). [current Codex inline only; no delegation]"
+next_prompt: "Resume Horus. Fetch first; read PRD.md and terminal-claude-rendering-levers.md. Ask for the one Accounts-fresh result on hosted v0.0.44: whether first paint/scroll were correct and, if Claude exited, the exact final screen. Do not request resume or a model turn."
+execution_recommendation: "continue-as-is — the only next step is an owner visual/lifecycle observation on the deployed build; no implementation volume or benefit from delegation."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -40,7 +40,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 ### Now / next candidates
 
 - **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
-- **Claude-on-phone final account check:** project fresh passes on v0.0.43; Accounts fresh had identical 39-col geometry but its isolated Claude config lacked ambient's `tui: fullscreen`. Preference set explicitly; owner retests one Accounts fresh session without a model turn. No resume test needed. [owner-only gate; current Codex inline if debugging]
+- **Claude-on-phone final account check:** v0.0.44 starts compact launches at the client-estimated phone width before Claude's first paint and retains exited screens. Owner hard-refreshes, launches one Accounts fresh session without a prompt, checks display/scroll, and records the final screen if Claude exits. No resume test needed. [owner-only gate; current Codex inline if debugging]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04;
    2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h —
@@ -67,7 +67,7 @@ One line per capability; details in `archive/features.md`, git history, and the 
 **Fix Codex usage-limit account scope** (2026-07-12, PR #173): `horus usage check` sources 5h/weekly Codex limits from the newest account-wide rollout (not project-scoped) and flags an expired reset window as stale rather than current capacity.
 **Mobile/desktop terminal sizing + lifecycle + controls hardening** (2026-07-12, PR #171): `.xterm-host` fills its region via `ResizeObserver` + layout-settled initial fit (no stale 80×24 default); live `matchMedia` re-evaluation instead of load-once mobile/desktop latch; tabs reachable in fullscreen; larger tap targets; confirm-guard on closing a live session. Symptom 2 (exposed-mode/POST-path no-input regression) is untouched, tracked separately in Backlog.
 
-**Terminal multi-viewer/mobile stack overhaul** (2026-07-12/13, PRs #178–#186, v0.0.36–v0.0.43): gone-session/input signals; 16px+iOS containment+xterm 6; geometry re-claim/touch wheel; smallest-wins viewers; epoch redraw+lazy reset; v0.0.43 arms reset before redraw so SSE repaint bytes cannot beat the HTTP response and be erased by later output; CDP race repro. Claude's controlled ~80-col result awaits clean owner retest. Details: sessions/2026-07-13-011925 + newest v0.0.43 note.
+**Terminal multi-viewer/mobile stack overhaul** (2026-07-12/13, PRs #178–#188, v0.0.36–v0.0.44): gone-session/input signals; 16px+iOS containment+xterm 6; geometry re-claim/touch wheel; smallest-wins viewers; epoch redraw+lazy reset; redraw race repro; compact launch forms seed PTY creation with the phone-width estimate so Claude's first paint is not at 80 cols; exited terminals retain the final screen until manual close. Awaiting one Accounts-fresh owner check.
 
 **Windows CLI un-broken** (2026-07-13, PR #181): Unix-only `fcntl` top-level import in `backlog.py` (since v0.0.36) killed every Windows invocation; lazy import, install-smoke green on all three OS.
 **Backlog card ship-lifecycle provenance** (2026-07-12, PR #172): `horus backlog ship <slug> --pr N --sha SHA` stamps `status: shipped` + PR/SHA in place; `backlog list`/`fleet --backlog` hide shipped cards by default (`--all`/`--shipped` opt in); `close --check` warns when a card carries shipped provenance but is still `open`.

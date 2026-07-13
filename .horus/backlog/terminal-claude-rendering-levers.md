@@ -10,6 +10,23 @@ surface: horus/dashboard.py, horus/assets/vendor/xterm/
 
 # Claude Code rendering in the webapp terminal: cheap levers, honest ceiling
 
+> **V0.0.44 FIRST-PAINT FIX + EXIT VISIBILITY (2026-07-13, PR #188):** the
+> owner's post-config retest briefly rendered one Accounts launch correctly, but
+> that Claude process exited a few seconds later; subsequent launches returned to
+> the bad display despite refreshes. Hosted journald showed no restart and the same
+> final 39×26/27 geometry across good/bad launches. That falsifies a config-only
+> diagnosis and supports the existing sole-viewer-from-birth timing finding: the
+> server spawned every PTY at 80 cols, and fast home-directory Accounts launches
+> could paint before the phone redirect attached and resized it; slower project
+> startup could let the claim win. Compact launch forms now submit a bounded
+> client width estimate (390 px → 39 cols) into PTY creation, before Claude paints;
+> FitAddon remains authoritative after attachment. Separately, the browser no
+> longer removes an exited watched tab after 1.5 seconds, so `[process exited]` and
+> Claude's final screen remain until manual close. v0.0.44 is published, clean-install
+> smoke passed on Linux/macOS/Windows, and the hosted `/health` reports 0.0.44.
+> Pending gate: hard-refresh/restart the PWA and perform one prompt-free Accounts
+> fresh launch; report display/scroll and, if it exits, the exact visible final screen.
+>
 > **V0.0.43 REGRESSION FIX (2026-07-13, PR #186):** the v0.0.42 lazy reset was
 > armed only after `/pty/redraw` returned. The synchronous TIOCSWINSZ jiggle can
 > publish Claude's repaint over SSE before that HTTP 204; the browser missed the
@@ -78,9 +95,10 @@ terminal supports mode 2026**.
    helper textarea carries the cell font, shearing the grid) and moved scroll
    containment onto `.xterm-viewport` (the actual scroller) with
    `touch-action: none` on the host.
-2. **On-device check** (owner-only): launch one Accounts fresh session after the
-   isolated account gained `tui: fullscreen`; verify display + scroll. Do not spend
-   a model turn or test resume. PASS closes this card; failure needs a screenshot.
+2. **On-device check** (owner-only): hard-refresh/restart the PWA, then launch one
+   Accounts fresh session on hosted v0.0.44; verify display + scroll without sending
+   a prompt. Do not test resume. If Claude exits, capture the retained final screen;
+   close the card only after rendering and lifecycle evidence are understood.
 3. Do NOT set `CLAUDE_CODE_NO_FLICKER` globally — it destroys scrollback (#41965);
    re-evaluate per upstream releases.
 
