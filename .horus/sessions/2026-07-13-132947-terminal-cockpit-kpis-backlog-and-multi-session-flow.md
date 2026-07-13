@@ -47,3 +47,9 @@ multi-session guidance, and mobile-natural touch direction.
 
 - Owner tests touch direction, KPI/account accuracy, backlog/card-first resume, and
   two concurrent tmux sessions in Termius. On PASS, return to orphan-process reaping.
+
+## Checkpoints (auto-harvested)
+
+- `afe6356` Expand terminal project cockpit (#201)
+- `a42355d` Release 0.0.48 (#202)
+- `bc82b00` Update continuity for terminal cockpit v0.0.48 (#203)
