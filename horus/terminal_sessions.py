@@ -31,12 +31,24 @@ def tmux_available() -> bool:
 
 
 def default_target() -> str:
-    """Prefer persistence for a bare SSH login; avoid nesting when already in tmux."""
+    """Prefer a persistent host whenever this runtime can provide one."""
+    override = os.environ.get("HORUS_TERMINAL_TARGET", "").strip().lower()
+    if override in {CURRENT, TMUX}:
+        return override
     if os.environ.get("TMUX"):
         return CURRENT
-    if os.environ.get("SSH_CONNECTION") and tmux_available():
+    if tmux_available():
         return TMUX
     return CURRENT
+
+
+def is_attachable(record: registry.SessionRecord) -> bool:
+    """Whether Horus has a persistent host it can safely reattach."""
+    return record.launch_target == TMUX and bool(record.target_ref)
+
+
+def access_label(record: registry.SessionRecord) -> str:
+    return "attachable" if is_attachable(record) else "original terminal only"
 
 
 def run_attached(
@@ -184,7 +196,7 @@ def attach_session(session_id: str, *, reg: registry.Registry | None = None) -> 
     record, error = resolve_session(session_id, reg=reg)
     if record is None:
         return error
-    if record.launch_target != TMUX or not record.target_ref:
+    if not is_attachable(record):
         return f"session {record.session_id[:8]} is not hosted by tmux"
     if record.status != "running":
         return f"session {record.session_id[:8]} is {record.status}, not running"
@@ -203,7 +215,7 @@ def stop_session(session_id: str, *, reg: registry.Registry | None = None) -> st
     record, error = resolve_session(session_id, reg=store)
     if record is None:
         return error
-    if record.launch_target != TMUX or not record.target_ref:
+    if not is_attachable(record):
         return f"session {record.session_id[:8]} is not hosted by tmux"
     subprocess.run(  # noqa: S603,S607 - tmux name is Horus-generated
         ["tmux", "kill-session", "-t", record.target_ref],
