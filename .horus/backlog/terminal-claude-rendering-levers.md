@@ -1,15 +1,29 @@
 ---
-status: open
+status: shipped
 priority: medium
 tier: codex
 created: 2026-07-12
 created_by: owner-session
 parallel: exclusive
 surface: horus/dashboard.py, horus/assets/vendor/xterm/
+shipped_pr: 191
+shipped_sha: 2456a271d1376ee62310fcfc35b366b650a01fd6
 ---
 
 # Claude Code rendering in the webapp terminal: cheap levers, honest ceiling
 
+> **FINAL OWNER VERDICT — NATIVE ROUTE PASS (2026-07-13):** four v0.0.45
+> browser attempts remained unreliable (black Accounts launch; good Project fresh;
+> mixed Accounts fresh; mixed Project fresh). Journald showed the black attempt took
+> redraw, while mixed output occurred both with and without redraw, ruling out launch
+> origin, geometry, and replay/reset as the common cause. Enabled Tailscale SSH on
+> rafa-linux (tailnet-only; no public sshd listener), kept persistence in tmux, and
+> added /home/rafa/.local/bin/claude-work-phone to select Horus's isolated work
+> account. The owner tested from a native iOS SSH terminal and reported it “worked
+> perfectly.” Close this card: the web levers are exhausted and shipped through
+> PR #191/v0.0.45; native SSH/tmux is the supported interactive Claude phone route.
+> Reopen browser work only on new upstream renderer evidence.
+>
 > **V0.0.45 ORDERED REDRAW STREAM (2026-07-13, PR #191):** the owner proved
 > v0.0.44 was still timing-dependent: Accounts fresh first rendered correctly,
 > Project resume then showed mixed letters, and a subsequent Accounts fresh
