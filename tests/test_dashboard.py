@@ -42,6 +42,9 @@ def _isolate_dashboard_access_globals():
 def _init(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    # Most dashboard tests isolate the legacy direct-host behavior. Managed-host
+    # tests opt into tmux explicitly so they do not depend on the developer machine.
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
 
 
 def _post(
@@ -795,6 +798,38 @@ def test_process_launch_window_routes_selected_agent(tmp_path, monkeypatch):
     assert captured["agent"] == "codex"  # the chosen agent reaches the launcher
 
 
+def test_process_launch_window_opens_managed_tmux_viewer(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    initialize.init_project(proj, assume_yes=True)
+    opened = {}
+    monkeypatch.setattr(dashboard.terminal_sessions, "default_target", lambda: "tmux")
+    monkeypatch.setattr(
+        dashboard.terminal_sessions,
+        "launch_tmux",
+        lambda **kwargs: dashboard.backend.launch.LaunchResult(
+            True,
+            kwargs["agent"],
+            Path(kwargs["project_dir"]),
+            session_id="12345678-1234-1234-1234-123456789abc",
+            target_ref="horus-123456781234",
+        ),
+    )
+
+    def fake_open(argv, cwd, env=None):
+        opened.update(argv=argv, cwd=cwd)
+        return 6060
+
+    monkeypatch.setattr(dashboard.terminal_sessions.launcher, "open_terminal", fake_open)
+    query = dashboard.process_launch(
+        {"project": "0", "mode": "fresh", "agent": "codex", "target": "window"},
+        projects=[str(proj)], known_aliases=set(),
+    )
+    assert query == "launched=12345678"
+    assert opened["argv"] == ["tmux", "attach-session", "-t", "horus-123456781234"]
+
+
 def test_project_prs_fragment_empty_when_no_open_horus_prs(tmp_path, monkeypatch):
     # Both "none open" and "unknowable" render nothing — no panel noise.
     monkeypatch.setattr(dashboard.integration, "open_horus_prs", lambda path: [])
@@ -1340,6 +1375,7 @@ def test_process_launch_in_app_opens_pty_terminal(tmp_path, monkeypatch):
     assert calls["agent"] == "fake" and str(calls["project_dir"]) == str(proj)
     assert calls["posture"] == "full-auto"  # chosen permission posture threaded through
     assert calls["cols"] == 80               # desktop/no hint keeps the established default
+    assert calls["managed"] is True
 
     # An unknown posture is rejected (not silently launched at default).
     assert dashboard.process_launch(
@@ -1764,6 +1800,7 @@ def test_process_brainstorm_defaults_to_in_app_terminal(tmp_path, monkeypatch):
     assert captured["prompt"].startswith("Brainstorm session for the demo project.")
     assert "offline sync" in captured["prompt"]
     assert captured["title"] == "demo · brainstorm"
+    assert captured["managed"] is True
     assert (proj / ".horus" / "temp").is_dir()
 
 
@@ -2110,6 +2147,7 @@ def test_process_launch_codex_account_routes_to_pty(tmp_path, monkeypatch):
     assert query == "tab=pty-cx"
     assert calls["agent"] == "codex" and calls["account"] == "codex-work"
     assert calls["posture"] == "read-only"
+    assert calls["managed"] is True
 
 
 def test_completed_roadmap_shows_complete(tmp_path, monkeypatch):

@@ -77,10 +77,11 @@ so returning to the first project restores the account rail and narrow phone ter
 never print raw arrow-key escape sequences. Termius already translates touch gestures
 into conventional Up/Down bytes, so Horus preserves the normal mapping on phone and
 desktop. `HORUS_TUI_INVERT_SCROLL=1` is an opt-in escape hatch for clients that report
-the opposite direction. The terminal app automatically uses a unique managed tmux
-session on Linux, macOS, and WSL whenever tmux is installed, so launches are detachable
-and reattachable from another terminal. Native Windows, hosts without tmux, and shells
-already inside tmux fall back to the current terminal. Set
+the opposite direction. Terminal launches from both the web app and terminal app
+automatically use a unique managed tmux session on Linux, macOS, and WSL whenever tmux
+is installed, so a browser terminal is now a viewer of the same detachable session the
+TUI can attach. Native Windows, hosts without tmux, and shells already inside tmux fall
+back to the previous direct terminal host. Set
 `HORUS_TERMINAL_TARGET=current` to force that fallback or
 `HORUS_TERMINAL_TARGET=tmux` to explicitly require persistence. The session list labels
 each live process as `attachable` or `original terminal only`. Scripted `horus open`
@@ -101,8 +102,8 @@ horus attach <session-id>
 horus stop <session-id>
 ```
 
-The existing `horus open` default remains `--target window`, and `horus app` still
-opens the desktop companion unless `--terminal` is passed.
+The existing scripted `horus open` default remains `--target window`, and `horus app`
+still opens the desktop companion unless `--terminal` is passed.
 
 ## GitHub remote catalog
 

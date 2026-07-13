@@ -8,7 +8,7 @@ map to real local primitives — no silent fallback, no fake session.
 
 import pytest
 
-from horus import backend, launcher, registry
+from horus import backend, launcher, registry, terminal_sessions
 from horus.backend import (
     Handle,
     LaunchBrief,
@@ -18,6 +18,7 @@ from horus.backend import (
     UnsupportedTarget,
 )
 from horus.registry import Registry
+from horus.launch import LaunchResult
 
 
 def _home(tmp_path, monkeypatch):
@@ -63,6 +64,28 @@ def test_launch_failure_raises_launchfailed(tmp_path, monkeypatch):
         LocalBackend().launch(LaunchBrief(project_dir=tmp_path, agent="nope"))
     assert "nope" in str(exc.value)
     assert Registry.default().all() == []  # nothing tracked on failure
+
+
+def test_local_backend_accepts_managed_local_launch_function(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    captured = {}
+
+    def fake_managed(**kwargs):
+        captured.update(kwargs)
+        return LaunchResult(
+            True,
+            kwargs["agent"],
+            tmp_path,
+            session_id="managed-session",
+            pid=4242,
+            target_ref="horus-managed",
+        )
+
+    handle = LocalBackend(launch_fn=fake_managed).launch(
+        LaunchBrief(project_dir=tmp_path, agent="codex")
+    )
+    assert captured["agent"] == "codex"
+    assert handle.meta == {"pid": 4242, "target_ref": "horus-managed"}
 
 
 def test_launch_rejects_native_windows_as_an_explicit_gap(tmp_path, monkeypatch):
@@ -132,6 +155,26 @@ def test_stop_without_pid_is_a_noop_terminate(tmp_path, monkeypatch):
     monkeypatch.setattr(backend, "_terminate_process", lambda pid: (_ for _ in ()).throw(AssertionError))
     # No pid in meta -> no terminate call, still marks the (absent) record best-effort.
     LocalBackend().stop(Handle(backend="local", session_id="x"))
+
+
+def test_stop_managed_handle_kills_tmux_session(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    stopped = []
+    monkeypatch.setattr(
+        terminal_sessions,
+        "stop_session",
+        lambda session_id, reg=None: stopped.append((session_id, reg)),
+    )
+    store = Registry.default()
+    be = LocalBackend(reg=store)
+    be.stop(
+        Handle(
+            backend="local",
+            session_id="managed-session",
+            meta={"pid": 4242, "target_ref": "horus-managed"},
+        )
+    )
+    assert stopped == [("managed-session", store)]
 
 
 def test_handle_ownership_is_guarded():

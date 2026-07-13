@@ -116,7 +116,7 @@ def start_brainstorm_app(
         host = pty_host.host
     term_id = host.start(
         agent=agent, project_dir=root, account=account, posture=posture,
-        model=model, prompt=prompt, title=f"{root.name} · brainstorm",
+        model=model, prompt=prompt, title=f"{root.name} · brainstorm", managed=True,
     )
     return term_id, note_relpath(topic)
 

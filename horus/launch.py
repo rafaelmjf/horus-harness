@@ -28,6 +28,7 @@ class LaunchResult:
     account: str | None = None
     session_id: str | None = None
     pid: int | None = None
+    target_ref: str | None = None
     error: str | None = None
 
 
