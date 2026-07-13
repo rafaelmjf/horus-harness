@@ -10,6 +10,25 @@ surface: horus/dashboard.py, horus/assets/vendor/xterm/
 
 # Claude Code rendering in the webapp terminal: cheap levers, honest ceiling
 
+> **V0.0.45 ORDERED REDRAW STREAM (2026-07-13, PR #191):** the owner proved
+> v0.0.44 was still timing-dependent: Accounts fresh first rendered correctly,
+> Project resume then showed mixed letters, and a subsequent Accounts fresh
+> launch also showed mixed letters. The repeated 39×26/27 resize logs were
+> initially suspicious, but code/tests confirmed unchanged sizes are server-side
+> no-ops. The actual remaining guess was the geometry-epoch reset: redraw POST and
+> SSE are independent connections, and the browser treated arbitrary “next output”
+> as Claude's repaint. With resume-sized replay or queued xterm writes, it could
+> reset amid old bytes and mix the screen. PtyHost.redraw now inserts a bounded,
+> viewer-tokened control marker at the exact output offset before TIOCSWINSZ; each
+> SSE subscriber splits buffered output at that boundary, and the matching browser
+> queues RIS between old replay and fresh repaint. Other viewers ignore the token.
+> The strongest test buffers old+fresh bytes together and proves SSE emits
+> old → marker → fresh; the real headless Chromium harness proves OLD disappears
+> while FRESH plus later LATE output survive even when marker/repaint beat the POST
+> response. 215 targeted + 1252 full tests passed; Linux/macOS/Windows install
+> smoke passed; hosted /health reports 0.0.45. Pending gate: one hard-refreshed
+> phone launch, preferably Project resume; no prompt/model turn required.
+>
 > **V0.0.44 FIRST-PAINT FIX + EXIT VISIBILITY (2026-07-13, PR #188):** the
 > owner's post-config retest briefly rendered one Accounts launch correctly, but
 > that Claude process exited a few seconds later; subsequent launches returned to
@@ -95,10 +114,10 @@ terminal supports mode 2026**.
    helper textarea carries the cell font, shearing the grid) and moved scroll
    containment onto `.xterm-viewport` (the actual scroller) with
    `touch-action: none` on the host.
-2. **On-device check** (owner-only): hard-refresh/restart the PWA, then launch one
-   Accounts fresh session on hosted v0.0.44; verify display + scroll without sending
-   a prompt. Do not test resume. If Claude exits, capture the retained final screen;
-   close the card only after rendering and lifecycle evidence are understood.
+2. **On-device check** (owner-only): hard-refresh/restart the PWA, then perform one
+   launch on hosted v0.0.45—prefer Project resume because it exercises replay—and
+   verify display + scroll without sending a prompt. Do not spend a second launch;
+   close the card only after this ordered-stream gate passes.
 3. Do NOT set `CLAUDE_CODE_NO_FLICKER` globally — it destroys scrollback (#41965);
    re-evaluate per upstream releases.
 
