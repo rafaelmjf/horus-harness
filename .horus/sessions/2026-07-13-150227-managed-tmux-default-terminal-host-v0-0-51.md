@@ -39,3 +39,9 @@ usage evidence.
 - Owner performs one fresh TUI launch outside tmux, detaches, and reattaches it from
   Sessions. On PASS, return to orphan-process reaping. Do not create the deferred
   terminal UX backlog card until more real usage clarifies it.
+
+## Checkpoints (auto-harvested)
+
+- `174105c` feat: make managed tmux the default terminal host (#210)
+- `d628780` chore: release v0.0.51 (#211)
+- `c7bb534` Update Horus continuity (closure)

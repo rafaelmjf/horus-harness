@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.51 closes the terminal-session gap: TUI launches use managed tmux automatically where supported, the session list states what can be reattached, and native Windows/no-tmux runtimes retain a safe direct-terminal fallback."
-next_action: "Owner launches one fresh Claude or Codex session from Horus TUI outside tmux, detaches, and reattaches it from the Sessions screen; on PASS, return to orphan reaping. [owner runtime gate; no model spend, current Codex inline only on failure]"
-next_prompt: "Resume Horus after the owner tests v0.0.51's automatic tmux host. Fetch first and read PRD.md. Record whether the new session says attachable and survives detach/reattach. Fix only a reproduced failure; on PASS, begin the orphan-reap backlog item without creating the deferred terminal UX card."
-execution_recommendation: "continue-as-is — the next terminal step is an owner-only runtime gate; any failure is a narrow reproduced fix for the current Codex session, while the following orphan-reap item should get a fresh execution decision."
+current_focus: "v0.0.52 unifies Horus app and TUI launches on the managed-tmux substrate: browser xterm and native windows are viewers of the same attachable session, with direct fallbacks on unsupported runtimes."
+next_action: "Owner launches a fresh Claude or Codex session from the web app, opens Termius → horus tui → Sessions, and attaches to that same live session; on PASS, return to orphan reaping. [owner runtime gate; no model spend, current Codex inline only on failure]"
+next_prompt: "Resume Horus after the owner tests v0.0.52 by launching from the web app and attaching from Termius/Horus TUI. Fetch first and read PRD.md. Record browser behavior, the TUI attachable label, and detach/reattach. Fix only a reproduced failure; on PASS, begin orphan reaping without creating the deferred terminal UX card."
+execution_recommendation: "continue-as-is — the next step is an owner-only cross-surface runtime gate; any failure is a narrow reproduced integration fix for the current Codex session, while orphan reaping should receive a fresh execution decision."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -37,13 +37,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 ### Now / next candidates
 
 - **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
-1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
-   ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04;
-   2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h —
-   systemd showed dead, deploys no-opped "already running"; deploy-hosted.sh's
-   version check caught it). On a `failed` RESULT — or `horus reap <session-id>`
-   — kill the session's remaining process tree (registry has the pid); at
-   minimum surface "pid still has children" in `horus tail`/dashboard.
+1. **[ops] Orphan reap after failed runs:** dead workers leave children holding ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04; 2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h — systemd showed dead, deploys no-opped "already running"; deploy-hosted.sh's version check caught it). On a `failed` RESULT — or `horus reap <session-id>` — kill the session's remaining process tree (registry has the pid); at minimum surface "pid still has children" in `horus tail`/dashboard.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
 3. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak; macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution. install-smoke CI covers install/CLI/`/health` on all three already.
 4. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD + execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup.
@@ -57,7 +51,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**Terminal-native project cockpit** (2026-07-13, PRs #195/#196/#198/#199/#201/#202/#204/#205/#207/#208/#210/#211, v0.0.46–0.0.51): responsive phone/desktop TUI with account-window KPIs, conventional Termius scrolling, unified Resume/Fresh accounts, backlog-card resume, and live-session controls; managed tmux is the automatic supported-runtime host with explicit attachability labels and safe direct-terminal fallbacks, while scripted `open --target` and browser/desktop defaults remain stable.
+**Unified terminal project cockpit** (2026-07-13, PRs #195/#196/#198/#199/#201/#202/#204/#205/#207/#208/#210/#211/#212/#213, v0.0.46–0.0.52): responsive phone/desktop TUI with account-window KPIs, conventional Termius scrolling, unified Resume/Fresh accounts, backlog-card resume, and live-session controls; TUI and web-app launches share automatic managed tmux, browser/native terminals are viewers of the attachable session, viewer failures roll back safely, and scripted `open --target` plus unsupported-runtime fallbacks remain stable.
 **OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): compared OpenWiki against the Horus capability catalog + PRD continuity (`research/openwiki-comparison-2026-07.md`); overseer+owner endorsed skip-but-watch — no dependency, no competing doc engine now — revisit only if OpenWiki reaches a stable 1.x code mode with evidence across 30+ merged changes in a private polyglot repo, via an opt-in measured pilot (`.horus/backlog/openwiki-vs-self-documenting-research.md`).
 **`dashboard --reload`** (2026-07-12, PR #175): restarts a running Horus backend in place from currently-installed code via `/health` discovery + terminate + relaunch on the same host/port (exposed backends restart with `--exposed`); `horus app` polls and respawns its own dashboard child after a crash, never adopting one it didn't spawn.
 **Consolidated-to marker stops self-dirtying closure** (2026-07-12, PR #174): `init`/`upgrade-project` scaffold the ignore rule for the generated `.horus/.consolidated-to` marker, `upgrade-project --apply` untracks legacy tracked copies while preserving local state, and closure cleanliness checks exclude the marker so it can never itself fail `working tree clean`.
@@ -167,7 +161,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   Preserve conventional mouse/arrow mapping on SSH because Termius already translates
   touch gestures; inversion is explicit opt-in only. Account aliases are display labels
   while ambient launches continue to pass `None` to the native agent adapter.
-- **Terminal persistence is prospective and capability-based:** TUI launches use a unique Horus-managed tmux session when tmux is available on Linux/macOS/WSL and the caller is outside tmux; native Windows, no-tmux hosts, and already-nested shells use the current terminal. A live registry row is attachable only with a Horus tmux `target_ref`; otherwise label it `original terminal only` and never offer a fake attach/close action. Keep scripted `horus open --target` behavior explicit and stable.
+- **Terminal persistence is prospective and capability-based:** TUI and web-app session requests use a unique Horus-managed tmux session when tmux is available on Linux/macOS/WSL and the caller is outside tmux; browser xterm and web-requested native windows attach as viewers, while native Windows, no-tmux hosts, and nested shells keep their direct host. A live registry row is attachable only with a Horus tmux `target_ref`; otherwise label it `original terminal only` and never offer a fake attach/close action. If a requested viewer cannot attach, reap the new tmux session. Keep scripted `horus open --target` behavior explicit and stable.
 - **Git policy:** branch → PR → auto-merge; this repo's main requires pytest checks
   (admins exempt so continuity pushes land directly; fallback direct merge only on
   repos without required checks); offboard keeps `.horus/` by default; `.vscode/` is
