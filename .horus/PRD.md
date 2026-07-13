@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Terminal-native Horus control is implemented on feature/terminal-app and open as PR #195: `horus app --terminal`/`horus tui` launch fresh or continuity-seeded Claude/Codex sessions in the current TTY or unique persistent tmux sessions. The browser/desktop defaults stay unchanged; 1,263 tests and a two-session live fake-agent tmux probe pass."
-next_action: "Let required CI pass on PR #195, merge it, release/install the new CLI, then have the owner run `horus app --terminal` from Termius and verify one real Claude/Codex launch plus reconnect. [current Codex inline; no delegation]"
-next_prompt: "Resume Horus on PR #195. Fetch first and read PRD.md. Confirm required pytest is green on the exact head, merge the terminal-native launcher, publish/install the next CLI release following the hosted-deploy invariant, then ask the owner to test `horus app --terminal` through Termius with a real account and reconnect."
-execution_recommendation: "continue-as-is — the remaining work is a deterministic CI/merge/release sequence plus an owner-only iPhone runtime gate; delegation adds no useful parallelism."
+current_focus: "Terminal-native Horus control shipped in PR #195/v0.0.46: `horus app --terminal`/`horus tui` launch fresh or continuity-seeded Claude/Codex sessions in the current TTY or unique persistent tmux sessions. PyPI, three-OS install smoke, and hosted 0.0.46 deployment are green; browser/desktop defaults remain unchanged."
+next_action: "Owner runs `horus app --terminal` from Termius, launches one real Claude or Codex session with the intended account, detaches/reconnects, and reports the experience; on PASS, return to orphan-process reaping. [owner runtime gate; current Codex inline]"
+next_prompt: "Resume Horus after the owner tests v0.0.46 through Termius. Fetch first and read PRD.md. Record whether project selection, account choice, real Claude/Codex launch, detach, and reconnect worked. Fix only a reproduced failure; on PASS, close the terminal-app validation and start the orphan-reap backlog item."
+execution_recommendation: "continue-as-is — the only remaining terminal-app work is an owner-only iPhone runtime gate or a narrowly reproduced follow-up; delegation adds no useful parallelism."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -40,7 +40,6 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 ### Now / next candidates
 
 - **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
-- **Terminal-native launcher rollout (PR #195):** implementation, full tests, SSH-mode UI, and two-session tmux probes pass; merge/release/install and the owner Termius real-agent/reconnect gate remain. [current Codex inline]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04;
    2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h —
@@ -61,6 +60,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Terminal-native Horus launcher** (2026-07-13, PRs #195/#196, v0.0.46): `horus app --terminal`/`horus tui` provides project/next-action selection, fresh/resume Claude/Codex account launches, live-session controls, current-TTY execution, and unique reconnectable tmux sessions; direct `open --target`, `attach`, and `stop` commands back shortcuts, with browser/desktop defaults unchanged.
 **OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): compared OpenWiki against the Horus capability catalog + PRD continuity (`research/openwiki-comparison-2026-07.md`); overseer+owner endorsed skip-but-watch — no dependency, no competing doc engine now — revisit only if OpenWiki reaches a stable 1.x code mode with evidence across 30+ merged changes in a private polyglot repo, via an opt-in measured pilot (`.horus/backlog/openwiki-vs-self-documenting-research.md`).
 **`dashboard --reload`** (2026-07-12, PR #175): restarts a running Horus backend in place from currently-installed code via `/health` discovery + terminate + relaunch on the same host/port (exposed backends restart with `--exposed`); `horus app` polls and respawns its own dashboard child after a crash, never adopting one it didn't spawn.
 **Consolidated-to marker stops self-dirtying closure** (2026-07-12, PR #174): `init`/`upgrade-project` scaffold the ignore rule for the generated `.horus/.consolidated-to` marker, `upgrade-project --apply` untracks legacy tracked copies while preserving local state, and closure cleanliness checks exclude the marker so it can never itself fail `working tree clean`.
