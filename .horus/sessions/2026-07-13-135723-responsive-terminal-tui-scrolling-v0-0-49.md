@@ -38,3 +38,9 @@ scrolling to account KPIs, and translates the arrow bytes Termius actually emits
 
 - Owner verifies desktop resize/zoom, reversible Accounts scrolling, and touch direction
   in Termius. On PASS, exercise two-session detach/reattach, then return to orphan reaping.
+
+## Checkpoints (auto-harvested)
+
+- `44037a0` Fix responsive terminal TUI scrolling (#204)
+- `ccbd41a` Release 0.0.49 (#205)
+- `fd041e1` Update continuity for responsive terminal v0.0.49 (#206)
