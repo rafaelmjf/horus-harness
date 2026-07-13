@@ -12,7 +12,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -74,6 +74,13 @@ Trust is READ from the data, never pinned to a model name:
   *"do not dispatch near usage ceiling"* → fine for a crisp scoped task with
   headroom; a poor fit for a large/loose task; off the table near the usage
   ceiling.
+- **Keep older-but-capable models in the roster.** A prior-frontier model
+  (yesterday's `gpt-5.5`/`sonnet-4.6`-style predecessor) does not stop being
+  capable the day a newer model ships — it may still be the strongest AND
+  cheapest fit for scoped/mechanical work. Don't drop a model from the ladder on
+  recency alone: pick by capability-for-the-task, not by release date, and keep
+  gathering datums on it so the ladder reflects measured reality instead of
+  assumption.
 - **Match tier to shape** (this mirrors the managed-block model-tier rule; the
   data tells you which concrete model fills each role now and how proven it is):
   design / ambiguity / the verify gate → the design tier (`opus-4.8`); most
