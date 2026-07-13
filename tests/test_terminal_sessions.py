@@ -70,6 +70,7 @@ def test_launch_tmux_creates_unique_tracked_session(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
     monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(terminal_sessions.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.delenv("TMUX", raising=False)
     calls = []
 

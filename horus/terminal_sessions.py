@@ -127,8 +127,16 @@ def launch_tmux(
     if prepared is None:
         return launch.LaunchResult(False, agent, root, account=account, error=error)
 
+    executable = shutil.which(prepared.argv[0])
+    if executable is None:
+        return launch.LaunchResult(
+            False, prepared.agent, prepared.project, account=account,
+            error=f"agent executable not found on PATH: {prepared.argv[0]}",
+        )
+    runner_argv = [executable, *prepared.argv[1:]]
+
     tmux_name = f"horus-{prepared.session_id[:12]}"
-    spec_path = _write_runner_spec(prepared)
+    spec_path = _write_runner_spec(prepared, argv=runner_argv)
     store = reg or registry.Registry.default()
     # Keep reconciliation honest during the short handoff before the runner records
     # its own child PID. A failed tmux spawn is immediately corrected below.
@@ -248,7 +256,7 @@ def _runner_spec_path(session_id: str) -> Path:
     return _runner_dir() / f"{session_id}.json"
 
 
-def _write_runner_spec(prepared: launch.PreparedInteractive) -> Path:
+def _write_runner_spec(prepared: launch.PreparedInteractive, *, argv: list[str] | None = None) -> Path:
     directory = _runner_dir()
     directory.mkdir(parents=True, exist_ok=True)
     path = _runner_spec_path(prepared.session_id)
@@ -257,8 +265,11 @@ def _write_runner_spec(prepared: launch.PreparedInteractive) -> Path:
         "agent": prepared.agent,
         "account": prepared.account,
         "project": prepared.project.as_posix(),
-        "argv": prepared.argv,
-        "env": prepared.env,
+        "argv": argv or prepared.argv,
+        # A long-lived tmux server may hold a stale PATH. Carry only this benign
+        # process-search value plus adapter-owned account isolation, never the full
+        # parent environment (which may contain credentials).
+        "env": {"PATH": os.environ.get("PATH", ""), **prepared.env},
     }
     encoded = json.dumps(payload).encode("utf-8")
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
