@@ -10,11 +10,7 @@ shipped_pr: 215
 shipped_sha: 86f433bce2a1b9e71cf103ea1eba4ea476ffc03d
 ---
 
-> **PR #215 open, awaiting owner review/merge** (commit `37bbd55`). Run
-> `horus backlog ship tmux-mouse-scroll-and-tui-launch-defaults --pr 215 --sha
-> 37bbd55efb40cec7e48c7f3277d2750ffc727292` once it merges — do not ship before
-> merge (this repo's convention; a card must not carry shipped provenance while
-> its PR is still open).
+**SHIPPED** — PR #215 merged at `86f433bce2a1b9e71cf103ea1eba4ea476ffc03d`. Owner live verification passed (2026-07-13): TUI-launched Codex session, mouse wheel scrolls terminal scrollback (not recalling input), session mouse mode scoped correctly (global tmux mouse off); installed-package probe confirmed five launch-defaults choices functional.
 
 # tmux mouse scroll fix + TUI launch-defaults screen
 
