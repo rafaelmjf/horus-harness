@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Terminal-native Horus control shipped in PR #195/v0.0.46: `horus app --terminal`/`horus tui` launch fresh or continuity-seeded Claude/Codex sessions in the current TTY or unique persistent tmux sessions. PyPI, three-OS install smoke, and hosted 0.0.46 deployment are green; browser/desktop defaults remain unchanged."
-next_action: "Owner runs `horus app --terminal` from Termius, launches one real Claude or Codex session with the intended account, detaches/reconnects, and reports the experience; on PASS, return to orphan-process reaping. [owner runtime gate; current Codex inline]"
-next_prompt: "Resume Horus after the owner tests v0.0.46 through Termius. Fetch first and read PRD.md. Record whether project selection, account choice, real Claude/Codex launch, detach, and reconnect worked. Fix only a reproduced failure; on PASS, close the terminal-app validation and start the orphan-reap backlog item."
-execution_recommendation: "continue-as-is — the only remaining terminal-app work is an owner-only iPhone runtime gate or a narrowly reproduced follow-up; delegation adds no useful parallelism."
+current_focus: "v0.0.47 replaces the terminal launcher's line prompts with one full-screen, internally scrolling project/session UI for phone and desktop terminals. Termius down-arrow bytes, keyboard arrows, and mouse-wheel events move the highlighted row without echoing raw escapes; launch/attach still use the proven current-TTY/tmux substrate."
+next_action: "Owner upgrades/opens `horus tui` in Termius and verifies swipe/down-arrow scrolling, project open/back, account selection, and no printed `^[[B`; on PASS, choose the next responsive desktop/launch-sheet slice or return to orphan-process reaping. [owner runtime gate; current Codex inline]"
+next_prompt: "Resume Horus after the owner tests v0.0.47 through Termius. Fetch first and read PRD.md. Record whether swipe/down-arrow scrolling follows the highlighted project without raw escapes and whether open/back/account selection remain usable. Fix only a reproduced failure; on PASS, decide between the planned responsive desktop detail/launch sheet and the orphan-reap backlog item."
+execution_recommendation: "continue-as-is — the next step is an owner-only iPhone runtime gate; any reproduced navigation follow-up is a narrow runtime/UI fix where delegation adds no useful parallelism."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -60,6 +60,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Scrollable terminal project/session UI** (2026-07-13, PRs #198/#199, v0.0.47): real TTYs now use a full-screen internally scrolling selector whose arrows, Termius swipe bytes, Page Up/Down, and mouse wheel move the highlighted row; blocking launch/attach actions run outside the alternate screen, while injected/non-TTY callers keep the legacy deterministic path.
 **Terminal-native Horus launcher** (2026-07-13, PRs #195/#196, v0.0.46): `horus app --terminal`/`horus tui` provides project/next-action selection, fresh/resume Claude/Codex account launches, live-session controls, current-TTY execution, and unique reconnectable tmux sessions; direct `open --target`, `attach`, and `stop` commands back shortcuts, with browser/desktop defaults unchanged.
 **OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): compared OpenWiki against the Horus capability catalog + PRD continuity (`research/openwiki-comparison-2026-07.md`); overseer+owner endorsed skip-but-watch — no dependency, no competing doc engine now — revisit only if OpenWiki reaches a stable 1.x code mode with evidence across 30+ merged changes in a private polyglot repo, via an opt-in measured pilot (`.horus/backlog/openwiki-vs-self-documenting-research.md`).
 **`dashboard --reload`** (2026-07-12, PR #175): restarts a running Horus backend in place from currently-installed code via `/health` discovery + terminate + relaunch on the same host/port (exposed backends restart with `--exposed`); `horus app` polls and respawns its own dashboard child after a crash, never adopting one it didn't spawn.
@@ -164,6 +165,9 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   tmux; claude-work-phone selects the isolated work account. This owner-verified path
   renders and scrolls correctly. Treat Claude in the 39-column browser/xterm viewer as
   best-effort; do not resume narrow-grid patching without new upstream renderer evidence.
+- **Terminal-app navigation stays inside the UI:** on a real TTY, swipe/wheel/arrows
+  scroll the highlighted internal viewport and raw escape bytes never reach a line
+  prompt; leave the alternate screen before blocking agent launch/attach commands.
 - **Git policy:** branch → PR → auto-merge; this repo's main requires pytest checks
   (admins exempt so continuity pushes land directly; fallback direct merge only on
   repos without required checks); offboard keeps `.horus/` by default; `.vscode/` is
