@@ -8,6 +8,12 @@ parallel: exclusive
 surface: horus/terminal_sessions.py, horus/terminal_tui.py, horus/config.py
 ---
 
+> **PR #215 open, awaiting owner review/merge** (commit `37bbd55`). Run
+> `horus backlog ship tmux-mouse-scroll-and-tui-launch-defaults --pr 215 --sha
+> 37bbd55efb40cec7e48c7f3277d2750ffc727292` once it merges — do not ship before
+> merge (this repo's convention; a card must not carry shipped provenance while
+> its PR is still open).
+
 # tmux mouse scroll fix + TUI launch-defaults screen
 
 **[bug]** Owner-reported: launching a live Codex session from `horus tui`, mouse-wheel
