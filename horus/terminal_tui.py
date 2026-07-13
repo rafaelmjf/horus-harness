@@ -12,7 +12,14 @@ from prompt_toolkit.filters import Condition
 from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.input import Input
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, ScrollOffsets, Window
+from prompt_toolkit.layout import (
+    ConditionalContainer,
+    FormattedTextControl,
+    HSplit,
+    Layout,
+    ScrollOffsets,
+    Window,
+)
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.output import Output
 from prompt_toolkit.styles import Style
@@ -107,20 +114,25 @@ class TerminalUI:
         self.selected = 0
         self.status = status
         if invert_mouse_scroll is None:
-            invert_mouse_scroll = _invert_mouse_scroll()
+            invert_mouse_scroll = _invert_mobile_scroll()
+        self.invert_mobile_scroll = invert_mouse_scroll
         self.body = _BodyControl(self._body_text, self.scroll, invert_mouse_scroll=invert_mouse_scroll)
         self.keys = self._key_bindings()
+        self.body_window = Window(
+            self.body,
+            scroll_offsets=ScrollOffsets(top=2, bottom=2),
+            allow_scroll_beyond_bottom=False,
+            wrap_lines=True,
+        )
         container = HSplit(
             [
                 Window(FormattedTextControl(self._header_text), height=1, style="class:header"),
                 Window(height=1, char="─", style="class:rule"),
-                Window(
-                    self.body,
-                    scroll_offsets=ScrollOffsets(top=2, bottom=2),
-                    allow_scroll_beyond_bottom=False,
-                    wrap_lines=Condition(lambda: self.screen in {"backlog", "card"}),
+                self.body_window,
+                ConditionalContainer(
+                    Window(FormattedTextControl(self._status_text), height=1, style="class:status"),
+                    filter=Condition(lambda: bool(self.status)),
                 ),
-                Window(FormattedTextControl(self._status_text), height=1, style="class:status"),
                 Window(FormattedTextControl(self._footer_text), height=1, style="class:footer"),
             ]
         )
@@ -138,15 +150,21 @@ class TerminalUI:
     def _key_bindings(self) -> KeyBindings:
         keys = KeyBindings()
 
-        @keys.add("up")
         @keys.add("k")
         def _up(event) -> None:
             self.scroll(-1)
 
-        @keys.add("down")
         @keys.add("j")
         def _down(event) -> None:
             self.scroll(1)
+
+        @keys.add("up")
+        def _terminal_up(event) -> None:
+            self.scroll(1 if self.invert_mobile_scroll else -1)
+
+        @keys.add("down")
+        def _terminal_down(event) -> None:
+            self.scroll(-1 if self.invert_mobile_scroll else 1)
 
         @keys.add("pageup")
         def _page_up(event) -> None:
@@ -183,12 +201,19 @@ class TerminalUI:
 
     def _page_size(self) -> int:
         rows = self.application.output.get_size().rows
-        return max(1, rows - 6)
+        fixed_rows = 4 if self.status else 3
+        return max(1, rows - fixed_rows)
 
     def move(self, amount: int) -> None:
         if not self.items:
             return
         self.selected = max(0, min(len(self.items) - 1, self.selected + amount))
+        if self.screen == "projects" and self.selected == 0:
+            # The account KPI rail sits above the first selectable project. Once
+            # prompt_toolkit has scrolled down, merely returning the cursor to the
+            # first project keeps that rail outside the viewport. Explicitly return
+            # home to the top so wheel/arrow navigation is reversible.
+            self.body_window.vertical_scroll = 0
         self.application.invalidate()
 
     def scroll(self, amount: int) -> None:
@@ -335,6 +360,8 @@ class TerminalUI:
             else:
                 message = "No running sessions."
             return [("class:muted", f"\n  {message}\n")]
+        if self.screen == "projects" and self.application.output.get_size().columns >= 96:
+            return self._wide_home_text(self.application.output.get_size().columns)
         lines: StyleAndTextTuples = []
         if self.screen == "projects":
             lines.extend(self._account_summary_text())
@@ -392,6 +419,70 @@ class TerminalUI:
             elif kind in {"yes", "no"}:
                 lines.append((style, f"\n {marker} {'Close session' if kind == 'yes' else 'Keep session'}\n"))
         return lines
+
+    def _wide_home_text(self, width: int) -> StyleAndTextTuples:
+        """Render the home cockpit as responsive columns on wide terminals."""
+        fragments: StyleAndTextTuples = [("class:section", "\n Accounts\n")]
+        account_blocks = []
+        for account in self.accounts:
+            usage = _usage_lines(self.account_usage.get((account.agent, account.alias)))
+            account_blocks.append(
+                [("class:account", f" {account.agent.title()} {account.alias}")]
+                + [("class:muted", f" {line}") for line in usage]
+            )
+        if account_blocks:
+            account_columns = min(3, max(1, width // 40), len(account_blocks))
+            account_width = max(1, (width - (account_columns - 1) * 2) // account_columns)
+            for start in range(0, len(account_blocks), account_columns):
+                blocks = account_blocks[start : start + account_columns]
+                for line_index in range(max(len(block) for block in blocks)):
+                    for column, block in enumerate(blocks):
+                        style, text = block[line_index] if line_index < len(block) else ("", "")
+                        fragments.append((style, _fit_cell(text, account_width)))
+                        if column < len(blocks) - 1:
+                            fragments.append(("class:muted", "  "))
+                    fragments.append(("", "\n"))
+                fragments.append(("", "\n"))
+        else:
+            fragments.append(("class:muted", " No agent accounts detected.\n\n"))
+
+        fragments.append(("class:section", " Projects\n"))
+        project_columns = 2
+        project_width = max(1, (width - 2) // project_columns)
+        for start in range(0, len(self.items), project_columns):
+            blocks: list[tuple[int, list[tuple[str, str]]]] = []
+            for index in range(start, min(start + project_columns, len(self.items))):
+                _, root = self.items[index]
+                sessions = self._project_sessions(root)  # type: ignore[arg-type]
+                suffix = (
+                    f" · {len(sessions)} open session{'s' if len(sessions) != 1 else ''}"
+                    if sessions
+                    else ""
+                )
+                marker = ">" if index == self.selected else " "
+                session_labels = ", ".join(_session_label(record) for record in sessions)
+                card_count, bug_count = self.project_metrics.get(root, (0, 0))  # type: ignore[arg-type]
+                blocks.append(
+                    (
+                        index,
+                        [
+                            ("class:selected" if index == self.selected else "class:item", f" {marker} {root.name}{suffix}"),
+                            ("class:session", f"   {session_labels}" if session_labels else ""),
+                            ("class:muted", f"   backlog {card_count} · bugs {bug_count}"),
+                        ],
+                    )
+                )
+            for line_index in range(3):
+                for column, (index, block) in enumerate(blocks):
+                    if line_index == 0 and index == self.selected:
+                        fragments.append(("[SetCursorPosition]", ""))
+                    style, text = block[line_index]
+                    fragments.append((style, _fit_cell(text, project_width)))
+                    if column < len(blocks) - 1:
+                        fragments.append(("class:muted", "  "))
+                fragments.append(("", "\n"))
+            fragments.append(("", "\n"))
+        return fragments
 
     def _account_summary_text(self) -> StyleAndTextTuples:
         if not self.accounts:
@@ -458,11 +549,23 @@ class TerminalUI:
         return [("class:status", "")]
 
     def _footer_text(self) -> StyleAndTextTuples:
+        narrow = self.application.output.get_size().columns < 64
         if self.screen == "card":
-            return [("class:footer", " ↑↓/swipe read   Enter resume   Esc back")]
+            text = " ↑↓ read · Enter resume · Esc back" if narrow else " ↑↓/swipe read   Enter resume   Esc back"
+            return [("class:footer", text)]
         if self.screen == "sessions":
-            return [("class:footer", " Enter attach   Ctrl-b d returns   Esc back   q quit")]
-        return [("class:footer", " ↑↓/swipe scroll   Enter open   Esc back   s sessions   q quit")]
+            text = (
+                " Enter attach · Esc back · q quit"
+                if narrow
+                else " Enter attach   Ctrl-b d returns   Esc back   q quit"
+            )
+            return [("class:footer", text)]
+        text = (
+            " ↑↓ scroll · Enter · s sessions · q"
+            if narrow
+            else " ↑↓/swipe scroll   Enter open   Esc back   s sessions   q quit"
+        )
+        return [("class:footer", text)]
 
 
 _STYLE = Style.from_dict(
@@ -603,8 +706,18 @@ def _session_label(record: registry.SessionRecord) -> str:
     return f"{record.agent} {_session_account_alias(record)}"
 
 
-def _invert_mouse_scroll() -> bool:
-    override = os.environ.get("HORUS_TUI_INVERT_MOUSE_SCROLL", "").strip().lower()
+def _fit_cell(text: str, width: int) -> str:
+    if len(text) > width:
+        text = f"{text[: max(0, width - 1)]}…"
+    return text.ljust(width)
+
+
+def _invert_mobile_scroll() -> bool:
+    override = (
+        os.environ.get("HORUS_TUI_INVERT_SCROLL")
+        or os.environ.get("HORUS_TUI_INVERT_MOUSE_SCROLL")
+        or ""
+    ).strip().lower()
     if override:
         return override not in {"0", "false", "no", "off"}
     columns = shutil.get_terminal_size(fallback=(80, 24)).columns
