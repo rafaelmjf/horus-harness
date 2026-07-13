@@ -1,35 +1,27 @@
 ---
 status: active
-current_focus: "Mobile-terminal marathon closed (v0.0.36–v0.0.42 all deployed): five stack bugs fixed (input black hole, iOS zoom shear, geometry claims, tmux smallest-wins, replay poison + lazy reset), Windows fcntl breakage fixed, xterm 6.0.0. Screenshot-proven verdict: stack correct; residual is Claude Code's ~80-col minimum (upstream) — codex renders clean at 38 cols."
-next_action: "Investigate owner counter-datum first (terminal-claude-rendering-levers card): accounts-menu session rendered WELL on phone — test sole-viewer-from-birth vs late-attach with the phone-shot.mjs harness; a spawn-size hint may beat the pan/floor options. Then owner picks the claude-on-phone option. [tier: Sonnet]"
-next_prompt: "Resume Horus. Fetch first, read PRD.md and sessions/2026-07-13-011925-terminal-mobile-marathon*. Ask the owner to pick a claude-on-phone option from .horus/backlog/terminal-claude-rendering-levers.md, then implement it; or pick up the orphan-reap ops card (fresh incident evidence in the session note)."
-execution_recommendation: "continue-as-is — the next step is an owner product decision plus a bounded single-surface implementation (dashboard.py terminal JS/CSS); no volume to delegate."
+current_focus: "v0.0.43 shipped + hosted: fixed the v0.0.42 lazy-reset ordering race that could erase Claude's redraw and break BOTH account- and project-launched mobile terminals. The earlier 38-col Claude minimum remains a controlled headless finding, but the owner counter-datum now needs a clean on-phone retest."
+next_action: "Owner-only phone gate on hosted v0.0.43: hard-reload the PWA/page, then compare account-menu fresh vs project fresh/resume with the phone as sole viewer. If rendering still differs, capture which mode + screenshot before choosing any 80-col floor/pan option. [no Sonnet; continue inline in the current Codex session if debugging resumes]"
+next_prompt: "Resume Horus. Fetch first; read PRD.md, .horus/backlog/terminal-claude-rendering-levers.md, and the newest v0.0.43 session note. Ask the owner for the hard-reloaded phone verdict on account fresh vs project fresh/resume; diagnose only the failing differential before revisiting Claude-width product options."
+execution_recommendation: "continue-as-is — the next gate is the owner's on-device visual comparison; any follow-up is ambiguous, localized terminal debugging and should stay inline in the current Codex session (no Sonnet/delegation)."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
 
 # Horus — PRD
 
-The one maintained continuity file: **PRD.md + sessions/** (prototype, 2026-07-03).
-Tooling reads its frontmatter directly; the deleted shims and retired lanes remain in
-`archive/` and git history.
+The one maintained continuity file: **PRD.md + sessions/** (prototype, 2026-07-03). Tooling reads its frontmatter directly; retired lanes remain in `archive/` and git history.
 
 ## Vision
 
-Horus is a lightweight, project-centric **continuity layer** for official coding-agent
-CLIs (Claude Code, Codex, more later). The durable value is the memory plane, not
-orchestration:
+Horus is a lightweight, project-centric **continuity layer** for official coding-agent CLIs (Claude Code, Codex, more later). The durable value is the memory plane, not orchestration:
 
 - repo-local `.horus/` files that any native agent session can use without Horus running;
 - a read-mostly dashboard: projects, current focus, next step, sessions, accounts/usage;
 - a closure ritual so work never disappears into a stale conversation;
 - visibility into which agent/account/environment touched a project.
 
-Model concretely: `project + agent + account + environment + session` — no abstract
-identity profiles. Native-app-first: new capabilities are designed on Claude/Codex's own
-surfaces (instructions, skills, hooks) before any Horus-owned session layer. Orchestration
-is ceded to execution planes (e.g. Omnigent — see `research/omnigent.md`); Horus stays the
-memory plane and interops via `.horus/`.
+Model concretely: `project + agent + account + environment + session` — no abstract identity profiles. Native-app-first: design capabilities on Claude/Codex's own surfaces before a Horus-owned session layer. Execution planes own orchestration (see `research/omnigent.md`); Horus stays the memory plane and interops via `.horus/`.
 
 **Out of scope:** multi-user SaaS, agent marketplace, distributed worker control plane,
 identity abstraction, memory beyond repo-local continuity.
@@ -47,12 +39,8 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** See Shipped
-  for what landed. Only remaining work is config-driven target/machine selection,
-  gated on hub writing a `[[targets]]`-or-equivalent contract (not present as of hub
-  HEAD `4a2b2ee` §9). Do NOT build an `OmnigentBackend` yet — blocking gates unmet
-  (`research/omnigent-fit-2026-07-10.md`). [tier: Sonnet wiring once hub's contract lands.]
-- **Claude-on-phone rendering decision:** stack fixed + proven (v0.0.36–42, see Shipped); residual is Claude Code's ~80-col minimum (upstream; codex clean at 38 cols). Owner picks an option on `terminal-claude-rendering-levers` card: 80-col floor + horizontal pan / per-agent min-cols / remote-control split / upstream issue. [tier: Sonnet after decision]
+- **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
+- **Claude-on-phone verification/decision:** v0.0.43 fixed a redraw-order race that explained both launch paths regressing. Owner first hard-reloads and compares account fresh vs project fresh/resume as sole phone viewer; only then choose from `terminal-claude-rendering-levers` (80-col pan/floor, per-agent min-cols, remote-control split, upstream). [owner-only gate; current Codex inline if debugging]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04;
    2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h —
@@ -64,17 +52,11 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 3. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak; macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution. install-smoke CI covers install/CLI/`/health` on all three already.
 4. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD + execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup.
 5. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per shell call (close + guard-host + usage guard); only if material, build a single `horus pretool --hook` dispatcher (fabric suggestion 2026-07-08). [tier: Haiku measure / Sonnet dispatcher]
-6. **Multi-developer continuity (design, evidence-gated):** PRD.md assumes one active
-   workstream — two devs closing sessions collide on frontmatter. Direction:
-   per-workstream focus (frontmatter keyed by branch/dev, or `.horus/focus/<name>.md`)
-   aggregated by `resolve_focus`/dashboard/`resume`. Per the ladder rule, design now,
-   build when a real second developer arrives. [tier: Opus design]
+6. **Multi-developer continuity (design, evidence-gated):** PRD.md assumes one active workstream, so two closers collide on frontmatter. Direction: per-workstream focus keyed by branch/dev, aggregated by `resolve_focus`/dashboard/`resume`; build when a real second developer arrives. [tier: Opus design]
 
 ### Open / deferred — see `.horus/backlog/`
 
-Everything formerly listed here is now one card per file in `.horus/backlog/` (priority
-in each card's frontmatter). Notable: `scheduled-usage-aware-continuation`,
-`project-machine-requirements`, and `deferred-*` for MVP3/MVP5 + continuity seams.
+Everything formerly listed here is one card per file in `.horus/backlog/`. Notable: `scheduled-usage-aware-continuation`, `project-machine-requirements`, and `deferred-*` for MVP3/MVP5 + continuity seams.
 
 ## Shipped
 
@@ -85,7 +67,7 @@ One line per capability; details in `archive/features.md`, git history, and the 
 **Fix Codex usage-limit account scope** (2026-07-12, PR #173): `horus usage check` sources 5h/weekly Codex limits from the newest account-wide rollout (not project-scoped) and flags an expired reset window as stale rather than current capacity.
 **Mobile/desktop terminal sizing + lifecycle + controls hardening** (2026-07-12, PR #171): `.xterm-host` fills its region via `ResizeObserver` + layout-settled initial fit (no stale 80×24 default); live `matchMedia` re-evaluation instead of load-once mobile/desktop latch; tabs reachable in fullscreen; larger tap targets; confirm-guard on closing a live session. Symptom 2 (exposed-mode/POST-path no-input regression) is untouched, tracked separately in Backlog.
 
-**Terminal multi-viewer/mobile stack overhaul** (2026-07-12/13, PRs #178–#185, v0.0.36–v0.0.42): gone-session 410 + visible notice; 16px compact font (iOS zoom shear) + viewport containment + xterm 6.0.0 (DEC 2026); geometry re-claim + touch-drag→wheel; tmux-style smallest-wins viewer registry; geometry-epoch handshake + `/pty/redraw` + lazy reset; `pty-geom` journald diagnostics; headless phone-emulated repro vs real sessions. Stack proven correct; Claude Code's ~80-col minimum is upstream (codex clean at 38 cols). Details: sessions/2026-07-13-011925.
+**Terminal multi-viewer/mobile stack overhaul** (2026-07-12/13, PRs #178–#186, v0.0.36–v0.0.43): gone-session/input signals; 16px+iOS containment+xterm 6; geometry re-claim/touch wheel; smallest-wins viewers; epoch redraw+lazy reset; v0.0.43 arms reset before redraw so SSE repaint bytes cannot beat the HTTP response and be erased by later output; CDP race repro. Claude's controlled ~80-col result awaits clean owner retest. Details: sessions/2026-07-13-011925 + newest v0.0.43 note.
 
 **Windows CLI un-broken** (2026-07-13, PR #181): Unix-only `fcntl` top-level import in `backlog.py` (since v0.0.36) killed every Windows invocation; lazy import, install-smoke green on all three OS.
 **Backlog card ship-lifecycle provenance** (2026-07-12, PR #172): `horus backlog ship <slug> --pr N --sha SHA` stamps `status: shipped` + PR/SHA in place; `backlog list`/`fleet --backlog` hide shipped cards by default (`--all`/`--shipped` opt in); `close --check` warns when a card carries shipped provenance but is still `open`.

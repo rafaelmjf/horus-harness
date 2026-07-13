@@ -1,7 +1,7 @@
 ---
 status: open
 priority: medium
-tier: sonnet
+tier: codex
 created: 2026-07-12
 created_by: owner-session
 parallel: exclusive
@@ -10,9 +10,19 @@ surface: horus/dashboard.py, horus/assets/vendor/xterm/
 
 # Claude Code rendering in the webapp terminal: cheap levers, honest ceiling
 
-> **DEFINITIVE FINDING (2026-07-13, headless end-to-end repro):** with the whole
+> **V0.0.43 REGRESSION FIX (2026-07-13, PR #186):** the v0.0.42 lazy reset was
+> armed only after `/pty/redraw` returned. The synchronous TIOCSWINSZ jiggle can
+> publish Claude's repaint over SSE before that HTTP 204; the browser missed the
+> repaint, armed late, then erased the screen on the next unrelated output. This
+> shared viewer path explains why both account and project launches later failed.
+> v0.0.43 arms before requesting redraw and disarms on request failure. The CDP
+> harness now forces repaint-before-response ordering: it failed before the fix
+> (`FRESH` disappeared; only `LATE` remained) and passes after. Hosted v0.0.43 is
+> deployed; owner must hard-reload and retest both launch modes on the phone.
+>
+> **CONTROLLED FINDING (2026-07-13, headless end-to-end repro):** with the whole
 > stack proven correct (smallest-wins registry, epoch handshake, lazy reset —
-> v0.0.42; PTY verified 38×34 via TIOCGWINSZ), **Claude Code paints a ~80-col
+> PTY verified 38×34 via TIOCGWINSZ), **Claude Code paints a ~80-col
 > minimum regardless of PTY size** — welcome banner, status line, paragraphs all
 > overflow a 38-col phone grid (mid-word wraps + orphan right-edge glyphs).
 > **codex at the same 38 cols in the same viewer renders clean.** Also: Claude's
@@ -57,8 +67,9 @@ terminal supports mode 2026**.
    helper textarea carries the cell font, shearing the grid) and moved scroll
    containment onto `.xterm-viewport` (the actual scroller) with
    `touch-action: none` on the host.
-2. **On-device check** (owner-only): legibility + touch-scroll behavior at phone
-   DPR after the 6.0.0/fontSize/containment deploy — pending owner.
+2. **On-device check** (owner-only): hard-reload hosted v0.0.43, then compare
+   account-menu fresh vs project fresh/resume with the phone as sole viewer;
+   verify legibility + touch scroll and capture a screenshot for any differential.
 3. Do NOT set `CLAUDE_CODE_NO_FLICKER` globally — it destroys scrollback (#41965);
    re-evaluate per upstream releases.
 
