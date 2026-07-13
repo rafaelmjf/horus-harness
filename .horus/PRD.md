@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.52 unifies Horus app and TUI launches on the managed-tmux substrate: browser xterm and native windows are viewers of the same attachable session, with direct fallbacks on unsupported runtimes."
-next_action: "Owner launches a fresh Claude or Codex session from the web app, opens Termius → horus tui → Sessions, and attaches to that same live session; on PASS, return to orphan reaping. [owner runtime gate; no model spend, current Codex inline only on failure]"
-next_prompt: "Resume Horus after the owner tests v0.0.52 by launching from the web app and attaching from Termius/Horus TUI. Fetch first and read PRD.md. Record browser behavior, the TUI attachable label, and detach/reattach. Fix only a reproduced failure; on PASS, begin orphan reaping without creating the deferred terminal UX card."
-execution_recommendation: "continue-as-is — the next step is an owner-only cross-surface runtime gate; any failure is a narrow reproduced integration fix for the current Codex session, while orphan reaping should receive a fresh execution decision."
+current_focus: "The terminal strategy is settled: web/TUI launches share managed tmux, the browser remains a supported viewer, and native iOS Termius over Tailscale into `horus tui` is the reliable phone control path."
+next_action: "Owner records one explicit v0.0.52 web-launch → Termius/Horus TUI attach and detach/reattach gate; on PASS, begin orphan reaping and leave terminal UX alone until real usage produces a concrete gap. [owner runtime gate; no model spend, current Codex inline only on failure]"
+next_prompt: "Resume Horus after the terminal strategy was closed. Fetch first and read PRD.md. If the v0.0.52 web-launch → Termius/Horus TUI attach gate has not been explicitly recorded, run it once and record browser behavior, the attachable label, and detach/reattach; fix only a reproduced failure. On PASS, make a fresh execution decision for orphan reaping. Do not reopen narrow mobile-browser rendering or iOS Shortcut automation without new evidence."
+execution_recommendation: "continue-as-is — the remaining terminal step is an owner-only cross-surface runtime gate with no model spend; a reproduced failure is a narrow current-Codex integration fix, while orphan reaping needs a fresh execution decision after PASS."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -151,10 +151,17 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   email never lands in a commit; forward-slash every path written to TOML/JSON. A
   `CLAUDE_CONFIG_DIR` isolates renderer preferences too — compare account settings when
   UI behavior differs, and change the explicit preference rather than cloning ambient config.
-- **Claude on phones:** use native iOS SSH over the private Tailscale network into
-  tmux; claude-work-phone selects the isolated work account. This owner-verified path
-  renders and scrolls correctly. Treat Claude in the 39-column browser/xterm viewer as
-  best-effort; do not resume narrow-grid patching without new upstream renderer evidence.
+- **Agent terminals on phones:** keep the browser terminal functional, but use native
+  iOS Termius SSH over the private Tailscale network into `horus tui` as the reliable
+  Claude/Codex control path; managed tmux makes app- and TUI-launched sessions attachable
+  from either surface. `claude-work-phone` selects the isolated work account. Treat Claude
+  in the 39-column browser/xterm viewer as best-effort; do not resume narrow-grid patching
+  without new upstream renderer evidence.
+- **Mobile entry stays deliberately simple:** Termius → connect → `horus tui`.
+  Termius exposes no native iOS Shortcut action and gates automatic startup snippets
+  behind Pro; an `ssh://` shortcut plus a manual snippet adds friction, while a dedicated
+  server-side forced-command endpoint is unjustified for a comfort-only shortcut. Revisit
+  only if Termius adds a free one-tap saved-host/startup action or real usage changes the tradeoff.
 - **Terminal-app navigation stays inside the UI:** on a real TTY, swipe/wheel/arrows
   scroll the highlighted internal viewport and raw escape bytes never reach a line
   prompt; leave the alternate screen before blocking agent launch/attach commands.

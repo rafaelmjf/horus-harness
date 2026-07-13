@@ -39,3 +39,25 @@ session that `horus tui` can attach, closing the split between launch surfaces.
 - Owner launches from the web app, then attaches to that same session from Termius →
   `horus tui` → Sessions. On PASS, return to orphan-process reaping; keep the broader
   terminal UX backlog card deferred until real usage makes its scope clearer.
+
+## Final workflow decision
+
+- The terminal approach is now intentionally split by viewer, not by session substrate:
+  browser xterm remains functional, while native iOS Termius over Tailscale is the reliable
+  phone viewer. Both reach the same Horus-managed tmux sessions through `horus tui`.
+- The owner confirmed the native Termius TUI flow renders, scrolls, and supports multiple
+  sessions; tmux prefix/navigation is acceptable for now, with UX improvements deferred
+  until repeated use reveals a concrete problem.
+- iOS Shortcuts exposed no Termius actions, and Termius gates automatic startup snippets
+  behind Pro. The generic `ssh://` + manual-snippet flow was rejected as worse than simply
+  opening Termius and entering `horus tui`; a server-side forced-command endpoint would be
+  disproportionate complexity for this comfort feature. The chosen entry remains
+  `Termius → connect → horus tui`.
+- No explicit post-v0.0.52 web-launch → Termius attach/detach result was recorded in the
+  session, so that single owner runtime gate remains the honest next step before orphan reaping.
+
+## Checkpoints (auto-harvested)
+
+- `56bc69f` feat: host web-launched sessions in managed tmux (#212)
+- `00cb710` chore: release v0.0.52 (#213)
+- `48c6286` Update Horus continuity (closure)
