@@ -281,6 +281,145 @@ def test_attach_and_stop_use_horus_generated_tmux_name(tmp_path, monkeypatch):
     assert Registry.default().get(sid).status == "exited"
 
 
+def _fake_list_sessions(rows):
+    listing = "\n".join(f"{name}\t{attached}\t{activity}" for name, attached, activity in rows)
+
+    def fake_run(argv, **kwargs):
+        if argv[:2] == ["tmux", "list-sessions"]:
+            return subprocess.CompletedProcess(argv, 0, listing, "")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    return fake_run
+
+
+def test_reap_orphans_returns_nothing_without_tmux(monkeypatch):
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: False)
+    assert terminal_sessions.reap_orphans() == []
+
+
+def test_reap_orphans_skips_attached_session(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
+    monkeypatch.setattr(
+        terminal_sessions.subprocess, "run",
+        _fake_list_sessions([("horus-abc123456789", "1", "9000")]),
+    )
+    calls = []
+    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    assert terminal_sessions.reap_orphans() == []
+    assert calls == []
+
+
+def test_reap_orphans_skips_recently_active_session(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
+    monkeypatch.setattr(
+        terminal_sessions.subprocess, "run",
+        _fake_list_sessions([("horus-abc123456789", "0", "9700")]),  # idle 300s < grace
+    )
+    calls = []
+    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    assert terminal_sessions.reap_orphans() == []
+    assert calls == []
+
+
+def test_reap_orphans_skips_live_session_backed_by_a_running_process(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    sid = "12345678-1234-1234-1234-123456789abc"
+    Registry.default().upsert(
+        SessionRecord(
+            session_id=sid, agent="fake", project=root.as_posix(), pid=4242,
+            status="running", launch_target="tmux", target_ref="horus-abc123456789",
+        )
+    )
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
+    monkeypatch.setattr(
+        terminal_sessions.subprocess, "run",
+        _fake_list_sessions([("horus-abc123456789", "0", "9000")]),  # idle 1000s, unattached
+    )
+    monkeypatch.setattr(terminal_sessions.registry, "process_alive", lambda pid: True)
+    calls = []
+    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    assert terminal_sessions.reap_orphans() == []
+    assert calls == []
+    assert Registry.default().get(sid).status == "running"
+
+
+def test_reap_orphans_kills_provably_orphaned_session(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    sid = "12345678-1234-1234-1234-123456789abc"
+    Registry.default().upsert(
+        SessionRecord(
+            session_id=sid, agent="fake", project=root.as_posix(), pid=4242,
+            status="stale", launch_target="tmux", target_ref="horus-abc123456789",
+        )
+    )
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
+    monkeypatch.setattr(
+        terminal_sessions.subprocess, "run",
+        _fake_list_sessions([("horus-abc123456789", "0", "9000")]),  # idle 1000s, unattached
+    )
+    monkeypatch.setattr(terminal_sessions.registry, "process_alive", lambda pid: False)
+    calls = []
+    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    assert terminal_sessions.reap_orphans() == ["horus-abc123456789"]
+    assert calls == ["horus-abc123456789"]
+    assert Registry.default().get(sid).status == "orphaned"
+
+
+def test_reap_orphans_never_touches_a_session_with_no_registry_record(tmp_path, monkeypatch):
+    # An absent record is not positive evidence of anything (it could just mean a
+    # stale/foreign/rebuilt registry looking at a real tmux server) — reap_orphans
+    # must leave it alone even though it's idle and unattached.
+    _home(tmp_path, monkeypatch)
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
+    monkeypatch.setattr(
+        terminal_sessions.subprocess, "run",
+        _fake_list_sessions([("horus-untracked00000", "0", "9000")]),
+    )
+    calls = []
+    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    assert terminal_sessions.reap_orphans() == []
+    assert calls == []
+
+
+def test_reap_orphans_kills_a_running_record_whose_tracked_pid_is_dead(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    sid = "12345678-1234-1234-1234-123456789abc"
+    Registry.default().upsert(
+        SessionRecord(
+            session_id=sid, agent="fake", project=root.as_posix(), pid=4242,
+            status="running", launch_target="tmux", target_ref="horus-abc123456789",
+        )
+    )
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
+    monkeypatch.setattr(
+        terminal_sessions.subprocess, "run",
+        _fake_list_sessions([("horus-abc123456789", "0", "9000")]),  # idle 1000s, unattached
+    )
+    monkeypatch.setattr(terminal_sessions.registry, "process_alive", lambda pid: False)
+    calls = []
+    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    assert terminal_sessions.reap_orphans() == ["horus-abc123456789"]
+    assert calls == ["horus-abc123456789"]
+    assert Registry.default().get(sid).status == "orphaned"
+
+
+def test_cmd_reap_reports_what_it_killed(monkeypatch, capsys):
+    monkeypatch.setattr(terminal_sessions, "reap_orphans", lambda: ["horus-abc123456789"])
+    assert cli.main(["reap"]) == 0
+    assert "Reaped 1 orphaned tmux session(s): horus-abc123456789" in capsys.readouterr().out
+
+
 def test_tmux_runner_executes_0600_spec_and_records_result(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)

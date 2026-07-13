@@ -994,6 +994,15 @@ def cmd_session_stop(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_reap(args: argparse.Namespace) -> int:
+    reaped = terminal_sessions.reap_orphans()
+    if not reaped:
+        print("No orphaned tmux sessions found.")
+        return 0
+    print(f"Reaped {len(reaped)} orphaned tmux session(s): {', '.join(sorted(reaped))}")
+    return 0
+
+
 def cmd_brainstorm(args: argparse.Namespace) -> int:
     """Launch a tracked brainstorm session seeded with scoped PRD context + a topic.
 
@@ -2712,6 +2721,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_stop = sub.add_parser("stop", help="close a running Horus tmux session")
     p_stop.add_argument("session_id", help="session id (or a unique prefix)")
     p_stop.set_defaults(func=cmd_session_stop)
+
+    p_reap = sub.add_parser(
+        "reap",
+        help="kill abandoned Horus tmux sessions (never one that's attached, live, or recently active)",
+    )
+    p_reap.set_defaults(func=cmd_reap)
 
     p_run = sub.add_parser("run", help="spawn (or resume) an agent session, tracked in the registry")
     p_run.add_argument("prompt", help="the prompt to send the agent")

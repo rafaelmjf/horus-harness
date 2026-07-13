@@ -14,6 +14,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from horus import config, launch, launcher, registry
@@ -24,6 +25,11 @@ WINDOW = "window"
 TARGETS = (WINDOW, CURRENT, TMUX)
 
 _SESSION_RE = re.compile(r"^[0-9a-f-]{36}$")
+
+# A detached, unattached tmux session must sit idle at least this long before it is
+# even considered for reaping — insurance against racing a session that was just
+# created (tmux activity and the registry pid handoff both need a moment to settle).
+ORPHAN_MIN_IDLE_SECONDS = 600.0
 
 
 def tmux_available() -> bool:
@@ -294,6 +300,80 @@ def stop_session(session_id: str, *, reg: registry.Registry | None = None) -> st
     store.set_status(record.session_id, "exited")
     _runner_spec_path(record.session_id).unlink(missing_ok=True)
     return None
+
+
+def _live_tmux_sessions() -> dict[str, tuple[bool, float]]:
+    """Horus-named tmux sessions the tmux server currently holds, keyed by name to
+    ``(attached, last_activity_epoch)``. Empty when tmux is unavailable or has no
+    server running (never an error — an absent server just means nothing to reap)."""
+    if not tmux_available():
+        return {}
+    listed = subprocess.run(  # noqa: S603,S607 - fixed tmux argv, no user input
+        ["tmux", "list-sessions", "-F", "#{session_name}\t#{session_attached}\t#{session_activity}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listed.returncode != 0:
+        return {}
+    sessions: dict[str, tuple[bool, float]] = {}
+    for line in listed.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 3 or not parts[0].startswith("horus-"):
+            continue
+        name, attached, activity = parts
+        try:
+            sessions[name] = (attached != "0", float(activity))
+        except ValueError:
+            continue
+    return sessions
+
+
+def reap_orphans(
+    *, reg: registry.Registry | None = None, min_idle_seconds: float = ORPHAN_MIN_IDLE_SECONDS,
+) -> list[str]:
+    """Kill Horus tmux sessions that are provably abandoned; return the killed names.
+
+    Safety invariant — positive confirmation only: a session is reaped only when
+    Horus's own registry positively confirms it is no longer live (a matching
+    record exists, and either that record's own status is already terminal, or the
+    pid Horus tracked for it is dead), AND it is not attached, AND it has been idle
+    beyond ``min_idle_seconds`` by tmux's own clock. A tmux session with NO
+    matching registry record is never touched, however idle or unattached it
+    looks — an absent record is not evidence of anything (a stale, foreign, or
+    rebuilt registry looks identical from here); guessing on absence is exactly
+    how a live session gets killed.
+    """
+    live = _live_tmux_sessions()
+    if not live:
+        return []
+    store = reg or registry.Registry.default()
+    by_target_ref = {record.target_ref: record for record in store.all() if record.target_ref}
+    now = time.time()
+    reaped: list[str] = []
+    for name, (attached, activity) in live.items():
+        if attached:
+            continue
+        if now - activity < min_idle_seconds:
+            continue
+        record = by_target_ref.get(name)
+        if record is None:
+            continue  # no positive confirmation this is ours to reap — leave it alone
+        if record.status == "running" and registry.process_alive(record.pid):
+            continue
+        _kill_tmux_session(name)
+        store.set_status(record.session_id, "orphaned")
+        _runner_spec_path(record.session_id).unlink(missing_ok=True)
+        reaped.append(name)
+    return reaped
+
+
+def _kill_tmux_session(name: str) -> None:
+    subprocess.run(  # noqa: S603,S607 - tmux name came from Horus's own list-sessions output
+        ["tmux", "kill-session", "-t", name],
+        capture_output=True,
+        check=False,
+    )
 
 
 def resolve_session(

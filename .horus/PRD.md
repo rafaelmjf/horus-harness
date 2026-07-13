@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "The terminal strategy is settled: web/TUI launches share managed tmux, the browser remains a supported viewer, and native iOS Termius over Tailscale into `horus tui` is the reliable phone control path."
-next_action: "Owner records one explicit v0.0.52 web-launch → Termius/Horus TUI attach and detach/reattach gate; on PASS, begin orphan reaping and leave terminal UX alone until real usage produces a concrete gap. [owner runtime gate; no model spend, current Codex inline only on failure]"
-next_prompt: "Resume Horus after the terminal strategy was closed. Fetch first and read PRD.md. If the v0.0.52 web-launch → Termius/Horus TUI attach gate has not been explicitly recorded, run it once and record browser behavior, the attachable label, and detach/reattach; fix only a reproduced failure. On PASS, make a fresh execution decision for orphan reaping. Do not reopen narrow mobile-browser rendering or iOS Shortcut automation without new evidence."
-execution_recommendation: "continue-as-is — the remaining terminal step is an owner-only cross-surface runtime gate with no model spend; a reproduced failure is a narrow current-Codex integration fix, while orphan reaping needs a fresh execution decision after PASS."
+current_focus: "Terminal strategy + attach gate are both closed. A guarded tmux orphan-reaper (positive-orphan-confirmation invariant) shipped to PR #214, awaiting the owner's accept-gate."
+next_action: "Owner reviews/merges PR #214 (guarded orphan-reaper). Do not self-merge. On merge, cut the next release (three-file bump + install smoke + hosted deploy). [owner accept-gate; no model spend]"
+next_prompt: "Resume Horus after the guarded orphan-reaper PR. Fetch first and read PRD.md. If PR #214 is merged, cut the next release per the usual discipline; if it's still open, do not act on it further without new owner direction. Do not reopen terminal UX without new usage evidence."
+execution_recommendation: "continue-as-is — remaining step is the owner's PR accept-gate, then a routine release cut; no open design ambiguity."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -37,7 +37,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 ### Now / next candidates
 
 - **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
-1. **[ops] Orphan reap after failed runs:** dead workers leave children holding ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04; 2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h — systemd showed dead, deploys no-opped "already running"; deploy-hosted.sh's version check caught it). On a `failed` RESULT — or `horus reap <session-id>` — kill the session's remaining process tree (registry has the pid); at minimum surface "pid still has children" in `horus tail`/dashboard.
+1. **[ops] Orphan reap after failed runs (process-tree, distinct from the tmux reaper below):** dead workers leave children holding ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04; 2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h — systemd showed dead, deploys no-opped "already running"; deploy-hosted.sh's version check caught it). On a `failed` RESULT, kill the session's remaining process tree (registry has the pid); at minimum surface "pid still has children" in `horus tail`/dashboard. Cross-platform process-tree walking, not tmux-specific — needs its own execution decision.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
 3. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak; macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution. install-smoke CI covers install/CLI/`/health` on all three already.
 4. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD + execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup.
@@ -51,6 +51,15 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**v0.0.52 attach gate: PASS** (2026-07-13, owner-verified): web-launched session attached
+cleanly from Termius/`horus tui` on a separate desktop; detach/reattach worked. This was
+the runtime gate the terminal-strategy work was blocked on; closes that thread.
+**Guarded tmux orphan-reaper** (2026-07-13, PR #214, unmerged pending owner accept-gate):
+`terminal_sessions.reap_orphans()` + `horus reap` kill an abandoned Horus-managed tmux
+session only under positive confirmation — a matching registry record whose status is
+already terminal or whose tracked pid is dead — AND unattached AND idle past a 10-minute
+grace window; a tmux session with no matching registry record is never touched (absence
+isn't evidence). See Rules for the tmux-socket-isolation testing lesson this shipped with.
 **Unified terminal project cockpit** (2026-07-13, PRs #195/#196/#198/#199/#201/#202/#204/#205/#207/#208/#210/#211/#212/#213, v0.0.46–0.0.52): responsive phone/desktop TUI with account-window KPIs, conventional Termius scrolling, unified Resume/Fresh accounts, backlog-card resume, and live-session controls; TUI and web-app launches share automatic managed tmux, browser/native terminals are viewers of the attachable session, viewer failures roll back safely, and scripted `open --target` plus unsupported-runtime fallbacks remain stable.
 **OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): compared OpenWiki against the Horus capability catalog + PRD continuity (`research/openwiki-comparison-2026-07.md`); overseer+owner endorsed skip-but-watch — no dependency, no competing doc engine now — revisit only if OpenWiki reaches a stable 1.x code mode with evidence across 30+ merged changes in a private polyglot repo, via an opt-in measured pilot (`.horus/backlog/openwiki-vs-self-documenting-research.md`).
 **`dashboard --reload`** (2026-07-12, PR #175): restarts a running Horus backend in place from currently-installed code via `/health` discovery + terminate + relaunch on the same host/port (exposed backends restart with `--exposed`); `horus app` polls and respawns its own dashboard child after a crash, never adopting one it didn't spawn.
@@ -210,6 +219,23 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   nothing, alone edits continuity. Commit continuity before cutting a worktree from HEAD;
   name any unreviewed-output branch in the handoff; probe briefs never hardcode port 8765;
   reap orphaned port-holders before probing after a worker death.
+- **Orphan reaping only ever acts on positive confirmation (2026-07-13).**
+  `reap_orphans()` kills a Horus tmux session only when the registry has a *matching*
+  record that is already terminal or whose tracked pid is dead, AND it's unattached,
+  AND idle past a grace window. A tmux session with **no matching registry record is
+  never touched**, however idle/unattached — absence of a record is not evidence of
+  anything (a stale, foreign, or rebuilt registry looks identical), and reaping on
+  absence is exactly how a live session gets killed. Extend this pattern to any future
+  reaper before relaxing it.
+- **tmux is one server per machine, never `$HOME`-namespaced — isolate it with a
+  private socket in every test/probe that touches real tmux (2026-07-13 incident).**
+  A live probe pointed a fake `$HOME` at tmux to sandbox the *registry*, but tmux itself
+  is a single shared server regardless of `$HOME`; `reap_orphans()` correctly (per its
+  own contract) killed two real pre-existing sessions on the machine because they had
+  no record in the probe's fake registry. No real loss this time (owner confirmed both
+  were already-abandoned), but never again: any tmux-touching test or probe MUST use
+  `tmux -S <explicit-path>` (not `-L <path>` — `-L` takes a bare *name* in the standard
+  socket dir, not a path, and silently mis-resolves/errors if given one).
 - **Platform traps:** `uv tool install horus-harness` without `--python 3.12` silently resolves
   an ancient version below the floor — compare `horus --version` with `uv run horus --version`,
   `--force --python 3.12` reinstall + restart. A **stale `pip`-installed `horus` on PATH shadows
