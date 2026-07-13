@@ -61,3 +61,5 @@ session that `horus tui` can attach, closing the split between launch surfaces.
 - `56bc69f` feat: host web-launched sessions in managed tmux (#212)
 - `00cb710` chore: release v0.0.52 (#213)
 - `48c6286` Update Horus continuity (closure)
+
+- `5babd32` Update Horus continuity (closure)
