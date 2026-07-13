@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.45 is published and hosted after the owner proved v0.0.44 could flip from correct Accounts rendering to mixed-letter Project resume and then mixed-letter Accounts fresh. The redraw protocol now places a viewer-tokened reset marker inside the SSE byte stream, ordering stale replay → reset → fresh repaint without cross-connection timing guesses."
-next_action: "Owner hard-refreshes/restarts the PWA and performs ONE launch on hosted v0.0.45—prefer Project resume because it exposed the replay race—then reports whether display + scroll remain correct. No prompt/model turn is needed. [current Codex inline only; no delegation]"
-next_prompt: "Resume Horus. Fetch first; read PRD.md and terminal-claude-rendering-levers.md. Ask for the single v0.0.45 phone result, preferably Project resume: did the terminal avoid mixed letters and scroll correctly after a hard refresh? Do not request an additional launch or model turn."
-execution_recommendation: "continue-as-is — only one owner visual check remains on the deployed ordered-stream fix; further work is contingent debugging, not a fenceable implementation batch."
+current_focus: "Claude-on-phone is resolved operationally: the owner verified native iOS SSH over Tailscale → tmux → Claude renders and scrolls perfectly. The 39-column browser/xterm path remains best-effort because Claude's live renderer is unreliable there; the bounded web levers shipped through v0.0.45/PR #191 and the card is closed."
+next_action: "Take the next actionable backlog item: reproduce and bound orphan-process reaping after failed runs, then implement the smallest safety guard. [current Codex inline; no delegation unless the probe reveals a broad cross-platform sweep]"
+next_prompt: "Resume Horus. Fetch first and read PRD.md. Start the orphan-reap item by reproducing one failed-run child that survives its registry PID; inspect existing process-tree cleanup and define one deterministic Linux gate before editing. Keep work inline in the current Codex session unless scope expands materially."
+execution_recommendation: "continue-as-is — orphan reaping starts as ambiguous process-tree diagnosis with a small Linux probe; delegation adds little until the failure shape and cross-platform volume are known."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -40,7 +40,6 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 ### Now / next candidates
 
 - **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
-- **Claude-on-phone ordered-stream check:** v0.0.45 replaces the cross-connection lazy-reset guess with an SSE-ordered replay→reset→repaint boundary. Owner hard-refreshes and performs one launch (prefer Project resume, the failing replay path), checking display/scroll without a prompt. [owner-only gate; current Codex inline if debugging]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04;
    2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h —
@@ -67,7 +66,7 @@ One line per capability; details in `archive/features.md`, git history, and the 
 **Fix Codex usage-limit account scope** (2026-07-12, PR #173): `horus usage check` sources 5h/weekly Codex limits from the newest account-wide rollout (not project-scoped) and flags an expired reset window as stale rather than current capacity.
 **Mobile/desktop terminal sizing + lifecycle + controls hardening** (2026-07-12, PR #171): `.xterm-host` fills its region via `ResizeObserver` + layout-settled initial fit (no stale 80×24 default); live `matchMedia` re-evaluation instead of load-once mobile/desktop latch; tabs reachable in fullscreen; larger tap targets; confirm-guard on closing a live session. Symptom 2 (exposed-mode/POST-path no-input regression) is untouched, tracked separately in Backlog.
 
-**Terminal multi-viewer/mobile stack overhaul** (2026-07-12/13, PRs #178–#191, v0.0.36–v0.0.45): gone-session/input signals; 16px+iOS containment+xterm 6; geometry re-claim/touch wheel; smallest-wins viewers; compact phone-width spawn; retained exited screens; viewer-tokened SSE reset markers now order stale replay → reset → fresh repaint instead of guessing across redraw POST/SSE timing. Awaiting one owner phone check.
+**Terminal multi-viewer/mobile stack + verified Claude phone route** (2026-07-12/13, PRs #178–#191, v0.0.36–v0.0.45): browser controls, lifecycle, geometry, xterm 6, phone-width spawn, retained exits, and ordered SSE reset markers shipped; owner testing proved Claude remains unreliable at a 39-column browser grid but works perfectly through native iOS Tailscale SSH → tmux at terminal-native geometry, using the isolated work-account launcher.
 
 **Windows CLI un-broken** (2026-07-13, PR #181): Unix-only `fcntl` top-level import in `backlog.py` (since v0.0.36) killed every Windows invocation; lazy import, install-smoke green on all three OS.
 **Backlog card ship-lifecycle provenance** (2026-07-12, PR #172): `horus backlog ship <slug> --pr N --sha SHA` stamps `status: shipped` + PR/SHA in place; `backlog list`/`fleet --backlog` hide shipped cards by default (`--all`/`--shipped` opt in); `close --check` warns when a card carries shipped provenance but is still `open`.
@@ -162,6 +161,10 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   email never lands in a commit; forward-slash every path written to TOML/JSON. A
   `CLAUDE_CONFIG_DIR` isolates renderer preferences too — compare account settings when
   UI behavior differs, and change the explicit preference rather than cloning ambient config.
+- **Claude on phones:** use native iOS SSH over the private Tailscale network into
+  tmux; claude-work-phone selects the isolated work account. This owner-verified path
+  renders and scrolls correctly. Treat Claude in the 39-column browser/xterm viewer as
+  best-effort; do not resume narrow-grid patching without new upstream renderer evidence.
 - **Git policy:** branch → PR → auto-merge; this repo's main requires pytest checks
   (admins exempt so continuity pushes land directly; fallback direct merge only on
   repos without required checks); offboard keeps `.horus/` by default; `.vscode/` is
