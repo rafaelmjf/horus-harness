@@ -1470,10 +1470,14 @@ def test_terminal_js_geometry_epoch_handshake(tmp_path, monkeypatch):
     assert "maybeEpochReset" in page and "term.reset()" in page
     assert "/pty/redraw" in page
     assert "if(fitted && s.cols>0" in page   # onResize gated on a real fit
-    # The reset is LAZY: armed only after a successful redraw request, applied
-    # when the repaint's bytes arrive — never eagerly (a TUI that ignores
-    # SIGWINCH, like Claude Code's trust prompt, must not leave a blank screen).
-    assert "if(r && r.ok){ pendingReset=true; }" in page
+    # The reset is LAZY: armed before the redraw request because TIOCSWINSZ can
+    # publish repaint bytes over SSE before fetch receives the 204. It is still
+    # applied only when bytes arrive, so a SIGWINCH-silent trust prompt stays
+    # visible; a failed redraw disarms it.
+    arm = page.index("pendingReset=true;")
+    redraw = page.index("post('/pty/redraw'")
+    assert arm < redraw
+    assert "if(!r || !r.ok){ pendingReset=false; }" in page
     assert "if(pendingReset){ pendingReset=false; term.reset(); }" in page
 
 

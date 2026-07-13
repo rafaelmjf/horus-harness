@@ -307,6 +307,25 @@ async function main() {
       Array.isArray(wheels) && wheels.length >= 1, wheels);
     check("upward finger drag scrolls forward (positive wheel deltaY)",
       Array.isArray(wheels) && wheels.length >= 1 && wheels.every((d) => d > 0), wheels);
+
+    // ---- Phase 8: redraw output can beat the redraw POST response ---------
+    // A real TIOCSWINSZ can publish Claude's repaint on the SSE thread before
+    // the HTTP handler returns 204. If pendingReset is armed only in fetch's
+    // .then(), that repaint is missed and the NEXT unrelated output wipes it.
+    await setViewport({ width: 1280, height: 900, mobile: false, deviceScaleFactor: 1 });
+    await navigate(`${SERVER_URL}/`);
+    await delay(800);
+    const redrawState = await evalJs(`fetch('/__state').then(r=>r.json())`);
+    check("geometry mismatch requests a redraw", redrawState.redraws.includes("pty-1"), redrawState.redraws);
+    await evalJs(`fetch('/__emit',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id=pty-1&data=LATE-pty-1'})`);
+    await delay(250);
+    const screenAfterLateOutput = await evalJs(`(function(){
+      var t = document.querySelector('.term-pane[data-tid="pty-1"] .xterm-rows');
+      return t ? t.textContent : '';
+    })()`);
+    check("redraw bytes arriving before POST completion survive later output",
+      screenAfterLateOutput.includes("FRESH-pty-1") && screenAfterLateOutput.includes("LATE-pty-1"),
+      screenAfterLateOutput);
   } finally {
     proc.kill();
   }
