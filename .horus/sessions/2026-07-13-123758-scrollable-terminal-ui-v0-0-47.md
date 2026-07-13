@@ -43,3 +43,9 @@ then shipped it as v0.0.47.
 - Owner tests v0.0.47 in Termius: swipe/down-arrow scrolling, project open/back,
   account selection, and absence of `^[[B`. On PASS, choose the next responsive
   desktop/launch-sheet slice or return to orphan-process reaping.
+
+## Checkpoints (auto-harvested)
+
+- `5e1148e` Add scrollable terminal project UI (#198)
+- `43fe609` Release 0.0.47 (#199)
+- `89676b8` Update continuity for scrollable terminal UI (#200)
