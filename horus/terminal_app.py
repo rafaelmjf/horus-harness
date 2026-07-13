@@ -126,7 +126,8 @@ def _sessions(input_fn: InputFn, out: TextIO, *, project: Path | None = None) ->
         _line(
             out,
             f"{index:>2}. {record.agent} · {record.account or 'ambient'} · "
-            f"{Path(record.project).name} · {record.launch_target} · {record.session_id[:8]}",
+            f"{Path(record.project).name} · {terminal_sessions.access_label(record)} · "
+            f"{record.launch_target} · {record.session_id[:8]}",
         )
     choice = _ask(input_fn, "Select session, [b] back: ")
     if choice is None or choice.lower() == "b":
@@ -136,6 +137,9 @@ def _sessions(input_fn: InputFn, out: TextIO, *, project: Path | None = None) ->
         _line(out, "Invalid selection.")
         return
     record = records[selected]
+    if not terminal_sessions.is_attachable(record):
+        _line(out, "This live session remains in its original terminal and cannot be attached here.")
+        return
     action = _ask(input_fn, "[a] attach, [x] close, [b] back: ")
     if action is None or action.lower() == "b":
         return

@@ -315,7 +315,10 @@ class TerminalUI:
             records.sort(key=lambda record: record.updated_at, reverse=True)
             self.items = [("session", record) for record in records]
         elif self.screen == "session":
-            self.items = [("attach", None), ("close", None), ("back", None)]
+            if self.selected_session is not None and terminal_sessions.is_attachable(self.selected_session):
+                self.items = [("attach", None), ("close", None), ("back", None)]
+            else:
+                self.items = [("unavailable", None), ("back", None)]
         elif self.screen == "confirm":
             self.items = [("no", None), ("yes", None)]
 
@@ -412,9 +415,17 @@ class TerminalUI:
                         f"{Path(record.project).name}\n",
                     )
                 )
-                lines.append(("class:muted", f"     {record.launch_target} · {record.session_id[:8]}\n"))
+                lines.append(
+                    (
+                        "class:muted",
+                        f"     {terminal_sessions.access_label(record)} · "
+                        f"{record.launch_target} · {record.session_id[:8]}\n",
+                    )
+                )
             elif kind in {"attach", "close", "back"}:
                 lines.append((style, f"\n {marker} {kind.title()}\n"))
+            elif kind == "unavailable":
+                lines.append(("class:muted", "\n   This live session remains in its original terminal.\n"))
             elif kind in {"yes", "no"}:
                 lines.append((style, f"\n {marker} {'Close session' if kind == 'yes' else 'Keep session'}\n"))
         return lines
@@ -555,6 +566,11 @@ class TerminalUI:
                 if narrow
                 else " Enter attach   Ctrl-b d returns   Esc back   q quit"
             )
+            return [("class:footer", text)]
+        if self.screen == "session" and (
+            self.selected_session is None or not terminal_sessions.is_attachable(self.selected_session)
+        ):
+            text = " Esc back · q quit" if narrow else " Original terminal only   Esc back   q quit"
             return [("class:footer", text)]
         text = (
             " ↑↓ scroll · Enter · s sessions · q"
@@ -699,7 +715,10 @@ def _session_account_alias(record: registry.SessionRecord) -> str:
 
 
 def _session_label(record: registry.SessionRecord) -> str:
-    return f"{record.agent} {_session_account_alias(record)}"
+    return (
+        f"{record.agent} {_session_account_alias(record)} · "
+        f"{terminal_sessions.access_label(record)}"
+    )
 
 
 def _fit_cell(text: str, width: int) -> str:

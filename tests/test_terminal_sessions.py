@@ -58,13 +58,67 @@ def _card(root: Path, name: str, *, title: str, priority: str, type: str, detail
     return path
 
 
-def test_default_target_prefers_tmux_for_bare_ssh(monkeypatch):
+def test_default_target_prefers_tmux_when_available(monkeypatch):
     monkeypatch.delenv("TMUX", raising=False)
-    monkeypatch.setenv("SSH_CONNECTION", "phone host")
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
     monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
     assert terminal_sessions.default_target() == "tmux"
+
+
+def test_default_target_falls_back_without_tmux_or_inside_tmux(monkeypatch):
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: False)
+    assert terminal_sessions.default_target() == "current"
+
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
     monkeypatch.setenv("TMUX", "/tmp/tmux")
     assert terminal_sessions.default_target() == "current"
+
+
+def test_default_target_honors_explicit_override(monkeypatch):
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
+    assert terminal_sessions.default_target() == "current"
+
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: False)
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
+    assert terminal_sessions.default_target() == "tmux"
+
+
+def test_tmux_is_unavailable_on_native_windows(monkeypatch):
+    monkeypatch.setattr(terminal_sessions.os, "name", "nt")
+    monkeypatch.setattr(terminal_sessions.shutil, "which", lambda _name: "C:/tmux.exe")
+    assert terminal_sessions.tmux_available() is False
+
+
+def test_attachability_requires_horus_tmux_target():
+    attachable = SessionRecord(
+        session_id="12345678-1234-1234-1234-123456789abc",
+        agent="fake",
+        project="/tmp/demo",
+        launch_target="tmux",
+        target_ref="horus-123456781234",
+    )
+    direct = SessionRecord(
+        session_id="87654321-1234-1234-1234-123456789abc",
+        agent="fake",
+        project="/tmp/demo",
+        launch_target="current",
+    )
+    incomplete = SessionRecord(
+        session_id="abcdefab-1234-1234-1234-123456789abc",
+        agent="fake",
+        project="/tmp/demo",
+        launch_target="tmux",
+    )
+    assert terminal_sessions.is_attachable(attachable) is True
+    assert terminal_sessions.access_label(attachable) == "attachable"
+    assert terminal_sessions.is_attachable(direct) is False
+    assert terminal_sessions.access_label(direct) == "original terminal only"
+    assert terminal_sessions.is_attachable(incomplete) is False
 
 
 def test_run_attached_tracks_final_status(tmp_path, monkeypatch):
@@ -217,6 +271,26 @@ def test_terminal_app_launches_selected_fresh_agent(tmp_path, monkeypatch):
     assert "Session 12345678 returned to Horus" in out.getvalue()
 
 
+def test_terminal_app_labels_non_attachable_session(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    Registry.default().upsert(
+        SessionRecord(
+            session_id="12345678-1234-1234-1234-123456789abc",
+            agent="codex",
+            project=root.as_posix(),
+            pid=os.getpid(),
+            launch_target="current",
+        )
+    )
+    answers = iter(["s", "1", "q"])
+    out = io.StringIO()
+    assert terminal_app.run(input_fn=lambda _: next(answers), output=out) == 0
+    text = out.getvalue()
+    assert "original terminal only" in text
+    assert "cannot be attached here" in text
+
+
 def test_terminal_tui_down_sequence_scrolls_selection_without_becoming_text(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     for index in range(12):
@@ -311,6 +385,46 @@ def test_terminal_tui_project_navigation_and_back(tmp_path, monkeypatch):
     assert ui.screen == "project" and ui.project == root
     ui.back()
     assert ui.screen == "projects"
+
+
+def test_terminal_tui_distinguishes_attachable_sessions(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    direct = Registry.default().upsert(
+        SessionRecord(
+            session_id="12345678-1234-1234-1234-123456789abc",
+            agent="codex",
+            project=root.as_posix(),
+            pid=os.getpid(),
+            launch_target="current",
+        )
+    )
+    managed = Registry.default().upsert(
+        SessionRecord(
+            session_id="87654321-1234-1234-1234-123456789abc",
+            agent="claude",
+            project=root.as_posix(),
+            pid=os.getpid(),
+            launch_target="tmux",
+            target_ref="horus-876543211234",
+        )
+    )
+    ui = terminal_tui.TerminalUI()
+    ui._show("sessions")
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "attachable · tmux" in rendered
+    assert "original terminal only · current" in rendered
+
+    ui.selected_session = direct
+    ui._show("session")
+    assert [kind for kind, _value in ui.items] == ["unavailable", "back"]
+    assert "remains in its original terminal" in "".join(
+        fragment[1] for fragment in ui._body_text()
+    )
+
+    ui.selected_session = managed
+    ui._show("session")
+    assert [kind for kind, _value in ui.items] == ["attach", "close", "back"]
 
 
 def test_terminal_tui_names_ambient_accounts_and_combines_agents(tmp_path, monkeypatch):

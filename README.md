@@ -77,11 +77,14 @@ so returning to the first project restores the account rail and narrow phone ter
 never print raw arrow-key escape sequences. Termius already translates touch gestures
 into conventional Up/Down bytes, so Horus preserves the normal mapping on phone and
 desktop. `HORUS_TUI_INVERT_SCROLL=1` is an opt-in escape hatch for clients that report
-the opposite direction. A local shell runs the selected agent in the current terminal.
-A bare SSH
-login automatically uses a unique detached tmux session when tmux is installed, so
-the agent survives a phone sleeping or a network change; when already inside tmux,
-Horus uses the current pane instead of nesting clients.
+the opposite direction. The terminal app automatically uses a unique managed tmux
+session on Linux, macOS, and WSL whenever tmux is installed, so launches are detachable
+and reattachable from another terminal. Native Windows, hosts without tmux, and shells
+already inside tmux fall back to the current terminal. Set
+`HORUS_TERMINAL_TARGET=current` to force that fallback or
+`HORUS_TERMINAL_TARGET=tmux` to explicitly require persistence. The session list labels
+each live process as `attachable` or `original terminal only`. Scripted `horus open`
+calls retain their explicit `--target window|current|tmux` behavior and window default.
 
 To run more than one phone session, detach from the current agent with tmux's
 `Ctrl-b`, then `d`. Horus returns without closing the agent. Launch another project or
