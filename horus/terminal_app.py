@@ -14,6 +14,11 @@ InputFn = Callable[[str], str]
 
 def run(*, input_fn: InputFn = input, output: TextIO | None = None) -> int:
     """Run the terminal application until the user quits or input closes."""
+    if input_fn is input and output is None and sys.stdin.isatty() and sys.stdout.isatty():
+        from horus import terminal_tui
+
+        return terminal_tui.run()
+
     out = output or sys.stdout
     try:
         while True:
