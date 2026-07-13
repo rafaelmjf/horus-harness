@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.43 shipped + hosted: fixed the v0.0.42 lazy-reset ordering race that could erase Claude's redraw and break BOTH account- and project-launched mobile terminals. The earlier 38-col Claude minimum remains a controlled headless finding, but the owner counter-datum now needs a clean on-phone retest."
-next_action: "Owner-only phone gate on hosted v0.0.43: hard-reload the PWA/page, then compare account-menu fresh vs project fresh/resume with the phone as sole viewer. If rendering still differs, capture which mode + screenshot before choosing any 80-col floor/pan option. [no Sonnet; continue inline in the current Codex session if debugging resumes]"
-next_prompt: "Resume Horus. Fetch first; read PRD.md, .horus/backlog/terminal-claude-rendering-levers.md, and the newest v0.0.43 session note. Ask the owner for the hard-reloaded phone verdict on account fresh vs project fresh/resume; diagnose only the failing differential before revisiting Claude-width product options."
-execution_recommendation: "continue-as-is — the next gate is the owner's on-device visual comparison; any follow-up is ambiguous, localized terminal debugging and should stay inline in the current Codex session (no Sonnet/delegation)."
+current_focus: "Owner phone verdict on v0.0.43: project fresh now renders + scrolls correctly; Accounts fresh still fails. Hosted logs prove both received the same 39×26/27 PTY geometry. Differential found in Claude config: successful ambient launch had tui=fullscreen; isolated work account did not. The isolated account now has tui=fullscreen, pending one retest."
+next_action: "Owner launches ONE fresh session from Accounts and checks display + scroll; no resume test needed. If it passes, close the Claude rendering card as a per-account renderer-preference issue; if not, capture a screenshot without spending a model turn. [no Sonnet; current Codex inline only if debugging resumes]"
+next_prompt: "Resume Horus. Fetch first; read PRD.md and terminal-claude-rendering-levers.md. Ask whether the Accounts fresh session rendered correctly after setting tui=fullscreen in the isolated work account. Do not request a resume/model turn; close the card on PASS or inspect the screenshot on failure."
+execution_recommendation: "continue-as-is — only an owner visual check remains; no implementation volume and no reason to delegate or use Sonnet."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -40,7 +40,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 ### Now / next candidates
 
 - **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
-- **Claude-on-phone verification/decision:** v0.0.43 fixed a redraw-order race that explained both launch paths regressing. Owner first hard-reloads and compares account fresh vs project fresh/resume as sole phone viewer; only then choose from `terminal-claude-rendering-levers` (80-col pan/floor, per-agent min-cols, remote-control split, upstream). [owner-only gate; current Codex inline if debugging]
+- **Claude-on-phone final account check:** project fresh passes on v0.0.43; Accounts fresh had identical 39-col geometry but its isolated Claude config lacked ambient's `tui: fullscreen`. Preference set explicitly; owner retests one Accounts fresh session without a model turn. No resume test needed. [owner-only gate; current Codex inline if debugging]
 1. **[ops] Orphan reap after failed runs:** dead workers leave children holding
    ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04;
    2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h —
@@ -159,7 +159,9 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   deploy unit as one lockstep change. Persist a client-side seen-flag in `localStorage`,
   not `sessionStorage` (per-tab → resets on every new window Horus opens).
 - **Accounts:** login-driven setup into isolated dirs; TOFU identity adoption; the real
-  email never lands in a commit; forward-slash every path written to TOML/JSON.
+  email never lands in a commit; forward-slash every path written to TOML/JSON. A
+  `CLAUDE_CONFIG_DIR` isolates renderer preferences too — compare account settings when
+  UI behavior differs, and change the explicit preference rather than cloning ambient config.
 - **Git policy:** branch → PR → auto-merge; this repo's main requires pytest checks
   (admins exempt so continuity pushes land directly; fallback direct merge only on
   repos without required checks); offboard keeps `.horus/` by default; `.vscode/` is

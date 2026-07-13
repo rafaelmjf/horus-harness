@@ -20,6 +20,17 @@ surface: horus/dashboard.py, horus/assets/vendor/xterm/
 > (`FRESH` disappeared; only `LATE` remained) and passes after. Hosted v0.0.43 is
 > deployed; owner must hard-reload and retest both launch modes on the phone.
 >
+> **OWNER VERDICT + CONFIG DIFFERENTIAL (2026-07-13):** on hosted v0.0.43,
+> project fresh rendered and scrolled correctly; Accounts fresh still showed the
+> old failure. Resume was intentionally not tested to avoid a needless model turn.
+> Journald proves both viewers posted the same correct 39×26/27 PTY geometry, so
+> the remaining difference is above Horus's terminal stack. The successful project
+> launch used ambient `~/.claude/settings.json` with `"tui": "fullscreen"`; the
+> Accounts launch used isolated `claude-work/settings.json`, which lacked `tui`.
+> Claude's own bundled changelog calls fullscreen its flicker-free renderer.
+> Set only `"tui": "fullscreen"` in the isolated work account (equivalent to local
+> `/tui fullscreen`, no model turn). Pending gate: one Accounts fresh retest.
+>
 > **CONTROLLED FINDING (2026-07-13, headless end-to-end repro):** with the whole
 > stack proven correct (smallest-wins registry, epoch handshake, lazy reset —
 > PTY verified 38×34 via TIOCGWINSZ), **Claude Code paints a ~80-col
@@ -67,9 +78,9 @@ terminal supports mode 2026**.
    helper textarea carries the cell font, shearing the grid) and moved scroll
    containment onto `.xterm-viewport` (the actual scroller) with
    `touch-action: none` on the host.
-2. **On-device check** (owner-only): hard-reload hosted v0.0.43, then compare
-   account-menu fresh vs project fresh/resume with the phone as sole viewer;
-   verify legibility + touch scroll and capture a screenshot for any differential.
+2. **On-device check** (owner-only): launch one Accounts fresh session after the
+   isolated account gained `tui: fullscreen`; verify display + scroll. Do not spend
+   a model turn or test resume. PASS closes this card; failure needs a screenshot.
 3. Do NOT set `CLAUDE_CODE_NO_FLICKER` globally — it destroys scrollback (#41965);
    re-evaluate per upstream releases.
 
