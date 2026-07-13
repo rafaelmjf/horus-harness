@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Two owner-facing terminal fixes landed on feat/tui-scroll-launch-defaults, PR #215 opened: scoped tmux mouse mode (fixes wheel-scroll-recalls-history bug) + a home-level Defaults screen for the TUI's launch permission posture. PR #214 (guarded orphan-reaper) is still awaiting the owner's accept-gate separately."
-next_action: "Owner reviews/merges PR #215 (tmux-mouse + launch-defaults) and PR #214 (guarded orphan-reaper). Do not self-merge either. On merge, cut the next release (three-file bump + install smoke + hosted deploy). [owner accept-gate; no model spend]"
-next_prompt: "Resume Horus after PR #215 (tmux-mouse/launch-defaults) and PR #214. Fetch first and read PRD.md. If both are merged, cut the next release per the usual discipline; if either is still open, do not act on it further without new owner direction. Do not reopen terminal UX without new usage evidence."
-execution_recommendation: "continue-as-is — remaining step is the owner's PR accept-gate on both PRs, then a routine release cut; no open design ambiguity."
+current_focus: "PR #215 (tmux mouse + launch-defaults) and PR #214 (guarded orphan-reaper) both merged and verified. Owner live-probed TUI-launched session: wheel scroll works correctly (scoped to session, global tmux mouse off). Installed-package probe: five launch-defaults choices functional, current default persists. Ready for release cut."
+next_action: "Cut the next release: three-file version bump + install-smoke CI validation on all three OS + hosted deploy. [Haiku mechanical; blocked on no external input]"
+next_prompt: "Resume Horus to cut the next release. Fetch first. Do not merge PRs yourself; bumps land via standard CI checks. Follow the three-files-together discipline, verify publish→install E2E, then run deploy-hosted.sh."
+execution_recommendation: "continue-as-is — next step is a mechanical release cut, no ambiguity."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -51,44 +51,31 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**v0.0.52 attach gate: PASS** (2026-07-13, owner-verified): web-launched session attached
-cleanly from Termius/`horus tui` on a separate desktop; detach/reattach worked. This was
-the runtime gate the terminal-strategy work was blocked on; closes that thread.
-**Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215, unmerged
-pending owner accept-gate): `launch_tmux` scopes tmux mouse mode to just the new session
-(`-t`, never `-g`) right after `new-session`/before attach — fixes wheel-up recalling
-agent input history instead of scrolling; a config failure kills only that session.
-`horus tui` gained a home-level Defaults screen (`d` key) for the default launch
-permission posture (all five, full-auto labeled "bypass permissions"), persisted in
-`config.toml`'s `[launch]` table and applied to fresh/resume/card-resume launches.
-**Guarded tmux orphan-reaper** (2026-07-13, PR #214, unmerged pending owner accept-gate):
-`terminal_sessions.reap_orphans()` + `horus reap` kill an abandoned Horus-managed tmux
-session only under positive confirmation — a matching registry record whose status is
-already terminal or whose tracked pid is dead — AND unattached AND idle past a 10-minute
-grace window; a tmux session with no matching registry record is never touched (absence
-isn't evidence). See Rules for the tmux-socket-isolation testing lesson this shipped with.
-**Unified terminal project cockpit** (2026-07-13, PRs #195/#196/#198/#199/#201/#202/#204/#205/#207/#208/#210/#211/#212/#213, v0.0.46–0.0.52): responsive phone/desktop TUI with account-window KPIs, conventional Termius scrolling, unified Resume/Fresh accounts, backlog-card resume, and live-session controls; TUI and web-app launches share automatic managed tmux, browser/native terminals are viewers of the attachable session, viewer failures roll back safely, and scripted `open --target` plus unsupported-runtime fallbacks remain stable.
-**OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): compared OpenWiki against the Horus capability catalog + PRD continuity (`research/openwiki-comparison-2026-07.md`); overseer+owner endorsed skip-but-watch — no dependency, no competing doc engine now — revisit only if OpenWiki reaches a stable 1.x code mode with evidence across 30+ merged changes in a private polyglot repo, via an opt-in measured pilot (`.horus/backlog/openwiki-vs-self-documenting-research.md`).
-**`dashboard --reload`** (2026-07-12, PR #175): restarts a running Horus backend in place from currently-installed code via `/health` discovery + terminate + relaunch on the same host/port (exposed backends restart with `--exposed`); `horus app` polls and respawns its own dashboard child after a crash, never adopting one it didn't spawn.
-**Consolidated-to marker stops self-dirtying closure** (2026-07-12, PR #174): `init`/`upgrade-project` scaffold the ignore rule for the generated `.horus/.consolidated-to` marker, `upgrade-project --apply` untracks legacy tracked copies while preserving local state, and closure cleanliness checks exclude the marker so it can never itself fail `working tree clean`.
-**Fix Codex usage-limit account scope** (2026-07-12, PR #173): `horus usage check` sources 5h/weekly Codex limits from the newest account-wide rollout (not project-scoped) and flags an expired reset window as stale rather than current capacity.
-**Mobile/desktop terminal sizing + lifecycle + controls hardening** (2026-07-12, PR #171): `.xterm-host` fills its region via `ResizeObserver` + layout-settled initial fit (no stale 80×24 default); live `matchMedia` re-evaluation instead of load-once mobile/desktop latch; tabs reachable in fullscreen; larger tap targets; confirm-guard on closing a live session. Symptom 2 (exposed-mode/POST-path no-input regression) is untouched, tracked separately in Backlog.
-**Terminal multi-viewer/mobile stack + verified Claude phone route** (2026-07-12/13, PRs #178–#191, v0.0.36–v0.0.45): browser controls, lifecycle, geometry, xterm 6, phone-width spawn, retained exits, and ordered SSE reset markers shipped; owner testing proved Claude remains unreliable at a 39-column browser grid but works perfectly through native iOS Tailscale SSH → tmux at terminal-native geometry, using the isolated work-account launcher.
-**Windows CLI un-broken** (2026-07-13, PR #181): Unix-only `fcntl` top-level import in `backlog.py` (since v0.0.36) killed every Windows invocation; lazy import, install-smoke green on all three OS.
-**Backlog card ship-lifecycle provenance** (2026-07-12, PR #172): `horus backlog ship <slug> --pr N --sha SHA` stamps `status: shipped` + PR/SHA in place; `backlog list`/`fleet --backlog` hide shipped cards by default (`--all`/`--shipped` opt in); `close --check` warns when a card carries shipped provenance but is still `open`.
-**Capabilities table rendering + model-name normalization** (2026-07-12, PRs #167/#168/#169): `capabilities --models`/`--matrix` render an aligned model/tier/datums/last/price/capability/researched table (concise default drops LAST/RESEARCHED, `--verbose`/`--full` restores them); `horus run` canonicalizes captured model names via `datums.canonical_model_name` (adapter-resolved model preferred over a small fallback alias map), `horus datum migrate-names` migrates existing rows in place; `capabilities.toml` owner priors gained optional `price_in`/`price_out`/`capability_note`/`researched_at` plus a >14-day staleness `WARNING`. Real price/capability data for older models is still open (`.horus/backlog/older-models-in-roster.md`). `--stdout` JSON shape unchanged throughout.
-**Per-project capability record + Vision extraction** (2026-07-11/12, PRs #159/#163): `horus capabilities --project <name>` (or the self-document default from inside a registered project's root) regenerates that ONE project's record from its live `.horus/` sources and writes a provenance-stamped, gitignored `<project>/.horus/capabilities.json`; `capabilities.vision_lead` adds each project's markdown-stripped `## Vision` lead sentence as the catalog's `vision` field (`null` when absent), answering "what IS it?" alongside the Shipped-derived "what can it do?". v1 fleet-wide `horus capabilities`/`--models` unchanged; see Rules for the freshness-reconciliation invariant.
-**Empirical delegation-decision spine** (2026-07-11, PRs #157/#158): `horus/datums.py` MEASURED datums + hand-edited OWNER priors, `horus datum close`, `horus capabilities --models` data-only roll-up; three consumer skills — `delegation-rubric`, `execution-decision`, `dispatch-decision` — share the rubric by relative import (see Rules for the advisory-only boundary).
-**Mobile-web-app bundle + dashboard resilience** (2026-07-11, PRs #149/#151/#153/#155): `usage-reset-inference`, `pwa-installable` (`/manifest.json` + `/sw.js`, cache-first ONLY for a fixed static app-shell whitelist), `responsive-mobile-pass`; `_project_column_safe` renders a per-project `failed to load` error card instead of 500ing the whole projects section on one bad registry entry — full detail in git history; `mobile-terminal-interaction-regression` remains open (Backlog).
-**LaunchBackend seam** (2026-07-10/11, PRs #144/#147): `horus/backend.py`'s minimal contract (`launch(brief)->handle · status · stream · stop`) backs a behavior-preserving `LocalBackend`; `horus open` + the dashboard's OS-window launch route through it. Omnigent evaluated as an optional backend (fits Linux native + managed containers, rejects native Windows, same-host multi-subscription isolation left Unknown) and stays undepended-on. Config-driven target selection stays deferred pending hub's `[[targets]]`-or-equivalent contract.
-**Ops & fleet-reporting hardening** (2026-07-10, PRs #131/#137/#139/#140/#141/#142/#143/#148, v0.0.33-35): honest dispatch receipts (`horus/delivery.py` derives pushed-SHA/PR/continuity-closed post-hoc for a non-clean `horus run`); usage-preflight reads both 5h+weekly windows; `horus run --effort` passthrough to both adapters; `status`/`fleet` fetch-first gone-branch/staleness attribution; the v1 fleet capability catalog prototype (superseded by the per-project mode above); refresh-artifacts honors workflow policy; Codex worker posture + adapter inference; hosted-deploy version gate; `.horus/backlog/` card parallel-safety claim gate; config/dashboard/checkpoint round-trip hardening.
-**Continuity core:** init/close/session/doctor/consolidate/distill/infer/reconcile; PRD+sessions v3; fetch-first freshness/merge gates; sessions archive/resume; brainstorm/orchestration and JSONL run-event/worktree/worker foundations.
-**Hooks & projections:** cross-agent usage/closure and pre-merge hooks; upgrade/sync/skill-map surfaces; usage-limit survival kit; commit/push checkpoints; version-floor and shadow-install guards; stale-dashboard scan; `--exposed` boundary; cross-shell fetch-first block-v7 bundle.
-**Dashboard:** read-mostly async multi-project UI; project/session/cache/PR/usage views; accounts/settings/self-update/startup visibility; reviewed sessions; mobile terminal; GitHub-owner and local-project add flows.
-**GitHub bridge:** cached remote discovery, onboard/integrate policy with private-repo fallback, default-branch restoration, catalog dedup/tracking/ignore controls, and `horus start`.
-**Execution & adapters:** Fake/Claude/Codex adapters, multi-account run/open/focus, workflow handoffs, worker marking, hub orchestration, run logs/tail/watch/status, and aware-UTC registry timestamps; in-app PTY cockpit retired.
-**Companion & launch:** cross-platform Tk mascot, worker badges, owned dashboard windows, VS Code resume/fresh tasks, and same-version `/health` adoption.
-**Distribution:** PyPI trusted publishing, floor/latest pytest + compileall, three-OS post-publish install smoke, Apache-2.0.
+**v0.0.52 attach gate: PASS** (2026-07-13, owner-verified): web-launched session attached cleanly from Termius/`horus tui` on separate desktop; detach/reattach worked. Terminal-strategy unblock.
+**Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215): session-scoped tmux mouse (fixes wheel-scroll history recall); home-level Defaults screen (`d` key) for launch permission posture, persisted in `[launch]` table.
+**Guarded tmux orphan-reaper** (2026-07-13, PR #214): `terminal_sessions.reap_orphans()` kills abandoned sessions only on positive confirmation (matching registry + terminal status + idle grace); reaper discipline + tmux socket isolation rule added to Rules.
+**Unified terminal project cockpit** (PRs #195–#213, v0.0.46–0.0.52): responsive phone/desktop TUI with KPIs, scrolling, unified Resume/Fresh, backlog-card resume, live-session controls; managed tmux attachment across viewers; graceful fallbacks.
+**OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): no dependency; revisit if OpenWiki reaches 1.x with evidence across 30+ merged changes in private repo.
+**`dashboard --reload`** (2026-07-12, PR #175): restart Horus backend in place from currently-installed code; `horus app` polls and respawns its own dashboard child after crash.
+**Consolidated-to marker stops self-dirtying closure** (2026-07-12, PR #174): gitignore marker so closure never fails on its own re-generation.
+**Fix Codex usage-limit account scope** (2026-07-12, PR #173): read 5h/weekly limits from account-wide rollout (not project-scoped); flag expired reset window as stale.
+**Mobile/desktop terminal sizing + lifecycle + controls hardening** (2026-07-12, PR #171): ResizeObserver layout-settled initial fit; live matchMedia re-eval; fullscreen tabs; larger tap targets; confirm-guard on close.
+**Terminal multi-viewer/mobile stack + verified Claude phone route** (PRs #178–#191, v0.0.36–0.0.45): phone-width spawn, retained exits, SSE reset markers; verified native iOS Tailscale SSH → tmux path reliable.
+**Windows CLI un-broken** (2026-07-13, PR #181): lazy import of Unix-only `fcntl`; install-smoke green all three OS.
+**Backlog card ship-lifecycle provenance** (2026-07-12, PR #172): `horus backlog ship <slug> --pr N --sha SHA` stamps provenance in place; `close --check` warns on lingering shipped-but-open cards.
+**Capabilities table rendering + model-name normalization** (2026-07-12, PRs #167–#169): `--models`/`--matrix` render aligned tables; canonicalized model names; owner-prior price/capability/note fields; staleness WARNING.
+**Per-project capability record + Vision extraction** (2026-07-11/12, PRs #159/#163): per-project `capabilities.json` regenerate-on-read artifact; Vision lead in catalog; fleet-wide catalog unchanged.
+**Empirical delegation-decision spine** (2026-07-11, PRs #157/#158): MEASURED datums + owner priors + three consumer skills; data-only roll-up, no auto-routing.
+**Mobile-web-app bundle + dashboard resilience** (2026-07-11, PRs #149/#151/#153/#155): PWA-installable, per-project error card isolation.
+**LaunchBackend seam** (2026-07-10/11, PRs #144/#147): minimal contract; LocalBackend; Omnigent optional, undepended-on; config target selection deferred.
+**Ops & fleet-reporting hardening** (2026-07-10, PRs #131–#148, v0.0.33–0.0.35): honest dispatch receipts; both-window usage preflight; fetch-first staleness signals.
+**Continuity core:** init/close/session/doctor/consolidate/distill/infer/reconcile; PRD+sessions v3; fetch-first gates; worker foundations.
+**Hooks & projections:** cross-agent usage/closure hooks; upgrade/sync surfaces; version-floor guard; `--exposed` boundary.
+**Dashboard:** async multi-project UI; project/session/PR/usage views; mobile terminal; GitHub and local-project add flows.
+**GitHub bridge:** cached discovery; onboard/integrate policy; private-repo fallback; dedup/tracking/ignore; `horus start`.
+**Execution & adapters:** Fake/Claude/Codex adapters; multi-account launch; workflow handoffs; worker marking; hub orchestration.
+**Companion & launch:** Tk mascot; worker badges; owned windows; VS Code tasks; same-version `/health` adoption.
+**Distribution:** PyPI trusted publishing; three-OS install smoke; Apache-2.0.
 
 ## Rules (load-bearing)
 
