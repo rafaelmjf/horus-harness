@@ -74,10 +74,11 @@ and projects into columns; narrow terminals stack and wrap the same content. Swi
 use the mouse wheel/arrow keys to scroll the highlighted row;
 Enter opens it, Esc goes back, and `q` quits. The list scrolls inside the application,
 so returning to the first project restores the account rail and narrow phone terminals
-never print raw arrow-key escape sequences. Narrow SSH sessions translate Termius-style
-swipe arrow bytes into natural touch movement; `j`/`k` remain conventional keyboard
-navigation. Set `HORUS_TUI_INVERT_SCROLL=0` to disable that translation. A local shell
-runs the selected agent in the current terminal. A bare SSH
+never print raw arrow-key escape sequences. Termius already translates touch gestures
+into conventional Up/Down bytes, so Horus preserves the normal mapping on phone and
+desktop. `HORUS_TUI_INVERT_SCROLL=1` is an opt-in escape hatch for clients that report
+the opposite direction. A local shell runs the selected agent in the current terminal.
+A bare SSH
 login automatically uses a unique detached tmux session when tmux is installed, so
 the agent survives a phone sleeping or a network change; when already inside tmux,
 Horus uses the current pane instead of nesting clients.

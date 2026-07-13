@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -491,12 +490,9 @@ class TerminalUI:
         for account in self.accounts:
             usage = self.account_usage.get((account.agent, account.alias))
             summary = _usage_lines(usage)
-            lines.append(("class:account", f"   {account.agent.title()} {account.alias}"))
-            if summary:
-                lines.append(("class:muted", f" · {summary[0]}"))
-            lines.append(("", "\n"))
-            for detail in summary[1:]:
-                lines.append(("class:muted", f"     {detail}\n"))
+            lines.append(("class:account", f"  {account.agent.title()} {account.alias}\n"))
+            for detail in summary:
+                lines.append(("class:muted", f"    {detail}\n"))
         lines.append(("", "\n Projects\n"))
         return lines
 
@@ -686,16 +682,16 @@ def _percent(value: float | None) -> str:
 
 def _usage_lines(snapshot: usage_snapshot.UsageSnapshot | None) -> list[str]:
     if snapshot is None:
-        return ["5h -- · weekly --", "usage not observed yet"]
-    first = f"5h {_percent(snapshot.percent)} · weekly {_percent(snapshot.weekly_percent)}"
-    lines = [first]
-    if snapshot.resets_at:
-        lines.append(f"5h resets {snapshot.resets_at}")
-    if snapshot.weekly_resets_at:
-        lines.append(f"weekly resets {snapshot.weekly_resets_at}")
-    if len(lines) == 1:
-        lines.append("reset time unavailable")
-    return lines
+        return ["5h --", "weekly --"]
+
+    def window(label: str, percent: float | None, resets_at: str | None) -> str:
+        text = f"{label} {_percent(percent)}"
+        return f"{text}, resets {resets_at}" if resets_at else text
+
+    return [
+        window("5h", snapshot.percent, snapshot.resets_at),
+        window("weekly", snapshot.weekly_percent, snapshot.weekly_resets_at),
+    ]
 
 
 def _session_account_alias(record: registry.SessionRecord) -> str:
@@ -718,10 +714,7 @@ def _invert_mobile_scroll() -> bool:
         or os.environ.get("HORUS_TUI_INVERT_MOUSE_SCROLL")
         or ""
     ).strip().lower()
-    if override:
-        return override not in {"0", "false", "no", "off"}
-    columns = shutil.get_terminal_size(fallback=(80, 24)).columns
-    return bool(os.environ.get("SSH_CONNECTION")) and columns < 64
+    return bool(override) and override not in {"0", "false", "no", "off"}
 
 
 def _card_prompt(root: Path, card: backlog.Card) -> str:

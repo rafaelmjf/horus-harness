@@ -11,7 +11,18 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from prompt_toolkit.output import DummyOutput
 
-from horus import claude_usage, cli, codex_usage, config, registry, terminal_app, terminal_sessions, terminal_tui, tmux_runner
+from horus import (
+    claude_usage,
+    cli,
+    codex_usage,
+    config,
+    registry,
+    terminal_app,
+    terminal_sessions,
+    terminal_tui,
+    tmux_runner,
+    usage_snapshot,
+)
 from horus.launch import LaunchResult
 from horus.registry import Registry, SessionRecord
 
@@ -266,7 +277,7 @@ def test_terminal_tui_wide_home_uses_project_columns(tmp_path, monkeypatch):
     )
 
 
-def test_terminal_tui_narrow_ssh_arrow_sequences_follow_touch_direction(tmp_path, monkeypatch):
+def test_terminal_tui_arrow_sequences_keep_conventional_direction(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     for index in range(3):
         config.register_project(_project(tmp_path, f"project-{index:02}"))
@@ -276,14 +287,13 @@ def test_terminal_tui_narrow_ssh_arrow_sequences_follow_touch_direction(tmp_path
             ui = terminal_tui.TerminalUI(
                 input=pipe_input,
                 output=DummyOutput(),
-                invert_mouse_scroll=True,
             )
             task = asyncio.create_task(ui.application.run_async())
             await asyncio.sleep(0.02)
-            pipe_input.send_bytes(b"\x1b[A")
+            pipe_input.send_bytes(b"\x1b[B")
             await asyncio.sleep(0.02)
             selected_after_swipe_up = ui.selected
-            pipe_input.send_bytes(b"\x1b[B")
+            pipe_input.send_bytes(b"\x1b[A")
             await asyncio.sleep(0.02)
             pipe_input.send_text("q")
             assert await asyncio.wait_for(task, timeout=1) == "quit"
@@ -317,6 +327,25 @@ def test_terminal_tui_names_ambient_accounts_and_combines_agents(tmp_path, monke
         ("claude", "work", "work"),
         ("codex", "personal", None),
     ]
+
+
+def test_terminal_tui_account_usage_uses_one_line_per_window(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    ui = terminal_tui.TerminalUI()
+    ui.accounts = [terminal_tui.LaunchAccount("claude", "personal", None)]
+    ui.account_usage = {
+        ("claude", "personal"): usage_snapshot.UsageSnapshot(
+            None,
+            None,
+            83.0,
+            "2026-07-17 09:59",
+        )
+    }
+
+    rendered = "".join(fragment[1] for fragment in ui._account_summary_text())
+    assert "Claude personal\n    5h --\n" in rendered
+    assert "weekly 83%, resets 2026-07-17 09:59" in rendered
+    assert "personal · 5h" not in rendered
 
 
 def test_terminal_tui_resume_returns_ambient_personal_launch(tmp_path, monkeypatch):
@@ -388,11 +417,8 @@ def test_terminal_tui_inverts_only_mouse_scroll_for_ssh_touch_direction():
     assert inverted == [1, -1]
 
 
-def test_terminal_tui_auto_inverts_narrow_ssh_scroll(monkeypatch):
+def test_terminal_tui_does_not_auto_invert_narrow_ssh_scroll(monkeypatch):
     monkeypatch.setenv("SSH_CONNECTION", "phone host")
-    monkeypatch.setattr(terminal_tui.shutil, "get_terminal_size", lambda **kwargs: os.terminal_size((39, 20)))
-    assert terminal_tui._invert_mobile_scroll() is True
-    monkeypatch.setattr(terminal_tui.shutil, "get_terminal_size", lambda **kwargs: os.terminal_size((120, 36)))
     assert terminal_tui._invert_mobile_scroll() is False
     monkeypatch.setenv("HORUS_TUI_INVERT_SCROLL", "1")
     assert terminal_tui._invert_mobile_scroll() is True
