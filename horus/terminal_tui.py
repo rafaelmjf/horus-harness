@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from prompt_toolkit.application import Application
+from prompt_toolkit.filters import Condition
 from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.input import Input
 from prompt_toolkit.key_binding import KeyBindings
@@ -14,7 +17,25 @@ from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.output import Output
 from prompt_toolkit.styles import Style
 
-from horus import config, frontmatter, registry, routines, terminal_sessions
+from horus import (
+    backlog,
+    backlog_migrate,
+    claude_usage,
+    codex_usage,
+    config,
+    frontmatter,
+    registry,
+    routines,
+    terminal_sessions,
+    usage_snapshot,
+)
+
+
+@dataclass(frozen=True)
+class LaunchAccount:
+    agent: str
+    alias: str
+    account: str | None
 
 
 @dataclass(frozen=True)
@@ -23,6 +44,7 @@ class _Launch:
     agent: str
     mode: str
     account: str | None
+    card: backlog.Card | None = None
 
 
 @dataclass(frozen=True)
@@ -39,16 +61,17 @@ _Action = _Launch | _Attach | _Stop | str
 
 
 class _BodyControl(FormattedTextControl):
-    def __init__(self, text, on_scroll) -> None:
+    def __init__(self, text, on_scroll, *, invert_mouse_scroll: bool) -> None:
         super().__init__(text, focusable=True)
         self._on_scroll = on_scroll
+        self._invert_mouse_scroll = invert_mouse_scroll
 
     def mouse_handler(self, event: MouseEvent):
         if event.event_type == MouseEventType.SCROLL_UP:
-            self._on_scroll(-1)
+            self._on_scroll(1 if self._invert_mouse_scroll else -1)
             return None
         if event.event_type == MouseEventType.SCROLL_DOWN:
-            self._on_scroll(1)
+            self._on_scroll(-1 if self._invert_mouse_scroll else 1)
             return None
         return super().mouse_handler(event)
 
@@ -56,17 +79,36 @@ class _BodyControl(FormattedTextControl):
 class TerminalUI:
     """One application frame. Blocking agent actions run between frames."""
 
-    def __init__(self, *, status: str = "", input: Input | None = None, output: Output | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        status: str = "",
+        input: Input | None = None,
+        output: Output | None = None,
+        invert_mouse_scroll: bool | None = None,
+    ) -> None:
         self.projects = _projects()
+        self.accounts = _launch_accounts()
+        self.account_usage = _account_usage(self.accounts)
+        self.project_cards = {project: _open_cards(project) for project in self.projects}
+        self.project_metrics = {
+            project: _backlog_metrics(project, self.project_cards[project]) for project in self.projects
+        }
+        self.running = [record for record in registry.Registry.default().all() if record.status == "running"]
         self.screen = "projects"
         self.project: Path | None = None
         self.project_filter: Path | None = None
-        self.pending_launch: tuple[str, str] | None = None
+        self.pending_mode: str | None = None
+        self.pending_card: backlog.Card | None = None
+        self.card: backlog.Card | None = None
+        self.card_scroll = 0
         self.selected_session: registry.SessionRecord | None = None
         self.items: list[tuple[str, object]] = []
         self.selected = 0
         self.status = status
-        self.body = _BodyControl(self._body_text, self.move)
+        if invert_mouse_scroll is None:
+            invert_mouse_scroll = _invert_mouse_scroll()
+        self.body = _BodyControl(self._body_text, self.scroll, invert_mouse_scroll=invert_mouse_scroll)
         self.keys = self._key_bindings()
         container = HSplit(
             [
@@ -76,7 +118,7 @@ class TerminalUI:
                     self.body,
                     scroll_offsets=ScrollOffsets(top=2, bottom=2),
                     allow_scroll_beyond_bottom=False,
-                    wrap_lines=False,
+                    wrap_lines=Condition(lambda: self.screen in {"backlog", "card"}),
                 ),
                 Window(FormattedTextControl(self._status_text), height=1, style="class:status"),
                 Window(FormattedTextControl(self._footer_text), height=1, style="class:footer"),
@@ -99,20 +141,20 @@ class TerminalUI:
         @keys.add("up")
         @keys.add("k")
         def _up(event) -> None:
-            self.move(-1)
+            self.scroll(-1)
 
         @keys.add("down")
         @keys.add("j")
         def _down(event) -> None:
-            self.move(1)
+            self.scroll(1)
 
         @keys.add("pageup")
         def _page_up(event) -> None:
-            self.move(-self._page_size())
+            self.scroll(-self._page_size())
 
         @keys.add("pagedown")
         def _page_down(event) -> None:
-            self.move(self._page_size())
+            self.scroll(self._page_size())
 
         @keys.add("enter")
         def _enter(event) -> None:
@@ -149,6 +191,14 @@ class TerminalUI:
         self.selected = max(0, min(len(self.items) - 1, self.selected + amount))
         self.application.invalidate()
 
+    def scroll(self, amount: int) -> None:
+        if self.screen == "card":
+            lines = self._card_lines()
+            self.card_scroll = max(0, min(len(lines) - 1, self.card_scroll + amount))
+            self.application.invalidate()
+            return
+        self.move(amount)
+
     def activate(self) -> None:
         if not self.items:
             return
@@ -156,21 +206,26 @@ class TerminalUI:
         if self.screen == "projects" and kind == "project":
             self.project = value  # type: ignore[assignment]
             self._show("project")
-        elif self.screen == "project" and kind == "launch":
-            self.pending_launch = value  # type: ignore[assignment]
-            accounts = self._accounts(self.pending_launch[0])
-            if len(accounts) == 1:
-                self._exit_launch(accounts[0])
-            else:
-                self._show("accounts")
-        elif self.screen == "project" and kind == "sessions":
-            self.project_filter = self.project
-            self._show("sessions")
+        elif self.screen == "project" and kind == "mode":
+            self.pending_mode = str(value)
+            self.pending_card = None
+            self._show("accounts")
+        elif self.screen == "project" and kind == "backlog":
+            self._show("backlog")
+        elif self.screen == "backlog" and kind == "card":
+            self.card = value  # type: ignore[assignment]
+            self.card_scroll = 4
+            self._show("card")
+        elif self.screen == "card" and kind == "card_resume":
+            self.pending_mode = "resume"
+            self.pending_card = self.card
+            self._show("accounts")
         elif self.screen == "sessions" and kind == "session":
             self.selected_session = value  # type: ignore[assignment]
             self._show("session")
         elif self.screen == "accounts" and kind == "account":
-            self._exit_launch(value if isinstance(value, str) else None)
+            if isinstance(value, LaunchAccount):
+                self._exit_launch(value)
         elif self.screen == "session":
             if kind == "attach" and self.selected_session is not None:
                 self.application.exit(result=_Attach(self.selected_session.session_id))
@@ -190,8 +245,14 @@ class TerminalUI:
         if self.screen == "project":
             self.project = None
             self._show("projects")
-        elif self.screen in {"accounts", "sessions"}:
-            self._show("project" if self.project_filter or self.screen == "accounts" else "projects")
+        elif self.screen == "accounts":
+            self._show("card" if self.pending_card is not None else "project")
+        elif self.screen == "backlog":
+            self._show("project")
+        elif self.screen == "card":
+            self._show("backlog")
+        elif self.screen == "sessions":
+            self._show("project" if self.project_filter else "projects")
         elif self.screen == "session":
             self._show("sessions")
         elif self.screen == "confirm":
@@ -209,16 +270,18 @@ class TerminalUI:
             self.items = [("project", project) for project in self.projects]
         elif self.screen == "project":
             self.items = [
-                ("launch", ("claude", "resume")),
-                ("launch", ("claude", "fresh")),
-                ("launch", ("codex", "resume")),
-                ("launch", ("codex", "fresh")),
-                ("sessions", None),
+                ("mode", "resume"),
+                ("mode", "fresh"),
+                ("backlog", None),
             ]
-        elif self.screen == "accounts" and self.pending_launch:
-            self.items = [("account", account) for account in self._accounts(self.pending_launch[0])]
+        elif self.screen == "accounts":
+            self.items = [("account", account) for account in self.accounts]
+        elif self.screen == "backlog":
+            self.items = [("card", card) for card in self.project_cards.get(self.project, [])]
+        elif self.screen == "card":
+            self.items = [("card_resume", self.card)] if self.card is not None else []
         elif self.screen == "sessions":
-            records = [record for record in registry.Registry.default().all() if record.status == "running"]
+            records = list(self.running)
             if self.project_filter is not None:
                 records = [
                     record
@@ -232,33 +295,49 @@ class TerminalUI:
         elif self.screen == "confirm":
             self.items = [("no", None), ("yes", None)]
 
-    def _accounts(self, agent: str) -> list[str | None]:
-        mapped = config.load_account_config_dirs() if agent == "claude" else config.load_account_codex_homes()
-        return [None, *sorted(mapped)]
-
-    def _exit_launch(self, account: str | None) -> None:
-        if self.project is None or self.pending_launch is None:
+    def _exit_launch(self, account: LaunchAccount) -> None:
+        if self.project is None or self.pending_mode is None:
             return
-        agent, mode = self.pending_launch
-        self.application.exit(result=_Launch(self.project, agent, mode, account))
+        self.application.exit(
+            result=_Launch(
+                self.project,
+                account.agent,
+                self.pending_mode,
+                account.account,
+                self.pending_card,
+            )
+        )
 
     def _header_text(self) -> StyleAndTextTuples:
         title = {
             "projects": "HORUS · Projects",
             "project": f"HORUS · {self.project.name if self.project else 'Project'}",
-            "accounts": "HORUS · Choose account",
+            "accounts": f"HORUS · {self.pending_mode.title() if self.pending_mode else 'Choose'} account",
+            "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
+            "card": "HORUS · Backlog card",
             "sessions": "HORUS · Running sessions",
             "session": "HORUS · Session",
             "confirm": "HORUS · Close session?",
         }[self.screen]
-        live = len([record for record in registry.Registry.default().all() if record.status == "running"])
+        live = len(self.running)
         return [("class:header", f" {title}"), ("class:meta", f"   {live} live" if live else "")]
 
     def _body_text(self) -> StyleAndTextTuples:
+        if self.screen == "card":
+            return self._card_body_text()
         if not self.items:
-            message = "No tracked projects. Run `horus init` first." if self.screen == "projects" else "No running sessions."
+            if self.screen == "projects":
+                message = "No tracked projects. Run `horus init` first."
+            elif self.screen == "backlog":
+                message = "No open backlog cards."
+            elif self.screen == "accounts":
+                message = "No agent accounts detected."
+            else:
+                message = "No running sessions."
             return [("class:muted", f"\n  {message}\n")]
         lines: StyleAndTextTuples = []
+        if self.screen == "projects":
+            lines.extend(self._account_summary_text())
         for index, (kind, value) in enumerate(self.items):
             selected = index == self.selected
             marker = ">" if selected else " "
@@ -267,24 +346,43 @@ class TerminalUI:
                 lines.append(("[SetCursorPosition]", ""))
             if kind == "project":
                 root = value
-                live = self._project_live_count(root)
-                suffix = f" · {live} live" if live else ""
+                sessions = self._project_sessions(root)
+                suffix = f" · {len(sessions)} open session{'s' if len(sessions) != 1 else ''}" if sessions else ""
                 lines.append((style, f"\n {marker} {root.name}{suffix}\n"))
-                lines.append(("class:muted", f"     {_compact(_next_action(root), 72)}\n"))
-            elif kind == "launch":
-                agent, mode = value
-                label = f"{mode.title()} with {agent.title()}"
+                if sessions:
+                    session_labels = ", ".join(_session_label(record) for record in sessions)
+                    lines.append(("class:session", f"     {session_labels}\n"))
+                card_count, bug_count = self.project_metrics.get(root, (0, 0))
+                lines.append(("class:muted", f"     backlog {card_count} · bugs {bug_count}\n"))
+            elif kind == "mode":
+                label = str(value).title()
+                detail = (
+                    "Continue from project continuity"
+                    if value == "resume"
+                    else "Start without a continuity prompt"
+                )
                 lines.append((style, f"\n {marker} {label}\n"))
-            elif kind == "sessions":
-                lines.append((style, f"\n {marker} Running sessions\n"))
+                lines.append(("class:muted", f"     {detail}\n"))
+            elif kind == "backlog":
+                card_count, bug_count = self.project_metrics.get(self.project, (0, 0))
+                lines.append((style, f"\n {marker} Backlog\n"))
+                lines.append(("class:muted", f"     {card_count} cards · {bug_count} bugs\n"))
             elif kind == "account":
-                lines.append((style, f"\n {marker} {value or 'ambient'}\n"))
+                account = value
+                lines.append((style, f"\n {marker} {account.agent.title()} {account.alias}\n"))
+                for usage_line in _usage_lines(self.account_usage.get((account.agent, account.alias))):
+                    lines.append(("class:muted", f"     {usage_line}\n"))
+            elif kind == "card":
+                card = value
+                lines.append((style, f"\n {marker} [{card.type}] {card.title}\n"))
+                if card.priority:
+                    lines.append(("class:muted", f"     priority {card.priority}\n"))
             elif kind == "session":
                 record = value
                 lines.append(
                     (
                         style,
-                        f"\n {marker} {record.agent} · {record.account or 'ambient'} · "
+                        f"\n {marker} {record.agent} · {_session_account_alias(record)} · "
                         f"{Path(record.project).name}\n",
                     )
                 )
@@ -295,21 +393,75 @@ class TerminalUI:
                 lines.append((style, f"\n {marker} {'Close session' if kind == 'yes' else 'Keep session'}\n"))
         return lines
 
-    def _project_live_count(self, root: Path) -> int:
-        return sum(
-            1
-            for record in registry.Registry.default().all()
-            if record.status == "running" and Path(record.project).resolve() == root.resolve()
-        )
+    def _account_summary_text(self) -> StyleAndTextTuples:
+        if not self.accounts:
+            return []
+        lines: StyleAndTextTuples = [("class:section", "\n Accounts\n")]
+        for account in self.accounts:
+            usage = self.account_usage.get((account.agent, account.alias))
+            summary = _usage_lines(usage)
+            lines.append(("class:account", f"   {account.agent.title()} {account.alias}"))
+            if summary:
+                lines.append(("class:muted", f" · {summary[0]}"))
+            lines.append(("", "\n"))
+            for detail in summary[1:]:
+                lines.append(("class:muted", f"     {detail}\n"))
+        lines.append(("", "\n Projects\n"))
+        return lines
+
+    def _project_sessions(self, root: Path) -> list[registry.SessionRecord]:
+        return [record for record in self.running if Path(record.project).resolve() == root.resolve()]
+
+    def _card_lines(self) -> list[str]:
+        if self.card is None:
+            return ["", "Backlog card unavailable."]
+        try:
+            body = frontmatter.parse(self.card.path.read_text(encoding="utf-8")).body
+        except (OSError, ValueError):
+            body = "Card description could not be read."
+        description = body.splitlines()
+        for index, line in enumerate(description):
+            if line.strip():
+                if line.lstrip().startswith("# "):
+                    description.pop(index)
+                break
+        return [
+            "",
+            f"[{self.card.type} · priority {self.card.priority or '-'}]",
+            self.card.title,
+            "",
+            "> Resume this card",
+            "",
+            *description,
+            "",
+        ]
+
+    def _card_body_text(self) -> StyleAndTextTuples:
+        fragments: StyleAndTextTuples = []
+        for index, line in enumerate(self._card_lines()):
+            if index == self.card_scroll:
+                fragments.append(("[SetCursorPosition]", ""))
+            if index == 1:
+                style = "class:meta"
+            elif index == 2:
+                style = "class:card-title"
+            elif index == 4:
+                style = "class:selected"
+            else:
+                style = "class:item"
+            fragments.append((style, f" {line}\n"))
+        return fragments
 
     def _status_text(self) -> StyleAndTextTuples:
         if self.status:
             return [("class:status", f" {self.status}")]
-        if self.screen == "project" and self.project is not None:
-            return [("class:status", f" Next: {_compact(_next_action(self.project), 72)}")]
         return [("class:status", "")]
 
     def _footer_text(self) -> StyleAndTextTuples:
+        if self.screen == "card":
+            return [("class:footer", " ↑↓/swipe read   Enter resume   Esc back")]
+        if self.screen == "sessions":
+            return [("class:footer", " Enter attach   Ctrl-b d returns   Esc back   q quit")]
         return [("class:footer", " ↑↓/swipe scroll   Enter open   Esc back   s sessions   q quit")]
 
 
@@ -321,6 +473,10 @@ _STYLE = Style.from_dict(
         "item": "#d7dce2",
         "selected": "bold #ffffff bg:#245a73",
         "muted": "#8c98a5",
+        "section": "bold #b8c7d1",
+        "account": "#d7dce2",
+        "session": "#9fc4d7",
+        "card-title": "bold #ffffff",
         "status": "#9fc4d7 bg:#17202a",
         "footer": "#aeb8c2 bg:#20242b",
     }
@@ -339,7 +495,10 @@ def run() -> int:
             return 130
         if isinstance(result, _Launch):
             target = terminal_sessions.default_target()
-            prompt = routines.resume_prompt(result.project) if result.mode == "resume" else ""
+            if result.card is not None:
+                prompt = _card_prompt(result.project, result.card)
+            else:
+                prompt = routines.resume_prompt(result.project) if result.mode == "resume" else ""
             launched = _launch(
                 target=target,
                 agent=result.agent,
@@ -368,17 +527,97 @@ def _projects() -> list[Path]:
     ]
 
 
-def _next_action(root: Path) -> str:
+_PRIORITY_RANK = {"now": 0, "next": 1, "high": 2, "medium": 3, "low": 4, "later": 5, "deferred": 6}
+
+
+def _open_cards(root: Path) -> list[backlog.Card]:
     try:
-        focus = frontmatter.resolve_focus(root)
+        cards = [card for card in backlog.load_cards(root) if card.status not in {"done", "shipped"}]
     except (OSError, ValueError):
-        return "Continuity could not be read"
-    return str(focus.get("next_action") or focus.get("current_focus") or "No next action")
+        return []
+    return sorted(cards, key=lambda card: (_PRIORITY_RANK.get(card.priority, 99), card.title.casefold()))
 
 
-def _compact(value: str, limit: int) -> str:
-    one_line = " ".join(value.split())
-    return one_line if len(one_line) <= limit else one_line[: limit - 1] + "…"
+def _backlog_metrics(root: Path, cards: list[backlog.Card]) -> tuple[int, int]:
+    if backlog.backlog_dir(root).is_dir():
+        return len(cards), sum(card.type == "bug" for card in cards)
+    inline_count = backlog_migrate.inline_backlog_item_count(root)
+    return (inline_count or 0, 0)
+
+
+def _ambient_alias(agent: str) -> str | None:
+    if agent == "claude":
+        return config.alias_for(claude_usage.current_account())
+    if agent == "codex":
+        return config.alias_for(codex_usage.current_account())
+    return None
+
+
+def _launch_accounts() -> list[LaunchAccount]:
+    result: list[LaunchAccount] = []
+    for agent, mapped in (
+        ("claude", config.load_account_config_dirs()),
+        ("codex", config.load_account_codex_homes()),
+    ):
+        ambient = _ambient_alias(agent)
+        if ambient and ambient not in mapped:
+            result.append(LaunchAccount(agent, ambient, None))
+        result.extend(LaunchAccount(agent, alias, alias) for alias in sorted(mapped))
+    return result
+
+
+def _account_usage(accounts: list[LaunchAccount]) -> dict[tuple[str, str], usage_snapshot.UsageSnapshot | None]:
+    return {
+        (account.agent, account.alias): (
+            snapshot.without_expired_windows() if (snapshot := usage_snapshot.read_cache_only(
+                account.agent, account.alias
+            )) else None
+        )
+        for account in accounts
+    }
+
+
+def _percent(value: float | None) -> str:
+    return "--" if value is None else f"{value:.0f}%"
+
+
+def _usage_lines(snapshot: usage_snapshot.UsageSnapshot | None) -> list[str]:
+    if snapshot is None:
+        return ["5h -- · weekly --", "usage not observed yet"]
+    first = f"5h {_percent(snapshot.percent)} · weekly {_percent(snapshot.weekly_percent)}"
+    lines = [first]
+    if snapshot.resets_at:
+        lines.append(f"5h resets {snapshot.resets_at}")
+    if snapshot.weekly_resets_at:
+        lines.append(f"weekly resets {snapshot.weekly_resets_at}")
+    if len(lines) == 1:
+        lines.append("reset time unavailable")
+    return lines
+
+
+def _session_account_alias(record: registry.SessionRecord) -> str:
+    return record.account or _ambient_alias(record.agent) or "ambient"
+
+
+def _session_label(record: registry.SessionRecord) -> str:
+    return f"{record.agent} {_session_account_alias(record)}"
+
+
+def _invert_mouse_scroll() -> bool:
+    override = os.environ.get("HORUS_TUI_INVERT_MOUSE_SCROLL", "").strip().lower()
+    if override:
+        return override not in {"0", "false", "no", "off"}
+    columns = shutil.get_terminal_size(fallback=(80, 24)).columns
+    return bool(os.environ.get("SSH_CONNECTION")) and columns < 64
+
+
+def _card_prompt(root: Path, card: backlog.Card) -> str:
+    return (
+        f"{routines.resume_prompt(root)}\n\n"
+        f"Work on this backlog card first: {card.title}. Read the full card at "
+        f"`.horus/backlog/{card.path.name}` before changing code, and treat it as the "
+        "first item for this session."
+    )
 
 
 def _launch(*, target: str, agent: str, root: Path, account: str | None, prompt: str):

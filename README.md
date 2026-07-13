@@ -67,13 +67,20 @@ horus forget <path> | horus prune # manage the dashboard's project registry
 `horus app --terminal` (or `horus tui`) is the terminal-native peer of the web
 dashboard. It lists tracked projects and their next action, launches fresh or
 continuity-seeded Claude/Codex sessions under a selected account, and lists live
-sessions. Swipe or use the mouse wheel/arrow keys to scroll the highlighted row;
+sessions. The home screen shows cached account usage, each project's open sessions,
+and backlog/bug counts. A project's Backlog action lists open cards by priority; a
+card can seed a resumed session as its first task. Swipe or use the mouse wheel/arrow
+keys to scroll the highlighted row;
 Enter opens it, Esc goes back, and `q` quits. The list scrolls inside the application,
 so narrow phone terminals never print raw arrow-key escape sequences. A local shell
 runs the selected agent in the current terminal. A bare SSH
 login automatically uses a unique detached tmux session when tmux is installed, so
 the agent survives a phone sleeping or a network change; when already inside tmux,
 Horus uses the current pane instead of nesting clients.
+
+To run more than one phone session, detach from the current agent with tmux's
+`Ctrl-b`, then `d`. Horus returns without closing the agent. Launch another project or
+press `s` to attach a running session; detach again to return to Horus.
 
 Every launch is also scriptable, which makes shell aliases and mobile SSH-client
 snippets straightforward:

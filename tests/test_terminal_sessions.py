@@ -6,10 +6,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from prompt_toolkit.data_structures import Point
 from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from prompt_toolkit.output import DummyOutput
 
-from horus import cli, config, registry, terminal_app, terminal_sessions, terminal_tui, tmux_runner
+from horus import claude_usage, cli, codex_usage, config, registry, terminal_app, terminal_sessions, terminal_tui, tmux_runner
 from horus.launch import LaunchResult
 from horus.registry import Registry, SessionRecord
 
@@ -32,6 +34,17 @@ def _project(tmp_path: Path, name: str = "demo") -> Path:
         encoding="utf-8",
     )
     return root
+
+
+def _card(root: Path, name: str, *, title: str, priority: str, type: str, detail: str) -> Path:
+    path = root / ".horus" / "backlog" / f"{name}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"---\nstatus: open\npriority: {priority}\ntype: {type}\ncreated: 2026-07-13\n---\n"
+        f"\n# {title}\n\n{detail}\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def test_default_target_prefers_tmux_for_bare_ssh(monkeypatch):
@@ -234,6 +247,101 @@ def test_terminal_tui_project_navigation_and_back(tmp_path, monkeypatch):
     assert ui.screen == "project" and ui.project == root
     ui.back()
     assert ui.screen == "projects"
+
+
+def test_terminal_tui_names_ambient_accounts_and_combines_agents(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.set_account_alias("claude-personal-id", "personal")
+    config.set_account_alias("codex-personal-id", "personal")
+    config.set_account_config_dir("work", (tmp_path / "claude-work").as_posix())
+    monkeypatch.setattr(claude_usage, "current_account", lambda *args, **kwargs: "claude-personal-id")
+    monkeypatch.setattr(codex_usage, "current_account", lambda *args, **kwargs: "codex-personal-id")
+
+    accounts = terminal_tui._launch_accounts()
+    assert [(account.agent, account.alias, account.account) for account in accounts] == [
+        ("claude", "personal", None),
+        ("claude", "work", "work"),
+        ("codex", "personal", None),
+    ]
+
+
+def test_terminal_tui_resume_returns_ambient_personal_launch(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    config.register_project(root)
+    config.set_account_alias("claude-personal-id", "personal")
+    monkeypatch.setattr(claude_usage, "current_account", lambda *args, **kwargs: "claude-personal-id")
+    monkeypatch.setattr(codex_usage, "current_account", lambda *args, **kwargs: None)
+
+    async def drive():
+        with create_pipe_input() as pipe_input:
+            ui = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
+            task = asyncio.create_task(ui.application.run_async())
+            await asyncio.sleep(0.02)
+            pipe_input.send_bytes(b"\r\r\r")
+            return await asyncio.wait_for(task, timeout=1)
+
+    result = asyncio.run(drive())
+    assert isinstance(result, terminal_tui._Launch)
+    assert result.project == root and result.mode == "resume"
+    assert result.agent == "claude" and result.account is None and result.card is None
+
+
+def test_terminal_tui_project_kpis_and_backlog_card_resume(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    _card(root, "later-feature", title="Add a feature", priority="medium", type="feature", detail="Feature detail.")
+    bug_path = _card(
+        root,
+        "urgent-bug",
+        title="Fix the terminal",
+        priority="high",
+        type="bug",
+        detail="Full bug description.\n\n- reproduce it\n- fix it",
+    )
+    config.register_project(root)
+    ui = terminal_tui.TerminalUI()
+
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "backlog 2 · bugs 1" in rendered
+    ui.activate()
+    ui.move(2)
+    ui.activate()
+    assert ui.screen == "backlog"
+    assert ui.items[0][1].title == "Fix the terminal"
+    ui.activate()
+    assert ui.screen == "card" and ui.card.path == bug_path
+    card_text = "".join(fragment[1] for fragment in ui._body_text())
+    assert "> Resume this card" in card_text
+    assert "Full bug description" in card_text and "- reproduce it" in card_text
+    assert "urgent-bug.md" in terminal_tui._card_prompt(root, ui.card)
+    ui.activate()
+    assert ui.screen == "accounts" and ui.pending_card.path == bug_path
+
+
+def test_terminal_tui_inverts_only_mouse_scroll_for_ssh_touch_direction():
+    natural = []
+    inverted = []
+    normal_control = terminal_tui._BodyControl(lambda: [], natural.append, invert_mouse_scroll=False)
+    ssh_control = terminal_tui._BodyControl(lambda: [], inverted.append, invert_mouse_scroll=True)
+    up = MouseEvent(Point(0, 0), MouseEventType.SCROLL_UP, MouseButton.NONE, frozenset())
+    down = MouseEvent(Point(0, 0), MouseEventType.SCROLL_DOWN, MouseButton.NONE, frozenset())
+    normal_control.mouse_handler(up)
+    normal_control.mouse_handler(down)
+    ssh_control.mouse_handler(up)
+    ssh_control.mouse_handler(down)
+    assert natural == [-1, 1]
+    assert inverted == [1, -1]
+
+
+def test_terminal_tui_auto_inverts_only_narrow_ssh_mouse_scroll(monkeypatch):
+    monkeypatch.setenv("SSH_CONNECTION", "phone host")
+    monkeypatch.setattr(terminal_tui.shutil, "get_terminal_size", lambda **kwargs: os.terminal_size((39, 20)))
+    assert terminal_tui._invert_mouse_scroll() is True
+    monkeypatch.setattr(terminal_tui.shutil, "get_terminal_size", lambda **kwargs: os.terminal_size((120, 36)))
+    assert terminal_tui._invert_mouse_scroll() is False
+    monkeypatch.setenv("HORUS_TUI_INVERT_MOUSE_SCROLL", "1")
+    assert terminal_tui._invert_mouse_scroll() is True
 
 
 def test_open_parser_exposes_scriptable_terminal_targets():
