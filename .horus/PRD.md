@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.50 removes Horus's incorrect automatic phone inversion: Termius's own touch→arrow mapping now passes through conventionally, while account KPIs render as a name plus separate 5h and weekly/reset lines that fit 39 columns."
-next_action: "Owner tests v0.0.50 in Termius: pull-down reveals earlier content, swipe-up reveals later projects, returning to project 1 restores Accounts, and each account shows separate 5h plus weekly/reset lines. [owner runtime gate; current Codex inline]"
-next_prompt: "Resume Horus after the owner tests v0.0.50 in Termius. Fetch first and read PRD.md. Record natural gesture direction and the vertical account-window layout. Fix only a reproduced failure; on PASS, test the pending two-session detach/reattach flow, then return to orphan reaping."
-execution_recommendation: "continue-as-is — the next step is an owner-only iPhone touch/visual gate; any failure will be a narrow reproduced TUI correction where delegation adds no useful parallelism."
+current_focus: "v0.0.51 closes the terminal-session gap: TUI launches use managed tmux automatically where supported, the session list states what can be reattached, and native Windows/no-tmux runtimes retain a safe direct-terminal fallback."
+next_action: "Owner launches one fresh Claude or Codex session from Horus TUI outside tmux, detaches, and reattaches it from the Sessions screen; on PASS, return to orphan reaping. [owner runtime gate; no model spend, current Codex inline only on failure]"
+next_prompt: "Resume Horus after the owner tests v0.0.51's automatic tmux host. Fetch first and read PRD.md. Record whether the new session says attachable and survives detach/reattach. Fix only a reproduced failure; on PASS, begin the orphan-reap backlog item without creating the deferred terminal UX card."
+execution_recommendation: "continue-as-is — the next terminal step is an owner-only runtime gate; any failure is a narrow reproduced fix for the current Codex session, while the following orphan-reap item should get a fresh execution decision."
 last_updated: 2026-07-13
 horus_min_version: 0.0.26
 ---
@@ -34,9 +34,6 @@ session notes + fetch-first; the six-lane taxonomy was the overhead — hence th
 Prioritized open work. Features and bugs in one list; jump order is allowed — this list
 is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
-**Card pilot (2026-07-10):** deferred items live one-per-file in `.horus/backlog/`;
-"Now / next" stays the small human-curated order.
-
 ### Now / next candidates
 
 - **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
@@ -60,8 +57,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**Responsive terminal project cockpit** (2026-07-13, PRs #198/#199/#201/#202/#204/#205/#207/#208, v0.0.47–0.0.50): the phone/desktop TUI shows vertically separated account-window KPIs, responsive columns/stacks, reversible page-natural Termius scrolling without automatic SSH inversion, unified Resume/Fresh accounts, and priority/type backlog → card-first resume; blocking tmux actions leave the alternate screen cleanly.
-**Terminal-native Horus launcher** (2026-07-13, PRs #195/#196, v0.0.46): `horus app --terminal`/`horus tui` provides project/next-action selection, fresh/resume Claude/Codex account launches, live-session controls, current-TTY execution, and unique reconnectable tmux sessions; direct `open --target`, `attach`, and `stop` commands back shortcuts, with browser/desktop defaults unchanged.
+**Terminal-native project cockpit** (2026-07-13, PRs #195/#196/#198/#199/#201/#202/#204/#205/#207/#208/#210/#211, v0.0.46–0.0.51): responsive phone/desktop TUI with account-window KPIs, conventional Termius scrolling, unified Resume/Fresh accounts, backlog-card resume, and live-session controls; managed tmux is the automatic supported-runtime host with explicit attachability labels and safe direct-terminal fallbacks, while scripted `open --target` and browser/desktop defaults remain stable.
 **OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): compared OpenWiki against the Horus capability catalog + PRD continuity (`research/openwiki-comparison-2026-07.md`); overseer+owner endorsed skip-but-watch — no dependency, no competing doc engine now — revisit only if OpenWiki reaches a stable 1.x code mode with evidence across 30+ merged changes in a private polyglot repo, via an opt-in measured pilot (`.horus/backlog/openwiki-vs-self-documenting-research.md`).
 **`dashboard --reload`** (2026-07-12, PR #175): restarts a running Horus backend in place from currently-installed code via `/health` discovery + terminate + relaunch on the same host/port (exposed backends restart with `--exposed`); `horus app` polls and respawns its own dashboard child after a crash, never adopting one it didn't spawn.
 **Consolidated-to marker stops self-dirtying closure** (2026-07-12, PR #174): `init`/`upgrade-project` scaffold the ignore rule for the generated `.horus/.consolidated-to` marker, `upgrade-project --apply` untracks legacy tracked copies while preserving local state, and closure cleanliness checks exclude the marker so it can never itself fail `working tree clean`.
@@ -171,6 +167,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   Preserve conventional mouse/arrow mapping on SSH because Termius already translates
   touch gestures; inversion is explicit opt-in only. Account aliases are display labels
   while ambient launches continue to pass `None` to the native agent adapter.
+- **Terminal persistence is prospective and capability-based:** TUI launches use a unique Horus-managed tmux session when tmux is available on Linux/macOS/WSL and the caller is outside tmux; native Windows, no-tmux hosts, and already-nested shells use the current terminal. A live registry row is attachable only with a Horus tmux `target_ref`; otherwise label it `original terminal only` and never offer a fake attach/close action. Keep scripted `horus open --target` behavior explicit and stable.
 - **Git policy:** branch → PR → auto-merge; this repo's main requires pytest checks
   (admins exempt so continuity pushes land directly; fallback direct merge only on
   repos without required checks); offboard keeps `.horus/` by default; `.vscode/` is

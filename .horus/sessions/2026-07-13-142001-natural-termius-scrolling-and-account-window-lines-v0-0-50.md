@@ -35,3 +35,9 @@ requested vertical account-window presentation.
 
 - Owner verifies gesture direction and account formatting in Termius. On PASS, exercise
   two-session detach/reattach, then return to orphan-process reaping.
+
+## Checkpoints (auto-harvested)
+
+- `66c71cc` Restore natural terminal scrolling (#207)
+- `cadeb3e` Release 0.0.50 (#208)
+- `5a78ad9` Update continuity for natural Termius scrolling v0.0.50 (#209)
