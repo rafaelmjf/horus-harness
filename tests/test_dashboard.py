@@ -1485,9 +1485,15 @@ def test_pty_redraw_jiggles_live_session_410_when_gone(tmp_path, monkeypatch):
     monkeypatch.setattr(dashboard.pty_host, "host", dashboard.pty_host.PtyHost())
     assert _post("/pty/redraw", {"id": "pty-gone"})["status"] == 410
     jiggled = []
-    monkeypatch.setattr(dashboard.pty_host.host, "redraw", lambda tid: jiggled.append(tid) or True)
-    assert _post("/pty/redraw", {"id": "pty-1"})["status"] == 204
-    assert jiggled == ["pty-1"]
+    monkeypatch.setattr(
+        dashboard.pty_host.host,
+        "redraw",
+        lambda tid, token=None: jiggled.append((tid, token)) or True,
+    )
+    assert _post("/pty/redraw", {"id": "pty-1", "reset": "viewer-reset-1"})["status"] == 204
+    assert jiggled == [("pty-1", "viewer-reset-1")]
+    assert _post("/pty/redraw", {"id": "pty-1", "reset": "bad\nsse"})["status"] == 204
+    assert jiggled[-1] == ("pty-1", None)  # untrusted SSE control data is discarded
 
 
 def test_terminal_js_geometry_epoch_handshake(tmp_path, monkeypatch):
@@ -1500,18 +1506,20 @@ def test_terminal_js_geometry_epoch_handshake(tmp_path, monkeypatch):
     )
     page = dashboard.render_control([], [], [], terminals=[term])
     assert "es.addEventListener('geometry'" in page
-    assert "maybeEpochReset" in page and "term.reset()" in page
+    assert "maybeEpochReset" in page
     assert "/pty/redraw" in page
     assert "if(fitted && s.cols>0" in page   # onResize gated on a real fit
-    # The reset is LAZY: armed before the redraw request because TIOCSWINSZ can
-    # publish repaint bytes over SSE before fetch receives the 204. It is still
-    # applied only when bytes arrive, so a SIGWINCH-silent trust prompt stays
-    # visible; a failed redraw disarms it.
-    arm = page.index("pendingReset=true;")
+    # The reset token is armed before the redraw request because its ordered SSE
+    # marker can beat the POST response. The marker queues RIS between old replay
+    # and fresh repaint bytes instead of guessing that arbitrary output is fresh.
+    arm = page.index("pendingReset=token;")
     redraw = page.index("post('/pty/redraw'")
     assert arm < redraw
-    assert "if(!r || !r.ok){ pendingReset=false; }" in page
-    assert "if(pendingReset){ pendingReset=false; term.reset(); }" in page
+    assert "reset:token" in page
+    assert "es.addEventListener('reset'" in page
+    assert "if(e.data!==pendingReset) return;" in page
+    assert "term.write('\\x1bc')" in page
+    assert "term.reset()" not in page
 
 
 def test_pty_resize_debounce_drop_is_still_204(tmp_path, monkeypatch):

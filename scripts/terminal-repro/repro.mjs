@@ -308,10 +308,11 @@ async function main() {
     check("upward finger drag scrolls forward (positive wheel deltaY)",
       Array.isArray(wheels) && wheels.length >= 1 && wheels.every((d) => d > 0), wheels);
 
-    // ---- Phase 8: redraw output can beat the redraw POST response ---------
-    // A real TIOCSWINSZ can publish Claude's repaint on the SSE thread before
-    // the HTTP handler returns 204. If pendingReset is armed only in fetch's
-    // .then(), that repaint is missed and the NEXT unrelated output wipes it.
+    // ---- Phase 8: reset marker orders replay before repaint ---------------
+    // The redraw POST and SSE stream are independent connections. The server
+    // emits a tokened reset marker immediately before repaint output, both of
+    // which deliberately beat the POST response in this stub. Xterm must queue
+    // the reset between OLD replay and FRESH repaint, then retain later output.
     await setViewport({ width: 1280, height: 900, mobile: false, deviceScaleFactor: 1 });
     await navigate(`${SERVER_URL}/`);
     await delay(800);
@@ -323,8 +324,10 @@ async function main() {
       var t = document.querySelector('.term-pane[data-tid="pty-1"] .xterm-rows');
       return t ? t.textContent : '';
     })()`);
-    check("redraw bytes arriving before POST completion survive later output",
-      screenAfterLateOutput.includes("FRESH-pty-1") && screenAfterLateOutput.includes("LATE-pty-1"),
+    check("ordered reset drops old-grid replay and preserves repaint + later output",
+      !screenAfterLateOutput.includes("OLD-pty-1")
+        && screenAfterLateOutput.includes("FRESH-pty-1")
+        && screenAfterLateOutput.includes("LATE-pty-1"),
       screenAfterLateOutput);
   } finally {
     proc.kill();

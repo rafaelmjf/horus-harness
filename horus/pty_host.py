@@ -62,6 +62,12 @@ class PtyTerminal:
     _total: int = 0         # total bytes ever produced
     _cond: threading.Condition = field(default_factory=threading.Condition, repr=False)
     _last_resize_at: float | None = field(default=None, repr=False)
+    # Ordered control markers in the terminal byte stream.  Each tuple is the
+    # absolute output offset *before* the repaint requested by redraw().  SSE
+    # subscribers emit the marker between the old bytes and the repaint bytes,
+    # so a browser can reset xterm at an exact boundary instead of guessing
+    # that an arbitrary "next output" chunk is the repaint.
+    _reset_markers: list[tuple[int, str]] = field(default_factory=list, repr=False)
     # viewer id -> (cols, rows) it can render; PTY takes the per-dimension min.
     _viewers: dict[str, tuple[int, int]] = field(default_factory=dict, repr=False)
 
@@ -196,18 +202,28 @@ class PtyHost:
         # not every TUI repaints on SIGWINCH (Claude Code's trust prompt
         # doesn't; clearing left every viewer blank until a keypress). The
         # replay-poison problem is handled viewer-side instead: the geometry
-        # attach handshake + /pty/redraw + a lazy screen reset applied when the
-        # repaint actually arrives.
+        # attach handshake + /pty/redraw + an ordered SSE reset marker placed
+        # immediately before the repaint bytes.
         return True
 
-    def redraw(self, term_id: str) -> bool:
+    def redraw(self, term_id: str, reset_token: str | None = None) -> bool:
         """Force the TUI to repaint its full screen: a double TIOCSWINSZ jiggle
         (rows-1 then rows), tmux's refresh trick. Used by a viewer that just
         reset its screen after attaching across a geometry change. Bypasses the
-        debounce and the viewer registry — geometry ends where it started."""
+        debounce and the viewer registry — geometry ends where it started.
+
+        When ``reset_token`` is supplied, place an ordered SSE control marker at
+        the current output offset before signalling the TUI.  That gives the
+        requesting viewer an unambiguous old-replay/repaint boundary even when
+        the redraw POST and SSE stream race on separate HTTP connections.
+        """
         term = self.get(term_id)
         if term is None or term._pty is None or not term.alive or term.rows <= 1:
             return False
+        if reset_token:
+            with term._cond:
+                term._reset_markers.append((term._total, reset_token))
+                term._cond.notify_all()
         try:
             term._pty.resize(term.cols, term.rows - 1)
             term._pty.resize(term.cols, term.rows)
@@ -326,6 +342,12 @@ class PtyHost:
         yield from self._subscribe_frames(term, heartbeat)
 
     def _subscribe_frames(self, term: PtyTerminal, heartbeat: float) -> Iterator[str]:
+        # Historical markers belong to earlier viewers and are irrelevant to a
+        # new subscriber. Snapshot BEFORE yielding geometry: the browser may
+        # request redraw as soon as that first event arrives, while this generator
+        # is paused at the yield.
+        with term._cond:
+            marker_index = len(term._reset_markers)
         # Announce the PTY's current geometry before anything else: a viewer
         # whose own fit differs knows the replayed scrollback was written for a
         # different grid and can reset + request a repaint instead of rendering
@@ -342,16 +364,36 @@ class PtyHost:
             with term._cond:
                 if cursor < term._base:
                     cursor = term._base  # missed bytes trimmed from scrollback
-                while cursor >= term._total and term.alive:
+                marker = None
+                if marker_index < len(term._reset_markers):
+                    marker = term._reset_markers[marker_index]
+                while cursor >= term._total and marker is None and term.alive:
                     if not term._cond.wait(timeout=heartbeat):
                         break
-                if cursor < term._total:
-                    chunk = bytes(term._buf[cursor - term._base:])
-                    cursor = term._total
-                else:
+                    if marker_index < len(term._reset_markers):
+                        marker = term._reset_markers[marker_index]
+                # Emit a reset marker only after every byte that preceded it.
+                # If unread output spans the boundary, stop the chunk exactly at
+                # the marker and emit the control event on the next iteration.
+                if marker is not None and marker[0] <= cursor:
+                    marker_index += 1
+                    reset_token = marker[1]
                     chunk = b""
-                done = not term.alive and cursor >= term._total
-            if chunk:
+                    done = False
+                else:
+                    reset_token = None
+                    chunk_end = term._total
+                    if marker is not None:
+                        chunk_end = min(chunk_end, marker[0])
+                    if cursor < chunk_end:
+                        chunk = bytes(term._buf[cursor - term._base:chunk_end - term._base])
+                        cursor = chunk_end
+                    else:
+                        chunk = b""
+                    done = not term.alive and cursor >= term._total and marker is None
+            if reset_token is not None:
+                yield f"event: reset\ndata: {reset_token}\n\n"
+            elif chunk:
                 yield "event: output\ndata: " + base64.b64encode(chunk).decode("ascii") + "\n\n"
             elif done:
                 yield "event: status\ndata: exited\n\n"

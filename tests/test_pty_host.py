@@ -217,7 +217,7 @@ def test_resize_preserves_scrollback_replay(tmp_path, monkeypatch):
     sequences (alt-screen, sync output) a fresh viewer needs, and not every TUI
     repaints on SIGWINCH (Claude Code's trust prompt doesn't — an eager clear
     left viewers blank until a keypress). Replay-poison across grids is handled
-    viewer-side (geometry handshake + /pty/redraw + lazy reset)."""
+    viewer-side (geometry handshake + /pty/redraw + ordered reset marker)."""
     h, tid, fake = _fake_host(tmp_path, monkeypatch)
     term = h.get(tid)
     fake.feed(b"OLD-GRID-BYTES")
@@ -242,6 +242,32 @@ def test_redraw_jiggles_rows_to_force_full_repaint(tmp_path, monkeypatch):
     assert h.redraw(tid) is True
     assert sizes == [(100, 29), (100, 30)]  # rows-1 then back: double SIGWINCH
     assert h.redraw("nope") is False
+
+
+def test_redraw_reset_marker_orders_old_replay_before_repaint(tmp_path, monkeypatch):
+    """The browser reset marker must sit exactly between already-buffered bytes
+    and bytes produced by the redraw, even though POST and SSE are independent."""
+    h, tid, fake = _fake_host(tmp_path, monkeypatch)
+    stream = h.subscribe(tid, heartbeat=0.05, viewer_id="phone")
+    assert next(stream).startswith("event: geometry")
+    assert next(stream) == "event: status\ndata: live\n\n"
+
+    fake.feed(b"OLD-REPLAY")
+    assert _wait(lambda: h.get(tid)._total == len(b"OLD-REPLAY"))
+    assert h.redraw(tid, "phone-reset-1") is True
+    fake.feed(b"FRESH-REPAINT")
+    assert _wait(lambda: h.get(tid)._total == len(b"OLD-REPLAYFRESH-REPAINT"))
+
+    # Both byte ranges are already buffered when the subscriber advances. It
+    # must split at the marker rather than returning one poisoned combined chunk.
+    old = next(stream)
+    assert old.startswith("event: output")
+    assert base64.b64decode(old.split("data: ", 1)[1].strip()) == b"OLD-REPLAY"
+    assert next(stream) == "event: reset\ndata: phone-reset-1\n\n"
+    fresh = next(stream)
+    assert fresh.startswith("event: output")
+    assert base64.b64decode(fresh.split("data: ", 1)[1].strip()) == b"FRESH-REPAINT"
+    stream.close()
 
 
 def test_subscribe_with_viewer_id_releases_geometry_on_disconnect(tmp_path, monkeypatch):
