@@ -1339,12 +1339,35 @@ def test_process_launch_in_app_opens_pty_terminal(tmp_path, monkeypatch):
     assert query == "tab=pty-1"
     assert calls["agent"] == "fake" and str(calls["project_dir"]) == str(proj)
     assert calls["posture"] == "full-auto"  # chosen permission posture threaded through
+    assert calls["cols"] == 80               # desktop/no hint keeps the established default
 
     # An unknown posture is rejected (not silently launched at default).
     assert dashboard.process_launch(
         {"project": "0", "target": "app", "posture": "nope"},
         projects=[str(proj)], known_aliases=set(),
     ) == "error=unknown+permission+mode"
+
+
+def test_process_launch_in_app_uses_bounded_phone_spawn_width(tmp_path, monkeypatch):
+    """The launching phone can size Claude's first paint before the viewer attaches;
+    malformed/untrusted hints degrade to the established 80-column default."""
+    _init(tmp_path, monkeypatch)
+    proj = tmp_path / "demo"
+    proj.mkdir()
+    calls = []
+    monkeypatch.setattr(dashboard.pty_host.host, "start", lambda **kw: calls.append(kw) or "pty-1")
+
+    base = {"project": "0", "mode": "fresh", "agent": "fake", "target": "app"}
+    assert dashboard.process_launch(
+        {**base, "spawn_cols": "39"}, projects=[str(proj)], known_aliases=set(),
+    ) == "tab=pty-1"
+    assert calls[-1]["cols"] == 39
+
+    for bad in ("", "nope", "1", "999"):
+        dashboard.process_launch(
+            {**base, "spawn_cols": bad}, projects=[str(proj)], known_aliases=set(),
+        )
+        assert calls[-1]["cols"] == 80
 
 
 def test_terminal_panel_renders_xterm_wiring(tmp_path, monkeypatch):
@@ -1362,6 +1385,16 @@ def test_terminal_panel_renders_xterm_wiring(tmp_path, monkeypatch):
     assert "class='popout linkbtn' data-tid='pty-7'" in page  # pop-out control per terminal
     assert "class='termclose linkbtn' data-tid='pty-7'" in page  # per-tab close control
     assert "/pty/close" in page                          # close wiring posts to the host
+    # A CLI exit stays inspectable; only the explicit close control removes it.
+    assert "Never auto-remove an exited session" in page
+    assert "setTimeout(function(){removeTab(tid);}, 1500)" not in page
+
+
+def test_page_adds_compact_spawn_width_hint_to_in_app_launches():
+    page = dashboard._page("test", "<form method='post' action='/launch'></form>")
+    assert "input[name=spawn_cols]" in page
+    assert "Math.floor(w/10)" in page
+    assert "t==='app'&&compact" in page
 
 
 def test_pty_close_route_forgets_terminal(tmp_path, monkeypatch):
