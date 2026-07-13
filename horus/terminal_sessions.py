@@ -188,6 +188,23 @@ def launch_tmux(
             error=f"failed to create tmux session: {detail}",
         )
 
+    # Wheel input reaches an attended agent as raw terminal escape sequences
+    # (e.g. recalled shell/agent history) unless tmux's mouse handling is on for
+    # this pane. Scope it to just the new session (-t <name>, never -g) so a
+    # Horus launch never touches the tmux server/user default. A session that
+    # fails to configure is torn down rather than left half-configured.
+    mouse_error = _enable_mouse_mode(tmux_name)
+    if mouse_error:
+        _kill_tmux_session(tmux_name)
+        spec_path.unlink(missing_ok=True)
+        store.set_status(prepared.session_id, "failed")
+        return launch.LaunchResult(
+            False, prepared.agent, prepared.project, account=account,
+            session_id=prepared.session_id,
+            target_ref=tmux_name,
+            error=f"failed to enable tmux mouse mode for the new session: {mouse_error}",
+        )
+
     if attach:
         attached = attach_session(prepared.session_id, reg=store)
         if attached:
@@ -366,6 +383,21 @@ def reap_orphans(
         _runner_spec_path(record.session_id).unlink(missing_ok=True)
         reaped.append(name)
     return reaped
+
+
+def _enable_mouse_mode(tmux_name: str) -> str | None:
+    """Turn on mouse handling for exactly one session (never ``-g``/global).
+    Returns an error string on failure, or ``None`` on success."""
+    configured = subprocess.run(  # noqa: S603,S607 - tmux name is Horus-generated
+        ["tmux", "set-option", "-t", tmux_name, "mouse", "on"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if configured.returncode != 0:
+        detail = (configured.stderr or configured.stdout).strip() or f"tmux exited {configured.returncode}"
+        return detail
+    return None
 
 
 def _kill_tmux_session(name: str) -> None:

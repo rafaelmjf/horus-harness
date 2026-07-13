@@ -65,6 +65,17 @@ class _Stop:
 
 _Action = _Launch | _Attach | _Stop | str
 
+# Labels for the home-level Defaults screen's one setting: the permission
+# posture new TUI launches (fresh/resume/card-resume) start with, until changed
+# here. `config.LAUNCH_POSTURE_CHOICES` is the source of truth for the values.
+_POSTURE_LABELS: dict[str, str] = {
+    "plan": "Plan — think/plan only, no edits or commands",
+    "read-only": "Read-only — may inspect, never write or run side-effecting tools",
+    "default": "Default — prompt for sensitive actions",
+    "auto-edit": "Auto-edit — auto-accept file edits, still gate other actions",
+    "full-auto": "Full-auto — bypass permissions (dangerous; unattended)",
+}
+
 
 class _BodyControl(FormattedTextControl):
     def __init__(self, text, on_scroll, *, invert_mouse_scroll: bool) -> None:
@@ -188,6 +199,10 @@ class TerminalUI:
             self.project_filter = None
             self._show("sessions")
 
+        @keys.add("d")
+        def _defaults(event) -> None:
+            self._show("settings")
+
         @keys.add("q")
         def _quit(event) -> None:
             event.app.exit(result="quit")
@@ -250,6 +265,12 @@ class TerminalUI:
         elif self.screen == "accounts" and kind == "account":
             if isinstance(value, LaunchAccount):
                 self._exit_launch(value)
+        elif self.screen == "settings" and kind == "posture":
+            posture = str(value)
+            config.set_launch_default_posture(posture)
+            self._refresh_items()
+            self.status = f"Default launch posture set to {posture}."
+            self.application.invalidate()
         elif self.screen == "session":
             if kind == "attach" and self.selected_session is not None:
                 self.application.exit(result=_Attach(self.selected_session.session_id))
@@ -281,6 +302,8 @@ class TerminalUI:
             self._show("sessions")
         elif self.screen == "confirm":
             self._show("session")
+        elif self.screen == "settings":
+            self._show("projects")
 
     def _show(self, screen: str) -> None:
         self.screen = screen
@@ -321,6 +344,10 @@ class TerminalUI:
                 self.items = [("unavailable", None), ("back", None)]
         elif self.screen == "confirm":
             self.items = [("no", None), ("yes", None)]
+        elif self.screen == "settings":
+            current = config.load_launch_defaults()["posture"]
+            self.items = [("posture", choice) for choice in config.LAUNCH_POSTURE_CHOICES]
+            self.selected = config.LAUNCH_POSTURE_CHOICES.index(current)
 
     def _exit_launch(self, account: LaunchAccount) -> None:
         if self.project is None or self.pending_mode is None:
@@ -345,6 +372,7 @@ class TerminalUI:
             "sessions": "HORUS · Running sessions",
             "session": "HORUS · Session",
             "confirm": "HORUS · Close session?",
+            "settings": "HORUS · Defaults",
         }[self.screen]
         live = len(self.running)
         return [("class:header", f" {title}"), ("class:meta", f"   {live} live" if live else "")]
@@ -428,6 +456,12 @@ class TerminalUI:
                 lines.append(("class:muted", "\n   This live session remains in its original terminal.\n"))
             elif kind in {"yes", "no"}:
                 lines.append((style, f"\n {marker} {'Close session' if kind == 'yes' else 'Keep session'}\n"))
+            elif kind == "posture":
+                posture = str(value)
+                current = config.load_launch_defaults()["posture"]
+                active = "current" if posture == current else "      "
+                lines.append((style, f"\n {marker} [{active}] {posture}\n"))
+                lines.append(("class:muted", f"     {_POSTURE_LABELS.get(posture, '')}\n"))
         return lines
 
     def _wide_home_text(self, width: int) -> StyleAndTextTuples:
@@ -572,10 +606,17 @@ class TerminalUI:
         ):
             text = " Esc back · q quit" if narrow else " Original terminal only   Esc back   q quit"
             return [("class:footer", text)]
+        if self.screen == "settings":
+            text = (
+                " ↑↓ select · Enter save · Esc back"
+                if narrow
+                else " ↑↓ select   Enter save   Esc back   q quit"
+            )
+            return [("class:footer", text)]
         text = (
-            " ↑↓ scroll · Enter · s sessions · q"
+            " ↑↓ scroll · Enter · s sessions · d defaults · q"
             if narrow
-            else " ↑↓/swipe scroll   Enter open   Esc back   s sessions   q quit"
+            else " ↑↓/swipe scroll   Enter open   Esc back   s sessions   d defaults   q quit"
         )
         return [("class:footer", text)]
 
@@ -620,6 +661,7 @@ def run() -> int:
                 root=result.project,
                 account=result.account,
                 prompt=prompt,
+                posture=config.load_launch_defaults()["posture"],
             )
             status = (
                 f"Session {launched.session_id[:8]} returned to Horus."
@@ -745,8 +787,8 @@ def _card_prompt(root: Path, card: backlog.Card) -> str:
     )
 
 
-def _launch(*, target: str, agent: str, root: Path, account: str | None, prompt: str):
-    kwargs = {"agent": agent, "project_dir": root, "account": account, "prompt": prompt}
+def _launch(*, target: str, agent: str, root: Path, account: str | None, prompt: str, posture: str = "default"):
+    kwargs = {"agent": agent, "project_dir": root, "account": account, "prompt": prompt, "posture": posture}
     if target == terminal_sessions.TMUX:
         return terminal_sessions.launch_tmux(**kwargs)
     return terminal_sessions.run_attached(**kwargs)

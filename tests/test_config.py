@@ -164,3 +164,66 @@ def test_set_workflow_policy_preserves_access_block(tmp_path, monkeypatch):
     config.set_workflow_policy(commit="manual")
     assert config.load_dashboard_access() is not None
     assert config.load_workflow_policy()["commit"] == "manual"
+
+
+# --------------------------------------------------------------------------- #
+# TUI launch defaults ([launch] table, home-level Defaults screen).
+# --------------------------------------------------------------------------- #
+
+
+def test_launch_defaults_default_to_default_posture(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.load_launch_defaults() == {"posture": "default"}
+
+
+def test_set_launch_default_posture_round_trips(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.set_launch_default_posture("full-auto") == "full-auto"
+    assert config.load_launch_defaults() == {"posture": "full-auto"}
+
+    assert config.set_launch_default_posture("read-only") == "read-only"
+    assert config.load_launch_defaults() == {"posture": "read-only"}
+
+
+def test_set_launch_default_posture_rejects_unknown_value(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    try:
+        config.set_launch_default_posture("yolo")
+        raised = False
+    except ValueError:
+        raised = True
+    assert raised
+    assert config.load_launch_defaults() == {"posture": "default"}  # unchanged
+
+
+def test_launch_defaults_tolerates_malformed_stored_value(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.config_dir().mkdir(parents=True, exist_ok=True)
+    config.config_path().write_text('[launch]\nposture = "not-a-real-posture"\n', encoding="utf-8")
+    assert config.load_launch_defaults() == {"posture": "default"}
+
+
+def test_set_launch_default_posture_preserves_access_block(tmp_path, monkeypatch):
+    config = _home_cfg(tmp_path, monkeypatch)
+    config.set_launch_default_posture("auto-edit")
+    assert config.load_dashboard_access() is not None
+    assert config.load_launch_defaults() == {"posture": "auto-edit"}
+
+
+def test_launch_defaults_coexist_with_projects_and_workflow(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    proj = tmp_path / "p1"
+    proj.mkdir()
+    config.register_project(proj)
+    config.set_workflow_policy(commit="manual")
+    config.set_launch_default_posture("plan")
+
+    assert config._as_key(proj) in config.load_projects()
+    assert config.load_workflow_policy()["commit"] == "manual"
+    assert config.load_launch_defaults() == {"posture": "plan"}
+
+    # Registering another project afterward must not disturb the launch default.
+    other = tmp_path / "p2"
+    other.mkdir()
+    config.register_project(other)
+    assert config.load_launch_defaults() == {"posture": "plan"}

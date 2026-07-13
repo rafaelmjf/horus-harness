@@ -41,6 +41,18 @@ WORKFLOW_CHOICES: dict[str, tuple[str, ...]] = {
     "merge": ("auto", "review"),
 }
 
+# ---------------------------------------------------------------------------
+# TUI launch defaults: the permission posture applied to new fresh/resume/
+# card-resume launches from `horus tui`, until the owner changes it from the
+# home-level Defaults screen. Mirrors adapters.base.PermissionPosture's values
+# as plain strings (duplicated, not imported) to avoid a config<->adapters
+# import cycle — dashboard.py's own posture picker already does the same.
+# ---------------------------------------------------------------------------
+
+LAUNCH_DEFAULTS: dict[str, str] = {"posture": "default"}
+
+LAUNCH_POSTURE_CHOICES: tuple[str, ...] = ("plan", "read-only", "default", "auto-edit", "full-auto")
+
 
 def config_dir() -> Path:
     return Path.home() / ".horus"
@@ -104,7 +116,7 @@ def _write_projects(projects: list[str]) -> None:
 # routine write (register a project, set a policy) silently drops it — which took the
 # exposed dashboard down mid-session (2026-07-10) when `[access]` vanished on a
 # `register_project` write.
-_MANAGED_KEYS = frozenset({"workspace_root", "projects", "github_owners", "ignored_repos", "workflow"})
+_MANAGED_KEYS = frozenset({"workspace_root", "projects", "github_owners", "ignored_repos", "workflow", "launch"})
 
 
 def _toml_value(value: object) -> str:
@@ -148,6 +160,7 @@ def _write_config(
     workspace_root: str | None = None,
     workflow: dict[str, str] | None = None,
     ignored_repos: list[str] | None = None,
+    launch: dict[str, str] | None = None,
 ) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
     root = workspace_root or load_workspace_root()
@@ -157,6 +170,9 @@ def _write_config(
     # Preserve the current ignored-repos list when the caller doesn't supply one.
     if ignored_repos is None:
         ignored_repos = load_ignored_repos()
+    # Preserve the current launch defaults when the caller doesn't supply them.
+    if launch is None:
+        launch = load_launch_defaults()
     # Round-trip any table/key we don't manage (e.g. [access]) — read before we write.
     extra_scalars, extra_tables = _unmanaged_entries()
     lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"']
@@ -168,11 +184,13 @@ def _write_config(
     lines += ["]", "", "ignored_repos = ["]
     lines += [f'  "{r}",' for r in ignored_repos]
     lines.append("]")
-    # [workflow] table goes at the end so it doesn't accidentally swallow the
-    # top-level keys above it in a strict TOML parse (tables extend until the
-    # next table header or EOF). Preserved tables ([access]) follow it, still last.
+    # [workflow]/[launch] go at the end so they don't accidentally swallow the
+    # top-level keys above them in a strict TOML parse (tables extend until the
+    # next table header or EOF). Preserved tables ([access]) follow them, still last.
     lines += ["", "[workflow]"]
     lines += [f'{k} = "{v}"' for k, v in workflow.items()]
+    lines += ["", "[launch]"]
+    lines += [f'{k} = "{v}"' for k, v in launch.items()]
     lines += extra_tables
     config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -288,6 +306,38 @@ def set_workflow_policy(
             current[key] = value
     _write_config(load_projects(), load_github_owners(), load_workspace_root(), workflow=current)
     return current
+
+
+def load_launch_defaults() -> dict[str, str]:
+    """Return the persisted TUI launch defaults, falling back to
+    :data:`LAUNCH_DEFAULTS` for anything missing or invalid. Keys: ``posture``.
+    """
+    path = config_path()
+    if not path.exists():
+        return dict(LAUNCH_DEFAULTS)
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return dict(LAUNCH_DEFAULTS)
+    raw = data.get("launch") or {}
+    if not isinstance(raw, dict):
+        return dict(LAUNCH_DEFAULTS)
+    value = raw.get("posture", LAUNCH_DEFAULTS["posture"])
+    if not isinstance(value, str) or value not in LAUNCH_POSTURE_CHOICES:
+        value = LAUNCH_DEFAULTS["posture"]
+    return {"posture": value}
+
+
+def set_launch_default_posture(posture: str) -> str:
+    """Persist the TUI's default launch permission posture (home-level Defaults
+    screen, applied to new fresh/resume/card-resume launches). Raises
+    ``ValueError`` for any value outside :data:`LAUNCH_POSTURE_CHOICES`.
+    """
+    if posture not in LAUNCH_POSTURE_CHOICES:
+        allowed = ", ".join(LAUNCH_POSTURE_CHOICES)
+        raise ValueError(f"Invalid launch posture {posture!r}. Allowed: {allowed}")
+    _write_config(load_projects(), load_github_owners(), load_workspace_root(), launch={"posture": posture})
+    return posture
 
 
 def register_project(project_path: Path) -> bool:
