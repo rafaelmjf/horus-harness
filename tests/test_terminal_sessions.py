@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from prompt_toolkit.data_structures import Point
+from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from prompt_toolkit.output import DummyOutput
@@ -238,6 +238,60 @@ def test_terminal_tui_down_sequence_scrolls_selection_without_becoming_text(tmp_
     assert asyncio.run(drive_real_input()) == 1
 
 
+def test_terminal_tui_home_wraps_and_returns_account_rail_at_first_project(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    for index in range(12):
+        config.register_project(_project(tmp_path, f"project-{index:02}"))
+
+    ui = terminal_tui.TerminalUI()
+    assert ui.body_window.wrap_lines() is True
+    ui.move(8)
+    ui.body_window.vertical_scroll = 20
+    ui.move(-8)
+    assert ui.selected == 0
+    assert ui.body_window.vertical_scroll == 0
+
+
+def test_terminal_tui_wide_home_uses_project_columns(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    for index in range(4):
+        config.register_project(_project(tmp_path, f"project-{index:02}"))
+
+    ui = terminal_tui.TerminalUI()
+    monkeypatch.setattr(ui.application.output, "get_size", lambda: Size(rows=36, columns=120))
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert any(
+        "project-00" in line and "project-01" in line
+        for line in rendered.splitlines()
+    )
+
+
+def test_terminal_tui_narrow_ssh_arrow_sequences_follow_touch_direction(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    for index in range(3):
+        config.register_project(_project(tmp_path, f"project-{index:02}"))
+
+    async def drive():
+        with create_pipe_input() as pipe_input:
+            ui = terminal_tui.TerminalUI(
+                input=pipe_input,
+                output=DummyOutput(),
+                invert_mouse_scroll=True,
+            )
+            task = asyncio.create_task(ui.application.run_async())
+            await asyncio.sleep(0.02)
+            pipe_input.send_bytes(b"\x1b[A")
+            await asyncio.sleep(0.02)
+            selected_after_swipe_up = ui.selected
+            pipe_input.send_bytes(b"\x1b[B")
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("q")
+            assert await asyncio.wait_for(task, timeout=1) == "quit"
+            return selected_after_swipe_up, ui.selected
+
+    assert asyncio.run(drive()) == (1, 0)
+
+
 def test_terminal_tui_project_navigation_and_back(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
@@ -334,14 +388,14 @@ def test_terminal_tui_inverts_only_mouse_scroll_for_ssh_touch_direction():
     assert inverted == [1, -1]
 
 
-def test_terminal_tui_auto_inverts_only_narrow_ssh_mouse_scroll(monkeypatch):
+def test_terminal_tui_auto_inverts_narrow_ssh_scroll(monkeypatch):
     monkeypatch.setenv("SSH_CONNECTION", "phone host")
     monkeypatch.setattr(terminal_tui.shutil, "get_terminal_size", lambda **kwargs: os.terminal_size((39, 20)))
-    assert terminal_tui._invert_mouse_scroll() is True
+    assert terminal_tui._invert_mobile_scroll() is True
     monkeypatch.setattr(terminal_tui.shutil, "get_terminal_size", lambda **kwargs: os.terminal_size((120, 36)))
-    assert terminal_tui._invert_mouse_scroll() is False
-    monkeypatch.setenv("HORUS_TUI_INVERT_MOUSE_SCROLL", "1")
-    assert terminal_tui._invert_mouse_scroll() is True
+    assert terminal_tui._invert_mobile_scroll() is False
+    monkeypatch.setenv("HORUS_TUI_INVERT_SCROLL", "1")
+    assert terminal_tui._invert_mobile_scroll() is True
 
 
 def test_open_parser_exposes_scriptable_terminal_targets():

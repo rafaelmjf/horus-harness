@@ -69,10 +69,14 @@ dashboard. It lists tracked projects and their next action, launches fresh or
 continuity-seeded Claude/Codex sessions under a selected account, and lists live
 sessions. The home screen shows cached account usage, each project's open sessions,
 and backlog/bug counts. A project's Backlog action lists open cards by priority; a
-card can seed a resumed session as its first task. Swipe or use the mouse wheel/arrow
-keys to scroll the highlighted row;
+card can seed a resumed session as its first task. Wide terminals arrange accounts
+and projects into columns; narrow terminals stack and wrap the same content. Swipe or
+use the mouse wheel/arrow keys to scroll the highlighted row;
 Enter opens it, Esc goes back, and `q` quits. The list scrolls inside the application,
-so narrow phone terminals never print raw arrow-key escape sequences. A local shell
+so returning to the first project restores the account rail and narrow phone terminals
+never print raw arrow-key escape sequences. Narrow SSH sessions translate Termius-style
+swipe arrow bytes into natural touch movement; `j`/`k` remain conventional keyboard
+navigation. Set `HORUS_TUI_INVERT_SCROLL=0` to disable that translation. A local shell
 runs the selected agent in the current terminal. A bare SSH
 login automatically uses a unique detached tmux session when tmux is installed, so
 the agent survives a phone sleeping or a network change; when already inside tmux,
