@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: now
 tier: sonnet
 created: 2026-07-13
 type: bug
 parallel: exclusive
 surface: horus/terminal_sessions.py, horus/terminal_tui.py, horus/config.py
+shipped_pr: 215
+shipped_sha: 86f433bce2a1b9e71cf103ea1eba4ea476ffc03d
 ---
 
 > **PR #215 open, awaiting owner review/merge** (commit `37bbd55`). Run
