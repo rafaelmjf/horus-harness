@@ -96,6 +96,8 @@ class SessionRecord:
     status: str = "running"
     returncode: int | None = None
     updated_at: str = ""
+    launch_target: str = "local"
+    target_ref: str | None = None
 
     @classmethod
     def from_session(cls, session: AgentSession) -> "SessionRecord":

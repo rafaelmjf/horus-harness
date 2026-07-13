@@ -44,6 +44,9 @@ horus config workspace-root ~/projects # where remote projects should be cloned
 horus start github:<owner>/<repo> # clone/register a remote Horus repo and show its resume prompt
 horus resume                      # print the minimum-context fresh-session handoff for this project
 horus app                         # borderless animated companion; click opens dashboard
+horus app --terminal              # terminal-native project/session launcher (`horus tui` alias)
+horus open . --mode resume --target tmux # persistent attended session in this project
+horus attach <session-id>         # reconnect this terminal to a Horus tmux session
 horus session new "<title>"       # create a dated session summary from the template
 horus close                       # verify continuity, Codex usage, and print the closure ritual
 horus close --usage-threshold 90  # warn when Codex context or rate-limit usage reaches a percent
@@ -58,6 +61,30 @@ horus skill install --target all  # install/update bundled Claude Code + Codex s
 horus reconcile instructions      # deterministic AGENTS.md <-> CLAUDE.md managed-block sync
 horus forget <path> | horus prune # manage the dashboard's project registry
 ```
+
+## Terminal application
+
+`horus app --terminal` (or `horus tui`) is the terminal-native peer of the web
+dashboard. It lists tracked projects and their next action, launches fresh or
+continuity-seeded Claude/Codex sessions under a selected account, and lists live
+sessions. A local shell runs the selected agent in the current terminal. A bare SSH
+login automatically uses a unique detached tmux session when tmux is installed, so
+the agent survives a phone sleeping or a network change; when already inside tmux,
+Horus uses the current pane instead of nesting clients.
+
+Every launch is also scriptable, which makes shell aliases and mobile SSH-client
+snippets straightforward:
+
+```sh
+horus open ~/projects/horus-harness --agent claude --account work --mode resume --target tmux
+horus open ~/projects/site --agent codex --mode fresh --target tmux --detach
+horus sessions
+horus attach <session-id>
+horus stop <session-id>
+```
+
+The existing `horus open` default remains `--target window`, and `horus app` still
+opens the desktop companion unless `--terminal` is passed.
 
 ## GitHub remote catalog
 

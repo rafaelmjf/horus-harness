@@ -46,6 +46,8 @@ from horus import (
     runlog,
     skills,
     templates,
+    terminal_app,
+    terminal_sessions,
     upgrade,
     usage_snapshot,
     versioning,
@@ -924,31 +926,71 @@ def cmd_tail(args: argparse.Namespace) -> int:
 
 
 def cmd_open(args: argparse.Namespace) -> int:
-    """Open an *attended* agent session in its own terminal window, tracked as running.
-
-    The interactive counterpart to `horus run`: launches the CLI's TUI (the user
-    types in it) under a chosen account + project, and registers it so it shows as
-    a live `running` session in `horus sessions` and the dashboard. Routes through
-    the frozen LaunchBackend seam (`horus.backend.LocalBackend`), which is a
-    behavior-preserving wrapper around `horus.launch.launch_interactive` — same
-    identity guard, registry row, and terminal spawn as before the seam existed.
-    """
-    brief = backend.LaunchBrief(
-        project_dir=args.path,
-        agent=args.agent,
-        account=args.account,
-        posture=args.posture,
-        model=args.model,
-        prompt=args.prompt or "",
+    """Open a tracked attended agent in a window, this TTY, or persistent tmux."""
+    root = Path(args.path).resolve()
+    prompt = args.prompt if args.prompt is not None else (
+        routines.resume_prompt(root) if args.mode == "resume" else ""
     )
-    try:
-        handle = backend.LocalBackend().launch(brief)
-    except backend.LaunchFailed as exc:
-        print(f"Refusing to open: {exc}")
+    if args.detach and args.target != terminal_sessions.TMUX:
+        print("Refusing to open: --detach is only valid with --target tmux")
         return 2
-    project_name = Path(args.path).resolve().name
-    print(f"Opened {args.agent} session in {project_name} as {args.account or 'ambient'} "
-          f"(pid {handle.meta['pid']}, session {handle.session_id}).")
+    if args.target == terminal_sessions.WINDOW:
+        brief = backend.LaunchBrief(
+            project_dir=root,
+            agent=args.agent,
+            account=args.account,
+            posture=args.posture,
+            model=args.model,
+            prompt=prompt,
+        )
+        try:
+            handle = backend.LocalBackend().launch(brief)
+        except backend.LaunchFailed as exc:
+            print(f"Refusing to open: {exc}")
+            return 2
+        print(f"Opened {args.agent} session in {root.name} as {args.account or 'ambient'} "
+              f"(pid {handle.meta['pid']}, session {handle.session_id}).")
+        return 0
+
+    kwargs = {
+        "agent": args.agent,
+        "project_dir": root,
+        "account": args.account,
+        "posture": args.posture,
+        "model": args.model,
+        "prompt": prompt,
+    }
+    if args.target == terminal_sessions.TMUX:
+        result = terminal_sessions.launch_tmux(**kwargs, attach=not args.detach)
+    else:
+        result = terminal_sessions.run_attached(**kwargs)
+    if not result.ok:
+        print(f"Refusing to open: {result.error}")
+        return 2
+    verb = "Started" if args.target == terminal_sessions.TMUX else "Completed"
+    print(f"{verb} {args.agent} session in {root.name} as {args.account or 'ambient'} "
+          f"({args.target}, session {result.session_id}).")
+    return 0
+
+
+def cmd_terminal_app(args: argparse.Namespace) -> int:
+    return terminal_app.run()
+
+
+def cmd_attach(args: argparse.Namespace) -> int:
+    error = terminal_sessions.attach_session(args.session_id)
+    if error:
+        print(f"Could not attach: {error}")
+        return 2
+    return 0
+
+
+def cmd_session_stop(args: argparse.Namespace) -> int:
+    error = terminal_sessions.stop_session(args.session_id)
+    if error:
+        print(f"Could not stop: {error}")
+        return 2
+    print(f"Stopped session {args.session_id}.")
     return 0
 
 
@@ -2072,6 +2114,8 @@ def _percent(part: int, total: int) -> float:
 
 
 def cmd_app(args: argparse.Namespace) -> int:
+    if getattr(args, "terminal", False):
+        return terminal_app.run()
     root = _resolve_dir(args.path)
     if root is None:
         return 2
@@ -2602,6 +2646,11 @@ def build_parser() -> argparse.ArgumentParser:
         p_app.add_argument("--host", default="127.0.0.1", help="dashboard host (default: 127.0.0.1)")
         p_app.add_argument("--port", type=int, default=8765, help="dashboard port (default: 8765)")
         p_app.add_argument("--no-dashboard", action="store_true", help="don't start the dashboard if it is offline")
+        p_app.add_argument(
+            "--terminal",
+            action="store_true",
+            help="run the terminal-native project/session application instead of the desktop companion",
+        )
         p_app.add_argument("--no-open", action="store_true", help="just show the mascot; don't pre-open the dashboard window during startup")
         p_app.add_argument(
             "--app-window",
@@ -2634,6 +2683,9 @@ def build_parser() -> argparse.ArgumentParser:
         )
         p_app.set_defaults(func=cmd_app)
 
+    p_tui = sub.add_parser("tui", help="run the terminal-native Horus project/session application")
+    p_tui.set_defaults(func=cmd_terminal_app)
+
     p_forget = sub.add_parser("forget", help="remove a project from the dashboard registry")
     p_forget.add_argument("path", nargs="?", default=".", help="project root (default: cwd)")
     p_forget.set_defaults(func=cmd_forget)
@@ -2652,6 +2704,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_focus = sub.add_parser("focus", help="raise a running session's terminal window (best-effort, Windows)")
     p_focus.add_argument("session_id", help="session id (or a unique prefix)")
     p_focus.set_defaults(func=cmd_focus)
+
+    p_attach = sub.add_parser("attach", help="attach this terminal to a running Horus tmux session")
+    p_attach.add_argument("session_id", help="session id (or a unique prefix)")
+    p_attach.set_defaults(func=cmd_attach)
+
+    p_stop = sub.add_parser("stop", help="close a running Horus tmux session")
+    p_stop.add_argument("session_id", help="session id (or a unique prefix)")
+    p_stop.set_defaults(func=cmd_session_stop)
 
     p_run = sub.add_parser("run", help="spawn (or resume) an agent session, tracked in the registry")
     p_run.add_argument("prompt", help="the prompt to send the agent")
@@ -2729,6 +2789,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_open.add_argument("--agent", default="claude", help="adapter to use (claude | codex | fake; default: claude)")
     p_open.add_argument("--account", default=None, help="account alias to run under (uses its isolated config dir)")
     p_open.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
+    p_open.add_argument(
+        "--mode",
+        choices=("fresh", "resume"),
+        default="fresh",
+        help="fresh session or seed it with the project's Horus resume prompt (default: fresh)",
+    )
+    p_open.add_argument(
+        "--target",
+        choices=terminal_sessions.TARGETS,
+        default=terminal_sessions.WINDOW,
+        help="display target: new window, current TTY, or persistent tmux (default: window)",
+    )
+    p_open.add_argument(
+        "--detach",
+        action="store_true",
+        help="with --target tmux, create the session without attaching this terminal",
+    )
     p_open.add_argument(
         "--posture",
         default="default",
