@@ -1111,6 +1111,21 @@ def _page(title: str, body: str, active: str = "projects", wide: bool = False, l
         # so several repos can be ignored in one sitting. Non-JS falls back to PRG.
         "document.addEventListener('submit',function(ev){"
         "var f=ev.target;"
+        # A phone-launched TUI must paint at the phone's width FROM BIRTH. The
+        # server otherwise spawns at 80 cols and only learns the real ~39-col
+        # grid after redirecting to /sessions. Claude may paint before that
+        # resize and does not reliably reflow the old frame. At compact 16px,
+        # one monospace cell is approximately 10 CSS pixels. The viewer's real
+        # FitAddon claim remains authoritative immediately after attach.
+        "if(f&&f.getAttribute&&f.getAttribute('action')==='/launch'){"
+        "var s=ev.submitter,t=s&&s.name==='target'?s.value:"
+        "((f.querySelector('[name=target]')||{}).value||'app');"
+        "var compact=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||window.innerWidth<800;"
+        "if(t==='app'&&compact){var v=window.visualViewport,w=v&&v.width?v.width:window.innerWidth;"
+        "var cols=Math.max(20,Math.min(200,Math.floor(w/10)));"
+        "var h=f.querySelector('input[name=spawn_cols]');"
+        "if(!h){h=document.createElement('input');h.type='hidden';h.name='spawn_cols';f.appendChild(h);}"
+        "h.value=String(cols);}}"
         "if(!f||!f.getAttribute||f.getAttribute('action')!=='/github-ignore')return;"
         "ev.preventDefault();"
         "fetch('/github-ignore',{method:'POST',headers:{'X-Horus-Fetch':'1'},"
@@ -3480,12 +3495,10 @@ _TERMINAL_JS = """
   }
   document.querySelectorAll('.term-pane').forEach(function(p){
     var tid=p.dataset.tid;
-    // Session ended while being watched -> its tab goes away (a beat later, so
-    // the [process exited] note registers). A tab attached to an already-dead
-    // session stays until closed, keeping crash output readable.
-    terms[tid]=window.horusAttachTerm('x-'+tid, tid, function(sawLive){
-      if(sawLive){ setTimeout(function(){removeTab(tid);}, 1500); }
-    });
+    // Never auto-remove an exited session. Its final screen and the explicit
+    // [process exited] line are the only evidence when a CLI dies unexpectedly;
+    // the user closes the dead tab after reading it.
+    terms[tid]=window.horusAttachTerm('x-'+tid, tid);
   });
   document.querySelectorAll('.term-tab').forEach(function(t){
     t.addEventListener('click', function(){activate(t.dataset.tid);});
@@ -4080,11 +4093,20 @@ def process_launch(
 
     if target == "app":
         # In-app terminal: spawn the real agent TUI under a PTY in the session-host.
-        # Fresh opens an empty TUI; resume seeds it with the continuity prompt.
+        # Fresh opens an empty TUI; resume seeds it with the continuity prompt. A
+        # compact launching browser estimates its future grid width so Claude's
+        # FIRST paint is phone-sized instead of racing the post-redirect fit.
+        try:
+            spawn_cols = int(form.get("spawn_cols", ""))
+        except ValueError:
+            spawn_cols = 80
+        if not 20 <= spawn_cols <= 200:
+            spawn_cols = 80
         try:
             term_id = pty_host.host.start(
                 agent=agent, project_dir=project_dir, account=account,
                 posture=posture, prompt=(prompt if mode == "resume" else ""),
+                cols=spawn_cols,
             )
         except (ValueError, adapters.AccountMismatch) as exc:
             return "error=" + quote_plus(str(exc))
