@@ -19,8 +19,11 @@ browser and resize the window by hand.
 
 from __future__ import annotations
 
+import base64
+import queue
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -35,6 +38,8 @@ ASSETS = ROOT / "horus" / "assets" / "vendor" / "xterm"
 _lock = threading.Lock()
 _resizes: list[dict] = []
 _closed: set[str] = set()
+_redraws: list[str] = []
+_subscribers: dict[str, list[queue.Queue[bytes]]] = {}
 
 TERMINALS = [
     pty_host.PtyTerminal(term_id="pty-1", agent="claude", project_dir=ROOT, title="alpha"),
@@ -98,28 +103,48 @@ class Handler(BaseHTTPRequestHandler):
             self._send(f.read_bytes(), 200, ctype)
             return
         if parsed.path == "/pty/stream":
-            # No real PTY bytes needed: sizing/lifecycle reproduces from the
-            # host box alone. Announce `live` so client lifecycle logic (the
-            # sawLive close-guard) sees a real session, then just heartbeat.
+            tid = parse_qs(parsed.query).get("id", [""])[0]
+            output: queue.Queue[bytes] = queue.Queue()
+            with _lock:
+                _subscribers.setdefault(tid, []).append(output)
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
             self.end_headers()
             try:
+                # Deliberately announce a grid that differs from the fitted
+                # browser box, then replay old-grid bytes. This exercises the
+                # geometry-epoch redraw path rather than merely the fit path.
+                replay = base64.b64encode(f"OLD-{tid}".encode())
+                self.wfile.write(b"event: geometry\ndata: 80x24\n\n")
                 self.wfile.write(b"event: status\ndata: live\n\n")
+                self.wfile.write(b"event: output\ndata: " + replay + b"\n\n")
                 self.wfile.flush()
                 while True:
-                    threading.Event().wait(1.0)
-                    self.wfile.write(b": hb\n\n")
+                    try:
+                        chunk = output.get(timeout=1.0)
+                        encoded = base64.b64encode(chunk)
+                        self.wfile.write(b"event: output\ndata: " + encoded + b"\n\n")
+                    except queue.Empty:
+                        self.wfile.write(b": hb\n\n")
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
                 pass
+            finally:
+                with _lock:
+                    listeners = _subscribers.get(tid, [])
+                    if output in listeners:
+                        listeners.remove(output)
             return
         if parsed.path == "/__state":
             import json
 
             with _lock:
-                body = json.dumps({"resizes": _resizes, "closed": sorted(_closed)}).encode("utf-8")
+                body = json.dumps({
+                    "resizes": _resizes,
+                    "closed": sorted(_closed),
+                    "redraws": _redraws,
+                }).encode("utf-8")
             self._send(body, 200, "application/json")
             return
         self._send(b"not found", 404, "text/plain")
@@ -143,6 +168,27 @@ class Handler(BaseHTTPRequestHandler):
             self._no_content()
             return
         if parsed.path == "/pty/redraw":
+            form = self._read_form()
+            tid = form.get("id", "")
+            with _lock:
+                _redraws.append(tid)
+                listeners = list(_subscribers.get(tid, []))
+            # Reproduce the real race: TIOCSWINSZ makes the PTY reader publish
+            # repaint bytes while the POST handler is still returning. The
+            # browser must arm its lazy reset before issuing this request.
+            for listener in listeners:
+                listener.put(f"FRESH-{tid}".encode())
+            time.sleep(0.15)
+            self._no_content()
+            return
+        if parsed.path == "/__emit":
+            form = self._read_form()
+            tid = form.get("id", "")
+            data = form.get("data", "").encode()
+            with _lock:
+                listeners = list(_subscribers.get(tid, []))
+            for listener in listeners:
+                listener.put(data)
             self._no_content()
             return
         if parsed.path == "/pty/close":

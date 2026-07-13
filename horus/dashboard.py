@@ -3295,8 +3295,13 @@ window.horusAttachTerm = function(hostId, tid, onExit){
     epochChecked=true;
     if(term.cols+'x'+term.rows === attachGeom) return;  // replay matched our grid
     setTimeout(function(){
+      // Arm BEFORE the request: redraw() jiggles TIOCSWINSZ synchronously, so
+      // the PTY reader can publish Claude's repaint over SSE before this fetch
+      // receives its 204. Arming in .then() missed that repaint and caused the
+      // next unrelated output to wipe the freshly-painted screen.
+      pendingReset=true;
       post('/pty/redraw',{id:tid}).then(function(r){
-        if(r && r.ok){ pendingReset=true; }
+        if(!r || !r.ok){ pendingReset=false; }
       });
     }, 250);
   }
