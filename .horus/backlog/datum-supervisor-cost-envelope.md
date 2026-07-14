@@ -1,6 +1,6 @@
 ---
 title: "Datum supervisor-cost envelope + one-act acceptance (frozen schema)"
-status: open
+status: done
 priority: now
 tier: sonnet
 parallel: safe
@@ -8,6 +8,7 @@ type: task
 surface: horus/datums.py, horus/cli.py, launch/completion capture (launcher/delivery), capabilities projection, skills/delegation-rubric
 created: 2026-07-14
 created_by: overseer
+shipped: 2026-07-14
 ---
 
 # Datum supervisor-cost envelope + one-act acceptance [frozen schema — implement as specified]
@@ -86,3 +87,10 @@ command — keep the surface minimal):
 - One live synthetic dispatch/accept cycle on this machine demonstrating: launch snapshot →
   `datum close` with the new flags → card stamped → continuity warning printed when stale.
 - No dashboard work, no auto-router, no policy engine, no new daemon.
+
+## Reviews
+
+### 2026-07-14 — cockpit-overseer (agent)
+Verdict: shipped-with-wrinkle
+
+One-act acceptance live-verified on the real dispatch (datum 9e21ec5f, PR #218). Wrinkle: --card resolves the card in the run's recorded project path, which for a --worktree dispatch is the WORKTREE — the stamp landed on a merged, disposable checkout and had to be hand-carried to main. Consider resolving --card against the repo's primary checkout (or current main) when the run used a worktree.
