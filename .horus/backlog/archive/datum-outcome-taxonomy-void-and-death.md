@@ -1,6 +1,6 @@
 ---
 title: "[bug] Add datum void/aborted state and separate death from quality rate"
-status: claimed
+status: shipped
 priority: medium
 tier: sonnet
 parallel: safe
@@ -12,6 +12,8 @@ created: 2026-07-12
 created_by: overseer
 migrated_from: rafaelmjf/horus-agent
 execution: "inline Sonnet-class correctness fix; focused tests + live CLI probe"
+shipped_pr: 241
+shipped_sha: b591bd9
 ---
 
 # Add datum void/aborted state and separate death from quality rate
