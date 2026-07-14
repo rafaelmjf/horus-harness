@@ -392,16 +392,33 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
 
 
 def cmd_datum_close(args: argparse.Namespace) -> int:
-    """Attach the agent-supplied qualitative half to a measured datum.
+    """Attach the agent-supplied qualitative + supervisor-cost half to a
+    measured datum, and — with ``--card`` — do the one-act acceptance stamp.
 
     The mechanical half (model/effort/account/runtime/exit…) is captured
     automatically by `horus run`; this one structured command adds the judgment
     the harness must never infer: ``outcome`` (clean/nudged/bounced/died), the
-    ``shape`` (ambiguity/volume/runtime), and a free note. Resolves the run id by
-    prefix, like `horus tail`."""
+    ``shape`` (ambiguity/volume/runtime), a free note, and — all optional — the
+    2026-07-14 frozen cost-envelope flags (``--oversight``/``--follow-on``/
+    ``--counterfactual``/``--dividend``). Resolves the run id by prefix, like
+    `horus tail`.
+
+    ``--card <path-or-slug>`` collapses the post-merge tail into this one
+    command: it stamps the delivered backlog card `status: done` + `shipped:
+    <date>` in the target project (the closed datum's own ``project``, unless
+    ``--card`` is already a resolvable path), then PRINTS a warning — never
+    auto-fixing anything — if that target's own continuity looks stale versus
+    this run's completion time."""
     try:
         datum = datums.DatumStore.default().close(
-            args.run_id, outcome=args.outcome, shape=args.shape, note=args.note
+            args.run_id,
+            outcome=args.outcome,
+            shape=args.shape,
+            note=args.note,
+            oversight=args.oversight,
+            follow_on=args.follow_on,
+            counterfactual=args.counterfactual,
+            dividend=args.dividend,
         )
     except (LookupError, ValueError) as exc:
         print(exc)
@@ -411,7 +428,30 @@ def cmd_datum_close(args: argparse.Namespace) -> int:
         bits.append(f"shape={datum.shape!r}")
     if datum.note:
         bits.append(f"note={datum.note!r}")
+    if datum.oversight:
+        bits.append(f"oversight={datum.oversight}")
+    if datum.follow_on is not None:
+        bits.append(f"follow-on={datum.follow_on}")
+    if datum.counterfactual:
+        bits.append(f"counterfactual={datum.counterfactual}")
+    if datum.dividend:
+        bits.append(f"dividend={datum.dividend}")
     print(f"Closed datum {datum.session_id} ({datum.model or 'unknown model'}): {' | '.join(bits)}")
+
+    if getattr(args, "card", None):
+        project_root = Path(datum.project) if datum.project else None
+        try:
+            card_path = backlog.resolve_delivered_card(args.card, project_root=project_root)
+        except FileNotFoundError as exc:
+            print(f"Could not stamp the delivered card: {exc}")
+            return 2
+        shipped_date = date.today().isoformat()
+        backlog.stamp_delivered(card_path, shipped_date=shipped_date)
+        print(f"Stamped {card_path} — status: done, shipped: {shipped_date}.")
+        if project_root is not None:
+            warning = closure.target_continuity_staleness(project_root, completed_at=datum.completed_at)
+            if warning:
+                print(f"WARNING: {warning}")
     return 0
 
 
@@ -815,6 +855,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                     worker=spec.worker,
                     posture=spec.posture.value,
                     environment=run.session.environment,
+                    usage_launch=datums.capture_usage_snapshot(run.session.agent, run.session.account),
                 )
             )
         if ev.type is adapters.EventType.ERROR and datums.looks_like_usage_death(ev.text):
@@ -2614,6 +2655,42 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_datum_close.add_argument("--shape", default=None, help="the run's shape: ambiguity/volume/runtime, your words")
     p_datum_close.add_argument("--note", default=None, help="a short free note")
+    p_datum_close.add_argument(
+        "--oversight",
+        default=None,
+        choices=datums.OVERSIGHT_LEVELS,
+        help="supervisor-steps bucket: light=brief+one review+accept, moderate=one bounce OR a "
+             "reinstall/live-probe cycle, heavy=multiple bounce/poll cycles or a debugging tail",
+    )
+    p_datum_close.add_argument(
+        "--follow-on",
+        type=int,
+        default=None,
+        metavar="N",
+        help="count of ADDITIONAL worker/PR cycles this dispatch spawned beyond the primary one",
+    )
+    p_datum_close.add_argument(
+        "--counterfactual",
+        default=None,
+        choices=datums.COUNTERFACTUALS,
+        help="in hindsight, the mode that would have been cheapest for this task",
+    )
+    p_datum_close.add_argument(
+        "--dividend",
+        default=None,
+        choices=datums.DIVIDENDS,
+        help="headline judgment: worker detail/context the overseer avoided, minus the fixed "
+             "supervisor tax (brief+review+gate+merge+reinstall+datum/continuity close)",
+    )
+    p_datum_close.add_argument(
+        "--card",
+        default=None,
+        metavar="PATH-OR-SLUG",
+        help="one-act acceptance: stamp the delivered backlog card `status: done` + `shipped: "
+             "<date>` in the target project (this datum's own `project`, unless PATH-OR-SLUG "
+             "already resolves as a path), then print a stale-continuity warning if that "
+             "target's own .horus/PRD.md looks behind this run's completion (never auto-fixed)",
+    )
     p_datum_close.set_defaults(func=cmd_datum_close)
 
     p_datum_migrate = datum_sub.add_parser(

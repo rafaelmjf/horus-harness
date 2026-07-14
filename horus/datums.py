@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import tomllib
 from dataclasses import asdict, dataclass, field, fields
 from datetime import date, datetime, timezone
@@ -43,6 +44,19 @@ OUTCOMES: tuple[str, ...] = ("clean", "nudged", "bounced", "died")
 
 # Mechanically-captured process-exit axis (why the run ENDED — distinct from quality).
 EXITS: tuple[str, ...] = ("completed", "crashed", "usage-death")
+
+# Agent-supplied supervisor-cost half (the 2026-07-14 frozen schema — see the
+# `datum-supervisor-cost-envelope` backlog card). Set ONLY via `horus datum
+# close`'s optional flags, same hard boundary as `outcome`: the agent judges,
+# the harness records — never inferred, never auto-scored.
+OVERSIGHT_LEVELS: tuple[str, ...] = ("light", "moderate", "heavy")
+COUNTERFACTUALS: tuple[str, ...] = ("direct-session", "one-worker", "multi-worker")
+DIVIDENDS: tuple[str, ...] = ("positive", "neutral", "negative")
+
+# Freshness axis for the mechanical usage snapshots (`usage_launch`/`usage_close`).
+# "fresh" only ever means "this read reflects the provider's own live/cached state
+# at read time" — it is never a judgment about whether the number itself is good.
+USAGE_FRESHNESS: tuple[str, ...] = ("fresh", "stale", "unavailable")
 
 # How many recent outcomes the roll-up surfaces per model.
 LAST_N = 5
@@ -150,11 +164,21 @@ class Datum:
     tokens: int | None = None
     pr_opened: bool | None = None
     ci: str | None = None
+    # --- mechanical usage snapshots, best-effort readings only (NEVER a
+    # computed delta/cost score — see `capture_usage_snapshot`) --------------
+    usage_launch: dict | None = None   # captured at `record_launch`
+    usage_close: dict | None = None    # captured at `horus datum close` time
     # --- qualitative, agent-supplied at review time --------------------------
     outcome: str | None = None         # one of OUTCOMES
     shape: str | None = None           # ambiguity/volume/runtime, agent's words
     note: str | None = None
     closed_at: str | None = None
+    # --- agent-supplied supervisor-cost half, set only via `horus datum
+    # close`'s optional flags (all None until an agent judges them) ----------
+    oversight: str | None = None       # one of OVERSIGHT_LEVELS
+    follow_on: int | None = None       # additional worker/PR cycles beyond the primary
+    counterfactual: str | None = None  # one of COUNTERFACTUALS
+    dividend: str | None = None        # one of DIVIDENDS
     # Provenance so backfilled calibration data reads honestly next to live runs.
     source: str = "run"                # "run" | "backfill"
 
@@ -179,6 +203,99 @@ def classify_exit(status: str, *, saw_usage_signal: bool) -> str:
 def looks_like_usage_death(error_text: str | None) -> bool:
     """Whether an ERROR event's text looks like a usage/quota wall."""
     return bool(error_text) and bool(_USAGE_DEATH_RE.search(error_text))
+
+
+# ---------------------------------------------------------------------------
+# Mechanical usage snapshots (`usage_launch` / `usage_close`) — readings only,
+# NEVER a computed delta or cost score (the 2026-07-14 frozen schema). Captured
+# at `record_launch` and at `horus datum close` time; the agent's judgment
+# about the delta between the two lands separately via the `--dividend` flag.
+# ---------------------------------------------------------------------------
+
+
+def capture_usage_snapshot(
+    agent: str | None, account: str | None, *, since: str | None = None
+) -> dict[str, dict]:
+    """Best-effort snapshot of every readable usage surface (claude, codex).
+
+    One entry per target, e.g. ``{"claude": {"pct_5h": 42, "pct_weekly": 37,
+    "read_at": "...", "freshness": "fresh"}, "codex": {...}}``. Readings only —
+    the agent judges the delta at close, in prose; nothing here computes one.
+    A failed/unreadable target renders ``{"freshness": "unavailable", ...}``
+    rather than ever blocking the launch or the close it's attached to (wrapped
+    in a blanket ``except`` on top of each target's own best-effort read, so an
+    unexpected import/environment failure can't escape this function).
+
+    ``account`` is the account for whichever of the two targets actually
+    matches ``agent`` (the session's own agent+account); the other target is
+    read under its own default account, since a snapshot's purpose is fleet
+    capacity visibility, not just the one surface this run happened to use.
+
+    ``since`` (an ISO timestamp — normally the run's own ``launched_at``) lets
+    the Codex entry detect the exact failure mode this schema was frozen to
+    catch: a cached rate-limit snapshot that predates this run entirely (Codex
+    only refreshes its usage cache when Codex itself runs a turn) reads
+    ``stale``, not ``fresh``, even though the read itself succeeded.
+    """
+    try:
+        return {
+            "claude": _claude_usage_entry(account if agent == "claude" else None),
+            "codex": _codex_usage_entry(account if agent == "codex" else None, since=since),
+        }
+    except Exception:  # noqa: BLE001 (best-effort: never blocks the launch/close it's attached to)
+        read_at = _now_iso()
+        return {
+            "claude": {"freshness": "unavailable", "read_at": read_at},
+            "codex": {"freshness": "unavailable", "read_at": read_at},
+        }
+
+
+def _claude_usage_entry(account: str | None) -> dict:
+    from horus import usage_snapshot
+
+    read_at = _now_iso()
+    try:
+        snap = usage_snapshot.cached_usage("claude", account)
+    except Exception:  # noqa: BLE001 (best-effort read; any failure -> unavailable)
+        snap = None
+    if snap is None or (snap.percent is None and snap.weekly_percent is None):
+        return {"freshness": "unavailable", "read_at": read_at}
+    # Claude's read is a live OAuth /usage call (or a still-fresh short-TTL cache
+    # of one) — it counts as "fresh" at read time by construction.
+    entry: dict = {"read_at": read_at, "freshness": "fresh"}
+    if snap.percent is not None:
+        entry["pct_5h"] = snap.percent
+    if snap.weekly_percent is not None:
+        entry["pct_weekly"] = snap.weekly_percent
+    return entry
+
+
+def _codex_usage_entry(account: str | None, *, since: str | None) -> dict:
+    from horus import codex_usage
+
+    read_at = _now_iso()
+    try:
+        home = None
+        if account:
+            configured = config.load_account_codex_homes().get(account)
+            home = Path(configured) if configured else None
+        report = codex_usage.latest_account_usage(home=home)
+    except Exception:  # noqa: BLE001 (best-effort read; any failure -> unavailable)
+        report = None
+    if report is None:
+        return {"freshness": "unavailable", "read_at": read_at}
+    entry: dict = {"read_at": read_at, "pct_context": report.context_percent}
+    if report.primary_percent is not None:
+        entry["pct_5h"] = report.primary_percent
+    now = time.time()
+    reset_expired = report.primary_resets_at is not None and report.primary_resets_at <= now
+    predates_run = False
+    if since:
+        report_epoch = codex_usage._timestamp_key(report.timestamp)
+        since_epoch = codex_usage._timestamp_key(since)
+        predates_run = bool(report_epoch) and bool(since_epoch) and report_epoch < since_epoch
+    entry["freshness"] = "stale" if (reset_expired or predates_run) else "fresh"
+    return entry
 
 
 # ---------------------------------------------------------------------------
@@ -318,13 +435,38 @@ class DatumStore:
         except (OSError, TypeError, ValueError):
             pass
 
-    def close(self, prefix: str, *, outcome: str, shape: str | None, note: str | None) -> Datum:
-        """Attach the agent-supplied qualitative half to a datum, resolved by id
-        prefix. Raises ``LookupError`` for no/ambiguous match, ``ValueError`` for
-        an out-of-vocabulary outcome. This is the ONLY path that sets ``outcome``
-        — never inferred, never auto-scored."""
+    def close(
+        self,
+        prefix: str,
+        *,
+        outcome: str,
+        shape: str | None,
+        note: str | None,
+        oversight: str | None = None,
+        follow_on: int | None = None,
+        counterfactual: str | None = None,
+        dividend: str | None = None,
+    ) -> Datum:
+        """Attach the agent-supplied qualitative + supervisor-cost half to a datum,
+        resolved by id prefix. Raises ``LookupError`` for no/ambiguous match,
+        ``ValueError`` for an out-of-vocabulary outcome/oversight/counterfactual/
+        dividend or a negative ``follow_on``. This is the ONLY path that sets
+        these fields — never inferred, never auto-scored (the 2026-07-14 frozen
+        cost-envelope schema keeps the same hard boundary as ``outcome``).
+
+        Also captures the mechanical ``usage_close`` snapshot (best-effort,
+        readings only) — the close moment is when the agent's cost judgment
+        lands, so it's also when the harness takes its second usage reading."""
         if outcome not in OUTCOMES:
             raise ValueError(f"outcome must be one of {', '.join(OUTCOMES)} (got {outcome!r})")
+        if oversight is not None and oversight not in OVERSIGHT_LEVELS:
+            raise ValueError(f"oversight must be one of {', '.join(OVERSIGHT_LEVELS)} (got {oversight!r})")
+        if counterfactual is not None and counterfactual not in COUNTERFACTUALS:
+            raise ValueError(f"counterfactual must be one of {', '.join(COUNTERFACTUALS)} (got {counterfactual!r})")
+        if dividend is not None and dividend not in DIVIDENDS:
+            raise ValueError(f"dividend must be one of {', '.join(DIVIDENDS)} (got {dividend!r})")
+        if follow_on is not None and follow_on < 0:
+            raise ValueError(f"follow-on must be >= 0 (got {follow_on!r})")
         rows = self._load()
         matches = [sid for sid in rows if sid.startswith(prefix)]
         if not matches:
@@ -336,6 +478,20 @@ class DatumStore:
         row["shape"] = shape
         row["note"] = note
         row["closed_at"] = _now_iso()
+        if oversight is not None:
+            row["oversight"] = oversight
+        if follow_on is not None:
+            row["follow_on"] = follow_on
+        if counterfactual is not None:
+            row["counterfactual"] = counterfactual
+        if dividend is not None:
+            row["dividend"] = dividend
+        try:
+            row["usage_close"] = capture_usage_snapshot(
+                row.get("agent"), row.get("account"), since=row.get("launched_at")
+            )
+        except Exception:  # noqa: BLE001 (best-effort: never blocks a close)
+            pass
         self._save(rows)
         return Datum.from_row(row)
 
@@ -474,6 +630,14 @@ class ModelRollup:
     closed_datums: int = 0
     clean_count: int = 0
     last_outcomes: list[str] = field(default_factory=list)
+    # Supervisor-cost glance (2026-07-14 frozen schema): counts/median from
+    # datums that carry the agent-supplied `--dividend`/`--oversight` close
+    # flags. Zero on a model with none of that data yet — the renderer treats
+    # zero-and-no-median as ABSENT (omitted), never shown as a literal 0.
+    dividend_positive: int = 0
+    dividend_neutral: int = 0
+    dividend_negative: int = 0
+    oversight_median: str | None = None
     # Price-for-capability fields (all optional, owner-prior, agent-researched —
     # see PRIORS_SEED docstring and the `older-models-in-roster` backlog card).
     price_in: float | None = None       # USD per Mtok, input
@@ -496,6 +660,21 @@ def _researched_at_str(value: object) -> str | None:
     return None
 
 
+# Ordinal ranking for a deterministic "median" oversight bucket per model —
+# not a judgment, just a middle-of-the-sorted-list pick (lower median on an
+# even count, so it never needs to invent a label between two rungs).
+_OVERSIGHT_RANK: dict[str, int] = {level: i + 1 for i, level in enumerate(OVERSIGHT_LEVELS)}
+_OVERSIGHT_BY_RANK: dict[int, str] = {rank: level for level, rank in _OVERSIGHT_RANK.items()}
+
+
+def _oversight_median(values: list[str]) -> str | None:
+    ranks = sorted(_OVERSIGHT_RANK[v] for v in values if v in _OVERSIGHT_RANK)
+    if not ranks:
+        return None
+    mid = (len(ranks) - 1) // 2
+    return _OVERSIGHT_BY_RANK[ranks[mid]]
+
+
 def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[ModelRollup]:
     """One row per model across BOTH layers (union of priors + measured models).
 
@@ -514,6 +693,8 @@ def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[Mod
         rows = sorted(by_model.get(model, []), key=lambda d: d.launched_at)
         closed = [d for d in rows if d.outcome]
         last = [d.outcome for d in closed][-LAST_N:]
+        dividends = [d.dividend for d in rows if d.dividend]
+        oversights = [d.oversight for d in rows if d.oversight]
         rollups.append(
             ModelRollup(
                 model=model,
@@ -530,6 +711,10 @@ def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[Mod
                 capability_note=prior.get("capability_note"),
                 capability_summary=prior.get("capability_summary"),
                 researched_at=_researched_at_str(prior.get("researched_at")),
+                dividend_positive=sum(1 for v in dividends if v == "positive"),
+                dividend_neutral=sum(1 for v in dividends if v == "neutral"),
+                dividend_negative=sum(1 for v in dividends if v == "negative"),
+                oversight_median=_oversight_median(oversights),
             )
         )
     rollups.sort(key=lambda r: (-r.clean_count, r.model))
@@ -651,6 +836,29 @@ def render_tier_notes(rollups: list[ModelRollup]) -> list[str]:
     return lines
 
 
+def render_cost_notes(rollups: list[ModelRollup]) -> list[str]:
+    """Compact per-model supervisor-cost glance (2026-07-14 frozen schema): the
+    dispatch-dividend tally and oversight median from datums carrying the
+    agent-supplied `horus datum close --dividend`/`--oversight` flags. A model
+    with none of that data yet is simply ABSENT from this section — never
+    rendered as a literal zero (mirrors `render_tier_notes`'s pattern)."""
+    flagged = [
+        r for r in rollups
+        if r.dividend_positive or r.dividend_neutral or r.dividend_negative or r.oversight_median
+    ]
+    if not flagged:
+        return []
+    lines = ["Cost:"]
+    for r in flagged:
+        bits = []
+        if r.dividend_positive or r.dividend_neutral or r.dividend_negative:
+            bits.append(f"dividend +{r.dividend_positive}/~{r.dividend_neutral}/-{r.dividend_negative}")
+        if r.oversight_median:
+            bits.append(f"oversight median: {r.oversight_median}")
+        lines.append(f"  {r.model}: " + " · ".join(bits))
+    return lines
+
+
 def render_model_rollup(rollups: list[ModelRollup], *, verbose: bool = False) -> str:
     """Human-readable text of the roll-up. Data only — describes what was measured
     and what the owner flagged; never names a model to pick. Concise by default
@@ -665,6 +873,10 @@ def render_model_rollup(rollups: list[ModelRollup], *, verbose: bool = False) ->
     if notes:
         lines.append("")
         lines.extend(notes)
+    cost = render_cost_notes(rollups)
+    if cost:
+        lines.append("")
+        lines.extend(cost)
     return "\n".join(lines).rstrip() + "\n"
 
 
