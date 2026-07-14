@@ -43,3 +43,9 @@ backlog, and moved all reusable behavior into horus-harness.
 
 - Merge this feature PR, install it, and ask the owner before starting
   `auto-merge-bypasses-freshness-gate`.
+
+## Checkpoints (auto-harvested)
+
+- `c9b4e29` feat: add remote-authoritative fleet curator (#232)
+  * feat: add remote authoritative fleet review
+  * chore: archive shipped fleet review card
