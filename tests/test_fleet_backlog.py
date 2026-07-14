@@ -51,9 +51,7 @@ def test_load_project_rollup_cards_mode_reads_all_cards(tmp_path):
 
 
 def test_load_project_rollup_excludes_stray_done_cards(tmp_path):
-    """The structure contract deletes a card on completion; a project that left
-    a `status: done` card behind is data-hygiene drift, not open work — the
-    roll-up must exclude it rather than counting it as "open"."""
+    """A terminal-state card left in the active root is drift, not open work."""
     _mk_card(tmp_path, "still-open", status="open")
     _mk_card(tmp_path, "left-behind-done", status="done")
 
@@ -62,14 +60,14 @@ def test_load_project_rollup_excludes_stray_done_cards(tmp_path):
     assert [c.name for c in rollup.cards] == ["still-open"]
 
 
-def test_load_project_rollup_hides_shipped_cards_unless_requested(tmp_path):
+def test_load_project_rollup_excludes_shipped_root_cards_and_archive(tmp_path):
     _mk_card(tmp_path, "still-open", status="open")
     _mk_card(tmp_path, "already-shipped", status="shipped")
+    archive = tmp_path / ".horus" / "backlog" / "archive"
+    archive.mkdir(parents=True)
+    (archive / "historical.md").write_text("---\nstatus: shipped\n---\n# Historical\n", encoding="utf-8")
 
     assert [c.name for c in fleet_backlog.load_project_rollup(str(tmp_path)).cards] == ["still-open"]
-    assert [c.name for c in fleet_backlog.load_project_rollup(
-        str(tmp_path), include_shipped=True,
-    ).cards] == ["already-shipped", "still-open"]
 
 
 def test_load_project_rollup_inline_not_migrated_degrades_with_note(tmp_path):

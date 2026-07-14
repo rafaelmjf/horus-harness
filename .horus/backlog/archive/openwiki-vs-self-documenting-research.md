@@ -9,6 +9,7 @@ parallel: true
 surface: research/, capability-catalog (capabilities.py)
 shipped: researched — decision recorded
 shipped_pr: 177
+shipped_sha: 8fc762cf97d9ff4f1c2bd2f4d0db9587f9493b47
 ---
 
 # Research: OpenWiki vs. our self-documenting capability catalog

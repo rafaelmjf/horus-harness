@@ -57,7 +57,7 @@ def _card_to_dict(card: backlog.Card) -> dict:
     }
 
 
-def load_project_rollup(path_str: str, *, include_shipped: bool = False) -> ProjectRollup:
+def load_project_rollup(path_str: str) -> ProjectRollup:
     """One project's backlog roll-up, read fresh from disk. Never raises — a
     project whose path has vanished, whose ``.horus/`` is gone, or whose cards
     fail to parse degrades to an ``"unreadable"`` row with a note rather than
@@ -71,12 +71,10 @@ def load_project_rollup(path_str: str, *, include_shipped: bool = False) -> Proj
             return ProjectRollup(name, str(root), "unreadable", note="no .horus/ found")
 
         if backlog.backlog_dir(root).is_dir():
-            # `status: done` is legacy lifecycle drift, not open work; shipped
-            # cards are deliberately retained but excluded from active views.
-            excluded = {"done"}
-            if not include_shipped:
-                excluded.add("shipped")
-            cards = [c for c in backlog.load_cards(root) if c.status not in excluded]
+            # Archive-on-ship is the lifecycle contract. Active fleet views read
+            # only non-terminal cards from the backlog root and never recurse into
+            # `backlog/archive/`; no card content is deleted on completion.
+            cards = backlog.load_active_cards(root)
             return ProjectRollup(name, str(root), "cards", cards=cards)
 
         if frontmatter.has_prd(root):
@@ -96,9 +94,9 @@ def load_project_rollup(path_str: str, *, include_shipped: bool = False) -> Proj
         return ProjectRollup(name, str(root), "unreadable", note=f"error reading backlog: {exc}")
 
 
-def load_fleet_rollup(project_paths: list[str], *, include_shipped: bool = False) -> list[ProjectRollup]:
+def load_fleet_rollup(project_paths: list[str]) -> list[ProjectRollup]:
     """Every registered project's roll-up, sorted by name for determinism."""
-    rollups = [load_project_rollup(p, include_shipped=include_shipped) for p in project_paths]
+    rollups = [load_project_rollup(p) for p in project_paths]
     rollups.sort(key=lambda r: r.name.casefold())
     return rollups
 

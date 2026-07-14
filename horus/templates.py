@@ -207,7 +207,8 @@ Starter card for `.horus/backlog/` — one card per work item. Frontmatter carri
 `status` (open/claimed/shipped), `priority`, `tier`, and `type`
 (`bug`/`feature`/`chore`/`task`, defaults to `task`). See `horus backlog list` /
 `horus backlog claim <name>` / `horus backlog ship <name> --pr N --sha SHA`.
-Delete this placeholder once real cards exist; shipped real cards remain in place.
+Delete this placeholder once real cards exist; shipped real cards move to
+`backlog/archive/` with their provenance intact.
 """
 
 
@@ -252,8 +253,8 @@ The invariants that constrain new work.
 
 - **This file** carries vision, shipped, rules, and a thin pointer to the backlog.
   Keep it under ~250 lines: new shipped items are one line; shipped backlog cards
-  stay in place with `status: shipped` plus PR/SHA provenance; new work (including
-  bugs) gets its own card in `.horus/backlog/`.
+  move to `.horus/backlog/archive/` with `status: shipped` plus PR/SHA provenance;
+  new work (including bugs) gets its own card in `.horus/backlog/`.
 - **`sessions/`**: one note per session (`horus session new`), operational facts
   welcome (gates verified, tokens to rotate, dead ends). Distilled notes move to
   `sessions/archive/` (local).
@@ -713,7 +714,7 @@ installed. Read this first.
   substantial item starts, not preserved as a timeline.
 
 Keep PRD.md under ~250 lines: shipped ledger items are one line; card-backed work
-is marked `status: shipped` in place with PR/SHA provenance. Closure = update PRD.md
+is moved to `backlog/archive/` with `status: shipped` and PR/SHA provenance. Closure = update PRD.md
 (frontmatter + backlog/shipped) +
 a session note, then `horus close --commit --push`. One `horus consolidate` pass at
 most; do not chase warnings.
@@ -952,8 +953,8 @@ Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.
 Never invent status, dates, or versions; when intent is unclear, leave it and flag it.
 
 1. Size: keep PRD.md under the ~250-line cap - shipped entries are one line each.
-   For card-backed work, retain the card and run `horus backlog ship <name> --pr N
-   --sha SHA`; delete only stale legacy/inline done items.
+   For card-backed work, run `horus backlog ship <name> --pr N --sha SHA`; it
+   preserves the card under `backlog/archive/`. Delete only stale legacy/inline done items.
 2. Freshness: refresh the frontmatter handoff fields (current_focus / next_action /
    next_prompt / execution_recommendation / last_updated) to reflect this session.
 3. Backlog hygiene: de-duplicate backlog titles; move work that shipped to the

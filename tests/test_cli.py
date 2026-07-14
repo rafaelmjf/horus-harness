@@ -1946,27 +1946,26 @@ def test_backlog_list_type_filter(tmp_path, monkeypatch, capsys):
     assert "a-bug" not in out
 
 
-def test_backlog_list_hides_shipped_cards_unless_all_requested(tmp_path, monkeypatch, capsys):
+def test_backlog_list_shows_only_active_cards_and_excludes_archive(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes", "--no-skills"])
     _write_backlog_card(tmp_path, "active", status="open", priority="high")
-    _write_backlog_card(
-        tmp_path, "already-shipped", status="shipped", priority="high",
-        shipped_pr="42", shipped_sha="abc123",
+    _write_backlog_card(tmp_path, "stray-retired", status="retired", priority="high")
+    archive = tmp_path / ".horus" / "backlog" / "archive"
+    archive.mkdir(parents=True, exist_ok=True)
+    (archive / "already-shipped.md").write_text(
+        "---\nstatus: shipped\nshipped_pr: 42\nshipped_sha: abc123\n---\n# Shipped\n",
+        encoding="utf-8",
     )
 
     assert main(["backlog", "list", "--path", str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert "active" in out
     assert "already-shipped" not in out
-
-    assert main(["backlog", "list", "--all", "--path", str(tmp_path)]) == 0
-    out = capsys.readouterr().out
-    assert "already-shipped" in out
-    assert "pr=42 sha=abc123" in out
+    assert "stray-retired" not in out
 
 
-def test_backlog_ship_cli_flips_status_and_stamps_provenance(tmp_path, monkeypatch, capsys):
+def test_backlog_ship_cli_archives_card_with_provenance(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes", "--no-skills"])
     _write_backlog_card(tmp_path, "to-ship", status="open", priority="high")
@@ -1975,7 +1974,8 @@ def test_backlog_ship_cli_flips_status_and_stamps_provenance(tmp_path, monkeypat
         "backlog", "ship", "to-ship", "--pr", "42", "--sha", "abc123", "--path", str(tmp_path),
     ]) == 0
     assert "Shipped: to-ship (PR #42, abc123)" in capsys.readouterr().out
-    text = (tmp_path / ".horus" / "backlog" / "to-ship.md").read_text(encoding="utf-8")
+    assert not (tmp_path / ".horus" / "backlog" / "to-ship.md").exists()
+    text = (tmp_path / ".horus" / "backlog" / "archive" / "to-ship.md").read_text(encoding="utf-8")
     assert "status: shipped" in text
     assert "shipped_pr: 42" in text
     assert "shipped_sha: abc123" in text
