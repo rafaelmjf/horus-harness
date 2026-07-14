@@ -38,3 +38,12 @@ corroborated interrupted vi sessions. Implemented a bounded UX fix on
 - PR #219 merged at `b6f75ea`; required PR checks and merge-SHA CI passed on
   Python 3.12/3.13. Owner-check `e` on a real backlog card after install/release.
 - `tui-capabilities-screen` and the pending release cut remain next afterward.
+
+## Checkpoints (auto-harvested)
+
+- `8b70f99` fix: make backlog card editor handoff friendly
+- `cb87ace` fix: ignore backlog editor swap files
+- `590d481` Close friendly TUI backlog-card editor handoff
+- `b6f75ea` Merge pull request #219 from rafaelmjf/fix/tui-friendly-editor-fallback
+  Fix TUI backlog-card editor handoff
+- `ad60215` Close PR 219 post-merge
