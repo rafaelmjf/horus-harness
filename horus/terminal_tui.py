@@ -133,6 +133,7 @@ class TerminalUI:
         self.pending_card: backlog.Card | None = None
         self.card: backlog.Card | None = None
         self.card_scroll = 0
+        self.project_focus: dict[str, str] = {}
         self.capabilities_record: dict | None = None
         self.capabilities_error = ""
         self.selected_session: registry.SessionRecord | None = None
@@ -285,6 +286,7 @@ class TerminalUI:
         kind, value = self.items[self.selected]
         if self.screen == "projects" and kind == "project":
             self.project = value  # type: ignore[assignment]
+            self._load_project_focus()
             self._load_project_capabilities()
             self._show("project")
         elif self.screen == "project" and kind == "mode":
@@ -333,6 +335,7 @@ class TerminalUI:
             return
         if self.screen == "project":
             self.project = None
+            self.project_focus = {}
             self._show("projects")
         elif self.screen == "accounts":
             self._show("card" if self.pending_card is not None else "project")
@@ -459,6 +462,14 @@ class TerminalUI:
         if self.screen == "projects":
             lines.extend(self._account_summary_text())
         elif self.screen == "project":
+            current_focus = self.project_focus.get("current_focus", "")
+            next_action = self.project_focus.get("next_action", "")
+            if current_focus:
+                lines.append(("class:section", "\n  Current focus\n"))
+                lines.append(("class:muted", f"    {current_focus}\n"))
+            if next_action:
+                lines.append(("class:section", "\n  Next action\n"))
+                lines.append(("class:muted", f"    {next_action}\n"))
             project = (self.capabilities_record or {}).get("project", {})
             vision = project.get("vision") if isinstance(project, dict) else None
             if isinstance(vision, str) and vision:
@@ -508,7 +519,8 @@ class TerminalUI:
                     lines.append(("class:muted", f"     {usage_line}\n"))
             elif kind == "card":
                 card = value
-                lines.append((style, f"\n {marker} [{card.type}] {card.title}\n"))
+                status = " · claimed" if card.status == "claimed" else ""
+                lines.append((style, f"\n {marker} [{card.type}{status}] {card.title}\n"))
                 if card.priority:
                     lines.append(("class:muted", f"     priority {card.priority}\n"))
             elif kind == "session":
@@ -674,6 +686,16 @@ class TerminalUI:
             self.capabilities_record = record
         except (OSError, ValueError) as exc:
             self.capabilities_error = str(exc)
+
+    def _load_project_focus(self) -> None:
+        """Retain the canonical PRD-first focus record for the project frame."""
+        self.project_focus = {}
+        if self.project is None:
+            return
+        try:
+            self.project_focus = frontmatter.resolve_focus(self.project)
+        except OSError:
+            return
 
     def _capabilities_body_text(self) -> StyleAndTextTuples:
         if self.capabilities_error:
