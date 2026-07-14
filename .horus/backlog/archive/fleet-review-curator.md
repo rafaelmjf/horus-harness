@@ -1,6 +1,6 @@
 ---
 title: "Remote-authoritative fleet review + optional TUI curator entry"
-status: claimed
+status: shipped
 priority: now
 tier: sonnet
 parallel: exclusive
@@ -12,6 +12,8 @@ surface:
   - horus/skills.py
 created: 2026-07-14
 created_by: user
+shipped_pr: 232
+shipped_sha: 03d71b6
 ---
 
 # Remote-authoritative fleet review + optional TUI curator entry
