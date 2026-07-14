@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-14
 type: feature
 parallel: safe
 surface: horus/terminal_tui.py, horus/capabilities.py
+shipped_pr: 225
+shipped_sha: 0e3073fcd51ee1a51b71d975f767658f2e2b6c6c
 ---
 
 # TUI capabilities screen + vision line on project open

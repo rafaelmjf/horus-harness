@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Archive-on-ship backlog lifecycle shipped (PR #223): `horus backlog ship` now preserves status + PR/SHA provenance while moving the complete card to `backlog/archive/`; local and fleet backlog views are active-only. The 13 shipped-card cruft entries and 2 owner-retired cards were archived, leaving 21 active cards and 16 archived cards."
-next_action: "Claim and implement `tui-capabilities-screen`: add the Capabilities item, project vision line, and staleness hint as a thin TUI renderer over capabilities.generate_project, then branch → PR. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus. Run `horus resume --preflight` for the one-screen start digest, then claim `.horus/backlog/tui-capabilities-screen.md`, read the full card, and implement it as a thin TUI renderer over capabilities.generate_project with no second data path; branch → PR. [Sonnet scoped implementation, inline]"
-execution_recommendation: "continue-as-is — `tui-capabilities-screen` is bounded rendering over an existing read-only module with no design ambiguity, suited to inline sonnet-5; delegation overhead would exceed the scoped change."
+current_focus: "TUI capabilities screen shipped (PR #225): opening a project regenerates `capabilities.generate_project` once, shows its vision line, and exposes scrollable shipped records with related commands plus generated-age/commits-since provenance. The 1,422-test gate and live `horus tui` probe passed."
+next_action: "Release v0.0.54 for the merged TUI capabilities screen, then deploy the hosted app per the release invariant. [Sonnet scoped release, inline]"
+next_prompt: "Resume Horus. Fetch and verify main, then cut v0.0.54 for PR #225 (three-file bump, tests, tag/release/PyPI verification) and finish with `scripts/deploy-hosted.sh`. [Sonnet scoped release, inline]"
+execution_recommendation: "continue-as-is — v0.0.54 is a bounded scripted release of already-green commit 0e3073f; inline Sonnet keeps the publish/deploy checkpoints together, while delegation would add handoff risk around external release state."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -51,6 +51,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**TUI capabilities screen** (2026-07-14, PR #225): project-open regenerates the canonical capability record once, renders its vision plus a scrollable shipped list with related commands, and reports generated age + commits since.
 **Archive-on-ship backlog lifecycle** (2026-07-14, PR #223): shipping stamps PR/SHA then moves the complete card to `backlog/archive/`; active local/fleet views exclude terminal cards and the archive; 13 shipped + 2 owner-retired cruft cards archived without content loss.
 **One-verb resume preflight** (2026-07-14, PR #222): `horus resume --preflight [--fleet]` composes fetched git state, explicit dual-target usage freshness, version floors, PRD handoffs, open datums, projected sessions/collisions, and hygiene into one lean read-only digest; `--no-fetch` and JSON `--stdout` supported.
 **Tier-0 supervision verbs** (2026-07-14, PR #221): `horus merge-watch <sha|pr>` polls required checks on the exact pinned sha to green/red, one line per state change; `horus reinstall <path> --verify <marker>` does the cache-clean + force-reinstall + installed-surface marker grep in one act; `datum close --card` now resolves against the primary git checkout (not a `--worktree` path) with an optional `--remove-worktree` merged-only cleanup.
@@ -175,7 +176,9 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   `generated_at` stamp refreshes every run — the file is a regenerate-on-read
   publishing artifact, never a cache read back — while the `project` payload
   underneath stays just as idempotent. Don't "fix" the stamp, and don't let
-  the relaxation creep into the fleet-wide catalog.
+  the relaxation creep into the fleet-wide catalog. The TUI calls
+  `generate_project` once on project-open and renders that returned payload;
+  it never reads the generated file as a cache or maintains a parallel parser.
 - **Model-calibration data measures; the agent judges (empirical spine, 2026-07-11).**
   `horus/datums.py` MEASURES and DISPLAYS — never a router/policy/spend engine (the
   `research/omnigent.md` drift trigger). Measured datums (`~/.horus/datums.json`,
