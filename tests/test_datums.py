@@ -94,6 +94,14 @@ def test_close_attaches_qualitative_half_by_prefix(tmp_path):
     assert store.get("abc123def").outcome == "nudged"  # persisted
 
 
+def test_close_supports_void_for_aborted_untested_run(tmp_path):
+    store = _store(tmp_path)
+    store.record_launch(datums.Datum(session_id="aborted-run", model="m"))
+    closed = store.close("aborted", outcome="void", shape=None, note="operator aborted pre-test")
+    assert closed.outcome == "void"
+    assert store.get("aborted-run").outcome == "void"
+
+
 def test_close_rejects_unknown_outcome(tmp_path):
     store = _store(tmp_path)
     store.record_launch(datums.Datum(session_id="run-x"))
@@ -289,6 +297,24 @@ def test_rollup_last_outcomes_most_recent_first(tmp_path):
     assert r.last_outcomes == ["bounced", "clean"]  # newest first
 
 
+def test_rollup_excludes_death_and_void_from_quality_rate_but_keeps_them_visible():
+    measured = [
+        datums.Datum(session_id="clean-1", model="m", outcome="clean", launched_at="1"),
+        datums.Datum(session_id="clean-2", model="m", outcome="clean", launched_at="2"),
+        datums.Datum(session_id="nudged", model="m", outcome="nudged", launched_at="3"),
+        datums.Datum(session_id="died", model="m", outcome="died", launched_at="4"),
+        datums.Datum(session_id="void", model="m", outcome="void", launched_at="5"),
+        datums.Datum(session_id="open", model="m", launched_at="6"),
+    ]
+    rollup = datums.build_model_rollup(measured, {})[0]
+    assert rollup.total_datums == 6 and rollup.closed_datums == 5
+    assert rollup.quality_datums == 3 and rollup.clean_count == 2
+    assert rollup.died_count == 1 and rollup.void_count == 1
+    assert rollup.last_outcomes == ["nudged", "clean", "clean"]
+    rendered = datums.render_model_rollup([rollup])
+    assert "2/3 clean · 1 died · 1 void" in rendered
+
+
 def test_rollup_render_is_data_only(tmp_path):
     store = _store(tmp_path)
     text = datums.render_model_rollup(datums.build_model_rollup(store.all(), datums.load_priors(tmp_path / "p.toml")))
@@ -344,6 +370,14 @@ def test_datum_close_cli_attaches_outcome(tmp_path, monkeypatch, capsys):
     assert d.outcome == "clean" and d.shape == "clear/small/short" and d.note == "ok"
 
 
+def test_datum_close_cli_accepts_void(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["run", "hi", "--agent", "fake", "--model", "opus-4.8", "--path", str(tmp_path)])
+    assert main(["datum", "close", "fake", "--outcome", "void", "--note", "aborted"]) == 0
+    assert "outcome=void" in capsys.readouterr().out
+    assert datums.DatumStore.default().get("fake-session").outcome == "void"
+
+
 def test_datum_close_cli_bad_id_returns_2(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     assert main(["datum", "close", "missing", "--outcome", "clean"]) == 2
@@ -355,7 +389,7 @@ def test_capabilities_models_rollup_cli(tmp_path, monkeypatch, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "Model calibration roll-up" in out
-    assert "sonnet-5" in out and "10/10" in out  # aligned table: 10 clean / 10 total
+    assert "sonnet-5" in out and "10/10 clean" in out
     assert "token-hungry" in out  # gpt-5.6 owner caution rendered (Notes section)
 
 

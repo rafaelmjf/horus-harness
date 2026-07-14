@@ -416,7 +416,8 @@ def cmd_datum_close(args: argparse.Namespace) -> int:
 
     The mechanical half (model/effort/account/runtime/exit…) is captured
     automatically by `horus run`; this one structured command adds the judgment
-    the harness must never infer: ``outcome`` (clean/nudged/bounced/died), the
+    the harness must never infer: ``outcome`` (clean/nudged/bounced quality,
+    died operational failure, or void for an aborted/untested run), the
     ``shape`` (ambiguity/volume/runtime), a free note, and — all optional — the
     2026-07-14 frozen cost-envelope flags (``--oversight``/``--follow-on``/
     ``--counterfactual``/``--dividend``). Resolves the run id by prefix, like
@@ -2809,7 +2810,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--outcome",
         required=True,
         choices=datums.OUTCOMES,
-        help="how the run went (agent's judgment — never inferred by the harness)",
+        help=(
+            "how the run went (agent's judgment — void marks aborted/untested; "
+            "died and void are excluded from the quality denominator)"
+        ),
     )
     p_datum_close.add_argument("--shape", default=None, help="the run's shape: ambiguity/volume/runtime, your words")
     p_datum_close.add_argument("--note", default=None, help="a short free note")

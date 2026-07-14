@@ -1,6 +1,6 @@
 ---
 title: "TUI fleet projection sync"
-status: claimed
+status: shipped
 priority: now
 tier: sonnet
 parallel: unsafe
@@ -8,6 +8,8 @@ type: feature
 surface: horus/terminal_tui.py, horus/projection_sync.py
 created: 2026-07-15
 created_by: owner
+shipped_pr: 240
+shipped_sha: 470db96
 ---
 
 # TUI fleet projection sync
