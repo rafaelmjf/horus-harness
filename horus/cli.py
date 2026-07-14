@@ -1603,7 +1603,12 @@ def cmd_close(args: argparse.Namespace) -> int:
     findings = closure.closure_status(root, usage_threshold=args.usage_threshold)
     healthy = _print_findings(findings)
 
-    print("\n" + templates.CLOSURE_PROMPT)
+    if healthy and args.commit:
+        print("\nContinuity captured — boundary checkpoint committed and ready to resume anywhere.")
+        return 0
+
+    prompt = templates.CLOSURE_PROMPT_V3 if frontmatter.has_prd(root) else templates.CLOSURE_PROMPT
+    print("\n" + prompt)
     if healthy:
         print("Continuity captured — ready to start a fresh session from `.horus/`.")
         return 0

@@ -829,6 +829,18 @@ is a SEPARATE pass — only when asked, not every close.
 """
 
 
+CLOSURE_PROMPT_V3 = """Continuity boundary - fold the campaign once, when context is about to change.
+
+1. Update PRD.md frontmatter, Backlog/Shipped, and any newly load-bearing rule.
+2. Write one concise campaign summary under .horus/sessions/.
+3. Use the horus-consolidate skill for context-aware hygiene, then run
+   `horus close --commit --push`.
+
+Branches, PRs, deterministic gates, and commit/push checkpoints remain required between
+boundaries. Resume/TUI keep any unconsolidated delivery commits visible until this close.
+"""
+
+
 # Two usage-closure injections, by hook event. The hook must never override an
 # explicit user instruction or strand work local-only (see decisions.md / history.md
 # "Usage hook overrode an explicit command + left work unpushed"). So:

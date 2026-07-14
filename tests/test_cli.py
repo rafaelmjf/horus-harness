@@ -841,6 +841,7 @@ def test_close_commit_accepts_fresh_recomputed_state(tmp_path, monkeypatch, caps
     assert "uncommitted continuity" not in out
     assert "Action needed" not in out
     assert "Continuity captured" in out
+    assert "Closure ritual" not in out
 
 
 def test_close_commit_push_real_repo_prints_only_final_state(tmp_path, monkeypatch, capsys):
@@ -869,8 +870,23 @@ def test_close_commit_push_real_repo_prints_only_final_state(tmp_path, monkeypat
     assert "uncommitted change" not in out
     assert "Action needed" not in out
     assert "Continuity captured" in out
+    assert "Closure ritual" not in out
     assert not _git(repo, "status", "--porcelain").stdout
     assert _git(repo, "rev-parse", "HEAD").stdout == _git(repo, "rev-parse", "origin/main").stdout
+
+
+def test_close_v3_uses_short_boundary_prompt_not_retired_six_lane_ritual(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes"])
+    capsys.readouterr()
+
+    main(["close", "--path", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert "Continuity boundary - fold the campaign once" in out
+    assert "Update PRD.md" in out
+    assert "project.md `current_focus`" not in out
+    assert "roadmap.md" not in out
 
 
 def test_close_check_gates_on_freshness(tmp_path, monkeypatch, capsys):
