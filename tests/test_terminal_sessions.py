@@ -752,6 +752,49 @@ def test_terminal_tui_fleet_review_is_optional_after_direct_projects(tmp_path, m
     assert ui.project == curator and ui.pending_mode == "resume"
 
 
+def test_terminal_tui_projection_sync_reports_drift_and_launches_curator(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    project = _project(tmp_path, "demo")
+    curator = _project(tmp_path, "horus-agent")
+    config.register_project(project)
+    config.register_project(curator)
+
+    states = {
+        project: {
+            "verdict": "behind",
+            "claude": {"status": "behind", "pending": 2},
+            "codex": {"status": "behind", "pending": 1},
+        },
+        curator: {
+            "verdict": "in_sync",
+            "claude": {"status": "current", "pending": 0},
+            "codex": {"status": "current", "pending": 0},
+        },
+    }
+    monkeypatch.setattr(terminal_tui.projection_sync, "sync_state", states.__getitem__)
+
+    ui = terminal_tui.TerminalUI()
+    home = "".join(fragment[1] for fragment in ui._body_text())
+    assert "Projection Sync" in home
+    assert "1 stale · Claude/Codex vs installed CLI" in home
+
+    ui.move(next(index for index, item in enumerate(ui.items) if item[0] == "projection_sync"))
+    ui.activate()
+    assert ui.screen == "projection_sync"
+    report = "".join(fragment[1] for fragment in ui._body_text())
+    assert "demo · behind" in report
+    assert "Claude behind (2 pending) · Codex behind (1 pending)" in report
+    assert "horus-agent · in sync" in report
+
+    ui.activate()
+    assert ui.screen == "accounts"
+    assert ui.project == curator and ui.pending_origin == "projection_sync"
+    assert "demo: behind" in ui.pending_prompt
+    assert "use an isolated worktree" in ui.pending_prompt
+    ui.back()
+    assert ui.screen == "projection_sync"
+
+
 def test_terminal_tui_arrow_sequences_keep_conventional_direction(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     for index in range(3):
@@ -1062,6 +1105,36 @@ def test_terminal_tui_run_applies_persisted_posture_to_new_launches(tmp_path, mo
     assert terminal_tui.run() == 0
     assert captured["posture"] == "auto-edit"  # the persisted default reached the launch call
     assert captured["agent"] == "fake" and captured["project_dir"] == root
+
+
+def test_terminal_tui_run_prefers_bounded_prompt_override(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "current")
+    captured = {}
+
+    def fake_run_attached(**kwargs):
+        captured.update(kwargs)
+        return LaunchResult(True, kwargs["agent"], Path(kwargs["project_dir"]), session_id="12345678-rest")
+
+    monkeypatch.setattr(terminal_sessions, "run_attached", fake_run_attached)
+    results = iter([
+        terminal_tui._Launch(root, "fake", "resume", None, None, "bounded curator prompt"),
+        "quit",
+    ])
+
+    class _StubApp:
+        def run(self):
+            return next(results)
+
+    class _StubUI:
+        def __init__(self, status=""):
+            self.application = _StubApp()
+
+    monkeypatch.setattr(terminal_tui, "TerminalUI", _StubUI)
+
+    assert terminal_tui.run() == 0
+    assert captured["prompt"] == "bounded curator prompt"
 
 
 def test_terminal_tui_end_to_end_defaults_flow_via_real_application(tmp_path, monkeypatch):

@@ -39,6 +39,7 @@ from horus import (
     fleet_review,
     frontmatter,
     machine_requirements,
+    projection_sync,
     registry,
     routines,
     terminal_sessions,
@@ -60,6 +61,7 @@ class _Launch:
     mode: str
     account: str | None
     card: backlog.Card | None = None
+    prompt_override: str | None = None
 
 
 @dataclass(frozen=True)
@@ -142,6 +144,8 @@ class TerminalUI:
         self.project_filter: Path | None = None
         self.pending_mode: str | None = None
         self.pending_card: backlog.Card | None = None
+        self.pending_prompt: str | None = None
+        self.pending_origin: str | None = None
         self.card: backlog.Card | None = None
         self.card_scroll = 0
         self.project_focus: dict[str, str] = {}
@@ -150,6 +154,8 @@ class TerminalUI:
         self.capabilities_error = ""
         self.fleet_review_record: fleet_review.FleetReview | None = None
         self.fleet_review_error = ""
+        self.projection_records: list[tuple[Path, dict]] = []
+        self._load_projection_sync()
         self.selected_session: registry.SessionRecord | None = None
         self.items: list[tuple[str, object]] = []
         self.selected = 0
@@ -236,7 +242,10 @@ class TerminalUI:
 
         @keys.add("u")
         def _refresh_usage(event) -> None:
-            self.refresh_account_usage()
+            if self.screen == "projection_sync":
+                self.refresh_projection_sync()
+            else:
+                self.refresh_account_usage()
 
         @keys.add("f")
         def _fleet_review(event) -> None:
@@ -273,6 +282,15 @@ class TerminalUI:
             self._refresh_items()
             self.selected = min(selected, max(0, len(self.items) - 1))
         self.status = "Account usage refreshed from cache."
+        self.application.invalidate()
+
+    def refresh_projection_sync(self) -> None:
+        """Re-run the canonical read-only projection comparison."""
+        selected = self.selected
+        self._load_projection_sync()
+        self._refresh_items()
+        self.selected = min(selected, max(0, len(self.items) - 1))
+        self.status = "Projection sync refreshed against the installed CLI."
         self.application.invalidate()
 
     def _page_size(self) -> int:
@@ -313,9 +331,13 @@ class TerminalUI:
         elif self.screen == "projects" and kind == "fleet_review":
             self._load_fleet_review()
             self._show("fleet_review")
+        elif self.screen == "projects" and kind == "projection_sync":
+            self._show("projection_sync")
         elif self.screen == "project" and kind == "mode":
             self.pending_mode = str(value)
             self.pending_card = None
+            self.pending_prompt = None
+            self.pending_origin = "project"
             self._show("accounts")
         elif self.screen == "project" and kind == "backlog":
             self._show("backlog")
@@ -328,6 +350,8 @@ class TerminalUI:
         elif self.screen == "card" and kind == "card_resume":
             self.pending_mode = "resume"
             self.pending_card = self.card
+            self.pending_prompt = None
+            self.pending_origin = "card"
             self._show("accounts")
         elif self.screen == "sessions" and kind == "session":
             self.selected_session = value  # type: ignore[assignment]
@@ -355,6 +379,16 @@ class TerminalUI:
                 self.project = value
                 self.pending_mode = "resume"
                 self.pending_card = None
+                self.pending_prompt = None
+                self.pending_origin = "fleet_review"
+                self._show("accounts")
+        elif self.screen == "projection_sync" and kind == "projection_curator":
+            if isinstance(value, Path):
+                self.project = value
+                self.pending_mode = "resume"
+                self.pending_card = None
+                self.pending_prompt = _projection_curator_prompt(self.projection_records)
+                self.pending_origin = "projection_sync"
                 self._show("accounts")
         elif self.screen == "session":
             if kind == "attach" and self.selected_session is not None:
@@ -378,7 +412,7 @@ class TerminalUI:
             self.project_requirements = None
             self._show("projects")
         elif self.screen == "accounts":
-            self._show("card" if self.pending_card is not None else "project")
+            self._show(self.pending_origin or ("card" if self.pending_card is not None else "project"))
         elif self.screen == "backlog":
             self._show("project")
         elif self.screen == "capabilities":
@@ -395,6 +429,8 @@ class TerminalUI:
             self._show("projects")
         elif self.screen == "fleet_review":
             self._show("projects")
+        elif self.screen == "projection_sync":
+            self._show("projects")
 
     def _show(self, screen: str) -> None:
         self.screen = screen
@@ -406,6 +442,7 @@ class TerminalUI:
     def _refresh_items(self) -> None:
         if self.screen == "projects":
             self.items = [("project", project) for project in self.projects]
+            self.items.append(("projection_sync", None))
             self.items.append(("fleet_review", None))
         elif self.screen == "project":
             self.items = [
@@ -462,6 +499,12 @@ class TerminalUI:
                     ("review_project", project)
                     for project in self.fleet_review_record.projects
                 )
+        elif self.screen == "projection_sync":
+            self.items = []
+            curator = next((project for project in self.projects if project.name == "horus-agent"), None)
+            if curator is not None:
+                self.items.append(("projection_curator", curator))
+            self.items.extend(("projection_project", record) for record in self.projection_records)
 
     def _exit_edit(self, *, review: bool) -> None:
         if self.project is None or self.card is None:
@@ -478,6 +521,7 @@ class TerminalUI:
                 self.pending_mode,
                 account.account,
                 self.pending_card,
+                self.pending_prompt,
             )
         )
 
@@ -494,6 +538,7 @@ class TerminalUI:
             "confirm": "HORUS · Close session?",
             "settings": "HORUS · Defaults",
             "fleet_review": "HORUS · Fleet Review",
+            "projection_sync": "HORUS · Projection Sync",
         }[self.screen]
         live = len(self.running)
         return [("class:header", f" {title}"), ("class:meta", f"   {live} live" if live else "")]
@@ -505,6 +550,8 @@ class TerminalUI:
             return self._capabilities_body_text()
         if self.screen == "fleet_review":
             return self._fleet_review_body_text()
+        if self.screen == "projection_sync":
+            return self._projection_sync_body_text()
         if not self.items:
             if self.screen == "projects":
                 message = "No tracked projects. Run `horus init` first."
@@ -572,6 +619,15 @@ class TerminalUI:
                 lines.append(
                     ("class:muted", "     Compare remote shipped truth with local working state\n")
                 )
+            elif kind == "projection_sync":
+                stale, unknown = _projection_counts(self.projection_records)
+                detail = f"{stale} stale"
+                if unknown:
+                    detail += f" · {unknown} unknown"
+                if not stale and not unknown:
+                    detail = "all tracked projects in sync"
+                lines.append((style, f"\n {marker} Projection Sync\n"))
+                lines.append(("class:muted", f"     {detail} · Claude/Codex vs installed CLI\n"))
             elif kind == "mode":
                 label = str(value).title()
                 detail = (
@@ -717,20 +773,31 @@ class TerminalUI:
                         fragments.append(("class:muted", "  "))
                 fragments.append(("", "\n"))
             fragments.append(("", "\n"))
-        review_index = next(
-            (index for index, (kind, _value) in enumerate(self.items) if kind == "fleet_review"),
-            None,
-        )
-        if review_index is not None:
-            selected = review_index == self.selected
+        utility_rows = [
+            (index, kind)
+            for index, (kind, _value) in enumerate(self.items)
+            if kind in {"projection_sync", "fleet_review"}
+        ]
+        for utility_index, kind in utility_rows:
+            selected = utility_index == self.selected
             if selected:
                 fragments.append(("[SetCursorPosition]", ""))
             marker = ">" if selected else " "
             style = "class:selected" if selected else "class:item"
-            fragments.append((style, f" {marker} Fleet Review\n"))
-            fragments.append(
-                ("class:muted", "   Compare remote shipped truth with local working state\n")
-            )
+            if kind == "projection_sync":
+                stale, unknown = _projection_counts(self.projection_records)
+                summary = f"{stale} stale"
+                if unknown:
+                    summary += f" · {unknown} unknown"
+                if not stale and not unknown:
+                    summary = "all tracked projects in sync"
+                fragments.append((style, f" {marker} Projection Sync\n"))
+                fragments.append(("class:muted", f"   {summary} · Claude/Codex vs installed CLI\n"))
+            else:
+                fragments.append((style, f" {marker} Fleet Review\n"))
+                fragments.append(
+                    ("class:muted", "   Compare remote shipped truth with local working state\n")
+                )
         return fragments
 
     def _account_summary_text(self) -> StyleAndTextTuples:
@@ -830,6 +897,56 @@ class TerminalUI:
             )
         except ValueError as exc:
             self.fleet_review_error = str(exc)
+
+    def _load_projection_sync(self) -> None:
+        """Retain the canonical per-project surface comparison for this frame."""
+        self.projection_records = [
+            (project, projection_sync.sync_state(project)) for project in self.projects
+        ]
+
+    def _projection_sync_body_text(self) -> StyleAndTextTuples:
+        stale, unknown = _projection_counts(self.projection_records)
+        fragments: StyleAndTextTuples = [
+            (
+                "class:muted",
+                "\n  Read-only comparison of each Claude and Codex projection with "
+                "the installed Horus CLI.\n",
+            ),
+            ("class:section", f"  {stale} stale · {unknown} unknown\n"),
+        ]
+        if not self.items:
+            fragments.append(("class:muted", "\n  No tracked projects.\n"))
+            return fragments
+        for index, (kind, value) in enumerate(self.items):
+            selected = index == self.selected
+            marker = ">" if selected else " "
+            style = "class:selected" if selected else "class:item"
+            if selected:
+                fragments.append(("[SetCursorPosition]", ""))
+            if kind == "projection_curator":
+                fragments.append((style, f"\n {marker} Start projection curator\n"))
+                fragments.append(
+                    (
+                        "class:muted",
+                        f"     Launch {Path(value).name} with a bounded, dirty-worktree-safe sync prompt\n",
+                    )
+                )
+                continue
+            if kind != "projection_project":
+                continue
+            project, state = value
+            verdict = str(state.get("verdict", "unknown"))
+            row_style = style if selected or verdict == "in_sync" else "class:warning"
+            fragments.append((row_style, f"\n {marker} {project.name} · {verdict.replace('_', ' ')}\n"))
+            fragments.append(
+                (
+                    "class:muted",
+                    "     "
+                    f"Claude {_projection_surface_text(state.get('claude'))} · "
+                    f"Codex {_projection_surface_text(state.get('codex'))}\n",
+                )
+            )
+        return fragments
 
     def _fleet_review_body_text(self) -> StyleAndTextTuples:
         if self.fleet_review_error:
@@ -963,6 +1080,13 @@ class TerminalUI:
                 else " ↑↓/swipe review   Enter start curator   Esc back   q quit"
             )
             return [("class:footer", text)]
+        if self.screen == "projection_sync":
+            text = (
+                " ↑↓ · Enter curator · u refresh · Esc"
+                if narrow
+                else " ↑↓/swipe review   Enter start curator   u refresh   Esc back   q quit"
+            )
+            return [("class:footer", text)]
         if self.screen in {"projects", "accounts"}:
             text = (
                 " ↑↓ · Enter · f fleet · u refresh · q"
@@ -1009,7 +1133,9 @@ def run() -> int:
             return 130
         if isinstance(result, _Launch):
             target = terminal_sessions.default_target()
-            if result.card is not None:
+            if result.prompt_override is not None:
+                prompt = result.prompt_override
+            elif result.card is not None:
                 prompt = _card_prompt(result.project, result.card)
             else:
                 prompt = routines.resume_prompt(result.project) if result.mode == "resume" else ""
@@ -1042,6 +1168,53 @@ def _projects() -> list[Path]:
         for raw in config.load_projects()
         if (root := Path(raw).resolve()).is_dir() and (root / ".horus").is_dir()
     ]
+
+
+def _projection_counts(records: list[tuple[Path, dict]]) -> tuple[int, int]:
+    """Return stale and unknown counts without treating unknown as actionable drift."""
+    unknown = sum(state.get("verdict") == "unknown" for _project, state in records)
+    stale = sum(
+        state.get("verdict") not in {"in_sync", "unknown"}
+        for _project, state in records
+    )
+    return stale, unknown
+
+
+def _projection_surface_text(value: object) -> str:
+    if not isinstance(value, dict):
+        return "unknown"
+    status = str(value.get("status", "unknown"))
+    pending = value.get("pending", 0)
+    return f"{status} ({pending} pending)" if pending else status
+
+
+def _projection_curator_prompt(records: list[tuple[Path, dict]]) -> str:
+    """Build a bounded handoff for the optional fleet curator workspace."""
+    drift = [
+        (project, state)
+        for project, state in records
+        if state.get("verdict") != "in_sync"
+    ]
+    rows = "\n".join(
+        f"- {project.name}: {state.get('verdict', 'unknown')} "
+        f"(Claude {_projection_surface_text(state.get('claude'))}; "
+        f"Codex {_projection_surface_text(state.get('codex'))})"
+        for project, state in drift
+    ) or "- none: all tracked projects currently report in_sync"
+    return (
+        "Resume Horus as the fleet projection curator. The installed CLI's read-only "
+        "projection report is:\n"
+        f"{rows}\n\n"
+        "For each actionable target separately: fetch --all --prune; verify its default "
+        "branch against origin; read its instructions and canonical Horus continuity; "
+        "confirm the local Horus version floor; and refresh only Horus-owned Claude/Codex "
+        "projection artifacts through that project's supported upgrade workflow. Preserve "
+        "all user work, use an isolated worktree when the registered checkout is dirty, and "
+        "land each project through its own branch and PR with required checks observed. Never "
+        "combine repositories, overwrite user-owned prose, or treat unknown/cli_outdated as "
+        "permission to write. Re-run the read-only projection report and stop when every "
+        "reachable actionable target is in_sync."
+    )
 
 
 _PRIORITY_RANK = {"now": 0, "next": 1, "high": 2, "medium": 3, "low": 4, "later": 5, "deferred": 6}

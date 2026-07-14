@@ -68,7 +68,11 @@ horus forget <path> | horus prune # manage the dashboard's project registry
 dashboard. It lists tracked projects and their next action, launches fresh or
 continuity-seeded Claude/Codex sessions under a selected account, and lists live
 sessions. The home screen shows cached account usage, each project's open sessions,
-and backlog/bug counts. A project's Backlog action lists open cards by priority; a
+backlog/bug counts, and a Projection Sync warning when a tracked project's Claude or
+Codex surface differs from the installed CLI. Projection Sync is read-only: its screen
+shows each surface independently and can launch the registered `horus-agent` curator
+with a bounded, dirty-worktree-safe repair prompt; it never mass-writes projects. A
+project's Backlog action lists open cards by priority; a
 card can seed a resumed session as its first task. Wide terminals arrange accounts
 and projects into columns; narrow terminals stack and wrap the same content. Swipe or
 use the mouse wheel/arrow keys to scroll the highlighted row;
