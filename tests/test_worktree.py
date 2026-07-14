@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from horus import worktree
-from horus.worktree import WorktreeError, ensure_worktree, branch_slug, worktree_path
+from horus.worktree import WorktreeError, ensure_worktree, branch_slug, worktree_path, primary_checkout, remove_if_merged
 
 
 def _git(root: Path, *args: str):
@@ -99,3 +99,84 @@ def test_surfaces_git_add_failure(tmp_path):
     repo = _init_repo(tmp_path / "repo")  # main worktree is on `main`
     with pytest.raises(WorktreeError, match="could not create worktree"):
         ensure_worktree(repo, "main")
+
+
+# --- primary_checkout: resolve a linked worktree back to the main checkout ----
+
+def test_primary_checkout_of_main_worktree_is_itself(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    assert primary_checkout(repo) == repo.resolve()
+
+
+def test_primary_checkout_of_linked_worktree_resolves_to_main(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    wt = ensure_worktree(repo, "probe-branch")
+    assert primary_checkout(wt.path) == repo.resolve()
+
+
+def test_primary_checkout_of_non_git_dir_returns_itself(tmp_path):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    assert primary_checkout(plain) == plain.resolve()
+
+
+# --- remove_if_merged: never destructive unless the branch looks merged -----
+
+def test_remove_if_merged_refuses_unmerged_branch(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    wt = ensure_worktree(repo, "probe-branch")
+    result = remove_if_merged(repo, wt.path)
+    assert result.removed is False
+    assert "does not look merged" in result.detail
+    assert wt.path.is_dir()  # left untouched
+
+
+def test_remove_if_merged_removes_when_upstream_gone(tmp_path):
+    """The `[gone]` upstream-track signal (GitHub deleted the branch post-merge,
+    the same signature `gitstate.git_state` already trusts) is enough on its
+    own, without needing a real remote."""
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True, capture_output=True, text=True)
+    repo = _init_repo(tmp_path / "repo")
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-u", "origin", "main")
+
+    wt = ensure_worktree(repo, "probe-branch")
+    _git(wt.path, "push", "-u", "origin", "probe-branch")
+    # Simulate GitHub deleting the remote branch after a merge.
+    _git(repo, "push", "origin", "--delete", "probe-branch")
+    _git(wt.path, "fetch", "--prune")
+
+    result = remove_if_merged(repo, wt.path)
+    assert result.removed is True
+    assert not wt.path.exists()
+    listing = _git(repo, "worktree", "list", "--porcelain").stdout
+    assert str(wt.path.resolve()) not in listing
+    branches = _git(repo, "branch", "--list").stdout
+    assert "probe-branch" not in branches
+
+
+def test_remove_if_merged_removes_when_ancestor_of_default(tmp_path):
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True, capture_output=True, text=True)
+    repo = _init_repo(tmp_path / "repo")
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-u", "origin", "main")
+
+    wt = ensure_worktree(repo, "probe-branch")
+    # Branch tip already IS the default branch's tip (an ancestor of it) —
+    # merged without needing to actually push/delete a remote ref.
+    _git(repo, "fetch", "origin")
+    _git(repo, "remote", "set-head", "origin", "-a")  # sets refs/remotes/origin/HEAD
+
+    result = remove_if_merged(repo, wt.path)
+    assert result.removed is True
+    assert not wt.path.exists()
+
+
+def test_remove_if_merged_missing_path_is_a_noop(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    missing = tmp_path / "not-there"
+    result = remove_if_merged(repo, missing)
+    assert result.removed is False
+    assert "does not exist" in result.detail
