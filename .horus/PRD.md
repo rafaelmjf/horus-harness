@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Boundary-based continuity is now the default: related inline deliveries can accumulate as portable git receipts, while dispatch/pause/release/end boundaries consolidate PRD, cards, and one campaign note; resume and TUI surface anything pending."
-next_action: "Ask the owner before claiming `datum-outcome-taxonomy-void-and-death`; if confirmed, add a truthful void/aborted path and keep operational deaths outside the quality denominator. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, verify CONTINUITY reports zero pending, read `.horus/backlog/datum-outcome-taxonomy-void-and-death.md`, and ask the owner to confirm proceeding. If confirmed, separate void/death lifecycle counts from clean|nudged|bounced quality calibration, branch → PR. [Sonnet scoped implementation, inline]"
-execution_recommendation: "continue-as-is — `datum-outcome-taxonomy-void-and-death` is a bounded data-model/rendering correction with a crisp denominator invariant and deterministic tests; it fits scoped Sonnet implementation without phased handoffs."
+current_focus: "v0.0.55 is published and deployed: the TUI exposes fleet Projection Sync with an optional safe curator launch, calibration separates quality from died/void outcomes, all six cleaned project projections match the release source, and the active backlog is empty."
+next_action: "Use Horus normally and let the next observed failure or repeated friction create a card; if Projection Sync later reports drift, launch the curator or run the target's supported upgrade workflow. Do not invent speculative work while the backlog is empty. [Sonnet owner triage, inline]"
+next_prompt: "Resume Horus from clean v0.0.55 main. Run `horus resume --preflight`; if the backlog remains empty, ask the owner for the next observed problem instead of manufacturing scope. Treat Projection Sync as read-only evidence and enter each target's branch→PR workflow before repairs. [Sonnet owner triage, inline]"
+execution_recommendation: "continue-as-is — the next boundary is low-volume owner prioritization or a concrete observed incident; there is no clear high-volume implementation unit for a phased handoff."
 last_updated: 2026-07-15
 horus_min_version: 0.0.26
 ---
@@ -36,11 +36,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-After machine readiness ships, three cards remain: datum taxonomy is next; two older cards are deferred.
-Deferred cards carry promotion conditions; retired/folded cards keep full history and rationale in `backlog/archive/`.
+No active cards after v0.0.55. Retired/deferred work remains preserved with restoration
+conditions in `backlog/archive/`; new work should start from observed use, not backlog refill.
 
 ## Shipped
 
+**Fleet Projection Sync cockpit** (2026-07-15, PR #240): TUI Home shows stale/unknown project counts, a dedicated screen renders each Claude/Codex surface against the canonical projection check, and the optional `horus-agent` curator launch carries a bounded fetch/isolated-worktree/branch→PR prompt without automatic writes.
+**Truthful datum quality denominator** (2026-07-15, PR #241): `void` closes aborted/untested runs, `died` and `void` remain separately visible, and only clean/nudged/bounced contribute to quality rates and recent quality outcomes; delegation rubric v4 consumes the corrected fields.
 **Boundary-based continuity granularity** (2026-07-15, PRs #238/#239): handoff boundaries are the default while delivery/manual remain selectable in TUI Defaults; git history provides portable pending-delivery receipts, strict project overrides still bind CI, per-turn Stop hooks no longer dirty session notes, dispatch pins/surfaces its base and pending state, resume/TUI warn until one campaign checkpoint consolidates PRD/cards/session context, and successful v3 acting-close output stays concise instead of replaying the retired six-lane ritual.
 **Project-declared machine readiness** (2026-07-14, PR #237): optional `.horus/requirements.md` tool/config probes are checked without command execution and rendered through one canonical result in doctor, resume prompts, dashboard badges/details, and TUI project views; the existing fabric declaration is the live first consumer.
 **Unambiguous acting-close verdict** (2026-07-14, PR #236): `close --commit [--push]` performs its checkpoint before rendering status, so successful output contains only recomputed clean findings while residual edits, failed pushes, and no-op failures still report their final actionable state.
@@ -70,7 +72,7 @@ Deferred cards carry promotion conditions; retired/folded cards keep full histor
 **GitHub bridge:** cached discovery; onboard/integrate policy; private-repo fallback; dedup/tracking/ignore; `horus start`.
 **Execution & adapters:** Fake/Claude/Codex adapters; multi-account launch; workflow handoffs; worker marking; hub orchestration.
 **Companion & launch:** Tk mascot; worker badges; owned windows; VS Code tasks; same-version `/health` adoption.
-**Distribution (current v0.0.54):** PyPI trusted publishing; three-OS install smoke; hosted pinned-install deployment; Apache-2.0.
+**Distribution (current v0.0.55):** PyPI trusted publishing; three-OS install smoke; hosted pinned-install deployment; Apache-2.0.
 
 ## Rules (load-bearing)
 
@@ -104,18 +106,8 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   ref via a temp `GIT_INDEX_FILE`, never touching the user's index/HEAD/worktree. Hook
   sentinels are machine-global under `/tmp` — probe session ids must be unique across
   supervisor/worker probes.
-- **Three OS targets** (Windows/Linux/macOS); projections move together across agent
-  surfaces (Claude + Codex), drift user-visible; sync compares each surface to the
-  installed CLI, never surfaces to each other.
-- **Every release:** cut promptly after meaningful merges; install smoke on all three
-  OSes; tests on the `requires-python` floor (uv provisions it — floor tracks uv, not
-  distro pythons). The bump is **three files together** — `pyproject.toml` +
-  `horus/__init__.py` + `uv.lock` — each missed once (0.0.15, 0.0.19-broken); rerun
-  the suite *after* the bump (the stale-build guard test catches a skew). Verify
-  publish→install E2E (PyPI JSON+simple index serve it, then a clean-venv install shows
-  it) — a green `publish.yml` alone bit back on v0.0.34. Hosted-version verification is
-  no longer a plain `/health` curl: the hosted dashboard now sits behind Cloudflare
-  Access — confirm the flip via Access-authenticated access or deploy-hook logs (v0.0.35).
+- **Three OS targets** (Windows/Linux/macOS); Claude/Codex projections move together and each compares with the CLI, never with its peer. Before release, project from prospective source (`uv run horus`) or repeat after install—the previous installed version can falsely look current. Fleet Projection Sync is read-only; curator launch never mass-writes targets.
+- **Every release:** bump `pyproject.toml` + `horus/__init__.py` + `uv.lock`, rerun tests, publish promptly, and prove PyPI JSON/simple-index plus a fresh install on all three OSes. The final release action is `scripts/deploy-hosted.sh`: exact refreshed install, service restart, `/health` version match, and `/` still 403 behind Access. A green publish job alone is insufficient.
 - **An outdated CLI must never silently regress `.horus/` structure.** Repos stamp
   `horus_min_version` (PRD frontmatter); two guards honor it — the managed-block
   Version-floor preflight (agent checks `horus --version`; the only guard that binds an
@@ -182,16 +174,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   the relaxation creep into the fleet-wide catalog. The TUI calls
   `generate_project` once on project-open and renders that returned payload;
   it never reads the generated file as a cache or maintains a parallel parser.
-- **Model-calibration data measures; the agent judges (empirical spine, 2026-07-11).**
-  `horus/datums.py` MEASURES and DISPLAYS — never a router/policy/spend engine (the
-  `research/omnigent.md` drift trigger). Measured datums (`~/.horus/datums.json`,
-  auto-captured by `horus run`) and hand-edited owner priors
-  (`~/.horus/capabilities.toml`) stay separate layers. `outcome`
-  (clean/nudged/bounced/died) is ALWAYS agent-supplied via `horus datum close`, never
-  auto-scored; `horus capabilities --models` and every future consumer emit DATA ONLY —
-  no model pick, no `--for` router, no auto-routed dispatch. Provider aliases normalize
-  to canonical model IDs before prior/datum joining; never render alias duplicates. Exit
-  (completed/crashed/usage-death) is the mechanical axis, orthogonal to quality.
+- **Model calibration measures; the agent judges.** Measured datums and hand-edited owner priors stay separate; `horus/datums.py` is never a router/policy/spend engine. Outcomes are agent-supplied: clean/nudged/bounced form quality, died/void are separate operational counts, and exit is an orthogonal mechanical axis. Every consumer emits data only—no pick, `--for`, or auto-dispatch—and aliases normalize before joins.
 - **Orchestration (proven 2026-07-04, contract in execution skill v8):** parallel features
   run orchestrator > supervisor > worker — worktree per worker; claude workers `full-auto`
   (default posture stalls headless); bounce = resume same session with the exact failure;
