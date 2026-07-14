@@ -47,6 +47,7 @@ from horus import (
     initialize,
     integration,
     launcher,
+    machine_requirements,
     markdown,
     offboard,
     overhead,
@@ -127,6 +128,7 @@ def load_project(path_str: str) -> dict[str, Any]:
         "history_body": "",
         "sessions": [],
         "findings": [],
+        "machine_requirements": None,
         "artifacts_stale": False,
         "artifacts_stale_count": 0,
         "projection_sync": {"verdict": "unknown"},
@@ -141,6 +143,8 @@ def load_project(path_str: str) -> dict[str, Any]:
     }
     if not hdir.is_dir():
         return data
+
+    data["machine_requirements"] = machine_requirements.inspect(root)
 
     # Focus/handoff fields via the shared PRD-first resolver (v3 PRD.md frontmatter
     # wins per-field; v2 project.md/roadmap.md shims otherwise).
@@ -227,7 +231,11 @@ def load_project(path_str: str) -> dict[str, Any]:
 
     data["findings"] = [
         {"level": f.level, "message": f.message}
-        for f in check_project(root) + codex_usage.usage_findings(root)
+        for f in (
+            check_project(root)
+            + machine_requirements.findings(data["machine_requirements"])
+            + codex_usage.usage_findings(root)
+        )
     ]
 
     try:
@@ -1161,6 +1169,36 @@ def _health_dot(p: dict[str, Any]) -> str:
     return "<span class='health-dot'><i></i>healthy</span>"
 
 
+def _machine_readiness_badge_html(p: dict[str, Any]) -> str:
+    report = p.get("machine_requirements")
+    if not isinstance(report, machine_requirements.Report) or not report.declared:
+        return ""
+    if report.ready:
+        return "<span class='badge'><span class='gd'></span>machine ready</span>"
+    if report.missing:
+        count = len(report.missing)
+        noun = "requirement" if count == 1 else "requirements"
+        label = f"{count} machine {noun} missing"
+    else:
+        label = "machine requirements invalid"
+    return f"<span class='badge warn'><span class='gd'></span>&#9888; {label}</span>"
+
+
+def _machine_readiness_panel_html(p: dict[str, Any]) -> str:
+    report = p.get("machine_requirements")
+    if not isinstance(report, machine_requirements.Report):
+        return ""
+    warning = machine_requirements.warning_text(report)
+    if not warning:
+        return ""
+    rendered = "<br>".join(html.escape(line) for line in warning.splitlines())
+    return (
+        "<div class='panel'><div class='ph'><span class='eyebrow'>Machine readiness</span>"
+        "<span class='x mono'>.horus/requirements.md</span></div>"
+        f"<p class='lead' style='font-size:13.5px'>{rendered}</p></div>"
+    )
+
+
 def _eye_glyph(filled: bool = True) -> str:
     pupil = "<circle cx='25' cy='18.5' r='5.5' fill='currentColor'/>" if filled else ""
     return (
@@ -1652,6 +1690,9 @@ def _project_column(p: dict[str, Any], i: int, aliases: list[dict[str, Any]] | N
         warns = len([f for f in p["findings"] if f.get("level") in ("warn", "fail")])
         if warns:
             status_badges.append(f"<span class='badge warn'><span class='gd'></span>{warns} warnings</span>")
+    readiness_badge = _machine_readiness_badge_html(p)
+    if readiness_badge:
+        status_badges.append(readiness_badge)
     latest = p.get("latest")
     if latest:
         summary = html.escape(latest.get("summary") or _session_summary_excerpt(p.get("latest_body", "")) or "(no summary)")
@@ -2410,6 +2451,7 @@ def render_project(
         f"<span class='badge'><b class='mono'>{len(p['sessions'])}</b>&nbsp;sessions</span>"
         f"{_projection_sync_badge_html(p)}"
         f"{_prd_line_budget_html(prd)}"
+        f"{_machine_readiness_badge_html(p)}"
     )
     refresh = _upgrade_button(idx) if p.get("artifacts_stale") and index is not None else ""
     aliases = [{"alias": a} for a in sorted(_known_aliases())]
@@ -2424,6 +2466,9 @@ def render_project(
         f"<span class='x mono'>.horus/{next_source}</span></div>"
         f"{_single_next_html(p)}{roadmap_progress}</div>",
     ]
+    readiness_panel = _machine_readiness_panel_html(p)
+    if readiness_panel:
+        main_parts.insert(0, readiness_panel)
     if prd:
         main_parts.append(_prd_backlog_panel_html(prd))
         main_parts.append(_prd_shipped_panel_html(prd))

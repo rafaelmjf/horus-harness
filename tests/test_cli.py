@@ -151,6 +151,33 @@ def test_version_floor_allows_when_met(tmp_path, monkeypatch):
     assert main(["session", "new", "X", "--path", str(tmp_path)]) == 0
 
 
+def test_doctor_project_warns_for_missing_declared_machine_requirement(
+    tmp_path, monkeypatch, capsys
+):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills", "--no-hooks"])
+    (tmp_path / ".horus" / "requirements.md").write_text(
+        """---
+kind: machine-requirements
+tools:
+  - name: Definitely absent CLI
+    probe: horus-definitely-absent-cli
+    install: install the project CLI
+    needed_for: project builds
+configs: []
+---
+""",
+        encoding="utf-8",
+    )
+    capsys.readouterr()
+
+    assert main(["doctor", "project", "--path", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "machine requirement missing: Definitely absent CLI" in out
+    assert "needed for project builds" in out
+    assert "install: install the project CLI" in out
+
+
 def test_focus_running_session_calls_raiser(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     Registry.default().upsert(SessionRecord(

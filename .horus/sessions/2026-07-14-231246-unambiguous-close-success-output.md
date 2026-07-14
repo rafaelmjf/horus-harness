@@ -36,3 +36,8 @@ tree before its own mutation.
 ## Checkpoints (auto-harvested)
 
 - `4d56b56` fix: report final close state after checkpoint
+
+- `715fec9` fix: report final close state after checkpoint (#236)
+  * fix: report final close state after checkpoint
+  * Update Horus continuity (closure)
+  * Update Horus continuity (closure)

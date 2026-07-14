@@ -12,7 +12,7 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
-from horus import backlog, frontmatter, roadmap, templates
+from horus import backlog, frontmatter, machine_requirements, roadmap, templates
 from horus.continuity import (
     HORUS_DIR,
     RECOMMENDED_FILES,
@@ -180,6 +180,7 @@ def resume_prompt(root: Path) -> str:
     if not horus_dir(root).is_dir():
         return ""
     info = resume_context(root)
+    readiness_warning = machine_requirements.warning_text(machine_requirements.inspect(root))
     project = info["project"]
     current_focus = info["current_focus"] or "(not set)"
     next_action = info["next_action"] or "(not set)"
@@ -201,7 +202,7 @@ def resume_prompt(root: Path) -> str:
 - Read `.horus/features.md`, `.horus/decisions.md`, and `.horus/history.md` only when shipped capability status, durable rules, or prior lessons matter.
 - Read the latest `.horus/sessions/` summary only if local-only details from the previous session are needed."""
 
-    return f"""Resume the {project} project.
+    prompt = f"""Resume the {project} project.
 
 Before trusting local state:
 1. Run `git fetch --all --prune`.
@@ -219,6 +220,7 @@ Minimum Horus state already loaded:
 Continue with this authored handoff:
 {continuation}
 """
+    return f"{readiness_warning}\n\n{prompt}" if readiness_warning else prompt
 
 
 # --------------------------------------------------------------------------- #

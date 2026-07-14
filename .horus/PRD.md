@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Acting closure now reports only its recomputed post-commit/post-push findings: a successful checkpoint names what happened and ends cleanly, while residual edits or push failures still produce the final warnings and action-needed verdict."
-next_action: "Ask the owner before claiming `project-machine-requirements`; if confirmed, implement one committed requirements parser feeding doctor, resume, and dashboard readiness without duplicating probes. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, read `.horus/backlog/project-machine-requirements.md`, and ask the owner to confirm proceeding. If confirmed, scope the shared read-only requirements primitive and its doctor/resume/dashboard consumers, then branch → PR. [Sonnet scoped implementation, inline]"
-execution_recommendation: "continue-as-is — `project-machine-requirements` spans three consumers but has a bounded committed schema, one shared read-only parser/probe path, and deterministic tests; it fits a scoped Sonnet implementation without phased handoffs."
+current_focus: "Project-declared machine readiness now has one safe read-only parser/probe result rendered by doctor, resume, dashboard, and TUI; the first real fabric declaration is the remaining acceptance step."
+next_action: "Add fabric's committed `.horus/requirements.md` for `fab`/`pbir` plus prose-only PBI access, verify all four Horus consumers against it, then finish the harness PR. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume the `project-machine-requirements` delivery from `feat/project-machine-requirements`: fetch both repos, read the harness card and fabric continuity, add the first fabric declaration without executable probes, verify doctor/resume/dashboard/TUI, then finish branch → PR closure. [Sonnet scoped implementation, inline]"
+execution_recommendation: "continue-as-is — the shared implementation is complete; the remaining fabric declaration is a small cross-repo data file with deterministic read-only probes, so phased handoffs add no value."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -80,6 +80,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Continuity must beat re-derivation.** Every capability must give a fresh session something CLAUDE.md + git log cannot, at lower cost. PRD.md is state, not behavior; behavioral text belongs in the managed block, and Rules holds only project-specific invariants earned by failure.
 - **Closure reaches the remote, fetch-first and self-reference-free** — `close --commit --push`; refuse newer remote continuity, seal the closing SHA without appending it into its own note, and refuse to push residual dirty continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
 - **Acting closure reports the final state only.** `close --commit [--push]` keeps pre-action dirtiness internal, renders the recomputed complete findings after its mutation, and still fails visibly on residual edits or an unpushed checkpoint.
+- **Committed machine probes are data, never commands.** `.horus/requirements.md` tool probes are executable-name lookups and config probes are path-existence checks; doctor, resume, dashboard, and TUI render the same shared result, while non-probeable access stays prose.
 - **One fetch-first primitive, reused.** `fetchcheck.fetch_and_state` (TTL-cached, read-only fetch, never pull) serves SessionStart and `status`/`fleet` gone-branch/staleness signals; no consumer reinvents it.
 - **Fleet review names its truth layers.** Manifests contain repository identity/lifecycle only; fetched `origin/<default>` PRD/cards are REMOTE SHIPPED TRUTH, checkout/session/dirty state is LOCAL WORKING STATE, and neither is blended or pulled. GitHub fallback is read-only; unavailable/unstructured data is labelled, never guessed.
 - **Resume preflight only projects deterministic data.** Its sole sanctioned side effect is the explicit fetch refresh; session liveness is projected without registry reconciliation, usage snapshots carry unmistakable freshness tags, and no output recommends or selects a model/account.
