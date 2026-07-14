@@ -1,6 +1,6 @@
 ---
 title: "Datum supervisor-cost envelope + one-act acceptance (frozen schema)"
-status: done
+status: shipped
 priority: now
 tier: sonnet
 parallel: safe
@@ -9,6 +9,8 @@ surface: horus/datums.py, horus/cli.py, launch/completion capture (launcher/deli
 created: 2026-07-14
 created_by: overseer
 shipped: 2026-07-14
+shipped_pr: 218
+shipped_sha: 8dbb59918911e8af52ca0b83bbdb9af20ad104b9
 ---
 
 # Datum supervisor-cost envelope + one-act acceptance [frozen schema — implement as specified]
