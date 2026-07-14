@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Friendly backlog-card editing shipped in PR #219 at `b6f75ea`: Unix prefers nano when VISUAL/EDITOR are unset (vi remains last fallback), prints editor-specific save/return guidance, and scaffolds ignore editor swap files. Local 1367-test gate + live nano PTY probe passed; PR and merge-SHA CI passed on Python 3.12/3.13. Owner runtime eyeball awaits the next install/release."
-next_action: "Resume `tui-capabilities-screen`: add Capabilities on the TUI project screen, the project vision line, and a staleness hint as a thin renderer over capabilities.generate_project. Then cut the pending release, deploy hosted, and owner-eyeball backlog-card `e` with the installed build. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus. Fetch first. Claim and implement `.horus/backlog/tui-capabilities-screen.md` as a thin TUI renderer over capabilities.generate_project (no second data path), branch → PR. Then perform the owed three-file release bump, publish→install E2E, deploy-hosted.sh, and ask the owner to verify backlog-card `e` opens nano with visible return guidance."
-execution_recommendation: "continue-as-is — `tui-capabilities-screen` is bounded rendering over an existing read-only module with no design ambiguity, suited to inline sonnet-5 (26/29 clean datums); dispatch overhead would exceed the scoped change."
+current_focus: "Release v0.0.53 is open as PR #220 at `66827f8`: pyproject.toml, horus/__init__.py, and uv.lock agree; the built package reports 0.0.53; the required post-bump suite is green (1367 tests). It packages PRs #218/#219, including the friendly backlog-card editor handoff."
+next_action: "Observe PR #220 CI on its final head and merge; observe merge-SHA CI, tag/release v0.0.53, verify PyPI JSON + simple index + clean-venv install, then run scripts/deploy-hosted.sh last and verify hosted /health version + root 403. [Haiku-scale mechanical release, inline]"
+next_prompt: "Resume Horus release v0.0.53. Fetch first; PR #220 is the three-file bump. Observe required CI on its final head, merge and watch merge-SHA CI, then tag + publish the GitHub release. Verify PyPI JSON/simple index and a clean Python 3.12 install before running scripts/deploy-hosted.sh as the final release step."
+execution_recommendation: "continue-as-is — release v0.0.53 is a bounded mechanical sequence already past its local gate; delegation would add more brief/review/acceptance overhead than it saves. Verification is the post-bump suite, exact-SHA CI, publish→clean-install E2E, and hosted health/gate probe."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
