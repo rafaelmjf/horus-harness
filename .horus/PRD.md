@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "PR #217 (backlog card reviews: append-only `## Reviews` convention + `horus backlog review` + TUI e/r edit keys with offered fetch-first commit+push; also gitignores backlog/.claim.lock) open with CI green, awaiting owner live verification + merge. Release cut still pending and should include it."
-next_action: "Owner verifies PR #217 live (edit + review a card from `horus tui`, confirm commit+push lands) and merges; then cut the release: three-file version bump + install-smoke CI on all three OS + hosted deploy. [Haiku mechanical once #217 lands]"
-next_prompt: "Resume Horus. Fetch first. If PR #217 is merged, ship-stamp is not needed (no card backs it) — proceed to the release cut: three-files-together bump, verify publish→install E2E, then run deploy-hosted.sh. Do not merge PRs yourself."
-execution_recommendation: "continue-as-is — remaining steps are owner verification and a mechanical release cut, no ambiguity."
+current_focus: "PR #217 (backlog card reviews + TUI e/r edit keys + claim.lock gitignore) merged at ca10482. Owner-directed next: the `tui-capabilities-screen` backlog card (priority high). Release cut still pending — it should ship #217 and, if quick, the capabilities screen together."
+next_action: "Implement the `tui-capabilities-screen` card: Capabilities item on the TUI project screen + vision line on project open + staleness hint, thin renderer over capabilities.generate_project. Then the release cut. [Sonnet implementation, inline]"
+next_prompt: "Resume Horus. Fetch first. Claim and work `.horus/backlog/tui-capabilities-screen.md` (read the full card first; keep the TUI a thin wrapper over the existing capabilities module — no second data path). Branch → PR. Afterwards the release cut is still owed: three-files-together bump, publish→install E2E, deploy-hosted.sh."
+execution_recommendation: "continue-as-is — bounded rendering feature over an existing read-only module, no design ambiguity; inline Sonnet-tier work."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -51,6 +51,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Backlog card reviews + TUI edit keys** (2026-07-14, PR #217): append-only `## Reviews` card section + `horus backlog review` (agents pass `--source agent`); TUI `e`/`r` open $EDITOR with offered fetch-first commit+push; hygiene scan skips Reviews; `backlog/.claim.lock` gitignored + untracked on upgrade.
 **Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215): session-scoped mouse fixes wheel-scroll recall; `d`-key Defaults screen persists launch posture. v0.0.52 attach gate PASS (owner-verified): web-launched session attached from Termius/`horus tui`, detach/reattach clean.
 **Guarded tmux orphan-reaper** (2026-07-13, PR #214): `reap_orphans()` kills only on positive confirmation (matching registry + terminal status + idle grace).
 **Unified terminal project cockpit** (PRs #195–#213, v0.0.46–0.0.52): responsive phone/desktop TUI with KPIs, scrolling, unified Resume/Fresh, backlog-card resume, live-session controls; managed tmux attachment across viewers; graceful fallbacks.

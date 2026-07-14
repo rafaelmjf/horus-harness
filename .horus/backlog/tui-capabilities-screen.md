@@ -1,6 +1,6 @@
 ---
 status: open
-priority: next
+priority: high
 tier: sonnet
 created: 2026-07-14
 type: feature
