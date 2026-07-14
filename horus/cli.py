@@ -1558,18 +1558,15 @@ def cmd_close(args: argparse.Namespace) -> int:
         return 0 if healthy else 1
 
     print(f"Closure check: {root}\n")
+    if args.commit:
+        _, detail = closure.commit_continuity(root, args.message, push=args.push)
+        print(f"\n--commit: {detail}")
+        # Acting close reports only the state after its own mutation. Printing
+        # pre-commit dirty warnings and then ending in success made a healthy
+        # checkpoint look unresolved. Recomputing remains essential: it catches
+        # residual hook edits, failed pushes, and unsuccessful/no-op commits.
     findings = closure.closure_status(root, usage_threshold=args.usage_threshold)
     healthy = _print_findings(findings)
-
-    if args.commit:
-        did, detail = closure.commit_continuity(root, args.message, push=args.push)
-        print(f"\n--commit: {detail}")
-        if did:
-            # Re-run the complete signal set after the commit. Filtering the
-            # pre-commit findings can bless a residual hook edit (or a failed
-            # push) because those facts did not exist when `findings` was built.
-            post_commit = closure.closure_status(root, usage_threshold=args.usage_threshold)
-            healthy = not any(f.level in ("warn", "fail") for f in post_commit)
 
     print("\n" + templates.CLOSURE_PROMPT)
     if healthy:

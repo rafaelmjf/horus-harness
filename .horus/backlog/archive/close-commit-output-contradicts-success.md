@@ -1,6 +1,6 @@
 ---
 title: "[bug] close --commit --push reports stale action after succeeding"
-status: open
+status: shipped
 priority: medium
 tier: sonnet
 parallel: safe
@@ -11,6 +11,8 @@ surface:
 created: 2026-07-13
 created_by: overseer
 migrated_from: rafaelmjf/horus-agent
+shipped_pr: 236
+shipped_sha: 4d56b56
 ---
 
 # close --commit --push reports stale action after succeeding
