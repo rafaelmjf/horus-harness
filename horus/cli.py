@@ -44,6 +44,7 @@ from horus import (
     reinstall,
     remote_start,
     rescue,
+    resume_preflight,
     routines,
     runlog,
     skills,
@@ -592,6 +593,28 @@ def cmd_start(args: argparse.Namespace) -> int:
 
 def cmd_resume(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
+    if getattr(args, "preflight", False):
+        fleet_mode = getattr(args, "fleet", False)
+        roots = [Path(path) for path in config.load_projects()] if fleet_mode else [root]
+        if not roots:
+            print("No Horus projects found for the requested preflight.")
+            return 1
+        if not fleet_mode and not (root / HORUS_DIR).is_dir():
+            print(f"No {HORUS_DIR}/ here (run `horus init` first).")
+            return 1
+        digest = resume_preflight.gather(
+            roots,
+            installed=__version__,
+            do_fetch=not getattr(args, "no_fetch", False),
+            mode="fleet" if fleet_mode else "project",
+        )
+        print(
+            resume_preflight.render_json(digest)
+            if getattr(args, "stdout", False)
+            else resume_preflight.render_text(digest),
+            end="",
+        )
+        return 0
     if not (root / HORUS_DIR).is_dir():
         print(f"No {HORUS_DIR}/ here (run `horus init` first).")
         return 1
@@ -3039,6 +3062,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_resume = sub.add_parser("resume", help="print the minimum-context fresh-session handoff for this project")
     p_resume.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_resume.add_argument("--preflight", action="store_true", help="print the compact deterministic session-start digest")
+    p_resume.add_argument("--fleet", action="store_true", help="with --preflight: include every registered project")
+    p_resume.add_argument("--no-fetch", action="store_true", help="with --preflight: skip the sanctioned git fetch refresh")
+    p_resume.add_argument("--stdout", action="store_true", help="with --preflight: print JSON for tooling")
     p_resume.set_defaults(func=cmd_resume)
 
     p_session = sub.add_parser("session", help="create a new session summary from the template")

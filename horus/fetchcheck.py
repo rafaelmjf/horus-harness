@@ -71,7 +71,9 @@ def fetch_and_state(root: Path, *, ttl: float = TTL_SECONDS) -> dict[str, Any] |
     state = gitstate.git_state(root)
     if state is None:
         return None
+    state = dict(state)
     if state["remote_url"] is None:
+        state["fetch_status"] = "not-needed"
         return state  # no remote — nothing to be behind of
 
     key = str(root.resolve())
@@ -84,6 +86,12 @@ def fetch_and_state(root: Path, *, ttl: float = TTL_SECONDS) -> dict[str, Any] |
         cache[key] = {"at": now, "ok": ok}
         _save_cache(cache)
         state = gitstate.git_state(root)  # re-read refs the fetch just moved
+        if state is None:
+            return None
+        state = dict(state)
+        state["fetch_status"] = "ok" if ok else "failed"
+    else:
+        state["fetch_status"] = "cached-ok" if entry.get("ok") else "cached-failed"
     return state
 
 
