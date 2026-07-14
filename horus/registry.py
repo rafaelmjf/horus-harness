@@ -202,6 +202,30 @@ class Registry:
         self.reconcile()
         return [SessionRecord(**row) for row in self._load().values()]
 
+    def snapshot(self) -> list[SessionRecord]:
+        """Read-only liveness projection of every tracked session.
+
+        Unlike :meth:`all`, this never reconciles the registry on disk.  A resume
+        preflight is a projection, so even correcting a dead ``running`` row would
+        violate its read-only contract.  The returned copies still surface the
+        status that reconciliation *would* record (terminal result or dead PID).
+        """
+        records: list[SessionRecord] = []
+        for stored in self._load().values():
+            row = dict(stored)
+            row["updated_at"] = _aware_utc_iso(row.get("updated_at"))
+            if row.get("status") not in TERMINAL:
+                session_id = str(row.get("session_id", ""))
+                result = _jsonl_result(session_id) or _legacy_log_result(session_id)
+                if result is not None:
+                    row["status"] = result.status
+                    if result.returncode is not None:
+                        row["returncode"] = result.returncode
+                elif not process_alive(row.get("pid")):
+                    row["status"] = "stale"
+            records.append(SessionRecord(**row))
+        return records
+
     def get(self, session_id: str) -> SessionRecord | None:
         self.reconcile()
         row = self._load().get(session_id)

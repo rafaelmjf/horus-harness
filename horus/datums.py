@@ -214,7 +214,11 @@ def looks_like_usage_death(error_text: str | None) -> bool:
 
 
 def capture_usage_snapshot(
-    agent: str | None, account: str | None, *, since: str | None = None
+    agent: str | None,
+    account: str | None,
+    *,
+    since: str | None = None,
+    persist_cache: bool = True,
 ) -> dict[str, dict]:
     """Best-effort snapshot of every readable usage surface (claude, codex).
 
@@ -236,10 +240,18 @@ def capture_usage_snapshot(
     catch: a cached rate-limit snapshot that predates this run entirely (Codex
     only refreshes its usage cache when Codex itself runs a turn) reads
     ``stale``, not ``fresh``, even though the read itself succeeded.
+
+    ``persist_cache=False`` keeps projections such as resume preflight strictly
+    read-only: Claude is read live without updating the shared usage cache. Datum
+    capture keeps the default ``True`` so its existing hot-path cache behavior is
+    unchanged.
     """
     try:
         return {
-            "claude": _claude_usage_entry(account if agent == "claude" else None),
+            "claude": _claude_usage_entry(
+                account if agent == "claude" else None,
+                persist_cache=persist_cache,
+            ),
             "codex": _codex_usage_entry(account if agent == "codex" else None, since=since),
         }
     except Exception:  # noqa: BLE001 (best-effort: never blocks the launch/close it's attached to)
@@ -250,12 +262,16 @@ def capture_usage_snapshot(
         }
 
 
-def _claude_usage_entry(account: str | None) -> dict:
+def _claude_usage_entry(account: str | None, *, persist_cache: bool = True) -> dict:
     from horus import usage_snapshot
 
     read_at = _now_iso()
     try:
-        snap = usage_snapshot.cached_usage("claude", account)
+        snap = (
+            usage_snapshot.cached_usage("claude", account)
+            if persist_cache
+            else usage_snapshot._read_live("claude", account, timeout=usage_snapshot.FETCH_TIMEOUT)
+        )
     except Exception:  # noqa: BLE001 (best-effort read; any failure -> unavailable)
         snap = None
     if snap is None or (snap.percent is None and snap.weekly_percent is None):
@@ -287,6 +303,9 @@ def _codex_usage_entry(account: str | None, *, since: str | None) -> dict:
     entry: dict = {"read_at": read_at, "pct_context": report.context_percent}
     if report.primary_percent is not None:
         entry["pct_5h"] = report.primary_percent
+    secondary_percent = getattr(report, "secondary_percent", None)
+    if secondary_percent is not None:
+        entry["pct_weekly"] = secondary_percent
     now = time.time()
     reset_expired = report.primary_resets_at is not None and report.primary_resets_at <= now
     predates_run = False

@@ -1,6 +1,6 @@
 ---
 title: "One-verb resume preflight: bundle the session-start ritual into a model-ready digest"
-status: open
+status: claimed
 priority: high
 tier: sonnet
 parallel: safe
