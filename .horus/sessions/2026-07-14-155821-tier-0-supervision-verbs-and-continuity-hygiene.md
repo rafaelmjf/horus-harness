@@ -109,3 +109,50 @@ loop this verb exists to replace.
 - `close-self-referential-sha-dirty-tree.md` is open and unclaimed — a good
   small follow-up (medium priority) whenever `horus close`/`closure.py` gets
   touched next.
+
+## Checkpoints (auto-harvested)
+
+- `a141f99` Add tier-0 supervision verbs: merge-watch, reinstall --verify, card-close worktree fix
+  Three one-shot CLI verbs that absorb the cockpit's mechanical polling/reinstall
+  tail without a daemon/watcher/router:
+  - `horus merge-watch <sha|pr>`: polls required checks on the exact pinned sha
+    until they settle, one line per state change (not a CI-log tail); exits 0
+    green / 1 red / 1 timeout. Warns (never re-targets) if a watched PR's head
+    moves mid-poll.
+  - `horus reinstall <path> --verify <marker>`: `uv cache clean` + force-reinstall
+    from a local path, then greps the freshly-installed on-disk surface (not this
+    process's already-imported modules) for `marker`; surfaces a still-active
+    known systemd service as a restart nudge.
+  - `horus datum close --card` now resolves the delivered card against the
+    PRIMARY git checkout (via the new `worktree.primary_checkout`, which reads
+    `git worktree list --porcelain`'s guaranteed main-worktree-first ordering),
+    not the datum's own `project` path — which is the WORKTREE path when the run
+    used `--worktree`. `--remove-worktree` optionally cleans up that worktree +
+    branch in the same act, but only when the branch looks merged (`[gone]`
+    upstream, or an ancestor of the fetched default branch) — never destructive
+    by default.
+  All three verified live on this machine: merge-watch against real PR #220
+  (all three required checks resolved green); reinstall --verify against a real
+  marker (found in the freshly reinstalled tool env, systemd note surfaced
+  correctly); a real `--worktree` run closed with `--card --remove-worktree`
+  stamped the card in the primary checkout and left the worktree/branch removed.
+- `84c3b48` Continuity hygiene: archive folded card, note PR #171 scope, file close-guard bug
+  - Archive `mobile-terminal-legibility.md` to `.horus/backlog/archive/` — it was
+    folded into `mobile-terminal-ux-hardening` (shipped PR #171) and its own
+    banner says not to action it standalone.
+  - `mobile-terminal-interaction-regression.md`: checked against PR #171 and
+    confirmed it did NOT resolve this card — the PR's own body scopes symptom 2
+    (this card's mobile-no-input bug) explicitly out of scope. Left `in-progress`
+    with the finding recorded, not blind-archived.
+  - File `close-self-referential-sha-dirty-tree.md`: a real close/consolidate gap
+    diagnosed from the cockpit — a step appended a bullet naming its OWN closing
+    commit's SHA (50a7548) into the session note that commit closes, which can
+    never itself be committed (the SHA doesn't exist until after the commit), and
+    `horus close --commit` never re-checks the tree is clean afterward. Proposes
+    a structural fix + a post-commit clean-tree guard.
+  - Records the above bullet properly (its content was accurate; the gap is
+    procedural) so this session note stays complete, resolving the stray
+    uncommitted edit item A/B surfaced this bug.
+- `8a3b442` Merge pull request #221 from rafaelmjf/feat/tier0-supervision-verbs
+  Tier-0 supervision verbs: merge-watch, reinstall --verify, card-close worktree fix
+- `37b3eef` Update Horus continuity (closure)
