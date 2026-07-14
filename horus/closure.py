@@ -96,6 +96,59 @@ def freshness_gate(root: Path) -> list[Finding]:
     return routines.freshness_signals(root) + backlog.hygiene_findings(root)
 
 
+def pr_diff_freshness(root: Path, base_ref: str) -> list[Finding]:
+    """Require a PR with product/source changes to update canonical continuity.
+
+    This is the server-side counterpart to the local merge fast-feedback hook:
+    GitHub auto-merge cannot bypass a required check.  The comparison is made
+    against the fetched base ref and never mutates the checkout.
+    """
+    changed_text = _git(root, "diff", "--name-only", f"{base_ref}...HEAD")
+    if changed_text is None:
+        return [Finding("fail", f"cannot compare this PR with base ref {base_ref!r}")]
+    changed = [line.strip().replace("\\", "/") for line in changed_text.splitlines() if line.strip()]
+    if not changed:
+        return [Finding("ok", f"no changes relative to {base_ref}")]
+
+    def is_continuity(path: str) -> bool:
+        return (
+            path == ".horus"
+            or path.startswith(".horus/")
+            or path in {"AGENTS.md", "CLAUDE.md", ".claude/settings.json", ".codex/hooks.json"}
+            or path.startswith(".claude/skills/")
+            or path.startswith(".agents/skills/")
+        )
+
+    work = [path for path in changed if not is_continuity(path)]
+    if not work:
+        return [Finding("ok", "PR changes continuity only")]
+
+    if frontmatter.has_prd(root):
+        homes = {".horus/PRD.md"}
+        label = ".horus/PRD.md"
+    else:
+        homes = {".horus/project.md", ".horus/roadmap.md", ".horus/features.md"}
+        label = ".horus/{project,roadmap,features}.md"
+    updated = sorted(homes.intersection(changed))
+    if not updated:
+        sample = ", ".join(work[:3])
+        suffix = f" (+{len(work) - 3} more)" if len(work) > 3 else ""
+        return [Finding(
+            "fail",
+            f"PR changes product/source files ({sample}{suffix}) but does not update "
+            f"{label}; close continuity before merging",
+        )]
+    return [Finding(
+        "ok",
+        f"PR product/source changes include canonical continuity ({', '.join(updated)})",
+    )]
+
+
+def pr_freshness_gate(root: Path, base_ref: str) -> list[Finding]:
+    """Dashboard/card freshness plus the PR-diff continuity invariant."""
+    return freshness_gate(root) + pr_diff_freshness(root, base_ref)
+
+
 def _parse_frontmatter_date(value: object) -> date | None:
     """Coerce a frontmatter `last_updated`/`date` value to a date, tolerantly —
     a local twin of `routines._as_date` (same lenient ISO-prefix parse) so this

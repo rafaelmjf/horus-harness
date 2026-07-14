@@ -32,6 +32,47 @@ def test_is_git_repo(tmp_path, monkeypatch):
     assert closure.is_git_repo(tmp_path)
 
 
+def test_pr_diff_freshness_requires_prd_for_product_changes(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    base = subprocess.run(
+        ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    (tmp_path / "feature.py").write_text("SHIPPED = True\n", encoding="utf-8")
+    _run(tmp_path, "add", "feature.py")
+    _run(tmp_path, "commit", "-m", "source only")
+    findings = closure.pr_diff_freshness(tmp_path, base)
+    assert findings[0].level == "fail"
+    assert "does not update .horus/PRD.md" in findings[0].message
+
+    prd = tmp_path / ".horus" / "PRD.md"
+    prd.write_text(prd.read_text(encoding="utf-8") + "\n<!-- closed -->\n", encoding="utf-8")
+    _run(tmp_path, "add", ".horus/PRD.md")
+    _run(tmp_path, "commit", "-m", "close continuity")
+    findings = closure.pr_diff_freshness(tmp_path, base)
+    assert findings[0].level == "ok"
+    assert "canonical continuity" in findings[0].message
+
+
+def test_pr_diff_freshness_allows_continuity_only_and_fails_unknown_base(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    base = subprocess.run(
+        ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    card = tmp_path / ".horus" / "backlog" / "finding.md"
+    card.write_text("---\nstatus: open\n---\n", encoding="utf-8")
+    _run(tmp_path, "add", ".horus/backlog/finding.md")
+    _run(tmp_path, "commit", "-m", "continuity only")
+    assert closure.pr_diff_freshness(tmp_path, base)[0].level == "ok"
+    assert closure.pr_diff_freshness(tmp_path, "missing/ref")[0].level == "fail"
+
+
 def test_clean_after_commit(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
     assert any("continuity files committed" in m for m in _msgs(tmp_path))

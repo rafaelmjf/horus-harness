@@ -1,6 +1,6 @@
 ---
 title: "[bug] Server-side auto-merge bypasses the continuity freshness gate"
-status: open
+status: shipped
 priority: high
 tier: sonnet
 parallel: safe
@@ -11,6 +11,8 @@ surface:
 created: 2026-07-12
 created_by: overseer
 migrated_from: rafaelmjf/horus-agent
+shipped_pr: 233
+shipped_sha: ad7f40eef47353aa148d1808fc405d5d10bd0aba
 ---
 
 # Server-side auto-merge bypasses the continuity freshness gate
