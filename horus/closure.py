@@ -303,6 +303,16 @@ def remote_lane_divergence(root: Path) -> int:
     return len([line for line in out.splitlines() if line.strip()])
 
 
+def continuity_dirty(root: Path) -> bool:
+    """Whether any continuity file has uncommitted changes (staged or not)."""
+    if not is_git_repo(root):
+        return False
+    present = [p for p in _CONTINUITY_PATHSPEC if (root / p).exists()]
+    if not present:
+        return False
+    return bool(_git(root, "status", "--porcelain", "--", *present))
+
+
 def commit_continuity(root: Path, message: str | None = None, *, push: bool = False) -> tuple[bool, str]:
     """Stage and commit the continuity files. Returns (did_commit, detail).
 

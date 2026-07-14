@@ -1248,6 +1248,27 @@ def cmd_backlog(args: argparse.Namespace) -> int:
         print(f"Shipped: {card.name} (PR #{card.shipped_pr}, {card.shipped_sha})")
         return 0
 
+    if args.backlog_cmd == "review":
+        if (rc := _enforce_version_floor(root)) is not None:
+            return rc
+        if not (args.note or args.verdict):
+            print("error: a review needs --note and/or --verdict")
+            return 2
+        card = backlog.add_review(
+            root,
+            args.name,
+            author=args.by or backlog.default_author(root),
+            source=args.source,
+            verdict=args.verdict,
+            note=args.note,
+        )
+        if card is None:
+            print(f"error: no backlog card named '{args.name}'")
+            return 2
+        print(f"Review appended to {card.path.relative_to(root)} — commit it to sync "
+              "(`horus close --commit --push`).")
+        return 0
+
     print(f"Unsupported backlog command: {args.backlog_cmd}")
     return 2
 
@@ -2937,6 +2958,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_backlog_ship.add_argument("--sha", required=True, metavar="SHA", help="merged commit SHA")
     p_backlog_ship.add_argument("--path", default=".", help="project root (default: cwd)")
     p_backlog_ship.set_defaults(func=cmd_backlog)
+
+    p_backlog_review = backlog_sub.add_parser(
+        "review",
+        help="append a review/comment entry to a card's `## Reviews` section (append-only)",
+    )
+    p_backlog_review.add_argument("name", help="card filename stem, e.g. companion-signals")
+    p_backlog_review.add_argument("--note", default="", help="free-text review body")
+    p_backlog_review.add_argument("--verdict", default="", help="short verdict, e.g. approve / needs-work")
+    p_backlog_review.add_argument("--by", default="", help="reviewer attribution (default: git user.name)")
+    p_backlog_review.add_argument(
+        "--source", choices=backlog.REVIEW_SOURCES, default="manual",
+        help="who authored this review (agents pass --source agent)",
+    )
+    p_backlog_review.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_backlog_review.set_defaults(func=cmd_backlog)
 
     p_account = sub.add_parser("account", help="show the detected agent account, alias, and isolation dir")
     p_account.add_argument("--agent", default="claude", help="which agent's account to inspect (default: claude)")

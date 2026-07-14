@@ -19,13 +19,23 @@ claim-time check + display), not a scheduler — no daemon, no auto-routing.
 - `status: shipped` plus `shipped_pr` / `shipped_sha` records immutable merge
   provenance in the card itself. Shipped cards stay in place for git history;
   active views hide them unless explicitly requested.
+- a `## Reviews` body section holds free-text review/comment entries, appended
+  by :func:`add_review` (`horus backlog review`, also the TUI's `r` key).
+  Append-only by convention: entries accumulate as history and end-of-section
+  appends keep cross-machine merges conflict-free. Tooling never parses entry
+  contents — reviews are for humans and agents to read, not a schema — and the
+  lingering-done hygiene scan skips this section so a review saying
+  "DONE looks wrong" or quoting a `[x]` checklist can't flag the card.
 """
 
 from __future__ import annotations
 
 import contextlib
+import datetime
 import fnmatch
+import getpass
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,6 +44,8 @@ from horus.continuity import Finding
 
 BACKLOG_DIR = "backlog"
 _CLAIM_LOCK_FILE = ".claim.lock"
+REVIEWS_HEADING = "## Reviews"
+REVIEW_SOURCES = ("manual", "agent")
 
 # In-progress for claim-overlap purposes. Cards otherwise use "open" (default)
 # and are deleted on completion (see PRD's structure contract).
@@ -132,14 +144,41 @@ def find_card(root: Path, name: str) -> Card | None:
     return None
 
 
+def _reviews_span(lines: list[str]) -> tuple[int, int] | None:
+    """(start, end) line indices of the `## Reviews` section — `start` is the
+    heading line, `end` the next `## ` heading (or EOF). None if absent."""
+    start = next(
+        (i for i, line in enumerate(lines) if line.strip().casefold() == REVIEWS_HEADING.casefold()),
+        None,
+    )
+    if start is None:
+        return None
+    end = next(
+        (j for j in range(start + 1, len(lines)) if lines[j].startswith("## ")),
+        len(lines),
+    )
+    return start, end
+
+
+def _lines_outside_reviews(body: str) -> list[str]:
+    lines = body.splitlines()
+    span = _reviews_span(lines)
+    if span is None:
+        return lines
+    start, end = span
+    return lines[:start] + lines[end:]
+
+
 def hygiene_findings(root: Path) -> list[Finding]:
     """Report card lifecycle drift for consolidate and the recurring close gate."""
     findings: list[Finding] = []
     for card in load_cards(root):
         body = frontmatter.parse(card.path.read_text(encoding="utf-8")).body
+        # Review entries are free text — a reviewer writing "DONE" or quoting a
+        # checked item must not read as lifecycle drift of the card itself.
         lingering_done = card.status == "done" or any(
             _CHECKED_ITEM_RE.match(line) or _LINGERING_DONE_RE.match(line)
-            for line in body.splitlines()
+            for line in _lines_outside_reviews(body)
         )
         if lingering_done:
             findings.append(Finding(
@@ -288,6 +327,64 @@ def claim(root: Path, name: str, *, force: bool = False) -> tuple[bool, list[Fin
         assert target is not None  # already checked above via claim_check
         _set_status(target.path, "claimed")
         return True, findings
+
+
+def default_author(root: Path) -> str:
+    """Reviewer attribution when none is given: git identity, then OS user."""
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(root), "config", "user.name"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return getpass.getuser()
+
+
+def review_entry(*, author: str, source: str = "manual", verdict: str = "", note: str = "") -> str:
+    """One `### <date> — <author> (<source>)` entry for the `## Reviews` section."""
+    lines = [f"### {datetime.date.today().isoformat()} — {author} ({source})"]
+    if verdict:
+        lines.append(f"Verdict: {verdict}")
+    if note.strip():
+        lines.extend(["", note.strip()])
+    return "\n".join(lines)
+
+
+def add_review(
+    root: Path,
+    name: str,
+    *,
+    author: str,
+    source: str = "manual",
+    verdict: str = "",
+    note: str = "",
+) -> Card | None:
+    """Append a review entry to card `name`'s `## Reviews` section, creating the
+    section at the end of the card when absent. Returns the card, or None if no
+    card matches. The file changes only by insertion — frontmatter and the rest
+    of the body are untouched, so this composes with claim/ship provenance."""
+    with _claim_lock(root):
+        target = find_card(root, name)
+        if target is None:
+            return None
+        text = target.path.read_text(encoding="utf-8")
+        entry = review_entry(author=author, source=source, verdict=verdict, note=note).splitlines()
+        lines = text.splitlines()
+        span = _reviews_span(lines)
+        if span is None:
+            while lines and not lines[-1].strip():
+                lines.pop()
+            lines.extend(["", REVIEWS_HEADING, "", *entry])
+        else:
+            start, end = span
+            while end > start + 1 and not lines[end - 1].strip():
+                end -= 1
+            lines[end:end] = ["", *entry]
+        target.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return find_card(root, name)
 
 
 def ship(root: Path, name: str, *, pr: str, sha: str) -> Card | None:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import shlex
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +29,7 @@ from horus import (
     backlog,
     backlog_migrate,
     claude_usage,
+    closure,
     codex_usage,
     config,
     frontmatter,
@@ -63,7 +66,14 @@ class _Stop:
     session_id: str
 
 
-_Action = _Launch | _Attach | _Stop | str
+@dataclass(frozen=True)
+class _EditCard:
+    project: Path
+    card: backlog.Card
+    review: bool = False
+
+
+_Action = _Launch | _Attach | _Stop | _EditCard | str
 
 # Labels for the home-level Defaults screen's one setting: the permission
 # posture new TUI launches (fresh/resume/card-resume) start with, until changed
@@ -202,6 +212,16 @@ class TerminalUI:
         @keys.add("d")
         def _defaults(event) -> None:
             self._show("settings")
+
+        on_card = Condition(lambda: self.screen == "card" and self.card is not None)
+
+        @keys.add("e", filter=on_card)
+        def _edit_card(event) -> None:
+            self._exit_edit(review=False)
+
+        @keys.add("r", filter=on_card)
+        def _review_card(event) -> None:
+            self._exit_edit(review=True)
 
         @keys.add("q")
         def _quit(event) -> None:
@@ -348,6 +368,11 @@ class TerminalUI:
             current = config.load_launch_defaults()["posture"]
             self.items = [("posture", choice) for choice in config.LAUNCH_POSTURE_CHOICES]
             self.selected = config.LAUNCH_POSTURE_CHOICES.index(current)
+
+    def _exit_edit(self, *, review: bool) -> None:
+        if self.project is None or self.card is None:
+            return
+        self.application.exit(result=_EditCard(self.project, self.card, review))
 
     def _exit_launch(self, account: LaunchAccount) -> None:
         if self.project is None or self.pending_mode is None:
@@ -592,7 +617,11 @@ class TerminalUI:
     def _footer_text(self) -> StyleAndTextTuples:
         narrow = self.application.output.get_size().columns < 64
         if self.screen == "card":
-            text = " ↑↓ read · Enter resume · Esc back" if narrow else " ↑↓/swipe read   Enter resume   Esc back"
+            text = (
+                " ↑↓ read · Enter resume · e/r edit · Esc back"
+                if narrow
+                else " ↑↓/swipe read   Enter resume   e edit   r review   Esc back"
+            )
             return [("class:footer", text)]
         if self.screen == "sessions":
             text = (
@@ -668,6 +697,8 @@ def run() -> int:
                 if launched.ok
                 else f"Launch failed: {launched.error}"
             )
+        elif isinstance(result, _EditCard):
+            status = _edit_card(result.project, result.card, review=result.review)
         elif isinstance(result, _Attach):
             error = terminal_sessions.attach_session(result.session_id)
             status = error or f"Detached from {result.session_id[:8]}."
@@ -776,6 +807,64 @@ def _invert_mobile_scroll() -> bool:
         or ""
     ).strip().lower()
     return bool(override) and override not in {"0", "false", "no", "off"}
+
+
+_REVIEW_PLACEHOLDER = "(replace this line with your review)"
+
+
+def _editor_command() -> list[str]:
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+    if editor:
+        return shlex.split(editor)
+    return ["notepad"] if os.name == "nt" else ["vi"]
+
+
+def _run_editor(path: Path) -> str | None:
+    """Open the user's editor on `path`; returns an error message or None."""
+    command = _editor_command()
+    try:
+        subprocess.run([*command, str(path)], check=False)
+    except OSError as exc:
+        return f"Could not open editor ({exc}); set $EDITOR and retry."
+    return None
+
+
+def _edit_card(root: Path, card: backlog.Card, *, review: bool) -> str:
+    """Between-frames flow for the card screen's `e`/`r` keys: optionally scaffold
+    a `## Reviews` entry, open the user's editor on the card file, then OFFER to
+    commit & push continuity — reusing closure's fetch-first commit primitive so
+    a stale machine is refused before it can overwrite newer remote state. Always
+    asks; never commits silently (hooks/UI advise and ask, never override)."""
+    try:
+        original = card.path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return f"Cannot read {card.path.name}: {exc}"
+    scaffolded = original
+    if review:
+        backlog.add_review(
+            root, card.name,
+            author=backlog.default_author(root),
+            note=_REVIEW_PLACEHOLDER,
+        )
+        scaffolded = card.path.read_text(encoding="utf-8")
+    if (error := _run_editor(card.path)) is not None:
+        if review:
+            card.path.write_text(original, encoding="utf-8")
+        return error
+    current = card.path.read_text(encoding="utf-8")
+    if review and current == scaffolded:
+        card.path.write_text(original, encoding="utf-8")
+        return "Review cancelled — scaffold left untouched, card restored."
+    if current == original or not closure.continuity_dirty(root):
+        return f"No changes to {card.name}."
+    answer = input(f"\n{card.name} changed. Commit & push continuity now? [y/N] ").strip().lower()
+    if answer not in {"y", "yes"}:
+        return f"{card.name} edited — uncommitted (sync later with `horus close --commit --push`)."
+    verb = "review" if review else "edit"
+    did, detail = closure.commit_continuity(
+        root, f"Update backlog card {card.name} ({verb} via TUI)", push=True
+    )
+    return detail if did else f"Not committed: {detail}"
 
 
 def _card_prompt(root: Path, card: backlog.Card) -> str:
