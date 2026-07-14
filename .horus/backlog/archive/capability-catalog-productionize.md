@@ -1,9 +1,13 @@
 ---
-status: open
+status: retired
 priority: later
 tier: sonnet
 created: 2026-07-10
 ---
+
+> Retired 2026-07-14 (owner triage): per-project generation, Vision extraction, and
+> the human TUI surface are shipped. More extractors and cross-project linking have no
+> second real consumer yet; re-open a narrowly scoped extractor when one appears.
 
 # Productionize `horus capabilities` (fleet capability catalog)
 

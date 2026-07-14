@@ -1,14 +1,17 @@
 ---
 status: open
-priority: later
+priority: deferred
 tier: sonnet
+type: feature
 created: 2026-07-10
 ---
-# Doctor compat (observe) + workflow-policy ladder
+> Deferred/narrowed 2026-07-14 (owner triage): branch→PR instructions and the merge
+> closure gate are shipped. Only the read-only Doctor compatibility report remains;
+> promote another policy rung solely after a new observed instruction failure.
 
-**Doctor compat:** per project, report what each agent would load
-(instructions/skills/MCP/hooks). **Workflow-policy:** block v7 carries the branch→PR
-default as instruction text (fabric field evidence: direct-to-main went unchallenged);
-remaining per the ladder rule: per-project `.horus/` override, then **CI gate
-promotion** only if the instruction rung observably fails again — continuity check
-advisory → required once proven; decide if `init` installs the merge gate by default.
+# Doctor compatibility report (read-only)
+
+Per project, report what each agent would load (instructions/skills/MCP/hooks).
+Workflow-policy expansion is no longer active scope: block v7 carries branch→PR and
+the merge hook guards stale continuity. Per-project overrides or CI promotion require
+new field evidence before they return to the backlog.

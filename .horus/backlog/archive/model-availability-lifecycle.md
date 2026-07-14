@@ -1,5 +1,5 @@
 ---
-status: open
+status: folded-in
 priority: medium
 tier: sonnet
 type: feature
@@ -8,7 +8,13 @@ created_by: overseer
 parallel: true
 surface: capabilities.toml (priors schema), horus/cli.py (capabilities render)
 shipped:
+folded_into: model-roster-correctness
 ---
+
+> Folded in 2026-07-14 (owner triage) → `model-roster-correctness.md`: lifecycle is
+> part of canonical roster correctness, not a separate product feature. The original
+> unnamed 2026-07-23 retirement premise lacks enough provenance to drive behavior;
+> only sourced availability dates should be recorded.
 
 # Track model availability / lifecycle — don't invest in soon-to-retire models
 

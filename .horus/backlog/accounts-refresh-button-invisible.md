@@ -1,11 +1,16 @@
 ---
 status: open
-priority: medium
+priority: high
 tier: sonnet
+type: bug
 created: 2026-07-11
 parallel: safe
 surface: horus/dashboard.py
 ---
+
+> Prioritized 2026-07-14 (owner triage): confirmed, permanently user-invisible control
+> with a one-line scoped CSS fix. Include in the high-value pre-release correctness
+> batch immediately after model-roster reconciliation.
 
 # Accounts strip "refresh (cached)" button is invisible on every viewport
 

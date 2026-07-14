@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "TUI capabilities screen shipped (PR #225): opening a project regenerates `capabilities.generate_project` once, shows its vision line, and exposes scrollable shipped records with related commands plus generated-age/commits-since provenance. The 1,422-test gate and live `horus tui` probe passed."
-next_action: "Release v0.0.54 for the merged TUI capabilities screen, then deploy the hosted app per the release invariant. [Sonnet scoped release, inline]"
-next_prompt: "Resume Horus. Fetch and verify main, then cut v0.0.54 for PR #225 (three-file bump, tests, tag/release/PyPI verification) and finish with `scripts/deploy-hosted.sh`. [Sonnet scoped release, inline]"
-execution_recommendation: "continue-as-is — v0.0.54 is a bounded scripted release of already-green commit 0e3073f; inline Sonnet keeps the publish/deploy checkpoints together, while delegation would add handoff risk around external release state."
+current_focus: "Backlog value triage complete: 13 stale/speculative cards were archived or folded with explicit reactivation reasons, model work collapsed into one roster-correctness bug, partially shipped cards were narrowed, and process-tree orphan safety now has a dedicated card. Eight actionable cards remain; release is intentionally deferred until the bounded high-value batch lands."
+next_action: "Claim and implement `model-roster-correctness`: join GPT-5.6 Sol/Terra/Luna priors to canonical datum rows, add sourced prices and optional lifecycle provenance, and remove the misleading generic duplicate. [Sonnet scoped correctness, inline]"
+next_prompt: "Resume Horus. Run `horus resume --preflight`, claim `.horus/backlog/model-roster-correctness.md`, read the full card, and fix canonical GPT-5.6 prior/datum joining with sourced prices and no ranking or routing behavior; branch → PR. [Sonnet scoped correctness, inline]"
+execution_recommendation: "continue-as-is — `model-roster-correctness` is a bounded schema/rendering correction with explicit fixtures and a live matrix gate; inline Sonnet keeps owner-prior migration and code behavior together, while delegation overhead exceeds the small scope."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -36,17 +36,17 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **★ [flagship] LaunchBackend seam — remaining slice blocked on hub.** Only config-driven target/machine selection remains, gated on hub writing a `[[targets]]`-equivalent contract (absent at hub HEAD `4a2b2ee` §9). Do NOT build `OmnigentBackend` yet (`research/omnigent-fit-2026-07-10.md`). [tier: scoped implementation once contract lands]
-1. **[ops] Orphan reap after failed runs (process-tree, distinct from the tmux reaper below):** dead workers leave children holding ports (ghost probe server on 8899 corrupted a supervisor probe, 2026-07-04; 2026-07-12: a setsid-detached dashboard orphan served the hosted app for 7h — systemd showed dead, deploys no-opped "already running"; deploy-hosted.sh's version check caught it). On a `failed` RESULT, kill the session's remaining process tree (registry has the pid); at minimum surface "pid still has children" in `horus tail`/dashboard. Cross-platform process-tree walking, not tmux-specific — needs its own execution decision.
+- **Pre-release high-value batch:** `model-roster-correctness` → `accounts-refresh-button-invisible` → `close-self-referential-sha-dirty-tree` → TUI focus/claimed slice. Cut the next release after this bounded batch, not between its cards.
+- **★ [flagship] Multi-machine LaunchBackend seam — blocked on owner decisions, not a `[[targets]]` contract.** Hub HEAD `f4b4a6c` proposes target-local `horus worker` daemons plus a typed LocalBackend/RemoteBackend protocol. Owner must confirm the five decisions in hub `docs/multi-machine-launch-targets-design.md` §11 before harness P0 freezes the contract; do not build `OmnigentBackend`.
+1. **[ops] Process-tree orphan reap after failed runs:** dedicated card `process-tree-orphan-reap`; two incidents prove value, but cross-platform ownership/termination needs an Opus design pass before implementation.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
 3. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak; macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution. install-smoke CI covers install/CLI/`/health` on all three already.
-4. **horus-hub follow-ups (harness side):** hub work in `rafaelmjf/horus-hub` (its PRD + execution.md). Parked: JSONL heartbeat events; `--worktree` auto-cleanup.
-5. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per shell call (close + guard-host + usage guard); only if material, build a single `horus pretool --hook` dispatcher (fabric suggestion 2026-07-08). [tier: Haiku measure / Sonnet dispatcher]
-6. **Multi-developer continuity (design, evidence-gated):** PRD.md assumes one active workstream, so two closers collide on frontmatter. Direction: per-workstream focus keyed by branch/dev, aggregated by `resolve_focus`/dashboard/`resume`; build when a real second developer arrives. [tier: Opus design]
+4. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per shell call; measure first, and build a dispatcher only if material. [Haiku measure / Sonnet dispatcher]
 
 ### Open / deferred — see `.horus/backlog/`
 
-Everything formerly listed here is one card per file in `.horus/backlog/`. Notable: `scheduled-usage-aware-continuation`, `project-machine-requirements`, and `deferred-*` for MVP3/MVP5 + continuity seams.
+Eight actionable cards remain. Deferred cards carry an explicit promotion condition;
+retired/folded cards preserve their full history and triage rationale in `backlog/archive/`.
 
 ## Shipped
 

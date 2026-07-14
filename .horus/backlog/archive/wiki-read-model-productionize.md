@@ -1,9 +1,13 @@
 ---
-status: open
+status: retired
 priority: later
 tier: sonnet
 created: 2026-07-10
 ---
+> Retired 2026-07-14 (owner triage): the draft spike was closed, no graph/vault pull
+> emerged, and the generated capabilities JSON plus TUI now covers the useful
+> discovery path without another read-model surface. Re-open only on observed demand.
+
 # Productionize `horus wiki` (fleet-memory read-model)
 
 Spike landed as **draft PR #138** (`horus/wiki.py` + `wiki` subcommand): a read-only

@@ -1,5 +1,5 @@
 ---
-status: open
+status: retired
 priority: medium
 tier: sonnet
 type: feature
@@ -9,6 +9,11 @@ parallel: true
 surface: horus/cli.py (capabilities render), capabilities.toml (priors), delegation-rubric
 shipped:
 ---
+
+> Retired 2026-07-14 (owner triage): current datums are sparse, uneven, and selected
+> for different task shapes, so a cost + clean-rate ordering would imply false
+> precision. Re-open only after canonical rows and enough comparable evidence exist;
+> the current data table plus agent judgment remains the decision surface.
 
 # Model ranking synthesis — a grounded "current ranking" for the decision matrix
 

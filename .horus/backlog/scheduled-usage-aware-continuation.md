@@ -1,10 +1,15 @@
 ---
 status: open
-priority: later
+priority: deferred
 tier: sonnet
+type: feature
 created: 2026-07-10
 ---
 # Scheduled / usage-aware autonomous continuation
+
+> Deferred 2026-07-14 (owner triage): the hand-rolled path proved feasibility and the
+> current preflight/usage guards cover immediate safety, but there is no present pull
+> for first-class scheduling. Re-prioritize when a specific unattended task needs it.
 
 Proven hand-rolled 2026-07-05: systemd timer → `horus run` ran one pinned task, closed
 cleanly; preflight refused an exhausted-window spawn. Make first-class on the

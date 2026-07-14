@@ -1,5 +1,5 @@
 ---
-status: open
+status: retired
 priority: medium
 tier: sonnet
 type: feature
@@ -9,6 +9,11 @@ parallel: true
 surface: delegation-rubric (skills.py), horus/cli.py (capabilities surface), dispatch-decision
 shipped:
 ---
+
+> Retired 2026-07-14 (owner triage): live counts already expose trust depth and the
+> delegation rubric permits scoped calibration of unproven tiers. Exploration should
+> happen opportunistically on fair low-risk tasks, not become another product surface,
+> unless a concrete selection failure proves the current signal insufficient.
 
 # Surface under-sampled models — counter the survivorship trap in dispatch
 

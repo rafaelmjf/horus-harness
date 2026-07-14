@@ -1,5 +1,5 @@
 ---
-status: open
+status: retired
 priority: low
 tier: sonnet
 type: feature
@@ -9,6 +9,11 @@ parallel: true
 surface: capabilities.toml (priors), horus/cli.py (capabilities render), research
 shipped:
 ---
+
+> Retired 2026-07-14 (owner triage): third-party benchmark integration is premature
+> while the roster itself is inconsistent and the measured datums are sparse and
+> task-selected. Re-open only after canonical model rows are clean and a ranking
+> decision demonstrably needs external grounding.
 
 # Ground the ranking in 3rd-party benchmark platforms
 

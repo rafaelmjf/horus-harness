@@ -1,6 +1,6 @@
 ---
 status: open
-priority: medium
+priority: high
 tier: sonnet
 created: 2026-07-14
 created_by: overseer
@@ -8,6 +8,10 @@ parallel: safe
 type: bug
 surface: horus/closure.py (commit_continuity), horus/cli.py (cmd_close)
 ---
+
+> Prioritized 2026-07-14 (owner triage): an observed continuity-integrity failure in
+> Horus's core closure promise. Add the post-commit residual-dirty guard before the
+> next release; do not depend on a reviewer noticing the stranded file.
 
 # `horus close` can strand a dirty tree: a commit can't reference its own SHA
 

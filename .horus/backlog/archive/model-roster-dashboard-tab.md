@@ -1,5 +1,5 @@
 ---
-status: open
+status: retired
 priority: medium
 tier: sonnet
 type: feature
@@ -9,6 +9,10 @@ parallel: true
 surface: horus/dashboard.py
 shipped:
 ---
+
+> Retired 2026-07-14 (owner triage): the CLI/JSON already exposes the roster and
+> there is no observed pull for a full dashboard or headless refresh action. This
+> also depends on ranking/lifecycle signals that are not ready; re-open on real use.
 
 # Dashboard tab: full model-roster research + table + refresh button
 
