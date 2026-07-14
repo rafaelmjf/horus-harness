@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-14
 type: feature
 parallel: safe
 surface: horus/terminal_tui.py
+shipped_pr: 229
+shipped_sha: 852d2588b558c5086c367d8f22abc3bab3c074cd
 ---
 
 > Narrowed 2026-07-14 (owner triage): items 1–2 are the valuable next slice and belong

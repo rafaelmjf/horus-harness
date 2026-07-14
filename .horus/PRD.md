@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Closure residual-dirty safety shipped (PR #228): pre-close work is harvested before staging, the closing SHA is sealed without self-reference, residual continuity paths are named before push, and the full closure verdict is recomputed afterward. Five actionable cards remain; the pre-release batch has one TUI slice left."
-next_action: "Await owner confirmation, then claim and implement `tui-cockpit-state-gaps`: show PRD current focus + next action on the project screen and distinguish claimed backlog cards, without idle timers or session-age expansion. [Sonnet scoped TUI rendering, inline]"
-next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/tui-cockpit-state-gaps.md`; then run `horus resume --preflight`, claim the card, render PRD focus/next plus claimed status in the TUI through existing continuity/card data, and branch → PR. Keep idle refresh/session age deferred. [Sonnet scoped TUI rendering, inline]"
-execution_recommendation: "continue-as-is — `tui-cockpit-state-gaps` is a bounded renderer-only slice over existing PRD/card data with direct state fixtures and a live terminal gate; inline Sonnet avoids plan overhead that exceeds the small scope."
+current_focus: "TUI cockpit state shipped (PR #229): the project screen now shows canonical PRD focus + next action before launch choices, and backlog cards distinguish claimed work without a second state path. The bounded high-value batch is complete; four actionable cards remain."
+next_action: "Await owner confirmation, then cut v0.0.54 from current main: three-file bump, full suite, tag/release/PyPI verification, and hosted deployment as the final invariant. [Sonnet bounded release operations, inline]"
+next_prompt: "Resume Horus. Confirm the owner wants to cut v0.0.54 now that the high-value batch is complete; then follow the release checklist through three-file bump, PR/merge, tag, GitHub release, PyPI install verification, and `scripts/deploy-hosted.sh`. [Sonnet bounded release operations, inline]"
+execution_recommendation: "continue-as-is — v0.0.54 is a fixed sequential release checklist with deterministic CI, index, install, and hosted-health gates; inline Sonnet keeps one operator responsible for the ordered external side effects."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -36,7 +36,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **Pre-release high-value batch:** TUI focus/claimed slice. Cut the next release after this final bounded card, not before it.
+- **Release v0.0.54:** the bounded high-value batch is complete; cut the release before starting another backlog card.
 - **★ [flagship] Multi-machine LaunchBackend seam — blocked on owner decisions, not a `[[targets]]` contract.** Hub HEAD `f4b4a6c` proposes target-local `horus worker` daemons plus a typed LocalBackend/RemoteBackend protocol. Owner must confirm the five decisions in hub `docs/multi-machine-launch-targets-design.md` §11 before harness P0 freezes the contract; do not build `OmnigentBackend`.
 1. **[ops] Process-tree orphan reap after failed runs:** dedicated card `process-tree-orphan-reap`; two incidents prove value, but cross-platform ownership/termination needs an Opus design pass before implementation.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
@@ -45,12 +45,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Five actionable cards remain. Deferred cards carry an explicit promotion condition;
+Four actionable cards remain. Deferred cards carry an explicit promotion condition;
 retired/folded cards preserve their full history and triage rationale in `backlog/archive/`.
 
 ## Shipped
 
-One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**TUI canonical project focus + claimed-card state** (2026-07-14, PR #229): the project screen renders PRD-first current focus and next action before launch choices, and backlog rows visibly distinguish claimed cards while reusing canonical focus/card primitives.
 **Self-reference-free closure + residual-dirty guard** (2026-07-14, PR #228): close harvests work before staging, seals its own SHA only in the local marker, names residual continuity edits and skips push, then recomputes the complete closure verdict.
 **Visible web + manual TUI account usage refresh** (2026-07-14, PR #227): the web cache-refresh label is always visible and properly sized; TUI `u` re-reads cache-only usage and account mappings in-frame with a compact visible shortcut and no live provider call.
 **Canonical GPT-5.6 roster + lifecycle provenance** (2026-07-14, PR #226): generic aliases fold into Sol, canonical Sol/Terra/Luna priors join measured datums with sourced prices, and optional availability/retirement markers remain display-only.
@@ -147,10 +147,10 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Mobile entry stays deliberately simple:** Termius → connect → `horus tui`. No
   shortcut/forced-command machinery; revisit only if Termius adds a free one-tap
   saved-host/startup action or real usage changes the tradeoff.
-- **Terminal-app navigation stays inside the UI:** swipe/wheel/arrows scroll the
-  highlighted viewport and raw escape bytes never reach a line prompt; leave the alternate
-  screen before blocking commands. External-editor handoffs honor VISUAL/EDITOR, otherwise
-  prefer a modeless editor and explain how to return — silently opening vi made typing look
+- **Terminal TUI stays thin and navigable:** render canonical CLI-callable continuity/card
+  primitives, never a second parser/state path; swipe/wheel/arrows scroll the highlighted
+  viewport, and leave the alternate screen before blocking commands. External editors honor
+  VISUAL/EDITOR; prefer a modeless fallback and explain how to return — vi made typing look
   broken. Preserve conventional SSH mouse/arrow mapping; inversion is opt-in. Account aliases
   are display labels while ambient launches pass `None` to the native agent adapter.
 - **Terminal persistence is prospective and capability-based:** TUI and web-app session requests use a unique Horus-managed tmux session when tmux is available on Linux/macOS/WSL and the caller is outside tmux; browser xterm and web-requested native windows attach as viewers, while native Windows, no-tmux hosts, and nested shells keep their direct host. A live registry row is attachable only with a Horus tmux `target_ref`; otherwise label it `original terminal only` and never offer a fake attach/close action. If a requested viewer cannot attach, reap the new tmux session. Keep scripted `horus open --target` behavior explicit and stable.
