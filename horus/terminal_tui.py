@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from prompt_toolkit.application import Application
@@ -29,6 +31,7 @@ from prompt_toolkit.styles import Style
 from horus import (
     backlog,
     backlog_migrate,
+    capabilities,
     claude_usage,
     closure,
     codex_usage,
@@ -130,6 +133,8 @@ class TerminalUI:
         self.pending_card: backlog.Card | None = None
         self.card: backlog.Card | None = None
         self.card_scroll = 0
+        self.capabilities_record: dict | None = None
+        self.capabilities_error = ""
         self.selected_session: registry.SessionRecord | None = None
         self.items: list[tuple[str, object]] = []
         self.selected = 0
@@ -265,6 +270,7 @@ class TerminalUI:
         kind, value = self.items[self.selected]
         if self.screen == "projects" and kind == "project":
             self.project = value  # type: ignore[assignment]
+            self._load_project_capabilities()
             self._show("project")
         elif self.screen == "project" and kind == "mode":
             self.pending_mode = str(value)
@@ -272,6 +278,8 @@ class TerminalUI:
             self._show("accounts")
         elif self.screen == "project" and kind == "backlog":
             self._show("backlog")
+        elif self.screen == "project" and kind == "capabilities":
+            self._show("capabilities")
         elif self.screen == "backlog" and kind == "card":
             self.card = value  # type: ignore[assignment]
             self.card_scroll = 4
@@ -315,6 +323,8 @@ class TerminalUI:
             self._show("card" if self.pending_card is not None else "project")
         elif self.screen == "backlog":
             self._show("project")
+        elif self.screen == "capabilities":
+            self._show("project")
         elif self.screen == "card":
             self._show("backlog")
         elif self.screen == "sessions":
@@ -341,11 +351,20 @@ class TerminalUI:
                 ("mode", "resume"),
                 ("mode", "fresh"),
                 ("backlog", None),
+                ("capabilities", None),
             ]
         elif self.screen == "accounts":
             self.items = [("account", account) for account in self.accounts]
         elif self.screen == "backlog":
             self.items = [("card", card) for card in self.project_cards.get(self.project, [])]
+        elif self.screen == "capabilities":
+            project = (self.capabilities_record or {}).get("project", {})
+            records = project.get("capabilities", []) if isinstance(project, dict) else []
+            self.items = [
+                ("capability", record)
+                for record in records
+                if isinstance(record, dict) and isinstance(record.get("text"), str)
+            ]
         elif self.screen == "card":
             self.items = [("card_resume", self.card)] if self.card is not None else []
         elif self.screen == "sessions":
@@ -394,6 +413,7 @@ class TerminalUI:
             "project": f"HORUS · {self.project.name if self.project else 'Project'}",
             "accounts": f"HORUS · {self.pending_mode.title() if self.pending_mode else 'Choose'} account",
             "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
+            "capabilities": f"HORUS · {self.project.name if self.project else 'Project'} capabilities",
             "card": "HORUS · Backlog card",
             "sessions": "HORUS · Running sessions",
             "session": "HORUS · Session",
@@ -406,6 +426,8 @@ class TerminalUI:
     def _body_text(self) -> StyleAndTextTuples:
         if self.screen == "card":
             return self._card_body_text()
+        if self.screen == "capabilities":
+            return self._capabilities_body_text()
         if not self.items:
             if self.screen == "projects":
                 message = "No tracked projects. Run `horus init` first."
@@ -421,6 +443,13 @@ class TerminalUI:
         lines: StyleAndTextTuples = []
         if self.screen == "projects":
             lines.extend(self._account_summary_text())
+        elif self.screen == "project":
+            project = (self.capabilities_record or {}).get("project", {})
+            vision = project.get("vision") if isinstance(project, dict) else None
+            if isinstance(vision, str) and vision:
+                lines.append(("class:muted", f"\n  {vision}\n"))
+            elif self.capabilities_error:
+                lines.append(("class:muted", f"\n  Capabilities unavailable: {self.capabilities_error}\n"))
         for index, (kind, value) in enumerate(self.items):
             selected = index == self.selected
             marker = ">" if selected else " "
@@ -450,6 +479,13 @@ class TerminalUI:
                 card_count, bug_count = self.project_metrics.get(self.project, (0, 0))
                 lines.append((style, f"\n {marker} Backlog\n"))
                 lines.append(("class:muted", f"     {card_count} cards · {bug_count} bugs\n"))
+            elif kind == "capabilities":
+                project = (self.capabilities_record or {}).get("project", {})
+                records = project.get("capabilities", []) if isinstance(project, dict) else []
+                count = len(records) if isinstance(records, list) else 0
+                lines.append((style, f"\n {marker} Capabilities\n"))
+                detail = self.capabilities_error or f"{count} shipped capabilities"
+                lines.append(("class:muted", f"     {detail}\n"))
             elif kind == "account":
                 account = value
                 lines.append((style, f"\n {marker} {account.agent.title()} {account.alias}\n"))
@@ -610,6 +646,46 @@ class TerminalUI:
             fragments.append((style, f" {line}\n"))
         return fragments
 
+    def _load_project_capabilities(self) -> None:
+        """Regenerate and retain the one canonical per-project capability record."""
+        self.capabilities_record = None
+        self.capabilities_error = ""
+        if self.project is None:
+            return
+        try:
+            record = json.loads(capabilities.generate_project(self.project.as_posix()))
+            if not isinstance(record, dict) or not isinstance(record.get("project"), dict):
+                raise ValueError("invalid generated record")
+            self.capabilities_record = record
+        except (OSError, ValueError) as exc:
+            self.capabilities_error = str(exc)
+
+    def _capabilities_body_text(self) -> StyleAndTextTuples:
+        if self.capabilities_error:
+            return [("class:muted", f"\n  Capabilities unavailable: {self.capabilities_error}\n")]
+        record = self.capabilities_record or {}
+        generated_at = record.get("generated_at")
+        freshness = _capability_freshness(self.project, generated_at)
+        fragments: StyleAndTextTuples = [
+            ("class:muted", f"\n  {freshness}\n"),
+            ("class:section", "\n  Shipped capabilities\n"),
+        ]
+        if not self.items:
+            fragments.append(("class:muted", "\n  No shipped capabilities recorded.\n"))
+            return fragments
+        for index, (_kind, value) in enumerate(self.items):
+            selected = index == self.selected
+            marker = ">" if selected else " "
+            style = "class:selected" if selected else "class:item"
+            if selected:
+                fragments.append(("[SetCursorPosition]", ""))
+            text = str(value.get("text", ""))
+            fragments.append((style, f"\n {marker} {text}\n"))
+            commands = value.get("related_commands", [])
+            if isinstance(commands, list) and commands:
+                fragments.append(("class:muted", f"     commands: {', '.join(map(str, commands))}\n"))
+        return fragments
+
     def _status_text(self) -> StyleAndTextTuples:
         if self.status:
             return [("class:status", f" {self.status}")]
@@ -642,6 +718,9 @@ class TerminalUI:
                 if narrow
                 else " ↑↓ select   Enter save   Esc back   q quit"
             )
+            return [("class:footer", text)]
+        if self.screen == "capabilities":
+            text = " ↑↓ scroll · Esc back" if narrow else " ↑↓/swipe scroll   Esc back   q quit"
             return [("class:footer", text)]
         text = (
             " ↑↓ scroll · Enter · s sessions · d defaults · q"
@@ -799,6 +878,61 @@ def _fit_cell(text: str, width: int) -> str:
     if len(text) > width:
         text = f"{text[: max(0, width - 1)]}…"
     return text.ljust(width)
+
+
+def _capability_freshness(
+    root: Path | None,
+    generated_at: object,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Human provenance hint for a generated capability record.
+
+    The capability payload still comes only from ``generate_project``. Git is
+    consulted solely to say how much local work followed that payload's stamp.
+    """
+    if not isinstance(generated_at, str):
+        return "generated time unknown · commits since unknown"
+    try:
+        generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        if generated.tzinfo is None:
+            generated = generated.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return "generated time unknown · commits since unknown"
+
+    age_seconds = max(0, int(((now or datetime.now(timezone.utc)) - generated).total_seconds()))
+    if age_seconds < 60:
+        age = "just now"
+    elif age_seconds < 3600:
+        age = f"{age_seconds // 60}m ago"
+    elif age_seconds < 86400:
+        age = f"{age_seconds // 3600}h ago"
+    else:
+        age = f"{age_seconds // 86400}d ago"
+
+    commits = None
+    if root is not None:
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "rev-list",
+                    "--count",
+                    f"--since={generated.isoformat()}",
+                    "HEAD",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip().isdigit():
+                commits = int(result.stdout.strip())
+        except (OSError, subprocess.SubprocessError):
+            pass
+    commit_text = "commits since unknown" if commits is None else f"{commits} commits since"
+    return f"generated {age} · {commit_text}"
 
 
 def _invert_mobile_scroll() -> bool:
