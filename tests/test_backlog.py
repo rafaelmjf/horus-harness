@@ -52,16 +52,46 @@ def test_load_cards_reads_explicit_type(tmp_path):
     assert cards[0].type == "bug"
 
 
-def test_ship_stamps_provenance_and_keeps_card_in_place(tmp_path):
-    _mk_card(tmp_path, "release-card")
+def test_ship_stamps_provenance_preserves_content_and_moves_to_archive(tmp_path):
+    _mk_card(tmp_path, "release-card", body="Keep this delivery context.\n")
 
     card = backlog.ship(tmp_path, "release-card", pr="42", sha="abc123")
 
     assert card is not None
+    assert card.path == tmp_path / ".horus" / "backlog" / "archive" / "release-card.md"
     assert card.status == "shipped"
     assert card.shipped_pr == "42"
     assert card.shipped_sha == "abc123"
-    assert (tmp_path / ".horus" / "backlog" / "release-card.md").is_file()
+    assert not (tmp_path / ".horus" / "backlog" / "release-card.md").exists()
+    assert "Keep this delivery context." in card.path.read_text(encoding="utf-8")
+    assert backlog.find_card(tmp_path, "release-card") is None
+
+
+def test_load_active_cards_excludes_terminal_root_cards_and_archive(tmp_path):
+    _mk_card(tmp_path, "active")
+    _mk_card(tmp_path, "stray-shipped", status="shipped")
+    _mk_card(tmp_path, "stray-retired", status="retired")
+    archive = backlog.archive_dir(tmp_path)
+    archive.mkdir(parents=True)
+    (archive / "archived.md").write_text(
+        "---\nstatus: shipped\npriority: later\n---\n# Archived\n", encoding="utf-8",
+    )
+
+    assert [card.name for card in backlog.load_active_cards(tmp_path)] == ["active"]
+
+
+def test_ship_refuses_to_destroy_existing_archive_card(tmp_path):
+    _mk_card(tmp_path, "collision", body="Active copy.\n")
+    archive = backlog.archive_dir(tmp_path)
+    archive.mkdir(parents=True)
+    archived = archive / "collision.md"
+    archived.write_text("Archived copy.\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
+        backlog.ship(tmp_path, "collision", pr="42", sha="abc123")
+
+    assert "Active copy." in (backlog.backlog_dir(tmp_path) / "collision.md").read_text(encoding="utf-8")
+    assert archived.read_text(encoding="utf-8") == "Archived copy.\n"
 
 
 def test_claim_no_other_in_progress_is_clean_even_without_fields(tmp_path):

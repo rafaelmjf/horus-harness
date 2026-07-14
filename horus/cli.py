@@ -280,9 +280,8 @@ def _cmd_fleet_backlog(args: argparse.Namespace) -> int:
         projects = [match]
 
     type_filter = getattr(args, "type", "") or ""
-    include_shipped = bool(getattr(args, "all", False) or getattr(args, "shipped", False))
     rollups = fleet_backlog.apply_filters(
-        fleet_backlog.load_fleet_rollup(projects, include_shipped=include_shipped), type_filter=type_filter
+        fleet_backlog.load_fleet_rollup(projects), type_filter=type_filter
     )
 
     if getattr(args, "stdout", False):
@@ -1296,11 +1295,7 @@ def cmd_backlog(args: argparse.Namespace) -> int:
         return 2
 
     if args.backlog_cmd == "list":
-        cards = backlog.load_cards(root)
-        if not (args.all or args.shipped):
-            cards = [c for c in cards if c.status != "shipped"]
-        elif args.shipped and not args.all:
-            cards = [c for c in cards if c.status == "shipped"]
+        cards = backlog.load_active_cards(root)
         if args.type:
             cards = [c for c in cards if c.type == args.type]
         if not cards:
@@ -1348,7 +1343,11 @@ def cmd_backlog(args: argparse.Namespace) -> int:
     if args.backlog_cmd == "ship":
         if (rc := _enforce_version_floor(root)) is not None:
             return rc
-        card = backlog.ship(root, args.name, pr=str(args.pr), sha=args.sha)
+        try:
+            card = backlog.ship(root, args.name, pr=str(args.pr), sha=args.sha)
+        except FileExistsError as exc:
+            print(f"error: {exc}")
+            return 2
         if card is None:
             print(f"error: no backlog card named '{args.name}'")
             return 2
@@ -2653,9 +2652,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--project", default=None,
         help="with --backlog: roll up just ONE registered project (matched by directory basename)",
     )
-    fleet_shipped = p_fleet.add_mutually_exclusive_group()
-    fleet_shipped.add_argument("--shipped", action="store_true", help="with --backlog: include shipped cards")
-    fleet_shipped.add_argument("--all", action="store_true", help="with --backlog: include shipped cards")
     p_fleet.set_defaults(func=cmd_fleet)
 
     p_capabilities = sub.add_parser(
@@ -3114,9 +3110,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--type", choices=backlog.CARD_TYPES, default="",
         help="filter to one card type (bug|feature|chore|task); default: no filter",
     )
-    list_shipped = p_backlog_list.add_mutually_exclusive_group()
-    list_shipped.add_argument("--shipped", action="store_true", help="show only shipped cards")
-    list_shipped.add_argument("--all", action="store_true", help="include shipped cards")
     p_backlog_list.set_defaults(func=cmd_backlog)
 
     p_backlog_migrate = backlog_sub.add_parser(
@@ -3136,7 +3129,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_backlog_claim.set_defaults(func=cmd_backlog)
 
     p_backlog_ship = backlog_sub.add_parser(
-        "ship", help="mark a backlog card shipped in place and stamp its merge provenance"
+        "ship", help="stamp merge provenance and move a shipped card to backlog/archive/"
     )
     p_backlog_ship.add_argument("name", help="card filename stem, e.g. companion-signals")
     p_backlog_ship.add_argument("--pr", required=True, metavar="N", help="merged pull-request number")

@@ -17,8 +17,8 @@ claim-time check + display), not a scheduler — no daemon, no auto-routing.
   separate `bugs/` folder; unset/blank defaults to "task". `horus backlog list
   --type bug` is the query surface, not a folder split.
 - `status: shipped` plus `shipped_pr` / `shipped_sha` records immutable merge
-  provenance in the card itself. Shipped cards stay in place for git history;
-  active views hide them unless explicitly requested.
+  provenance in the card itself. Shipping moves the complete card to
+  `.horus/backlog/archive/`; active views read only the backlog root.
 - a `## Reviews` body section holds free-text review/comment entries, appended
   by :func:`add_review` (`horus backlog review`, also the TUI's `r` key).
   Append-only by convention: entries accumulate as history and end-of-section
@@ -43,13 +43,15 @@ from horus import frontmatter
 from horus.continuity import Finding
 
 BACKLOG_DIR = "backlog"
+ARCHIVE_DIR = "archive"
 _CLAIM_LOCK_FILE = ".claim.lock"
 REVIEWS_HEADING = "## Reviews"
 REVIEW_SOURCES = ("manual", "agent")
 
 # In-progress for claim-overlap purposes. Cards otherwise use "open" (default)
-# and are deleted on completion (see PRD's structure contract).
+# and move to `backlog/archive/` when shipped (see PRD's structure contract).
 _IN_PROGRESS_STATUSES = ("claimed",)
+_INACTIVE_STATUSES = ("done", "folded-in", "retired", "shipped")
 
 # `type` is a free-form-but-conventional field: one `backlog/` dir instead of a
 # separate `bugs/` folder, with visibility coming from tooling (this list + the
@@ -107,6 +109,10 @@ def backlog_dir(root: Path) -> Path:
     return root / ".horus" / BACKLOG_DIR
 
 
+def archive_dir(root: Path) -> Path:
+    return backlog_dir(root) / ARCHIVE_DIR
+
+
 def _card_from_path(path: Path) -> Card:
     doc = frontmatter.parse(path.read_text(encoding="utf-8"))
     fm = doc.front_matter
@@ -128,11 +134,16 @@ def _card_from_path(path: Path) -> Card:
 
 
 def load_cards(root: Path) -> list[Card]:
-    """All backlog cards, sorted by filename. Empty list if there's no backlog/."""
+    """Backlog-root cards, sorted by filename; archived cards are never loaded."""
     hdir = backlog_dir(root)
     if not hdir.is_dir():
         return []
     return [_card_from_path(p) for p in sorted(hdir.glob("*.md")) if p.is_file()]
+
+
+def load_active_cards(root: Path) -> list[Card]:
+    """Only active backlog-root cards; terminal lifecycle states stay hidden."""
+    return [card for card in load_cards(root) if card.status not in _INACTIVE_STATUSES]
 
 
 def find_card(root: Path, name: str) -> Card | None:
@@ -420,18 +431,20 @@ def stamp_delivered(path: Path, *, shipped_date: str) -> None:
 
 
 def ship(root: Path, name: str, *, pr: str, sha: str) -> Card | None:
-    """Mark a card shipped in place and stamp its merged-PR provenance.
-
-    The card is deliberately retained under ``.horus/backlog/``. Its ``shipped``
-    status removes it from active views without losing the work item's context.
-    """
+    """Stamp merged-PR provenance, then move the complete card to the archive."""
     with _claim_lock(root):
         target = find_card(root, name)
         if target is None:
             return None
+        destination_dir = archive_dir(root)
+        destination = destination_dir / target.path.name
+        if destination.exists():
+            raise FileExistsError(f"refusing to overwrite archived backlog card: {destination}")
         _set_front_matter(target.path, {
             "status": "shipped",
             "shipped_pr": pr,
             "shipped_sha": sha,
         })
-        return find_card(root, name)
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        target.path.rename(destination)
+        return _card_from_path(destination)

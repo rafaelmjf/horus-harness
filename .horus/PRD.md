@@ -218,14 +218,15 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 ## Structure contract (prototype)
 
 - **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines: new
-  shipped items are one line; card-backed work stays in `backlog/` as `status: shipped`
-  with PR/SHA provenance; bugs get appended to the backlog as found.
+  shipped items are one line; shipped cards move to `backlog/archive/` with
+  `status: shipped` and PR/SHA provenance intact; bugs get appended to the backlog as found.
 - **`backlog/` (card pilot 2026-07-10, claim gate 2026-07-11):** one card per item,
   `status`/`priority`/`tier`/`created` frontmatter plus optional `parallel: safe|exclusive` /
   `surface: <globs>`; claim via `horus backlog claim <name>` (warns, `--force` to override on
-  overlap/exclusive); after merge, `horus backlog ship <name> --pr N --sha SHA` flips the card
-  in place and records provenance. `close --check` warns on lingering-done or shipped-but-open
-  cards. No stale-`claimed` sweep exists — a real gap, not yet built.
+  overlap/exclusive); after merge, `horus backlog ship <name> --pr N --sha SHA` records
+  provenance and moves the card to `backlog/archive/`. Active list and fleet views exclude
+  the archive. `close --check` warns on lingering-done or shipped-but-open cards. No
+  stale-`claimed` sweep exists — a real gap, not yet built.
 - **`sessions/`** unchanged: one note per session (`horus session new`), operational
   facts welcome (gates verified, tokens to rotate, dead ends). Distilled notes →
   `sessions/archive/` (local).
