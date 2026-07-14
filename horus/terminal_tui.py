@@ -36,6 +36,7 @@ from horus import (
     closure,
     codex_usage,
     config,
+    fleet_review,
     frontmatter,
     registry,
     routines,
@@ -136,6 +137,8 @@ class TerminalUI:
         self.project_focus: dict[str, str] = {}
         self.capabilities_record: dict | None = None
         self.capabilities_error = ""
+        self.fleet_review_record: fleet_review.FleetReview | None = None
+        self.fleet_review_error = ""
         self.selected_session: registry.SessionRecord | None = None
         self.items: list[tuple[str, object]] = []
         self.selected = 0
@@ -224,6 +227,12 @@ class TerminalUI:
         def _refresh_usage(event) -> None:
             self.refresh_account_usage()
 
+        @keys.add("f")
+        def _fleet_review(event) -> None:
+            if self.screen == "projects":
+                self._load_fleet_review()
+                self._show("fleet_review")
+
         on_card = Condition(lambda: self.screen == "card" and self.card is not None)
 
         @keys.add("e", filter=on_card)
@@ -289,6 +298,9 @@ class TerminalUI:
             self._load_project_focus()
             self._load_project_capabilities()
             self._show("project")
+        elif self.screen == "projects" and kind == "fleet_review":
+            self._load_fleet_review()
+            self._show("fleet_review")
         elif self.screen == "project" and kind == "mode":
             self.pending_mode = str(value)
             self.pending_card = None
@@ -317,6 +329,12 @@ class TerminalUI:
             self._refresh_items()
             self.status = f"Default launch posture set to {posture}."
             self.application.invalidate()
+        elif self.screen == "fleet_review" and kind == "curator":
+            if isinstance(value, Path):
+                self.project = value
+                self.pending_mode = "resume"
+                self.pending_card = None
+                self._show("accounts")
         elif self.screen == "session":
             if kind == "attach" and self.selected_session is not None:
                 self.application.exit(result=_Attach(self.selected_session.session_id))
@@ -353,6 +371,8 @@ class TerminalUI:
             self._show("session")
         elif self.screen == "settings":
             self._show("projects")
+        elif self.screen == "fleet_review":
+            self._show("projects")
 
     def _show(self, screen: str) -> None:
         self.screen = screen
@@ -364,6 +384,7 @@ class TerminalUI:
     def _refresh_items(self) -> None:
         if self.screen == "projects":
             self.items = [("project", project) for project in self.projects]
+            self.items.append(("fleet_review", None))
         elif self.screen == "project":
             self.items = [
                 ("mode", "resume"),
@@ -406,6 +427,16 @@ class TerminalUI:
             current = config.load_launch_defaults()["posture"]
             self.items = [("posture", choice) for choice in config.LAUNCH_POSTURE_CHOICES]
             self.selected = config.LAUNCH_POSTURE_CHOICES.index(current)
+        elif self.screen == "fleet_review":
+            self.items = []
+            if self.fleet_review_record is not None:
+                curator = Path(self.fleet_review_record.manifest).parent
+                if curator in self.projects:
+                    self.items.append(("curator", curator))
+                self.items.extend(
+                    ("review_project", project)
+                    for project in self.fleet_review_record.projects
+                )
 
     def _exit_edit(self, *, review: bool) -> None:
         if self.project is None or self.card is None:
@@ -437,6 +468,7 @@ class TerminalUI:
             "session": "HORUS · Session",
             "confirm": "HORUS · Close session?",
             "settings": "HORUS · Defaults",
+            "fleet_review": "HORUS · Fleet Review",
         }[self.screen]
         live = len(self.running)
         return [("class:header", f" {title}"), ("class:meta", f"   {live} live" if live else "")]
@@ -446,6 +478,8 @@ class TerminalUI:
             return self._card_body_text()
         if self.screen == "capabilities":
             return self._capabilities_body_text()
+        if self.screen == "fleet_review":
+            return self._fleet_review_body_text()
         if not self.items:
             if self.screen == "projects":
                 message = "No tracked projects. Run `horus init` first."
@@ -492,6 +526,11 @@ class TerminalUI:
                     lines.append(("class:session", f"     {session_labels}\n"))
                 card_count, bug_count = self.project_metrics.get(root, (0, 0))
                 lines.append(("class:muted", f"     backlog {card_count} · bugs {bug_count}\n"))
+            elif kind == "fleet_review":
+                lines.append((style, f"\n {marker} Fleet Review\n"))
+                lines.append(
+                    ("class:muted", "     Compare remote shipped truth with local working state\n")
+                )
             elif kind == "mode":
                 label = str(value).title()
                 detail = (
@@ -582,10 +621,14 @@ class TerminalUI:
         fragments.append(("class:section", " Projects\n"))
         project_columns = 2
         project_width = max(1, (width - 2) // project_columns)
-        for start in range(0, len(self.items), project_columns):
+        project_items = [
+            (index, root)
+            for index, (kind, root) in enumerate(self.items)
+            if kind == "project"
+        ]
+        for start in range(0, len(project_items), project_columns):
             blocks: list[tuple[int, list[tuple[str, str]]]] = []
-            for index in range(start, min(start + project_columns, len(self.items))):
-                _, root = self.items[index]
+            for index, root in project_items[start : start + project_columns]:
                 sessions = self._project_sessions(root)  # type: ignore[arg-type]
                 suffix = (
                     f" · {len(sessions)} open session{'s' if len(sessions) != 1 else ''}"
@@ -615,6 +658,20 @@ class TerminalUI:
                         fragments.append(("class:muted", "  "))
                 fragments.append(("", "\n"))
             fragments.append(("", "\n"))
+        review_index = next(
+            (index for index, (kind, _value) in enumerate(self.items) if kind == "fleet_review"),
+            None,
+        )
+        if review_index is not None:
+            selected = review_index == self.selected
+            if selected:
+                fragments.append(("[SetCursorPosition]", ""))
+            marker = ">" if selected else " "
+            style = "class:selected" if selected else "class:item"
+            fragments.append((style, f" {marker} Fleet Review\n"))
+            fragments.append(
+                ("class:muted", "   Compare remote shipped truth with local working state\n")
+            )
         return fragments
 
     def _account_summary_text(self) -> StyleAndTextTuples:
@@ -697,6 +754,80 @@ class TerminalUI:
         except OSError:
             return
 
+    def _load_fleet_review(self) -> None:
+        """Build the canonical CLI review once; this screen only renders it."""
+        self.fleet_review_record = None
+        self.fleet_review_error = ""
+        try:
+            self.fleet_review_record = fleet_review.build(
+                [project.as_posix() for project in self.projects]
+            )
+        except ValueError as exc:
+            self.fleet_review_error = str(exc)
+
+    def _fleet_review_body_text(self) -> StyleAndTextTuples:
+        if self.fleet_review_error:
+            return [("class:muted", f"\n  Fleet review unavailable: {self.fleet_review_error}\n")]
+        record = self.fleet_review_record
+        if record is None:
+            return [("class:muted", "\n  Fleet review unavailable.\n")]
+        fragments: StyleAndTextTuples = [
+            ("class:muted", f"\n  manifest: {record.manifest}\n"),
+            (
+                "class:muted",
+                "  Remote shipped truth is never blended with local working state.\n",
+            ),
+        ]
+        for index, (kind, value) in enumerate(self.items):
+            selected = index == self.selected
+            marker = ">" if selected else " "
+            style = "class:selected" if selected else "class:item"
+            if selected:
+                fragments.append(("[SetCursorPosition]", ""))
+            if kind == "curator":
+                fragments.append((style, f"\n {marker} Start curator session\n"))
+                fragments.append(
+                    ("class:muted", f"     Resume {Path(value).name} as an ordinary project\n")
+                )
+                continue
+            if kind != "review_project":
+                continue
+            project = value
+            remote = project.remote
+            fragments.append(
+                (style, f"\n {marker} {project.id} [{project.manifest_status}]\n")
+            )
+            if remote.available:
+                ref = f"{remote.ref}@{remote.sha[:8]}" if remote.sha else remote.ref
+                fragments.append(
+                    ("class:section", f"     REMOTE SHIPPED TRUTH · {remote.source} {ref}\n")
+                )
+                fragments.append(
+                    ("class:muted", f"     focus: {' '.join(remote.current_focus.split()) or '-'}\n")
+                )
+                fragments.append(
+                    (
+                        "class:muted",
+                        f"     capabilities {len(remote.capabilities)} · backlog "
+                        f"{len(remote.backlog) if remote.backlog_mode == 'cards' else remote.backlog_mode}\n",
+                    )
+                )
+                if remote.source_commits_since_continuity:
+                    fragments.append(
+                        (
+                            "class:status",
+                            "     WARNING: "
+                            f"{remote.source_commits_since_continuity} newer source commit(s)\n",
+                        )
+                    )
+            else:
+                fragments.append(
+                    ("class:muted", f"     REMOTE SHIPPED TRUTH unavailable: {remote.note}\n")
+                )
+            fragments.append(("class:section", "     LOCAL WORKING STATE\n"))
+            fragments.append(("class:muted", f"     {project.local.summary}\n"))
+        return fragments
+
     def _capabilities_body_text(self) -> StyleAndTextTuples:
         if self.capabilities_error:
             return [("class:muted", f"\n  Capabilities unavailable: {self.capabilities_error}\n")]
@@ -759,11 +890,18 @@ class TerminalUI:
         if self.screen == "capabilities":
             text = " ↑↓ scroll · Esc back" if narrow else " ↑↓/swipe scroll   Esc back   q quit"
             return [("class:footer", text)]
+        if self.screen == "fleet_review":
+            text = (
+                " ↑↓ · Enter curator · Esc back"
+                if narrow
+                else " ↑↓/swipe review   Enter start curator   Esc back   q quit"
+            )
+            return [("class:footer", text)]
         if self.screen in {"projects", "accounts"}:
             text = (
-                " ↑↓ · Enter · u refresh · q"
+                " ↑↓ · Enter · f fleet · u refresh · q"
                 if narrow
-                else " ↑↓/swipe · Enter · u refresh · Esc · s sessions · d defaults · q quit"
+                else " ↑↓/swipe · Enter · f fleet · u refresh · Esc · s sessions · d defaults · q quit"
             )
             return [("class:footer", text)]
         text = (

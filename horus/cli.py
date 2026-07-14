@@ -30,6 +30,7 @@ from horus import (
     delivery,
     fetchcheck,
     fleet_backlog,
+    fleet_review,
     frontmatter,
     gitstate,
     github_catalog,
@@ -224,6 +225,17 @@ def cmd_fleet(args: argparse.Namespace) -> int:
     other project's)."""
     if getattr(args, "backlog", False):
         return _cmd_fleet_backlog(args)
+    if getattr(args, "review", False):
+        try:
+            result = fleet_review.build(config.load_projects())
+        except ValueError as exc:
+            print(f"fleet review: {exc}", file=sys.stderr)
+            return 2
+        if getattr(args, "stdout", False):
+            print(fleet_review.render_json(result), end="")
+        else:
+            print(fleet_review.render_text(result), end="")
+        return 0
 
     projects = [
         path for path in config.load_projects()
@@ -2640,8 +2652,13 @@ def build_parser() -> argparse.ArgumentParser:
              "projects, cockpit included) — deterministic, read-only, no fetch",
     )
     p_fleet.add_argument(
+        "--review", action="store_true",
+        help="render the curator manifest using fetched remote continuity as shipped "
+             "truth, kept separate from local checkout state",
+    )
+    p_fleet.add_argument(
         "--stdout", action="store_true",
-        help="with --backlog: print the full JSON roll-up instead of the human-readable view",
+        help="with --backlog or --review: print full JSON instead of the human-readable view",
     )
     p_fleet.add_argument(
         "--type", choices=backlog.CARD_TYPES, default="",

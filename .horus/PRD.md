@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.54 is released and deployed. Process-tree auto-reaping was designed in closed PR #231, then owner-retired because exact-handle manual cleanup is acceptable and the cross-platform containment/termination risk exceeds current value. Three unshipped cards remain; only machine requirements is presently promoted."
-next_action: "Await owner confirmation, then claim `project-machine-requirements` and implement the smallest canonical requirements parser plus read-only doctor/resume/dashboard projections, starting with the real Fabric consumer. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/project-machine-requirements.md`; then run `horus resume --preflight`, claim the card, and implement project-declared machine requirements as one canonical read-only data path projected into doctor, resume, and dashboard. Branch → PR. [Sonnet scoped implementation, inline]"
-execution_recommendation: "continue-as-is — `project-machine-requirements` is a medium, bounded read-only feature with one real consumer and three thin projections; inline Sonnet avoids handoff overhead while keeping the canonical parser contract coherent."
+current_focus: "Fleet curation is consolidated: horus-agent is a thin Git-synchronized workspace, while harness now owns a remote-authoritative fleet review, optional TUI curator entry, and bundled curation workflow. Three real agent defects were migrated here; obsolete/speculative agent cards remain preserved with rationale."
+next_action: "After the fleet-review PR lands, ask the owner before claiming `auto-merge-bypasses-freshness-gate`; it is the highest-value remaining defect because the current advisory CI gate can still let server-side auto-merges land with stale continuity. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, review `.horus/backlog/auto-merge-bypasses-freshness-gate.md`, and ask the owner to confirm proceeding. If confirmed, make the server-side freshness check enforceable without command-string false positives, branch → PR. [Sonnet scoped implementation, inline]"
+execution_recommendation: "continue-as-is — `auto-merge-bypasses-freshness-gate` is a bounded CI/CLI correctness defect with an explicit stale-auto-merge gate; inline Sonnet keeps policy and implementation in one context."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -34,21 +34,14 @@ session notes + fetch-first; the six-lane taxonomy was the overhead — hence th
 Prioritized open work. Features and bugs in one list; jump order is allowed — this list
 is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
-### Now / next candidates
-
-- **★ [flagship] Multi-machine LaunchBackend seam — blocked on owner decisions, not a `[[targets]]` contract.** Hub HEAD `f4b4a6c` proposes target-local `horus worker` daemons plus a typed LocalBackend/RemoteBackend protocol. Owner must confirm the five decisions in hub `docs/multi-machine-launch-targets-design.md` §11 before harness P0 freezes the contract; do not build `OmnigentBackend`.
-1. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
-2. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak; macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution. install-smoke CI covers install/CLI/`/health` on all three already.
-3. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per shell call; measure first, and build a dispatcher only if material. [Haiku measure / Sonnet dispatcher]
-4. **[ops] CI action runtime cleanup:** main tests pass, but checkout v4/setup-python v5 are being forced from deprecated Node 20 to Node 24; upgrade the test workflow actions before GitHub stops compatibility forcing.
-
 ### Open / deferred — see `.horus/backlog/`
 
-Three unshipped cards remain; only `project-machine-requirements` is currently promoted.
+After fleet review ships, six cards remain: auto-merge is highest value; machine requirements is promoted; close-output and datum-taxonomy are medium; two older cards are deferred.
 Deferred cards carry promotion conditions; retired/folded cards keep full history and rationale in `backlog/archive/`.
 
 ## Shipped
 
+**Remote-authoritative fleet curator** (2026-07-14): a path-free shared manifest drives `horus fleet --review` (fetched remote PRD/cards/capabilities kept separate from local state, with GitHub fallback and continuity lag), an optional TUI Fleet Review/curator launch, and a bundled owner-gated curation skill.
 **TUI canonical project focus + claimed-card state** (2026-07-14, PR #229): the project screen renders PRD-first current focus and next action before launch choices, and backlog rows visibly distinguish claimed cards while reusing canonical focus/card primitives.
 **Self-reference-free closure + residual-dirty guard** (2026-07-14, PR #228): close harvests work before staging, seals its own SHA only in the local marker, names residual continuity edits and skips push, then recomputes the complete closure verdict.
 **Visible web + manual TUI account usage refresh** (2026-07-14, PR #227): the web cache-refresh label is always visible and properly sized; TUI `u` re-reads cache-only usage and account mappings in-frame with a compact visible shortcut and no live provider call.
@@ -84,6 +77,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Continuity must beat re-derivation.** Every capability must give a fresh session something CLAUDE.md + git log cannot, at lower cost. PRD.md is state, not behavior; behavioral text belongs in the managed block, and Rules holds only project-specific invariants earned by failure.
 - **Closure reaches the remote, fetch-first and self-reference-free** — `close --commit --push`; refuse newer remote continuity, seal the closing SHA without appending it into its own note, and refuse to push residual dirty continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
 - **One fetch-first primitive, reused.** `fetchcheck.fetch_and_state` (TTL-cached, read-only fetch, never pull) serves SessionStart and `status`/`fleet` gone-branch/staleness signals; no consumer reinvents it.
+- **Fleet review names its truth layers.** Manifests contain repository identity/lifecycle only; fetched `origin/<default>` PRD/cards are REMOTE SHIPPED TRUTH, checkout/session/dirty state is LOCAL WORKING STATE, and neither is blended or pulled. GitHub fallback is read-only; unavailable/unstructured data is labelled, never guessed.
 - **Resume preflight only projects deterministic data.** Its sole sanctioned side effect is the explicit fetch refresh; session liveness is projected without registry reconciliation, usage snapshots carry unmistakable freshness tags, and no output recommends or selects a model/account.
 - **Three disciplines, every session:** reproduce the gate via a deterministic signal
   you observe yourself — a *required* CI check green on the exact commit counts for
