@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "PR #215 (tmux mouse + launch-defaults) and PR #214 (guarded orphan-reaper) both merged and verified. Owner live-probed TUI-launched session: wheel scroll works correctly (scoped to session, global tmux mouse off). Installed-package probe: five launch-defaults choices functional, current default persists. Ready for release cut."
-next_action: "Cut the next release: three-file version bump + install-smoke CI validation on all three OS + hosted deploy. [Haiku mechanical; blocked on no external input]"
-next_prompt: "Resume Horus to cut the next release. Fetch first. Do not merge PRs yourself; bumps land via standard CI checks. Follow the three-files-together discipline, verify publish→install E2E, then run deploy-hosted.sh."
-execution_recommendation: "continue-as-is — next step is a mechanical release cut, no ambiguity."
-last_updated: 2026-07-13
+current_focus: "PR #217 (backlog card reviews: append-only `## Reviews` convention + `horus backlog review` + TUI e/r edit keys with offered fetch-first commit+push; also gitignores backlog/.claim.lock) open with CI green, awaiting owner live verification + merge. Release cut still pending and should include it."
+next_action: "Owner verifies PR #217 live (edit + review a card from `horus tui`, confirm commit+push lands) and merges; then cut the release: three-file version bump + install-smoke CI on all three OS + hosted deploy. [Haiku mechanical once #217 lands]"
+next_prompt: "Resume Horus. Fetch first. If PR #217 is merged, ship-stamp is not needed (no card backs it) — proceed to the release cut: three-files-together bump, verify publish→install E2E, then run deploy-hosted.sh. Do not merge PRs yourself."
+execution_recommendation: "continue-as-is — remaining steps are owner verification and a mechanical release cut, no ambiguity."
+last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
 
@@ -51,18 +51,12 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**v0.0.52 attach gate: PASS** (2026-07-13, owner-verified): web-launched session attached cleanly from Termius/`horus tui` on separate desktop; detach/reattach worked. Terminal-strategy unblock.
-**Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215): session-scoped tmux mouse (fixes wheel-scroll history recall); home-level Defaults screen (`d` key) for launch permission posture, persisted in `[launch]` table.
-**Guarded tmux orphan-reaper** (2026-07-13, PR #214): `terminal_sessions.reap_orphans()` kills abandoned sessions only on positive confirmation (matching registry + terminal status + idle grace); reaper discipline + tmux socket isolation rule added to Rules.
+**Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215): session-scoped mouse fixes wheel-scroll recall; `d`-key Defaults screen persists launch posture. v0.0.52 attach gate PASS (owner-verified): web-launched session attached from Termius/`horus tui`, detach/reattach clean.
+**Guarded tmux orphan-reaper** (2026-07-13, PR #214): `reap_orphans()` kills only on positive confirmation (matching registry + terminal status + idle grace).
 **Unified terminal project cockpit** (PRs #195–#213, v0.0.46–0.0.52): responsive phone/desktop TUI with KPIs, scrolling, unified Resume/Fresh, backlog-card resume, live-session controls; managed tmux attachment across viewers; graceful fallbacks.
-**OpenWiki fit research → skip-but-watch** (2026-07-12, PR #177): no dependency; revisit if OpenWiki reaches 1.x with evidence across 30+ merged changes in private repo.
-**`dashboard --reload`** (2026-07-12, PR #175): restart Horus backend in place from currently-installed code; `horus app` polls and respawns its own dashboard child after crash.
-**Consolidated-to marker stops self-dirtying closure** (2026-07-12, PR #174): gitignore marker so closure never fails on its own re-generation.
-**Fix Codex usage-limit account scope** (2026-07-12, PR #173): read 5h/weekly limits from account-wide rollout (not project-scoped); flag expired reset window as stale.
-**Mobile/desktop terminal sizing + lifecycle + controls hardening** (2026-07-12, PR #171): ResizeObserver layout-settled initial fit; live matchMedia re-eval; fullscreen tabs; larger tap targets; confirm-guard on close.
-**Terminal multi-viewer/mobile stack + verified Claude phone route** (PRs #178–#191, v0.0.36–0.0.45): phone-width spawn, retained exits, SSE reset markers; verified native iOS Tailscale SSH → tmux path reliable.
+**Ops & UX hardening batch** (2026-07-12, PRs #171–#177): `dashboard --reload` + `horus app` child respawn; consolidated-to gitignore marker (no self-dirtying closure); Codex usage account-wide scope fix; mobile terminal sizing/lifecycle/controls hardening; backlog `ship` PR/SHA provenance + `close --check` shipped-but-open warning; OpenWiki skip-but-watch verdict.
+**Terminal multi-viewer/mobile stack + verified Claude phone route** (PRs #178–#191, v0.0.36–0.0.45): phone-width spawn, retained exits, SSE reset markers; native iOS Tailscale SSH → tmux path verified reliable.
 **Windows CLI un-broken** (2026-07-13, PR #181): lazy import of Unix-only `fcntl`; install-smoke green all three OS.
-**Backlog card ship-lifecycle provenance** (2026-07-12, PR #172): `horus backlog ship <slug> --pr N --sha SHA` stamps provenance in place; `close --check` warns on lingering shipped-but-open cards.
 **Capabilities table rendering + model-name normalization** (2026-07-12, PRs #167–#169): `--models`/`--matrix` render aligned tables; canonicalized model names; owner-prior price/capability/note fields; staleness WARNING.
 **Per-project capability record + Vision extraction** (2026-07-11/12, PRs #159/#163): per-project `capabilities.json` regenerate-on-read artifact; Vision lead in catalog; fleet-wide catalog unchanged.
 **Empirical delegation-decision spine** (2026-07-11, PRs #157/#158): MEASURED datums + owner priors + three consumer skills; data-only roll-up, no auto-routing.
@@ -79,8 +73,7 @@ One line per capability; details in `archive/features.md`, git history, and the 
 
 ## Rules (load-bearing)
 
-The invariants that constrain new work. Full rationale: `archive/decisions.md` +
-`archive/history.md`.
+The invariants that constrain new work. Full rationale: `archive/decisions.md` + `archive/history.md`.
 
 - **Repo-local `.horus/` is the source of truth** — committed, vendor-neutral, works
   without Horus installed. Horus is a helper, never a required runtime.
@@ -160,11 +153,9 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   from either surface. `claude-work-phone` selects the isolated work account. Treat Claude
   in the 39-column browser/xterm viewer as best-effort; do not resume narrow-grid patching
   without new upstream renderer evidence.
-- **Mobile entry stays deliberately simple:** Termius → connect → `horus tui`.
-  Termius exposes no native iOS Shortcut action and gates automatic startup snippets
-  behind Pro; an `ssh://` shortcut plus a manual snippet adds friction, while a dedicated
-  server-side forced-command endpoint is unjustified for a comfort-only shortcut. Revisit
-  only if Termius adds a free one-tap saved-host/startup action or real usage changes the tradeoff.
+- **Mobile entry stays deliberately simple:** Termius → connect → `horus tui`. No
+  shortcut/forced-command machinery; revisit only if Termius adds a free one-tap
+  saved-host/startup action or real usage changes the tradeoff.
 - **Terminal-app navigation stays inside the UI:** on a real TTY, swipe/wheel/arrows
   scroll the highlighted internal viewport and raw escape bytes never reach a line
   prompt; leave the alternate screen before blocking agent launch/attach commands.

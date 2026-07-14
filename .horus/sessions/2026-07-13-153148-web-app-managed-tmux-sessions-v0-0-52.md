@@ -63,3 +63,11 @@ session that `horus tui` can attach, closing the split between launch surfaces.
 - `48c6286` Update Horus continuity (closure)
 
 - `5babd32` Update Horus continuity (closure)
+
+- `b13bbb9` chore: close PR 215 & 214 post-merge; update Horus continuity
+  Both PRs merged and verified by owner. Shipped backlog card tmux-mouse-scroll-and-tui-launch-defaults with PR #215 merge SHA. Updated PRD.md frontmatter to reflect both PRs merged and ready for release cut. Trimmed Shipped section to keep PRD.md under line cap.
+  Owner verification: wheel scroll works (scoped to session), global tmux mouse off, launch-defaults screen functional with five choices. Tests green, installed-package probe passed.
+- `22a88e1` fix: update shipped backlog card to reflect PR #215 merged and owner verification
+  Replace stale 'PR open, awaiting review' text with accurate ship record: PR #215 merged at 86f433bce2a1b9e71cf103ea1eba4ea476ffc03d. Record owner live verification gates: TUI-launched session wheel scroll working (scoped to session), global tmux mouse off, launch-defaults screen with five choices functional.
+- `6c195da` Merge pull request #216 from rafaelmjf/chore/close-pr-215
+  chore: close PR 215 & 214 post-merge; update Horus continuity
