@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Dispatched worker implemented the frozen `datum-supervisor-cost-envelope` card (usage snapshots, agent-supplied cost flags on `horus datum close`, one-act `--card` acceptance, `--models` cost glance, delegation-rubric dispatch-dividend v3) on branch `feat/datum-supervisor-cost-envelope`; PR open, 1364 tests green, awaiting overseer review/accept — do NOT stamp the card done, the overseer does that on acceptance. Still queued after this lands: the `tui-capabilities-screen` card (priority high) and the pending release cut."
-next_action: "Overseer: review + accept the datum-supervisor-cost-envelope PR (observe CI green on the merge SHA, then `horus backlog ship`/stamp the card). Then resume `tui-capabilities-screen`: Capabilities item on the TUI project screen + vision line on project open + staleness hint, thin renderer over capabilities.generate_project. Then the release cut. [Sonnet implementation, inline]"
-next_prompt: "Resume Horus. Fetch first. If the datum-supervisor-cost-envelope PR is still open, review/accept it first (do not merge without observing CI green). Once merged, claim and work `.horus/backlog/tui-capabilities-screen.md` (read the full card first; keep the TUI a thin wrapper over the existing capabilities module — no second data path). Branch → PR. Afterwards the release cut is still owed: three-files-together bump, publish→install E2E, deploy-hosted.sh."
-execution_recommendation: "continue-as-is — the datum-supervisor-cost-envelope PR is a review/accept step, not new implementation; tui-capabilities-screen behind it stays bounded rendering over an existing read-only module, no design ambiguity; inline Sonnet-tier work."
+current_focus: "Friendly backlog-card editing is implemented on `fix/tui-friendly-editor-fallback` at `cb87ace`: when VISUAL/EDITOR are unset, Unix prefers modeless nano (vi remains last fallback), prints editor-specific save/return guidance, and future scaffolds ignore editor swap files. Full gate: 1367 tests; live PTY probe opened nano and returned cleanly. PR creation/merge is next after this pre-merge continuity close."
+next_action: "Open the friendly-editor PR, observe required CI green on exact commit `cb87ace`, merge, then owner-eyeball `e` from a real backlog card after install/release. Afterward resume `tui-capabilities-screen` and the pending release cut. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus. Fetch first. Finish the PR for branch `fix/tui-friendly-editor-fallback`: observe required CI on `cb87ace`, merge, verify main, then ask the owner to live-check backlog-card `e` on their terminal. Next remains `.horus/backlog/tui-capabilities-screen.md`, followed by the owed three-file release bump, publish→install E2E, and deploy-hosted.sh."
+execution_recommendation: "continue-as-is — the editor fix is complete and only needs PR/CI acceptance plus an owner runtime eyeball; the following `tui-capabilities-screen` card remains bounded rendering over an existing read-only module, suited to inline sonnet-5 (26/29 clean datums)."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -51,8 +51,8 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
-**Datum supervisor-cost envelope + one-act acceptance** (2026-07-14, branch `feat/datum-supervisor-cost-envelope`, PR pending): `usage_launch`/`usage_close` best-effort readings (never a computed delta) + agent-supplied `--oversight`/`--follow-on`/`--counterfactual`/`--dividend` on `horus datum close`; `--card <path-or-slug>` one-act acceptance (stamps target backlog card `status: done`+`shipped:<date>`, prints — never fixes — a stale-continuity warning); `--models` cost glance; delegation-rubric now names the expected dispatch dividend (v3).
-**Backlog card reviews + TUI edit keys** (2026-07-14, PR #217): append-only `## Reviews` card section + `horus backlog review` (agents pass `--source agent`); TUI `e`/`r` open $EDITOR with offered fetch-first commit+push; hygiene scan skips Reviews; `backlog/.claim.lock` gitignored + untracked on upgrade.
+**Datum supervisor-cost envelope + one-act acceptance** (2026-07-14, PR #218): `usage_launch`/`usage_close` readings + agent-supplied cost flags on `datum close`; `--card` stamps delivery and warns on stale continuity; `--models` cost glance; delegation-rubric dispatch-dividend v3.
+**Backlog card reviews + friendly TUI edit/review handoff** (2026-07-14, PR #217 + branch `fix/tui-friendly-editor-fallback`, pending): append-only Reviews + `backlog review`; `e`/`r` open the configured editor, prefer nano over vi when unset, explain save/return, then offer fetch-first commit+push.
 **Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215): session-scoped mouse fixes wheel-scroll recall; `d`-key Defaults screen persists launch posture. v0.0.52 attach gate PASS (owner-verified): web-launched session attached from Termius/`horus tui`, detach/reattach clean.
 **Guarded tmux orphan-reaper** (2026-07-13, PR #214): `reap_orphans()` kills only on positive confirmation (matching registry + terminal status + idle grace).
 **Unified terminal project cockpit** (PRs #195–#213, v0.0.46–0.0.52): responsive phone/desktop TUI with KPIs, scrolling, unified Resume/Fresh, backlog-card resume, live-session controls; managed tmux attachment across viewers; graceful fallbacks.
@@ -155,12 +155,12 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Mobile entry stays deliberately simple:** Termius → connect → `horus tui`. No
   shortcut/forced-command machinery; revisit only if Termius adds a free one-tap
   saved-host/startup action or real usage changes the tradeoff.
-- **Terminal-app navigation stays inside the UI:** on a real TTY, swipe/wheel/arrows
-  scroll the highlighted internal viewport and raw escape bytes never reach a line
-  prompt; leave the alternate screen before blocking agent launch/attach commands.
-  Preserve conventional mouse/arrow mapping on SSH because Termius already translates
-  touch gestures; inversion is explicit opt-in only. Account aliases are display labels
-  while ambient launches continue to pass `None` to the native agent adapter.
+- **Terminal-app navigation stays inside the UI:** swipe/wheel/arrows scroll the
+  highlighted viewport and raw escape bytes never reach a line prompt; leave the alternate
+  screen before blocking commands. External-editor handoffs honor VISUAL/EDITOR, otherwise
+  prefer a modeless editor and explain how to return — silently opening vi made typing look
+  broken. Preserve conventional SSH mouse/arrow mapping; inversion is opt-in. Account aliases
+  are display labels while ambient launches pass `None` to the native agent adapter.
 - **Terminal persistence is prospective and capability-based:** TUI and web-app session requests use a unique Horus-managed tmux session when tmux is available on Linux/macOS/WSL and the caller is outside tmux; browser xterm and web-requested native windows attach as viewers, while native Windows, no-tmux hosts, and nested shells keep their direct host. A live registry row is attachable only with a Horus tmux `target_ref`; otherwise label it `original terminal only` and never offer a fake attach/close action. If a requested viewer cannot attach, reap the new tmux session. Keep scripted `horus open --target` behavior explicit and stable.
 - **Git policy:** branch → PR → auto-merge; this repo's main requires pytest checks
   (admins exempt so continuity pushes land directly; fallback direct merge only on

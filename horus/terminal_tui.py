@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -816,12 +817,31 @@ def _editor_command() -> list[str]:
     editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
     if editor:
         return shlex.split(editor)
-    return ["notepad"] if os.name == "nt" else ["vi"]
+    if os.name == "nt":
+        return ["notepad"]
+    # The TUI is also a phone-facing surface.  Prefer a modeless editor when the
+    # user has not chosen one: silently dropping a non-vi user into vi makes
+    # ordinary letters look broken and gives them no discoverable way back.
+    return ["nano"] if shutil.which("nano") else ["vi"]
+
+
+def _editor_notice(command: list[str]) -> str:
+    """Short hand-off guidance while the full-screen TUI is suspended."""
+    name = Path(command[0]).name.lower()
+    if name in {"nano", "pico"}:
+        return f"Opening {name} (external editor). Save: Ctrl+O, Enter; return: Ctrl+X."
+    if name in {"vi", "vim", "nvim"}:
+        return (
+            f"Opening {name} (external editor). Edit: i; save + return: Esc, :wq, Enter; "
+            "quit unchanged: Esc, :q!, Enter."
+        )
+    return f"Opening {name} (external editor). Close it to return to Horus."
 
 
 def _run_editor(path: Path) -> str | None:
     """Open the user's editor on `path`; returns an error message or None."""
     command = _editor_command()
+    print(f"\n{_editor_notice(command)}", flush=True)
     try:
         subprocess.run([*command, str(path)], check=False)
     except OSError as exc:

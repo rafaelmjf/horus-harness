@@ -1093,6 +1093,38 @@ def test_terminal_tui_e_and_r_keys_inert_outside_card_screen(tmp_path, monkeypat
     assert still_running and screen == "projects"
 
 
+def test_editor_command_honors_visual_before_editor(monkeypatch):
+    monkeypatch.setenv("VISUAL", "micro --softwrap off")
+    monkeypatch.setenv("EDITOR", "nano")
+    assert terminal_tui._editor_command() == ["micro", "--softwrap", "off"]
+
+
+def test_editor_command_prefers_nano_then_falls_back_to_vi(monkeypatch):
+    monkeypatch.delenv("VISUAL", raising=False)
+    monkeypatch.delenv("EDITOR", raising=False)
+    monkeypatch.setattr(terminal_tui.os, "name", "posix")
+    monkeypatch.setattr(terminal_tui.shutil, "which", lambda name: f"/usr/bin/{name}")
+    assert terminal_tui._editor_command() == ["nano"]
+
+    monkeypatch.setattr(terminal_tui.shutil, "which", lambda _name: None)
+    assert terminal_tui._editor_command() == ["vi"]
+
+
+def test_run_editor_explains_how_to_return_to_horus(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "card.md"
+    path.write_text("# Card\n", encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(terminal_tui, "_editor_command", lambda: ["nano"])
+    monkeypatch.setattr(terminal_tui.subprocess, "run", lambda command, check: calls.append(command))
+
+    assert terminal_tui._run_editor(path) is None
+    assert calls == [["nano", str(path)]]
+    notice = capsys.readouterr().out
+    assert "external editor" in notice
+    assert "Ctrl+X" in notice
+    assert "return" in notice
+
+
 def _git_project(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)

@@ -26,6 +26,7 @@ GITIGNORE_RULES = (
     "!temp/.gitkeep",
     ".consolidated-to",
     "backlog/.claim.lock",
+    "backlog/.*.sw?",
 )
 GITIGNORE_BLOCK = "\n".join(GITIGNORE_RULES) + "\n"
 

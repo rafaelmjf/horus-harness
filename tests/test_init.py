@@ -39,6 +39,7 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     assert "!temp/.gitkeep" in gitignore
     assert ".consolidated-to" in gitignore
     assert "backlog/.claim.lock" in gitignore
+    assert "backlog/.*.sw?" in gitignore
     assert not (tmp_path / ".gitignore").exists()  # no root .gitignore managed
     assert any(s == "created" for s in statuses.values())
     # Native hooks are part of the init projection set, so onboarding commits the

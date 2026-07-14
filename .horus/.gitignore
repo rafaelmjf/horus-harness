@@ -10,3 +10,4 @@ sessions/archive/
 # not a source of truth — committing it would only churn the timestamp stamp.
 capabilities.json
 backlog/.claim.lock
+backlog/.*.sw?
