@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.54 released and deployed (PR #230): the three-file version bump passed 1,434 tests plus exact merge-SHA CI, trusted publishing, both PyPI indexes, a clean Python 3.12 install, and hosted version/access probes. Four actionable cards remain."
-next_action: "Await owner confirmation, then claim `process-tree-orphan-reap` and perform its Opus design-only pass: define positive ownership, report-only signals, per-OS termination boundaries, PID-reuse races, and deterministic gates before any implementation. [Opus ambiguous safety design, inline]"
-next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/process-tree-orphan-reap.md`; then run `horus resume --preflight`, claim the card, and complete an Opus design-only pass for safe cross-platform owned-process-tree reporting/reaping. Stop for owner approval before Sonnet implementation. [Opus ambiguous safety design, inline]"
-execution_recommendation: "continue-as-is — `process-tree-orphan-reap` starts with an ambiguous cross-platform ownership/termination safety design; inline Opus keeps the incident evidence and owner decisions together, while a phased Sonnet implementation should wait until the contract and gates are fenced."
+current_focus: "v0.0.54 is released and deployed. Process-tree auto-reaping was designed in closed PR #231, then owner-retired because exact-handle manual cleanup is acceptable and the cross-platform containment/termination risk exceeds current value. Three unshipped cards remain; only machine requirements is presently promoted."
+next_action: "Await owner confirmation, then claim `project-machine-requirements` and implement the smallest canonical requirements parser plus read-only doctor/resume/dashboard projections, starting with the real Fabric consumer. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/project-machine-requirements.md`; then run `horus resume --preflight`, claim the card, and implement project-declared machine requirements as one canonical read-only data path projected into doctor, resume, and dashboard. Branch → PR. [Sonnet scoped implementation, inline]"
+execution_recommendation: "continue-as-is — `project-machine-requirements` is a medium, bounded read-only feature with one real consumer and three thin projections; inline Sonnet avoids handoff overhead while keeping the canonical parser contract coherent."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -37,16 +37,15 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 ### Now / next candidates
 
 - **★ [flagship] Multi-machine LaunchBackend seam — blocked on owner decisions, not a `[[targets]]` contract.** Hub HEAD `f4b4a6c` proposes target-local `horus worker` daemons plus a typed LocalBackend/RemoteBackend protocol. Owner must confirm the five decisions in hub `docs/multi-machine-launch-targets-design.md` §11 before harness P0 freezes the contract; do not build `OmnigentBackend`.
-1. **[ops] Process-tree orphan reap after failed runs:** dedicated card `process-tree-orphan-reap`; two incidents prove value, but cross-platform ownership/termination needs an Opus design pass before implementation.
-2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
-3. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak; macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution. install-smoke CI covers install/CLI/`/health` on all three already.
-4. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per shell call; measure first, and build a dispatcher only if material. [Haiku measure / Sonnet dispatcher]
-5. **[ops] CI action runtime cleanup:** main tests pass, but checkout v4/setup-python v5 are being forced from deprecated Node 20 to Node 24; upgrade the test workflow actions before GitHub stops compatibility forcing.
+1. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
+2. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak; macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution. install-smoke CI covers install/CLI/`/health` on all three already.
+3. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per shell call; measure first, and build a dispatcher only if material. [Haiku measure / Sonnet dispatcher]
+4. **[ops] CI action runtime cleanup:** main tests pass, but checkout v4/setup-python v5 are being forced from deprecated Node 20 to Node 24; upgrade the test workflow actions before GitHub stops compatibility forcing.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Four actionable cards remain. Deferred cards carry an explicit promotion condition;
-retired/folded cards preserve their full history and triage rationale in `backlog/archive/`.
+Three unshipped cards remain; only `project-machine-requirements` is currently promoted.
+Deferred cards carry promotion conditions; retired/folded cards keep full history and rationale in `backlog/archive/`.
 
 ## Shipped
 
@@ -197,7 +196,8 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   after each merge watch main's push CI before arming the next. Orchestrator implements
   nothing, alone edits continuity. Commit continuity before cutting a worktree from HEAD;
   name any unreviewed-output branch in the handoff; probe briefs never hardcode port 8765;
-  reap orphaned port-holders before probing after a worker death.
+  manually reap exact-handle orphaned port-holders before probing after a worker death;
+  automatic cross-platform reaping stays retired unless incidents make manual recovery burdensome (closed design PR #231).
 - **Orphan reaping only ever acts on positive confirmation (2026-07-13).**
   `reap_orphans()` kills a Horus tmux session only when the registry has a *matching*
   record that is already terminal or whose tracked pid is dead, AND it's unattached,
