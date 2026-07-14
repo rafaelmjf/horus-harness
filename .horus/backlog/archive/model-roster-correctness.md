@@ -1,5 +1,5 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 type: bug
@@ -7,6 +7,8 @@ created: 2026-07-12
 created_by: overseer
 parallel: safe
 surface: horus/datums.py, tests/test_datums.py, ~/.horus/capabilities.toml
+shipped_pr: 226
+shipped_sha: d57587ff4f9593dfbf48e6777fc989cdcee68d6f
 ---
 
 # Reconcile canonical model roster rows, prices, and lifecycle provenance

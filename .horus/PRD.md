@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Backlog value triage complete: 13 stale/speculative cards were archived or folded with explicit reactivation reasons, model work collapsed into one roster-correctness bug, partially shipped cards were narrowed, and process-tree orphan safety now has a dedicated card. Eight actionable cards remain; release is intentionally deferred until the bounded high-value batch lands."
-next_action: "Claim and implement `model-roster-correctness`: join GPT-5.6 Sol/Terra/Luna priors to canonical datum rows, add sourced prices and optional lifecycle provenance, and remove the misleading generic duplicate. [Sonnet scoped correctness, inline]"
-next_prompt: "Resume Horus. Run `horus resume --preflight`, claim `.horus/backlog/model-roster-correctness.md`, read the full card, and fix canonical GPT-5.6 prior/datum joining with sourced prices and no ranking or routing behavior; branch → PR. [Sonnet scoped correctness, inline]"
-execution_recommendation: "continue-as-is — `model-roster-correctness` is a bounded schema/rendering correction with explicit fixtures and a live matrix gate; inline Sonnet keeps owner-prior migration and code behavior together, while delegation overhead exceeds the small scope."
+current_focus: "Model-roster correctness shipped (PR #226): generic GPT-5.6 data now joins canonical Sol, Sol/Terra/Luna carry sourced prices and conservative roles, and optional lifecycle provenance renders without ranking or routing. Seven actionable cards remain; release stays deferred through the bounded high-value batch."
+next_action: "Await owner confirmation, then claim and implement `accounts-refresh-button-invisible`: restore visibility of the web dashboard Accounts-strip refresh control with the card's scoped CSS fix. [Sonnet tiny web bug, inline]"
+next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/accounts-refresh-button-invisible.md`; then run `horus resume --preflight`, claim the card, apply the scoped web-dashboard CSS fix, and branch → PR. Do not change the TUI. [Sonnet tiny web bug, inline]"
+execution_recommendation: "continue-as-is — `accounts-refresh-button-invisible` is a confirmed one-rule web CSS defect with a direct renderer/browser gate; delegation overhead exceeds the tiny scope."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -36,7 +36,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **Pre-release high-value batch:** `model-roster-correctness` → `accounts-refresh-button-invisible` → `close-self-referential-sha-dirty-tree` → TUI focus/claimed slice. Cut the next release after this bounded batch, not between its cards.
+- **Pre-release high-value batch:** `accounts-refresh-button-invisible` → `close-self-referential-sha-dirty-tree` → TUI focus/claimed slice. Cut the next release after this bounded batch, not between its cards.
 - **★ [flagship] Multi-machine LaunchBackend seam — blocked on owner decisions, not a `[[targets]]` contract.** Hub HEAD `f4b4a6c` proposes target-local `horus worker` daemons plus a typed LocalBackend/RemoteBackend protocol. Owner must confirm the five decisions in hub `docs/multi-machine-launch-targets-design.md` §11 before harness P0 freezes the contract; do not build `OmnigentBackend`.
 1. **[ops] Process-tree orphan reap after failed runs:** dedicated card `process-tree-orphan-reap`; two incidents prove value, but cross-platform ownership/termination needs an Opus design pass before implementation.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
@@ -45,12 +45,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Eight actionable cards remain. Deferred cards carry an explicit promotion condition;
+Seven actionable cards remain. Deferred cards carry an explicit promotion condition;
 retired/folded cards preserve their full history and triage rationale in `backlog/archive/`.
 
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Canonical GPT-5.6 roster + lifecycle provenance** (2026-07-14, PR #226): generic aliases fold into Sol, canonical Sol/Terra/Luna priors join measured datums with sourced prices, and optional availability/retirement markers remain display-only.
 **TUI capabilities screen** (2026-07-14, PR #225): project-open regenerates the canonical capability record once, renders its vision plus a scrollable shipped list with related commands, and reports generated age + commits since.
 **Archive-on-ship backlog lifecycle** (2026-07-14, PR #223): shipping stamps PR/SHA then moves the complete card to `backlog/archive/`; active local/fleet views exclude terminal cards and the archive; 13 shipped + 2 owner-retired cruft cards archived without content loss.
 **One-verb resume preflight** (2026-07-14, PR #222): `horus resume --preflight [--fleet]` composes fetched git state, explicit dual-target usage freshness, version floors, PRD handoffs, open datums, projected sessions/collisions, and hygiene into one lean read-only digest; `--no-fetch` and JSON `--stdout` supported.
@@ -186,7 +187,8 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   (`~/.horus/capabilities.toml`) stay separate layers. `outcome`
   (clean/nudged/bounced/died) is ALWAYS agent-supplied via `horus datum close`, never
   auto-scored; `horus capabilities --models` and every future consumer emit DATA ONLY —
-  no model pick, no `--for` router, no auto-routed dispatch. Exit
+  no model pick, no `--for` router, no auto-routed dispatch. Provider aliases normalize
+  to canonical model IDs before prior/datum joining; never render alias duplicates. Exit
   (completed/crashed/usage-death) is the mechanical axis, orthogonal to quality.
 - **Orchestration (proven 2026-07-04, contract in execution skill v8):** parallel features
   run orchestrator > supervisor > worker — worktree per worker; claude workers `full-auto`
