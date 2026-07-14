@@ -387,6 +387,38 @@ def add_review(
         return find_card(root, name)
 
 
+def resolve_delivered_card(card_arg: str, *, project_root: Path | None) -> Path:
+    """Resolve `horus datum close --card <path-or-slug>` to a concrete card file.
+
+    A literal existing path wins outright (any project — the cockpit may name a
+    card in a project other than the one it's currently reasoning about);
+    otherwise ``card_arg`` is treated as a slug resolved against
+    ``project_root``'s own `.horus/backlog/` (the "target project" the frozen
+    schema refers to — the project the closed datum's run actually delivered
+    into). Raises ``FileNotFoundError`` naming both attempts when neither
+    resolves, so the one-act accept flow fails loudly rather than stamping the
+    wrong file."""
+    direct = Path(card_arg)
+    if direct.is_file():
+        return direct
+    if project_root is not None:
+        stem = card_arg[:-3] if card_arg.endswith(".md") else card_arg
+        candidate = backlog_dir(project_root) / f"{stem}.md"
+        if candidate.is_file():
+            return candidate
+    hint = f", or as a slug under {backlog_dir(project_root)}" if project_root is not None else ""
+    raise FileNotFoundError(f"no backlog card found for {card_arg!r} (checked as a path{hint})")
+
+
+def stamp_delivered(path: Path, *, shipped_date: str) -> None:
+    """One-act acceptance stamp (`horus datum close --card`): set `status: done`
+    + `shipped: <date>` in the card's frontmatter — the SAME generic
+    frontmatter-fence editor `ship()` uses. Purely mechanical: the agent already
+    made the accept judgment by passing `--card` at all; this never decides
+    anything, it only writes what was decided."""
+    _set_front_matter(path, {"status": "done", "shipped": shipped_date})
+
+
 def ship(root: Path, name: str, *, pr: str, sha: str) -> Card | None:
     """Mark a card shipped in place and stamp its merged-PR provenance.
 

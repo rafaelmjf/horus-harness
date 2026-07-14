@@ -12,7 +12,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -136,6 +136,24 @@ Emit three things for the agent to APPLY (never auto-apply them):
 - **tier** — a concrete model, chosen from the data + shape,
 - **verification depth** — observe-only vs observe+probe vs owner-eyeball, with
   the one deterministic gate you'll observe named explicitly.
+
+**When the mode is a dispatched one** (anything that spawns a tracked worker
+rather than staying inline — `dispatched-worker`/`dispatched-plan` in
+`dispatch-decision`'s vocabulary, `subagent-plan` in `execution-decision`'s),
+also name the expected **dispatch dividend**: the context/detail the overseer
+avoids by not implementing this inline, weighed against the fixed supervisor
+tax every dispatch pays regardless of size — brief + review + gate + merge +
+reinstall + datum/continuity close. Recommend dispatch only when the savings
+plausibly exceed that tax, OR when parallelism / protecting the overseer's own
+context was the explicit named benefit — say which one. `horus capabilities
+--models`'s per-model cost glance (`dividend +P/~N/-Neg · oversight median: …`,
+from `horus datum close --dividend`/`--oversight` — see `horus/datums.py`) is
+the measured record of how that judgment actually played out on past
+dispatches of this tier; read it as the closest thing to evidence before
+naming the expected dividend. This stays advisory prose only, same hard
+boundary as everything else here: no auto-scored dividend, no auto-routing —
+the harness only ever RECORDS the closed `--dividend` judgment after the fact,
+it never predicts or picks one up front.
 
 Always show the data that drove it (e.g. *"sonnet-5: 10 clean, tier=scoped-impl
 lead → matched"*). The agent decides and acts; you advise.

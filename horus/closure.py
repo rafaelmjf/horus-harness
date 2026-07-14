@@ -13,7 +13,7 @@ the printed ritual. No agent is spawned here.
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from horus import backlog, codex_usage, frontmatter, routines
@@ -94,6 +94,58 @@ def freshness_gate(root: Path) -> list[Finding]:
     and usage/drift signals stay in the full `horus close`; they're informational and
     the former mtime-nags within the very session being closed, so they don't gate."""
     return routines.freshness_signals(root) + backlog.hygiene_findings(root)
+
+
+def _parse_frontmatter_date(value: object) -> date | None:
+    """Coerce a frontmatter `last_updated`/`date` value to a date, tolerantly —
+    a local twin of `routines._as_date` (same lenient ISO-prefix parse) so this
+    one-act-acceptance probe doesn't need a cross-module private import."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return date.fromisoformat(value.strip()[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def target_continuity_staleness(root: Path, *, completed_at: str | None) -> str | None:
+    """One-act-acceptance probe (`horus datum close --card`): is the TARGET
+    project's own continuity (its `.horus/PRD.md` `last_updated`, or its latest
+    session note date) at least as fresh as this run's completion?
+
+    PRINT-only signal for the caller — this never writes anything (the frozen
+    schema's hard boundary: surface staleness, never auto-fix it; a residual
+    continuity close stays the worker's or overseer's own job). Returns a
+    one-line warning, or ``None`` when fresh enough or there's nothing to probe
+    (no completion timestamp, or no `.horus/PRD.md` at the target)."""
+    if not completed_at:
+        return None
+    completed = _parse_frontmatter_date(completed_at)
+    if completed is None:
+        return None
+    prd = frontmatter.parse_file(root / ".horus" / frontmatter.PRD_FILE)
+    if prd is None:
+        return None
+    last_updated = _parse_frontmatter_date(prd.front_matter.get("last_updated"))
+    sessions = recent_sessions(root, limit=1)
+    session_date = None
+    if sessions:
+        session_date = _parse_frontmatter_date(
+            frontmatter.parse(sessions[0].read_text(encoding="utf-8")).front_matter.get("date")
+        )
+    freshest = max((d for d in (last_updated, session_date) if d is not None), default=None)
+    if freshest is not None and freshest >= completed:
+        return None
+    stamp = freshest.isoformat() if freshest else "unset"
+    return (
+        f"target continuity looks stale: {root}/.horus/{frontmatter.PRD_FILE} last_updated/latest "
+        f"session ({stamp}) predates this run's completion ({completed.isoformat()}) — refresh "
+        "continuity there (this probe only warns; it never auto-fixes)."
+    )
 
 
 def _enforce_push(root: Path) -> bool:

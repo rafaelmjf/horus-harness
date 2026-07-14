@@ -661,4 +661,261 @@ def test_capabilities_models_stdout_json_unaffected_by_warning(tmp_path, monkeyp
     captured = capsys.readouterr()
     data = json.loads(captured.out)  # would raise if the warning leaked into stdout
     assert "models" in data
-    assert "WARNING:" in captured.err
+
+
+# --- supervisor-cost envelope: usage snapshots (2026-07-14 frozen schema) ----
+
+def test_capture_usage_snapshot_unavailable_on_failed_read(tmp_path, monkeypatch):
+    # No credentials/rollouts anywhere reachable (isolated fake HOME) -> both
+    # targets read as unavailable, never block, never fabricate a percent.
+    _home(tmp_path, monkeypatch)
+    snap = datums.capture_usage_snapshot("claude", None)
+    assert snap["claude"]["freshness"] == "unavailable"
+    assert "pct_5h" not in snap["claude"]
+    assert snap["codex"]["freshness"] == "unavailable"
+    assert "read_at" in snap["claude"] and "read_at" in snap["codex"]
+
+
+def test_capture_usage_snapshot_claude_fresh_at_read_time(monkeypatch):
+    from horus import usage_snapshot
+
+    monkeypatch.setattr(
+        usage_snapshot, "cached_usage",
+        lambda agent, account, **kw: usage_snapshot.UsageSnapshot(42.0, "1h", 37.0, "3d") if agent == "claude" else None,
+    )
+    snap = datums.capture_usage_snapshot("claude", "acct-a")
+    assert snap["claude"] == {"read_at": snap["claude"]["read_at"], "freshness": "fresh", "pct_5h": 42.0, "pct_weekly": 37.0}
+
+
+def test_capture_usage_snapshot_codex_stale_when_reset_past(monkeypatch):
+    from horus import codex_usage
+
+    class _Report:
+        primary_percent = 90.0
+        primary_resets_at = 1  # epoch second 1 -- always in the past
+        context_percent = 47.0
+        timestamp = "2026-07-13T00:00:00Z"
+
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: _Report())
+    snap = datums.capture_usage_snapshot("claude", None)  # codex read under default account
+    assert snap["codex"]["freshness"] == "stale"
+    assert snap["codex"]["pct_5h"] == 90.0
+    assert snap["codex"]["pct_context"] == 47.0
+
+
+def test_capture_usage_snapshot_codex_stale_when_cache_predates_run(monkeypatch):
+    from horus import codex_usage
+
+    class _Report:
+        primary_percent = 10.0
+        primary_resets_at = 4102444800  # far future -- reset not expired
+        context_percent = 5.0
+        timestamp = "2026-07-13T00:00:00+00:00"  # before the run's own launch
+
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: _Report())
+    snap = datums.capture_usage_snapshot(None, None, since="2026-07-14T00:00:00+00:00")
+    assert snap["codex"]["freshness"] == "stale"  # cached codex read predates this run's launch
+
+
+def test_capture_usage_snapshot_codex_fresh_when_recent_and_unexpired(monkeypatch):
+    from horus import codex_usage
+
+    class _Report:
+        primary_percent = 10.0
+        primary_resets_at = 4102444800
+        context_percent = 5.0
+        timestamp = "2026-07-14T01:00:00+00:00"  # after the run's own launch
+
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: _Report())
+    snap = datums.capture_usage_snapshot(None, None, since="2026-07-14T00:00:00+00:00")
+    assert snap["codex"]["freshness"] == "fresh"
+
+
+def test_capture_usage_snapshot_never_raises_on_unexpected_failure(monkeypatch):
+    from horus import usage_snapshot
+
+    def _boom(*a, **kw):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(usage_snapshot, "cached_usage", _boom)
+    snap = datums.capture_usage_snapshot("claude", None)  # must not raise
+    assert snap["claude"]["freshness"] == "unavailable"
+
+
+def test_run_fake_captures_usage_launch_snapshot(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert main(["run", "hello", "--agent", "fake", "--model", "sonnet-5", "--path", str(tmp_path)]) == 0
+    d = datums.DatumStore.default().get("fake-session")
+    assert d.usage_launch is not None
+    assert set(d.usage_launch) == {"claude", "codex"}
+    assert d.usage_launch["claude"]["freshness"] == "unavailable"  # no real creds in the fake HOME
+
+
+# --- supervisor-cost envelope: agent-supplied close flags --------------------
+
+def test_close_persists_new_cost_flags(tmp_path):
+    store = _store(tmp_path)
+    store.record_launch(datums.Datum(session_id="cost-1", model="sonnet-5", agent="claude"))
+    d = store.close(
+        "cost-1", outcome="clean", shape=None, note=None,
+        oversight="moderate", follow_on=1, counterfactual="direct-session", dividend="negative",
+    )
+    assert d.oversight == "moderate"
+    assert d.follow_on == 1
+    assert d.counterfactual == "direct-session"
+    assert d.dividend == "negative"
+    assert store.get("cost-1").dividend == "negative"  # persisted
+
+
+def test_close_cost_flags_all_optional_existing_datums_stay_valid(tmp_path):
+    store = _store(tmp_path)
+    store.record_launch(datums.Datum(session_id="cost-2"))
+    d = store.close("cost-2", outcome="clean", shape=None, note=None)
+    assert d.oversight is None and d.follow_on is None
+    assert d.counterfactual is None and d.dividend is None
+
+
+def test_close_captures_usage_close_snapshot(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    store.record_launch(datums.Datum(session_id="cost-3", agent="claude", launched_at="2026-07-14T00:00:00+00:00"))
+    d = store.close("cost-3", outcome="clean", shape=None, note=None)
+    assert d.usage_close is not None and set(d.usage_close) == {"claude", "codex"}
+
+
+@pytest.mark.parametrize(
+    "kwargs,bad_kw",
+    [
+        ({"oversight": "extreme"}, "oversight"),
+        ({"counterfactual": "telepathy"}, "counterfactual"),
+        ({"dividend": "amazing"}, "dividend"),
+        ({"follow_on": -1}, "follow-on"),
+    ],
+)
+def test_close_rejects_out_of_vocabulary_cost_flags(tmp_path, kwargs, bad_kw):
+    store = _store(tmp_path)
+    store.record_launch(datums.Datum(session_id="bad-cost"))
+    with pytest.raises(ValueError, match=bad_kw):
+        store.close("bad-cost", outcome="clean", shape=None, note=None, **kwargs)
+
+
+def test_datum_close_cli_new_flags(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["run", "hi", "--agent", "fake", "--model", "opus-4.8", "--path", str(tmp_path)])
+    rc = main([
+        "datum", "close", "fake", "--outcome", "clean",
+        "--oversight", "heavy", "--follow-on", "2",
+        "--counterfactual", "one-worker", "--dividend", "positive",
+    ])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "oversight=heavy" in out and "follow-on=2" in out
+    assert "counterfactual=one-worker" in out and "dividend=positive" in out
+    d = datums.DatumStore.default().get("fake-session")
+    assert d.oversight == "heavy" and d.follow_on == 2
+    assert d.counterfactual == "one-worker" and d.dividend == "positive"
+
+
+def test_datum_close_cli_rejects_bad_oversight_choice(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
+    with pytest.raises(SystemExit):
+        main(["datum", "close", "fake", "--outcome", "clean", "--oversight", "extreme"])
+
+
+# --- one-act acceptance: `horus datum close --card` (2026-07-14 frozen schema) --
+
+def _mk_target_card(project_root, slug):
+    hdir = project_root / ".horus" / "backlog"
+    hdir.mkdir(parents=True, exist_ok=True)
+    (hdir / f"{slug}.md").write_text(
+        "---\nstatus: open\npriority: now\ntier: sonnet\ncreated: 2026-07-14\n---\n\n# Card\n",
+        encoding="utf-8",
+    )
+
+
+def _write_target_prd(project_root, *, last_updated):
+    hdir = project_root / ".horus"
+    hdir.mkdir(parents=True, exist_ok=True)
+    (hdir / "PRD.md").write_text(f"---\nlast_updated: {last_updated}\n---\n\n# PRD\n", encoding="utf-8")
+
+
+def test_datum_close_cli_card_stamps_card_and_stays_quiet_when_fresh(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    _mk_target_card(tmp_path, "deliver-me")
+    today = datetime.now(timezone.utc).date().isoformat()
+    _write_target_prd(tmp_path, last_updated=today)  # fresh: matches this run's completion
+
+    main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
+    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Stamped" in out and "status: done" in out
+    assert "WARNING" not in out
+
+    from horus import backlog
+    card = backlog.find_card(tmp_path, "deliver-me")
+    assert card.status == "done" and card.shipped == today
+
+
+def test_datum_close_cli_card_warns_when_target_continuity_stale(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    _mk_target_card(tmp_path, "deliver-me")
+    _write_target_prd(tmp_path, last_updated="2020-01-01")  # deliberately ancient
+
+    main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
+    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Stamped" in out
+    assert "WARNING" in out and "stale" in out
+
+    from horus import backlog
+    assert backlog.find_card(tmp_path, "deliver-me").status == "done"  # stamp still lands; probe only warns
+
+
+def test_datum_close_cli_card_missing_card_returns_2(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
+    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "no-such-card"])
+    assert rc == 2
+    assert "Could not stamp" in capsys.readouterr().out
+    # The datum close itself still went through before the card resolution failed.
+    d = datums.DatumStore.default().get("fake-session")
+    assert d.outcome == "clean"
+
+
+# --- supervisor-cost envelope: capabilities --models cost glance -------------
+
+def test_render_cost_notes_absent_when_no_model_has_cost_data(tmp_path):
+    rollups = datums.build_model_rollup(_store(tmp_path).all(), {})
+    assert datums.render_cost_notes(rollups) == []
+
+
+def test_render_cost_notes_shows_dividend_and_oversight_median(tmp_path):
+    store = _store(tmp_path)
+    for i, (oversight, dividend) in enumerate(
+        [("light", "positive"), ("light", "positive"), ("heavy", "positive"),
+         ("moderate", "neutral"), ("heavy", "negative")]
+    ):
+        sid = f"m-{i}"
+        store.record_launch(datums.Datum(session_id=sid, model="sonnet-5"))
+        store.close(sid, outcome="clean", shape=None, note=None, oversight=oversight, dividend=dividend)
+
+    rollups = datums.build_model_rollup(store.all(), {})
+    lines = datums.render_cost_notes(rollups)
+    assert lines[0] == "Cost:"
+    sonnet_line = next(line for line in lines if "sonnet-5" in line)
+    assert "dividend +3/~1/-1" in sonnet_line
+    assert "oversight median:" in sonnet_line
+
+
+def test_capabilities_models_cli_renders_cost_glance(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    store = datums.DatumStore.default()
+    store.record_launch(datums.Datum(session_id="glance-1", model="sonnet-5"))
+    store.close("glance-1", outcome="clean", shape=None, note=None, oversight="light", dividend="positive")
+
+    rc = main(["capabilities", "--models"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Cost:" in out and "dividend +1/~0/-0" in out

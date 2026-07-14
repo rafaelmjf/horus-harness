@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "PR #217 (backlog card reviews + TUI e/r edit keys + claim.lock gitignore) merged at ca10482. Owner-directed next: the `tui-capabilities-screen` backlog card (priority high). Release cut still pending — it should ship #217 and, if quick, the capabilities screen together."
-next_action: "Implement the `tui-capabilities-screen` card: Capabilities item on the TUI project screen + vision line on project open + staleness hint, thin renderer over capabilities.generate_project. Then the release cut. [Sonnet implementation, inline]"
-next_prompt: "Resume Horus. Fetch first. Claim and work `.horus/backlog/tui-capabilities-screen.md` (read the full card first; keep the TUI a thin wrapper over the existing capabilities module — no second data path). Branch → PR. Afterwards the release cut is still owed: three-files-together bump, publish→install E2E, deploy-hosted.sh."
-execution_recommendation: "continue-as-is — bounded rendering feature over an existing read-only module, no design ambiguity; inline Sonnet-tier work."
+current_focus: "Dispatched worker implemented the frozen `datum-supervisor-cost-envelope` card (usage snapshots, agent-supplied cost flags on `horus datum close`, one-act `--card` acceptance, `--models` cost glance, delegation-rubric dispatch-dividend v3) on branch `feat/datum-supervisor-cost-envelope`; PR open, 1364 tests green, awaiting overseer review/accept — do NOT stamp the card done, the overseer does that on acceptance. Still queued after this lands: the `tui-capabilities-screen` card (priority high) and the pending release cut."
+next_action: "Overseer: review + accept the datum-supervisor-cost-envelope PR (observe CI green on the merge SHA, then `horus backlog ship`/stamp the card). Then resume `tui-capabilities-screen`: Capabilities item on the TUI project screen + vision line on project open + staleness hint, thin renderer over capabilities.generate_project. Then the release cut. [Sonnet implementation, inline]"
+next_prompt: "Resume Horus. Fetch first. If the datum-supervisor-cost-envelope PR is still open, review/accept it first (do not merge without observing CI green). Once merged, claim and work `.horus/backlog/tui-capabilities-screen.md` (read the full card first; keep the TUI a thin wrapper over the existing capabilities module — no second data path). Branch → PR. Afterwards the release cut is still owed: three-files-together bump, publish→install E2E, deploy-hosted.sh."
+execution_recommendation: "continue-as-is — the datum-supervisor-cost-envelope PR is a review/accept step, not new implementation; tui-capabilities-screen behind it stays bounded rendering over an existing read-only module, no design ambiguity; inline Sonnet-tier work."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -51,6 +51,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Datum supervisor-cost envelope + one-act acceptance** (2026-07-14, branch `feat/datum-supervisor-cost-envelope`, PR pending): `usage_launch`/`usage_close` best-effort readings (never a computed delta) + agent-supplied `--oversight`/`--follow-on`/`--counterfactual`/`--dividend` on `horus datum close`; `--card <path-or-slug>` one-act acceptance (stamps target backlog card `status: done`+`shipped:<date>`, prints — never fixes — a stale-continuity warning); `--models` cost glance; delegation-rubric now names the expected dispatch dividend (v3).
 **Backlog card reviews + TUI edit keys** (2026-07-14, PR #217): append-only `## Reviews` card section + `horus backlog review` (agents pass `--source agent`); TUI `e`/`r` open $EDITOR with offered fetch-first commit+push; hygiene scan skips Reviews; `backlog/.claim.lock` gitignored + untracked on upgrade.
 **Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215): session-scoped mouse fixes wheel-scroll recall; `d`-key Defaults screen persists launch posture. v0.0.52 attach gate PASS (owner-verified): web-launched session attached from Termius/`horus tui`, detach/reattach clean.
 **Guarded tmux orphan-reaper** (2026-07-13, PR #214): `reap_orphans()` kills only on positive confirmation (matching registry + terminal status + idle grace).
@@ -58,12 +59,9 @@ One line per capability; details in `archive/features.md`, git history, and the 
 **Ops & UX hardening batch** (2026-07-12, PRs #171–#177): `dashboard --reload` + `horus app` child respawn; consolidated-to gitignore marker (no self-dirtying closure); Codex usage account-wide scope fix; mobile terminal sizing/lifecycle/controls hardening; backlog `ship` PR/SHA provenance + `close --check` shipped-but-open warning; OpenWiki skip-but-watch verdict.
 **Terminal multi-viewer/mobile stack + verified Claude phone route** (PRs #178–#191, v0.0.36–0.0.45): phone-width spawn, retained exits, SSE reset markers; native iOS Tailscale SSH → tmux path verified reliable.
 **Windows CLI un-broken** (2026-07-13, PR #181): lazy import of Unix-only `fcntl`; install-smoke green all three OS.
-**Capabilities table rendering + model-name normalization** (2026-07-12, PRs #167–#169): `--models`/`--matrix` render aligned tables; canonicalized model names; owner-prior price/capability/note fields; staleness WARNING.
-**Per-project capability record + Vision extraction** (2026-07-11/12, PRs #159/#163): per-project `capabilities.json` regenerate-on-read artifact; Vision lead in catalog; fleet-wide catalog unchanged.
-**Empirical delegation-decision spine** (2026-07-11, PRs #157/#158): MEASURED datums + owner priors + three consumer skills; data-only roll-up, no auto-routing.
+**Capabilities catalog + empirical delegation spine** (2026-07-11/12, PRs #157–#159/#163/#167–#169): MEASURED datums + owner priors + three consumer skills (data-only, no auto-routing); per-project `capabilities.json` regenerate-on-read artifact + Vision lead in catalog; `--models`/`--matrix` aligned tables with canonicalized model names + staleness WARNING.
 **Mobile-web-app bundle + dashboard resilience** (2026-07-11, PRs #149/#151/#153/#155): PWA-installable, per-project error card isolation.
-**LaunchBackend seam** (2026-07-10/11, PRs #144/#147): minimal contract; LocalBackend; Omnigent optional, undepended-on; config target selection deferred.
-**Ops & fleet-reporting hardening** (2026-07-10, PRs #131–#148, v0.0.33–0.0.35): honest dispatch receipts; both-window usage preflight; fetch-first staleness signals.
+**LaunchBackend seam + fleet-reporting hardening** (2026-07-10/11, PRs #131–#148, v0.0.33–0.0.35): minimal LaunchBackend contract + LocalBackend (Omnigent optional, undepended-on, config target selection deferred); honest dispatch receipts; both-window usage preflight; fetch-first staleness signals.
 **Continuity core:** init/close/session/doctor/consolidate/distill/infer/reconcile; PRD+sessions v3; fetch-first gates; worker foundations.
 **Hooks & projections:** cross-agent usage/closure hooks; upgrade/sync surfaces; version-floor guard; `--exposed` boundary.
 **Dashboard:** async multi-project UI; project/session/PR/usage views; mobile terminal; GitHub and local-project add flows.

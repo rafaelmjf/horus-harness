@@ -328,3 +328,59 @@ def test_continuity_dirty_tracks_horus_changes_only(tmp_path, monkeypatch):
 
 def test_continuity_dirty_false_outside_git(tmp_path):
     assert not closure.continuity_dirty(tmp_path)
+
+
+# --- one-act acceptance: target continuity freshness probe (2026-07-14) -----
+
+def _write_prd(root, *, last_updated):
+    hdir = root / ".horus"
+    hdir.mkdir(parents=True, exist_ok=True)
+    (hdir / "PRD.md").write_text(
+        f"---\nstatus: active\nlast_updated: {last_updated}\n---\n\n# PRD\n", encoding="utf-8"
+    )
+
+
+def _write_session(root, *, date, name="note.md"):
+    sessions = root / ".horus" / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    (sessions / name).write_text(f"---\ndate: {date}\n---\n\n# Session\n", encoding="utf-8")
+
+
+def test_target_continuity_staleness_none_without_completed_at(tmp_path):
+    _write_prd(tmp_path, last_updated="2026-01-01")
+    assert closure.target_continuity_staleness(tmp_path, completed_at=None) is None
+
+
+def test_target_continuity_staleness_none_without_target_prd(tmp_path):
+    assert closure.target_continuity_staleness(tmp_path, completed_at="2026-07-14T12:00:00+00:00") is None
+
+
+def test_target_continuity_staleness_fresh_when_last_updated_matches_completion(tmp_path):
+    _write_prd(tmp_path, last_updated="2026-07-14")
+    warning = closure.target_continuity_staleness(tmp_path, completed_at="2026-07-14T12:00:00+00:00")
+    assert warning is None
+
+
+def test_target_continuity_staleness_warns_when_prd_predates_completion(tmp_path):
+    _write_prd(tmp_path, last_updated="2026-07-10")
+    warning = closure.target_continuity_staleness(tmp_path, completed_at="2026-07-14T12:00:00+00:00")
+    assert warning is not None
+    assert "stale" in warning and "2026-07-10" in warning and "2026-07-14" in warning
+
+
+def test_target_continuity_staleness_uses_freshest_of_prd_and_session_note(tmp_path):
+    # PRD itself is stale, but a session note landed the same day the run
+    # completed -- the freshest of the two signals wins, so no warning fires.
+    _write_prd(tmp_path, last_updated="2026-07-01")
+    _write_session(tmp_path, date="2026-07-14")
+    warning = closure.target_continuity_staleness(tmp_path, completed_at="2026-07-14T12:00:00+00:00")
+    assert warning is None
+
+
+def test_target_continuity_staleness_never_auto_fixes(tmp_path):
+    # This probe is print-only: it must never write to the target's continuity.
+    _write_prd(tmp_path, last_updated="2026-07-01")
+    before = (tmp_path / ".horus" / "PRD.md").read_text(encoding="utf-8")
+    closure.target_continuity_staleness(tmp_path, completed_at="2026-07-14T12:00:00+00:00")
+    after = (tmp_path / ".horus" / "PRD.md").read_text(encoding="utf-8")
+    assert before == after

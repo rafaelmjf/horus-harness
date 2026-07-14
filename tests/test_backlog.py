@@ -3,6 +3,8 @@
 import threading
 from pathlib import Path
 
+import pytest
+
 from horus import backlog
 
 
@@ -255,3 +257,56 @@ def test_hygiene_still_flags_done_markers_outside_reviews_section(tmp_path):
     _mk_card(tmp_path, "drifted", body="- [x] DONE: shipped it\n\n## Reviews\n\n### 2026-07-14 — rafa (manual)\nVerdict: ok\n")
     findings = backlog.hygiene_findings(tmp_path)
     assert any("lingering done" in f.message for f in findings)
+
+
+# --- one-act acceptance: `horus datum close --card` (2026-07-14 frozen schema) --
+
+def test_resolve_delivered_card_by_slug(tmp_path):
+    _mk_card(tmp_path, "deliver-me")
+    path = backlog.resolve_delivered_card("deliver-me", project_root=tmp_path)
+    assert path == tmp_path / ".horus" / "backlog" / "deliver-me.md"
+
+
+def test_resolve_delivered_card_by_slug_with_md_suffix(tmp_path):
+    _mk_card(tmp_path, "deliver-me")
+    path = backlog.resolve_delivered_card("deliver-me.md", project_root=tmp_path)
+    assert path == tmp_path / ".horus" / "backlog" / "deliver-me.md"
+
+
+def test_resolve_delivered_card_by_literal_path_wins_over_slug(tmp_path):
+    # A literal existing path is used as-is — it can point at a card in a
+    # DIFFERENT project than project_root, so it must never be re-resolved.
+    other_project = tmp_path / "other"
+    _mk_card(other_project, "elsewhere-card")
+    literal = other_project / ".horus" / "backlog" / "elsewhere-card.md"
+    path = backlog.resolve_delivered_card(str(literal), project_root=tmp_path)
+    assert path == literal
+
+
+def test_resolve_delivered_card_missing_raises_with_both_attempts_named(tmp_path):
+    with pytest.raises(FileNotFoundError, match="no backlog card found"):
+        backlog.resolve_delivered_card("nope", project_root=tmp_path)
+
+
+def test_resolve_delivered_card_missing_no_project_root(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        backlog.resolve_delivered_card(str(tmp_path / "nope.md"), project_root=None)
+
+
+def test_stamp_delivered_sets_status_done_and_shipped_date(tmp_path):
+    _mk_card(tmp_path, "to-accept", surface="horus/foo.py")
+    path = backlog.backlog_dir(tmp_path) / "to-accept.md"
+
+    backlog.stamp_delivered(path, shipped_date="2026-07-14")
+
+    card = backlog.find_card(tmp_path, "to-accept")
+    assert card.status == "done"
+    assert card.shipped == "2026-07-14"
+    assert card.surface == ("horus/foo.py",)  # other frontmatter untouched
+
+
+def test_stamp_delivered_preserves_body(tmp_path):
+    _mk_card(tmp_path, "keep-body", body="Important detail.\n")
+    path = backlog.backlog_dir(tmp_path) / "keep-body.md"
+    backlog.stamp_delivered(path, shipped_date="2026-07-14")
+    assert "Important detail." in path.read_text(encoding="utf-8")
