@@ -4,6 +4,7 @@ import os
 import subprocess
 
 from horus import closure, initialize
+from horus.continuity import Finding
 
 
 def _run(root, *args):
@@ -72,6 +73,51 @@ def test_pr_diff_freshness_handoff_default_defers_canonical_update(tmp_path, mon
     assert findings[0].level == "ok"
     assert "durable in git" in findings[0].message
     assert "handoff boundary" in findings[0].message
+
+
+def test_project_frontmatter_can_enforce_delivery_mode_in_ci(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    prd = tmp_path / ".horus" / "PRD.md"
+    prd.write_text(
+        prd.read_text(encoding="utf-8").replace(
+            "---\n", "---\ncontinuity_granularity: delivery\n", 1,
+        ),
+        encoding="utf-8",
+    )
+    _run(tmp_path, "add", ".horus/PRD.md")
+    _run(tmp_path, "commit", "-m", "configure strict continuity")
+    base = subprocess.run(
+        ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    _work_commit(tmp_path, "feature.py", "SHIPPED = True\n", "source only")
+
+    assert closure.continuity_granularity(tmp_path) == "delivery"
+    findings = closure.pr_diff_freshness(tmp_path, base)
+    assert findings[0].level == "fail"
+    assert "does not update .horus/PRD.md" in findings[0].message
+
+
+def test_handoff_pr_defers_card_archival_but_delivery_mode_keeps_it_strict(tmp_path, monkeypatch):
+    monkeypatch.setattr(closure.routines, "freshness_signals", lambda root: [])
+    monkeypatch.setattr(
+        closure.backlog,
+        "hygiene_findings",
+        lambda root: [Finding("warn", "done card awaits archive")],
+    )
+    monkeypatch.setattr(
+        closure,
+        "pr_diff_freshness",
+        lambda root, base_ref, granularity=None: [Finding("ok", f"diff {granularity}")],
+    )
+
+    monkeypatch.setattr(closure, "continuity_granularity", lambda root=None: "handoff")
+    handoff = closure.pr_freshness_gate(tmp_path, "origin/main")
+    assert [finding.message for finding in handoff] == ["diff handoff"]
+
+    monkeypatch.setattr(closure, "continuity_granularity", lambda root=None: "delivery")
+    delivery = closure.pr_freshness_gate(tmp_path, "origin/main")
+    assert any("done card awaits archive" in finding.message for finding in delivery)
 
 
 def test_pending_delivery_commits_are_portable_git_history_signal(tmp_path, monkeypatch):

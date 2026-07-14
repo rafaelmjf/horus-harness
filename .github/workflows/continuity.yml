@@ -2,8 +2,8 @@ name: continuity
 
 # Pre-merge continuity gate. Under the default handoff granularity, product commits
 # themselves are durable delivery receipts and canonical narrative may be batched until
-# a real context boundary. Per-delivery mode still requires PRD/lanes in every PR. The
-# required job also keeps dashboard/card hygiene and git checkpoint checks server-side.
+# a real context boundary. Per-delivery mode still requires PRD/lanes and card hygiene
+# in every PR. The required job keeps field validity and git checkpoints server-side.
 
 on:
   pull_request:
@@ -20,5 +20,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -e .  # pywinpty is win-only/conditional; stdlib pty on Linux
-      - name: Dashboard-freshness check
+      - name: Continuity-policy check
         run: python -m horus close --check --base-ref "origin/${{ github.base_ref }}"

@@ -36,7 +36,8 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
   `PRD.md` is a separate, opt-in step and does not happen automatically.
 
 Continuity is a checkpoint at context boundaries, not a transaction log for every
-card. The shared continuity setting (CLI/hooks/TUI) controls narrative granularity:
+card. The shared continuity setting (CLI/hooks/TUI, optionally overridden for every
+machine/CI by `continuity_granularity` in project frontmatter) controls narrative granularity:
 
 - `handoff` (**default**) batches related deliveries in one uninterrupted session;
   checkpoint before an agent/account/machine change, dispatch, pause, release, or end.

@@ -93,7 +93,7 @@ def _project_projection(root: Path, *, installed: str, do_fetch: bool) -> dict[s
             )
         },
         "continuity": {
-            "granularity": closure.continuity_granularity(),
+            "granularity": closure.continuity_granularity(root),
             "pending": len(pending),
             "deliveries": [
                 {"sha": sha, "subject": subject} for sha, subject in pending

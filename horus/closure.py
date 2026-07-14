@@ -106,12 +106,23 @@ def freshness_gate(root: Path) -> list[Finding]:
     return routines.freshness_signals(root) + backlog.hygiene_findings(root)
 
 
-def continuity_granularity() -> str:
-    """The shared local narrative-checkpoint policy.
+def continuity_granularity(root: Path | None = None) -> str:
+    """The effective narrative-checkpoint policy.
 
-    A clean CI runner and a second machine intentionally get ``handoff`` from
-    the config loader's fallback, so the default never depends on TUI state.
+    A project may commit ``continuity_granularity`` in PRD/project frontmatter
+    when CI and every machine must share a stricter policy. Otherwise the TUI/
+    user-config default applies; a clean CI runner and a second machine get the
+    universal ``handoff`` fallback.
     """
+    if root is not None:
+        hdir = root / ".horus"
+        for name in (frontmatter.PRD_FILE, "project.md"):
+            doc = frontmatter.parse_file(hdir / name)
+            if doc is None:
+                continue
+            value = doc.front_matter.get("continuity_granularity")
+            if isinstance(value, str) and value in config.CONTINUITY_GRANULARITY_CHOICES:
+                return value
     return config.load_continuity_defaults()["granularity"]
 
 
@@ -179,11 +190,12 @@ def pr_diff_freshness(
     *,
     granularity: str | None = None,
 ) -> list[Finding]:
-    """Require a PR with product/source changes to update canonical continuity.
+    """Apply the configured PR-boundary continuity policy.
 
-    This is the server-side counterpart to the local merge fast-feedback hook:
-    GitHub auto-merge cannot bypass a required check.  The comparison is made
-    against the fetched base ref and never mutates the checkout.
+    ``delivery`` requires canonical continuity in the diff. ``handoff`` and
+    ``manual`` accept the git commit itself as the durable delivery receipt and
+    let :func:`pending_delivery_commits` carry it to the next narrative
+    checkpoint. This is server-side and never mutates the checkout.
     """
     changed_text = _git(root, "diff", "--name-only", f"{base_ref}...HEAD")
     if changed_text is None:
@@ -213,7 +225,7 @@ def pr_diff_freshness(
         label = ".horus/{project,roadmap,features}.md"
     updated = sorted(homes.intersection(changed))
     if not updated:
-        mode = granularity or continuity_granularity()
+        mode = granularity or continuity_granularity(root)
         if mode != "delivery":
             return [Finding(
                 "ok",
@@ -234,8 +246,18 @@ def pr_diff_freshness(
 
 
 def pr_freshness_gate(root: Path, base_ref: str) -> list[Finding]:
-    """Dashboard/card freshness plus the PR-diff continuity invariant."""
-    return freshness_gate(root) + pr_diff_freshness(root, base_ref)
+    """PR-boundary signals for the effective narrative granularity.
+
+    Card archival is canonical continuity too: handoff/manual may batch a
+    delivered card until the real boundary, while delivery mode retains the
+    old per-PR hygiene requirement. Dashboard field validity remains checked in
+    every mode.
+    """
+    mode = continuity_granularity(root)
+    findings = routines.freshness_signals(root)
+    if mode == "delivery":
+        findings.extend(backlog.hygiene_findings(root))
+    return findings + pr_diff_freshness(root, base_ref, granularity=mode)
 
 
 def _parse_frontmatter_date(value: object) -> date | None:

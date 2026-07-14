@@ -1578,9 +1578,18 @@ def cmd_close(args: argparse.Namespace) -> int:
         )
         findings = freshness + closure.checkpoint_gate(root)
         healthy = _print_findings(findings)
-        print("\nFresh — the dashboard reflects this session and work is checkpointed." if healthy
-              else "\nStale — update the lanes (run the horus-consolidate skill) and commit/push "
-              "before closing/merging.")
+        if healthy and base_ref and closure.continuity_granularity(root) != "delivery":
+            print(
+                "\nDelivery accepted — git evidence is durable; canonical continuity may remain "
+                "pending until the next configured boundary."
+            )
+        elif healthy:
+            print("\nFresh — canonical continuity and work are checkpointed.")
+        else:
+            print(
+                "\nStale — update continuity (run the horus-consolidate skill) and commit/push "
+                "before closing/merging."
+            )
         return 0 if healthy else 1
 
     print(f"Closure check: {root}\n")
@@ -1902,7 +1911,7 @@ def _checkpoint_hook(root: Path, *, block: bool) -> int:
     # Per-turn harvesting is the old high-granularity behavior.  Handoff (the
     # default) and manual modes leave session notes untouched until an explicit
     # boundary close, avoiding a post-commit hook edit after every delivery.
-    if closure.continuity_granularity() == "delivery":
+    if closure.continuity_granularity(root) == "delivery":
         try:
             closure.harvest_checkpoint(root)
         except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)

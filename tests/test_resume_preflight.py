@@ -94,7 +94,7 @@ def test_gather_projects_all_required_signals_and_renders_freshness(tmp_path, mo
         "pending_delivery_commits",
         lambda root: [("a" * 40, "feat: pending delivery")],
     )
-    monkeypatch.setattr(resume_preflight.closure, "continuity_granularity", lambda: "handoff")
+    monkeypatch.setattr(resume_preflight.closure, "continuity_granularity", lambda root=None: "handoff")
     usage_calls = _patch_machine(
         monkeypatch,
         datums=[Datum(session_id="datum-open", model="sonnet-5", launched_at="2026-07-14T10:00:00+00:00")],
