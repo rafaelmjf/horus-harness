@@ -50,11 +50,20 @@ def _project(tmp_path: Path, name: str = "demo") -> Path:
     return root
 
 
-def _card(root: Path, name: str, *, title: str, priority: str, type: str, detail: str) -> Path:
+def _card(
+    root: Path,
+    name: str,
+    *,
+    title: str,
+    priority: str,
+    type: str,
+    detail: str,
+    status: str = "open",
+) -> Path:
     path = root / ".horus" / "backlog" / f"{name}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        f"---\nstatus: open\npriority: {priority}\ntype: {type}\ncreated: 2026-07-13\n---\n"
+        f"---\nstatus: {status}\npriority: {priority}\ntype: {type}\ncreated: 2026-07-13\n---\n"
         f"\n# {title}\n\n{detail}\n",
         encoding="utf-8",
     )
@@ -722,6 +731,28 @@ def test_terminal_tui_project_navigation_and_back(tmp_path, monkeypatch):
     assert ui.screen == "projects"
 
 
+def test_terminal_tui_project_screen_uses_canonical_focus_record(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    config.register_project(root)
+    calls = []
+
+    def resolve_focus(project):
+        calls.append(project)
+        return {"current_focus": "Protect durable continuity", "next_action": "Ship the TUI slice"}
+
+    monkeypatch.setattr(terminal_tui.frontmatter, "resolve_focus", resolve_focus)
+    ui = terminal_tui.TerminalUI()
+    ui.activate()
+
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert calls == [root]
+    assert rendered.index("Current focus") < rendered.index("Resume")
+    assert rendered.index("Protect durable continuity") < rendered.index("Resume")
+    assert rendered.index("Next action") < rendered.index("Resume")
+    assert rendered.index("Ship the TUI slice") < rendered.index("Resume")
+
+
 def test_terminal_tui_project_vision_and_capabilities_share_generated_record(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
@@ -1124,6 +1155,7 @@ def test_terminal_tui_project_kpis_and_backlog_card_resume(tmp_path, monkeypatch
         priority="high",
         type="bug",
         detail="Full bug description.\n\n- reproduce it\n- fix it",
+        status="claimed",
     )
     config.register_project(root)
     ui = terminal_tui.TerminalUI()
@@ -1135,6 +1167,9 @@ def test_terminal_tui_project_kpis_and_backlog_card_resume(tmp_path, monkeypatch
     ui.activate()
     assert ui.screen == "backlog"
     assert ui.items[0][1].title == "Fix the terminal"
+    backlog_text = "".join(fragment[1] for fragment in ui._body_text())
+    assert "[bug · claimed] Fix the terminal" in backlog_text
+    assert "[feature] Add a feature" in backlog_text
     ui.activate()
     assert ui.screen == "card" and ui.card.path == bug_path
     card_text = "".join(fragment[1] for fragment in ui._body_text())
