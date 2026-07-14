@@ -5,7 +5,7 @@ account: personal
 environment: host
 project: horus-harness
 status: closed
-summary: "Diagnosed vi fallback as the broken-feeling card editor UX; implemented and verified a friendly external-editor handoff on 8b70f99."
+summary: "Diagnosed vi fallback as the broken-feeling card editor UX; friendly external-editor handoff shipped in PR #219 at b6f75ea."
 ---
 
 # Friendly TUI backlog-card editor handoff
@@ -35,6 +35,6 @@ corroborated interrupted vi sessions. Implemented a bounded UX fix on
 
 ## Next
 
-- Open the PR for `cb87ace`, observe required CI green on that exact commit,
-  merge, verify main, then owner-check `e` on a real backlog card after install.
+- PR #219 merged at `b6f75ea`; required PR checks and merge-SHA CI passed on
+  Python 3.12/3.13. Owner-check `e` on a real backlog card after install/release.
 - `tui-capabilities-screen` and the pending release cut remain next afterward.

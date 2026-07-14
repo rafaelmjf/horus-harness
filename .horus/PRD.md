@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Friendly backlog-card editing is implemented on `fix/tui-friendly-editor-fallback` at `cb87ace`: when VISUAL/EDITOR are unset, Unix prefers modeless nano (vi remains last fallback), prints editor-specific save/return guidance, and future scaffolds ignore editor swap files. Full gate: 1367 tests; live PTY probe opened nano and returned cleanly. PR creation/merge is next after this pre-merge continuity close."
-next_action: "Open the friendly-editor PR, observe required CI green on exact commit `cb87ace`, merge, then owner-eyeball `e` from a real backlog card after install/release. Afterward resume `tui-capabilities-screen` and the pending release cut. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus. Fetch first. Finish the PR for branch `fix/tui-friendly-editor-fallback`: observe required CI on `cb87ace`, merge, verify main, then ask the owner to live-check backlog-card `e` on their terminal. Next remains `.horus/backlog/tui-capabilities-screen.md`, followed by the owed three-file release bump, publish→install E2E, and deploy-hosted.sh."
-execution_recommendation: "continue-as-is — the editor fix is complete and only needs PR/CI acceptance plus an owner runtime eyeball; the following `tui-capabilities-screen` card remains bounded rendering over an existing read-only module, suited to inline sonnet-5 (26/29 clean datums)."
+current_focus: "Friendly backlog-card editing shipped in PR #219 at `b6f75ea`: Unix prefers nano when VISUAL/EDITOR are unset (vi remains last fallback), prints editor-specific save/return guidance, and scaffolds ignore editor swap files. Local 1367-test gate + live nano PTY probe passed; PR and merge-SHA CI passed on Python 3.12/3.13. Owner runtime eyeball awaits the next install/release."
+next_action: "Resume `tui-capabilities-screen`: add Capabilities on the TUI project screen, the project vision line, and a staleness hint as a thin renderer over capabilities.generate_project. Then cut the pending release, deploy hosted, and owner-eyeball backlog-card `e` with the installed build. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus. Fetch first. Claim and implement `.horus/backlog/tui-capabilities-screen.md` as a thin TUI renderer over capabilities.generate_project (no second data path), branch → PR. Then perform the owed three-file release bump, publish→install E2E, deploy-hosted.sh, and ask the owner to verify backlog-card `e` opens nano with visible return guidance."
+execution_recommendation: "continue-as-is — `tui-capabilities-screen` is bounded rendering over an existing read-only module with no design ambiguity, suited to inline sonnet-5 (26/29 clean datums); dispatch overhead would exceed the scoped change."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -52,7 +52,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
 **Datum supervisor-cost envelope + one-act acceptance** (2026-07-14, PR #218): `usage_launch`/`usage_close` readings + agent-supplied cost flags on `datum close`; `--card` stamps delivery and warns on stale continuity; `--models` cost glance; delegation-rubric dispatch-dividend v3.
-**Backlog card reviews + friendly TUI edit/review handoff** (2026-07-14, PR #217 + branch `fix/tui-friendly-editor-fallback`, pending): append-only Reviews + `backlog review`; `e`/`r` open the configured editor, prefer nano over vi when unset, explain save/return, then offer fetch-first commit+push.
+**Backlog card reviews + friendly TUI edit/review handoff** (2026-07-14, PRs #217/#219): append-only Reviews + `backlog review`; `e`/`r` open the configured editor, prefer nano over vi when unset, explain save/return, ignore swap files, then offer fetch-first commit+push.
 **Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215): session-scoped mouse fixes wheel-scroll recall; `d`-key Defaults screen persists launch posture. v0.0.52 attach gate PASS (owner-verified): web-launched session attached from Termius/`horus tui`, detach/reattach clean.
 **Guarded tmux orphan-reaper** (2026-07-13, PR #214): `reap_orphans()` kills only on positive confirmation (matching registry + terminal status + idle grace).
 **Unified terminal project cockpit** (PRs #195–#213, v0.0.46–0.0.52): responsive phone/desktop TUI with KPIs, scrolling, unified Resume/Fresh, backlog-card resume, live-session controls; managed tmux attachment across viewers; graceful fallbacks.
