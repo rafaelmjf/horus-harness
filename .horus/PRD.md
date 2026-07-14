@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "TUI cockpit state shipped (PR #229): the project screen now shows canonical PRD focus + next action before launch choices, and backlog cards distinguish claimed work without a second state path. The bounded high-value batch is complete; four actionable cards remain."
-next_action: "Await owner confirmation, then cut v0.0.54 from current main: three-file bump, full suite, tag/release/PyPI verification, and hosted deployment as the final invariant. [Sonnet bounded release operations, inline]"
-next_prompt: "Resume Horus. Confirm the owner wants to cut v0.0.54 now that the high-value batch is complete; then follow the release checklist through three-file bump, PR/merge, tag, GitHub release, PyPI install verification, and `scripts/deploy-hosted.sh`. [Sonnet bounded release operations, inline]"
-execution_recommendation: "continue-as-is — v0.0.54 is a fixed sequential release checklist with deterministic CI, index, install, and hosted-health gates; inline Sonnet keeps one operator responsible for the ordered external side effects."
+current_focus: "v0.0.54 released and deployed (PR #230): the three-file version bump passed 1,434 tests plus exact merge-SHA CI, trusted publishing, both PyPI indexes, a clean Python 3.12 install, and hosted version/access probes. Four actionable cards remain."
+next_action: "Await owner confirmation, then claim `process-tree-orphan-reap` and perform its Opus design-only pass: define positive ownership, report-only signals, per-OS termination boundaries, PID-reuse races, and deterministic gates before any implementation. [Opus ambiguous safety design, inline]"
+next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/process-tree-orphan-reap.md`; then run `horus resume --preflight`, claim the card, and complete an Opus design-only pass for safe cross-platform owned-process-tree reporting/reaping. Stop for owner approval before Sonnet implementation. [Opus ambiguous safety design, inline]"
+execution_recommendation: "continue-as-is — `process-tree-orphan-reap` starts with an ambiguous cross-platform ownership/termination safety design; inline Opus keeps the incident evidence and owner decisions together, while a phased Sonnet implementation should wait until the contract and gates are fenced."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -36,12 +36,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **Release v0.0.54:** the bounded high-value batch is complete; cut the release before starting another backlog card.
 - **★ [flagship] Multi-machine LaunchBackend seam — blocked on owner decisions, not a `[[targets]]` contract.** Hub HEAD `f4b4a6c` proposes target-local `horus worker` daemons plus a typed LocalBackend/RemoteBackend protocol. Owner must confirm the five decisions in hub `docs/multi-machine-launch-targets-design.md` §11 before harness P0 freezes the contract; do not build `OmnigentBackend`.
 1. **[ops] Process-tree orphan reap after failed runs:** dedicated card `process-tree-orphan-reap`; two incidents prove value, but cross-platform ownership/termination needs an Opus design pass before implementation.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
 3. **[ops] Machine validation leftovers (needs real hardware):** Windows — mascot failure dialog + Skills tab; Linux — VS Code task keybindings under Flatpak; macOS — mascot/Tk, terminal spawning, owned-window defaults, hook execution. install-smoke CI covers install/CLI/`/health` on all three already.
 4. **[ops] Measure per-tool-call hook spawn cost:** up to three `horus` processes per shell call; measure first, and build a dispatcher only if material. [Haiku measure / Sonnet dispatcher]
+5. **[ops] CI action runtime cleanup:** main tests pass, but checkout v4/setup-python v5 are being forced from deprecated Node 20 to Node 24; upgrade the test workflow actions before GitHub stops compatibility forcing.
 
 ### Open / deferred — see `.horus/backlog/`
 
@@ -74,7 +74,7 @@ retired/folded cards preserve their full history and triage rationale in `backlo
 **GitHub bridge:** cached discovery; onboard/integrate policy; private-repo fallback; dedup/tracking/ignore; `horus start`.
 **Execution & adapters:** Fake/Claude/Codex adapters; multi-account launch; workflow handoffs; worker marking; hub orchestration.
 **Companion & launch:** Tk mascot; worker badges; owned windows; VS Code tasks; same-version `/health` adoption.
-**Distribution (current v0.0.53):** PyPI trusted publishing; three-OS install smoke; hosted pinned-install deployment; Apache-2.0.
+**Distribution (current v0.0.54):** PyPI trusted publishing; three-OS install smoke; hosted pinned-install deployment; Apache-2.0.
 
 ## Rules (load-bearing)
 
