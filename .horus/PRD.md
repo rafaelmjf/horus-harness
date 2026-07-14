@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Account usage refresh controls shipped (PR #227): the web Accounts-strip cache refresh is visibly usable at desktop/phone widths, and the TUI `u` command re-reads cache-only usage and mappings in the current frame without provider calls. Six actionable cards remain; release stays deferred through the bounded high-value batch."
-next_action: "Await owner confirmation, then claim and implement `close-self-referential-sha-dirty-tree`: prevent self-referential closure metadata and surface any residual dirty continuity path after `--commit`. [Sonnet scoped closure bug, inline]"
-next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/close-self-referential-sha-dirty-tree.md`; then run `horus resume --preflight`, claim the card, add the structural self-reference fix plus post-commit residual-dirty guard, and branch → PR. [Sonnet scoped closure bug, inline]"
-execution_recommendation: "continue-as-is — `close-self-referential-sha-dirty-tree` is a bounded core-closure bug with a reproducible git fixture and explicit invariant; inline Sonnet keeps the failure reproduction and guard together, while delegation overhead exceeds the scoped change."
+current_focus: "Closure residual-dirty safety shipped (PR #228): pre-close work is harvested before staging, the closing SHA is sealed without self-reference, residual continuity paths are named before push, and the full closure verdict is recomputed afterward. Five actionable cards remain; the pre-release batch has one TUI slice left."
+next_action: "Await owner confirmation, then claim and implement `tui-cockpit-state-gaps`: show PRD current focus + next action on the project screen and distinguish claimed backlog cards, without idle timers or session-age expansion. [Sonnet scoped TUI rendering, inline]"
+next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/tui-cockpit-state-gaps.md`; then run `horus resume --preflight`, claim the card, render PRD focus/next plus claimed status in the TUI through existing continuity/card data, and branch → PR. Keep idle refresh/session age deferred. [Sonnet scoped TUI rendering, inline]"
+execution_recommendation: "continue-as-is — `tui-cockpit-state-gaps` is a bounded renderer-only slice over existing PRD/card data with direct state fixtures and a live terminal gate; inline Sonnet avoids plan overhead that exceeds the small scope."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -36,7 +36,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **Pre-release high-value batch:** `close-self-referential-sha-dirty-tree` → TUI focus/claimed slice. Cut the next release after this bounded batch, not between its cards.
+- **Pre-release high-value batch:** TUI focus/claimed slice. Cut the next release after this final bounded card, not before it.
 - **★ [flagship] Multi-machine LaunchBackend seam — blocked on owner decisions, not a `[[targets]]` contract.** Hub HEAD `f4b4a6c` proposes target-local `horus worker` daemons plus a typed LocalBackend/RemoteBackend protocol. Owner must confirm the five decisions in hub `docs/multi-machine-launch-targets-design.md` §11 before harness P0 freezes the contract; do not build `OmnigentBackend`.
 1. **[ops] Process-tree orphan reap after failed runs:** dedicated card `process-tree-orphan-reap`; two incidents prove value, but cross-platform ownership/termination needs an Opus design pass before implementation.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
@@ -45,12 +45,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Six actionable cards remain. Deferred cards carry an explicit promotion condition;
+Five actionable cards remain. Deferred cards carry an explicit promotion condition;
 retired/folded cards preserve their full history and triage rationale in `backlog/archive/`.
 
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Self-reference-free closure + residual-dirty guard** (2026-07-14, PR #228): close harvests work before staging, seals its own SHA only in the local marker, names residual continuity edits and skips push, then recomputes the complete closure verdict.
 **Visible web + manual TUI account usage refresh** (2026-07-14, PR #227): the web cache-refresh label is always visible and properly sized; TUI `u` re-reads cache-only usage and account mappings in-frame with a compact visible shortcut and no live provider call.
 **Canonical GPT-5.6 roster + lifecycle provenance** (2026-07-14, PR #226): generic aliases fold into Sol, canonical Sol/Terra/Luna priors join measured datums with sourced prices, and optional availability/retirement markers remain display-only.
 **TUI capabilities screen** (2026-07-14, PR #225): project-open regenerates the canonical capability record once, renders its vision plus a scrollable shipped list with related commands, and reports generated age + commits since.
@@ -68,8 +69,7 @@ One line per capability; details in `archive/features.md`, git history, and the 
 **Capabilities catalog + empirical delegation spine** (2026-07-11/12, PRs #157–#159/#163/#167–#169): MEASURED datums + owner priors + three consumer skills (data-only, no auto-routing); per-project `capabilities.json` regenerate-on-read artifact + Vision lead in catalog; `--models`/`--matrix` aligned tables with canonicalized model names + staleness WARNING.
 **Mobile-web-app bundle + dashboard resilience** (2026-07-11, PRs #149/#151/#153/#155): PWA-installable, per-project error card isolation.
 **LaunchBackend seam + fleet-reporting hardening** (2026-07-10/11, PRs #131–#148, v0.0.33–0.0.35): minimal LaunchBackend contract + LocalBackend (Omnigent optional, undepended-on, config target selection deferred); honest dispatch receipts; both-window usage preflight; fetch-first staleness signals.
-**Continuity core:** init/close/session/doctor/consolidate/distill/infer/reconcile; PRD+sessions v3; fetch-first gates; worker foundations.
-**Hooks & projections:** cross-agent usage/closure hooks; upgrade/sync surfaces; version-floor guard; `--exposed` boundary.
+**Continuity core + hooks/projections:** init/close/session/doctor/consolidate/distill/infer/reconcile; PRD+sessions v3; cross-agent usage/closure hooks; upgrade/sync, version-floor, and fetch-first gates; worker foundations.
 **Dashboard:** async multi-project UI; project/session/PR/usage views; mobile terminal; GitHub and local-project add flows.
 **GitHub bridge:** cached discovery; onboard/integrate policy; private-repo fallback; dedup/tracking/ignore; `horus start`.
 **Execution & adapters:** Fake/Claude/Codex adapters; multi-account launch; workflow handoffs; worker marking; hub orchestration.
@@ -83,7 +83,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Repo-local `.horus/` is the source of truth** — committed, vendor-neutral, works without Horus installed. Horus is a helper, never a required runtime.
 - **Controls climb a ladder: instruction → deterministic signal → hard gate.** Start with instructions; promote only after an observed field failure (fetch-first + branch→PR instructions failed, so SessionStart signal + block v7 followed). Never enforce preemptively.
 - **Continuity must beat re-derivation.** Every capability must give a fresh session something CLAUDE.md + git log cannot, at lower cost. PRD.md is state, not behavior; behavioral text belongs in the managed block, and Rules holds only project-specific invariants earned by failure.
-- **Closure reaches the remote, fetch-first** — `close --commit --push`; refuse newer remote continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
+- **Closure reaches the remote, fetch-first and self-reference-free** — `close --commit --push`; refuse newer remote continuity, seal the closing SHA without appending it into its own note, and refuse to push residual dirty continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
 - **One fetch-first primitive, reused.** `fetchcheck.fetch_and_state` (TTL-cached, read-only fetch, never pull) serves SessionStart and `status`/`fleet` gone-branch/staleness signals; no consumer reinvents it.
 - **Resume preflight only projects deterministic data.** Its sole sanctioned side effect is the explicit fetch refresh; session liveness is projected without registry reconciliation, usage snapshots carry unmistakable freshness tags, and no output recommends or selects a model/account.
 - **Three disciplines, every session:** reproduce the gate via a deterministic signal

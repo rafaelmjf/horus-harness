@@ -1,5 +1,5 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-14
@@ -7,6 +7,8 @@ created_by: overseer
 parallel: safe
 type: bug
 surface: horus/closure.py (commit_continuity), horus/cli.py (cmd_close)
+shipped_pr: 228
+shipped_sha: 028d3ee2fea6ecdafbebef470f70072cff1bb4b7
 ---
 
 > Prioritized 2026-07-14 (owner triage): an observed continuity-integrity failure in
