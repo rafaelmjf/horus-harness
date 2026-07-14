@@ -154,6 +154,7 @@ needs them.
   decisions.md    # durable decisions + reasoning
   history.md      # curated lessons / "bumps in the road"
   execution.md    # optional active execution plan for phased/subagent work
+  requirements.md # optional declarative machine readiness probes
   sessions/       # local session summaries (gitignored by default)
   temp/           # fleeting worker/subagent handoff notes (gitignored)
 ```
@@ -162,6 +163,12 @@ needs them.
 `<!-- HORUS:BEGIN shared-instructions -->` block and detects drift elsewhere.
 Horus project skills are scaffolded for both Claude Code (`.claude/skills`) and
 Codex (`.agents/skills`).
+
+Projects that depend on machine-local tools or configuration can commit an
+optional `.horus/requirements.md`. `doctor project`, resume prompts, the web
+dashboard, and the terminal TUI all render the same read-only readiness result;
+see [machine requirements](docs/machine-requirements.md) for the schema and
+safe probe rules.
 
 When `roadmap.md` recommends `plan-execution`, use `horus execution prompt
 --target claude|codex` to frame the supervisor session and `horus execution

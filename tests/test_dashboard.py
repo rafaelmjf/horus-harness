@@ -463,6 +463,32 @@ def test_project_detail_renders_sections(tmp_path, monkeypatch):
     assert "Roadmap" in html_out
 
 
+def test_project_detail_renders_machine_readiness_warning_and_badge(tmp_path, monkeypatch):
+    _init(tmp_path, monkeypatch)
+    initialize.init_project(tmp_path, assume_yes=True)
+    (tmp_path / ".horus" / "requirements.md").write_text(
+        """---
+kind: machine-requirements
+tools:
+  - name: Definitely absent CLI
+    probe: horus-definitely-absent-cli
+    install: install the project CLI
+    needed_for: project builds
+configs: []
+---
+""",
+        encoding="utf-8",
+    )
+
+    data = dashboard.load_project(str(tmp_path))
+    html_out = dashboard.render_project(data)
+    assert "Machine readiness" in html_out
+    assert "1 machine requirement missing" in html_out
+    assert "this machine is missing: Definitely absent CLI" in html_out
+    assert "needed for project builds" in html_out
+    assert any("machine requirement missing" in finding["message"] for finding in data["findings"])
+
+
 def test_project_detail_surfaces_token_overhead(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)

@@ -38,6 +38,7 @@ from horus import (
     initialize,
     integration,
     launcher,
+    machine_requirements,
     mergewatch,
     native_hooks,
     offboard,
@@ -123,8 +124,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     if args.target in ("project", "all"):
         print(f"doctor project: {root}")
+        requirements = machine_requirements.inspect(root)
         findings = (
             check_project(root)
+            + machine_requirements.findings(requirements)
             + skills.skill_findings(root, targets=("claude", "codex"))
             + integration.continuity_pr_findings(root)
         )

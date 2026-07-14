@@ -38,6 +38,7 @@ from horus import (
     config,
     fleet_review,
     frontmatter,
+    machine_requirements,
     registry,
     routines,
     terminal_sessions,
@@ -135,6 +136,7 @@ class TerminalUI:
         self.card: backlog.Card | None = None
         self.card_scroll = 0
         self.project_focus: dict[str, str] = {}
+        self.project_requirements: machine_requirements.Report | None = None
         self.capabilities_record: dict | None = None
         self.capabilities_error = ""
         self.fleet_review_record: fleet_review.FleetReview | None = None
@@ -296,6 +298,7 @@ class TerminalUI:
         if self.screen == "projects" and kind == "project":
             self.project = value  # type: ignore[assignment]
             self._load_project_focus()
+            self._load_project_requirements()
             self._load_project_capabilities()
             self._show("project")
         elif self.screen == "projects" and kind == "fleet_review":
@@ -354,6 +357,7 @@ class TerminalUI:
         if self.screen == "project":
             self.project = None
             self.project_focus = {}
+            self.project_requirements = None
             self._show("projects")
         elif self.screen == "accounts":
             self._show("card" if self.pending_card is not None else "project")
@@ -496,6 +500,13 @@ class TerminalUI:
         if self.screen == "projects":
             lines.extend(self._account_summary_text())
         elif self.screen == "project":
+            warning = (
+                machine_requirements.warning_text(self.project_requirements)
+                if self.project_requirements is not None
+                else ""
+            )
+            if warning:
+                lines.append(("class:warning", f"\n  {warning}\n"))
             current_focus = self.project_focus.get("current_focus", "")
             next_action = self.project_focus.get("next_action", "")
             if current_focus:
@@ -754,6 +765,13 @@ class TerminalUI:
         except OSError:
             return
 
+    def _load_project_requirements(self) -> None:
+        """Retain the canonical read-only readiness result for the project frame."""
+        self.project_requirements = None
+        if self.project is None:
+            return
+        self.project_requirements = machine_requirements.inspect(self.project)
+
     def _load_fleet_review(self) -> None:
         """Build the canonical CLI review once; this screen only renders it."""
         self.fleet_review_record = None
@@ -920,6 +938,7 @@ _STYLE = Style.from_dict(
         "item": "#d7dce2",
         "selected": "bold #ffffff bg:#245a73",
         "muted": "#8c98a5",
+        "warning": "bold #e3b341",
         "section": "bold #b8c7d1",
         "account": "#d7dce2",
         "session": "#9fc4d7",

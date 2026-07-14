@@ -810,6 +810,41 @@ def test_terminal_tui_project_screen_uses_canonical_focus_record(tmp_path, monke
     assert rendered.index("Ship the TUI slice") < rendered.index("Resume")
 
 
+def test_terminal_tui_project_screen_warns_about_missing_machine_requirements(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    (root / ".horus" / "requirements.md").write_text(
+        """---
+kind: machine-requirements
+tools:
+  - name: Definitely absent CLI
+    probe: horus-definitely-absent-cli
+    install: install the project CLI
+    needed_for: project builds
+configs: []
+---
+""",
+        encoding="utf-8",
+    )
+    config.register_project(root)
+    calls = []
+    original_inspect = terminal_tui.machine_requirements.inspect
+
+    def inspect(project):
+        calls.append(project)
+        return original_inspect(project, which=lambda _name: None)
+
+    monkeypatch.setattr(terminal_tui.machine_requirements, "inspect", inspect)
+    ui = terminal_tui.TerminalUI()
+    ui.activate()
+
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert calls == [root]
+    assert rendered.index("this machine is missing: Definitely absent CLI") < rendered.index("Resume")
+    assert "needed for project builds" in rendered
+    assert "install: install the project CLI" in rendered
+
+
 def test_terminal_tui_project_vision_and_capabilities_share_generated_record(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)

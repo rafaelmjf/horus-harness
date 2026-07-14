@@ -409,6 +409,29 @@ def test_resume_prompt_v3_points_at_prd_not_lanes(tmp_path):
     assert "Resume: build Codex adapter" in prompt
 
 
+def test_resume_prompt_prepends_missing_machine_requirements(tmp_path):
+    _mk_fresh_v3(tmp_path)
+    (tmp_path / ".horus" / "requirements.md").write_text(
+        """---
+kind: machine-requirements
+tools:
+  - name: Definitely absent CLI
+    probe: horus-definitely-absent-cli
+    install: install the project CLI
+    needed_for: project builds
+configs: []
+---
+""",
+        encoding="utf-8",
+    )
+
+    prompt = routines.resume_prompt(tmp_path)
+    assert prompt.startswith("⚠ this machine is missing: Definitely absent CLI")
+    assert prompt.index("this machine is missing") < prompt.index("Resume the")
+    assert "needed for project builds" in prompt
+    assert "install: install the project CLI" in prompt
+
+
 def test_resume_prompt_v2_unchanged(tmp_path):
     _mk_fresh(tmp_path)
     prompt = routines.resume_prompt(tmp_path)
