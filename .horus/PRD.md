@@ -41,7 +41,7 @@ Deferred cards carry promotion conditions; retired/folded cards keep full histor
 
 ## Shipped
 
-**Project-declared machine readiness** (2026-07-14): optional `.horus/requirements.md` tool/config probes are checked without command execution and rendered through one canonical result in doctor, resume prompts, dashboard badges/details, and TUI project views; the existing fabric declaration is the live first consumer.
+**Project-declared machine readiness** (2026-07-14, PR #237): optional `.horus/requirements.md` tool/config probes are checked without command execution and rendered through one canonical result in doctor, resume prompts, dashboard badges/details, and TUI project views; the existing fabric declaration is the live first consumer.
 **Unambiguous acting-close verdict** (2026-07-14, PR #236): `close --commit [--push]` performs its checkpoint before rendering status, so successful output contains only recomputed clean findings while residual edits, failed pushes, and no-op failures still report their final actionable state.
 **Required server-side continuity freshness** (2026-07-14, PR #233): `close --check --base-ref` fails source/product PRs without canonical PRD/lane updates; GitHub's `freshness` job is non-advisory and required, while the local merge hook tokenizes command positions so quoted prompts never trigger it. Live queued-auto-merge probe PR #234 remained blocked and was closed unmerged.
 **Remote-authoritative fleet curator** (2026-07-14): a path-free shared manifest drives `horus fleet --review` (fetched remote PRD/cards/capabilities kept separate from local state, with GitHub fallback and continuity lag), an optional TUI Fleet Review/curator launch, and a bundled owner-gated curation skill.

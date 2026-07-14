@@ -1,5 +1,5 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 tier: sonnet
 type: feature
@@ -10,6 +10,8 @@ surface:
   - horus/routines.py
   - horus/dashboard.py
   - horus/terminal_tui.py
+shipped_pr: 237
+shipped_sha: 2f2c7b3
 ---
 > Kept 2026-07-14 (owner triage): concrete consumer exists (`fabric`), so this remains
 > relevant after the correctness/reliability batch. It is not required for the next

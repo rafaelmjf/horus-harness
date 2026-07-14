@@ -44,3 +44,8 @@ as a fourth consumer, without introducing a second parser or probe path.
 ## Next
 
 - Finish PR #237, then ask before `datum-outcome-taxonomy-void-and-death`.
+
+## Checkpoints (auto-harvested)
+
+- `105c41a` feat: add project machine readiness across surfaces
+- `2f2c7b3` fix: honor existing machine requirement declarations
