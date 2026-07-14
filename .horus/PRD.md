@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Model-roster correctness shipped (PR #226): generic GPT-5.6 data now joins canonical Sol, Sol/Terra/Luna carry sourced prices and conservative roles, and optional lifecycle provenance renders without ranking or routing. Seven actionable cards remain; release stays deferred through the bounded high-value batch."
-next_action: "Await owner confirmation, then claim and implement `accounts-refresh-button-invisible`: restore visibility of the web dashboard Accounts-strip refresh control with the card's scoped CSS fix. [Sonnet tiny web bug, inline]"
-next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/accounts-refresh-button-invisible.md`; then run `horus resume --preflight`, claim the card, apply the scoped web-dashboard CSS fix, and branch → PR. Do not change the TUI. [Sonnet tiny web bug, inline]"
-execution_recommendation: "continue-as-is — `accounts-refresh-button-invisible` is a confirmed one-rule web CSS defect with a direct renderer/browser gate; delegation overhead exceeds the tiny scope."
+current_focus: "Account usage refresh controls shipped (PR #227): the web Accounts-strip cache refresh is visibly usable at desktop/phone widths, and the TUI `u` command re-reads cache-only usage and mappings in the current frame without provider calls. Six actionable cards remain; release stays deferred through the bounded high-value batch."
+next_action: "Await owner confirmation, then claim and implement `close-self-referential-sha-dirty-tree`: prevent self-referential closure metadata and surface any residual dirty continuity path after `--commit`. [Sonnet scoped closure bug, inline]"
+next_prompt: "Resume Horus. Confirm the owner wants to proceed with `.horus/backlog/close-self-referential-sha-dirty-tree.md`; then run `horus resume --preflight`, claim the card, add the structural self-reference fix plus post-commit residual-dirty guard, and branch → PR. [Sonnet scoped closure bug, inline]"
+execution_recommendation: "continue-as-is — `close-self-referential-sha-dirty-tree` is a bounded core-closure bug with a reproducible git fixture and explicit invariant; inline Sonnet keeps the failure reproduction and guard together, while delegation overhead exceeds the scoped change."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -36,7 +36,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Now / next candidates
 
-- **Pre-release high-value batch:** `accounts-refresh-button-invisible` → `close-self-referential-sha-dirty-tree` → TUI focus/claimed slice. Cut the next release after this bounded batch, not between its cards.
+- **Pre-release high-value batch:** `close-self-referential-sha-dirty-tree` → TUI focus/claimed slice. Cut the next release after this bounded batch, not between its cards.
 - **★ [flagship] Multi-machine LaunchBackend seam — blocked on owner decisions, not a `[[targets]]` contract.** Hub HEAD `f4b4a6c` proposes target-local `horus worker` daemons plus a typed LocalBackend/RemoteBackend protocol. Owner must confirm the five decisions in hub `docs/multi-machine-launch-targets-design.md` §11 before harness P0 freezes the contract; do not build `OmnigentBackend`.
 1. **[ops] Process-tree orphan reap after failed runs:** dedicated card `process-tree-orphan-reap`; two incidents prove value, but cross-platform ownership/termination needs an Opus design pass before implementation.
 2. **Catalog niceties:** badge private repos in the GitHub catalog; "N ignored" affordance on the untracked fold (user misread "only public repos visible" when 3 private repos were on the ignore list).
@@ -45,12 +45,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Seven actionable cards remain. Deferred cards carry an explicit promotion condition;
+Six actionable cards remain. Deferred cards carry an explicit promotion condition;
 retired/folded cards preserve their full history and triage rationale in `backlog/archive/`.
 
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Visible web + manual TUI account usage refresh** (2026-07-14, PR #227): the web cache-refresh label is always visible and properly sized; TUI `u` re-reads cache-only usage and account mappings in-frame with a compact visible shortcut and no live provider call.
 **Canonical GPT-5.6 roster + lifecycle provenance** (2026-07-14, PR #226): generic aliases fold into Sol, canonical Sol/Terra/Luna priors join measured datums with sourced prices, and optional availability/retirement markers remain display-only.
 **TUI capabilities screen** (2026-07-14, PR #225): project-open regenerates the canonical capability record once, renders its vision plus a scrollable shipped list with related commands, and reports generated age + commits since.
 **Archive-on-ship backlog lifecycle** (2026-07-14, PR #223): shipping stamps PR/SHA then moves the complete card to `backlog/archive/`; active local/fleet views exclude terminal cards and the archive; 13 shipped + 2 owner-retired cruft cards archived without content loss.

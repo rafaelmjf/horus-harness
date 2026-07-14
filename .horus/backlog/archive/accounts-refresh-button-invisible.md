@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 type: bug
 created: 2026-07-11
 parallel: safe
 surface: horus/dashboard.py, horus/terminal_tui.py, tests/test_dashboard.py, tests/test_terminal_sessions.py
+shipped_pr: 227
+shipped_sha: 66a22fc45480f789e338cebdc25ce5beb591eab0
 ---
 
 > Prioritized 2026-07-14 (owner triage): confirmed, permanently user-invisible control
