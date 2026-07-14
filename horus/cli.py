@@ -36,10 +36,12 @@ from horus import (
     initialize,
     integration,
     launcher,
+    mergewatch,
     native_hooks,
     offboard,
     overhead,
     registry,
+    reinstall,
     remote_start,
     rescue,
     routines,
@@ -439,7 +441,12 @@ def cmd_datum_close(args: argparse.Namespace) -> int:
     print(f"Closed datum {datum.session_id} ({datum.model or 'unknown model'}): {' | '.join(bits)}")
 
     if getattr(args, "card", None):
-        project_root = Path(datum.project) if datum.project else None
+        run_dir = Path(datum.project) if datum.project else None
+        # `datum.project` records wherever the run actually executed, which is
+        # the WORKTREE path when `horus run --worktree` was used — but the
+        # delivered card lives in the primary checkout's own `.horus/backlog/`
+        # and must be stamped there even after the worktree is later removed.
+        project_root = worktree.primary_checkout(run_dir) if run_dir is not None else None
         try:
             card_path = backlog.resolve_delivered_card(args.card, project_root=project_root)
         except FileNotFoundError as exc:
@@ -452,6 +459,12 @@ def cmd_datum_close(args: argparse.Namespace) -> int:
             warning = closure.target_continuity_staleness(project_root, completed_at=datum.completed_at)
             if warning:
                 print(f"WARNING: {warning}")
+        if getattr(args, "remove_worktree", False) and run_dir is not None and project_root is not None:
+            if run_dir.resolve() != project_root.resolve():
+                removal = worktree.remove_if_merged(project_root, run_dir)
+                print(f"{'Removed' if removal.removed else 'Kept'} worktree: {removal.detail}")
+            else:
+                print("--remove-worktree: this datum's project is already the primary checkout — nothing to remove.")
     return 0
 
 
@@ -469,6 +482,36 @@ def cmd_datum_migrate_names(args: argparse.Namespace) -> int:
         canonical = datums.ALIAS_TO_CANONICAL[alias]
         print(f"Renamed {count} datum(s): {alias!r} -> {canonical!r}")
     return 0
+
+
+def cmd_merge_watch(args: argparse.Namespace) -> int:
+    """Poll a PR/commit's required checks on the EXACT sha until they settle,
+    printing one line per state change — absorbs the wait, not the
+    observation (the supervisor still reads the final green/red itself)."""
+    root = Path(args.path).resolve()
+    try:
+        outcome = mergewatch.watch(root, args.ref, interval=args.interval, timeout=args.timeout)
+    except mergewatch.MergeWatchError as exc:
+        print(f"merge-watch: {exc}")
+        return 2
+    return 0 if outcome.state == "success" else 1
+
+
+def cmd_reinstall(args: argparse.Namespace) -> int:
+    """`uv cache clean` + force-reinstall from PATH, then grep the INSTALLED
+    surface for --verify's marker and report found/absent."""
+    source = str(Path(args.path).resolve())
+    try:
+        result = reinstall.reinstall(source, args.verify, package=args.package, python=args.python)
+    except reinstall.ReinstallError as exc:
+        print(f"reinstall: {exc}")
+        return 2
+    print(f"reinstall: {args.package} reinstalled from {source} (python {args.python})")
+    status = "FOUND" if result.marker_found else "ABSENT"
+    print(f"reinstall: marker {result.marker!r} -> {status} ({result.detail})")
+    for note in result.service_notes:
+        print(f"reinstall: NOTE {note}")
+    return 0 if result.marker_found else 1
 
 
 def cmd_discover(args: argparse.Namespace) -> int:
@@ -2687,9 +2730,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PATH-OR-SLUG",
         help="one-act acceptance: stamp the delivered backlog card `status: done` + `shipped: "
-             "<date>` in the target project (this datum's own `project`, unless PATH-OR-SLUG "
-             "already resolves as a path), then print a stale-continuity warning if that "
-             "target's own .horus/PRD.md looks behind this run's completion (never auto-fixed)",
+             "<date>` in the target project's PRIMARY checkout (resolved from this datum's own "
+             "`project`, which may be a --worktree path — unless PATH-OR-SLUG already resolves "
+             "as a path), then print a stale-continuity warning if that target's own "
+             ".horus/PRD.md looks behind this run's completion (never auto-fixed)",
+    )
+    p_datum_close.add_argument(
+        "--remove-worktree",
+        action="store_true",
+        help="with --card: if this datum's `project` was a linked git worktree, remove it (and "
+             "its branch) once the card is stamped — ONLY when the branch looks merged (its "
+             "upstream is gone, or its tip is an ancestor of the fetched default branch); "
+             "otherwise the worktree is left in place and the reason is printed",
     )
     p_datum_close.set_defaults(func=cmd_datum_close)
 
@@ -2825,6 +2877,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="kill abandoned Horus tmux sessions (never one that's attached, live, or recently active)",
     )
     p_reap.set_defaults(func=cmd_reap)
+
+    p_merge_watch = sub.add_parser(
+        "merge-watch",
+        help="poll a PR/commit's required checks on the exact sha until they settle; exit 0 green / 1 red",
+    )
+    p_merge_watch.add_argument("ref", help="a PR number, PR URL, or literal commit sha")
+    p_merge_watch.add_argument("--path", default=".", help="repo root to run gh/git in (default: cwd)")
+    p_merge_watch.add_argument(
+        "--interval", type=float, default=mergewatch.DEFAULT_INTERVAL, metavar="SECONDS",
+        help=f"poll interval (default: {mergewatch.DEFAULT_INTERVAL:g}s)",
+    )
+    p_merge_watch.add_argument(
+        "--timeout", type=float, default=mergewatch.DEFAULT_TIMEOUT, metavar="SECONDS",
+        help=f"give up waiting after this long (default: {mergewatch.DEFAULT_TIMEOUT:g}s)",
+    )
+    p_merge_watch.set_defaults(func=cmd_merge_watch)
+
+    p_reinstall = sub.add_parser(
+        "reinstall",
+        help="uv cache clean + force-reinstall from PATH, then verify a marker landed in the installed surface",
+    )
+    p_reinstall.add_argument("path", nargs="?", default=".", help="source to install from (default: cwd)")
+    p_reinstall.add_argument(
+        "--verify", required=True, metavar="MARKER", dest="verify",
+        help="string to grep for in the freshly-installed surface (found/absent, reported and exit-coded)",
+    )
+    p_reinstall.add_argument("--package", default=reinstall.DEFAULT_PACKAGE, help="uv tool package name")
+    p_reinstall.add_argument("--python", default=reinstall.DEFAULT_PYTHON, help="python version for the tool env")
+    p_reinstall.set_defaults(func=cmd_reinstall)
 
     p_run = sub.add_parser("run", help="spawn (or resume) an agent session, tracked in the registry")
     p_run.add_argument("prompt", help="the prompt to send the agent")

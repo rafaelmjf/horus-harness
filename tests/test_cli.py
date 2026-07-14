@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from horus import adapters, config, github_catalog, launcher, registry, remote_start, upgrade
+from horus import adapters, config, github_catalog, launcher, mergewatch, registry, reinstall, remote_start, upgrade
 from horus.cli import main
 from horus.instructions import check_drift
 from horus.registry import Registry, SessionRecord
@@ -2095,3 +2095,174 @@ def test_upgrade_project_untracks_legacy_claim_lock(tmp_path, monkeypatch, capsy
     ).stdout
     assert tracked == ""
     assert "stopped tracking generated continuity state" in capsys.readouterr().out
+
+
+# --- horus merge-watch: CLI wiring (module internals covered by test_mergewatch.py) --
+
+def test_merge_watch_cli_exits_0_on_green(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        mergewatch, "watch",
+        lambda root, ref, *, interval, timeout: mergewatch.WatchOutcome(state="success", sha="deadbeef", checks={}),
+    )
+    rc = main(["merge-watch", "42", "--path", str(tmp_path)])
+    assert rc == 0
+
+
+def test_merge_watch_cli_exits_1_on_red(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        mergewatch, "watch",
+        lambda root, ref, *, interval, timeout: mergewatch.WatchOutcome(state="failure", sha="deadbeef", checks={}),
+    )
+    rc = main(["merge-watch", "42", "--path", str(tmp_path)])
+    assert rc == 1
+
+
+def test_merge_watch_cli_exits_1_on_timeout(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        mergewatch, "watch",
+        lambda root, ref, *, interval, timeout: mergewatch.WatchOutcome(state="timeout", sha="deadbeef", checks={}),
+    )
+    rc = main(["merge-watch", "42", "--path", str(tmp_path)])
+    assert rc == 1
+
+
+def test_merge_watch_cli_exits_2_on_resolution_error(tmp_path, monkeypatch, capsys):
+    def raiser(root, ref, *, interval, timeout):
+        raise mergewatch.MergeWatchError("gh repo view failed: not a repo")
+
+    monkeypatch.setattr(mergewatch, "watch", raiser)
+    rc = main(["merge-watch", "42", "--path", str(tmp_path)])
+    assert rc == 2
+    assert "not a repo" in capsys.readouterr().out
+
+
+def test_merge_watch_cli_passes_interval_and_timeout(tmp_path, monkeypatch):
+    captured = {}
+
+    def spy(root, ref, *, interval, timeout):
+        captured["interval"] = interval
+        captured["timeout"] = timeout
+        return mergewatch.WatchOutcome(state="success", sha="x", checks={})
+
+    monkeypatch.setattr(mergewatch, "watch", spy)
+    main(["merge-watch", "42", "--path", str(tmp_path), "--interval", "3", "--timeout", "60"])
+    assert captured == {"interval": 3.0, "timeout": 60.0}
+
+
+# --- horus reinstall: CLI wiring (module internals covered by test_reinstall.py) --
+
+def test_reinstall_cli_exits_0_when_marker_found(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        reinstall, "reinstall",
+        lambda source, marker, *, package, python: reinstall.ReinstallResult(
+            ok=True, marker=marker, marker_found=True, detail="found in cli.py", service_notes=[],
+        ),
+    )
+    rc = main(["reinstall", str(tmp_path), "--verify", "MARKER"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "FOUND" in out
+
+
+def test_reinstall_cli_exits_1_when_marker_absent(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        reinstall, "reinstall",
+        lambda source, marker, *, package, python: reinstall.ReinstallResult(
+            ok=True, marker=marker, marker_found=False, detail="not found", service_notes=[],
+        ),
+    )
+    rc = main(["reinstall", str(tmp_path), "--verify", "MARKER"])
+    assert rc == 1
+    assert "ABSENT" in capsys.readouterr().out
+
+
+def test_reinstall_cli_exits_2_on_install_failure(tmp_path, monkeypatch, capsys):
+    def raiser(source, marker, *, package, python):
+        raise reinstall.ReinstallError("uv tool install failed: boom")
+
+    monkeypatch.setattr(reinstall, "reinstall", raiser)
+    rc = main(["reinstall", str(tmp_path), "--verify", "MARKER"])
+    assert rc == 2
+    assert "boom" in capsys.readouterr().out
+
+
+def test_reinstall_cli_surfaces_service_notes(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        reinstall, "reinstall",
+        lambda source, marker, *, package, python: reinstall.ReinstallResult(
+            ok=True, marker=marker, marker_found=True, detail="found",
+            service_notes=["horus-dashboard.service is active — restart it"],
+        ),
+    )
+    rc = main(["reinstall", str(tmp_path), "--verify", "MARKER"])
+    assert rc == 0
+    assert "NOTE" in capsys.readouterr().out
+
+
+def test_reinstall_cli_requires_verify_flag(tmp_path, capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["reinstall", str(tmp_path)])
+    assert exc.value.code == 2
+
+
+# --- horus datum close --card: primary-checkout resolution + worktree cleanup ---
+
+def test_datum_close_card_resolves_against_primary_checkout_not_worktree(tmp_path, monkeypatch, capsys):
+    """A run under `--worktree` records its `project` as the WORKTREE path;
+    `--card` must still stamp the card in the PRIMARY checkout's own
+    `.horus/backlog/`, not a (possibly absent) one under the worktree."""
+    _home(tmp_path, monkeypatch)
+    repo = _init_repo(tmp_path / "repo")
+    _write_backlog_card(repo, "deliver-me", status="open", priority="now", tier="sonnet")
+
+    rc = main(["run", "hi", "--agent", "fake", "--worktree", "probe-branch", "--path", str(repo)])
+    assert rc == 0
+    capsys.readouterr()
+
+    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Stamped" in out
+    assert str(repo.resolve()) in out  # stamped under the PRIMARY checkout, not the -wt- path
+
+    from horus import backlog
+    assert backlog.find_card(repo, "deliver-me").status == "done"
+
+
+def test_datum_close_remove_worktree_removes_when_merged(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    repo = _init_repo(tmp_path / "repo")
+    _write_backlog_card(repo, "deliver-me", status="open", priority="now", tier="sonnet")
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True, capture_output=True, text=True)
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-u", "origin", "main")
+    _git(repo, "remote", "set-head", "origin", "-a")
+
+    rc = main(["run", "hi", "--agent", "fake", "--worktree", "probe-branch", "--path", str(repo)])
+    assert rc == 0
+    worktree_dir = repo.parent / "repo-wt-probe-branch"
+    capsys.readouterr()
+
+    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me", "--remove-worktree"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Removed worktree" in out
+    assert not worktree_dir.exists()
+
+
+def test_datum_close_remove_worktree_keeps_unmerged(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    repo = _init_repo(tmp_path / "repo")
+    _write_backlog_card(repo, "deliver-me", status="open", priority="now", tier="sonnet")
+
+    rc = main(["run", "hi", "--agent", "fake", "--worktree", "probe-branch", "--path", str(repo)])
+    assert rc == 0
+    worktree_dir = repo.parent / "repo-wt-probe-branch"
+    capsys.readouterr()
+
+    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me", "--remove-worktree"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Kept worktree" in out
+    assert worktree_dir.exists()
