@@ -1013,6 +1013,84 @@ def test_terminal_tui_account_usage_uses_one_line_per_window(tmp_path, monkeypat
     assert "personal · 5h" not in rendered
 
 
+def test_terminal_tui_manual_usage_refresh_updates_current_frame(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    ui = terminal_tui.TerminalUI()
+    ui._show("accounts")
+    ui.selected = 4
+    refreshed = [
+        terminal_tui.LaunchAccount("claude", "personal", None),
+        terminal_tui.LaunchAccount("codex", "work", "work"),
+    ]
+    snapshot = usage_snapshot.UsageSnapshot(42.0, "in 1h", 17.0, "in 3d")
+    calls = []
+    monkeypatch.setattr(terminal_tui, "_launch_accounts", lambda: refreshed)
+
+    def refresh_usage(accounts):
+        calls.append(accounts)
+        return {("claude", "personal"): snapshot, ("codex", "work"): None}
+
+    monkeypatch.setattr(terminal_tui, "_account_usage", refresh_usage)
+    ui.refresh_account_usage()
+
+    assert calls == [refreshed]
+    assert ui.accounts == refreshed
+    assert ui.account_usage[("claude", "personal")] == snapshot
+    assert [value for _kind, value in ui.items] == refreshed
+    assert ui.selected == 1  # old selection is clamped to the refreshed list
+    assert ui.status == "Account usage refreshed from cache."
+
+
+def test_terminal_tui_usage_refresh_key_and_footer_are_visible(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    calls = []
+    original = terminal_tui.TerminalUI.refresh_account_usage
+
+    def spy(self):
+        calls.append(self.screen)
+        original(self)
+
+    monkeypatch.setattr(terminal_tui.TerminalUI, "refresh_account_usage", spy)
+
+    async def drive():
+        with create_pipe_input() as pipe_input:
+            ui = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
+            footer = "".join(fragment[1] for fragment in ui._footer_text())
+            task = asyncio.create_task(ui.application.run_async())
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("u")
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("q")
+            assert await asyncio.wait_for(task, timeout=1) == "quit"
+            return footer, ui.status
+
+    footer, status = asyncio.run(drive())
+    assert calls == ["projects"]
+    assert "u refresh" in footer
+    assert status == "Account usage refreshed from cache."
+
+
+def test_terminal_tui_usage_refresh_reads_cache_only(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    account = terminal_tui.LaunchAccount("claude", "personal", None)
+    snapshot = usage_snapshot.UsageSnapshot(31.0, None, 9.0, None)
+    reads = []
+
+    def read_cache_only(agent, alias):
+        reads.append((agent, alias))
+        return snapshot
+
+    def live_call(*args, **kwargs):
+        raise AssertionError("manual TUI refresh must not call a live usage endpoint")
+
+    monkeypatch.setattr(terminal_tui.usage_snapshot, "read_cache_only", read_cache_only)
+    monkeypatch.setattr(terminal_tui.claude_usage, "latest_usage", live_call)
+    monkeypatch.setattr(terminal_tui.codex_usage, "latest_account_usage", live_call)
+
+    assert terminal_tui._account_usage([account]) == {("claude", "personal"): snapshot}
+    assert reads == [("claude", "personal")]
+
+
 def test_terminal_tui_resume_returns_ambient_personal_launch(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)

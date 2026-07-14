@@ -2105,6 +2105,8 @@ def test_accounts_refresh_button_labeled_cached_not_live(tmp_path, monkeypatch):
     strip = dashboard._accounts_strip([])
     assert "refresh (cached)" in strip
     assert "/accounts-refresh" in strip or "horusRefreshAccounts" in strip
+    assert "class='icon-btn usage-refresh'" in strip
+    assert ".icon-btn.usage-refresh{opacity:1;width:auto;padding:0 6px}" in dashboard._STYLE
 
 
 def test_known_aliases_includes_codex_isolated_and_ambient(tmp_path, monkeypatch):
