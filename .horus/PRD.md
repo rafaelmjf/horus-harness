@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Release v0.0.53 is open as PR #220 at `66827f8`: pyproject.toml, horus/__init__.py, and uv.lock agree; the built package reports 0.0.53; the required post-bump suite is green (1367 tests). It packages PRs #218/#219, including the friendly backlog-card editor handoff."
-next_action: "Observe PR #220 CI on its final head and merge; observe merge-SHA CI, tag/release v0.0.53, verify PyPI JSON + simple index + clean-venv install, then run scripts/deploy-hosted.sh last and verify hosted /health version + root 403. [Haiku-scale mechanical release, inline]"
-next_prompt: "Resume Horus release v0.0.53. Fetch first; PR #220 is the three-file bump. Observe required CI on its final head, merge and watch merge-SHA CI, then tag + publish the GitHub release. Verify PyPI JSON/simple index and a clean Python 3.12 install before running scripts/deploy-hosted.sh as the final release step."
-execution_recommendation: "continue-as-is — release v0.0.53 is a bounded mechanical sequence already past its local gate; delegation would add more brief/review/acceptance overhead than it saves. Verification is the post-bump suite, exact-SHA CI, publish→clean-install E2E, and hosted health/gate probe."
+current_focus: "v0.0.53 released from PR #220 / merge `9edb7dd`: PR and merge-SHA CI passed on Python 3.12/3.13; PyPI JSON + simple index exposed 0.0.53; a clean Python 3.12 environment installed the public artifact and showed the nano editor guidance; hosted deploy reports 0.0.53 and remains gated (root 403)."
+next_action: "Owner-eyeball backlog-card `e` from the installed TUI (expect nano + visible Ctrl+O/Ctrl+X guidance), then resume `tui-capabilities-screen`: Capabilities item, vision line, and staleness hint as a thin renderer over capabilities.generate_project. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus after v0.0.53. Fetch first. Ask the owner to verify backlog-card `e` opens nano with visible save/return guidance on their real terminal; then claim `.horus/backlog/tui-capabilities-screen.md` and implement it as a thin TUI renderer over capabilities.generate_project, branch → PR."
+execution_recommendation: "continue-as-is — the owner editor check is a one-minute runtime eyeball, then `tui-capabilities-screen` is bounded rendering over an existing read-only module with no design ambiguity, suited to inline sonnet-5; delegation overhead would exceed the scoped change."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -68,7 +68,7 @@ One line per capability; details in `archive/features.md`, git history, and the 
 **GitHub bridge:** cached discovery; onboard/integrate policy; private-repo fallback; dedup/tracking/ignore; `horus start`.
 **Execution & adapters:** Fake/Claude/Codex adapters; multi-account launch; workflow handoffs; worker marking; hub orchestration.
 **Companion & launch:** Tk mascot; worker badges; owned windows; VS Code tasks; same-version `/health` adoption.
-**Distribution:** PyPI trusted publishing; three-OS install smoke; Apache-2.0.
+**Distribution (current v0.0.53):** PyPI trusted publishing; three-OS install smoke; hosted pinned-install deployment; Apache-2.0.
 
 ## Rules (load-bearing)
 
