@@ -8,6 +8,17 @@ surface: horus/dashboard.py, horus/pty_host.py, horus/pty_session.py
 folded_into: mobile-terminal-ux-hardening
 ---
 
+> **CHECKED AGAINST PR #171 (2026-07-14, tier0-supervision-verbs acceptance
+> cleanup):** `mobile-terminal-ux-hardening` shipped via PR #171
+> (`68b4125`, merged 2026-07-12) — but its own PR body explicitly scopes
+> **symptom 2 (this card's mobile-no-input bug) as OUT OF SCOPE**: "untouched
+> beyond the pre-existing input-failure surfacing, per the card." PR #171 only
+> touched `horus/dashboard.py` CSS/JS sizing+lifecycle and `horus/pty_host.py`
+> resize-debounce — no `access_gate.py`/`_same_origin` change, which is where
+> this card's own diagnosis (§"Investigation 2026-07-12") pins the input-path
+> suspects. **Leaving this card open** — not resolved by #171, still needs the
+> on-phone decision tree in that section run against the live hosted dashboard.
+
 > **REACTIVATED (2026-07-12, owner session):** investigation session traced the full
 > input path and concluded this is **our stack, not Claude Code** — the transport
 > (`onData` → POST `/pty/input` → Access-JWT + `_same_origin` gate → PTY write) is
