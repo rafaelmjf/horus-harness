@@ -201,3 +201,57 @@ def test_claim_works_without_fcntl_like_windows(tmp_path, monkeypatch):
     assert claimed
     assert findings == []
     assert backlog.find_card(tmp_path, "win-card").status == "claimed"
+
+
+def test_add_review_creates_section_and_appends(tmp_path):
+    _mk_card(tmp_path, "review-me")
+
+    card = backlog.add_review(tmp_path, "review-me", author="rafa", verdict="approve", note="Looks right.")
+    assert card is not None
+    text = card.path.read_text(encoding="utf-8")
+    assert "## Reviews" in text
+    assert "— rafa (manual)" in text
+    assert "Verdict: approve" in text
+    assert text.rstrip().endswith("Looks right.")
+
+    backlog.add_review(tmp_path, "review-me", author="sonnet", source="agent", note="Second pass.")
+    text = card.path.read_text(encoding="utf-8")
+    assert text.count("## Reviews") == 1  # one section, entries accumulate
+    assert text.index("— rafa (manual)") < text.index("— sonnet (agent)")
+
+
+def test_add_review_inserts_before_following_section(tmp_path):
+    _mk_card(tmp_path, "sectioned", body="Body.\n\n## Reviews\n\n### 2026-07-01 — old (manual)\nVerdict: hold\n\n## Notes\n\nKeep me last.\n")
+
+    backlog.add_review(tmp_path, "sectioned", author="rafa", note="Newer.")
+    text = (tmp_path / ".horus" / "backlog" / "sectioned.md").read_text(encoding="utf-8")
+    assert text.index("old (manual)") < text.index("Newer.") < text.index("## Notes")
+
+
+def test_add_review_unknown_card_returns_none(tmp_path):
+    _mk_card(tmp_path, "exists")
+    assert backlog.add_review(tmp_path, "missing", author="rafa", note="x") is None
+
+
+def test_add_review_preserves_frontmatter_and_body(tmp_path):
+    _mk_card(tmp_path, "intact", status="claimed", surface="horus/cli.py")
+    before = backlog.find_card(tmp_path, "intact")
+
+    backlog.add_review(tmp_path, "intact", author="rafa", note="No side effects.")
+    after = backlog.find_card(tmp_path, "intact")
+    assert (after.status, after.surface, after.title) == (before.status, before.surface, before.title)
+
+
+def test_hygiene_ignores_done_markers_inside_reviews_section(tmp_path):
+    _mk_card(
+        tmp_path,
+        "reviewed",
+        body="Body.\n\n## Reviews\n\n### 2026-07-14 — rafa (manual)\n\nDONE looks wrong here.\n- [x] I checked the repro\n",
+    )
+    assert backlog.hygiene_findings(tmp_path) == []
+
+
+def test_hygiene_still_flags_done_markers_outside_reviews_section(tmp_path):
+    _mk_card(tmp_path, "drifted", body="- [x] DONE: shipped it\n\n## Reviews\n\n### 2026-07-14 — rafa (manual)\nVerdict: ok\n")
+    findings = backlog.hygiene_findings(tmp_path)
+    assert any("lingering done" in f.message for f in findings)

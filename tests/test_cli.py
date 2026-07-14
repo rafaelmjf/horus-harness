@@ -2042,3 +2042,56 @@ def test_backlog_claim_non_overlapping_proceeds_clean(tmp_path, monkeypatch, cap
     assert rc == 0
     assert "Claimed: b" in out
     assert "warn" not in out.lower()
+
+
+def test_backlog_review_cli_appends_entry(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "review-me", status="open", priority="high")
+
+    assert main([
+        "backlog", "review", "review-me", "--by", "sonnet", "--source", "agent",
+        "--verdict", "needs-work", "--note", "Repro still fails on tmux 3.3.",
+        "--path", str(tmp_path),
+    ]) == 0
+    assert "Review appended" in capsys.readouterr().out
+    text = (tmp_path / ".horus" / "backlog" / "review-me.md").read_text(encoding="utf-8")
+    assert "## Reviews" in text
+    assert "— sonnet (agent)" in text
+    assert "Verdict: needs-work" in text
+    assert "Repro still fails on tmux 3.3." in text
+
+
+def test_backlog_review_cli_requires_note_or_verdict(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "review-me", status="open", priority="high")
+
+    assert main(["backlog", "review", "review-me", "--path", str(tmp_path)]) == 2
+    assert "--note and/or --verdict" in capsys.readouterr().out
+
+
+def test_upgrade_project_untracks_legacy_claim_lock(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from horus import initialize
+
+    subprocess.run(["git", "-C", str(tmp_path), "init"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@example.com"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "Tester"], check=True)
+    initialize.init_project(tmp_path, assume_yes=True)
+    lock = tmp_path / ".horus" / "backlog" / ".claim.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text("", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-f", ".horus/backlog/.claim.lock"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "legacy init"], check=True, capture_output=True)
+
+    rc = main(["upgrade-project", "--path", str(tmp_path), "--apply", "--no-hooks", "--no-skills", "--no-instructions"])
+
+    assert rc == 0
+    tracked = subprocess.run(
+        ["git", "-C", str(tmp_path), "ls-files", ".horus/backlog/.claim.lock"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    assert tracked == ""
+    assert "stopped tracking generated continuity state" in capsys.readouterr().out

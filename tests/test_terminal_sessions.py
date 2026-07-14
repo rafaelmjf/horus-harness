@@ -1029,3 +1029,138 @@ def test_cmd_open_resume_tmux_uses_continuity_prompt(tmp_path, monkeypatch):
     assert cli.main(["open", str(root), "--agent", "fake", "--mode", "resume", "--target", "tmux", "--detach"]) == 0
     assert "Resume the demo project" in captured["prompt"]
     assert captured["attach"] is False
+
+
+def _card_screen_ui(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    path = _card(root, "review-me", title="Review me", priority="high", type="bug", detail="Detail.")
+    config.register_project(root)
+    ui = terminal_tui.TerminalUI()
+    ui.activate()  # project
+    ui.move(2)
+    ui.activate()  # backlog
+    ui.activate()  # card
+    assert ui.screen == "card"
+    return ui, root, path
+
+
+def test_terminal_tui_e_and_r_keys_exit_with_edit_action_on_card_screen(tmp_path, monkeypatch):
+    ui, root, path = _card_screen_ui(tmp_path, monkeypatch)
+
+    async def drive(key):
+        with create_pipe_input() as pipe_input:
+            driven = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
+            driven.activate()
+            driven.move(2)
+            driven.activate()
+            driven.activate()
+            assert driven.screen == "card"
+            task = asyncio.create_task(driven.application.run_async())
+            await asyncio.sleep(0.02)
+            pipe_input.send_text(key)
+            return await asyncio.wait_for(task, timeout=1)
+
+    edit = asyncio.run(drive("e"))
+    assert isinstance(edit, terminal_tui._EditCard)
+    assert edit.project == root and edit.card.path == path and edit.review is False
+
+    review = asyncio.run(drive("r"))
+    assert isinstance(review, terminal_tui._EditCard) and review.review is True
+
+    footer = "".join(fragment[1] for fragment in ui._footer_text())
+    assert "e edit" in footer and "r review" in footer
+
+
+def test_terminal_tui_e_and_r_keys_inert_outside_card_screen(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.register_project(_project(tmp_path))
+
+    async def drive():
+        with create_pipe_input() as pipe_input:
+            ui = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
+            task = asyncio.create_task(ui.application.run_async())
+            await asyncio.sleep(0.02)
+            pipe_input.send_text("e")
+            pipe_input.send_text("r")
+            await asyncio.sleep(0.02)
+            still_running = not task.done()
+            pipe_input.send_text("q")
+            assert await asyncio.wait_for(task, timeout=1) == "quit"
+            return still_running, ui.screen
+
+    still_running, screen = asyncio.run(drive())
+    assert still_running and screen == "projects"
+
+
+def _git_project(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    for args in (("init",), ("config", "user.email", "t@example.com"), ("config", "user.name", "Tester")):
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+    path = _card(root, "review-me", title="Review me", priority="high", type="bug", detail="Detail.")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(root), "commit", "-m", "init"], check=True, capture_output=True)
+    from horus import backlog as backlog_mod
+
+    return root, backlog_mod.find_card(root, "review-me")
+
+
+def test_edit_card_flow_commits_on_confirm(tmp_path, monkeypatch):
+    root, card = _git_project(tmp_path, monkeypatch)
+
+    def fake_editor(path):
+        path.write_text(path.read_text(encoding="utf-8") + "\nEdited line.\n", encoding="utf-8")
+        return None
+
+    monkeypatch.setattr(terminal_tui, "_run_editor", fake_editor)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "y")
+    from horus import closure
+
+    committed = {}
+    monkeypatch.setattr(
+        closure, "commit_continuity",
+        lambda r, m, push=False: committed.update(root=r, message=m, push=push) or (True, "committed 1 file(s); pushed"),
+    )
+    status = terminal_tui._edit_card(root, card, review=False)
+    assert committed["root"] == root and committed["push"] is True
+    assert "edit via TUI" in committed["message"]
+    assert status == "committed 1 file(s); pushed"
+
+
+def test_edit_card_flow_decline_leaves_uncommitted(tmp_path, monkeypatch):
+    root, card = _git_project(tmp_path, monkeypatch)
+
+    def fake_editor(path):
+        path.write_text(path.read_text(encoding="utf-8") + "\nEdited line.\n", encoding="utf-8")
+        return None
+
+    monkeypatch.setattr(terminal_tui, "_run_editor", fake_editor)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "")
+    status = terminal_tui._edit_card(root, card, review=False)
+    assert "uncommitted" in status
+    assert "Edited line." in card.path.read_text(encoding="utf-8")
+
+
+def test_edit_card_review_scaffolds_and_cancel_restores_card(tmp_path, monkeypatch):
+    root, card = _git_project(tmp_path, monkeypatch)
+    original = card.path.read_text(encoding="utf-8")
+    seen = {}
+
+    def untouched_editor(path):
+        seen["text"] = path.read_text(encoding="utf-8")
+        return None
+
+    monkeypatch.setattr(terminal_tui, "_run_editor", untouched_editor)
+    status = terminal_tui._edit_card(root, card, review=True)
+    assert "## Reviews" in seen["text"]  # editor opened on the scaffolded entry
+    assert terminal_tui._REVIEW_PLACEHOLDER in seen["text"]
+    assert "cancelled" in status.lower()
+    assert card.path.read_text(encoding="utf-8") == original  # scaffold reverted
+
+
+def test_edit_card_no_change_reports_no_changes(tmp_path, monkeypatch):
+    root, card = _git_project(tmp_path, monkeypatch)
+    monkeypatch.setattr(terminal_tui, "_run_editor", lambda path: None)
+    status = terminal_tui._edit_card(root, card, review=False)
+    assert status == "No changes to review-me."

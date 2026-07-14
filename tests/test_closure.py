@@ -307,3 +307,24 @@ def test_harvest_clears_summary_freshness(tmp_path, monkeypatch):
     assert any("work commit(s) since" in m for m in _msgs(tmp_path))
     closure.harvest_checkpoint(tmp_path)
     assert not any("work commit(s) since" in m for m in _msgs(tmp_path))
+
+
+def test_continuity_dirty_tracks_horus_changes_only(tmp_path, monkeypatch):
+    root = _setup(tmp_path, monkeypatch)
+    assert not closure.continuity_dirty(root)
+
+    (root / "unrelated.py").write_text("x = 1\n", encoding="utf-8")
+    assert not closure.continuity_dirty(root)  # non-continuity files don't count
+
+    card = root / ".horus" / "backlog" / "some-card.md"
+    card.parent.mkdir(parents=True, exist_ok=True)
+    card.write_text("---\nstatus: open\n---\n\n# Some card\n", encoding="utf-8")
+    assert closure.continuity_dirty(root)
+
+    _run(root, "add", ".horus")
+    _run(root, "commit", "-m", "card")
+    assert not closure.continuity_dirty(root)
+
+
+def test_continuity_dirty_false_outside_git(tmp_path):
+    assert not closure.continuity_dirty(tmp_path)
