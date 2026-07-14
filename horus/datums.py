@@ -40,8 +40,12 @@ from pathlib import Path
 
 from horus import config
 
-# Agent-supplied quality axis (the qualitative half of a datum, set at review time).
-OUTCOMES: tuple[str, ...] = ("clean", "nudged", "bounced", "died")
+# Agent-supplied review outcomes. Only QUALITY_OUTCOMES belong in the quality
+# denominator; operational endings remain visible without grading work that was
+# never completed or tested.
+QUALITY_OUTCOMES: tuple[str, ...] = ("clean", "nudged", "bounced")
+OPERATIONAL_OUTCOMES: tuple[str, ...] = ("died", "void")
+OUTCOMES: tuple[str, ...] = QUALITY_OUTCOMES + OPERATIONAL_OUTCOMES
 
 # Mechanically-captured process-exit axis (why the run ENDED — distinct from quality).
 EXITS: tuple[str, ...] = ("completed", "crashed", "usage-death")
@@ -681,7 +685,10 @@ class ModelRollup:
     guard: str | None = None
     total_datums: int = 0
     closed_datums: int = 0
+    quality_datums: int = 0
     clean_count: int = 0
+    died_count: int = 0
+    void_count: int = 0
     last_outcomes: list[str] = field(default_factory=list)
     # Supervisor-cost glance (2026-07-14 frozen schema): counts/median from
     # datums that carry the agent-supplied `--dividend`/`--oversight` close
@@ -798,7 +805,8 @@ def build_model_rollup(
         prior = canonical_priors.get(model, {})
         rows = sorted(by_model.get(model, []), key=lambda d: d.launched_at)
         closed = [d for d in rows if d.outcome]
-        last = [d.outcome for d in closed][-LAST_N:]
+        quality = [d for d in closed if d.outcome in QUALITY_OUTCOMES]
+        last = [d.outcome for d in quality][-LAST_N:]
         dividends = [d.dividend for d in rows if d.dividend]
         oversights = [d.oversight for d in rows if d.oversight]
         available = prior.get("available") if isinstance(prior.get("available"), bool) else None
@@ -812,7 +820,10 @@ def build_model_rollup(
                 guard=prior.get("guard"),
                 total_datums=len(rows),
                 closed_datums=len(closed),
-                clean_count=sum(1 for d in closed if d.outcome == "clean"),
+                quality_datums=len(quality),
+                clean_count=sum(1 for d in quality if d.outcome == "clean"),
+                died_count=sum(1 for d in closed if d.outcome == "died"),
+                void_count=sum(1 for d in closed if d.outcome == "void"),
                 last_outcomes=list(reversed(last)),  # most-recent first
                 price_in=prior.get("price_in"),
                 price_out=prior.get("price_out"),
@@ -836,7 +847,7 @@ def build_model_rollup(
 # `render_delegation_matrix`. The CONCISE set (default — a CLI glance) is
 # model/tier/price/datums/capability; the FULL set (--verbose/--full, power
 # users) restores LAST (per-run outcome history) and RESEARCHED. LAST is
-# insider delegation-quality judgment (clean/nudged/bounced/died), not
+# insider delegation-quality judgment (clean/nudged/bounced), not
 # CI/exit status — it needs a legend to read, so it's opt-in, never dropped
 # from `--stdout` JSON. Free-text strength/caution/guard flags don't fit a
 # column (they'd blow out alignment) so they render as a separate Notes
@@ -857,10 +868,15 @@ _CAPABILITY_SUMMARY_MAX = 40  # concise capability column — a few words, not a
 
 
 def _table_row(r: ModelRollup, *, verbose: bool) -> dict[str, str]:
+    datum_bits = [f"{r.clean_count}/{r.quality_datums} clean"]
+    if r.died_count:
+        datum_bits.append(f"{r.died_count} died")
+    if r.void_count:
+        datum_bits.append(f"{r.void_count} void")
     return {
         "model": r.model,
         "tier": r.tier or "-",
-        "datums": f"{r.clean_count}/{r.total_datums}",
+        "datums": " · ".join(datum_bits),
         "last": " ".join(r.last_outcomes) if r.last_outcomes else "-",
         "price": _format_price(r),
         "capability": _capability_cell(r, verbose=verbose),

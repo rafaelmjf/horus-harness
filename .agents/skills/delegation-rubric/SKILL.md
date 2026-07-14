@@ -12,7 +12,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -40,10 +40,12 @@ names no model to pick. Per model it reports:
 
 - **`tier`** (owner prior) — the role the owner assigns: design/ambiguity/verify
   gate, scoped-impl lead, mechanical, frontier, codex, …
-- **`clean_count` / `closed_datums` / `total_datums`** (measured) — how many
-  runs closed `clean` out of how many closed and seen total.
+- **`clean_count` / `quality_datums`** (measured) — quality rate over only
+  `clean` / `nudged` / `bounced`; `died_count` and `void_count` stay visible
+  separately and never lower that denominator. `closed_datums` / `total_datums`
+  still show how many runs were reviewed and seen overall.
 - **`last_outcomes`** (measured, most-recent first) — the recent track record:
-  `clean` / `nudged` / `bounced` / `died`.
+  quality outcomes only (`clean` / `nudged` / `bounced`).
 - **`strength` / `caution` / `guard`** (owner priors, free text) — `caution` and
   `guard` are HARD constraints on how the model may be used.
 

@@ -64,6 +64,8 @@ def test_delegation_rubric_is_the_shared_single_source_of_truth():
     assert "tier-trust" in rubric.content.lower()
     assert "Proven" in rubric.content and "Unproven" in rubric.content
     assert "clean_count" in rubric.content and "last_outcomes" in rubric.content
+    assert "quality_datums" in rubric.content
+    assert "died_count" in rubric.content and "void_count" in rubric.content
     # The one lever sets BOTH the pick and the verification depth.
     assert "same tier-trust sets BOTH" in rubric.content or "SAME tier-trust" in rubric.content
     # Verification = observe a gate you didn't author; reproduction != re-run.
