@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "One-verb resume preflight shipped (PR #222): `horus resume --preflight` now emits a compact single-project or `--fleet` digest covering fetched git freshness, freshness-tagged Codex + Claude usage, version floors, frontmatter handoffs, open datums, projected session liveness/collisions, and closure hygiene; `--no-fetch` and JSON `--stdout` are available. Live gate: 9 project lines / 28 fleet lines on this machine."
+current_focus: "Archive-on-ship backlog lifecycle shipped (PR #223): `horus backlog ship` now preserves status + PR/SHA provenance while moving the complete card to `backlog/archive/`; local and fleet backlog views are active-only. The 13 shipped-card cruft entries and 2 owner-retired cards were archived, leaving 21 active cards and 16 archived cards."
 next_action: "Claim and implement `tui-capabilities-screen`: add the Capabilities item, project vision line, and staleness hint as a thin TUI renderer over capabilities.generate_project, then branch → PR. [Sonnet scoped implementation, inline]"
 next_prompt: "Resume Horus. Run `horus resume --preflight` for the one-screen start digest, then claim `.horus/backlog/tui-capabilities-screen.md`, read the full card, and implement it as a thin TUI renderer over capabilities.generate_project with no second data path; branch → PR. [Sonnet scoped implementation, inline]"
 execution_recommendation: "continue-as-is — `tui-capabilities-screen` is bounded rendering over an existing read-only module with no design ambiguity, suited to inline sonnet-5; delegation overhead would exceed the scoped change."
@@ -51,6 +51,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Archive-on-ship backlog lifecycle** (2026-07-14, PR #223): shipping stamps PR/SHA then moves the complete card to `backlog/archive/`; active local/fleet views exclude terminal cards and the archive; 13 shipped + 2 owner-retired cruft cards archived without content loss.
 **One-verb resume preflight** (2026-07-14, PR #222): `horus resume --preflight [--fleet]` composes fetched git state, explicit dual-target usage freshness, version floors, PRD handoffs, open datums, projected sessions/collisions, and hygiene into one lean read-only digest; `--no-fetch` and JSON `--stdout` supported.
 **Tier-0 supervision verbs** (2026-07-14, PR #221): `horus merge-watch <sha|pr>` polls required checks on the exact pinned sha to green/red, one line per state change; `horus reinstall <path> --verify <marker>` does the cache-clean + force-reinstall + installed-surface marker grep in one act; `datum close --card` now resolves against the primary git checkout (not a `--worktree` path) with an optional `--remove-worktree` merged-only cleanup.
 **Datum supervisor-cost envelope + one-act acceptance** (2026-07-14, PR #218): `usage_launch`/`usage_close` readings + agent-supplied cost flags on `datum close`; `--card` stamps delivery and warns on stale continuity; `--models` cost glance; delegation-rubric dispatch-dividend v3.
@@ -217,19 +218,9 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 
 ## Structure contract (prototype)
 
-- **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines: new
-  shipped items are one line; shipped cards move to `backlog/archive/` with
-  `status: shipped` and PR/SHA provenance intact; bugs get appended to the backlog as found.
-- **`backlog/` (card pilot 2026-07-10, claim gate 2026-07-11):** one card per item,
-  `status`/`priority`/`tier`/`created` frontmatter plus optional `parallel: safe|exclusive` /
-  `surface: <globs>`; claim via `horus backlog claim <name>` (warns, `--force` to override on
-  overlap/exclusive); after merge, `horus backlog ship <name> --pr N --sha SHA` records
-  provenance and moves the card to `backlog/archive/`. Active list and fleet views exclude
-  the archive. `close --check` warns on lingering-done or shipped-but-open cards. No
-  stale-`claimed` sweep exists — a real gap, not yet built.
-- **`sessions/`** unchanged: one note per session (`horus session new`), operational
-  facts welcome (gates verified, tokens to rotate, dead ends). Distilled notes →
-  `sessions/archive/` (local).
+- **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines: shipped items are one line; shipped cards move to `backlog/archive/` with status + PR/SHA intact; bugs get cards as found.
+- **`backlog/` (card pilot 2026-07-10, claim gate 2026-07-11):** one card per item with `status`/`priority`/`tier`/`created` plus optional `parallel`/`surface`; claim via `horus backlog claim` (warnings need `--force`). After merge, `horus backlog ship <name> --pr N --sha SHA` records provenance and moves the card to `backlog/archive/`; active local/fleet views exclude terminal cards and the archive. `close --check` warns on lingering-done or shipped-but-open cards. No stale-`claimed` sweep exists.
+- **`sessions/`** unchanged: one note per session (`horus session new`); distilled notes → `sessions/archive/` (local).
 - **Frontmatter:** this file carries `current_focus` / `next_action` / `next_prompt` /
   `execution_recommendation` / `last_updated` — the tooling reads them PRD-first (`resolve_focus`),
   so no shims are needed. **`next_action` / `next_prompt` / `execution_recommendation` each name
