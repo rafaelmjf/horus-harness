@@ -16,7 +16,8 @@ Two data layers, kept strictly separate:
 - **Owner priors** (``~/.horus/capabilities.toml``, hand-edited, fleet-global):
   per-model constraints/cautions that shape HOW to use a model — read here but
   never written by a run. This also carries the optional price-for-capability
-  fields (``price_in``/``price_out``/``capability_note``/``researched_at``) —
+  fields (``price_in``/``price_out``/``capability_note``/``researched_at``) and
+  lifecycle provenance (``available``/``retires_at``) —
   see the ``older-models-in-roster`` backlog card. Populating THOSE fields is a
   separate agent web-research pass; this module only parses, displays, and
   nudges on staleness (``staleness_warning``) — it never fetches the network.
@@ -34,7 +35,7 @@ import re
 import time
 import tomllib
 from dataclasses import asdict, dataclass, field, fields
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from horus import config
@@ -95,13 +96,14 @@ def _now_iso() -> str:
 # Only consulted when an adapter didn't expose what actually ran (see
 # `canonical_model_name`) — a static map like this goes stale the moment a
 # family default moves (`sonnet` -> `sonnet-6` later), so resolved-capture is
-# always preferred and this is the fallback, not the primary path. GPT variants
-# already carry their suffix at the call site (`gpt-5.6-sol`, not bare
-# `gpt-5.6`) so they need no entry here.
+# always preferred and this is the fallback, not the primary path. The GPT-5.6
+# family is the exception: OpenAI documents the unsuffixed name as an alias for
+# Sol, so legacy generic datums/priors must join the canonical Sol row.
 ALIAS_TO_CANONICAL: dict[str, str] = {
     "sonnet": "sonnet-5",
     "haiku": "haiku-4.5",
     "opus": "opus-4.8",
+    "gpt-5.6": "gpt-5.6-sol",
 }
 
 # Matches a Claude Code resolved model id, e.g. "claude-haiku-4-5-20251001" or
@@ -120,7 +122,7 @@ def canonical_model_name(alias: str | None, *, resolved: str | None = None) -> s
     since that stays correct across a family-default move that a static map
     would mis-record. Falls back to :data:`ALIAS_TO_CANONICAL` when no
     resolution is available (e.g. Codex's stream reports no model at all). A
-    name that's already canonical, or unrecognized (GPT variants, a literal
+    name that's already canonical, or unrecognized (a literal
     version string), passes through unchanged."""
     if resolved:
         match = _RESOLVED_MODEL_RE.match(resolved)
@@ -515,8 +517,9 @@ class DatumStore:
         return Datum.from_row(row)
 
     def migrate_names(self) -> dict[str, int]:
-        """One-time, idempotent rename of bare dispatch aliases already captured
-        in ``datums.json`` (``sonnet``, ``haiku``, ``opus``) to their canonical
+        """One-time, idempotent rename of dispatch aliases already captured
+        in ``datums.json`` (including bare Claude names and generic ``gpt-5.6``)
+        to their canonical
         versioned name, via :data:`ALIAS_TO_CANONICAL`. Every other field on the
         row is preserved untouched; only the ``model`` value changes, so rows
         naturally merge under the canonical name in the roll-up (grouping is by
@@ -564,7 +567,7 @@ PRIORS_SEED = """\
 #
 # Edit freely; add models as the fleet gains experience with them.
 #
-# Optional price-for-capability fields (all back-compatible — omit entirely and
+# Optional price-for-capability/lifecycle fields (all back-compatible — omit entirely and
 # a model renders exactly as before). Filled in by a SEPARATE agent web-research
 # refresh pass (see the `older-models-in-roster` backlog card), never hand-typed
 # guesses and never fetched by this CLI:
@@ -579,6 +582,8 @@ PRIORS_SEED = """\
 #                                # display command warns (non-blocking) when the
 #                                # freshest researched_at across all models is
 #                                # more than 14 days old or absent entirely
+#   available = true             # current provider availability, when sourced
+#   retires_at = 2026-08-31      # explicit provider retirement date only
 
 schema_version = 1
 
@@ -594,14 +599,43 @@ tier = "mechanical (unproven)"
 [models."fable-5"]
 tier = "frontier (early)"
 
-[models."gpt-5.6"]
+[models."gpt-5.6-sol"]
 tier = "frontier codex"
 strength = "frontier codex, self-verifies, PR-disciplined"
 caution = "token-hungry — needs tightly-scoped task + explicit stopping point + budget headroom"
 guard = "do not dispatch near usage ceiling"
+price_in = 5.0
+price_out = 30.0
+capability_summary = "flagship frontier codex"
+capability_note = "OpenAI flagship GPT-5.6 variant; the generic gpt-5.6 name aliases Sol"
+researched_at = 2026-07-14
+available = true
+
+[models."gpt-5.6-terra"]
+tier = "value codex (early)"
+price_in = 2.5
+price_out = 15.0
+capability_summary = "balanced value variant"
+capability_note = "OpenAI balanced price/performance GPT-5.6 variant; retain early tier until measured evidence matures"
+researched_at = 2026-07-14
+available = true
+
+[models."gpt-5.6-luna"]
+tier = "high-volume codex (unproven)"
+price_in = 1.0
+price_out = 6.0
+capability_summary = "cost-sensitive high volume"
+capability_note = "OpenAI cost-sensitive, high-volume GPT-5.6 variant; unproven in local measured datums"
+researched_at = 2026-07-14
+available = true
 
 [models."gpt-5.5"]
 tier = "codex (early)"
+price_in = 5.0
+price_out = 30.0
+capability_summary = "retained for measured comparison"
+capability_note = "Prior generation retained only to keep its measured datum visible; price-dominated by newer Terra"
+researched_at = 2026-07-14
 """
 
 
@@ -664,10 +698,13 @@ class ModelRollup:
     capability_note: str | None = None  # short free-text: what it's good for
     capability_summary: str | None = None  # a few words, for the concise table
     researched_at: str | None = None    # ISO date (YYYY-MM-DD) last checked
+    available: bool | None = None       # explicit owner-prior availability state
+    retires_at: str | None = None       # explicit provider retirement date
+    lifecycle: str | None = None        # derived display marker; never routing input
 
 
-def _researched_at_str(value: object) -> str | None:
-    """Normalize a prior's ``researched_at`` to an ISO date string.
+def _prior_date_str(value: object) -> str | None:
+    """Normalize an owner prior's date-like value to an ISO date string.
 
     TOML lets a hand-editor write an unquoted date (``2026-07-10``), which
     ``tomllib`` parses as a native ``date``/``datetime`` — accept that form
@@ -676,6 +713,38 @@ def _researched_at_str(value: object) -> str | None:
         return value.isoformat()
     if isinstance(value, str):
         return value
+    return None
+
+
+LIFECYCLE_SOON_DAYS = 30
+
+
+def _lifecycle_marker(
+    available: bool | None,
+    retires_at: str | None,
+    *,
+    today: date | None = None,
+) -> str | None:
+    """Derive a display-only lifecycle marker from explicit owner provenance."""
+    today = today or datetime.now(timezone.utc).date()
+    retirement: date | None = None
+    if retires_at:
+        try:
+            retirement = date.fromisoformat(retires_at[:10])
+        except ValueError:
+            pass
+    if available is False:
+        return f"retired {retires_at}" if retires_at else "retired"
+    if retirement is not None:
+        if retirement <= today:
+            return f"retired {retires_at}"
+        if retirement <= today + timedelta(days=LIFECYCLE_SOON_DAYS):
+            return f"retires soon {retires_at}"
+        return f"retires {retires_at}"
+    if retires_at:
+        return f"retires {retires_at}"
+    if available is True:
+        return "available"
     return None
 
 
@@ -694,7 +763,12 @@ def _oversight_median(values: list[str]) -> str | None:
     return _OVERSIGHT_BY_RANK[ranks[mid]]
 
 
-def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[ModelRollup]:
+def build_model_rollup(
+    datums: list[Datum],
+    priors: dict[str, dict],
+    *,
+    today: date | None = None,
+) -> list[ModelRollup]:
     """One row per model across BOTH layers (union of priors + measured models).
 
     Priors supply tier/strength/caution/guard; datums supply the measured counts
@@ -704,16 +778,31 @@ def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[Mod
     by_model: dict[str, list[Datum]] = {}
     for d in datums:
         if d.model:
-            by_model.setdefault(d.model, []).append(d)
+            model = canonical_model_name(d.model) or d.model
+            by_model.setdefault(model, []).append(d)
+
+    # Legacy alias priors provide a compatibility base, while an explicitly
+    # authored canonical row wins field-by-field when both are present.
+    canonical_priors: dict[str, dict] = {}
+    for model, prior in priors.items():
+        canonical = canonical_model_name(model) or model
+        if canonical != model:
+            canonical_priors.setdefault(canonical, {}).update(prior)
+    for model, prior in priors.items():
+        canonical = canonical_model_name(model) or model
+        if canonical == model:
+            canonical_priors.setdefault(canonical, {}).update(prior)
 
     rollups: list[ModelRollup] = []
-    for model in sorted(set(priors) | set(by_model)):
-        prior = priors.get(model, {})
+    for model in sorted(set(canonical_priors) | set(by_model)):
+        prior = canonical_priors.get(model, {})
         rows = sorted(by_model.get(model, []), key=lambda d: d.launched_at)
         closed = [d for d in rows if d.outcome]
         last = [d.outcome for d in closed][-LAST_N:]
         dividends = [d.dividend for d in rows if d.dividend]
         oversights = [d.oversight for d in rows if d.oversight]
+        available = prior.get("available") if isinstance(prior.get("available"), bool) else None
+        retires_at = _prior_date_str(prior.get("retires_at"))
         rollups.append(
             ModelRollup(
                 model=model,
@@ -729,7 +818,10 @@ def build_model_rollup(datums: list[Datum], priors: dict[str, dict]) -> list[Mod
                 price_out=prior.get("price_out"),
                 capability_note=prior.get("capability_note"),
                 capability_summary=prior.get("capability_summary"),
-                researched_at=_researched_at_str(prior.get("researched_at")),
+                researched_at=_prior_date_str(prior.get("researched_at")),
+                available=available,
+                retires_at=retires_at,
+                lifecycle=_lifecycle_marker(available, retires_at, today=today),
                 dividend_positive=sum(1 for v in dividends if v == "positive"),
                 dividend_neutral=sum(1 for v in dividends if v == "neutral"),
                 dividend_negative=sum(1 for v in dividends if v == "negative"),
@@ -878,6 +970,14 @@ def render_cost_notes(rollups: list[ModelRollup]) -> list[str]:
     return lines
 
 
+def render_lifecycle_notes(rollups: list[ModelRollup]) -> list[str]:
+    """Explicit lifecycle provenance, omitted entirely when no prior supplies it."""
+    flagged = [r for r in rollups if r.lifecycle]
+    if not flagged:
+        return []
+    return ["Lifecycle:", *(f"  {r.model}: {r.lifecycle}" for r in flagged)]
+
+
 def render_model_rollup(rollups: list[ModelRollup], *, verbose: bool = False) -> str:
     """Human-readable text of the roll-up. Data only — describes what was measured
     and what the owner flagged; never names a model to pick. Concise by default
@@ -888,6 +988,10 @@ def render_model_rollup(rollups: list[ModelRollup], *, verbose: bool = False) ->
         "",
     ]
     lines.extend(render_tier_table(rollups, verbose=verbose))
+    lifecycle = render_lifecycle_notes(rollups)
+    if lifecycle:
+        lines.append("")
+        lines.extend(lifecycle)
     notes = render_tier_notes(rollups)
     if notes:
         lines.append("")
@@ -976,6 +1080,10 @@ def render_delegation_matrix(
         "Tier ladder (owner priors + measured datums):",
     ]
     lines.extend(f"  {line}" for line in render_tier_table(rollups, verbose=verbose))
+    lifecycle = render_lifecycle_notes(rollups)
+    if lifecycle:
+        lines.append("")
+        lines.extend(f"  {line}" for line in lifecycle)
     notes = render_tier_notes(rollups)
     if notes:
         lines.append("")

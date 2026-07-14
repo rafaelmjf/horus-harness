@@ -128,6 +128,7 @@ def test_canonical_model_name_falls_back_to_alias_map():
     assert datums.canonical_model_name("sonnet") == "sonnet-5"
     assert datums.canonical_model_name("haiku") == "haiku-4.5"
     assert datums.canonical_model_name("opus") == "opus-4.8"
+    assert datums.canonical_model_name("gpt-5.6") == "gpt-5.6-sol"
 
 
 def test_canonical_model_name_prefers_resolved_over_alias_map():
@@ -221,9 +222,15 @@ def test_priors_seeded_and_parsed(tmp_path):
     priors = datums.load_priors(path)
     assert path.exists()  # seeded on first read
     assert priors["sonnet-5"]["tier"] == "scoped-impl lead"
-    gpt = priors["gpt-5.6"]
-    assert "token-hungry" in gpt["caution"]
-    assert gpt["guard"] == "do not dispatch near usage ceiling"
+    assert "gpt-5.6" not in priors
+    assert set(priors) >= {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}
+    sol = priors["gpt-5.6-sol"]
+    assert "token-hungry" in sol["caution"]
+    assert sol["guard"] == "do not dispatch near usage ceiling"
+    assert (sol["price_in"], sol["price_out"]) == (5.0, 30.0)
+    assert (priors["gpt-5.6-terra"]["price_in"], priors["gpt-5.6-terra"]["price_out"]) == (2.5, 15.0)
+    assert (priors["gpt-5.6-luna"]["price_in"], priors["gpt-5.6-luna"]["price_out"]) == (1.0, 6.0)
+    assert "measured datum" in priors["gpt-5.5"]["capability_note"]
 
 
 def test_priors_hand_edits_are_respected(tmp_path):
@@ -244,8 +251,32 @@ def test_rollup_joins_priors_and_datums_and_sorts_by_clean_count(tmp_path):
     # Haiku appears from priors alone with zero datums (unproven, still visible).
     assert by_model["haiku-4.5"].total_datums == 0
     assert by_model["haiku-4.5"].tier == "mechanical (unproven)"
-    # gpt-5.6's owner flags come through the join.
-    assert "token-hungry" in by_model["gpt-5.6"].caution
+    # The legacy generic backfill joins the canonical Sol prior.
+    assert "gpt-5.6" not in by_model
+    assert "token-hungry" in by_model["gpt-5.6-sol"].caution
+    assert by_model["gpt-5.6-sol"].total_datums == 1
+
+
+def test_rollup_canonicalizes_generic_gpt_datums_and_priors_without_duplicate():
+    measured = [
+        datums.Datum(session_id="generic", model="gpt-5.6", outcome="clean"),
+        datums.Datum(session_id="sol", model="gpt-5.6-sol", outcome="clean"),
+        datums.Datum(session_id="terra", model="gpt-5.6-terra", outcome="clean"),
+    ]
+    priors = {
+        "gpt-5.6": {"tier": "legacy", "price_in": 99.0},
+        "gpt-5.6-sol": {"tier": "canonical", "price_in": 5.0, "price_out": 30.0},
+        "gpt-5.6-terra": {"price_in": 2.5, "price_out": 15.0},
+        "gpt-5.6-luna": {"price_in": 1.0, "price_out": 6.0},
+    }
+    rollups = datums.build_model_rollup(measured, priors)
+    by_model = {r.model: r for r in rollups}
+    assert set(by_model) == {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}
+    assert by_model["gpt-5.6-sol"].total_datums == 2
+    assert by_model["gpt-5.6-sol"].tier == "canonical"
+    assert (by_model["gpt-5.6-sol"].price_in, by_model["gpt-5.6-sol"].price_out) == (5.0, 30.0)
+    assert by_model["gpt-5.6-terra"].total_datums == 1
+    assert by_model["gpt-5.6-luna"].total_datums == 0
 
 
 def test_rollup_last_outcomes_most_recent_first(tmp_path):
@@ -332,7 +363,8 @@ def test_capabilities_models_stdout_is_json(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     assert main(["capabilities", "--models", "--stdout"]) == 0
     data = json.loads(capsys.readouterr().out)
-    assert "models" in data and any(m["model"] == "gpt-5.6" and m["caution"] for m in data["models"])
+    assert "models" in data and any(m["model"] == "gpt-5.6-sol" and m["caution"] for m in data["models"])
+    assert not any(m["model"] == "gpt-5.6" for m in data["models"])
     assert "recommend" not in data["note"].lower()
 
 
@@ -463,10 +495,55 @@ def test_priors_without_new_fields_render_back_compat(tmp_path):
     r = rollups[0]
     assert r.price_in is None and r.price_out is None
     assert r.capability_note is None and r.researched_at is None
+    assert r.available is None and r.retires_at is None and r.lifecycle is None
     text = datums.render_model_rollup(rollups)
     assert "price:" not in text and "capability:" not in text and "researched:" not in text
     matrix = datums.render_delegation_matrix(rollups, [], [])
     assert "price:" not in matrix and "capability:" not in matrix and "researched:" not in matrix
+
+
+def test_lifecycle_priors_render_retired_retiring_soon_and_available(tmp_path):
+    path = tmp_path / "capabilities.toml"
+    path.write_text(
+        '[models."retired"]\navailable = false\n'
+        '[models."soon"]\nretires_at = 2026-08-01\n'
+        '[models."current"]\navailable = true\n',
+        encoding="utf-8",
+    )
+    rollups = datums.build_model_rollup(
+        [], datums.load_priors(path), today=datetime(2026, 7, 14).date()
+    )
+    by_model = {r.model: r for r in rollups}
+    assert by_model["retired"].lifecycle == "retired"
+    assert by_model["soon"].retires_at == "2026-08-01"
+    assert by_model["soon"].lifecycle == "retires soon 2026-08-01"
+    assert by_model["current"].lifecycle == "available"
+    text = datums.render_model_rollup(rollups)
+    matrix = datums.render_delegation_matrix(rollups, [], [])
+    assert "Lifecycle:" in text and "soon: retires soon 2026-08-01" in text
+    assert "Lifecycle:" in matrix and "retired: retired" in matrix
+
+
+def test_lifecycle_absent_keeps_rendering_unchanged():
+    rollups = datums.build_model_rollup([], {"plain": {"tier": "manual"}})
+    assert "Lifecycle:" not in datums.render_model_rollup(rollups)
+    assert "Lifecycle:" not in datums.render_delegation_matrix(rollups, [], [])
+    payload = datums.rollup_to_dict(rollups)["models"][0]
+    assert payload["available"] is None
+    assert payload["retires_at"] is None
+    assert payload["lifecycle"] is None
+
+
+def test_lifecycle_cli_is_non_blocking_and_adds_no_routing_field(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    prior_path = tmp_path / "home" / ".horus" / "capabilities.toml"
+    prior_path.parent.mkdir(parents=True, exist_ok=True)
+    prior_path.write_text('[models."retired"]\navailable = false\n', encoding="utf-8")
+    assert main(["capabilities", "--models", "--stdout"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    retired = next(model for model in payload["models"] if model["model"] == "retired")
+    assert retired["lifecycle"] == "retired"
+    assert not any("pick" in key.lower() or "route" in key.lower() for key in retired)
 
 
 def test_render_model_rollup_shows_price_and_capability_when_present(tmp_path):
@@ -615,14 +692,13 @@ def test_capabilities_models_cli_warns_on_stale_priors_but_exits_ok(tmp_path, mo
     assert "old-but-cheap" in captured.out  # normal output still printed
 
 
-def test_capabilities_models_cli_default_seed_has_no_researched_at_and_warns(tmp_path, monkeypatch, capsys):
-    # The default seeded priors carry no researched_at anywhere yet — that is
-    # itself a staleness signal, so the nudge fires even with no fixture.
+def test_capabilities_models_cli_default_seed_is_fresh(tmp_path, monkeypatch, capsys):
+    # The canonical GPT-5.6 seed rows carry their source-check date.
     _home(tmp_path, monkeypatch)
     rc = main(["capabilities", "--models"])
     assert rc == 0
     captured = capsys.readouterr()
-    assert "WARNING:" in captured.err and "no researched_at" in captured.err
+    assert captured.err == ""
 
 
 def test_capabilities_models_cli_fresh_priors_no_warning(tmp_path, monkeypatch, capsys):
