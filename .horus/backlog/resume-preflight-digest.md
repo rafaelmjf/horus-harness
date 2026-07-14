@@ -1,6 +1,6 @@
 ---
 title: "One-verb resume preflight: bundle the session-start ritual into a model-ready digest"
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 parallel: safe
@@ -8,6 +8,8 @@ type: task
 surface: horus resume / status / usage / fetch-check, frontmatter projection, sessions registry
 created: 2026-07-14
 created_by: overseer
+shipped_pr: 222
+shipped_sha: 1f460b0ee07101480a3af6b949b2fb784320f352
 ---
 
 # Resume preflight digest — one verb, model-ready output

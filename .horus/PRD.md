@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "Tier-0 supervision verbs shipped (PR #221): `merge-watch`, `reinstall --verify`, and the `datum close --card` primary-checkout/worktree-cleanup fix — all three live-verified on this machine. Continuity hygiene folded in: mobile-terminal-legibility archived, mobile-terminal-interaction-regression checked against PR #171 (not resolved, left open), and a real close/consolidate self-referential-SHA/dirty-tree gap filed as a new card."
+current_focus: "One-verb resume preflight shipped (PR #222): `horus resume --preflight` now emits a compact single-project or `--fleet` digest covering fetched git freshness, freshness-tagged Codex + Claude usage, version floors, frontmatter handoffs, open datums, projected session liveness/collisions, and closure hygiene; `--no-fetch` and JSON `--stdout` are available. Live gate: 9 project lines / 28 fleet lines on this machine."
 next_action: "Claim and implement `tui-capabilities-screen`: add the Capabilities item, project vision line, and staleness hint as a thin TUI renderer over capabilities.generate_project, then branch → PR. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus after the tier0-supervision-verbs release. Fetch first, claim `.horus/backlog/tui-capabilities-screen.md`, read the full card, and implement it as a thin TUI renderer over capabilities.generate_project with no second data path; branch → PR."
+next_prompt: "Resume Horus. Run `horus resume --preflight` for the one-screen start digest, then claim `.horus/backlog/tui-capabilities-screen.md`, read the full card, and implement it as a thin TUI renderer over capabilities.generate_project with no second data path; branch → PR. [Sonnet scoped implementation, inline]"
 execution_recommendation: "continue-as-is — `tui-capabilities-screen` is bounded rendering over an existing read-only module with no design ambiguity, suited to inline sonnet-5; delegation overhead would exceed the scoped change."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
@@ -51,6 +51,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**One-verb resume preflight** (2026-07-14, PR #222): `horus resume --preflight [--fleet]` composes fetched git state, explicit dual-target usage freshness, version floors, PRD handoffs, open datums, projected sessions/collisions, and hygiene into one lean read-only digest; `--no-fetch` and JSON `--stdout` supported.
 **Tier-0 supervision verbs** (2026-07-14, PR #221): `horus merge-watch <sha|pr>` polls required checks on the exact pinned sha to green/red, one line per state change; `horus reinstall <path> --verify <marker>` does the cache-clean + force-reinstall + installed-surface marker grep in one act; `datum close --card` now resolves against the primary git checkout (not a `--worktree` path) with an optional `--remove-worktree` merged-only cleanup.
 **Datum supervisor-cost envelope + one-act acceptance** (2026-07-14, PR #218): `usage_launch`/`usage_close` readings + agent-supplied cost flags on `datum close`; `--card` stamps delivery and warns on stale continuity; `--models` cost glance; delegation-rubric dispatch-dividend v3.
 **Backlog card reviews + friendly TUI edit/review handoff** (2026-07-14, PRs #217/#219): append-only Reviews + `backlog review`; `e`/`r` open the configured editor, prefer nano over vi when unset, explain save/return, ignore swap files, then offer fetch-first commit+push.
@@ -80,6 +81,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Continuity must beat re-derivation.** Every capability must give a fresh session something CLAUDE.md + git log cannot, at lower cost. PRD.md is state, not behavior; behavioral text belongs in the managed block, and Rules holds only project-specific invariants earned by failure.
 - **Closure reaches the remote, fetch-first** — `close --commit --push`; refuse newer remote continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
 - **One fetch-first primitive, reused.** `fetchcheck.fetch_and_state` (TTL-cached, read-only fetch, never pull) serves SessionStart and `status`/`fleet` gone-branch/staleness signals; no consumer reinvents it.
+- **Resume preflight only projects deterministic data.** Its sole sanctioned side effect is the explicit fetch refresh; session liveness is projected without registry reconciliation, usage snapshots carry unmistakable freshness tags, and no output recommends or selects a model/account.
 - **Three disciplines, every session:** reproduce the gate via a deterministic signal
   you observe yourself — a *required* CI check green on the exact commit counts for
   the test gate; the *runtime* gate always stays yours (drive the real surface once,
