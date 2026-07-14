@@ -219,6 +219,10 @@ class TerminalUI:
         def _defaults(event) -> None:
             self._show("settings")
 
+        @keys.add("u")
+        def _refresh_usage(event) -> None:
+            self.refresh_account_usage()
+
         on_card = Condition(lambda: self.screen == "card" and self.card is not None)
 
         @keys.add("e", filter=on_card)
@@ -238,6 +242,17 @@ class TerminalUI:
             event.app.exit(result="interrupt")
 
         return keys
+
+    def refresh_account_usage(self) -> None:
+        """Re-read account aliases and their cache-only usage in the current frame."""
+        selected = self.selected
+        self.accounts = _launch_accounts()
+        self.account_usage = _account_usage(self.accounts)
+        if self.screen == "accounts":
+            self._refresh_items()
+            self.selected = min(selected, max(0, len(self.items) - 1))
+        self.status = "Account usage refreshed from cache."
+        self.application.invalidate()
 
     def _page_size(self) -> int:
         rows = self.application.output.get_size().rows
@@ -721,6 +736,13 @@ class TerminalUI:
             return [("class:footer", text)]
         if self.screen == "capabilities":
             text = " ↑↓ scroll · Esc back" if narrow else " ↑↓/swipe scroll   Esc back   q quit"
+            return [("class:footer", text)]
+        if self.screen in {"projects", "accounts"}:
+            text = (
+                " ↑↓ · Enter · u refresh · q"
+                if narrow
+                else " ↑↓/swipe · Enter · u refresh · Esc · s sessions · d defaults · q quit"
+            )
             return [("class:footer", text)]
         text = (
             " ↑↓ scroll · Enter · s sessions · d defaults · q"
