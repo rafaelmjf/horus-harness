@@ -1,0 +1,1 @@
+Intentional stale-continuity probe. This branch must never merge.
