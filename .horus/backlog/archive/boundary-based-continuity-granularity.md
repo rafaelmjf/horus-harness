@@ -1,6 +1,6 @@
 ---
 title: "Boundary-based continuity granularity"
-status: claimed
+status: shipped
 priority: now
 tier: sonnet
 parallel: unsafe
@@ -8,6 +8,8 @@ type: feature
 surface: horus/config.py, horus/closure.py, horus/resume_preflight.py, horus/terminal_tui.py, horus/cli.py
 created: 2026-07-15
 created_by: owner
+shipped_pr: 238
+shipped_sha: bd2c6f5c6443df2b4a60966160dbf97f992ce086
 ---
 
 # Boundary-based continuity granularity

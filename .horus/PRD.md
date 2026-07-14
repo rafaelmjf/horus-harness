@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "Projects can declare machine tools/config paths once and get the same safe readiness result in doctor, resume, dashboard, and TUI; the existing fabric declaration now warns before deploy work when `fab`, `pbir`, or PBIR config is absent."
+current_focus: "Boundary-based continuity is now the default: related inline deliveries can accumulate as portable git receipts, while dispatch/pause/release/end boundaries consolidate PRD, cards, and one campaign note; resume and TUI surface anything pending."
 next_action: "Ask the owner before claiming `datum-outcome-taxonomy-void-and-death`; if confirmed, add a truthful void/aborted path and keep operational deaths outside the quality denominator. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, read `.horus/backlog/datum-outcome-taxonomy-void-and-death.md`, and ask the owner to confirm proceeding. If confirmed, separate void/death lifecycle counts from clean|nudged|bounced quality calibration, branch → PR. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, verify CONTINUITY reports zero pending, read `.horus/backlog/datum-outcome-taxonomy-void-and-death.md`, and ask the owner to confirm proceeding. If confirmed, separate void/death lifecycle counts from clean|nudged|bounced quality calibration, branch → PR. [Sonnet scoped implementation, inline]"
 execution_recommendation: "continue-as-is — `datum-outcome-taxonomy-void-and-death` is a bounded data-model/rendering correction with a crisp denominator invariant and deterministic tests; it fits scoped Sonnet implementation without phased handoffs."
-last_updated: 2026-07-14
+last_updated: 2026-07-15
 horus_min_version: 0.0.26
 ---
 
@@ -41,6 +41,7 @@ Deferred cards carry promotion conditions; retired/folded cards keep full histor
 
 ## Shipped
 
+**Boundary-based continuity granularity** (2026-07-15, PR #238): handoff boundaries are the default while delivery/manual remain selectable in TUI Defaults; git history provides portable pending-delivery receipts, strict project overrides still bind CI, per-turn Stop hooks no longer dirty session notes, dispatch pins/surfaces its base and pending state, and resume/TUI warn until one campaign checkpoint consolidates PRD/cards/session context.
 **Project-declared machine readiness** (2026-07-14, PR #237): optional `.horus/requirements.md` tool/config probes are checked without command execution and rendered through one canonical result in doctor, resume prompts, dashboard badges/details, and TUI project views; the existing fabric declaration is the live first consumer.
 **Unambiguous acting-close verdict** (2026-07-14, PR #236): `close --commit [--push]` performs its checkpoint before rendering status, so successful output contains only recomputed clean findings while residual edits, failed pushes, and no-op failures still report their final actionable state.
 **Required server-side continuity freshness** (2026-07-14, PR #233): `close --check --base-ref` fails source/product PRs without canonical PRD/lane updates; GitHub's `freshness` job is non-advisory and required, while the local merge hook tokenizes command positions so quoted prompts never trigger it. Live queued-auto-merge probe PR #234 remained blocked and was closed unmerged.
@@ -77,9 +78,10 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 
 - **Repo-local `.horus/` is the source of truth** — committed, vendor-neutral, works without Horus installed. Horus is a helper, never a required runtime.
 - **Controls climb a ladder: instruction → deterministic signal → hard gate.** Start with instructions; promote only after an observed field failure (fetch-first + branch→PR instructions failed, so SessionStart signal + block v7 followed). Never enforce preemptively.
-- **Server-side merge freshness is a required PR invariant.** Any PR changing product/source outside committed continuity surfaces must update the canonical PRD (or v2 lanes); the required `freshness` check owns the hard gate for queued auto-merge. Local PreToolUse parsing is fast feedback only and must match `gh pr merge` at shell command position, never inside quoted prompt prose.
+- **Server-side continuity is granularity-aware.** The required PR check always verifies field validity + git checkpoint state; `delivery` additionally requires canonical PRD/card hygiene in every PR, while default `handoff` and `manual` accept product commits as durable receipts until the next visible boundary checkpoint. Local PreToolUse parsing is fast feedback only and must match `gh pr merge` at shell command position, never inside quoted prompt prose.
 - **Continuity must beat re-derivation.** Every capability must give a fresh session something CLAUDE.md + git log cannot, at lower cost. PRD.md is state, not behavior; behavioral text belongs in the managed block, and Rules holds only project-specific invariants earned by failure.
-- **Closure reaches the remote, fetch-first and self-reference-free** — `close --commit --push`; refuse newer remote continuity, seal the closing SHA without appending it into its own note, and refuse to push residual dirty continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
+- **Continuity checkpoints at context boundaries; delivery safety never relaxes.** Default `handoff` batches canonical PRD/card/session prose until agent/account/machine change, dispatch, pause, release, or end; `delivery` closes every PR and `manual` keeps warnings until explicit close. Branches, commits, pushed refs, PRs, deterministic gates, dispatch base/receipts, and commit/push checkpoints apply in every mode. Pending delivery truth derives from product commits after the latest canonical-continuity commit, so it survives machines and squash merges.
+- **Closure reaches the remote, fetch-first and self-reference-free** — at the configured boundary run `close --commit --push`; refuse newer remote continuity, seal the closing SHA without appending it into its own note, and refuse to push residual dirty continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
 - **Acting closure reports the final state only.** `close --commit [--push]` keeps pre-action dirtiness internal, renders the recomputed complete findings after its mutation, and still fails visibly on residual edits or an unpushed checkpoint.
 - **Committed machine probes are data, never commands.** `.horus/requirements.md` tool probes are executable-name lookups and config probes are path-existence checks; doctor, resume, dashboard, and TUI render the same shared result, while non-probeable access stays prose.
 - **One fetch-first primitive, reused.** `fetchcheck.fetch_and_state` (TTL-cached, read-only fetch, never pull) serves SessionStart and `status`/`fleet` gone-branch/staleness signals; no consumer reinvents it.
@@ -232,4 +234,4 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   so no shims are needed. **`next_action` / `next_prompt` / `execution_recommendation` each name
   an explicit model tier** (Haiku/Sonnet/Opus per the model-tier rule). If the user proposes a
   heavier model than the work needs, pushing back for the lower tier is expected, not overstepping.
-- **Closure:** update frontmatter + backlog/shipped + session note; run `close --commit --push`. One `consolidate` pass at most; do not chase warnings.
+- **Closure:** at the configured boundary, update frontmatter + backlog/shipped + one campaign session note; run `close --commit --push`. One `consolidate` pass at most; do not chase warnings.
