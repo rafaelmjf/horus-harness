@@ -693,6 +693,63 @@ def test_terminal_tui_wide_home_uses_project_columns(tmp_path, monkeypatch):
         "project-00" in line and "project-01" in line
         for line in rendered.splitlines()
     )
+    assert "Fleet Review" in rendered
+
+
+def test_terminal_tui_fleet_review_is_optional_after_direct_projects(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    project = _project(tmp_path, "demo")
+    curator = _project(tmp_path, "horus-agent")
+    config.register_project(project)
+    config.register_project(curator)
+    record = terminal_tui.fleet_review.FleetReview(
+        str(curator / "fleet.toml"),
+        [
+            terminal_tui.fleet_review.ProjectReview(
+                "demo",
+                "owner/demo",
+                "active",
+                terminal_tui.fleet_review.RemoteTruth(
+                    available=True,
+                    source="git",
+                    ref="origin/main",
+                    sha="abcdef123",
+                    current_focus="Remote canonical focus",
+                    capabilities=["One"],
+                    backlog=[{"name": "bug"}],
+                    source_commits_since_continuity=1,
+                ),
+                terminal_tui.fleet_review.LocalWorkingState(
+                    available=True,
+                    summary="feature/demo · uncommitted",
+                ),
+            )
+        ],
+    )
+    calls = []
+    monkeypatch.setattr(
+        terminal_tui.fleet_review,
+        "build",
+        lambda projects: calls.append(projects) or record,
+    )
+
+    ui = terminal_tui.TerminalUI()
+    assert ui.items[0] == ("project", project)
+    assert ui.items[-1][0] == "fleet_review"
+    ui.move(len(ui.items) - 1)
+    ui.activate()
+    assert ui.screen == "fleet_review" and calls == [[project.as_posix(), curator.as_posix()]]
+
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "Start curator session" in rendered
+    assert "REMOTE SHIPPED TRUTH · git origin/main@abcdef12" in rendered
+    assert "Remote canonical focus" in rendered
+    assert "LOCAL WORKING STATE" in rendered and "feature/demo · uncommitted" in rendered
+    assert "WARNING: 1 newer source commit" in rendered
+
+    ui.activate()
+    assert ui.screen == "accounts"
+    assert ui.project == curator and ui.pending_mode == "resume"
 
 
 def test_terminal_tui_arrow_sequences_keep_conventional_direction(tmp_path, monkeypatch):
