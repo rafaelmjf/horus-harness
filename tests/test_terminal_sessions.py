@@ -722,6 +722,94 @@ def test_terminal_tui_project_navigation_and_back(tmp_path, monkeypatch):
     assert ui.screen == "projects"
 
 
+def test_terminal_tui_project_vision_and_capabilities_share_generated_record(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    config.register_project(root)
+    calls = []
+    record = {
+        "generated_at": "2026-07-14T12:00:00+00:00",
+        "project": {
+            "vision": "A lightweight continuity layer for native coding agents.",
+            "capabilities": [
+                {
+                    "text": "Resume a project from durable continuity.",
+                    "related_commands": ["horus resume"],
+                },
+                {
+                    "text": "Show active backlog cards.",
+                    "related_commands": [],
+                },
+            ],
+        },
+    }
+
+    def generate_project(path):
+        calls.append(path)
+        return json.dumps(record)
+
+    monkeypatch.setattr(terminal_tui.capabilities, "generate_project", generate_project)
+    monkeypatch.setattr(
+        terminal_tui,
+        "_capability_freshness",
+        lambda root, generated_at: "generated 2h ago · 3 commits since",
+    )
+
+    ui = terminal_tui.TerminalUI()
+    ui.activate()
+    assert calls == [root.as_posix()]
+    assert ui.screen == "project"
+    project_text = "".join(fragment[1] for fragment in ui._body_text())
+    assert "A lightweight continuity layer" in project_text
+    assert "Capabilities" in project_text and "2 shipped capabilities" in project_text
+
+    ui.move(3)
+    ui.activate()
+    assert ui.screen == "capabilities"
+    assert calls == [root.as_posix()]  # screen renders the retained record; no second data path
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "generated 2h ago · 3 commits since" in rendered
+    assert "Resume a project from durable continuity." in rendered
+    assert "commands: horus resume" in rendered
+    assert "Show active backlog cards." in rendered
+    ui.back()
+    assert ui.screen == "project"
+
+
+def test_terminal_tui_capabilities_failure_does_not_block_project_actions(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    config.register_project(root)
+
+    def fail(_path):
+        raise OSError("record unavailable")
+
+    monkeypatch.setattr(terminal_tui.capabilities, "generate_project", fail)
+    ui = terminal_tui.TerminalUI()
+    ui.activate()
+    assert ui.screen == "project"
+    assert [kind for kind, _value in ui.items] == ["mode", "mode", "backlog", "capabilities"]
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "Capabilities unavailable: record unavailable" in rendered
+
+
+def test_capability_freshness_reports_age_and_commits_since(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, 0, "4\n", "")
+
+    monkeypatch.setattr(terminal_tui.subprocess, "run", fake_run)
+    rendered = terminal_tui._capability_freshness(
+        tmp_path,
+        "2026-07-14T10:00:00+00:00",
+        now=terminal_tui.datetime.fromisoformat("2026-07-14T12:30:00+00:00"),
+    )
+    assert rendered == "generated 2h ago · 4 commits since"
+    assert calls[0][0][-2:] == ["--since=2026-07-14T10:00:00+00:00", "HEAD"]
+
+
 def test_terminal_tui_defaults_screen_lists_full_posture_vocabulary(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     ui = terminal_tui.TerminalUI()
