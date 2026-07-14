@@ -73,6 +73,7 @@ def _project_projection(root: Path, *, installed: str, do_fetch: bool) -> dict[s
         for finding in closure.freshness_gate(root) + closure.checkpoint_gate(root)
         if finding.level in {"warn", "fail"}
     ]
+    pending = closure.pending_delivery_commits(root)
     return {
         "name": root.name,
         "path": str(root),
@@ -90,6 +91,13 @@ def _project_projection(root: Path, *, installed: str, do_fetch: bool) -> dict[s
                 "next_prompt",
                 "execution_recommendation",
             )
+        },
+        "continuity": {
+            "granularity": closure.continuity_granularity(root),
+            "pending": len(pending),
+            "deliveries": [
+                {"sha": sha, "subject": subject} for sha, subject in pending
+            ],
         },
         "hygiene": hygiene,
     }
@@ -227,6 +235,13 @@ def render_text(digest: dict[str, Any]) -> str:
             f"HANDOFF {project['name']} | focus={_compact(handoff['current_focus'])} | "
             f"next={_compact(handoff['next_action'])} | prompt={_compact(handoff['next_prompt'])} | "
             f"execution={_compact(handoff['execution_recommendation'])}"
+        )
+        continuity = project["continuity"]
+        pending = continuity["pending"]
+        state = "WARN" if pending else "OK"
+        lines.append(
+            f"CONTINUITY {project['name']} [{state}] mode={continuity['granularity']} "
+            f"pending={pending}"
         )
         for finding in project.get("hygiene", []):
             lines.append(

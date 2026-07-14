@@ -1,5 +1,7 @@
 """Tests for the project registry: register, unregister, prune."""
 
+import pytest
+
 from horus import config
 
 
@@ -227,3 +229,32 @@ def test_launch_defaults_coexist_with_projects_and_workflow(tmp_path, monkeypatc
     other.mkdir()
     config.register_project(other)
     assert config.load_launch_defaults() == {"posture": "plan"}
+
+
+def test_continuity_defaults_to_handoff_and_persists_choices(tmp_path, monkeypatch):
+    config = _home_cfg(tmp_path, monkeypatch)
+    assert config.load_continuity_defaults() == {"granularity": "handoff"}
+
+    for choice in config.CONTINUITY_GRANULARITY_CHOICES:
+        assert config.set_continuity_granularity(choice) == choice
+        assert config.load_continuity_defaults() == {"granularity": choice}
+
+    with pytest.raises(ValueError):
+        config.set_continuity_granularity("yolo")
+
+
+def test_continuity_setting_survives_other_config_writes(tmp_path, monkeypatch):
+    config = _home_cfg(tmp_path, monkeypatch)
+    config.set_continuity_granularity("delivery")
+    config.register_project(tmp_path / "project")
+    config.set_launch_default_posture("auto-edit")
+    config.set_workflow_policy(commit="manual")
+
+    assert config.load_continuity_defaults() == {"granularity": "delivery"}
+
+
+def test_continuity_setting_tolerates_malformed_stored_value(tmp_path, monkeypatch):
+    config = _home_cfg(tmp_path, monkeypatch)
+    config.config_dir().mkdir(parents=True, exist_ok=True)
+    config.config_path().write_text('[continuity]\ngranularity = "sometimes"\n', encoding="utf-8")
+    assert config.load_continuity_defaults() == {"granularity": "handoff"}

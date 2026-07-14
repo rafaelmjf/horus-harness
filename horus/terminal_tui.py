@@ -92,6 +92,12 @@ _POSTURE_LABELS: dict[str, str] = {
     "full-auto": "Full-auto — bypass permissions (dangerous; unattended)",
 }
 
+_CONTINUITY_LABELS: dict[str, str] = {
+    "handoff": "Handoffs & pauses — batch related deliveries (recommended)",
+    "delivery": "Every delivery — update canonical continuity for each PR",
+    "manual": "Manual only — keep warnings until an explicit checkpoint",
+}
+
 
 class _BodyControl(FormattedTextControl):
     def __init__(self, text, on_scroll, *, invert_mouse_scroll: bool) -> None:
@@ -126,6 +132,9 @@ class TerminalUI:
         self.project_cards = {project: _open_cards(project) for project in self.projects}
         self.project_metrics = {
             project: _backlog_metrics(project, self.project_cards[project]) for project in self.projects
+        }
+        self.project_pending = {
+            project: len(closure.pending_delivery_commits(project)) for project in self.projects
         }
         self.running = [record for record in registry.Registry.default().all() if record.status == "running"]
         self.screen = "projects"
@@ -332,6 +341,15 @@ class TerminalUI:
             self._refresh_items()
             self.status = f"Default launch posture set to {posture}."
             self.application.invalidate()
+        elif self.screen == "settings" and kind == "continuity":
+            granularity = str(value)
+            config.set_continuity_granularity(granularity)
+            self._refresh_items()
+            self.selected = len(config.LAUNCH_POSTURE_CHOICES) + config.CONTINUITY_GRANULARITY_CHOICES.index(
+                granularity
+            )
+            self.status = f"Continuity granularity set to {granularity}."
+            self.application.invalidate()
         elif self.screen == "fleet_review" and kind == "curator":
             if isinstance(value, Path):
                 self.project = value
@@ -428,9 +446,12 @@ class TerminalUI:
         elif self.screen == "confirm":
             self.items = [("no", None), ("yes", None)]
         elif self.screen == "settings":
-            current = config.load_launch_defaults()["posture"]
+            posture = config.load_launch_defaults()["posture"]
             self.items = [("posture", choice) for choice in config.LAUNCH_POSTURE_CHOICES]
-            self.selected = config.LAUNCH_POSTURE_CHOICES.index(current)
+            self.items.extend(
+                ("continuity", choice) for choice in config.CONTINUITY_GRANULARITY_CHOICES
+            )
+            self.selected = config.LAUNCH_POSTURE_CHOICES.index(posture)
         elif self.screen == "fleet_review":
             self.items = []
             if self.fleet_review_record is not None:
@@ -500,6 +521,13 @@ class TerminalUI:
         if self.screen == "projects":
             lines.extend(self._account_summary_text())
         elif self.screen == "project":
+            pending = self.project_pending.get(self.project, 0)
+            if pending:
+                lines.append((
+                    "class:warning",
+                    f"\n  Continuity checkpoint pending · {pending} delivery commit"
+                    f"{'s' if pending != 1 else ''}\n",
+                ))
             warning = (
                 machine_requirements.warning_text(self.project_requirements)
                 if self.project_requirements is not None
@@ -536,7 +564,9 @@ class TerminalUI:
                     session_labels = ", ".join(_session_label(record) for record in sessions)
                     lines.append(("class:session", f"     {session_labels}\n"))
                 card_count, bug_count = self.project_metrics.get(root, (0, 0))
-                lines.append(("class:muted", f"     backlog {card_count} · bugs {bug_count}\n"))
+                pending = self.project_pending.get(root, 0)
+                continuity = f" · continuity {pending} pending" if pending else ""
+                lines.append(("class:muted", f"     backlog {card_count} · bugs {bug_count}{continuity}\n"))
             elif kind == "fleet_review":
                 lines.append((style, f"\n {marker} Fleet Review\n"))
                 lines.append(
@@ -596,11 +626,21 @@ class TerminalUI:
             elif kind in {"yes", "no"}:
                 lines.append((style, f"\n {marker} {'Close session' if kind == 'yes' else 'Keep session'}\n"))
             elif kind == "posture":
+                if index == 0:
+                    lines.append(("class:section", "\n  Launch posture\n"))
                 posture = str(value)
                 current = config.load_launch_defaults()["posture"]
                 active = "current" if posture == current else "      "
                 lines.append((style, f"\n {marker} [{active}] {posture}\n"))
                 lines.append(("class:muted", f"     {_POSTURE_LABELS.get(posture, '')}\n"))
+            elif kind == "continuity":
+                if index == len(config.LAUNCH_POSTURE_CHOICES):
+                    lines.append(("class:section", "\n  Continuity checkpoint\n"))
+                granularity = str(value)
+                current = config.load_continuity_defaults()["granularity"]
+                active = "current" if granularity == current else "      "
+                lines.append((style, f"\n {marker} [{active}] {granularity}\n"))
+                lines.append(("class:muted", f"     {_CONTINUITY_LABELS.get(granularity, '')}\n"))
         return lines
 
     def _wide_home_text(self, width: int) -> StyleAndTextTuples:
@@ -655,7 +695,15 @@ class TerminalUI:
                         [
                             ("class:selected" if index == self.selected else "class:item", f" {marker} {root.name}{suffix}"),
                             ("class:session", f"   {session_labels}" if session_labels else ""),
-                            ("class:muted", f"   backlog {card_count} · bugs {bug_count}"),
+                            (
+                                "class:muted",
+                                f"   backlog {card_count} · bugs {bug_count}"
+                                + (
+                                    f" · continuity {self.project_pending.get(root, 0)} pending"
+                                    if self.project_pending.get(root, 0)
+                                    else ""
+                                ),
+                            ),
                         ],
                     )
                 )

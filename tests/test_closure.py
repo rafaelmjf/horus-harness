@@ -4,6 +4,7 @@ import os
 import subprocess
 
 from horus import closure, initialize
+from horus.continuity import Finding
 
 
 def _run(root, *args):
@@ -32,7 +33,7 @@ def test_is_git_repo(tmp_path, monkeypatch):
     assert closure.is_git_repo(tmp_path)
 
 
-def test_pr_diff_freshness_requires_prd_for_product_changes(tmp_path, monkeypatch):
+def test_pr_diff_freshness_delivery_mode_requires_prd_for_product_changes(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
     base = subprocess.run(
         ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
@@ -44,7 +45,7 @@ def test_pr_diff_freshness_requires_prd_for_product_changes(tmp_path, monkeypatc
     (tmp_path / "feature.py").write_text("SHIPPED = True\n", encoding="utf-8")
     _run(tmp_path, "add", "feature.py")
     _run(tmp_path, "commit", "-m", "source only")
-    findings = closure.pr_diff_freshness(tmp_path, base)
+    findings = closure.pr_diff_freshness(tmp_path, base, granularity="delivery")
     assert findings[0].level == "fail"
     assert "does not update .horus/PRD.md" in findings[0].message
 
@@ -52,9 +53,89 @@ def test_pr_diff_freshness_requires_prd_for_product_changes(tmp_path, monkeypatc
     prd.write_text(prd.read_text(encoding="utf-8") + "\n<!-- closed -->\n", encoding="utf-8")
     _run(tmp_path, "add", ".horus/PRD.md")
     _run(tmp_path, "commit", "-m", "close continuity")
-    findings = closure.pr_diff_freshness(tmp_path, base)
+    findings = closure.pr_diff_freshness(tmp_path, base, granularity="delivery")
     assert findings[0].level == "ok"
     assert "canonical continuity" in findings[0].message
+
+
+def test_pr_diff_freshness_handoff_default_defers_canonical_update(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    base = subprocess.run(
+        ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    (tmp_path / "feature.py").write_text("SHIPPED = True\n", encoding="utf-8")
+    _run(tmp_path, "add", "feature.py")
+    _run(tmp_path, "commit", "-m", "source only")
+
+    findings = closure.pr_diff_freshness(tmp_path, base)
+
+    assert findings[0].level == "ok"
+    assert "durable in git" in findings[0].message
+    assert "handoff boundary" in findings[0].message
+
+
+def test_project_frontmatter_can_enforce_delivery_mode_in_ci(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    prd = tmp_path / ".horus" / "PRD.md"
+    prd.write_text(
+        prd.read_text(encoding="utf-8").replace(
+            "---\n", "---\ncontinuity_granularity: delivery\n", 1,
+        ),
+        encoding="utf-8",
+    )
+    _run(tmp_path, "add", ".horus/PRD.md")
+    _run(tmp_path, "commit", "-m", "configure strict continuity")
+    base = subprocess.run(
+        ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    _work_commit(tmp_path, "feature.py", "SHIPPED = True\n", "source only")
+
+    assert closure.continuity_granularity(tmp_path) == "delivery"
+    findings = closure.pr_diff_freshness(tmp_path, base)
+    assert findings[0].level == "fail"
+    assert "does not update .horus/PRD.md" in findings[0].message
+
+
+def test_handoff_pr_defers_card_archival_but_delivery_mode_keeps_it_strict(tmp_path, monkeypatch):
+    monkeypatch.setattr(closure.routines, "freshness_signals", lambda root: [])
+    monkeypatch.setattr(
+        closure.backlog,
+        "hygiene_findings",
+        lambda root: [Finding("warn", "done card awaits archive")],
+    )
+    monkeypatch.setattr(
+        closure,
+        "pr_diff_freshness",
+        lambda root, base_ref, granularity=None: [Finding("ok", f"diff {granularity}")],
+    )
+
+    monkeypatch.setattr(closure, "continuity_granularity", lambda root=None: "handoff")
+    handoff = closure.pr_freshness_gate(tmp_path, "origin/main")
+    assert [finding.message for finding in handoff] == ["diff handoff"]
+
+    monkeypatch.setattr(closure, "continuity_granularity", lambda root=None: "delivery")
+    delivery = closure.pr_freshness_gate(tmp_path, "origin/main")
+    assert any("done card awaits archive" in finding.message for finding in delivery)
+
+
+def test_pending_delivery_commits_are_portable_git_history_signal(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    _work_commit(tmp_path, "feature.py", "SHIPPED = True\n", "feat: first delivery")
+    _work_commit(tmp_path, "second.py", "MORE = True\n", "feat: second delivery")
+
+    pending = closure.pending_delivery_commits(tmp_path)
+    assert [subject for _sha, subject in pending] == ["feat: first delivery", "feat: second delivery"]
+    assert "2 delivery commit(s) pending" in closure.pending_delivery_findings(tmp_path)[0].message
+
+    prd = tmp_path / ".horus" / "PRD.md"
+    prd.write_text(prd.read_text(encoding="utf-8") + "\n<!-- boundary checkpoint -->\n", encoding="utf-8")
+    _run(tmp_path, "add", ".horus/PRD.md")
+    _run(tmp_path, "commit", "-m", "Update Horus continuity at handoff")
+
+    assert closure.pending_delivery_commits(tmp_path) == []
+    assert closure.pending_delivery_findings(tmp_path)[0].level == "ok"
 
 
 def test_pr_diff_freshness_allows_continuity_only_and_fails_unknown_base(tmp_path, monkeypatch):

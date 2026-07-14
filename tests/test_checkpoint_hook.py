@@ -3,7 +3,7 @@
 import json
 import uuid
 
-from horus import cli, closure, native_hooks
+from horus import cli, closure, config, native_hooks
 from horus.continuity import Finding
 
 
@@ -80,9 +80,10 @@ def test_checker_exception_is_silent(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out == ""
 
 
-def test_hook_runs_harvest(tmp_path, monkeypatch):
-    # The Stop hook folds new commits into the session note (incremental consolidation).
+def test_delivery_mode_hook_runs_harvest(tmp_path, monkeypatch):
+    # Per-delivery mode retains incremental consolidation.
     _use_temp_sentinels(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "load_continuity_defaults", lambda: {"granularity": "delivery"})
     called = []
     monkeypatch.setattr(closure, "harvest_checkpoint", lambda root: (called.append(root), (0, None))[1])
     _stub_findings(monkeypatch, [Finding("ok", "working tree clean")])
@@ -91,9 +92,22 @@ def test_hook_runs_harvest(tmp_path, monkeypatch):
     assert called == [tmp_path]
 
 
+def test_handoff_default_does_not_harvest_on_every_stop(tmp_path, monkeypatch):
+    _use_temp_sentinels(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "load_continuity_defaults", lambda: {"granularity": "handoff"})
+    called = []
+    monkeypatch.setattr(closure, "harvest_checkpoint", lambda root: called.append(root))
+    _stub_findings(monkeypatch, [Finding("ok", "working tree clean")])
+    _stub_stdin(monkeypatch, {"session_id": _sid()})
+
+    assert cli._checkpoint_hook(tmp_path, block=False) == 0
+    assert called == []
+
+
 def test_hook_harvest_errors_are_swallowed(tmp_path, monkeypatch):
     # A harvest failure must never wedge the Stop hook (guard invariant).
     _use_temp_sentinels(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "load_continuity_defaults", lambda: {"granularity": "delivery"})
     def boom(root):
         raise RuntimeError("harvest blew up")
     monkeypatch.setattr(closure, "harvest_checkpoint", boom)

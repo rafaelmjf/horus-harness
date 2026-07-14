@@ -47,10 +47,25 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
   structure — read those lanes directly (each stays in its lane); migrating to
   `PRD.md` is a separate, opt-in step and does not happen automatically.
 
-After work that contributes to the project state, close the session by invoking the
-`horus-consolidate` skill and folding in this session's context:
+Continuity is a checkpoint at context boundaries, not a transaction log for every
+card. The shared continuity setting (CLI/hooks/TUI, optionally overridden for every
+machine/CI by `continuity_granularity` in project frontmatter) controls narrative granularity:
 
-- Add a concise session summary under `.horus/sessions/` (scaffold with
+- `handoff` (**default**) batches related deliveries in one uninterrupted session;
+  checkpoint before an agent/account/machine change, dispatch, pause, release, or end.
+- `delivery` performs the older strict checkpoint after every merged card/PR.
+- `manual` waits for an explicit checkpoint but keeps pending-state warnings visible.
+
+Delivery safety never changes with that setting: branches, commits, pushed refs, PRs,
+deterministic gates, and worker receipts remain durable. Before dispatch, pin the task
+and base SHA in the brief; if Horus reports pending continuity, either checkpoint it or
+carry the relevant delta explicitly. Workers record delivery facts; the supervisor owns
+canonical continuity.
+
+At a continuity boundary, invoke the `horus-consolidate` skill and fold in the whole
+campaign's context:
+
+- Add one concise session summary under `.horus/sessions/` (scaffold with
   `horus session new "<title>"`, then write what actually happened — not just a date).
 - Update PRD.md: refresh its frontmatter (`current_focus`, `next_action`,
   `next_prompt`, `execution_recommendation`, `last_updated`), move any work that
@@ -261,9 +276,9 @@ The invariants that constrain new work.
 - **Frontmatter:** this file carries `current_focus` / `next_action` /
   `next_prompt` / `execution_recommendation` / `last_updated` — the tooling reads
   them PRD-first (`resolve_focus`); no shims are needed.
-- **Closure:** update this file's frontmatter + backlog/shipped + a session note +
-  `horus close --commit --push`. One `horus consolidate` pass at most; do not chase
-  warnings.
+- **Closure:** at a configured continuity boundary, update this file's frontmatter +
+  backlog/shipped + one campaign session note + `horus close --commit --push`.
+  One `horus consolidate` pass at most; do not chase warnings.
 """
 
 
@@ -714,10 +729,12 @@ installed. Read this first.
   substantial item starts, not preserved as a timeline.
 
 Keep PRD.md under ~250 lines: shipped ledger items are one line; card-backed work
-is moved to `backlog/archive/` with `status: shipped` and PR/SHA provenance. Closure = update PRD.md
-(frontmatter + backlog/shipped) +
-a session note, then `horus close --commit --push`. One `horus consolidate` pass at
-most; do not chase warnings.
+is moved to `backlog/archive/` with `status: shipped` and PR/SHA provenance. At the
+configured continuity boundary, closure = update PRD.md (frontmatter +
+backlog/shipped) + one campaign session note, then `horus close --commit --push`.
+The default `handoff` granularity batches related deliveries until an agent/account/
+machine change, dispatch, pause, release, or end. One `horus consolidate` pass at most;
+do not chase warnings.
 
 These files are scaffolded by `horus init` and maintained by the agents working in
 this repo. `horus infer` can bootstrap PRD.md from existing docs (README, status

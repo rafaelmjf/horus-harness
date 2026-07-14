@@ -35,10 +35,25 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
   structure — read those lanes directly (each stays in its lane); migrating to
   `PRD.md` is a separate, opt-in step and does not happen automatically.
 
-After work that contributes to the project state, close the session by invoking the
-`horus-consolidate` skill and folding in this session's context:
+Continuity is a checkpoint at context boundaries, not a transaction log for every
+card. The shared continuity setting (CLI/hooks/TUI, optionally overridden for every
+machine/CI by `continuity_granularity` in project frontmatter) controls narrative granularity:
 
-- Add a concise session summary under `.horus/sessions/` (scaffold with
+- `handoff` (**default**) batches related deliveries in one uninterrupted session;
+  checkpoint before an agent/account/machine change, dispatch, pause, release, or end.
+- `delivery` performs the older strict checkpoint after every merged card/PR.
+- `manual` waits for an explicit checkpoint but keeps pending-state warnings visible.
+
+Delivery safety never changes with that setting: branches, commits, pushed refs, PRs,
+deterministic gates, and worker receipts remain durable. Before dispatch, pin the task
+and base SHA in the brief; if Horus reports pending continuity, either checkpoint it or
+carry the relevant delta explicitly. Workers record delivery facts; the supervisor owns
+canonical continuity.
+
+At a continuity boundary, invoke the `horus-consolidate` skill and fold in the whole
+campaign's context:
+
+- Add one concise session summary under `.horus/sessions/` (scaffold with
   `horus session new "<title>"`, then write what actually happened — not just a date).
 - Update PRD.md: refresh its frontmatter (`current_focus`, `next_action`,
   `next_prompt`, `execution_recommendation`, `last_updated`), move any work that

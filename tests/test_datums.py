@@ -13,7 +13,7 @@ recommends nothing — is asserted directly.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -918,7 +918,9 @@ def _write_target_prd(project_root, *, last_updated):
 def test_datum_close_cli_card_stamps_card_and_stays_quiet_when_fresh(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     _mk_target_card(tmp_path, "deliver-me")
-    today = datetime.now(timezone.utc).date().isoformat()
+    # Card delivery stamps intentionally use the operator's local calendar day.
+    # Keep this assertion stable around local-midnight/UTC-date boundaries.
+    today = date.today().isoformat()
     _write_target_prd(tmp_path, last_updated=today)  # fresh: matches this run's completion
 
     main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])

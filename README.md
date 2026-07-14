@@ -77,7 +77,16 @@ so returning to the first project restores the account rail and narrow phone ter
 never print raw arrow-key escape sequences. Termius already translates touch gestures
 into conventional Up/Down bytes, so Horus preserves the normal mapping on phone and
 desktop. `HORUS_TUI_INVERT_SCROLL=1` is an opt-in escape hatch for clients that report
-the opposite direction. Terminal launches from both the web app and terminal app
+the opposite direction. Press `d` for Defaults: besides launch permissions, it controls
+continuity granularity. `handoff` (the default) batches canonical PRD/card/session-note
+updates until an agent/account/machine change, dispatch, pause, release, or session end;
+`delivery` checkpoints every PR; `manual` waits for an explicit checkpoint. Git delivery
+evidence and commit/push/test safeguards remain active in every mode, while resume and
+the TUI warn about product commits pending consolidation. A project can commit
+`continuity_granularity` in PRD/project frontmatter to override the user default on every
+machine and in required CI.
+
+Terminal launches from both the web app and terminal app
 automatically use a unique managed tmux session on Linux, macOS, and WSL whenever tmux
 is installed, so a browser terminal is now a viewer of the same detachable session the
 TUI can attach. Native Windows, hosts without tmux, and shells already inside tmux fall
