@@ -32,3 +32,7 @@ tree before its own mutation.
 ## Next
 
 - After merge, ask the owner before claiming `project-machine-requirements`.
+
+## Checkpoints (auto-harvested)
+
+- `4d56b56` fix: report final close state after checkpoint
