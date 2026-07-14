@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Fleet curation is consolidated: horus-agent is a thin Git-synchronized workspace, while harness now owns a remote-authoritative fleet review, optional TUI curator entry, and bundled curation workflow. Three real agent defects were migrated here; obsolete/speculative agent cards remain preserved with rationale."
-next_action: "After the fleet-review PR lands, ask the owner before claiming `auto-merge-bypasses-freshness-gate`; it is the highest-value remaining defect because the current advisory CI gate can still let server-side auto-merges land with stale continuity. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, review `.horus/backlog/auto-merge-bypasses-freshness-gate.md`, and ask the owner to confirm proceeding. If confirmed, make the server-side freshness check enforceable without command-string false positives, branch → PR. [Sonnet scoped implementation, inline]"
-execution_recommendation: "continue-as-is — `auto-merge-bypasses-freshness-gate` is a bounded CI/CLI correctness defect with an explicit stale-auto-merge gate; inline Sonnet keeps policy and implementation in one context."
+current_focus: "Server-side continuity freshness is now enforceable: PR source/product changes must update canonical continuity, the GitHub freshness job fails hard and is required on main, and the local merge hook recognizes shell-position commands without blocking quoted prompt prose."
+next_action: "Ask the owner before claiming `close-commit-output-contradicts-success`; it is the smallest repeatedly observed trust/ceremony defect and should make successful closure output describe the recomputed final state only. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, read `.horus/backlog/close-commit-output-contradicts-success.md`, and ask the owner to confirm proceeding. If confirmed, make `close --commit --push` suppress resolved pre-action warnings and report one unambiguous final verdict, branch → PR. [Sonnet scoped implementation, inline]"
+execution_recommendation: "continue-as-is — `close-commit-output-contradicts-success` is a small, reproduced CLI-output defect with deterministic state-transition tests; delegation overhead exceeds the implementation."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -36,11 +36,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-After fleet review ships, six cards remain: auto-merge is highest value; machine requirements is promoted; close-output and datum-taxonomy are medium; two older cards are deferred.
+After the freshness gate ships, five cards remain: close-output is the next small observed defect; machine requirements is promoted; datum taxonomy is medium; two older cards are deferred.
 Deferred cards carry promotion conditions; retired/folded cards keep full history and rationale in `backlog/archive/`.
 
 ## Shipped
 
+**Required server-side continuity freshness** (2026-07-14): `close --check --base-ref` fails source/product PRs without canonical PRD/lane updates; GitHub's `freshness` job is non-advisory and required, while the local merge hook tokenizes command positions so quoted prompts never trigger it.
 **Remote-authoritative fleet curator** (2026-07-14): a path-free shared manifest drives `horus fleet --review` (fetched remote PRD/cards/capabilities kept separate from local state, with GitHub fallback and continuity lag), an optional TUI Fleet Review/curator launch, and a bundled owner-gated curation skill.
 **TUI canonical project focus + claimed-card state** (2026-07-14, PR #229): the project screen renders PRD-first current focus and next action before launch choices, and backlog rows visibly distinguish claimed cards while reusing canonical focus/card primitives.
 **Self-reference-free closure + residual-dirty guard** (2026-07-14, PR #228): close harvests work before staging, seals its own SHA only in the local marker, names residual continuity edits and skips push, then recomputes the complete closure verdict.
@@ -74,6 +75,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 
 - **Repo-local `.horus/` is the source of truth** — committed, vendor-neutral, works without Horus installed. Horus is a helper, never a required runtime.
 - **Controls climb a ladder: instruction → deterministic signal → hard gate.** Start with instructions; promote only after an observed field failure (fetch-first + branch→PR instructions failed, so SessionStart signal + block v7 followed). Never enforce preemptively.
+- **Server-side merge freshness is a required PR invariant.** Any PR changing product/source outside committed continuity surfaces must update the canonical PRD (or v2 lanes); the required `freshness` check owns the hard gate for queued auto-merge. Local PreToolUse parsing is fast feedback only and must match `gh pr merge` at shell command position, never inside quoted prompt prose.
 - **Continuity must beat re-derivation.** Every capability must give a fresh session something CLAUDE.md + git log cannot, at lower cost. PRD.md is state, not behavior; behavioral text belongs in the managed block, and Rules holds only project-specific invariants earned by failure.
 - **Closure reaches the remote, fetch-first and self-reference-free** — `close --commit --push`; refuse newer remote continuity, seal the closing SHA without appending it into its own note, and refuse to push residual dirty continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
 - **One fetch-first primitive, reused.** `fetchcheck.fetch_and_state` (TTL-cached, read-only fetch, never pull) serves SessionStart and `status`/`fleet` gone-branch/staleness signals; no consumer reinvents it.

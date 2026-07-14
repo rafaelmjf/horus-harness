@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import sys
 import time
 import uuid
@@ -1467,7 +1468,7 @@ def _close_merge_hook(root: Path) -> int:
     tool = hook_input.get("tool_name") or hook_input.get("toolName") or ""
     tool_input = hook_input.get("tool_input") or hook_input.get("toolInput") or {}
     command = str(tool_input.get("command", "")) if isinstance(tool_input, dict) else ""
-    if tool not in native_hooks.SHELL_TOOL_NAMES or "gh pr merge" not in command:
+    if tool not in native_hooks.SHELL_TOOL_NAMES or not _is_gh_pr_merge_command(command):
         return 0  # not a merge — let it through
 
     try:
@@ -1494,6 +1495,42 @@ def _close_merge_hook(root: Path) -> int:
     return 0
 
 
+def _is_gh_pr_merge_command(command: str) -> bool:
+    """Recognize gh-pr-merge only where a shell command may begin.
+
+    Quoted prompt text remains one token, so e.g. horus-run with a prompt that
+    mentions the spelling is not mistaken for a merge. Compound commands remain
+    useful fast feedback: cd repo && gh pr merge is recognized after the operator.
+    CI is the hard gate; malformed/complex shell syntax safely returns false here.
+    """
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        tokens = list(lexer)
+    except ValueError:
+        return False
+
+    at_command = True
+    for index, token in enumerate(tokens):
+        if token and all(char in ";&|\n" for char in token):
+            at_command = True
+            continue
+        if not at_command:
+            continue
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", token):
+            continue
+        if (
+            token.casefold() in {"gh", "gh.exe"}
+            and index + 2 < len(tokens)
+            and tokens[index + 1:index + 3] == ["pr", "merge"]
+        ):
+            return True
+        at_command = False
+    return False
+
+
 def cmd_close(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     if (rc := _enforce_version_floor(root)) is not None:
@@ -1507,7 +1544,13 @@ def cmd_close(args: argparse.Namespace) -> int:
         # Gate mode (scriptable / CI): only dashboard-freshness signals, verdict + exit
         # code, no ritual prompt and no usage/drift noise.
         print(f"Closure freshness check: {root}\n")
-        findings = closure.freshness_gate(root) + closure.checkpoint_gate(root)
+        base_ref = getattr(args, "base_ref", None)
+        freshness = (
+            closure.pr_freshness_gate(root, base_ref)
+            if base_ref
+            else closure.freshness_gate(root)
+        )
+        findings = freshness + closure.checkpoint_gate(root)
         healthy = _print_findings(findings)
         print("\nFresh — the dashboard reflects this session and work is checkpointed." if healthy
               else "\nStale — update the lanes (run the horus-consolidate skill) and commit/push "
@@ -3181,6 +3224,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_close.add_argument(
         "--check", action="store_true",
         help="gate mode: print the freshness verdict and exit non-zero if the lanes are stale (for scripts/CI)",
+    )
+    p_close.add_argument(
+        "--base-ref",
+        help="with --check: also require product/source changes relative to this "
+             "fetched ref to include canonical continuity (for required PR CI)",
     )
     p_close.add_argument(
         "--hook", action="store_true",

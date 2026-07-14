@@ -267,7 +267,7 @@ def install_codex_usage_hook(project_root: Path, *, threshold: float = 90.0) -> 
 
 
 def install_codex_merge_hook(project_root: Path) -> HookAction:
-    """Install/update a project-local Codex PreToolUse gate for `gh pr merge`."""
+    """Install/update local fast feedback; required CI owns the hard merge gate."""
     codex_dir = project_root / ".codex"
     path = codex_dir / "hooks.json"
     data = _load_json(path)
@@ -493,10 +493,12 @@ def install_claude_usage_hook(project_root: Path, *, threshold: float = 90.0) ->
 
 
 def install_claude_merge_hook(project_root: Path) -> HookAction:
-    """Install/update a Claude `PreToolUse` hook that gates `gh pr merge` on the
-    closure freshness check — blocks the merge and diverts to consolidation when the
-    dashboard lanes are stale. Matches the `Bash` tool; the command filters for the
-    merge itself, so non-merge Bash calls pass straight through."""
+    """Install/update local fast feedback for a shell-position gh-pr-merge command.
+
+    Required CI owns the hard server-side gate. The hook remains a quicker local
+    nudge, with command parsing in cli._is_gh_pr_merge_command avoiding prompt-text
+    false positives.
+    """
     path, data, hooks = _claude_hooks_dict(project_root)
     _merge_event_hook(
         hooks, "PreToolUse", _claude_merge_hook_command(),

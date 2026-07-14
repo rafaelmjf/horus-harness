@@ -1,6 +1,6 @@
 ---
 title: "[bug] Server-side auto-merge bypasses the continuity freshness gate"
-status: open
+status: claimed
 priority: high
 tier: sonnet
 parallel: safe

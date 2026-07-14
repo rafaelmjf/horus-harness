@@ -1655,6 +1655,48 @@ def test_merge_hook_ignores_non_merge_bash(monkeypatch, capsys):
     assert rc == 0 and out.strip() == ""
 
 
+def test_merge_hook_ignores_quoted_prompt_that_mentions_merge(monkeypatch, capsys):
+    rc, out = _merge_hook_run(
+        monkeypatch,
+        capsys,
+        tool_input={
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": 'horus run "Open the PR and STOP; do not gh pr merge"',
+            },
+        },
+        findings=[("fail", "lanes stale")],
+    )
+    assert rc == 0 and out.strip() == ""
+
+
+def test_merge_hook_gates_actual_merge_after_shell_operator(monkeypatch, capsys):
+    rc, out = _merge_hook_run(
+        monkeypatch,
+        capsys,
+        tool_input={
+            "tool_name": "Bash",
+            "tool_input": {"command": "cd /tmp/project && gh pr merge 15 --auto"},
+        },
+        findings=[("warn", "lanes stale")],
+    )
+    assert rc == 0
+    assert json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_merge_hook_malformed_shell_text_fails_open(monkeypatch, capsys):
+    rc, out = _merge_hook_run(
+        monkeypatch,
+        capsys,
+        tool_input={
+            "tool_name": "Bash",
+            "tool_input": {"command": 'horus run "mention gh pr merge'},
+        },
+        findings=[("fail", "lanes stale")],
+    )
+    assert rc == 0 and out.strip() == ""
+
+
 def test_merge_hook_ignores_non_shell_tool(monkeypatch, capsys):
     rc, out = _merge_hook_run(
         monkeypatch, capsys,
