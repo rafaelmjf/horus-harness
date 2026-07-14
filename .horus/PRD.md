@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.53 released from PR #220 / merge `9edb7dd`: PR and merge-SHA CI passed on Python 3.12/3.13; PyPI JSON + simple index exposed 0.0.53; a clean Python 3.12 environment installed the public artifact and showed the nano editor guidance; hosted deploy reports 0.0.53 and remains gated (root 403)."
-next_action: "Owner-eyeball backlog-card `e` from the installed TUI (expect nano + visible Ctrl+O/Ctrl+X guidance), then resume `tui-capabilities-screen`: Capabilities item, vision line, and staleness hint as a thin renderer over capabilities.generate_project. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus after v0.0.53. Fetch first. Ask the owner to verify backlog-card `e` opens nano with visible save/return guidance on their real terminal; then claim `.horus/backlog/tui-capabilities-screen.md` and implement it as a thin TUI renderer over capabilities.generate_project, branch → PR."
-execution_recommendation: "continue-as-is — the owner editor check is a one-minute runtime eyeball, then `tui-capabilities-screen` is bounded rendering over an existing read-only module with no design ambiguity, suited to inline sonnet-5; delegation overhead would exceed the scoped change."
+current_focus: "v0.0.53 is fully released and owner-verified: PR/merge-SHA CI passed on Python 3.12/3.13; PyPI JSON/simple index + clean Python 3.12 install passed; hosted runs 0.0.53 with root still gated (403); owner confirmed backlog-card editing works correctly on the real installed TUI."
+next_action: "Claim and implement `tui-capabilities-screen`: add the Capabilities item, project vision line, and staleness hint as a thin TUI renderer over capabilities.generate_project, then branch → PR. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus after the owner-verified v0.0.53 release. Fetch first, claim `.horus/backlog/tui-capabilities-screen.md`, read the full card, and implement it as a thin TUI renderer over capabilities.generate_project with no second data path; branch → PR."
+execution_recommendation: "continue-as-is — `tui-capabilities-screen` is bounded rendering over an existing read-only module with no design ambiguity, suited to inline sonnet-5; delegation overhead would exceed the scoped change."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -74,26 +74,11 @@ One line per capability; details in `archive/features.md`, git history, and the 
 
 The invariants that constrain new work. Full rationale: `archive/decisions.md` + `archive/history.md`.
 
-- **Repo-local `.horus/` is the source of truth** — committed, vendor-neutral, works
-  without Horus installed. Horus is a helper, never a required runtime.
-- **Controls climb a ladder: instruction → deterministic signal → hard gate.** New
-  controls start as instruction text; promote a rung only on an *observed field
-  failure* of the rung below (fabric 2026-07-08: fetch-first + branch→PR failed as
-  instructions → became a SessionStart signal + block v7 policy line). Never build
-  enforcement preemptively — this is the anti-over-engineering test for backlog items.
-- **Continuity must beat re-derivation.** Every `.horus/` capability names what a
-  fresh session gets that CLAUDE.md + git log alone couldn't, at less cost than
-  re-deriving it. PRD.md is *state*, not behavior; behavioral text belongs in the
-  managed block, and Rules stays project-specific invariants earned by failure —
-  otherwise this file drifts into a second CLAUDE.md.
-- **Closure reaches the remote, fetch-first** — `close --commit --push`; refuse when
-  origin has newer continuity. At session start: `git fetch --all --prune` and verify
-  against the remote before trusting local refs or continuity prose.
-- **One fetch-first primitive, reused, not reinvented.** `fetchcheck.fetch_and_state`
-  (TTL-cached, read-only `git fetch --all --prune`, never a pull) is the single fetch
-  path for every reporting surface that needs fresh remote-tracking refs — the
-  session-start hook and `status`/`fleet`'s gone-branch/staleness signals (2026-07-10)
-  both call it rather than each shelling a fetch of their own.
+- **Repo-local `.horus/` is the source of truth** — committed, vendor-neutral, works without Horus installed. Horus is a helper, never a required runtime.
+- **Controls climb a ladder: instruction → deterministic signal → hard gate.** Start with instructions; promote only after an observed field failure (fetch-first + branch→PR instructions failed, so SessionStart signal + block v7 followed). Never enforce preemptively.
+- **Continuity must beat re-derivation.** Every capability must give a fresh session something CLAUDE.md + git log cannot, at lower cost. PRD.md is state, not behavior; behavioral text belongs in the managed block, and Rules holds only project-specific invariants earned by failure.
+- **Closure reaches the remote, fetch-first** — `close --commit --push`; refuse newer remote continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
+- **One fetch-first primitive, reused.** `fetchcheck.fetch_and_state` (TTL-cached, read-only fetch, never pull) serves SessionStart and `status`/`fleet` gone-branch/staleness signals; no consumer reinvents it.
 - **Three disciplines, every session:** reproduce the gate via a deterministic signal
   you observe yourself — a *required* CI check green on the exact commit counts for
   the test gate; the *runtime* gate always stays yours (drive the real surface once,
