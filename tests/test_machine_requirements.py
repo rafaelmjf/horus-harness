@@ -27,16 +27,16 @@ def test_inspect_probes_tools_and_config_paths_without_executing(tmp_path):
         """kind: machine-requirements
 tools:
   - name: Fabric CLI
-    probe: fab
+    probe: fab --version
     install: uv tool install fab
     needed_for: Fabric workspace operations
   - name: Power BI reader
-    probe: pbir
+    probe: pbir --version
     install: install pbir
     needed_for: report inspection
 configs:
   - name: Local settings
-    probe: local/settings.toml
+    path: local/settings.toml
     needed_for: authenticated access
 """,
         "# Machine requirements\n\nDescribe non-probeable access here.\n",
@@ -60,13 +60,13 @@ configs:
     assert "install: install pbir" in warning
 
 
-def test_tool_probe_rejects_committed_shell_commands(tmp_path):
+def test_tool_probe_rejects_committed_shell_syntax(tmp_path):
     _write(
         tmp_path,
         """kind: machine-requirements
 tools:
   - name: Unsafe probe
-    probe: fab --version
+    probe: fab --version && touch /tmp/should-not-exist
     install: never run this
     needed_for: proving probes are data
 configs: []
@@ -81,7 +81,7 @@ configs: []
 
     assert looked_up == []
     assert not report.requirements
-    assert "commands are never executed" in report.issues[0]
+    assert "probes are never executed" in report.issues[0]
     assert "could not be fully checked" in machine_requirements.warning_text(report)
 
 

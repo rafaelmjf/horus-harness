@@ -14,16 +14,16 @@ present, the same read-only result appears in:
 kind: machine-requirements
 tools:
   - name: Fabric CLI
-    probe: fab
+    probe: fab --version
     install: uv tool install fab
     needed_for: Fabric workspace operations
   - name: Power BI reader
-    probe: pbir
+    probe: pbir --version
     install: install pbir for this machine
     needed_for: report inspection
 configs:
   - name: Power BI credentials
-    probe: ~/.config/pbir/credentials.json
+    path: ~/.config/pbir/credentials.json
     install: configure pbir credentials
     needed_for: authenticated Power BI work
 ---
@@ -33,14 +33,16 @@ configs:
 Access to the tenant is also required and cannot be probed automatically.
 ```
 
-The frontmatter is intentionally narrow: `tools` and `configs` are lists whose
-items use `name`, `probe`, `install`, and `needed_for` scalar fields.
+The frontmatter is intentionally narrow: `tools` and `configs` are lists. Tool
+items use `name`, `probe`, `install`, and `needed_for`; config items use `path`
+plus optional `name`, `install`, and `needed_for` scalar fields.
 
 Safety is structural:
 
-- a tool `probe` is one executable name checked through the operating system's
-  command lookup; it is never run;
-- a config `probe` is a path existence check, with `~` and environment variables
+- a tool `probe` is an executable plus optional descriptive arguments; only the
+  executable token is checked through the operating system's command lookup and
+  the argv is never run;
+- a config `path` is an existence check, with `~` and environment variables
   expanded; relative paths resolve from the project root;
-- shell commands are rejected as invalid probes;
+- shell syntax is rejected as an invalid probe;
 - non-probeable dependencies belong in the Markdown body as prose.

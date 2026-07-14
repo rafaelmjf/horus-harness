@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Project-declared machine readiness now has one safe read-only parser/probe result rendered by doctor, resume, dashboard, and TUI; the first real fabric declaration is the remaining acceptance step."
-next_action: "Add fabric's committed `.horus/requirements.md` for `fab`/`pbir` plus prose-only PBI access, verify all four Horus consumers against it, then finish the harness PR. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume the `project-machine-requirements` delivery from `feat/project-machine-requirements`: fetch both repos, read the harness card and fabric continuity, add the first fabric declaration without executable probes, verify doctor/resume/dashboard/TUI, then finish branch → PR closure. [Sonnet scoped implementation, inline]"
-execution_recommendation: "continue-as-is — the shared implementation is complete; the remaining fabric declaration is a small cross-repo data file with deterministic read-only probes, so phased handoffs add no value."
+current_focus: "Projects can declare machine tools/config paths once and get the same safe readiness result in doctor, resume, dashboard, and TUI; the existing fabric declaration now warns before deploy work when `fab`, `pbir`, or PBIR config is absent."
+next_action: "Ask the owner before claiming `datum-outcome-taxonomy-void-and-death`; if confirmed, add a truthful void/aborted path and keep operational deaths outside the quality denominator. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, read `.horus/backlog/datum-outcome-taxonomy-void-and-death.md`, and ask the owner to confirm proceeding. If confirmed, separate void/death lifecycle counts from clean|nudged|bounced quality calibration, branch → PR. [Sonnet scoped implementation, inline]"
+execution_recommendation: "continue-as-is — `datum-outcome-taxonomy-void-and-death` is a bounded data-model/rendering correction with a crisp denominator invariant and deterministic tests; it fits scoped Sonnet implementation without phased handoffs."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -36,11 +36,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-After close-output ships, four cards remain: machine requirements is next; datum taxonomy is medium; two older cards are deferred.
+After machine readiness ships, three cards remain: datum taxonomy is next; two older cards are deferred.
 Deferred cards carry promotion conditions; retired/folded cards keep full history and rationale in `backlog/archive/`.
 
 ## Shipped
 
+**Project-declared machine readiness** (2026-07-14): optional `.horus/requirements.md` tool/config probes are checked without command execution and rendered through one canonical result in doctor, resume prompts, dashboard badges/details, and TUI project views; the existing fabric declaration is the live first consumer.
 **Unambiguous acting-close verdict** (2026-07-14, PR #236): `close --commit [--push]` performs its checkpoint before rendering status, so successful output contains only recomputed clean findings while residual edits, failed pushes, and no-op failures still report their final actionable state.
 **Required server-side continuity freshness** (2026-07-14, PR #233): `close --check --base-ref` fails source/product PRs without canonical PRD/lane updates; GitHub's `freshness` job is non-advisory and required, while the local merge hook tokenizes command positions so quoted prompts never trigger it. Live queued-auto-merge probe PR #234 remained blocked and was closed unmerged.
 **Remote-authoritative fleet curator** (2026-07-14): a path-free shared manifest drives `horus fleet --review` (fetched remote PRD/cards/capabilities kept separate from local state, with GitHub fallback and continuity lag), an optional TUI Fleet Review/curator launch, and a bundled owner-gated curation skill.

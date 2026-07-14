@@ -4,8 +4,8 @@ agent: codex
 account: personal
 environment: host
 project: horus-harness
-status: in-progress
-summary: "Implemented one safe project-machine readiness result across doctor, resume, dashboard, and TUI; first fabric declaration remains before closure."
+status: complete
+summary: "Shipped one safe project-machine readiness result across doctor, resume, dashboard, and TUI, verified against fabric's existing declaration."
 ---
 
 # project-declared machine readiness across all launch surfaces
@@ -28,13 +28,19 @@ as a fourth consumer, without introducing a second parser or probe path.
 - Dashboard project cards/details show a readiness badge and warning panel; the
   TUI project frame shows the same warning above Resume/Fresh launch choices.
 - Added user-facing schema/safety documentation.
+- The fetched remote-authoritative fabric repo already carried the promised
+  declaration. Compatibility was adjusted to its existing contract: tool probes
+  may include descriptive argv such as `fab --version` (only `fab` is looked up;
+  nothing runs), and configs use `path:` with an optional display name.
 - Verification: 475 impacted tests and the full 1,455-test suite passed. A live
   isolated declaration produced the expected warning in doctor, resume,
   dashboard, and the actual TUI frame renderer.
+- Live first-consumer proof: fabric's unchanged declaration parsed with no
+  issues and all four surfaces warned that this machine lacks `fab`, `pbir`,
+  and `~/.config/pbir/config.json` before its deploy-oriented next action.
 - Consolidation found 14 active notes after this note was created; the two
   oldest already-distilled notes were moved to the local archive, leaving 12.
 
 ## Next
 
-- Add the first real declaration to fabric, verify it through all four
-  consumers, then finish the harness PR and ask before the next backlog card.
+- Finish PR #237, then ask before `datum-outcome-taxonomy-void-and-death`.

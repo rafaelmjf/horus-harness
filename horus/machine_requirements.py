@@ -7,12 +7,12 @@ matter shape::
     kind: machine-requirements
     tools:
       - name: Fabric CLI
-        probe: fab
+        probe: fab --version
         install: uv tool install fab
         needed_for: Fabric workspace operations
     configs:
       - name: Power BI credentials
-        probe: ~/.config/pbir/credentials.json
+        path: ~/.config/pbir/credentials.json
         install: Configure pbir credentials
         needed_for: authenticated Power BI work
     ---
@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,8 +36,9 @@ from typing import Callable, NamedTuple
 
 REQUIREMENTS_FILE = ".horus/requirements.md"
 _SECTIONS = {"tools": "tool", "configs": "config"}
-_ITEM_KEYS = {"name", "probe", "install", "needed_for"}
+_ITEM_KEYS = {"name", "probe", "path", "install", "needed_for"}
 _SAFE_TOOL_PROBE = re.compile(r"^[A-Za-z0-9_.+-]+$")
+_SHELL_METACHARS = frozenset(";&|<>`$()")
 
 
 @dataclass(frozen=True)
@@ -178,23 +180,37 @@ def inspect(
 
     for section, fields in records:
         category = _SECTIONS[section]
-        name = fields.get("name", "").strip()
-        probe = fields.get("probe", "").strip()
-        if not name or not probe:
-            issues.append(f"{section} item requires non-empty name and probe")
-            continue
+        if category == "tool":
+            name = fields.get("name", "").strip()
+            probe = fields.get("probe", "").strip()
+            if not name or not probe:
+                issues.append("tools item requires non-empty name and probe")
+                continue
+        else:
+            probe = (fields.get("path") or fields.get("probe") or "").strip()
+            name = (fields.get("name") or probe).strip()
+            if not probe:
+                issues.append("configs item requires a non-empty path (or probe)")
+                continue
         unknown = set(fields).difference(_ITEM_KEYS)
         if unknown:
             issues.append(f"{name}: unsupported fields: {', '.join(sorted(unknown))}")
             continue
 
         if category == "tool":
-            if not _SAFE_TOOL_PROBE.fullmatch(probe):
+            try:
+                argv = shlex.split(probe)
+            except ValueError:
+                argv = []
+            executable = argv[0] if argv else ""
+            unsafe_arg = any(any(char in _SHELL_METACHARS for char in token) for token in argv)
+            if not _SAFE_TOOL_PROBE.fullmatch(executable) or unsafe_arg:
                 issues.append(
-                    f"{name}: tool probe must be one executable name (commands are never executed)"
+                    f"{name}: tool probe must be a plain executable plus optional arguments "
+                    "(shell syntax is rejected; probes are never executed)"
                 )
                 continue
-            available = tool_lookup(probe) is not None
+            available = tool_lookup(executable) is not None
         else:
             expanded = Path(os.path.expandvars(probe)).expanduser()
             candidate = expanded if expanded.is_absolute() else project_root / expanded
