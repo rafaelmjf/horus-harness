@@ -1,10 +1,9 @@
 name: continuity
 
-# Pre-merge closure gate: require that a PR closed its Horus session — the dashboard's
-# lanes reflect the change before it lands on main. Closure *authoring* is in-session
-# (the agent has the context); this just verifies the committed result at the PR
-# boundary. The `freshness` job is a required main-branch status check, so queued
-# server-side auto-merges cannot bypass it.
+# Pre-merge continuity gate. Under the default handoff granularity, product commits
+# themselves are durable delivery receipts and canonical narrative may be batched until
+# a real context boundary. Per-delivery mode still requires PRD/lanes in every PR. The
+# required job also keeps dashboard/card hygiene and git checkpoint checks server-side.
 
 on:
   pull_request:

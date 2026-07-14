@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from horus import adapters, config, github_catalog, launcher, mergewatch, registry, reinstall, remote_start, upgrade
+from horus import adapters, closure, config, github_catalog, launcher, mergewatch, registry, reinstall, remote_start, upgrade
 from horus.cli import main
 from horus.instructions import check_drift
 from horus.registry import Registry, SessionRecord
@@ -1944,6 +1944,21 @@ def test_run_worker_preset_maps_claude_to_full_auto(tmp_path, monkeypatch):
     rc = main(["run", "hi", "--agent", "fake", "--worker", "claude", "--path", str(tmp_path)])
     assert rc == 0
     assert captured["posture"] == "full-auto"
+
+
+def test_run_worker_surfaces_dispatch_boundary_and_pending_continuity(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    _capture_run_posture(monkeypatch)
+    monkeypatch.setattr(
+        closure,
+        "pending_delivery_commits",
+        lambda root: [("a" * 40, "feat: one"), ("b" * 40, "feat: two")],
+    )
+
+    assert main(["run", "hi", "--agent", "fake", "--worker", "claude", "--path", str(tmp_path)]) == 0
+    output = capsys.readouterr().out
+    assert "Dispatch boundary: base unknown · pending continuity 2" in output
+    assert "include their relevant state in the worker brief" in output
 
 
 def test_run_worker_preset_maps_codex_to_auto_edit(tmp_path, monkeypatch):

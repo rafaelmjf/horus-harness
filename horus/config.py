@@ -53,6 +53,12 @@ LAUNCH_DEFAULTS: dict[str, str] = {"posture": "default"}
 
 LAUNCH_POSTURE_CHOICES: tuple[str, ...] = ("plan", "read-only", "default", "auto-edit", "full-auto")
 
+# Narrative continuity is intentionally independent from delivery safety.  Git
+# commits/branches/PRs and the commit+push checkpoint remain mandatory in every
+# mode; this setting controls only how often canonical `.horus/` prose is folded.
+CONTINUITY_DEFAULTS: dict[str, str] = {"granularity": "handoff"}
+CONTINUITY_GRANULARITY_CHOICES: tuple[str, ...] = ("handoff", "delivery", "manual")
+
 
 def config_dir() -> Path:
     return Path.home() / ".horus"
@@ -116,7 +122,9 @@ def _write_projects(projects: list[str]) -> None:
 # routine write (register a project, set a policy) silently drops it — which took the
 # exposed dashboard down mid-session (2026-07-10) when `[access]` vanished on a
 # `register_project` write.
-_MANAGED_KEYS = frozenset({"workspace_root", "projects", "github_owners", "ignored_repos", "workflow", "launch"})
+_MANAGED_KEYS = frozenset({
+    "workspace_root", "projects", "github_owners", "ignored_repos", "workflow", "launch", "continuity",
+})
 
 
 def _toml_value(value: object) -> str:
@@ -161,6 +169,7 @@ def _write_config(
     workflow: dict[str, str] | None = None,
     ignored_repos: list[str] | None = None,
     launch: dict[str, str] | None = None,
+    continuity: dict[str, str] | None = None,
 ) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
     root = workspace_root or load_workspace_root()
@@ -173,6 +182,8 @@ def _write_config(
     # Preserve the current launch defaults when the caller doesn't supply them.
     if launch is None:
         launch = load_launch_defaults()
+    if continuity is None:
+        continuity = load_continuity_defaults()
     # Round-trip any table/key we don't manage (e.g. [access]) — read before we write.
     extra_scalars, extra_tables = _unmanaged_entries()
     lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"']
@@ -191,6 +202,8 @@ def _write_config(
     lines += [f'{k} = "{v}"' for k, v in workflow.items()]
     lines += ["", "[launch]"]
     lines += [f'{k} = "{v}"' for k, v in launch.items()]
+    lines += ["", "[continuity]"]
+    lines += [f'{k} = "{v}"' for k, v in continuity.items()]
     lines += extra_tables
     config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -338,6 +351,40 @@ def set_launch_default_posture(posture: str) -> str:
         raise ValueError(f"Invalid launch posture {posture!r}. Allowed: {allowed}")
     _write_config(load_projects(), load_github_owners(), load_workspace_root(), launch={"posture": posture})
     return posture
+
+
+def load_continuity_defaults() -> dict[str, str]:
+    """Return the local continuity policy used by CLI, hooks, and TUI.
+
+    ``handoff`` is deliberately the compatibility fallback, including on a
+    clean CI runner or a second machine with no user config yet.
+    """
+    path = config_path()
+    if not path.exists():
+        return dict(CONTINUITY_DEFAULTS)
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return dict(CONTINUITY_DEFAULTS)
+    raw = data.get("continuity") or {}
+    if not isinstance(raw, dict):
+        return dict(CONTINUITY_DEFAULTS)
+    value = raw.get("granularity", CONTINUITY_DEFAULTS["granularity"])
+    if not isinstance(value, str) or value not in CONTINUITY_GRANULARITY_CHOICES:
+        value = CONTINUITY_DEFAULTS["granularity"]
+    return {"granularity": value}
+
+
+def set_continuity_granularity(granularity: str) -> str:
+    """Persist narrative checkpoint granularity without changing safety gates."""
+    if granularity not in CONTINUITY_GRANULARITY_CHOICES:
+        allowed = ", ".join(CONTINUITY_GRANULARITY_CHOICES)
+        raise ValueError(f"Invalid continuity granularity {granularity!r}. Allowed: {allowed}")
+    _write_config(
+        load_projects(), load_github_owners(), load_workspace_root(),
+        continuity={"granularity": granularity},
+    )
+    return granularity
 
 
 def register_project(project_path: Path) -> bool:

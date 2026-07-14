@@ -49,3 +49,8 @@ as a fourth consumer, without introducing a second parser or probe path.
 
 - `105c41a` feat: add project machine readiness across surfaces
 - `2f2c7b3` fix: honor existing machine requirement declarations
+
+- `2160ea6` feat: add project machine readiness across surfaces (#237)
+  * feat: add project machine readiness across surfaces
+  * fix: honor existing machine requirement declarations
+  * Update Horus continuity (closure)

@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 import time
 import uuid
@@ -840,6 +841,26 @@ def cmd_run(args: argparse.Namespace) -> int:
     # an explicit --agent remains authoritative.
     args.agent = args.agent or args.worker or "claude"
     root = Path(args.path).resolve()
+    dispatch_base_sha: str | None = None
+    dispatch_pending = 0
+    if getattr(args, "worker", None):
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                dispatch_base_sha = result.stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+        dispatch_pending = len(closure.pending_delivery_commits(root))
+        base_label = dispatch_base_sha[:8] if dispatch_base_sha else "unknown"
+        print(f"Dispatch boundary: base {base_label} · pending continuity {dispatch_pending}")
+        if dispatch_pending:
+            print(
+                "Warning: canonical continuity does not cover the latest delivery commits; "
+                "include their relevant state in the worker brief or checkpoint before dispatch."
+            )
     if getattr(args, "worktree", None):
         try:
             wt = worktree.ensure_worktree(root, args.worktree)
@@ -919,6 +940,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                     "model": spec.model,
                     "effort": spec.effort,
                     "resume": args.resume,
+                    "dispatch_base_sha": dispatch_base_sha,
+                    "continuity_pending": dispatch_pending,
                 },
             )
             # Mechanical datum capture — the whole overhead win, zero agent cost.
@@ -1551,7 +1574,7 @@ def cmd_close(args: argparse.Namespace) -> int:
         freshness = (
             closure.pr_freshness_gate(root, base_ref)
             if base_ref
-            else closure.freshness_gate(root)
+            else closure.boundary_freshness_gate(root)
         )
         findings = freshness + closure.checkpoint_gate(root)
         healthy = _print_findings(findings)
@@ -1876,14 +1899,14 @@ def _checkpoint_hook(root: Path, *, block: bool) -> int:
     or has unpushed commits. Silent + exit 0 when the checkpoint is clean or on any
     trouble — the hook signals only via stdout JSON and never a non-zero exit, so the
     `|| exit 0` guard can't mask a real decision."""
-    # Incremental consolidation, automatic + token-free: fold any commits made this turn
-    # into the session note (deterministic, marker-gated) so continuity keeps pace without
-    # a manual `consolidate`. Piggybacks on the already-installed Stop hook — the turn
-    # boundary is a natural, frequent checkpoint. Never let it wedge the hook.
-    try:
-        closure.harvest_checkpoint(root)
-    except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
-        pass
+    # Per-turn harvesting is the old high-granularity behavior.  Handoff (the
+    # default) and manual modes leave session notes untouched until an explicit
+    # boundary close, avoiding a post-commit hook edit after every delivery.
+    if closure.continuity_granularity() == "delivery":
+        try:
+            closure.harvest_checkpoint(root)
+        except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
+            pass
     try:
         findings = closure.checkpoint_gate(root)
     except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
@@ -3227,8 +3250,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_close.add_argument(
         "--base-ref",
-        help="with --check: also require product/source changes relative to this "
-             "fetched ref to include canonical continuity (for required PR CI)",
+        help="with --check: compare product/source changes with this fetched ref; "
+             "delivery granularity requires canonical continuity, while handoff/manual "
+             "defer it to a visible pending boundary (for required PR CI)",
     )
     p_close.add_argument(
         "--hook", action="store_true",

@@ -937,12 +937,53 @@ def test_terminal_tui_defaults_screen_lists_full_posture_vocabulary(tmp_path, mo
     _home(tmp_path, monkeypatch)
     ui = terminal_tui.TerminalUI()
     ui._show("settings")
-    assert [value for _kind, value in ui.items] == list(config.LAUNCH_POSTURE_CHOICES)
+    assert [value for kind, value in ui.items if kind == "posture"] == list(config.LAUNCH_POSTURE_CHOICES)
+    assert [value for kind, value in ui.items if kind == "continuity"] == list(
+        config.CONTINUITY_GRANULARITY_CHOICES
+    )
     assert ui.selected == config.LAUNCH_POSTURE_CHOICES.index("default")  # backward-compat default
 
     rendered = "".join(fragment[1] for fragment in ui._body_text())
     assert "full-auto" in rendered
     assert "bypass permissions" in rendered  # full-auto must read unambiguously as dangerous
+    assert "Continuity checkpoint" in rendered
+    assert "handoff" in rendered and "recommended" in rendered
+
+
+def test_terminal_tui_defaults_persists_continuity_granularity(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    ui = terminal_tui.TerminalUI()
+    ui._show("settings")
+    target = len(config.LAUNCH_POSTURE_CHOICES) + config.CONTINUITY_GRANULARITY_CHOICES.index("manual")
+    ui.move(target - ui.selected)
+    ui.activate()
+
+    assert config.load_continuity_defaults() == {"granularity": "manual"}
+    assert ui.selected == target
+    assert "manual" in ui.status
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "[current] manual" in rendered
+
+
+def test_terminal_tui_warns_when_project_has_pending_continuity(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    config.register_project(root)
+    monkeypatch.setattr(
+        terminal_tui.closure,
+        "pending_delivery_commits",
+        lambda project: [("a" * 40, "feat: one"), ("b" * 40, "feat: two")],
+    )
+    ui = terminal_tui.TerminalUI()
+
+    home = "".join(fragment[1] for fragment in ui._body_text())
+    assert "continuity 2 pending" in home
+
+    ui.project = root
+    ui._load_project_focus()
+    ui._show("project")
+    project = "".join(fragment[1] for fragment in ui._body_text())
+    assert "Continuity checkpoint pending · 2 delivery commits" in project
 
 
 def test_terminal_tui_d_key_opens_defaults_from_home(tmp_path, monkeypatch):

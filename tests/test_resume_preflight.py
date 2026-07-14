@@ -89,6 +89,12 @@ def test_gather_projects_all_required_signals_and_renders_freshness(tmp_path, mo
         lambda root: [Finding("warn", "frontmatter stale")],
     )
     monkeypatch.setattr(resume_preflight.closure, "checkpoint_gate", lambda root: [])
+    monkeypatch.setattr(
+        resume_preflight.closure,
+        "pending_delivery_commits",
+        lambda root: [("a" * 40, "feat: pending delivery")],
+    )
+    monkeypatch.setattr(resume_preflight.closure, "continuity_granularity", lambda: "handoff")
     usage_calls = _patch_machine(
         monkeypatch,
         datums=[Datum(session_id="datum-open", model="sonnet-5", launched_at="2026-07-14T10:00:00+00:00")],
@@ -119,6 +125,7 @@ def test_gather_projects_all_required_signals_and_renders_freshness(tmp_path, mo
     }
     assert project["version"] == {"installed": "0.0.53", "floor": "0.0.26", "meets_floor": True}
     assert project["handoff"]["next_prompt"] == "Resume the card"
+    assert project["continuity"]["pending"] == 1
     assert project["hygiene"] == [{"level": "warn", "message": "frontmatter stale"}]
     assert usage_calls[0][1]["persist_cache"] is False
     assert [item["session_id"] for item in digest["open_datums"]] == ["datum-open"]
@@ -128,6 +135,7 @@ def test_gather_projects_all_required_signals_and_renders_freshness(tmp_path, mo
     assert "USAGE codex [STALE] 5h=97%" in rendered
     assert "USAGE claude [FRESH] 5h=42%" in rendered
     assert "HANDOFF demo | focus=Focus now | next=Do next" in rendered
+    assert "CONTINUITY demo [WARN] mode=handoff pending=1" in rendered
     assert "DATUMS open=1 | datum-op:sonnet-5/pending" in rendered
     assert "SESSIONS running=2" in rendered
     assert "SESSIONS stale=0" in rendered

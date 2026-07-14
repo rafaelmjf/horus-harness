@@ -16,7 +16,7 @@ import subprocess
 from datetime import date, datetime
 from pathlib import Path
 
-from horus import backlog, codex_usage, frontmatter, routines
+from horus import backlog, codex_usage, config, frontmatter, routines
 from horus.continuity import Finding, check_project, recent_sessions
 from horus.instructions import check_drift
 
@@ -42,6 +42,16 @@ PROJECTED_ARTIFACT_PATHS = [
 # Files Horus treats as "continuity" (committed durable state + instruction blocks
 # + projected agent artifacts).
 _CONTINUITY_PATHSPEC = [".horus", "AGENTS.md", "CLAUDE.md", *PROJECTED_ARTIFACT_PATHS]
+
+_PRODUCT_LOG_EXCLUDES = (
+    ":(exclude).horus",
+    ":(exclude)AGENTS.md",
+    ":(exclude)CLAUDE.md",
+    ":(exclude).claude/settings.json",
+    ":(exclude).claude/skills",
+    ":(exclude).agents/skills",
+    ":(exclude).codex/hooks.json",
+)
 
 
 def _git(root: Path, *args: str) -> str | None:
@@ -96,7 +106,79 @@ def freshness_gate(root: Path) -> list[Finding]:
     return routines.freshness_signals(root) + backlog.hygiene_findings(root)
 
 
-def pr_diff_freshness(root: Path, base_ref: str) -> list[Finding]:
+def continuity_granularity() -> str:
+    """The shared local narrative-checkpoint policy.
+
+    A clean CI runner and a second machine intentionally get ``handoff`` from
+    the config loader's fallback, so the default never depends on TUI state.
+    """
+    return config.load_continuity_defaults()["granularity"]
+
+
+def _canonical_continuity_paths(root: Path) -> tuple[str, ...]:
+    if frontmatter.has_prd(root):
+        return (".horus/PRD.md",)
+    return (".horus/project.md", ".horus/roadmap.md", ".horus/features.md")
+
+
+def pending_delivery_commits(root: Path) -> list[tuple[str, str]]:
+    """Product commits after the latest canonical-continuity commit.
+
+    Git history is the durable receipt: unlike the local ``.consolidated-to``
+    marker this survives a new machine, and unlike a self-authored checkpoint
+    SHA it remains valid after GitHub squash-merges a feature branch.  A commit
+    touching both product and canonical continuity is covered because it is the
+    checkpoint commit itself and therefore outside the queried range.
+    """
+    if not is_git_repo(root):
+        return []
+    checkpoint = _git(
+        root, "log", "-1", "--format=%H", "--", *_canonical_continuity_paths(root),
+    )
+    if not checkpoint:
+        return []
+    out = _git(
+        root,
+        "log",
+        "--reverse",
+        "--format=%H%x1f%s",
+        f"{checkpoint}..HEAD",
+        "--",
+        ".",
+        *_PRODUCT_LOG_EXCLUDES,
+    )
+    records: list[tuple[str, str]] = []
+    for line in (out or "").splitlines():
+        sha, separator, subject = line.partition("\x1f")
+        if separator and sha:
+            records.append((sha, subject))
+    return records
+
+
+def pending_delivery_findings(root: Path) -> list[Finding]:
+    pending = pending_delivery_commits(root)
+    if not pending:
+        return [Finding("ok", "canonical continuity covers all product commits")]
+    sample = ", ".join(f"{sha[:8]} {subject}" for sha, subject in pending[-3:])
+    suffix = f" (+{len(pending) - 3} earlier)" if len(pending) > 3 else ""
+    return [Finding(
+        "warn",
+        f"{len(pending)} delivery commit(s) pending the next continuity boundary: "
+        f"{sample}{suffix}",
+    )]
+
+
+def boundary_freshness_gate(root: Path) -> list[Finding]:
+    """A real pause/handoff close must fold every pending delivery."""
+    return freshness_gate(root) + pending_delivery_findings(root)
+
+
+def pr_diff_freshness(
+    root: Path,
+    base_ref: str,
+    *,
+    granularity: str | None = None,
+) -> list[Finding]:
     """Require a PR with product/source changes to update canonical continuity.
 
     This is the server-side counterpart to the local merge fast-feedback hook:
@@ -131,6 +213,13 @@ def pr_diff_freshness(root: Path, base_ref: str) -> list[Finding]:
         label = ".horus/{project,roadmap,features}.md"
     updated = sorted(homes.intersection(changed))
     if not updated:
+        mode = granularity or continuity_granularity()
+        if mode != "delivery":
+            return [Finding(
+                "ok",
+                f"PR product/source changes are durable in git; canonical continuity is "
+                f"deferred to the next {mode} boundary",
+            )]
         sample = ", ".join(work[:3])
         suffix = f" (+{len(work) - 3} more)" if len(work) > 3 else ""
         return [Finding(
@@ -359,6 +448,7 @@ def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding
     # Dashboard-freshness gate: the lanes the dashboard renders must be current with
     # this session before closure is "done" (the drift that motivated this check).
     findings.extend(routines.freshness_signals(root))
+    findings.extend(pending_delivery_findings(root))
     findings.extend(codex_usage.usage_findings(root, threshold=usage_threshold))
 
     agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
