@@ -73,6 +73,54 @@ def test_commit_continuity(tmp_path, monkeypatch):
     assert not did2 and "nothing to commit" in detail2
 
 
+def test_commit_continuity_harvests_work_then_seals_closing_commit(tmp_path, monkeypatch):
+    """The closing commit must never be appended into the note it just committed."""
+    _setup(tmp_path, monkeypatch)
+    note = _session_note(tmp_path)
+    _work_commit(tmp_path, "app.py", "print(1)\n", "feat: work before close")
+    (tmp_path / ".horus" / "PRD.md").write_text("closing state\n", encoding="utf-8")
+
+    did, detail = closure.commit_continuity(tmp_path, "close this session")
+
+    assert did and "committed" in detail
+    text = note.read_text(encoding="utf-8")
+    assert "feat: work before close" in text
+    assert "close this session" not in text
+    head = subprocess.run(
+        ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    marker = tmp_path / ".horus" / closure.CHECKPOINT_MARKER
+    assert marker.read_text(encoding="utf-8").strip() == head
+    assert closure.harvest_checkpoint(tmp_path) == (0, None)
+
+
+def test_commit_continuity_surfaces_residual_dirty_path_and_skips_push(tmp_path, monkeypatch):
+    """Mimic a post-commit hook edit: the close reports the exact stranded path."""
+    _setup(tmp_path, monkeypatch)
+    prd = tmp_path / ".horus" / "PRD.md"
+    prd.write_text("closing state\n", encoding="utf-8")
+    original_git = closure._git
+    calls = []
+
+    def injecting_git(root, *args):
+        calls.append(args)
+        result = original_git(root, *args)
+        if args and args[0] == "commit" and result is not None:
+            prd.write_text("edited after commit\n", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(closure, "_git", injecting_git)
+    did, detail = closure.commit_continuity(tmp_path, "close", push=True)
+
+    assert did  # the commit happened, but the closure is not clean
+    assert "residual dirty continuity after commit" in detail
+    assert ".horus/PRD.md" in detail
+    assert "push skipped" in detail
+    assert not any(args and args[0] == "push" for args in calls)
+    assert closure.continuity_dirty_paths(tmp_path) == [".horus/PRD.md"]
+
+
 def test_projected_artifacts_are_continuity(tmp_path, monkeypatch):
     """Hook/skill projections count as continuity: an untracked .claude/settings.json
     warns and `close --commit` commits it (the gym-coach 2026-07-02 finding)."""
@@ -324,6 +372,10 @@ def test_continuity_dirty_tracks_horus_changes_only(tmp_path, monkeypatch):
     _run(root, "add", ".horus")
     _run(root, "commit", "-m", "card")
     assert not closure.continuity_dirty(root)
+
+    card.unlink()
+    assert closure.continuity_dirty(root)  # tracked deletions count too
+    assert closure.continuity_dirty_paths(root) == [".horus/backlog/some-card.md"]
 
 
 def test_continuity_dirty_false_outside_git(tmp_path):

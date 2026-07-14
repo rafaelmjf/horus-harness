@@ -751,6 +751,52 @@ def test_close_runs_and_returns_status(tmp_path, monkeypatch):
     assert main(["close", "--path", str(tmp_path)]) in (0, 1)
 
 
+def test_close_commit_rechecks_post_commit_state(tmp_path, monkeypatch, capsys):
+    """A successful git commit is not a successful close when continuity is dirty again."""
+    from horus import cli, closure
+    from horus.continuity import Finding
+
+    monkeypatch.setattr(cli, "_enforce_version_floor", lambda root: None)
+    states = iter([
+        [Finding("warn", "1 uncommitted continuity file(s)")],
+        [Finding("warn", "1 uncommitted continuity file(s): .horus/PRD.md")],
+    ])
+    monkeypatch.setattr(closure, "closure_status", lambda *args, **kwargs: next(states))
+    monkeypatch.setattr(
+        closure,
+        "commit_continuity",
+        lambda *args, **kwargs: (
+            True,
+            "committed 1 file(s); WARNING: residual dirty continuity after commit: .horus/PRD.md",
+        ),
+    )
+
+    assert main(["close", "--commit", "--path", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "residual dirty continuity" in out
+    assert "Action needed" in out
+
+
+def test_close_commit_accepts_fresh_recomputed_state(tmp_path, monkeypatch, capsys):
+    from horus import cli, closure
+    from horus.continuity import Finding
+
+    monkeypatch.setattr(cli, "_enforce_version_floor", lambda root: None)
+    states = iter([
+        [Finding("warn", "1 uncommitted continuity file(s)")],
+        [Finding("ok", "continuity files committed"), Finding("ok", "working tree clean")],
+    ])
+    monkeypatch.setattr(closure, "closure_status", lambda *args, **kwargs: next(states))
+    monkeypatch.setattr(
+        closure,
+        "commit_continuity",
+        lambda *args, **kwargs: (True, "committed 1 file(s); pushed"),
+    )
+
+    assert main(["close", "--commit", "--push", "--path", str(tmp_path)]) == 0
+    assert "Continuity captured" in capsys.readouterr().out
+
+
 def test_close_check_gates_on_freshness(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     from tests.test_routines import _mk_fresh
