@@ -357,12 +357,47 @@ def remote_lane_divergence(root: Path) -> int:
 
 def continuity_dirty(root: Path) -> bool:
     """Whether any continuity file has uncommitted changes (staged or not)."""
+    return bool(continuity_dirty_paths(root))
+
+
+def continuity_dirty_paths(root: Path) -> list[str]:
+    """Changed continuity pathspec entries, including tracked deletions.
+
+    The porcelain payload is retained verbatim after its two-column status so
+    quoted paths and rename arrows remain unambiguous in a warning.
+    """
     if not is_git_repo(root):
+        return []
+    try:
+        result = subprocess.run(
+            [
+                "git", "-C", str(root), "status", "--porcelain", "--",
+                *_CONTINUITY_PATHSPEC,
+                *[f":(exclude){path}" for path in _GENERATED_STATE_PATHS],
+            ],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    # Do not route porcelain through `_git`: its `.strip()` intentionally
+    # normalizes scalar output but would remove the first line's leading status
+    # column (turning ` M .horus/PRD.md` into `M .horus/PRD.md`).
+    return [line[3:].strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _seal_checkpoint_at_head(root: Path) -> bool:
+    """Mark the closing commit harvested without appending it to its own note."""
+    head = _git(root, "rev-parse", "HEAD")
+    if not head:
         return False
-    present = [p for p in _CONTINUITY_PATHSPEC if (root / p).exists()]
-    if not present:
+    marker = root / ".horus" / CHECKPOINT_MARKER
+    try:
+        marker.write_text(head + "\n", encoding="utf-8")
+    except OSError:
         return False
-    return bool(_git(root, "status", "--porcelain", "--", *present))
+    return True
 
 
 def commit_continuity(root: Path, message: str | None = None, *, push: bool = False) -> tuple[bool, str]:
@@ -380,6 +415,14 @@ def commit_continuity(root: Path, message: str | None = None, *, push: bool = Fa
                 f"origin has {n} newer continuity commit(s) — run `git pull --ff-only` "
                 "to fold them in, then re-run `horus close --commit --push`"
             )
+    # Fold work commits into the latest session note BEFORE staging continuity.
+    # After the close commit lands, its SHA is deliberately sealed in the local
+    # marker rather than appended to the note inside that same commit (an
+    # impossible self-reference that would dirty the tree forever).
+    try:
+        harvest_checkpoint(root)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return False, f"checkpoint harvest failed before commit: {exc}"
     # Only add paths that exist: `git add` fails wholesale on a pathspec that
     # matches nothing (e.g. a repo without hooks/skills installed).
     present = [p for p in _CONTINUITY_PATHSPEC if (root / p).exists()]
@@ -391,8 +434,20 @@ def commit_continuity(root: Path, message: str | None = None, *, push: bool = Fa
     if _git(root, "commit", "-m", message or "Update Horus continuity (closure)") is None:
         return False, "commit failed"
     detail = f"committed {len(staged.splitlines())} file(s)"
+    if not _seal_checkpoint_at_head(root):
+        return False, detail + "; checkpoint seal failed — push skipped"
+
+    residual = continuity_dirty_paths(root)
+    if residual:
+        return True, (
+            detail + "; WARNING: residual dirty continuity after commit — push skipped: "
+            + ", ".join(residual)
+        )
     if push:
         branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
         pushed = _git(root, "push", "origin", branch or "HEAD")
         detail += "; pushed" if pushed is not None else "; push failed"
+    residual = continuity_dirty_paths(root)
+    if residual:
+        detail += "; WARNING: residual dirty continuity: " + ", ".join(residual)
     return True, detail

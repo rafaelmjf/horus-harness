@@ -1510,12 +1510,11 @@ def cmd_close(args: argparse.Namespace) -> int:
         did, detail = closure.commit_continuity(root, args.message, push=args.push)
         print(f"\n--commit: {detail}")
         if did:
-            # The commit clears the "uncommitted continuity" warning.
-            healthy = not any(
-                f.level in ("warn", "fail")
-                for f in findings
-                if "uncommitted continuity" not in f.message
-            )
+            # Re-run the complete signal set after the commit. Filtering the
+            # pre-commit findings can bless a residual hook edit (or a failed
+            # push) because those facts did not exist when `findings` was built.
+            post_commit = closure.closure_status(root, usage_threshold=args.usage_threshold)
+            healthy = not any(f.level in ("warn", "fail") for f in post_commit)
 
     print("\n" + templates.CLOSURE_PROMPT)
     if healthy:
