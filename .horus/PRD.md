@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Server-side continuity freshness is now enforceable: PR source/product changes must update canonical continuity, the GitHub freshness job fails hard and is required on main, and the local merge hook recognizes shell-position commands without blocking quoted prompt prose."
-next_action: "Ask the owner before claiming `close-commit-output-contradicts-success`; it is the smallest repeatedly observed trust/ceremony defect and should make successful closure output describe the recomputed final state only. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, read `.horus/backlog/close-commit-output-contradicts-success.md`, and ask the owner to confirm proceeding. If confirmed, make `close --commit --push` suppress resolved pre-action warnings and report one unambiguous final verdict, branch → PR. [Sonnet scoped implementation, inline]"
-execution_recommendation: "continue-as-is — `close-commit-output-contradicts-success` is a small, reproduced CLI-output defect with deterministic state-transition tests; delegation overhead exceeds the implementation."
+current_focus: "Acting closure now reports only its recomputed post-commit/post-push findings: a successful checkpoint names what happened and ends cleanly, while residual edits or push failures still produce the final warnings and action-needed verdict."
+next_action: "Ask the owner before claiming `project-machine-requirements`; if confirmed, implement one committed requirements parser feeding doctor, resume, and dashboard readiness without duplicating probes. [Sonnet scoped implementation, inline]"
+next_prompt: "Resume Horus from clean main. Run `horus resume --preflight`, read `.horus/backlog/project-machine-requirements.md`, and ask the owner to confirm proceeding. If confirmed, scope the shared read-only requirements primitive and its doctor/resume/dashboard consumers, then branch → PR. [Sonnet scoped implementation, inline]"
+execution_recommendation: "continue-as-is — `project-machine-requirements` spans three consumers but has a bounded committed schema, one shared read-only parser/probe path, and deterministic tests; it fits a scoped Sonnet implementation without phased handoffs."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
 ---
@@ -36,11 +36,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-After the freshness gate ships, five cards remain: close-output is the next small observed defect; machine requirements is promoted; datum taxonomy is medium; two older cards are deferred.
+After close-output ships, four cards remain: machine requirements is next; datum taxonomy is medium; two older cards are deferred.
 Deferred cards carry promotion conditions; retired/folded cards keep full history and rationale in `backlog/archive/`.
 
 ## Shipped
 
+**Unambiguous acting-close verdict** (2026-07-14): `close --commit [--push]` performs its checkpoint before rendering status, so successful output contains only recomputed clean findings while residual edits, failed pushes, and no-op failures still report their final actionable state.
 **Required server-side continuity freshness** (2026-07-14, PR #233): `close --check --base-ref` fails source/product PRs without canonical PRD/lane updates; GitHub's `freshness` job is non-advisory and required, while the local merge hook tokenizes command positions so quoted prompts never trigger it. Live queued-auto-merge probe PR #234 remained blocked and was closed unmerged.
 **Remote-authoritative fleet curator** (2026-07-14): a path-free shared manifest drives `horus fleet --review` (fetched remote PRD/cards/capabilities kept separate from local state, with GitHub fallback and continuity lag), an optional TUI Fleet Review/curator launch, and a bundled owner-gated curation skill.
 **TUI canonical project focus + claimed-card state** (2026-07-14, PR #229): the project screen renders PRD-first current focus and next action before launch choices, and backlog rows visibly distinguish claimed cards while reusing canonical focus/card primitives.
@@ -78,6 +79,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Server-side merge freshness is a required PR invariant.** Any PR changing product/source outside committed continuity surfaces must update the canonical PRD (or v2 lanes); the required `freshness` check owns the hard gate for queued auto-merge. Local PreToolUse parsing is fast feedback only and must match `gh pr merge` at shell command position, never inside quoted prompt prose.
 - **Continuity must beat re-derivation.** Every capability must give a fresh session something CLAUDE.md + git log cannot, at lower cost. PRD.md is state, not behavior; behavioral text belongs in the managed block, and Rules holds only project-specific invariants earned by failure.
 - **Closure reaches the remote, fetch-first and self-reference-free** — `close --commit --push`; refuse newer remote continuity, seal the closing SHA without appending it into its own note, and refuse to push residual dirty continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.
+- **Acting closure reports the final state only.** `close --commit [--push]` keeps pre-action dirtiness internal, renders the recomputed complete findings after its mutation, and still fails visibly on residual edits or an unpushed checkpoint.
 - **One fetch-first primitive, reused.** `fetchcheck.fetch_and_state` (TTL-cached, read-only fetch, never pull) serves SessionStart and `status`/`fleet` gone-branch/staleness signals; no consumer reinvents it.
 - **Fleet review names its truth layers.** Manifests contain repository identity/lifecycle only; fetched `origin/<default>` PRD/cards are REMOTE SHIPPED TRUTH, checkout/session/dirty state is LOCAL WORKING STATE, and neither is blended or pulled. GitHub fallback is read-only; unavailable/unstructured data is labelled, never guessed.
 - **Resume preflight only projects deterministic data.** Its sole sanctioned side effect is the explicit fetch refresh; session liveness is projected without registry reconciliation, usage snapshots carry unmistakable freshness tags, and no output recommends or selects a model/account.

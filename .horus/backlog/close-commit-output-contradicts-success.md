@@ -1,6 +1,6 @@
 ---
 title: "[bug] close --commit --push reports stale action after succeeding"
-status: open
+status: claimed
 priority: medium
 tier: sonnet
 parallel: safe

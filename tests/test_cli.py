@@ -757,22 +757,30 @@ def test_close_commit_rechecks_post_commit_state(tmp_path, monkeypatch, capsys):
     from horus.continuity import Finding
 
     monkeypatch.setattr(cli, "_enforce_version_floor", lambda root: None)
-    states = iter([
-        [Finding("warn", "1 uncommitted continuity file(s)")],
-        [Finding("warn", "1 uncommitted continuity file(s): .horus/PRD.md")],
-    ])
-    monkeypatch.setattr(closure, "closure_status", lambda *args, **kwargs: next(states))
+    events = []
+    monkeypatch.setattr(
+        closure,
+        "closure_status",
+        lambda *args, **kwargs: (
+            events.append("status")
+            or [Finding("warn", "1 uncommitted continuity file(s): .horus/PRD.md")]
+        ),
+    )
     monkeypatch.setattr(
         closure,
         "commit_continuity",
         lambda *args, **kwargs: (
-            True,
-            "committed 1 file(s); WARNING: residual dirty continuity after commit: .horus/PRD.md",
+            events.append("commit")
+            or (
+                True,
+                "committed 1 file(s); WARNING: residual dirty continuity after commit: .horus/PRD.md",
+            )
         ),
     )
 
     assert main(["close", "--commit", "--path", str(tmp_path)]) == 1
     out = capsys.readouterr().out
+    assert events == ["commit", "status"]
     assert "residual dirty continuity" in out
     assert "Action needed" in out
 
@@ -782,19 +790,60 @@ def test_close_commit_accepts_fresh_recomputed_state(tmp_path, monkeypatch, caps
     from horus.continuity import Finding
 
     monkeypatch.setattr(cli, "_enforce_version_floor", lambda root: None)
-    states = iter([
-        [Finding("warn", "1 uncommitted continuity file(s)")],
-        [Finding("ok", "continuity files committed"), Finding("ok", "working tree clean")],
-    ])
-    monkeypatch.setattr(closure, "closure_status", lambda *args, **kwargs: next(states))
+    events = []
+    monkeypatch.setattr(
+        closure,
+        "closure_status",
+        lambda *args, **kwargs: (
+            events.append("status")
+            or [Finding("ok", "continuity files committed"), Finding("ok", "working tree clean")]
+        ),
+    )
     monkeypatch.setattr(
         closure,
         "commit_continuity",
-        lambda *args, **kwargs: (True, "committed 1 file(s); pushed"),
+        lambda *args, **kwargs: (
+            events.append("commit") or (True, "committed 1 file(s); pushed")
+        ),
     )
 
     assert main(["close", "--commit", "--push", "--path", str(tmp_path)]) == 0
-    assert "Continuity captured" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert events == ["commit", "status"]
+    assert "--commit: committed 1 file(s); pushed" in out
+    assert "uncommitted continuity" not in out
+    assert "Action needed" not in out
+    assert "Continuity captured" in out
+
+
+def test_close_commit_push_real_repo_prints_only_final_state(tmp_path, monkeypatch, capsys):
+    """The acting close's user-visible verdict describes the pushed checkpoint."""
+    from tests.test_routines import _mk_fresh_v3
+
+    _home(tmp_path, monkeypatch)
+    repo = _init_repo(tmp_path / "repo")
+    _mk_fresh_v3(repo)
+    (repo / ".gitignore").write_text(".horus/.consolidated-to\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", "add continuity")
+
+    remote = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True, text=True)
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-u", "origin", "main")
+
+    prd = repo / ".horus" / "PRD.md"
+    prd.write_text(prd.read_text(encoding="utf-8") + "\n<!-- close me -->\n", encoding="utf-8")
+
+    assert main(["close", "--commit", "--push", "--path", str(repo)]) == 0
+    out = capsys.readouterr().out
+    assert "--commit: committed" in out and "; pushed" in out
+    assert "uncommitted continuity" not in out
+    assert "uncommitted change" not in out
+    assert "Action needed" not in out
+    assert "Continuity captured" in out
+    assert not _git(repo, "status", "--porcelain").stdout
+    assert _git(repo, "rev-parse", "HEAD").stdout == _git(repo, "rev-parse", "origin/main").stdout
 
 
 def test_close_check_gates_on_freshness(tmp_path, monkeypatch, capsys):

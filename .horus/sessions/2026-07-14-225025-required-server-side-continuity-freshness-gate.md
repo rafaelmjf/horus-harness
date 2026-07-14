@@ -48,3 +48,5 @@ block a worker prompt that merely mentioned the merge command.
 - `44085ad` fix: require server-side continuity freshness (#233)
   * fix: require server-side continuity freshness
   * chore: archive shipped freshness card
+
+- `5841a86` Update Horus continuity (closure) (#235)
