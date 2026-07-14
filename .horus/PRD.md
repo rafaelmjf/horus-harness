@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "v0.0.53 is fully released and owner-verified: PR/merge-SHA CI passed on Python 3.12/3.13; PyPI JSON/simple index + clean Python 3.12 install passed; hosted runs 0.0.53 with root still gated (403); owner confirmed backlog-card editing works correctly on the real installed TUI."
+current_focus: "Tier-0 supervision verbs shipped (PR #221): `merge-watch`, `reinstall --verify`, and the `datum close --card` primary-checkout/worktree-cleanup fix — all three live-verified on this machine. Continuity hygiene folded in: mobile-terminal-legibility archived, mobile-terminal-interaction-regression checked against PR #171 (not resolved, left open), and a real close/consolidate self-referential-SHA/dirty-tree gap filed as a new card."
 next_action: "Claim and implement `tui-capabilities-screen`: add the Capabilities item, project vision line, and staleness hint as a thin TUI renderer over capabilities.generate_project, then branch → PR. [Sonnet scoped implementation, inline]"
-next_prompt: "Resume Horus after the owner-verified v0.0.53 release. Fetch first, claim `.horus/backlog/tui-capabilities-screen.md`, read the full card, and implement it as a thin TUI renderer over capabilities.generate_project with no second data path; branch → PR."
+next_prompt: "Resume Horus after the tier0-supervision-verbs release. Fetch first, claim `.horus/backlog/tui-capabilities-screen.md`, read the full card, and implement it as a thin TUI renderer over capabilities.generate_project with no second data path; branch → PR."
 execution_recommendation: "continue-as-is — `tui-capabilities-screen` is bounded rendering over an existing read-only module with no design ambiguity, suited to inline sonnet-5; delegation overhead would exceed the scoped change."
 last_updated: 2026-07-14
 horus_min_version: 0.0.26
@@ -51,6 +51,7 @@ Everything formerly listed here is one card per file in `.horus/backlog/`. Notab
 ## Shipped
 
 One line per capability; details in `archive/features.md`, git history, and the READMEs.
+**Tier-0 supervision verbs** (2026-07-14, PR #221): `horus merge-watch <sha|pr>` polls required checks on the exact pinned sha to green/red, one line per state change; `horus reinstall <path> --verify <marker>` does the cache-clean + force-reinstall + installed-surface marker grep in one act; `datum close --card` now resolves against the primary git checkout (not a `--worktree` path) with an optional `--remove-worktree` merged-only cleanup.
 **Datum supervisor-cost envelope + one-act acceptance** (2026-07-14, PR #218): `usage_launch`/`usage_close` readings + agent-supplied cost flags on `datum close`; `--card` stamps delivery and warns on stale continuity; `--models` cost glance; delegation-rubric dispatch-dividend v3.
 **Backlog card reviews + friendly TUI edit/review handoff** (2026-07-14, PRs #217/#219): append-only Reviews + `backlog review`; `e`/`r` open the configured editor, prefer nano over vi when unset, explain save/return, ignore swap files, then offer fetch-first commit+push.
 **Scoped tmux mouse mode + TUI launch-defaults screen** (2026-07-13, PR #215): session-scoped mouse fixes wheel-scroll recall; `d`-key Defaults screen persists launch posture. v0.0.52 attach gate PASS (owner-verified): web-launched session attached from Termius/`horus tui`, detach/reattach clean.

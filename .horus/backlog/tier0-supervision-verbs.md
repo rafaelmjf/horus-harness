@@ -1,6 +1,6 @@
 ---
 title: "Tier-0 supervision verbs: merge-watch, reinstall-verify, acceptance cleanup"
-status: open
+status: shipped
 priority: high
 tier: sonnet
 parallel: safe
@@ -8,6 +8,8 @@ type: task
 surface: horus/cli.py, horus/datums.py (--card path resolution), install/reload path
 created: 2026-07-14
 created_by: overseer
+shipped_pr: 221
+shipped_sha: 8a3b4428e8f6538c07edc21e8fb7c322a7a75c33
 ---
 
 # Tier-0 supervision verbs — eliminate the cockpit's mechanical tail as CLI one-shots
