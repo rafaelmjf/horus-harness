@@ -5,14 +5,14 @@ description: >-
   project's own canonical docs — README, status/roadmap files, CLAUDE.md/AGENTS.md,
   and linked docs — into `.horus/`: the PRD-structure `PRD.md` skeleton (Vision /
   Backlog / Shipped / Rules) on a v3 project, or the six-lane structure on a v2
-  project. Use this when setting Horus up in an existing repo that already has docs;
+  project. Use this when setting Horus up in an existing repo that already has useful docs;
   when the user says "set up horus here", "bootstrap the .horus files", "populate
   the continuity", "infer the project state", or "fill in the backlog/roadmap from
-  our docs"; or right after `horus init` left placeholder content. Runs `horus infer`
-  first to find the canonical docs and the empty/placeholder sections.
+  our docs". A blank scaffold is valid until a real use case or evidenced docs exist.
+  Runs `horus infer` first to find canonical docs and empty/placeholder sections.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -23,6 +23,9 @@ never drift.
 
 `horus infer` reports which structure the project uses — follow the matching
 section below.
+
+Do not invoke inference merely because `horus init` produced blank placeholders.
+With no useful source truth and no concrete user request, leave the scaffold blank.
 
 ## PRD-structure projects (v3 — `.horus/PRD.md` present)
 
@@ -39,13 +42,15 @@ section below.
      `execution_recommendation`, `last_updated`.
    - `## Vision` — what the project is, its shape, and explicit out-of-scope
      boundaries.
-   - `## Backlog` — open action points as a prioritized list, bold **title**
-     per item, bugs marked `[bug]`, ops chores `[ops]`.
+   - `## Backlog` — retain the thin pointer. Create one
+     `.horus/backlog/<slug>.md` card per evidenced open item, with
+     `status`/`priority`/`type` frontmatter; do not create a starter card.
    - `## Shipped` — **one line per capability**, not a paragraph; the deep
      detail lives in git history, not here.
    - `## Rules` — durable, current invariants only (not a dated log — if the
      docs describe *why* a rule exists or a superseded alternative, that
-     rationale belongs in a `sessions/` note or `.horus/archive/`, not `PRD.md`).
+     rationale belongs in git history, an optional recovery note when needed, or
+     `.horus/archive/`, not `PRD.md`).
 
 4. **Don't duplicate.** Where a canonical doc stays the deep reference (e.g. a
    detailed architecture doc), point at it from `PRD.md` instead of copying it

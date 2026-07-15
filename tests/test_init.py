@@ -28,6 +28,7 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     assert not (tmp_path / ".horus" / "history.md").exists()
     assert (tmp_path / ".horus" / "sessions").is_dir()
     assert (tmp_path / ".horus" / "sessions" / ".gitkeep").exists()
+    assert (tmp_path / ".horus" / "backlog" / ".gitkeep").exists()
     assert (tmp_path / ".horus" / "temp").is_dir()
     assert (tmp_path / ".horus" / "temp" / ".gitkeep").exists()
     assert (tmp_path / "AGENTS.md").exists()
@@ -48,10 +49,10 @@ def test_init_creates_structure(tmp_path, monkeypatch):
     assert (tmp_path / ".codex" / "hooks.json").exists()
 
 
-def test_init_scaffolds_backlog_dir_with_starter_card(tmp_path, monkeypatch):
+def test_init_scaffolds_blank_tracked_backlog_dir(tmp_path, monkeypatch):
     """Card-per-file backlog is the fleet standard: `horus init` on a fresh
-    project scaffolds `.horus/backlog/` with a starter card, and the PRD's
-    `## Backlog` is a thin pointer, not an inline list."""
+    project tracks a blank `.horus/backlog/` without inventing work, and the
+    PRD's `## Backlog` is a thin pointer, not an inline list."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
 
@@ -62,21 +63,22 @@ def test_init_scaffolds_backlog_dir_with_starter_card(tmp_path, monkeypatch):
     bdir = tmp_path / ".horus" / "backlog"
     assert bdir.is_dir()
     cards = list(bdir.glob("*.md"))
-    assert len(cards) == 1
+    assert cards == []
+    assert (bdir / ".gitkeep").is_file()
     assert any(a.status == "created" and "backlog" in a.message for a in actions)
 
     loaded = backlog.load_cards(tmp_path)
-    assert len(loaded) == 1
-    assert loaded[0].type == "task"
+    assert loaded == []
 
     prd_text = (tmp_path / ".horus" / "PRD.md").read_text(encoding="utf-8")
     assert "one card per item" in prd_text
     assert "Now / next candidates" not in prd_text
+    assert "Blank Horus scaffold" in prd_text
+    assert "Run `horus infer`" not in prd_text
 
 
 def test_init_never_clobbers_populated_backlog_dir(tmp_path, monkeypatch):
-    """A project that already has real cards must never get the starter card
-    injected alongside them."""
+    """A project that already has real cards remains unchanged."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
 
@@ -150,7 +152,8 @@ def test_init_on_existing_v3_project_never_creates_six_lanes(tmp_path, monkeypat
     for lane in ("project.md", "roadmap.md", "features.md", "decisions.md", "history.md", "execution.md"):
         assert not (hdir / lane).exists()
     # An existing v3 project without a backlog/ dir yet also gets scaffolded.
-    assert list((hdir / "backlog").glob("*.md"))
+    assert (hdir / "backlog" / ".gitkeep").is_file()
+    assert list((hdir / "backlog").glob("*.md")) == []
 
 
 def test_init_v3_scaffold_is_idempotent(tmp_path, monkeypatch):
@@ -232,6 +235,8 @@ def test_doctor_passes_on_fresh_init(tmp_path, monkeypatch):
     initialize.init_project(tmp_path, assume_yes=True)
     findings = check_project(tmp_path)
     assert not any(f.level == "fail" for f in findings)
+    assert any(f.level == "ok" and "recovery notes (optional)" in f.message for f in findings)
+    assert not any(f.level == "warn" and "session" in f.message for f in findings)
 
 
 def test_doctor_v3_prd_project_needs_no_lanes(tmp_path):

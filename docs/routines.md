@@ -23,13 +23,17 @@ Shared rules for every routine:
 - **Deterministic pre-pass first.** Horus computes signals in Python and prints
   them; the agent acts on those signals plus its reading of the files. The pre-pass
   must be safe to run with no agent present (it only reads + reports).
+- **Recovery notes are optional.** Write a local `sessions/` note only when durable
+  continuity plus git/PR state cannot resume incomplete work, a dirty tree, an
+  unresolved investigation, or an agent/account handoff. Absence is healthy; notes
+  are gitignored and cannot replace a pushed durable handoff between machines.
 
 ---
 
 ## `consolidate`
 
 Keep the `.horus/` lanes in their lanes: route facts to the right file, prune what
-is done or stale, and distill local session summaries into durable state. This is
+is done or stale, and distill optional local recovery notes into durable state. This is
 the routine that makes a multi-lane structure honest — without it, `roadmap.md` and
 `features.md` drift into two hand-maintained lists.
 
@@ -43,7 +47,7 @@ the routine that makes a multi-lane structure honest — without it, `roadmap.md
 | `decisions.md` | durable rules + reasoning, dated | open questions, status |
 | `history.md` | curated lessons / "bumps in the road" | a timeline, open issues |
 | `execution.md` | optional active plan for the current roadmap item: phases, model-tier routing, worker handoffs, review gates | durable capability ledger, long-term history |
-| `sessions/` | local ephemeral per-machine context | anything durable not yet distilled upward |
+| `sessions/` | optional local recovery context when durable state is insufficient | anything durable not yet distilled upward |
 | `temp/` | gitignored worker/subagent handoff notes for active execution | durable state, secrets, full transcripts |
 
 ### Routing rules (the contract)
@@ -59,7 +63,7 @@ the routine that makes a multi-lane structure honest — without it, `roadmap.md
    status* stays in `features.md`, and each file points at the other rather than
    restating it. No fact is maintained in two places.
 4. **Prune.** Remove done/obsolete roadmap items (they live in features/history/git
-   now). Drop session summaries whose content has been fully distilled upward.
+   now). Archive recovery notes whose content has been fully distilled upward.
 5. **Distill sessions and worker notes.** Fold durable content from `sessions/*.md`
    and accepted `.horus/temp/*.md` handoffs into project/roadmap/features/decisions/
    history/execution, then mark/remove the local note when it has served its purpose.
@@ -81,7 +85,7 @@ Reads the lanes and reports, without mutating anything:
   so an in-progress/planned item legitimately in both lanes stops warning once split.
 - **Done-but-unshipped** — roadmap items marked done (`[x]`) whose text has no
   corresponding `features.md` row (candidate for rule 1).
-- **Sessions / temp notes to distill** — session summaries and worker handoff notes
+- **Sessions / temp notes to distill** — optional recovery notes and worker handoff notes
   present (candidates for rule 5).
 - **Staleness** — `last_updated` age and lane mtimes.
 

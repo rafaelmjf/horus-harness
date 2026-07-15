@@ -458,7 +458,7 @@ def consolidate_signals(root: Path, *, overlap_threshold: float = 0.5) -> list[F
     sessions = recent_sessions(root, limit=999)
     if sessions:
         findings.append(Finding(
-            "warn", f"{len(sessions)} session summary(ies) to distill into the lanes"
+            "warn", f"{len(sessions)} local recovery note(s) to distill into the lanes"
         ))
     temp_notes = _temp_notes(root)
     if temp_notes:
@@ -621,7 +621,13 @@ def discover_canonical_docs(root: Path) -> list[Path]:
     for name in _CANONICAL_DOC_NAMES:
         p = root / name
         if p.is_file():
-            found[name] = p
+            generated = templates.instruction_file(
+                "Agent Instructions" if name == "AGENTS.md" else "Claude Code Instructions",
+                "CLAUDE.md" if name == "AGENTS.md" else "AGENTS.md",
+                "Codex Notes" if name == "AGENTS.md" else "Claude Notes",
+            )
+            if p.read_text(encoding="utf-8") != generated:
+                found[name] = p
     docs_dir = root / "docs"
     if docs_dir.is_dir():
         for p in sorted(docs_dir.glob("*.md")):
@@ -676,26 +682,35 @@ def infer_signals(root: Path) -> list[Finding]:
         findings.append(Finding("warn", "no .horus/ yet — run `horus init`, then infer populates it"))
 
     docs = discover_canonical_docs(root)
+    is_v3 = hdir.is_dir() and frontmatter.has_prd(root)
     if docs:
         names = ", ".join(d.name if d.parent == root else f"docs/{d.name}" for d in docs)
         findings.append(Finding("ok", f"{len(docs)} canonical doc(s) to distill from: {names}"))
+    elif is_v3:
+        findings.append(Finding(
+            "ok", "no useful canonical docs found; the blank PRD scaffold may remain blank until a real use case"
+        ))
     else:
         findings.append(Finding(
             "warn", "no canonical docs found (README/ROADMAP/STATUS/…); infer has little to distill from"
         ))
 
-    if hdir.is_dir() and frontmatter.has_prd(root):
+    if is_v3:
         prd_body = frontmatter.parse(_read(hdir, frontmatter.PRD_FILE) or "").body
         gaps = _prd_skeleton_gaps(prd_body)
-        if gaps:
+        if gaps and docs:
             findings.append(Finding(
                 "warn",
                 f"PRD skeleton section(s) empty/placeholder: {', '.join(gaps)} — distill from the "
                 f"canonical docs above",
             ))
-        else:
+        elif not gaps:
             findings.append(Finding(
                 "ok", "PRD skeleton sections (Vision/Backlog/Shipped/Rules) are populated"
+            ))
+        else:
+            findings.append(Finding(
+                "ok", "PRD skeleton is intentionally blank; infer only after useful source truth exists"
             ))
     elif hdir.is_dir():
         placeholders = _placeholder_lanes(hdir)

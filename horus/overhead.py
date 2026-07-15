@@ -99,7 +99,8 @@ def static_footprint() -> list[FootprintItem]:
         ("consolidate routine prompt (PRD structure)", templates.CONSOLIDATE_PROMPT_V3),
         ("distill-history routine prompt", templates.DISTILL_HISTORY_PROMPT),
         ("distill-history routine prompt (PRD structure)", templates.DISTILL_HISTORY_PROMPT_V3),
-        ("infer routine prompt", templates.INFER_PROMPT),
+        ("infer routine prompt (six-lane)", templates.INFER_PROMPT_V2),
+        ("infer routine prompt (PRD structure)", templates.INFER_PROMPT_V3),
     ]
     for skill in skills.SKILLS:
         items.append((f"{skill.name} skill", skill.content))

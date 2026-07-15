@@ -1430,7 +1430,7 @@ def _cache_metric(status: cache_status.CacheStatus) -> str:
 
 
 def _latest_session_card(p: dict[str, Any]) -> str:
-    """The most recent session summary, rendered in full."""
+    """The most recent optional local recovery note, rendered in full."""
     latest = p.get("latest")
     body = p.get("latest_body", "")
     if not latest or not body.strip():
@@ -1714,7 +1714,7 @@ def _project_column(p: dict[str, Any], i: int, aliases: list[dict[str, Any]] | N
         f"<div class='pc-sub'>{git_bits}</div></div>"
         f"<div class='pc-health'>{_health_dot(p)}</div><a class='pc-open' href='/project?i={i}' title='Open project' aria-label='Open project'>&#8599;</a></div>"
         f"<div class='statline'>{''.join(status_badges)}</div>"
-        f"{_single_next_html(p)}<div hidden><span>Last session summary</span>{_resume_html(p)}{_remaining_items_html(p)}{_features_buckets_html(p)}</div>"
+        f"{_single_next_html(p)}<div hidden><span>Latest local recovery note</span>{_resume_html(p)}{_remaining_items_html(p)}{_features_buckets_html(p)}</div>"
         f"{_features_summary_html(p, road_href=f'/project?i={i}#roadmap')}{recap}"
         "<div class='pc-foot'>"
         f"<div class='pc-actions'>{refresh}</div>"

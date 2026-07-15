@@ -495,7 +495,7 @@ def rename_account_alias(old_alias: str, new_alias: str, *, identifier: str | No
 
     ``identifier`` is optional because an isolated account may be configured before
     that account has logged in locally. When present, persist the identifier->alias
-    mapping too so future session summaries use the friendly name.
+    mapping too so future local recovery notes use the friendly name.
     """
     accts = _load_accounts()
     if identifier:

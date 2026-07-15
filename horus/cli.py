@@ -648,6 +648,7 @@ def cmd_onboard(args: argparse.Namespace) -> int:
         return 1
 
     print(f"{'Cloned' if result.cloned else 'Using local clone'}: {result.path}")
+    print(f"Git identity: {result.git_identity}.")
     created = [a for a in result.init_actions if a.status in {"created", "updated"}]
     print(f"Initialized {len(created)} Horus file(s).")
     print(f"{'Registered' if result.registered else 'Already registered'} in Horus project registry.")
@@ -1244,22 +1245,40 @@ def cmd_session(args: argparse.Namespace) -> int:
         return 1
     sessions.mkdir(parents=True, exist_ok=True)
 
-    # Timestamp (not just date): multiple sessions a day must not collide or lose
-    # their order. Account tag anchors which Claude user the session ran under.
+    # Timestamp (not just date): multiple recovery notes a day must not collide.
     now = datetime.now()
     path = sessions / f"{now:%Y-%m-%d-%H%M%S}-{_slugify(args.title)}.md"
     if path.exists():
         print(f"Already exists: {path}")
         return 1
-    # Record the alias, never the raw email: session content distills into the
-    # committed lanes, so the real identifier must not land in the summary.
-    account = args.account or config.alias_for(claude_usage.current_account()) or "unknown"
+    # Explicit attribution wins. Environment inference is deliberately
+    # conservative: when both/neither runtime markers exist, record "unknown"
+    # instead of silently misattributing the note to Claude.
+    agent = args.agent
+    if agent is None:
+        declared = os.environ.get("HORUS_AGENT", "").strip().lower()
+        if declared in {"claude", "codex"}:
+            agent = declared
+        else:
+            has_claude = bool(os.environ.get("CLAUDE_CONFIG_DIR"))
+            has_codex = bool(os.environ.get("CODEX_HOME"))
+            agent = "claude" if has_claude and not has_codex else "codex" if has_codex and not has_claude else "unknown"
+
+    # Record the alias, never the raw account identifier.
+    if args.account:
+        account = args.account
+    elif agent == "claude":
+        account = config.alias_for(claude_usage.current_account()) or "unknown"
+    elif agent == "codex":
+        account = config.alias_for(codex_usage.current_account()) or "unknown"
+    else:
+        account = "unknown"
     path.write_text(
         templates.session_summary(
             title=args.title,
             date=now.strftime("%Y-%m-%dT%H:%M:%S"),
             project=root.name,
-            agent=args.agent,
+            agent=agent,
             account=account,
             environment=args.environment,
         ),
@@ -2513,7 +2532,8 @@ def cmd_infer(args: argparse.Namespace) -> int:
         return 2
     print(f"Infer check: {root}\n")
     _print_findings(routines.infer_signals(root))
-    print("\n" + templates.INFER_PROMPT)
+    prompt = templates.INFER_PROMPT_V3 if frontmatter.has_prd(root) else templates.INFER_PROMPT_V2
+    print("\n" + prompt)
     _skill_nudge(root)
     return 0
 
@@ -3164,13 +3184,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_resume.add_argument("--stdout", action="store_true", help="with --preflight: print JSON for tooling")
     p_resume.set_defaults(func=cmd_resume)
 
-    p_session = sub.add_parser("session", help="create a new session summary from the template")
+    p_session = sub.add_parser("session", help="create an optional local recovery note")
     session_sub = p_session.add_subparsers(dest="session_cmd", required=True)
-    p_session_new = session_sub.add_parser("new", help="create a new session summary")
+    p_session_new = session_sub.add_parser("new", help="create an optional local recovery note")
     p_session_new.add_argument("title", help="short session title")
     p_session_new.add_argument("--path", default=".", help="project root (default: cwd)")
-    p_session_new.add_argument("--agent", default="claude")
-    p_session_new.add_argument("--account", default=None, help="account tag (default: auto-detect the logged-in Claude account)")
+    p_session_new.add_argument(
+        "--agent", choices=("claude", "codex", "unknown"), default=None,
+        help="agent attribution (default: HORUS_AGENT/runtime inference, otherwise unknown)",
+    )
+    p_session_new.add_argument("--account", default=None, help="account tag (default: auto-detect for the attributed agent)")
     p_session_new.add_argument("--environment", default="host")
     p_session_new.set_defaults(func=cmd_session)
 

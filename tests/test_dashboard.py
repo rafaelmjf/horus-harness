@@ -711,7 +711,7 @@ def test_dashboard_surfaces_features_and_history(tmp_path, monkeypatch):
     idx = dashboard.render_index([data])
     # New column layout: features show as named buckets (Idea / In progress / Shipped).
     assert "Main features" in idx and "Widget engine" in idx
-    assert "Last session summary" in idx
+    assert "Latest local recovery note" in idx
 
 
 def test_dashboard_surfaces_execution_plan(tmp_path, monkeypatch):
@@ -1139,7 +1139,7 @@ def test_process_upgrade_project_clean_manual_lists_uncommitted_paths(tmp_path, 
     for name in ("AGENTS.md", "CLAUDE.md"):
         path = proj / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("horus-block-version: 8", "horus-block-version: 7"), encoding="utf-8")
+        path.write_text(text.replace("horus-block-version: 9", "horus-block-version: 8"), encoding="utf-8")
     _commit_scaffold(proj)
     config.set_workflow_policy(commit="manual")
 
@@ -1169,7 +1169,7 @@ def test_process_upgrade_project_clean_automerge_dispatches_branch_pr_and_leaves
     for name in ("AGENTS.md", "CLAUDE.md"):
         path = proj / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("horus-block-version: 8", "horus-block-version: 7"), encoding="utf-8")
+        path.write_text(text.replace("horus-block-version: 9", "horus-block-version: 8"), encoding="utf-8")
     _commit_scaffold_with_origin(proj, tmp_path)
     monkeypatch.setattr(dashboard.integration, "_run", _fake_git_real_gh_faked())
 
@@ -1193,7 +1193,7 @@ def test_process_upgrade_project_clean_automerge_records_integration_failure(tmp
     for name in ("AGENTS.md", "CLAUDE.md"):
         path = proj / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("horus-block-version: 8", "horus-block-version: 7"), encoding="utf-8")
+        path.write_text(text.replace("horus-block-version: 9", "horus-block-version: 8"), encoding="utf-8")
     _commit_scaffold_with_origin(proj, tmp_path)
     monkeypatch.setattr(dashboard.integration, "_run", _fake_git_real_gh_faked(pr_create_ok=False))
 
@@ -3028,7 +3028,7 @@ def test_render_project_shows_codex_projection_behind_badge(tmp_path, monkeypatc
         install(proj)
     skill_md = proj / ".agents" / "skills" / "horus-consolidate" / "SKILL.md"
     skill_md.write_text(
-        skill_md.read_text(encoding="utf-8").replace("horus-skill-version: 10", "horus-skill-version: 1"),
+        skill_md.read_text(encoding="utf-8").replace("horus-skill-version: 11", "horus-skill-version: 1"),
         encoding="utf-8",
     )
 

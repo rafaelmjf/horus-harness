@@ -26,6 +26,51 @@ class OnboardResult:
     registered: bool
     init_actions: list
     integration: integration.IntegrationResult
+    git_identity: str
+
+
+@dataclass(frozen=True)
+class GitIdentity:
+    name: str
+    email: str
+
+
+def _git_config_value(root: Path, key: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "config", "--get", key],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    value = result.stdout.strip()
+    return value if result.returncode == 0 and value else None
+
+
+def _read_git_identity(root: Path) -> GitIdentity | None:
+    """Read the effective Git author identity, including repository-local config."""
+    name = _git_config_value(root, "user.name")
+    email = _git_config_value(root, "user.email")
+    return GitIdentity(name, email) if name and email else None
+
+
+def _configure_local_git_identity(root: Path, identity: GitIdentity) -> None:
+    """Copy a known identity into the target repository without changing global config."""
+    for key, value in (("user.name", identity.name), ("user.email", identity.email)):
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(root), "config", "--local", key, value],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        except OSError as exc:
+            raise RuntimeError(f"could not configure repository-local Git identity: {exc}") from exc
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "git config failed").strip()
+            raise RuntimeError(f"could not configure repository-local Git identity: {detail}")
 
 
 def parse_github_target(target: str) -> tuple[str, str]:
@@ -132,11 +177,13 @@ def onboard_github_project(
     Steps:
     1. Parse ``target`` (``github:owner/repo``).
     2. Run discovery; error if the repo is already a Horus project or not found.
-    3. Clone if the repo has no local path yet.
-    4. Guard: error if ``.horus/`` already exists in the clone.
-    5. Run ``horus init`` non-interactively.
-    6. Register in the local config.
-    7. Integrate via the workflow policy (branch-PR-automerge by default).
+    3. Preflight a complete Git author identity before clone/init; inherit the
+       invoking repository's identity as target-local config when needed.
+    4. Clone if the repo has no local path yet.
+    5. Guard: error if ``.horus/`` already exists in the clone.
+    6. Run ``horus init`` non-interactively.
+    7. Register in the local config.
+    8. Integrate via the workflow policy (branch-PR-automerge by default).
 
     A non-ok IntegrationResult is NOT a hard failure — clone + init + commit may
     already have succeeded. The caller surfaces integration failures as warnings.
@@ -158,11 +205,19 @@ def onboard_github_project(
     if untracked is None:
         raise RuntimeError(f"no GitHub repo found for {owner}/{repo}")
 
-    # Determine path and whether to clone.
+    invoking_identity = _read_git_identity(Path.cwd())
+
+    # Determine path and whether to clone. A new clone requires identity before
+    # any filesystem mutation, so onboarding never discovers the problem at commit.
     if untracked.local_path:
         path = Path(untracked.local_path).resolve()
         cloned = False
     else:
+        if invoking_identity is None:
+            raise RuntimeError(
+                "no complete Git author identity is available; configure user.name "
+                "and user.email in the invoking repository or globally before onboarding"
+            )
         root = (workspace_root or Path(config.load_workspace_root())).expanduser().resolve()
         path = root / untracked.name
         cloned = _clone_repo(untracked.full_name, path)
@@ -171,6 +226,18 @@ def onboard_github_project(
     if (path / ".horus").is_dir():
         raise RuntimeError(
             f"{path} already has .horus/; not overwriting (use `horus start` to register it)"
+        )
+
+    target_identity = _read_git_identity(path)
+    if target_identity is not None:
+        identity_detail = "using the target repository's effective Git author identity"
+    elif invoking_identity is not None:
+        _configure_local_git_identity(path, invoking_identity)
+        identity_detail = "inherited the invoking Git author identity as repository-local config"
+    else:
+        raise RuntimeError(
+            "no complete Git author identity is available; configure user.name "
+            "and user.email in the target or invoking repository before onboarding"
         )
 
     # Register first so this call reports whether onboarding newly added the project
@@ -204,4 +271,5 @@ def onboard_github_project(
         registered=registered,
         init_actions=init_actions,
         integration=integ,
+        git_identity=identity_detail,
     )

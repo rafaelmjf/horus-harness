@@ -42,12 +42,13 @@ horus discover github <owner> --save # show remote Horus repos for a GitHub user
 horus refresh github <owner>      # force-refresh a GitHub owner snapshot now
 horus config workspace-root ~/projects # where remote projects should be cloned
 horus start github:<owner>/<repo> # clone/register a remote Horus repo and show its resume prompt
+horus onboard github:<owner>/<repo> # clone + blank Horus scaffold + PR (Git identity preflighted)
 horus resume                      # print the minimum-context fresh-session handoff for this project
 horus app                         # borderless animated companion; click opens dashboard
 horus app --terminal              # terminal-native project/session launcher (`horus tui` alias)
 horus open . --mode resume --target tmux # persistent attended session in this project
 horus attach <session-id>         # reconnect this terminal to a Horus tmux session
-horus session new "<title>"       # create a dated session summary from the template
+horus session new "<title>" --agent codex # optional local recovery note
 horus close                       # verify continuity, Codex usage, and print the closure ritual
 horus close --usage-threshold 90  # warn when Codex context or rate-limit usage reaches a percent
 horus usage check                 # check the same native-app usage signal directly
@@ -161,16 +162,17 @@ needs them.
 
 ```text
 .horus/
-  project.md      # vision, shape, boundaries, current focus
-  roadmap.md      # open action points
-  features.md     # shipped / in-progress / planned capability ledger
-  decisions.md    # durable decisions + reasoning
-  history.md      # curated lessons / "bumps in the road"
+  PRD.md          # vision, focus/next handoff, shipped ledger, load-bearing rules
+  backlog/        # one card per evidenced open item; blank after a fresh init
   execution.md    # optional active execution plan for phased/subagent work
   requirements.md # optional declarative machine readiness probes
-  sessions/       # local session summaries (gitignored by default)
+  sessions/       # optional local recovery notes (gitignored by default)
   temp/           # fleeting worker/subagent handoff notes (gitignored)
 ```
+
+Older projects may still use the six-lane `project.md` / `roadmap.md` /
+`features.md` / `decisions.md` / `history.md` structure. Migration is explicit;
+`horus init` never changes an existing project's structure.
 
 `AGENTS.md` and `CLAUDE.md` stay native; Horus only syncs the marked
 `<!-- HORUS:BEGIN shared-instructions -->` block and detects drift elsewhere.
@@ -183,7 +185,7 @@ dashboard, and the terminal TUI all render the same read-only readiness result;
 see [machine requirements](docs/machine-requirements.md) for the schema and
 safe probe rules.
 
-When `roadmap.md` recommends `plan-execution`, use `horus execution prompt
+When `PRD.md` (or `roadmap.md` on a six-lane project) recommends `plan-execution`, use `horus execution prompt
 --target claude|codex` to frame the supervisor session and `horus execution
 handoff <phase>` to create the worker note each native subagent should fill before
 review. The temp handoff stays local; accepted outcomes are distilled into the
@@ -202,6 +204,12 @@ horus doctor
 
 For an existing project with useful README/status/roadmap docs, run `horus infer`
 after init and let the in-app `horus-infer` skill distill the docs into `.horus/`.
+Otherwise leave the scaffold blank until the first real use case; init does not
+create a fake backlog card or require an immediate inference pass.
+
+`horus onboard` checks for a complete Git author identity before clone/init. If the
+new target has none but the invoking repository does, Horus copies that identity as
+target-local Git config; it never changes global Git configuration.
 
 ## Keeping projected artifacts current
 
