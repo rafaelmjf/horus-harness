@@ -24,7 +24,13 @@ different account.
   incomplete signal; no alias, email, or usage reading is committed to a project.
 - Unknown aliases fail clearly and never fall back silently to the ambient account.
 - Existing no-`--account` behavior and hook behavior remain compatible.
-- Tests cover Claude and Codex mappings plus incomplete/native-lifted telemetry.
+- **Overseer==worker collision warning:** when a dispatch would route a worker to the
+  same isolated account the overseer session is running under, warn explicitly (shared
+  usage pool, not true isolation). Observed in the campaign: the only isolated `claude`
+  alias (`work`) was also the overseer, so worker and overseer shared a rate-limit pool.
+  Advisory only — it warns, it does not block or reroute.
+- Tests cover Claude and Codex mappings, incomplete/native-lifted telemetry, and the
+  overseer==worker collision warning.
 
 ## Execution
 

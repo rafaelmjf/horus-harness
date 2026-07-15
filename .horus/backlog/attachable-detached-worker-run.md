@@ -19,6 +19,14 @@ Unify those properties so an owner can leave a worker alone, attach only when it
 stuck or needs clarification, detach again, and still receive a deterministic process
 result without killing and relaunching the worker context.
 
+Concrete failure that motivates this: launching `horus run --worker` from a bounded
+foreground caller (a supervisor tool call with a timeout) meant the caller's SIGTERM on
+timeout **propagated to and killed the worker** — the first campaign launch died at ~2
+min with a `stale-but-delivered` registry artifact pointing only at the base SHA. A
+launcher/caller ending must never kill a dispatched worker; detached execution (below)
+is the fix, and until it ships the foreground path should at minimum document that it is
+attached and caller-fatal.
+
 ## Acceptance
 
 - `horus run --worker <agent> --target tmux --detach ...` (or an equivalent explicit
@@ -28,8 +36,10 @@ result without killing and relaunching the worker context.
   detach never interrupt the worker, and manual input can clarify a blocked live run.
 - Natural worker exit records the same normalized status, return code, run log, launch
   and completion datum, and delivery facts as foreground `horus run`.
-- Launcher exit, TUI exit, viewer disconnect, and machine-local dashboard restarts do
-  not kill the worker. Reconciliation distinguishes running, exited, failed, and stale.
+- Launcher exit, TUI exit, viewer disconnect, machine-local dashboard restarts, and a
+  **foreground caller's SIGTERM/timeout** do not kill the worker. Reconciliation
+  distinguishes running, exited, failed, and stale (progress/`stalled` is tracked
+  separately in [[worker-progress-heartbeat]]).
 - Account isolation, posture, model/effort, pinned dispatch base, pending-continuity
   warning, emergency worker hooks, and usage preflight behave identically to foreground
   `horus run`; detached execution does not create a second adapter path.
