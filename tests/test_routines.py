@@ -148,7 +148,7 @@ def test_consolidate_counts_done_and_sessions(tmp_path):
     findings = routines.consolidate_signals(tmp_path)
     msgs = " ".join(f.message for f in findings)
     assert "done roadmap item" in msgs
-    assert "session summary(ies) to distill" in msgs
+    assert "local recovery note(s) to distill" in msgs
 
 
 def test_consolidate_counts_temp_worker_notes(tmp_path):
@@ -216,6 +216,21 @@ def test_infer_discovers_canonical_docs(tmp_path):
     (docs / "HISTORY.md").write_text("# H\n", encoding="utf-8")
     names = {p.name for p in routines.discover_canonical_docs(tmp_path)}
     assert {"README.md", "ROADMAP.md", "CLAUDE.md", "HISTORY.md"} <= names
+
+
+def test_infer_ignores_fresh_generated_instruction_files(tmp_path, monkeypatch):
+    from horus import initialize
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    initialize.init_project(tmp_path, assume_yes=True, with_skills=False, with_hooks=False)
+
+    assert routines.discover_canonical_docs(tmp_path) == []
+    findings = routines.infer_signals(tmp_path)
+    assert all(f.level == "ok" for f in findings)
+    messages = " ".join(f.message for f in findings)
+    assert "blank PRD scaffold may remain blank" in messages
+    assert "intentionally blank" in messages
 
 
 def test_infer_flags_placeholder_lanes(tmp_path):

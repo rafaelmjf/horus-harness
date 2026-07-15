@@ -165,7 +165,7 @@ def test_uncommitted_continuity_warns(tmp_path, monkeypatch):
     assert any("uncommitted continuity" in m for m in _msgs(tmp_path))
 
 
-def test_work_commit_since_summary(tmp_path, monkeypatch):
+def test_work_commit_since_recovery_note_does_not_create_closure_warning(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
     (tmp_path / "foo.py").write_text("x = 1\n", encoding="utf-8")
     _run(tmp_path, "add", "foo.py")
@@ -180,7 +180,7 @@ def test_work_commit_since_summary(tmp_path, monkeypatch):
     sess.write_text("---\ndate: 2026-06-24\nsummary: x\n---\n# x\n", encoding="utf-8")
 
     os.utime(sess, (ct - 100, ct - 100))  # summary older than the work commit
-    assert any("since the latest session summary" in m for m in _msgs(tmp_path))
+    assert not any("since the latest session summary" in m for m in _msgs(tmp_path))
 
     os.utime(sess, (ct + 100, ct + 100))  # summary newer than the work commit
     assert not any("since the latest session summary" in m for m in _msgs(tmp_path))
@@ -460,21 +460,23 @@ def test_harvest_multiple_commits_since_marker_in_order(tmp_path, monkeypatch):
     assert text.index("feat: second") < text.index("feat: third")
 
 
-def test_harvest_autocreates_note_when_none(tmp_path, monkeypatch):
+def test_harvest_does_not_autocreate_note_when_none(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
     assert closure.recent_sessions(tmp_path, limit=1) == []
     _work_commit(tmp_path, "app.py", "1\n", "feat: x")
     n, note = closure.harvest_checkpoint(tmp_path)
-    assert n == 1 and note is not None and note.exists()
+    assert (n, note) == (0, None)
+    assert closure.recent_sessions(tmp_path, limit=1) == []
+    assert (tmp_path / ".horus" / closure.CHECKPOINT_MARKER).is_file()
 
 
-def test_harvest_clears_summary_freshness(tmp_path, monkeypatch):
+def test_harvest_existing_note_never_affects_closure_freshness(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
     note = _session_note(tmp_path)
     old = note.stat().st_mtime - 3600  # backdate so the work commit is "newer"
     os.utime(note, (old, old))
     _work_commit(tmp_path, "app.py", "1\n", "feat: work")
-    assert any("work commit(s) since" in m for m in _msgs(tmp_path))
+    assert not any("work commit(s) since" in m for m in _msgs(tmp_path))
     closure.harvest_checkpoint(tmp_path)
     assert not any("work commit(s) since" in m for m in _msgs(tmp_path))
 

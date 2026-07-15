@@ -63,7 +63,7 @@ def current_account(path: Path | None = None) -> str | None:
 
     Read from ``~/.claude.json`` (``oauthAccount.emailAddress``) — a read-only,
     non-secret anchor for *which* account a session ran under. Useful for tagging
-    session summaries and, later, for scoping usage state per account.
+    local recovery notes and, later, for scoping usage state per account.
     """
     cfg = path or config_path()
     try:

@@ -1,9 +1,9 @@
 """The closure routine.
 
-Before ending a session, verify the work is captured in continuity: `.horus/`
-health, instruction-block alignment, and git-aware signals (real-work commits
-since the latest session summary, uncommitted continuity files). Optionally
-commit the continuity files so durable state is persisted (and can sync).
+Before ending a session, verify the work is captured in durable continuity:
+`.horus/` health, instruction-block alignment, and uncommitted continuity files.
+Optional local recovery notes are harvested when present but are never required.
+The routine can commit continuity files so durable state is persisted (and can sync).
 
 This is the file-first, verify-first half of the hybrid closure decision: it
 checks and reports; the actual summary is written by the in-loop agent following
@@ -69,40 +69,13 @@ def is_git_repo(root: Path) -> bool:
     return _git(root, "rev-parse", "--is-inside-work-tree") == "true"
 
 
-def _work_commits_since(root: Path, mtime: float) -> int:
-    """Commits newer than ``mtime`` that touched files OUTSIDE continuity paths
-    (i.e. real work not yet reflected in a session summary)."""
-    out = _git(
-        root, "log", "--format=%ct", "--", ".",
-        ":(exclude).horus", ":(exclude)AGENTS.md", ":(exclude)CLAUDE.md",
-    )
-    if not out:
-        return 0
-    return sum(1 for line in out.splitlines() if line.strip().isdigit() and int(line) > mtime)
-
-
-def _summary_freshness(root: Path) -> list[Finding]:
-    """Git signal: real-work commits made since the latest session summary (i.e. work
-    not yet captured). Empty when not a repo or there are no sessions."""
-    if not is_git_repo(root):
-        return []
-    recent = recent_sessions(root, limit=1)
-    if not recent:
-        return []
-    n = _work_commits_since(root, recent[0].stat().st_mtime)
-    if n:
-        return [Finding("warn", f"{n} work commit(s) since the latest session summary; summarize before closing")]
-    return [Finding("ok", "session summary is current with work commits")]
-
-
 def freshness_gate(root: Path) -> list[Finding]:
     """The dashboard-freshness subset, for `horus close --check` / a CI pre-merge gate:
     are the lanes the dashboard renders current with this session?
 
     It includes the reliable per-field freshness checks plus deterministic card
-    lifecycle drift. The "work commits since summary" nudge (:func:`_summary_freshness`)
-    and usage/drift signals stay in the full `horus close`; they're informational and
-    the former mtime-nags within the very session being closed, so they don't gate."""
+    lifecycle drift. Usage and instruction-drift signals stay in the full
+    `horus close`; optional recovery notes never gate closure."""
     return routines.freshness_signals(root) + backlog.hygiene_findings(root)
 
 
@@ -404,23 +377,10 @@ def _harvest_records(root: Path, since: str | None) -> list[tuple[str, str, str]
     return records
 
 
-def _latest_or_new_session_note(root: Path) -> Path:
-    """The newest session note to append checkpoints to; create a minimal dated one
-    when the session hasn't authored a note yet (capture-by-default)."""
+def _latest_session_note(root: Path) -> Path | None:
+    """Return the newest optional recovery note without creating one."""
     recent = recent_sessions(root, limit=1)
-    if recent:
-        return recent[0]
-    sessions = root / ".horus" / "sessions"
-    sessions.mkdir(parents=True, exist_ok=True)
-    now = datetime.now()
-    note = sessions / f"{now:%Y-%m-%d-%H%M%S}-session.md"
-    note.write_text(
-        f"---\ndate: {now:%Y-%m-%dT%H:%M:%S}\nproject: {root.name}\n"
-        f'status: in-progress\nsummary: "session checkpoints (auto)"\n---\n\n'
-        f"# Session {now:%Y-%m-%d}\n",
-        encoding="utf-8",
-    )
-    return note
+    return recent[0] if recent else None
 
 
 _TRAILER_PREFIXES = ("co-authored-by:", "signed-off-by:", "co-committed-by:")
@@ -441,11 +401,9 @@ def _append_checkpoints(note: Path, records: list[tuple[str, str, str]]) -> None
 
 
 def harvest_checkpoint(root: Path) -> tuple[int, Path | None]:
-    """Append commit messages since the last harvest to the latest session note and
-    advance the marker. Deterministic, no LLM. Because the append bumps the note's
-    mtime, the "work commits since summary" freshness nudge clears automatically — the
-    checkpoints ARE the running consolidation. Returns (n_harvested, note_path|None);
-    a silent no-op when not a git repo, no ``.horus/``, or nothing new."""
+    """Append new commit messages to an existing optional recovery note and advance
+    the marker. Never creates a note. Returns ``(n_harvested, note_path|None)``;
+    a silent no-op when no note exists or there is nothing new."""
     if not is_git_repo(root) or not (root / ".horus").is_dir():
         return 0, None
     head = _git(root, "rev-parse", "HEAD")
@@ -458,10 +416,11 @@ def harvest_checkpoint(root: Path) -> tuple[int, Path | None]:
     records = _harvest_records(root, since)
     note: Path | None = None
     if records:
-        note = _latest_or_new_session_note(root)
+        note = _latest_session_note(root)
+    if records and note is not None:
         _append_checkpoints(note, records)
     marker.write_text(head + "\n", encoding="utf-8")  # advance even if empty, to avoid rescan
-    return len(records), note
+    return (len(records), note) if note is not None else (0, None)
 
 
 def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding]:
@@ -486,7 +445,6 @@ def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding
                 Finding("warn", f"instruction blocks {report.status}; run `horus reconcile instructions`")
             )
 
-    findings.extend(_summary_freshness(root))
     if is_git_repo(root):
         status = _git(
             root, "status", "--porcelain", "--", *_CONTINUITY_PATHSPEC,
@@ -580,7 +538,7 @@ def commit_continuity(root: Path, message: str | None = None, *, push: bool = Fa
                 f"origin has {n} newer continuity commit(s) — run `git pull --ff-only` "
                 "to fold them in, then re-run `horus close --commit --push`"
             )
-    # Fold work commits into the latest session note BEFORE staging continuity.
+    # Fold work commits into an existing optional recovery note BEFORE staging continuity.
     # After the close commit lands, its SHA is deliberately sealed in the local
     # marker rather than appended to the note inside that same commit (an
     # impossible self-reference that would dirty the tree forever).

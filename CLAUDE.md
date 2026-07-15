@@ -1,12 +1,13 @@
 # Claude Code Instructions
 
-> **PRD structure v3 (2026-07-03).** This repo's `.horus/` is **`PRD.md` +
-> `sessions/`** and the managed block below is PRD-native (block v7, tooling reads
-> PRD frontmatter directly — no shims). Retired v2 lanes are preserved in
-> `.horus/archive/`; do not restore the six-lane split.
+> **PRD structure v3 (2026-07-15).** This repo's durable continuity is `PRD.md` +
+> card-backed `.horus/backlog/`; retired v2 lanes are preserved in
+> `.horus/archive/`. Local `sessions/` notes are optional recovery buffers, not
+> required closure output. The managed block below is PRD-native (block v9); do not
+> restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 8 -->
+<!-- horus-block-version: 9 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -27,7 +28,8 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
 - Frontmatter carries `current_focus` / `next_action` / `next_prompt` /
   `execution_recommendation` / `last_updated`, read PRD-first by the dashboard,
   `horus resume`, and the merge freshness gate.
-- Review recent local session summaries in `.horus/sessions/` when available.
+- Review optional local recovery notes in `.horus/sessions/` when they exist and
+  contain context that is not yet durable elsewhere.
 - Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
   is active; distill only the durable results upward.
 - If this project instead has `project.md` / `roadmap.md` / `features.md` /
@@ -53,8 +55,12 @@ canonical continuity.
 At a continuity boundary, invoke the `horus-consolidate` skill and fold in the whole
 campaign's context:
 
-- Add one concise session summary under `.horus/sessions/` (scaffold with
-  `horus session new "<title>"`, then write what actually happened — not just a date).
+- Write a concise local recovery note under `.horus/sessions/` only when the
+  durable state is not enough to resume: incomplete work, a dirty tree, an
+  unresolved investigation, or an agent/account handoff before PRD.md is ready.
+  Scaffold it with `horus session new "<title>" --agent <claude|codex>` and write
+  the missing recovery context. Skip it when PRD.md, backlog cards, git, and the
+  PR/worker receipt already make the next session recoverable.
 - Update PRD.md: refresh its frontmatter (`current_focus`, `next_action`,
   `next_prompt`, `execution_recommendation`, `last_updated`), move any work that
   shipped from Backlog to Shipped (one line), and record durable rules under Rules.
@@ -65,6 +71,9 @@ campaign's context:
   a direct single-agent task.
 - `horus consolidate` / `horus close` are signal + verification only — you supply the
   content from the session; they never rewrite `.horus/` for you.
+- Local recovery notes are gitignored and do not travel between machines. Before a
+  machine change, put required context in durable PRD/backlog state, a pushed branch,
+  or an explicit dispatch brief.
 - Do not store secrets or full transcripts in `.horus/`.
 
 Working discipline (every session, whether or not the work is delegated):

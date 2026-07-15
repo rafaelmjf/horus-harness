@@ -57,9 +57,9 @@ def _check_sessions(project_root: Path) -> list[Finding]:
     recent = recent_sessions(project_root)
     if recent:
         return [
-            Finding("ok", f"{len(recent)} recent session summary(ies); latest: {recent[0].name}")
+            Finding("ok", f"{len(recent)} local recovery note(s); latest: {recent[0].name}")
         ]
-    return [Finding("warn", "no session summaries yet")]
+    return [Finding("ok", "no local recovery notes (optional)")]
 
 
 def check_project(project_root: Path) -> list[Finding]:

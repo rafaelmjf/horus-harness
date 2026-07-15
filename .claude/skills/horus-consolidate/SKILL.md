@@ -3,20 +3,21 @@ name: horus-consolidate
 description: >-
   Consolidate a project's Horus continuity (`.horus/`). On a PRD-structure (v3)
   project this is a light backlog-hygiene pass over the single `PRD.md` file
-  (line-count vs the cap, stale frontmatter, undistilled session notes,
+  (line-count vs the cap, stale frontmatter, undistilled optional recovery notes,
   duplicate or lingering-done backlog items). On a six-lane (v2) project it
   routes shipped work into the features ledger, prunes done/stale roadmap
   items, distills session notes into the durable files, and de-duplicates
   facts that drifted across roadmap.md and features.md. Use this whenever
-  wrapping up or closing out a work session in a repo that has a `.horus/`
+  reaching a real continuity boundary in a repo that has a `.horus/`
   directory; when the user says "consolidate", "wrap up", "update continuity",
-  "tidy the roadmap"/"tidy the backlog", or "close out"; right after shipping a
-  capability; or whenever `.horus/` looks like it's drifted. Prefer this over
+  "tidy the roadmap"/"tidy the backlog", or "close out"; before an
+  agent/account/machine change, dispatch, pause, release, or end; or whenever
+  `.horus/` looks like it's drifted. Prefer this over
   editing `.horus/` ad hoc, because it runs `horus consolidate` for precise
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 10 -->
+<!-- horus-skill-version: 11 -->
 
 # Consolidate Horus continuity
 
@@ -33,12 +34,12 @@ structure the project uses — follow the matching section below.
 `PRD.md` is the **one maintained continuity file**: frontmatter (`status`,
 `current_focus`, `next_action`, `next_prompt`, `execution_recommendation`,
 `last_updated`) plus Vision / Backlog / Shipped / Rules sections. `sessions/`
-(one note per session) and `temp/` (fleeting worker handoff notes) are
-**unchanged** from six-lane projects.
+contains optional, local/gitignored recovery notes; `temp/` contains fleeting
+worker handoff notes.
 
 ### Two jobs — do not conflate them
 
-- **Per-session close (always, bounded):** fold this session's delta into
+- **Continuity close (at a real boundary, bounded):** fold this campaign's delta into
   `PRD.md` and refresh the frontmatter handoff fields.
 - **Backlog hygiene (small, do it whenever `horus consolidate` flags it):** trim
   the file back under the line cap, delete done items, split duplicate titles.
@@ -61,9 +62,10 @@ them is stale or empty.
    - **Line count vs the ~250-line cap** — warns past 235, more urgently past
      250. Fix by trimming: one-line `## Shipped` entries, deleted done backlog
      items (git remembers them, no need to keep them around).
-   - **Stale frontmatter** — `last_updated` older than the newest `sessions/`
-     note date. Refresh the content and bump the date.
-   - **Undistilled session notes** — more than a dozen files directly in
+   - **Stale frontmatter** — when a recovery note exists, `last_updated` older than
+     its date means the note may still contain undistilled context. Refresh the
+     content and bump the date.
+   - **Undistilled recovery notes** — more than a dozen files directly in
      `sessions/` (excluding `README.md` and `archive/`). Move older ones to
      `sessions/archive/` (local, git-ignored, doesn't count against the cap).
    - **Duplicate backlog titles** — two `## Backlog` items whose bold
@@ -72,30 +74,34 @@ them is stale or empty.
      `DONE`/`Done:`. Delete the item; a `**Result … PASS**` note continuing a
      still-open item is not itself a done marker, leave those.
 
-2. **Read `PRD.md`**, the newest `sessions/*.md` note, and any `temp/*.md`
-   handoff notes awaiting review.
+2. **Read `PRD.md`**, any relevant `temp/*.md` handoff notes, and the newest
+   `sessions/*.md` recovery note only when one exists.
 
-3. **Record this session, in `PRD.md` only** (never source, `AGENTS.md`, or
+3. **Record this campaign, in `PRD.md` only** (never source, `AGENTS.md`, or
    `CLAUDE.md`):
    - Fold capabilities shipped *this session* into `## Shipped` as **one line
-     each** — not a paragraph; detail lives in git history and session notes.
+     each** — not a paragraph; detail lives in git history and optional recovery notes.
    - Add or update `## Backlog` items for new or changed open work.
    - Add any newly load-bearing invariant to `## Rules`, concise and
-     current-state only (not a dated log — that's what `sessions/` and git
-     history are for).
-   - Refresh the frontmatter handoff fields and bump `last_updated`. Same
-     judgment as v2 for `execution_recommendation`: `"continue-as-is — <why>"`
+     current-state only (not a dated log — git history and optional recovery
+     notes carry rationale when needed).
+   - Refresh the frontmatter handoff fields and bump `last_updated`. Apply
+     `execution-decision`'s need-first rubric for `execution_recommendation`:
+     `"continue-as-is — <why>"`
      for small/ambiguous/exploratory/debugging work, `"plan-execution — <why>"`
      for high-volume low-ambiguity work with a clear gate (create/update
-     `execution.md` before implementation starts). The `<why>` must name what
-     delegation actually buys *on this runtime* — a frontier supervisor +
-     cheaper worker tiers gains context hygiene AND a cheaper tier; a single
-     strong model gains mostly context hygiene, so its bar is higher. Do not
-     sell supervisor review as the safeguard (reproduce the gate / bound
-     checkpoints / safety-in-code are the durable ones).
+     `execution.md` before implementation starts). The `<why>` must name the
+     concrete context, parallelism, or price dividend and show that it exceeds
+     the fixed supervisor tax. Cross-project scope, multiple phases, and
+     calibration goals are not dividends by themselves. Do not sell supervisor
+     review as the safeguard (reproduce the gate / bound checkpoints /
+     safety-in-code are the durable ones).
    - When a `temp/` worker handoff note exists, treat it as evidence, not
      truth: review the diff/tests yourself, then fold the accepted facts into
      `PRD.md` and update `execution.md` if a phase completed.
+   - Apply the recovery test: create a local `sessions/` note only when PRD/backlog
+     plus git/PR state cannot resume incomplete work, a dirty tree, an unresolved
+     investigation, or an agent/account handoff. Do not create one as ceremony.
 
 4. **Apply backlog hygiene** for whatever Step 1 flagged. This is normally
    small enough to fold into the same close — don't let the file blow the cap
@@ -112,6 +118,8 @@ them is stale or empty.
 - Edits are confined to `.horus/**`. This is continuity maintenance, not a
   coding task.
 - Bump `last_updated` in `PRD.md` frontmatter if it isn't already today.
+- Recovery notes are gitignored and never substitute for durable state before a
+  machine change; push the branch and put required context in PRD/cards/a brief.
 
 ## v2 six-lane projects (fallback)
 
@@ -122,11 +130,11 @@ structure unchanged from before.
 
 ### Two jobs — do not conflate them
 
-This skill spans two sizes of work. **Do the per-session close every time; do the
+This skill spans two sizes of work. **Do the continuity close at real boundaries; do the
 backlog pass only when the user asks for it.** Conflating them is why lanes drift:
 the per-session part gets half-done because the backlog looks huge.
 
-- **Per-session close (always, bounded):** capture *this* session and make the
+- **Continuity close (bounded):** capture the campaign delta and make the
   dashboard reflect it. Small and complete — only this session's delta plus the
   dashboard fields below. Steps 3–4.
 - **Backlog consolidation (occasional, opt-in):** distill the *accumulated* old
@@ -134,7 +142,7 @@ the per-session part gets half-done because the backlog looks huge.
   A large, separate pass — run it only on an explicit "pay down continuity debt" /
   "consolidate the backlog" request. Step 5. The signals will report a big backlog
   (many done items / undistilled sessions); that pressure is for *this* job, not the
-  per-session close — **do not try to clear it every time.**
+  continuity close — **do not try to clear it every time.**
 
 ### The dashboard contract — keep these current at EVERY close
 
@@ -159,15 +167,16 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
 
 1. **Get the deterministic signals.** Run `horus consolidate` (optionally
    `--path <repo>`). It reports file-only candidates: roadmap↔features overlaps,
-   done-but-unshipped items, session summaries to distill, missing lanes. Leads, not
+   done-but-unshipped items, optional recovery notes to distill, missing lanes. Leads, not
    gospel — and most belong to the backlog job (Step 5), not this close.
 
 2. **Read the lanes.** Read `.horus/project.md`, `roadmap.md`, `features.md`,
-   `decisions.md`, `history.md`, optional `execution.md`, and the newest
-   `sessions/*.md` / `temp/*.md` handoff notes. If `docs/routines.md` exists it
-   holds the full routing contract; otherwise this skill is authoritative.
+   `decisions.md`, `history.md`, optional `execution.md`, relevant `temp/*.md`
+   handoffs, and the newest `sessions/*.md` recovery note only when one exists. If
+   `docs/routines.md` exists it holds the full routing contract; otherwise this skill
+   is authoritative.
 
-3. **Per-session close — record this session** (`.horus/**` only; never source,
+3. **Continuity close — record the campaign delta** (`.horus/**` only; never source,
    `AGENTS.md`, or `CLAUDE.md`):
 
    - **Record fresh context.** Decisions, lessons/dead-ends, and capabilities shipped
@@ -194,6 +203,9 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
    - **When a worker handoff exists** in `.horus/temp/`, use it as evidence, not as
      truth: the supervisor reviews the diff/tests, then distills accepted facts into
      durable lanes and updates `execution.md`.
+   - **Use a recovery note only when needed.** If durable lanes + git/PR state cannot
+     resume incomplete work, a dirty tree, an unresolved investigation, or a handoff,
+     write a local `sessions/` note. Otherwise skip it.
 
 4. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
    `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`.

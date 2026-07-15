@@ -170,12 +170,12 @@ def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
 
 def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
-    assert consolidate.version == 10
+    assert consolidate.version == 11
     assert "PRD.md" in consolidate.content
     assert "no lane-routing/overlap warnings" in consolidate.content
     assert "~250-line cap" in consolidate.content
     assert "Stale frontmatter" in consolidate.content
-    assert "Undistilled session notes" in consolidate.content
+    assert "Undistilled recovery notes" in consolidate.content
     assert "Duplicate backlog titles" in consolidate.content
     assert "Lingering done items" in consolidate.content
     assert "one line" in consolidate.content and "not a paragraph" in consolidate.content
@@ -185,10 +185,12 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
 
 def test_infer_skill_v3_reports_prd_skeleton_gaps():
     infer = next(s for s in skills.SKILLS if s.name == "horus-infer")
-    assert infer.version == 3
+    assert infer.version == 4
     assert "Vision" in infer.content and "Backlog" in infer.content
     assert "Shipped" in infer.content and "Rules" in infer.content
     assert "PRD.md" in infer.content
+    assert "do not create a starter card" in infer.content
+    assert "leave the scaffold blank" in infer.content
 
 
 def test_distill_history_skill_v3_targets_archive():

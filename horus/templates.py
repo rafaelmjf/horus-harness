@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 8
+BLOCK_VERSION = 9
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -39,7 +39,8 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
 - Frontmatter carries `current_focus` / `next_action` / `next_prompt` /
   `execution_recommendation` / `last_updated`, read PRD-first by the dashboard,
   `horus resume`, and the merge freshness gate.
-- Review recent local session summaries in `.horus/sessions/` when available.
+- Review optional local recovery notes in `.horus/sessions/` when they exist and
+  contain context that is not yet durable elsewhere.
 - Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
   is active; distill only the durable results upward.
 - If this project instead has `project.md` / `roadmap.md` / `features.md` /
@@ -65,8 +66,12 @@ canonical continuity.
 At a continuity boundary, invoke the `horus-consolidate` skill and fold in the whole
 campaign's context:
 
-- Add one concise session summary under `.horus/sessions/` (scaffold with
-  `horus session new "<title>"`, then write what actually happened — not just a date).
+- Write a concise local recovery note under `.horus/sessions/` only when the
+  durable state is not enough to resume: incomplete work, a dirty tree, an
+  unresolved investigation, or an agent/account handoff before PRD.md is ready.
+  Scaffold it with `horus session new "<title>" --agent <claude|codex>` and write
+  the missing recovery context. Skip it when PRD.md, backlog cards, git, and the
+  PR/worker receipt already make the next session recoverable.
 - Update PRD.md: refresh its frontmatter (`current_focus`, `next_action`,
   `next_prompt`, `execution_recommendation`, `last_updated`), move any work that
   shipped from Backlog to Shipped (one line), and record durable rules under Rules.
@@ -77,6 +82,9 @@ campaign's context:
   a direct single-agent task.
 - `horus consolidate` / `horus close` are signal + verification only — you supply the
   content from the session; they never rewrite `.horus/` for you.
+- Local recovery notes are gitignored and do not travel between machines. Before a
+  machine change, put required context in durable PRD/backlog state, a pushed branch,
+  or an explicit dispatch brief.
 - Do not store secrets or full transcripts in `.horus/`.
 
 Working discipline (every session, whether or not the work is delegated):
@@ -207,33 +215,12 @@ def backlog_pointer_block() -> str:
     )
 
 
-def starter_backlog_card(date: str) -> str:
-    """The one card `horus init`/`infer` scaffold into a fresh `.horus/backlog/`
-    so the directory is never silently empty. Delete it once real cards exist."""
-    return f"""---
-status: open
-priority: low
-type: task
-created: {date}
----
-
-# Replace this with your first backlog item
-
-Starter card for `.horus/backlog/` — one card per work item. Frontmatter carries
-`status` (open/claimed/shipped), `priority`, `tier`, and `type`
-(`bug`/`feature`/`chore`/`task`, defaults to `task`). See `horus backlog list` /
-`horus backlog claim <name>` / `horus backlog ship <name> --pr N --sha SHA`.
-Delete this placeholder once real cards exist; shipped real cards move to
-`backlog/archive/` with their provenance intact.
-"""
-
-
 def prd_md(project_name: str, date: str) -> str:
     return f"""---
 status: active
-current_focus: "Fresh scaffold — fill from `horus infer` or the first working session."
-next_action: "Run `horus infer` to bootstrap this PRD from existing docs, or replace this with the first concrete task."
-next_prompt: "Resume {project_name}. Read .horus/PRD.md (frontmatter + Backlog), then continue the next_action above."
+current_focus: "Blank Horus scaffold; no project truth has been inferred yet."
+next_action: "Wait for the first concrete use case; infer only when existing docs already carry useful project truth."
+next_prompt: "Resume {project_name}. Read .horus/PRD.md, then ground the first real backlog item in repository or owner evidence."
 execution_recommendation: "continue-as-is"
 horus_min_version: {MIN_CLI_VERSION}
 last_updated: {date}
@@ -271,15 +258,16 @@ The invariants that constrain new work.
   Keep it under ~250 lines: new shipped items are one line; shipped backlog cards
   move to `.horus/backlog/archive/` with `status: shipped` plus PR/SHA provenance;
   new work (including bugs) gets its own card in `.horus/backlog/`.
-- **`sessions/`**: one note per session (`horus session new`), operational facts
-  welcome (gates verified, tokens to rotate, dead ends). Distilled notes move to
-  `sessions/archive/` (local).
+- **`sessions/`**: optional local recovery notes (`horus session new`), used only
+  when durable PRD/backlog/git/PR state cannot fully resume the work. They are
+  gitignored; distilled notes move to `sessions/archive/` (local).
 - **Frontmatter:** this file carries `current_focus` / `next_action` /
   `next_prompt` / `execution_recommendation` / `last_updated` — the tooling reads
   them PRD-first (`resolve_focus`); no shims are needed.
 - **Closure:** at a configured continuity boundary, update this file's frontmatter +
-  backlog/shipped + one campaign session note + `horus close --commit --push`.
-  One `horus consolidate` pass at most; do not chase warnings.
+  backlog/shipped, add a recovery note only if the durable-state test fails, then
+  `horus close --commit --push`. One `horus consolidate` pass at most; do not chase
+  warnings.
 """
 
 
@@ -684,8 +672,8 @@ installed. Read this first.
   **not** open issues.
 - `execution.md` — optional active execution plan for the current roadmap item:
   phase breakdown, model-tier routing, worker handoff notes, and review gates.
-- `sessions/` — local session summaries (gitignored; per-machine context that
-  distills into the files above).
+- `sessions/` — optional local recovery notes (gitignored; per-machine context for
+  incomplete work or handoffs that is distilled into the files above when durable).
 - `temp/` — gitignored scratch notes from implementation workers/subagents. These
   are fleeting handoffs for the supervisor, not durable project memory.
 
@@ -696,11 +684,11 @@ maintain two hand-written roadmaps that will drift. Mark a superseded doc as suc
 once its content lives here.
 
 Keep each lane in its lane; run `horus consolidate` to route facts to the right
-file, prune what's done, and distill session summaries upward.
+file, prune what's done, and distill recovery notes upward when present.
 
 Durable state (`project.md` / `roadmap.md` / `features.md` / `decisions.md` /
-`history.md` / `execution.md`) is committed and travels via git; session summaries
-and temp worker notes stay local per machine.
+`history.md` / `execution.md`) is committed and travels via git; optional recovery
+notes and temp worker notes stay local per machine.
 
 These files are scaffolded by `horus init` and maintained by the agents working in
 this repo. A future `horus infer` will populate them automatically (LLM-based).
@@ -721,8 +709,9 @@ installed. Read this first.
   frontmatter (`current_focus` / `next_action` / `next_prompt` /
   `execution_recommendation` / `last_updated`) feeds the dashboard, `horus resume`,
   and the merge freshness gate directly — see `resolve_focus`.
-- `sessions/` — local session summaries (gitignored; operational facts, dead ends,
-  verified gates). Distilled notes move to `sessions/archive/`.
+- `sessions/` — optional local recovery notes (gitignored; incomplete work, dead
+  ends, or handoff context not yet durable elsewhere). Distilled notes move to
+  `sessions/archive/`.
 - `temp/` — gitignored scratch notes from implementation workers/subagents; fleeting
   handoffs for the supervisor, not durable project memory.
 - `execution.md` — optional, created only when a backlog item needs a phased plan
@@ -732,7 +721,8 @@ installed. Read this first.
 Keep PRD.md under ~250 lines: shipped ledger items are one line; card-backed work
 is moved to `backlog/archive/` with `status: shipped` and PR/SHA provenance. At the
 configured continuity boundary, closure = update PRD.md (frontmatter +
-backlog/shipped) + one campaign session note, then `horus close --commit --push`.
+backlog/shipped), add a local recovery note only when durable state is insufficient,
+then `horus close --commit --push`.
 The default `handoff` granularity batches related deliveries until an agent/account/
 machine change, dispatch, pause, release, or end. One `horus consolidate` pass at most;
 do not chase warnings.
@@ -799,8 +789,9 @@ conversation. This is the file-level checklist.)
 The dashboard renders these fields as the project's *current* state and never infers
 them — keep each current at every close:
 
-1. Session summary: ensure one for this session exists under .horus/sessions/
-   (`horus session new "<title>"` if this session moved the project forward).
+1. Recovery test: if durable lanes + git/PR state cannot resume incomplete work,
+   write a local note under .horus/sessions/ (`horus session new "<title>"
+   --agent <claude|codex>`). Otherwise skip it.
 2. project.md `current_focus` (frontmatter): refresh the one-line "where things are now".
 3. roadmap.md, the two agent-authored fields + the checkboxes:
    - `next_action`: the single best next step, one imperative line.
@@ -833,7 +824,8 @@ is a SEPARATE pass — only when asked, not every close.
 CLOSURE_PROMPT_V3 = """Continuity boundary - fold the campaign once, when context is about to change.
 
 1. Update PRD.md frontmatter, Backlog/Shipped, and any newly load-bearing rule.
-2. Write one concise campaign summary under .horus/sessions/.
+2. Write a concise local recovery note under .horus/sessions/ only if PRD/backlog +
+   git/PR state do not fully preserve incomplete work or handoff context.
 3. Use the horus-consolidate skill for context-aware hygiene, then run
    `horus close --commit --push`.
 
@@ -1035,7 +1027,33 @@ Signal test for each entry:
 """
 
 
-INFER_PROMPT = """Infer routine - bootstrap/refresh .horus/ by distilling the project's own docs.
+INFER_PROMPT_V3 = """Infer routine - bootstrap/refresh PRD-structure continuity from the project's own docs.
+Act on the signals above only when the repository already contains useful project
+truth or the user explicitly asked for inference. A fresh blank scaffold is valid;
+do not manufacture work merely to fill placeholders.
+
+1. Read the canonical docs found above and follow their pointers (README -> status/
+   roadmap -> CLAUDE.md/AGENTS.md -> linked docs). Build a model before writing.
+2. Distill durable state into .horus/PRD.md:
+   - frontmatter: current focus, next action/prompt, execution recommendation, date;
+   - Vision: shape and explicit boundaries;
+   - Backlog: keep the pointer in PRD.md and create one .horus/backlog/<slug>.md card
+     per evidenced open item, with status/priority/type frontmatter;
+   - Shipped: one line per evidenced capability;
+   - Rules: concise current invariants only.
+3. Do not create a starter card or infer an item solely because the backlog is empty.
+4. Point to canonical deep references instead of copying them wholesale.
+5. Add a one-line superseded pointer to a source doc only when PRD.md truly replaces
+   its current-state role; ask before substantially rewriting source docs.
+6. When intent is unclear, ask rather than guess. Never invent decisions, dates,
+   priorities, versions, or shipped state.
+
+Edit scope: .horus/PRD.md and .horus/backlog/** (plus, with care and consent, a
+one-line pointer atop a genuinely superseded source doc).
+"""
+
+
+INFER_PROMPT_V2 = """Infer routine - bootstrap/refresh .horus/ by distilling the project's own docs.
 Act on the signals above. The goal is a single concise source of "what is this and
 what's next", distilled FROM the canonical docs - not a second copy of them.
 
@@ -1059,3 +1077,7 @@ what's next", distilled FROM the canonical docs - not a second copy of them.
 Edit scope: .horus/** (plus, with care and consent, a one-line pointer atop a
 superseded source doc).
 """
+
+
+# Backward-compatible name for callers that mean the retired six-lane prompt.
+INFER_PROMPT = INFER_PROMPT_V2

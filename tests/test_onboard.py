@@ -24,6 +24,12 @@ from horus.remote_start import OnboardResult
 # Helpers
 # ---------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def _known_git_identity(monkeypatch):
+    identity = remote_start.GitIdentity("Test User", "test@example.com")
+    monkeypatch.setattr(remote_start, "_read_git_identity", lambda root: identity)
+    monkeypatch.setattr(remote_start, "_configure_local_git_identity", lambda root, value: None)
+
 def _untracked(name: str = "my-repo", full_name: str = "acme/my-repo", local_path: str | None = None):
     return github_catalog.UntrackedRepo(
         owner="acme",
@@ -195,6 +201,65 @@ def test_onboard_clones_when_no_local_path(tmp_path, monkeypatch):
     assert path_cloned == tmp_path / "my-repo"
 
 
+def test_onboard_without_git_identity_fails_before_clone(tmp_path, monkeypatch):
+    clone_calls = []
+    monkeypatch.setattr(remote_start, "_read_git_identity", lambda root: None)
+    monkeypatch.setattr(remote_start, "_clone_repo", lambda *args: clone_calls.append(args) or True)
+    monkeypatch.setattr(
+        remote_start.github_catalog,
+        "discover",
+        lambda owner, **kw: github_catalog.DiscoveryResult(
+            projects=[], untracked=[_untracked(local_path=None)]
+        ),
+    )
+    monkeypatch.setattr(remote_start.config, "load_projects", lambda: [])
+
+    with pytest.raises(RuntimeError, match="no complete Git author identity"):
+        remote_start.onboard_github_project(
+            "github:acme/my-repo", workspace_root=tmp_path, policy=_policy()
+        )
+
+    assert clone_calls == []
+    assert not (tmp_path / "my-repo").exists()
+
+
+def test_onboard_inherits_invoking_identity_as_target_local(tmp_path, monkeypatch):
+    project_path = tmp_path / "my-repo"
+    project_path.mkdir()
+    (project_path / ".git").mkdir()
+    invoking = remote_start.GitIdentity("Invoking User", "invoking@example.com")
+    configured = []
+
+    monkeypatch.setattr(
+        remote_start,
+        "_read_git_identity",
+        lambda root: invoking if Path(root).resolve() == Path.cwd().resolve() else None,
+    )
+    monkeypatch.setattr(
+        remote_start, "_configure_local_git_identity",
+        lambda root, identity: configured.append((Path(root), identity)),
+    )
+    monkeypatch.setattr(
+        remote_start.github_catalog,
+        "discover",
+        lambda owner, **kw: github_catalog.DiscoveryResult(
+            projects=[], untracked=[_untracked(local_path=str(project_path))]
+        ),
+    )
+    monkeypatch.setattr(remote_start.config, "load_projects", lambda: [])
+    monkeypatch.setattr(remote_start.config, "register_project", lambda p: True)
+    monkeypatch.setattr(intmod, "_run", FakeRunner(_automerge_responses()))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    result = remote_start.onboard_github_project(
+        "github:acme/my-repo", policy=_policy()
+    )
+
+    assert configured == [(project_path, invoking)]
+    assert "repository-local" in result.git_identity
+
+
 # ---------------------------------------------------------------------------
 # Error: repo is already a Horus project
 # ---------------------------------------------------------------------------
@@ -355,7 +420,7 @@ def test_onboard_integration_command_sequence(tmp_path, monkeypatch):
 # CLI — cmd_onboard
 # ---------------------------------------------------------------------------
 
-def test_cli_onboard_success(tmp_path, monkeypatch):
+def test_cli_onboard_success(tmp_path, monkeypatch, capsys):
     """cmd_onboard returns 0 on success and prints a summary."""
     from horus.cli import cmd_onboard
     import argparse
@@ -384,6 +449,7 @@ def test_cli_onboard_success(tmp_path, monkeypatch):
     args = argparse.Namespace(target="github:acme/my-repo", workspace_root=None, limit=100)
     rc = cmd_onboard(args)
     assert rc == 0
+    assert "Git identity:" in capsys.readouterr().out
 
 
 def test_cli_onboard_hard_failure_returns_1(tmp_path, monkeypatch):

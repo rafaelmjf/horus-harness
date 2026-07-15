@@ -16,8 +16,8 @@ from horus import backlog, config, frontmatter, native_hooks, skills, templates
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, TEMP_DIR
 from horus.instructions import extract_block
 
-# Session summaries are ignored via a .gitignore co-located inside .horus/,
-# keeping a tracked .gitkeep so the directory travels with the repo.
+# Optional local recovery notes are ignored via a .gitignore co-located inside
+# .horus/, keeping a tracked .gitkeep so the directory travels with the repo.
 GITIGNORE_RULES = (
     "sessions/*.md",
     "!sessions/.gitkeep",
@@ -93,7 +93,7 @@ def init_project(
         actions.append(
             _write_if_missing(hdir / "README.md", templates.readme_md_v3(), f"{HORUS_DIR}/README.md")
         )
-        actions.append(_ensure_backlog_dir(hdir, today))
+        actions.append(_ensure_backlog_dir(hdir))
     elif is_v2:
         actions.append(
             _write_if_missing(hdir / "README.md", templates.readme_md(), f"{HORUS_DIR}/README.md")
@@ -151,7 +151,7 @@ def init_project(
                 f"{HORUS_DIR}/{frontmatter.PRD_FILE}",
             )
         )
-        actions.append(_ensure_backlog_dir(hdir, today))
+        actions.append(_ensure_backlog_dir(hdir))
 
     actions.append(
         _write_if_missing(
@@ -203,31 +203,29 @@ def init_project(
     return actions
 
 
-def _ensure_backlog_dir(hdir: Path, today: str) -> Action:
-    """Card-per-file backlog is the fleet standard: scaffold `.horus/backlog/`
-    with a starter card so a fresh project's backlog dir is never silently
-    empty. Never-clobber: only writes the starter card when the dir has no
-    cards yet — an already-populated backlog/ (this project's own, or one a
-    prior `init` already seeded) is left untouched."""
+def _ensure_backlog_dir(hdir: Path) -> Action:
+    """Track the card-per-file backlog directory without manufacturing work."""
     bdir = hdir / backlog.BACKLOG_DIR
     bdir.mkdir(parents=True, exist_ok=True)
     if any(bdir.glob("*.md")):
         return Action("exists", f"{HORUS_DIR}/{backlog.BACKLOG_DIR}/ already has card(s)")
-    starter = bdir / "first-card.md"
-    starter.write_text(templates.starter_backlog_card(today), encoding="utf-8")
-    return Action("created", f"created {HORUS_DIR}/{backlog.BACKLOG_DIR}/{starter.name}")
+    marker = bdir / ".gitkeep"
+    if marker.exists():
+        return Action("exists", f"{HORUS_DIR}/{backlog.BACKLOG_DIR}/ tracked and blank")
+    marker.write_text("", encoding="utf-8")
+    return Action("created", f"created blank {HORUS_DIR}/{backlog.BACKLOG_DIR}/")
 
 
 def _ensure_gitignore(horus_dir_path: Path) -> Action:
     path = horus_dir_path / ".gitignore"
     if not path.exists():
         path.write_text(GITIGNORE_BLOCK, encoding="utf-8")
-        return Action("created", f"created {HORUS_DIR}/.gitignore ignoring session summaries and temp notes")
+        return Action("created", f"created {HORUS_DIR}/.gitignore ignoring recovery and temp notes")
     text = path.read_text(encoding="utf-8")
     lines = {line.strip() for line in text.splitlines()}
     missing = [rule for rule in GITIGNORE_RULES if rule not in lines]
     if not missing:
-        return Action("exists", f"{HORUS_DIR}/.gitignore already ignores session summaries and temp notes")
+        return Action("exists", f"{HORUS_DIR}/.gitignore already ignores recovery and temp notes")
     sep = "" if text.endswith("\n") or text == "" else "\n"
     path.write_text(text + sep + "\n".join(missing) + "\n", encoding="utf-8")
     return Action("updated", f"{HORUS_DIR}/.gitignore: added missing temp/session ignore rules")

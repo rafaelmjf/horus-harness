@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.56 is published and deployed: managed instructions and bundled decision/execution skills require a concrete dispatch dividend before model selection, keep integrated campaigns inline when handoffs do not pay, and consume live rather than pinned model evidence."
-next_action: "Use Horus normally and let the next observed failure or repeated friction create a card; refresh project projections from installed v0.0.56 when their next real workflow selects them."
-next_prompt: "Resume Horus from clean v0.0.56 main. Run `horus resume --preflight`; if the backlog remains empty, use the next owner-observed problem rather than manufacturing scope. Require a concrete dispatch dividend before selecting a model or worker."
-execution_recommendation: "continue-as-is — the next boundary is low-volume owner prioritization or a concrete observed incident; there is no bounded unit whose dispatch dividend exceeds the supervisor tax."
+current_focus: "Campaign-retrospective improvements: make session notes optional recovery buffers, keep fresh onboarding blank, and fix v3 infer, agent attribution, and Git-identity friction."
+next_action: "Implement and verify optional-recovery-notes-and-honest-onboarding as one cohesive harness change, then release and refresh the selected project projections."
+next_prompt: "Resume Horus on optional-recovery-notes-and-honest-onboarding. Keep the change inline, update templates/skills/code/tests together, and reproduce focused plus full gates before release."
+execution_recommendation: "continue-as-is — templates, CLI behavior, skills, and tests share one tight policy contract; delegation would duplicate context without a parallelism or price dividend."
 last_updated: 2026-07-15
 horus_min_version: 0.0.26
 ---
