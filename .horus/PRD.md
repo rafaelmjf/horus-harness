@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.57 is stable; five observed cockpit follow-ups are captured as deferred cards while the next campaign migrates three Drive-backed projects to Git without waiting on harness changes."
-next_action: "Run the prepared horus-agent migration campaign from a fresh supervisor session; implement a harness card only when that campaign reaches the evidenced friction it addresses."
-next_prompt: "Resume clean horus-harness main only when a migration campaign reports a concrete harness blocker. Read the matching backlog card, reproduce the current behavior, and keep the implementation to that bounded surface."
-execution_recommendation: "continue-as-is — the cards are independently scoped, but none blocks migration and implementing speculative convenience now would not repay dispatch or review overhead."
+current_focus: "v0.0.57 is stable; the Drive-to-Git campaign has now evidenced two concrete worker-lifecycle gaps: one-shot runs cannot yet be both detached and TUI-attachable, and deferred supervision lacks one compact completion/usage receipt."
+next_action: "Implement `attachable-detached-worker-run` in a fresh harness session, preserving foreground `horus run` semantics while reusing the managed tmux host; then implement its completion-receipt companion."
+next_prompt: "Resume clean horus-harness main and claim `attachable-detached-worker-run`. Reproduce the split between foreground one-shot `horus run` and attachable interactive tmux sessions, then add the smallest shared path that makes a headless worker detached, TUI-attachable, and deterministically complete."
+execution_recommendation: "plan-execution — the attachable one-shot path spans CLI, tmux hosting, registry, logs, and datums with clear parity gates; a bounded phased implementation protects those existing contracts better than editing them opportunistically during a migration campaign."
 last_updated: 2026-07-15
 horus_min_version: 0.0.26
 ---
@@ -38,10 +38,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Five post-v0.0.57 cards come from observed cross-machine campaign planning: account-scoped
+Seven post-v0.0.57 cards come from observed cross-machine campaign planning: account-scoped
 usage checks, remote-only TUI start, scoped machine requirements, project-local workflow
-overrides, and an optional campaign launch. None blocks the prepared migrations; activate
-one only when the corresponding friction is reached.
+overrides, an optional campaign launch, attachable detached one-shot workers, and a
+deferred-supervision completion receipt. The final two are evidenced by the prepared
+migration campaign; they improve later launches but do not block its first attachable
+interactive worker.
 
 ## Shipped
 
