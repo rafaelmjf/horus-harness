@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Need-first dispatch routing is source-complete: shared instructions and bundled decision/execution skills require a concrete dividend before model selection, keep integrated campaigns inline when handoffs do not pay, and consume live rather than pinned model evidence."
-next_action: "Merge the need-first dispatch PR, publish/deploy the next Horus release, then refresh the affected project projections before resuming the Fabric onboarding campaign."
-next_prompt: "Resume the need-first dispatch delivery from its feature PR. Observe required CI green on the exact SHA, merge, publish/deploy the next Horus release, and refresh project projections; do not add a worker or continuity card solely for calibration."
-execution_recommendation: "continue-as-is — release, deployment, and projection refresh reuse this session's exact source context; dispatch would add a second handoff without avoiding meaningful work."
+current_focus: "v0.0.56 is published and deployed: managed instructions and bundled decision/execution skills require a concrete dispatch dividend before model selection, keep integrated campaigns inline when handoffs do not pay, and consume live rather than pinned model evidence."
+next_action: "Use Horus normally and let the next observed failure or repeated friction create a card; refresh project projections from installed v0.0.56 when their next real workflow selects them."
+next_prompt: "Resume Horus from clean v0.0.56 main. Run `horus resume --preflight`; if the backlog remains empty, use the next owner-observed problem rather than manufacturing scope. Require a concrete dispatch dividend before selecting a model or worker."
+execution_recommendation: "continue-as-is — the next boundary is low-volume owner prioritization or a concrete observed incident; there is no bounded unit whose dispatch dividend exceeds the supervisor tax."
 last_updated: 2026-07-15
 horus_min_version: 0.0.26
 ---
@@ -41,7 +41,7 @@ conditions in `backlog/archive/`; new work should start from observed use, not b
 
 ## Shipped
 
-**Need-first dispatch routing** (2026-07-15): managed instructions and bundled consolidation/execution/decision skills now prove a concrete context, parallelism, or price dividend before model selection; cross-project scope, multiple phases, and calibration alone never force dispatch, live owner evidence may qualify incomplete usage telemetry, and durable guidance carries no pinned model names.
+**Need-first dispatch routing** (2026-07-15, PR #244, v0.0.56): managed instructions and bundled consolidation/execution/decision skills prove a concrete context, parallelism, or price dividend before model selection; cross-project scope, multiple phases, and calibration alone never force dispatch, live owner evidence may qualify incomplete usage telemetry, and durable guidance carries no pinned model names.
 **Fleet Projection Sync cockpit** (2026-07-15, PR #240): TUI Home shows stale/unknown project counts, a dedicated screen renders each Claude/Codex surface against the canonical projection check, and the optional `horus-agent` curator launch carries a bounded fetch/isolated-worktree/branch→PR prompt without automatic writes.
 **Truthful datum quality denominator** (2026-07-15, PR #241): `void` closes aborted/untested runs, `died` and `void` remain separately visible, and only clean/nudged/bounced contribute to quality rates and recent quality outcomes; delegation rubric v4 consumes the corrected fields.
 **Boundary-based continuity granularity** (2026-07-15, PRs #238/#239): handoff boundaries are the default while delivery/manual remain selectable in TUI Defaults; git history provides portable pending-delivery receipts, strict project overrides still bind CI, per-turn Stop hooks no longer dirty session notes, dispatch pins/surfaces its base and pending state, resume/TUI warn until one campaign checkpoint consolidates PRD/cards/session context, and successful v3 acting-close output stays concise instead of replaying the retired six-lane ritual.
