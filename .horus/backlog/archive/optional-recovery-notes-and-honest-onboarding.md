@@ -1,12 +1,14 @@
 ---
 title: "Optional recovery notes and honest onboarding"
-status: claimed
+status: shipped
 priority: now
 type: feature
 surface: horus/templates.py, horus/skills.py, horus/continuity.py, horus/closure.py, horus/routines.py, horus/cli.py, horus/initialize.py, horus/remote_start.py, tests/
 created: 2026-07-15
 created_by: owner
 parallel: unsafe
+shipped_pr: 247
+shipped_sha: 405ddbd261a55c5b553ad7da578f5df61774d5e7
 ---
 
 # Optional recovery notes and honest onboarding

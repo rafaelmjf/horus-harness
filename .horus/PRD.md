@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Campaign-retrospective improvements: make session notes optional recovery buffers, keep fresh onboarding blank, and fix v3 infer, agent attribution, and Git-identity friction."
-next_action: "Implement and verify optional-recovery-notes-and-honest-onboarding as one cohesive harness change, then release and refresh the selected project projections."
-next_prompt: "Resume Horus on optional-recovery-notes-and-honest-onboarding. Keep the change inline, update templates/skills/code/tests together, and reproduce focused plus full gates before release."
-execution_recommendation: "continue-as-is — templates, CLI behavior, skills, and tests share one tight policy contract; delegation would duplicate context without a parallelism or price dividend."
+current_focus: "v0.0.57 is published and deployed: recovery notes are optional, fresh scaffolds stay blank, inference is structure-aware, session attribution is honest, and onboarding preflights Git identity."
+next_action: "Return to the Fabric project family and start the selected project's concrete highest-priority card; let dependency warnings guide machine setup instead of manufacturing more harness scope."
+next_prompt: "Resume from clean horus-harness v0.0.57 main. Run `horus resume --preflight`, then enter the selected Fabric repo and follow its PRD/card plus any missing-dependency warning. Create a local recovery note only if durable PRD + git/PR state cannot resume the work."
+execution_recommendation: "continue-as-is — the next boundary is owner selection of one concrete Fabric card; there is no bounded harness work unit or dispatch dividend yet."
 last_updated: 2026-07-15
 horus_min_version: 0.0.26
 ---
@@ -26,8 +26,10 @@ Model concretely: `project + agent + account + environment + session` — no abs
 **Out of scope:** multi-user SaaS, agent marketplace, distributed worker control plane,
 identity abstraction, memory beyond repo-local continuity.
 
-**Continuity value finding (2026-07-03):** the proven spine is resume frontmatter +
-session notes + fetch-first; the six-lane taxonomy was the overhead — hence this PRD.
+**Continuity value finding (updated 2026-07-15):** the proven spine is resume
+frontmatter + pushed git/PR state + fetch-first; local recovery notes are an optional
+fallback when that durable state cannot resume incomplete work. The six-lane taxonomy
+and mandatory per-session prose were overhead.
 
 ## Backlog
 
@@ -36,11 +38,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-No active cards after v0.0.55. Retired/deferred work remains preserved with restoration
+No active cards after v0.0.57. Retired/deferred work remains preserved with restoration
 conditions in `backlog/archive/`; new work should start from observed use, not backlog refill.
 
 ## Shipped
 
+**Optional recovery notes and honest onboarding** (2026-07-15, PR #247, v0.0.57): fresh init keeps a blank tracked backlog and does not pressure immediate inference; generated instructions are not treated as project truth; doctor/close never require or auto-create local notes; v3 infer and Claude/Codex attribution are honest; onboarding preflights and safely inherits repository-local Git identity; hosted/local installs and the selected Horus/Fabric projections were verified.
 **Need-first dispatch routing** (2026-07-15, PR #244, v0.0.56): managed instructions and bundled consolidation/execution/decision skills prove a concrete context, parallelism, or price dividend before model selection; cross-project scope, multiple phases, and calibration alone never force dispatch, live owner evidence may qualify incomplete usage telemetry, and durable guidance carries no pinned model names.
 **Fleet Projection Sync cockpit** (2026-07-15, PR #240): TUI Home shows stale/unknown project counts, a dedicated screen renders each Claude/Codex surface against the canonical projection check, and the optional `horus-agent` curator launch carries a bounded fetch/isolated-worktree/branch→PR prompt without automatic writes.
 **Truthful datum quality denominator** (2026-07-15, PR #241): `void` closes aborted/untested runs, `died` and `void` remain separately visible, and only clean/nudged/bounced contribute to quality rates and recent quality outcomes; delegation rubric v4 consumes the corrected fields.
