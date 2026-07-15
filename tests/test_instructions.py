@@ -51,6 +51,14 @@ def test_shared_block_carries_version_floor_instruction():
     assert "uv tool install --force" in block
 
 
+def test_shared_block_requires_a_dispatch_dividend_without_continuity_ceremony():
+    block = templates.shared_block("CLAUDE.md")
+    assert "Prove delegation pays before selecting a worker" in block
+    assert "cross-project scope, multiple phases" in block
+    assert "calibration goals alone do not justify delegation" in block
+    assert "do not create a card or rewrite continuity solely" in block
+
+
 def test_normalize_ignores_trailing_whitespace_and_crlf():
     a = templates.shared_block("CLAUDE.md")
     b = a.replace("\n", "\r\n") + "   "

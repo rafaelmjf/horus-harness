@@ -71,7 +71,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 9 -->
+<!-- horus-skill-version: 10 -->
 
 # Consolidate Horus continuity
 
@@ -138,16 +138,17 @@ them is stale or empty.
    - Add any newly load-bearing invariant to `## Rules`, concise and
      current-state only (not a dated log — that's what `sessions/` and git
      history are for).
-   - Refresh the frontmatter handoff fields and bump `last_updated`. Same
-     judgment as v2 for `execution_recommendation`: `"continue-as-is — <why>"`
+   - Refresh the frontmatter handoff fields and bump `last_updated`. Apply
+     `execution-decision`'s need-first rubric for `execution_recommendation`:
+     `"continue-as-is — <why>"`
      for small/ambiguous/exploratory/debugging work, `"plan-execution — <why>"`
      for high-volume low-ambiguity work with a clear gate (create/update
-     `execution.md` before implementation starts). The `<why>` must name what
-     delegation actually buys *on this runtime* — a frontier supervisor +
-     cheaper worker tiers gains context hygiene AND a cheaper tier; a single
-     strong model gains mostly context hygiene, so its bar is higher. Do not
-     sell supervisor review as the safeguard (reproduce the gate / bound
-     checkpoints / safety-in-code are the durable ones).
+     `execution.md` before implementation starts). The `<why>` must name the
+     concrete context, parallelism, or price dividend and show that it exceeds
+     the fixed supervisor tax. Cross-project scope, multiple phases, and
+     calibration goals are not dividends by themselves. Do not sell supervisor
+     review as the safeguard (reproduce the gate / bound checkpoints /
+     safety-in-code are the durable ones).
    - When a `temp/` worker handoff note exists, treat it as evidence, not
      truth: review the diff/tests yourself, then fold the accepted facts into
      `PRD.md` and update `execution.md` if a phase completed.
@@ -235,18 +236,17 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
      `last_updated` on touched lanes. Author the next step for a *cold* reader — name
      it, point at `.horus/`.
-   - **Recommend the execution mode for the NEXT.** Decide on implementation
-     **volume × ambiguity**, not vibes: set `execution_recommendation:
+   - **Recommend the execution mode for the NEXT.** Apply `execution-decision`'s
+     need-first rubric: set `execution_recommendation:
      "continue-as-is — <why>"` for small, ambiguous/exploratory, debugging, or
      mostly-continuity work; set `"plan-execution — <why>"` for high-volume,
      low-ambiguity work with a clear gate (and create/update `execution.md` before
-     implementation starts). The `<why>` must name what delegation buys *on this
-     runtime* — a frontier supervisor + cheaper worker tiers (e.g. Opus + Sonnet/Haiku)
-     gains context hygiene AND a cheaper tier; a single strong model (e.g. GPT-5.5)
-     gains mostly context hygiene, so its bar is higher. Do not imply delegation is
-     cheaper merely because a standard worker tier exists, and do not sell
-     supervisor review as the safeguard (reproduce the gate / bound checkpoints /
-     safety-in-code are the durable ones).
+     implementation starts). The `<why>` must name the concrete dividend on this
+     runtime — context avoided, useful parallelism, or lower-tier savings — and show
+     that it exceeds the fixed supervisor tax. Cross-project scope, multiple phases,
+     and calibration goals are not dividends by themselves. Do not sell supervisor
+     review as the safeguard (reproduce the gate / bound checkpoints / safety-in-code
+     are the durable ones).
    - **When a worker handoff exists** in `.horus/temp/`, use it as evidence, not as
      truth: the supervisor reviews the diff/tests, then distills accepted facts into
      durable lanes and updates `execution.md`.
@@ -525,7 +525,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # Horus execution supervision
 
@@ -541,11 +541,12 @@ plan without turning `.horus/` into a transcript or a second issue tracker.
   next phase starts.
 - A worker returned a note under `.horus/temp/` that needs supervisor review.
 
-## Deciding to delegate (volume × ambiguity × runtime)
+## Confirm delegation already earned its cost
 
-Delegation — spinning a *separate* worker agent/session to implement a phase — is a
-judgment call, not a default. Decide on implementation **volume** and **ambiguity**,
-then weigh what delegation actually buys on *this* runtime:
+Before creating `execution.md` or a worker handoff, apply `execution-decision` and
+its shared rubric. Define the bounded unit and require a concrete dividend that
+exceeds the fixed brief/review/gate/merge/closure tax. Do not enter this workflow
+merely because work spans projects or phases, or to collect a model datum.
 
 | Situation | Approach |
 |---|---|
@@ -554,13 +555,9 @@ then weigh what delegation actually buys on *this* runtime:
 | Small, or ambiguous/exploratory, or debugging/investigation | Stay inline — orchestration overhead and judgment loss dominate. |
 | Work where the *user* is the real reviewer (visual/UI) | Delegate the build; the user's eyeball is the gate, not a code-read. |
 
-Runtime matters — name it in `delegation_basis`:
-
-- A frontier *supervisor* + cheaper *worker* tiers (e.g. Claude Opus + Sonnet/Haiku)
-  gains **both** context hygiene and a cheaper tier, so its bar to delegate is lower.
-- A single strong model (e.g. GPT-5.5 in Codex) gains **mostly context hygiene**, so its
-  bar is higher — staying inline is often right unless the volume would flood the
-  context window.
+Runtime matters — name the actual context, parallelism, or price dividend in
+`delegation_basis`, using live calibration data for model selection. If no concrete
+benefit remains after the task is bounded, stay inline and do not create the plan.
 
 Be honest about review: in practice most supervisor reviews just confirm green, and a
 review is **not** a safety guarantee. The durable safeguards are model-independent (the
@@ -642,8 +639,9 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
    Different agents may reasonably choose differently.
 
 4. **Delegate bounded phases only.** Ask native workers/subagents to implement one
-   phase at a time. Use cheaper/faster tiers only for clear, narrow work; keep
-   frontier-tier reasoning for architecture, risky review, and final acceptance.
+   phase at a time. Read live tier roles and measured evidence from
+   `horus capabilities --models`; use lower-cost tiers only for clear, narrow work
+   and reserve stronger reasoning tiers for work whose ambiguity actually needs them.
    If the user is testing model separation, this is a hard gate: do not implement
    the delegated phase in the supervisor context. If a native worker/subagent cannot
    be spawned from the current environment, stop and tell the user that the test
@@ -684,14 +682,9 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
 
 ## Native mapping
 
-- Claude Code: use project subagents for bounded worker/reviewer roles when useful.
-  Keep Opus/frontier-equivalent work on supervision and review; use Sonnet/standard-
-  equivalent workers for narrow implementation phases. Claude's cost/latency/review
-  tradeoffs may differ from Codex; record the local rationale.
-- Codex: use subagents or project custom agents for bounded workers/reviewers when
-  useful. Map frontier to strong/high-reasoning supervision, standard to worker
-  implementation, and economy to mechanical continuity or formatting updates. Codex's
-  cost/latency/review tradeoffs may differ from Claude; record the local rationale.
+- Claude Code or Codex: use native subagents for bounded worker/reviewer roles only
+  when the recorded dividend pays for the handoff. Map live tier roles to the task
+  shape; never pin durable guidance to current model names.
 - Cross-agent (either supervisor): `worker_agent: codex`/`claude` phases run on the
   other CLI via `horus run --agent <cli>` — a one-shot exec session, registry-tracked.
   Because a cross-vendor worker shares no conversation history, it doubles as an
@@ -739,7 +732,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -760,6 +753,22 @@ data-only: there is no `--for`/pick mode and you must not add one. Orchestration
 is ceded to execution planes; Horus stays the memory plane that measures and
 displays (drift trigger: `research/omnigent.md`).
 
+## Precondition — prove delegation has a dividend
+
+Before reading the model roster, define the bounded work unit and name what a
+separate worker actually buys: context the current session avoids loading, useful
+parallelism, or lower-tier savings. Compare that with the fixed tax of briefing,
+reviewing, observing the gate, merging, and closing continuity.
+
+- If the benefit is unclear or does not plausibly exceed that tax, stay inline and
+  stop the routing analysis before selecting a model.
+- Cross-project scope, multiple phases, and a desire to collect calibration data are
+  not dividends by themselves.
+- Decide per bounded unit, not once for an entire campaign. An integrated long-running
+  session may be the cheapest place for cross-project judgment because it already
+  holds the context that handoffs would discard.
+- Never manufacture work or a worker solely to earn a datum.
+
 ## Step 1 — Read the calibration data
 
 Run `horus capabilities --models` (add `--stdout` for JSON). It is data only and
@@ -776,6 +785,12 @@ names no model to pick. Per model it reports:
 - **`strength` / `caution` / `guard`** (owner priors, free text) — `caution` and
   `guard` are HARD constraints on how the model may be used.
 
+Counts are not task-shape evidence by themselves. Read recent matching outcomes and
+their notes, and keep measured datums distinct from explicit owner observations. If a
+native usage signal is incomplete, stale, or temporarily lifted, an owner-provided
+reading may override it for this decision; label the source rather than pretending the
+telemetry was complete.
+
 ## Step 2 — Read the task shape (four axes)
 
 - **Ambiguity** — is the goal + acceptance crisp, or exploratory/underspecified?
@@ -787,35 +802,30 @@ names no model to pick. Per model it reports:
 
 ## Step 3 — Tier-trust ladder (data, not hardcode)
 
-Trust is READ from the data, never pinned to a model name:
+Trust is READ from the live data, never pinned to a model name or a count copied into
+this skill:
 
 - **Proven** = many `clean` closed datums with a clean recent `last_outcomes`
-  streak (today: `sonnet-5`, 10 clean). Trust it on work matching its `tier`.
+  streak. Trust it on work matching its `tier`.
   Well-matched proven work is the strongest delegation candidate.
-- **Unproven** = 0–few datums (today: `haiku-4.5` = 0; `opus-4.8` / `fable-5` /
-  `gpt-5.6` / `gpt-5.5` ≈ 1 each). Prefer it ONLY on well-matched, scoped work
+- **Unproven** = 0–few quality datums. Prefer it ONLY on well-matched, scoped work
   where a clean gate will catch a miss — you are calibrating it, so the win is
   the datum as much as the output. Never hand an unproven tier a large/loose
   task.
 - **Owner flags gate the pick.** A `caution` or `guard` is a hard constraint —
-  read it before matching. Live example: `gpt-5.6` carries *"token-hungry —
-  needs tightly-scoped task + explicit stopping point + budget headroom"* and
-  *"do not dispatch near usage ceiling"* → fine for a crisp scoped task with
-  headroom; a poor fit for a large/loose task; off the table near the usage
-  ceiling.
+  read it before matching. A token-headroom guard, for example, takes the model
+  off the table when the best available usage evidence says the ceiling is near.
 - **Keep older-but-capable models in the roster.** A prior-frontier model
-  (yesterday's `gpt-5.5`/`sonnet-4.6`-style predecessor) does not stop being
-  capable the day a newer model ships — it may still be the strongest AND
+  does not stop being capable the day a newer model ships — it may still be the strongest AND
   cheapest fit for scoped/mechanical work. Don't drop a model from the ladder on
   recency alone: pick by capability-for-the-task, not by release date, and keep
   gathering datums on it so the ladder reflects measured reality instead of
   assumption.
 - **Match tier to shape** (this mirrors the managed-block model-tier rule; the
   data tells you which concrete model fills each role now and how proven it is):
-  design / ambiguity / the verify gate → the design tier (`opus-4.8`); most
-  scoped implementation → the scoped-impl lead (`sonnet-5`); mechanical
-  verifiable sweeps → the mechanical tier (`haiku-4.5`) — never as the judgment
-  gate.
+  design / ambiguity / the verify gate → the live design tier; most scoped
+  implementation → the live scoped-implementation tier; mechanical verifiable
+  sweeps → the live mechanical tier, never as the judgment gate.
 
 ## Step 4 — Shape → mode + tier
 
@@ -825,7 +835,9 @@ The mode *vocabulary* belongs to the consuming skill; the shared axis is:
   overhead + judgment loss dominate; delegation buys little).
 - High-volume / low-ambiguity / clear gate / fenceable scope → **delegate** to
   the best-matched tier from Step 3, then reproduce the gate.
-- Large AND multi-phase / spans surfaces → **delegate as a phased plan**.
+- Large AND multi-phase / spans surfaces → **delegate as a phased plan only when**
+  the phases are independently fenceable and the named context or parallelism
+  dividend exceeds the supervisor tax; otherwise keep the integrated campaign inline.
 - Runtime/visual surface where the *user* is the real reviewer → delegate the
   build, but the gate is the owner's eyeball, not a code read.
 
@@ -884,8 +896,8 @@ boundary as everything else here: no auto-scored dividend, no auto-routing —
 the harness only ever RECORDS the closed `--dividend` judgment after the fact,
 it never predicts or picks one up front.
 
-Always show the data that drove it (e.g. *"sonnet-5: 10 clean, tier=scoped-impl
-lead → matched"*). The agent decides and acts; you advise.
+Always show the live data and owner evidence that drove it, clearly labelled. The
+agent decides and acts; you advise.
 
 ## v2 six-lane projects (fallback)
 
@@ -954,7 +966,7 @@ description: >-
   dispatch use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Execution decision (in-project, subagents substrate)
 
@@ -967,9 +979,10 @@ delegate.
 
 ## Load the shared rubric first
 
-Read **`../delegation-rubric/SKILL.md`** and apply its six steps (read the data,
-read the task shape, the tier-trust ladder, shape→mode+tier, verification depth,
-emit). Everything about reading `horus capabilities --models` and dialing
+Read **`../delegation-rubric/SKILL.md`** and apply its dividend precondition plus
+six steps (read the data, read the task shape, the tier-trust ladder,
+shape→mode+tier, verification depth, emit). Everything about reading
+`horus capabilities --models` and dialing
 verification by tier-trust lives there — do not restate or fork it here.
 
 ## Mode vocabulary (this skill's output for the rubric's Step 4 axis)
@@ -1034,7 +1047,7 @@ description: >-
   single repo use `execution-decision` instead.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Dispatch decision (cockpit / multi-project, sessions substrate)
 
@@ -1046,22 +1059,25 @@ routing, and one substrate note.
 
 ## Load the shared rubric first
 
-Read **`../delegation-rubric/SKILL.md`** and apply its six steps. All of the
-calibration-data reading and the verification-depth dial live there; do not
-restate or fork it.
+Read **`../delegation-rubric/SKILL.md`** and apply its dividend precondition plus
+six steps. All of the calibration-data reading and the verification-depth dial
+live there; do not restate or fork it.
 
 ## Mode vocabulary (this skill's output for the rubric's Step 4 axis)
 
 - **`inline-here`** — do it in the overseer session. The rubric's "stay inline"
-  case (small / ambiguous / exploratory / debugging). Note the cost: it spends
-  the overseer account's context and usage on implementation — the whole point
-  of the cockpit is to keep that account free to oversee, so the bar for
-  `inline-here` is HIGHER than for `execution-decision`'s `inline`.
+  case (small / ambiguous / exploratory / debugging), plus integrated campaigns
+  where the current session already holds context that a handoff would discard.
+  Overseer usage is a cost to weigh, not a presumption that dispatch is better.
 - **`dispatched-worker`** — one tracked `horus run` worker for a bounded,
   fenceable, clear-gate task. The rubric's "delegate" case.
 - **`dispatched-plan`** — a phased plan (orchestrator > supervisor > worker, one
-  worktree per worker) for large multi-phase work. The rubric's "delegate as a
-  phased plan" case.
+  worktree per worker) for large multi-phase work whose independently fenceable
+  phases have a named context or parallelism dividend that exceeds the supervisor
+  tax. Cross-project scope alone is insufficient.
+
+Do not dispatch merely to collect a datum. Calibration is a useful by-product of
+real work, never the reason to create a worker.
 
 ## Account routing (cockpit-specific, on top of the rubric)
 
@@ -1072,8 +1088,9 @@ restate or fork it.
 - **Gate the target account on `horus usage check`** (`--target claude|codex`
   for the worker's agent). If the chosen account is near a closure threshold,
   pick another isolated account or hold the dispatch — and heed the rubric's
-  `guard` flags (e.g. `gpt-5.6` "do not dispatch near usage ceiling"). This is a
-  check you OBSERVE, not an auto-throttle.
+  `guard` flags. This is a check you OBSERVE, not an auto-throttle. When native
+  telemetry is incomplete or temporarily lifted, accept a current owner-provided
+  reading as the routing signal and label that override explicitly.
 
 ## Overseer verification note (the substrate specialization of rubric Step 5)
 
@@ -1170,13 +1187,13 @@ next review should be reproducible from the manifest plus target remotes.
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 9, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 10, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 3, _INFER_SKILL),
-    Skill("horus-execution", 8, _EXECUTION_SKILL),
-    Skill("delegation-rubric", 4, _DELEGATION_RUBRIC_SKILL),
-    Skill("execution-decision", 1, _EXECUTION_DECISION_SKILL),
-    Skill("dispatch-decision", 1, _DISPATCH_DECISION_SKILL),
+    Skill("horus-execution", 9, _EXECUTION_SKILL),
+    Skill("delegation-rubric", 5, _DELEGATION_RUBRIC_SKILL),
+    Skill("execution-decision", 2, _EXECUTION_DECISION_SKILL),
+    Skill("dispatch-decision", 2, _DISPATCH_DECISION_SKILL),
     Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
 )
 

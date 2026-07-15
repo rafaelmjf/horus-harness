@@ -14,7 +14,7 @@ description: >-
   single repo use `execution-decision` instead.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Dispatch decision (cockpit / multi-project, sessions substrate)
 
@@ -26,22 +26,25 @@ routing, and one substrate note.
 
 ## Load the shared rubric first
 
-Read **`../delegation-rubric/SKILL.md`** and apply its six steps. All of the
-calibration-data reading and the verification-depth dial live there; do not
-restate or fork it.
+Read **`../delegation-rubric/SKILL.md`** and apply its dividend precondition plus
+six steps. All of the calibration-data reading and the verification-depth dial
+live there; do not restate or fork it.
 
 ## Mode vocabulary (this skill's output for the rubric's Step 4 axis)
 
 - **`inline-here`** — do it in the overseer session. The rubric's "stay inline"
-  case (small / ambiguous / exploratory / debugging). Note the cost: it spends
-  the overseer account's context and usage on implementation — the whole point
-  of the cockpit is to keep that account free to oversee, so the bar for
-  `inline-here` is HIGHER than for `execution-decision`'s `inline`.
+  case (small / ambiguous / exploratory / debugging), plus integrated campaigns
+  where the current session already holds context that a handoff would discard.
+  Overseer usage is a cost to weigh, not a presumption that dispatch is better.
 - **`dispatched-worker`** — one tracked `horus run` worker for a bounded,
   fenceable, clear-gate task. The rubric's "delegate" case.
 - **`dispatched-plan`** — a phased plan (orchestrator > supervisor > worker, one
-  worktree per worker) for large multi-phase work. The rubric's "delegate as a
-  phased plan" case.
+  worktree per worker) for large multi-phase work whose independently fenceable
+  phases have a named context or parallelism dividend that exceeds the supervisor
+  tax. Cross-project scope alone is insufficient.
+
+Do not dispatch merely to collect a datum. Calibration is a useful by-product of
+real work, never the reason to create a worker.
 
 ## Account routing (cockpit-specific, on top of the rubric)
 
@@ -52,8 +55,9 @@ restate or fork it.
 - **Gate the target account on `horus usage check`** (`--target claude|codex`
   for the worker's agent). If the chosen account is near a closure threshold,
   pick another isolated account or hold the dispatch — and heed the rubric's
-  `guard` flags (e.g. `gpt-5.6` "do not dispatch near usage ceiling"). This is a
-  check you OBSERVE, not an auto-throttle.
+  `guard` flags. This is a check you OBSERVE, not an auto-throttle. When native
+  telemetry is incomplete or temporarily lifted, accept a current owner-provided
+  reading as the routing signal and label that override explicitly.
 
 ## Overseer verification note (the substrate specialization of rubric Step 5)
 

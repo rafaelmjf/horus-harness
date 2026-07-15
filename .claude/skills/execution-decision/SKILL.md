@@ -13,7 +13,7 @@ description: >-
   dispatch use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Execution decision (in-project, subagents substrate)
 
@@ -26,9 +26,10 @@ delegate.
 
 ## Load the shared rubric first
 
-Read **`../delegation-rubric/SKILL.md`** and apply its six steps (read the data,
-read the task shape, the tier-trust ladder, shape→mode+tier, verification depth,
-emit). Everything about reading `horus capabilities --models` and dialing
+Read **`../delegation-rubric/SKILL.md`** and apply its dividend precondition plus
+six steps (read the data, read the task shape, the tier-trust ladder,
+shape→mode+tier, verification depth, emit). Everything about reading
+`horus capabilities --models` and dialing
 verification by tier-trust lives there — do not restate or fork it here.
 
 ## Mode vocabulary (this skill's output for the rubric's Step 4 axis)

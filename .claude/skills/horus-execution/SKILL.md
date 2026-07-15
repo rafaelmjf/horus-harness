@@ -11,7 +11,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # Horus execution supervision
 
@@ -27,11 +27,12 @@ plan without turning `.horus/` into a transcript or a second issue tracker.
   next phase starts.
 - A worker returned a note under `.horus/temp/` that needs supervisor review.
 
-## Deciding to delegate (volume × ambiguity × runtime)
+## Confirm delegation already earned its cost
 
-Delegation — spinning a *separate* worker agent/session to implement a phase — is a
-judgment call, not a default. Decide on implementation **volume** and **ambiguity**,
-then weigh what delegation actually buys on *this* runtime:
+Before creating `execution.md` or a worker handoff, apply `execution-decision` and
+its shared rubric. Define the bounded unit and require a concrete dividend that
+exceeds the fixed brief/review/gate/merge/closure tax. Do not enter this workflow
+merely because work spans projects or phases, or to collect a model datum.
 
 | Situation | Approach |
 |---|---|
@@ -40,13 +41,9 @@ then weigh what delegation actually buys on *this* runtime:
 | Small, or ambiguous/exploratory, or debugging/investigation | Stay inline — orchestration overhead and judgment loss dominate. |
 | Work where the *user* is the real reviewer (visual/UI) | Delegate the build; the user's eyeball is the gate, not a code-read. |
 
-Runtime matters — name it in `delegation_basis`:
-
-- A frontier *supervisor* + cheaper *worker* tiers (e.g. Claude Opus + Sonnet/Haiku)
-  gains **both** context hygiene and a cheaper tier, so its bar to delegate is lower.
-- A single strong model (e.g. GPT-5.5 in Codex) gains **mostly context hygiene**, so its
-  bar is higher — staying inline is often right unless the volume would flood the
-  context window.
+Runtime matters — name the actual context, parallelism, or price dividend in
+`delegation_basis`, using live calibration data for model selection. If no concrete
+benefit remains after the task is bounded, stay inline and do not create the plan.
 
 Be honest about review: in practice most supervisor reviews just confirm green, and a
 review is **not** a safety guarantee. The durable safeguards are model-independent (the
@@ -128,8 +125,9 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
    Different agents may reasonably choose differently.
 
 4. **Delegate bounded phases only.** Ask native workers/subagents to implement one
-   phase at a time. Use cheaper/faster tiers only for clear, narrow work; keep
-   frontier-tier reasoning for architecture, risky review, and final acceptance.
+   phase at a time. Read live tier roles and measured evidence from
+   `horus capabilities --models`; use lower-cost tiers only for clear, narrow work
+   and reserve stronger reasoning tiers for work whose ambiguity actually needs them.
    If the user is testing model separation, this is a hard gate: do not implement
    the delegated phase in the supervisor context. If a native worker/subagent cannot
    be spawned from the current environment, stop and tell the user that the test
@@ -170,14 +168,9 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
 
 ## Native mapping
 
-- Claude Code: use project subagents for bounded worker/reviewer roles when useful.
-  Keep Opus/frontier-equivalent work on supervision and review; use Sonnet/standard-
-  equivalent workers for narrow implementation phases. Claude's cost/latency/review
-  tradeoffs may differ from Codex; record the local rationale.
-- Codex: use subagents or project custom agents for bounded workers/reviewers when
-  useful. Map frontier to strong/high-reasoning supervision, standard to worker
-  implementation, and economy to mechanical continuity or formatting updates. Codex's
-  cost/latency/review tradeoffs may differ from Claude; record the local rationale.
+- Claude Code or Codex: use native subagents for bounded worker/reviewer roles only
+  when the recorded dividend pays for the handoff. Map live tier roles to the task
+  shape; never pin durable guidance to current model names.
 - Cross-agent (either supervisor): `worker_agent: codex`/`claude` phases run on the
   other CLI via `horus run --agent <cli>` — a one-shot exec session, registry-tracked.
   Because a cross-vendor worker shares no conversation history, it doubles as an

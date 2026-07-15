@@ -74,9 +74,9 @@ def test_delegation_rubric_is_the_shared_single_source_of_truth():
     assert "CI check green on the" in rubric.content
     # Runtime/visual surface defaults to the owner.
     assert "asking the OWNER" in rubric.content
-    # Owner caution/guard flags gate the pick (gpt-5.6 token-hunger + ceiling).
+    # Owner caution/guard flags gate the pick without pinning a current model.
     assert "caution" in rubric.content and "guard" in rubric.content
-    assert "token-hungry" in rubric.content and "usage ceiling" in rubric.content
+    assert "token-headroom guard" in rubric.content and "ceiling is near" in rubric.content
     # Hard boundary held.
     assert "advisory" in rubric.content.lower()
     assert "research/omnigent.md" in rubric.content
@@ -89,6 +89,20 @@ def test_delegation_rubric_keeps_older_capable_models_in_roster():
     rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
     assert "older-but-capable" in rubric.content.lower()
     assert "not by release date" in rubric.content.lower() or "not recency" in rubric.content.lower()
+
+
+def test_delegation_rubric_proves_dividend_before_model_selection():
+    rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
+    assert rubric.version == 5
+    assert rubric.content.index("prove delegation has a dividend") < rubric.content.index(
+        "Read the calibration data"
+    )
+    assert "Cross-project scope, multiple phases" in rubric.content
+    assert "Never manufacture work or a worker solely to earn a datum" in rubric.content
+    assert "temporarily lifted" in rubric.content and "owner-provided" in rubric.content
+    assert "today:" not in rubric.content
+    for pinned_model in ("sonnet-5", "opus-4.8", "haiku-4.5", "gpt-5.6"):
+        assert pinned_model not in rubric.content
 
 
 def test_delegation_shape_tiers_and_verification_dial_are_structured_and_single_sourced():
@@ -120,7 +134,7 @@ def test_both_consumer_skills_import_the_shared_rubric():
 
 def test_execution_decision_skill_is_in_project_subagents():
     skill = next(s for s in skills.SKILLS if s.name == "execution-decision")
-    assert skill.version == 1
+    assert skill.version == 2
     # Its mode vocabulary + the in-project verification specialization.
     assert "`inline`" in skill.content and "`subagent-plan`" in skill.content
     assert "RUNS the gate at the phase boundary" in skill.content
@@ -131,13 +145,17 @@ def test_execution_decision_skill_is_in_project_subagents():
 
 def test_dispatch_decision_skill_is_cockpit_multiproject():
     skill = next(s for s in skills.SKILLS if s.name == "dispatch-decision")
-    assert skill.version == 1
+    assert skill.version == 2
     # Its mode vocabulary, account routing, and the overseer verification note.
     assert "`inline-here`" in skill.content
     assert "`dispatched-worker`" in skill.content
     assert "`dispatched-plan`" in skill.content
     assert "away from the overseer account" in skill.content
     assert "horus usage check" in skill.content
+    assert "Overseer usage is a cost to weigh, not a presumption" in skill.content
+    assert "Cross-project scope alone is insufficient" in skill.content
+    assert "Do not dispatch merely to collect a datum" in skill.content
+    assert "owner-provided" in skill.content
     # Observe CI green on the merge SHA; do not re-run the suite.
     assert "required CI check green on the merge SHA" in skill.content
     assert "Do NOT re-run" in skill.content
@@ -152,7 +170,7 @@ def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
 
 def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
-    assert consolidate.version == 9
+    assert consolidate.version == 10
     assert "PRD.md" in consolidate.content
     assert "no lane-routing/overlap warnings" in consolidate.content
     assert "~250-line cap" in consolidate.content
@@ -182,7 +200,7 @@ def test_distill_history_skill_v3_targets_archive():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 8
+    assert execution.version == 9
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -190,8 +208,10 @@ def test_execution_skill_requires_real_delegation_for_model_separation():
     assert "worker_tier` is only the intended tier **if delegated**" in execution.content
     assert "A handoff" in execution.content
     assert "written by the supervisor after doing the work" in execution.content
-    # v4: the volume × ambiguity × runtime delegation rubric + honest review caveat.
-    assert "volume × ambiguity" in execution.content
+    # Need-first delegation guard + honest review caveat.
+    assert "require a concrete dividend" in execution.content
+    assert "Do not enter this workflow" in execution.content
+    assert "never pin durable guidance to current model names" in execution.content
     assert "safety guarantee" in execution.content  # honest review caveat
     assert "does not satisfy the workflow test" in execution.content
     # v5: cross-agent workers — mark a phase for the other CLI and spawn it tracked.

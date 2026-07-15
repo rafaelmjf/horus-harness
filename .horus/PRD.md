@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.55 is published and deployed: the TUI exposes fleet Projection Sync with an optional safe curator launch, calibration separates quality from died/void outcomes, all six cleaned project projections match the release source, and the active backlog is empty."
-next_action: "Use Horus normally and let the next observed failure or repeated friction create a card; if Projection Sync later reports drift, launch the curator or run the target's supported upgrade workflow. Do not invent speculative work while the backlog is empty. [Sonnet owner triage, inline]"
-next_prompt: "Resume Horus from clean v0.0.55 main. Run `horus resume --preflight`; if the backlog remains empty, ask the owner for the next observed problem instead of manufacturing scope. Treat Projection Sync as read-only evidence and enter each target's branch→PR workflow before repairs. [Sonnet owner triage, inline]"
-execution_recommendation: "continue-as-is — the next boundary is low-volume owner prioritization or a concrete observed incident; there is no clear high-volume implementation unit for a phased handoff."
+current_focus: "Need-first dispatch routing is source-complete: shared instructions and bundled decision/execution skills require a concrete dividend before model selection, keep integrated campaigns inline when handoffs do not pay, and consume live rather than pinned model evidence."
+next_action: "Merge the need-first dispatch PR, publish/deploy the next Horus release, then refresh the affected project projections before resuming the Fabric onboarding campaign."
+next_prompt: "Resume the need-first dispatch delivery from its feature PR. Observe required CI green on the exact SHA, merge, publish/deploy the next Horus release, and refresh project projections; do not add a worker or continuity card solely for calibration."
+execution_recommendation: "continue-as-is — release, deployment, and projection refresh reuse this session's exact source context; dispatch would add a second handoff without avoiding meaningful work."
 last_updated: 2026-07-15
 horus_min_version: 0.0.26
 ---
@@ -41,6 +41,7 @@ conditions in `backlog/archive/`; new work should start from observed use, not b
 
 ## Shipped
 
+**Need-first dispatch routing** (2026-07-15): managed instructions and bundled consolidation/execution/decision skills now prove a concrete context, parallelism, or price dividend before model selection; cross-project scope, multiple phases, and calibration alone never force dispatch, live owner evidence may qualify incomplete usage telemetry, and durable guidance carries no pinned model names.
 **Fleet Projection Sync cockpit** (2026-07-15, PR #240): TUI Home shows stale/unknown project counts, a dedicated screen renders each Claude/Codex surface against the canonical projection check, and the optional `horus-agent` curator launch carries a bounded fetch/isolated-worktree/branch→PR prompt without automatic writes.
 **Truthful datum quality denominator** (2026-07-15, PR #241): `void` closes aborted/untested runs, `died` and `void` remain separately visible, and only clean/nudged/bounced contribute to quality rates and recent quality outcomes; delegation rubric v4 consumes the corrected fields.
 **Boundary-based continuity granularity** (2026-07-15, PRs #238/#239): handoff boundaries are the default while delivery/manual remain selectable in TUI Defaults; git history provides portable pending-delivery receipts, strict project overrides still bind CI, per-turn Stop hooks no longer dirty session notes, dispatch pins/surfaces its base and pending state, resume/TUI warn until one campaign checkpoint consolidates PRD/cards/session context, and successful v3 acting-close output stays concise instead of replaying the retired six-lane ritual.
@@ -151,19 +152,14 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   (admins exempt so continuity pushes land directly; fallback direct merge only on
   repos without required checks); offboard keeps `.horus/` by default; `.vscode/` is
   a user surface (static, secret-free, create-only).
-- **Delegation is volume × ambiguity × runtime** — delegate high-volume/low-ambiguity
-  with a clear gate, then reproduce the gate; stay inline for exploratory/debugging;
-  workflow tests require a real distinct worker. Codex auto-edit workers get a
-  read-only `.git` and no socket bind: the supervisor owns commit, push, and every
-  runtime gate — write briefs accordingly.
-- **Model tier is a delegation dimension — match it to the work, don't default to
-  frontier.** Token burn ≈ (tool-call turns) × (resident context), cache reads of which are
-  ~80% of cost — keep the *expensive* tier's context small: push tool-heavy exploration/
-  verification into subagents/workers returning distilled notes, not file dumps. **Haiku** —
-  mechanical verifiable sweeps (never the judgment gate); **Sonnet** — most implementation;
-  **Opus** — design, ambiguity, the verify/accept gate. Main-session model can't swap per
-  call, so cheaper execution comes only via a worker on the **isolated** account (never the
-  ambient one) — cheaper tier × separate account is the double win. Rationale: 2026-07-04 note.
+- **Delegation is need-first, model-second.** Define the bounded unit and name a
+  concrete context, parallelism, or price dividend that exceeds the fixed supervisor
+  tax before selecting a worker. Cross-project scope, multiple phases, and calibration
+  goals alone do not justify delegation; integrated campaigns may be cheaper inline.
+  Use live calibration and current owner evidence for model selection instead of
+  pinning durable guidance to model names. Workflow tests still require a real distinct
+  worker. Codex auto-edit workers get a read-only `.git` and no socket bind: the
+  supervisor owns commit, push, and every runtime gate — write briefs accordingly.
 - **Capability catalogs stay idempotent EXCEPT the per-project stamp, by design
   (2026-07-11).** The fleet-wide catalog has no timestamps (pure function of
   sources, unchanged run = no write). `horus capabilities --project <name>`
@@ -214,7 +210,6 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **`sessions/`** unchanged: one note per session (`horus session new`); distilled notes → `sessions/archive/` (local).
 - **Frontmatter:** this file carries `current_focus` / `next_action` / `next_prompt` /
   `execution_recommendation` / `last_updated` — the tooling reads them PRD-first (`resolve_focus`),
-  so no shims are needed. **`next_action` / `next_prompt` / `execution_recommendation` each name
-  an explicit model tier** (Haiku/Sonnet/Opus per the model-tier rule). If the user proposes a
-  heavier model than the work needs, pushing back for the lower tier is expected, not overstepping.
+  so no shims are needed. Describe the next unit and execution posture without pinning a
+  model name; choose the model from live calibration only after delegation earns its cost.
 - **Closure:** at the configured boundary, update frontmatter + backlog/shipped + one campaign session note; run `close --commit --push`. One `consolidate` pass at most; do not chase warnings.

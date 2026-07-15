@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 7
+BLOCK_VERSION = 8
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -102,12 +102,13 @@ Working discipline (every session, whether or not the work is delegated):
   Implement on a feature branch and land it via PR; do not commit straight to the
   default branch unless the project's workflow policy or the user explicitly allows
   it (continuity closure commits follow that same policy).
-- **Decide the execution mode while planning, not after.** Before implementing a
-  feature or fix, weigh staying inline in this session vs a delegated worker vs a
-  phased execution plan (volume × ambiguity × runtime), name the model tier the work
-  actually needs, and record the choice in the backlog item or
-  `execution_recommendation`. Prefer the lightest mode that fits — delegation buys
-  back the expensive session's context; it is not ceremony.
+- **Prove delegation pays before selecting a worker.** Define the bounded unit and
+  name the concrete dividend — context avoided, useful parallelism, or lower-tier
+  savings — before choosing a model or execution plane. Compare it with the fixed
+  brief/review/gate/merge/closure tax; cross-project scope, multiple phases, and
+  calibration goals alone do not justify delegation. Default inline when the benefit
+  is unclear. Record the choice only in an existing durable handoff or backlog item;
+  do not create a card or rewrite continuity solely to document execution mode.
 
 Version floor (check before writing `.horus/`):
 
@@ -345,10 +346,10 @@ Delegation is a judgment call, not a default. Decide on implementation **volume*
 | Small, ambiguous/exploratory, or debugging | Stay inline — orchestration overhead and judgment loss dominate |
 | Work where the *user* is the real reviewer (visual/UI) | Delegate the build; the user's eyeball is the gate |
 
-Runtime matters: a frontier supervisor + cheaper worker tiers (Opus + Sonnet/Haiku)
-gains context hygiene **and** a cheaper tier; a single strong model (GPT-5.5) gains
-mostly context hygiene, so its bar to delegate is higher. Record the call per phase in
-`delegation_basis`. Review is not a safety guarantee — the durable safeguards are to
+Runtime matters: separate worker tiers may add a price dividend, while a single-model
+runtime may buy only context hygiene. Read the live calibration data rather than naming
+models in this durable template. Record the call per phase in `delegation_basis`.
+Review is not a safety guarantee — the durable safeguards are to
 reproduce the gate, bound each pass to a green committed checkpoint, and put safety in
 the code (guards), not the reviewer. Reproducing the gate means observing a
 deterministic signal yourself — a *required* CI check green on the worker's exact
