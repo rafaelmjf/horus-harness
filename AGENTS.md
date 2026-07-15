@@ -10,7 +10,7 @@
 > its lane-routing warnings — do not restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 7 -->
+<!-- horus-block-version: 8 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -94,12 +94,13 @@ Working discipline (every session, whether or not the work is delegated):
   Implement on a feature branch and land it via PR; do not commit straight to the
   default branch unless the project's workflow policy or the user explicitly allows
   it (continuity closure commits follow that same policy).
-- **Decide the execution mode while planning, not after.** Before implementing a
-  feature or fix, weigh staying inline in this session vs a delegated worker vs a
-  phased execution plan (volume × ambiguity × runtime), name the model tier the work
-  actually needs, and record the choice in the backlog item or
-  `execution_recommendation`. Prefer the lightest mode that fits — delegation buys
-  back the expensive session's context; it is not ceremony.
+- **Prove delegation pays before selecting a worker.** Define the bounded unit and
+  name the concrete dividend — context avoided, useful parallelism, or lower-tier
+  savings — before choosing a model or execution plane. Compare it with the fixed
+  brief/review/gate/merge/closure tax; cross-project scope, multiple phases, and
+  calibration goals alone do not justify delegation. Default inline when the benefit
+  is unclear. Record the choice only in an existing durable handoff or backlog item;
+  do not create a card or rewrite continuity solely to document execution mode.
 
 Version floor (check before writing `.horus/`):
 
