@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.57 is published and deployed: recovery notes are optional, fresh scaffolds stay blank, inference is structure-aware, session attribution is honest, and onboarding preflights Git identity."
-next_action: "Return to the Fabric project family and start the selected project's concrete highest-priority card; let dependency warnings guide machine setup instead of manufacturing more harness scope."
-next_prompt: "Resume from clean horus-harness v0.0.57 main. Run `horus resume --preflight`, then enter the selected Fabric repo and follow its PRD/card plus any missing-dependency warning. Create a local recovery note only if durable PRD + git/PR state cannot resume the work."
-execution_recommendation: "continue-as-is — the next boundary is owner selection of one concrete Fabric card; there is no bounded harness work unit or dispatch dividend yet."
+current_focus: "v0.0.57 is stable; five observed cockpit follow-ups are captured as deferred cards while the next campaign migrates three Drive-backed projects to Git without waiting on harness changes."
+next_action: "Run the prepared horus-agent migration campaign from a fresh supervisor session; implement a harness card only when that campaign reaches the evidenced friction it addresses."
+next_prompt: "Resume clean horus-harness main only when a migration campaign reports a concrete harness blocker. Read the matching backlog card, reproduce the current behavior, and keep the implementation to that bounded surface."
+execution_recommendation: "continue-as-is — the cards are independently scoped, but none blocks migration and implementing speculative convenience now would not repay dispatch or review overhead."
 last_updated: 2026-07-15
 horus_min_version: 0.0.26
 ---
@@ -38,8 +38,10 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-No active cards after v0.0.57. Retired/deferred work remains preserved with restoration
-conditions in `backlog/archive/`; new work should start from observed use, not backlog refill.
+Five post-v0.0.57 cards come from observed cross-machine campaign planning: account-scoped
+usage checks, remote-only TUI start, scoped machine requirements, project-local workflow
+overrides, and an optional campaign launch. None blocks the prepared migrations; activate
+one only when the corresponding friction is reached.
 
 ## Shipped
 
