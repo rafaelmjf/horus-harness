@@ -64,9 +64,9 @@ from horus import (
     vscode,
     worktree,
 )
-from horus.continuity import HORUS_DIR, SESSIONS_DIR, check_project
+from horus.continuity import HORUS_DIR, SESSIONS_DIR, Finding, check_project
 from horus.doctor_machine import machine_findings
-from horus.instructions import check_drift, reconcile
+from horus.instructions import block_version, check_drift, reconcile
 
 _LEVEL_TAG = {"ok": "[ ok ]", "warn": "[warn]", "fail": "[fail]"}
 
@@ -122,6 +122,47 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _account_isolation_findings() -> list[Finding]:
+    """Advisory checks that every known account has its own isolated config dir.
+
+    Two agent CLIs sharing one CLAUDE_CONFIG_DIR / CODEX_HOME race on its JSON state
+    and corrupt it, so an account on the shared ambient dir — or two accounts on one
+    dir — is a latent footgun. Warnings only (machine health is not broken), each with
+    the remediation command. No known accounts yet -> nothing to say."""
+    aliases = sorted(set(config.load_account_aliases().values()))
+    if not aliases:
+        return []
+    claude_dirs = config.load_account_config_dirs()
+    codex_homes = config.load_account_codex_homes()
+    findings: list[Finding] = []
+    for alias in aliases:
+        if alias not in claude_dirs and alias not in codex_homes:
+            findings.append(Finding(
+                "warn",
+                f"account {alias!r} is not isolated — it uses the shared ambient config dir. "
+                f"While logged into it, run `horus account --isolate --alias-name {alias}` "
+                "(add `--agent codex` for a Codex account) to give it its own dir.",
+            ))
+    for label, mapping in (("CLAUDE_CONFIG_DIR", claude_dirs), ("CODEX_HOME", codex_homes)):
+        by_dir: dict[str, list[str]] = {}
+        for alias, path in mapping.items():
+            try:
+                key = str(Path(path).expanduser().resolve())
+            except OSError:
+                key = str(path)
+            by_dir.setdefault(key, []).append(alias)
+        for path, sharers in sorted(by_dir.items()):
+            if len(sharers) > 1:
+                findings.append(Finding(
+                    "warn",
+                    f"accounts {', '.join(sorted(sharers))} share one {label} ({path}) — "
+                    "two agent processes on one config dir corrupt it; give each its own dir.",
+                ))
+    if not findings:
+        findings.append(Finding("ok", f"{len(aliases)} account(s) isolated"))
+    return findings
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     rc = 0
@@ -147,10 +188,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(f"  {_LEVEL_TAG['fail']} missing file(s): {', '.join(missing)}")
             rc = 1
         else:
-            report = check_drift(
-                agents.read_text(encoding="utf-8"), "AGENTS.md",
-                claude.read_text(encoding="utf-8"), "CLAUDE.md",
-            )
+            agents_text = agents.read_text(encoding="utf-8")
+            claude_text = claude.read_text(encoding="utf-8")
+            report = check_drift(agents_text, "AGENTS.md", claude_text, "CLAUDE.md")
             if report.status == "aligned":
                 print(f"  {_LEVEL_TAG['ok']} {report.detail}")
             elif report.status == "missing":
@@ -162,11 +202,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                     print(f"      {line}")
                 print("      run `horus upgrade-project --apply --no-hooks --no-skills` to refresh Horus-managed blocks")
                 rc = 1
+            # Currency: a block behind the installed template is an advisory (not a
+            # failure) — the instructions still work but should be migrated.
+            for name, raw in (("AGENTS.md", agents_text), ("CLAUDE.md", claude_text)):
+                v = block_version(raw)
+                if v is None or v < templates.BLOCK_VERSION:
+                    shown = f"v{v}" if v is not None else "an unversioned block"
+                    print(f"  {_LEVEL_TAG['warn']} {name} has {shown} (current v{templates.BLOCK_VERSION}) — "
+                          "run `horus upgrade-project --apply --no-hooks --no-skills` to migrate")
+                elif v > templates.BLOCK_VERSION:
+                    print(f"  {_LEVEL_TAG['warn']} {name} block is v{v}, newer than this CLI "
+                          f"(v{templates.BLOCK_VERSION}) — upgrade horus-harness")
         print()
 
     if args.target in ("machine", "all"):
         print(f"doctor machine: {root}")
-        findings = machine_findings(root)
+        findings = machine_findings(root) + _account_isolation_findings()
         _print_findings(findings)
         if any(f.level == "fail" for f in findings):
             rc = 1
