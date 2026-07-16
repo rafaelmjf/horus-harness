@@ -1,10 +1,11 @@
 ---
 status: active
-current_focus: "Dispatch consent and actual-cost accounting shipped in PR #256 at `1b3cffa`: Claude/Codex supervisors must obtain approval for an exact agent/model/effort/account/task/attempt/gate envelope; owner-directed capacity/context overrides stay explicit; worker completion captures start/end usage and `horus datum report` renders attempts while conservatively labelling ambient or overlapping readings confounded."
-next_action: "Claim `tui-remote-project-start` and add cached remote-only projects to the terminal TUI by reusing the existing catalog/start primitives; keep first paint non-blocking and preserve distinct local/remote/ignored/unavailable states."
-next_prompt: "Fetch clean main at or beyond `1b3cffa`, read PRD.md and the `tui-remote-project-start` card, then claim it. Implement the scoped TUI integration inline, reuse existing remote catalog/start paths, run targeted tests, and plan the disposable-repository live probe without mutating an external repo until the owner authorizes that probe."
-execution_recommendation: "continue-as-is — the next card is a scoped integration over existing catalog/start primitives and no concrete context, parallelism, or lower-tier dividend currently exceeds the fixed dispatch tax; any later worker proposal must present the new exact consent envelope first."
+current_focus: "The approved personal-Claude parallel trial delivered product-audit PR #258 and terminal-TUI remote start PR #257 in one attempt each; exact CI plus direct audit/TUI probes passed, while overlapping ambient-account readings stayed honestly confounded. The first detached campaign also exposed that successful merged workers are persisted as crashed/stale/blocked with null runtime."
+next_action: "Fix the reproduced detached completion-receipt defect under `deferred-supervision-completion-receipt`: terminal one-shot workers with pushed PR evidence must retain a truthful terminal state and runtime instead of `crashed` / `stale` / `blocked` / null. Keep the richer supervision taxonomy deferred."
+next_prompt: "Fetch clean main after the parallel-worker closure, read PRD.md and `deferred-supervision-completion-receipt`, then claim it. Reproduce against datums `ed7a7f2b` and `bf63cc20`, trace executor reconciliation into registry/delivery/datum projection, fix only terminal-state/runtime/delivery truth, and gate with targeted tests plus one cheap isolated detached probe."
+execution_recommendation: "continue-as-is — the next unit is a narrow reproduced lifecycle defect whose exact persisted rows are already in supervisor context; another dispatch would pay the full brief/review/merge tax and use the broken surface to test itself, with no offsetting context, parallelism, or lower-tier dividend."
 last_updated: 2026-07-16
+last_product_audit: 0.0.57 2026-07-16
 horus_min_version: 0.0.26
 ---
 
@@ -38,10 +39,11 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Nine active cards: medium — campaign launch UI, product-audit signal+skill, project workflow overrides, scoped machine requirements, and remote-only TUI start; low/deferred — Codex usage-window semantics, receipt trimmings, init-CI, and heartbeat stall detection.
+Eight active cards: high — detached completion-receipt correctness; medium — campaign launch UI, project workflow overrides, scoped machine requirements, and remote-only TUI start; low/deferred — Codex usage-window semantics, init-CI, and heartbeat stall detection.
 
 ## Shipped
 
+**Release-stamped product audit** (2026-07-16, PR #258): `close`/`consolidate` emit a non-blocking advisory after five releases or 30 days, while the bundled evidence-first skill permits only demote/defer/retire/no-change verdicts and updates the PRD stamp without adding telemetry or features.
 **Explicit worker dispatch consent + actual-cost accounting** (2026-07-16, PR #256): shared Claude/Codex instructions and decision/execution skills require owner approval for an exact worker envelope with reapproval on fallback; completion captures one end reading and `horus datum report` renders model/account/effort/runtime/attempt/outcome plus observed or honestly confounded start/end usage without estimation or polling.
 **Attachable detached workers + delivery completion evidence** (2026-07-16, PR #255): foreground/detached one-shot workers share a stable-ID caller-death-safe tmux executor; explicit delivery intent/evidence persists `delivery-ready|blocked|no-op|failed|unknown` across reconciliation, registry, JSONL, datums, and sessions JSON; additive registry readers preserve unknown future fields.
 **Bulk-migration inventory reconciliation** (2026-07-16, PR #254): `horus verify-inventory` reconciles source/produced trees by count+size both directions (0 clean / 1 discrepancy / 2 error), treats an empty walk of an expected-non-empty tree as a retryable error, handles non-ASCII names, and the horus-execution skill requires the reconcile before accepting bulk-copy phases; delivered by a dispatched sonnet worker gated by the account-scoped usage check.
