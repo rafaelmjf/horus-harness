@@ -13,7 +13,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -23,14 +23,33 @@ is; this scans what the world already offers, so the owner can decide where to
 go. The output is a dated receipt that FEEDS the PRD Vision and the backlog; it
 does not change them.
 
+## Frame it to the intent — build-vs-adopt OR market-gap (ask, don't assume)
+
+The SAME competitor evidence answers two different questions, and the owner's
+intent decides which verdict you summarize toward. Do NOT default to the outward
+adoption frame silently:
+
+- **deepen-own-use** (personal/internal tool; audience = the owner) → read the
+  scan as **build-vs-adopt**: per capability, is there something external with
+  *more value* the owner should adopt or compose, or is it worth building/keeping?
+  Here a green/yellow/red *saturation* verdict is the WRONG yardstick — a
+  commoditized primitive is often table-stakes to adopt underneath, not a reason
+  to stop. The verdict is a per-capability build / adopt / compose call.
+- **broaden-adoption** (reach new users) → read it as the classic **market-gap**:
+  prior-art, differentiation, is-the-space-taken.
+- **both** → keep both verdicts side by side.
+
+When `pathfinder` invokes this skill it passes the pinned intent + shipped/vision
+brief; honor it. Standalone, ASK the owner the intent before spending.
+
 ## Before you spend — confirm the envelope
 
 This skill fans out web research (it composes the `deep-research` harness), which
-is a real token spend. Before any web work, state: the trigger
-(new-idea | pivot), the problem/space in one sentence, the competitors you
-already know, and the research depth — then get the owner's confirmation. Match
-depth to the question; a light comparative sweep usually beats a full adversarial
-report for a product decision.
+is a real token spend. Before any web work, state: the intent (deepen-own-use |
+broaden-adoption | both), the trigger (new-idea | pivot), the problem/space in one
+sentence, the competitors you already know, and the research depth — then get the
+owner's confirmation. Match depth to the question; a light comparative sweep
+usually beats a full adversarial report for a product decision.
 
 ## Bake in exactly the outward trio (+ one capped check)
 
@@ -54,12 +73,15 @@ saturated?"). Hard-cap it; never let it become a spreadsheet.
 
 ```
 # Market scan: <idea/pivot> — <YYYY-MM-DD>
+Intent: deepen-own-use | broaden-adoption | both
 Trigger: new-idea | pivot
 Problem / JTBD (hypothesis): "When ___, I want ___, so I can ___"
 Current alternatives: [list + links]
 Competitive teardown:
   | Competitor | Does well | Gap | Positioning | Evidence (URL) |
-Prior-art verdict: green (gap) | yellow | red (saturated)
+Verdict (match to intent):
+  - broaden-adoption → Prior-art verdict: green (gap) | yellow | red (saturated)
+  - deepen-own-use  → Build-vs-adopt: per capability, build/keep | adopt | compose
 Vision draft (PR-FAQ, 1 para): ...
 Open questions / hard FAQ: [3-5]
 Market-size sanity: <one line>
@@ -70,7 +92,7 @@ Sources: [URLs from deep-research]
 
 ## Hand off — propose, the owner disposes
 
-- The **Vision draft** + **prior-art verdict** are written to be distilled into
+- The **Vision draft** + **verdict** (prior-art or build-vs-adopt, per intent) are written to be distilled into
   `PRD.md`'s Vision by `horus-consolidate` — you do not edit the Vision here.
 - Each **candidate backlog item** becomes a candidate card the owner may accept,
   sourced to a specific gap/assumption. New exploratory directions enter as
@@ -78,7 +100,7 @@ Sources: [URLs from deep-research]
   facet (the convergence read-out in `horus consolidate`).
 - Advisory only: never auto-write the Vision, never auto-create cards.
 
-## Composable (standalone or as a kickstart step)
+## Composable (standalone or as a pathfinder step)
 
 Inputs are a trigger + a one-line problem statement; outputs are the receipt
 path, the Vision draft, and the candidate cards. Keep those clean so a larger

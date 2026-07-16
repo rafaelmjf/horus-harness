@@ -58,7 +58,7 @@ def test_delegation_decision_skills_registered():
 
 def test_market_scan_skill_registered_and_outward():
     market = next(s for s in skills.SKILLS if s.name == "market-scan")
-    assert market.version == 1
+    assert market.version == 2
     # outward twin of product-audit: composes deep-research, advisory, dated receipt.
     assert "deep-research" in market.content
     assert ".horus/research/" in market.content
@@ -66,32 +66,48 @@ def test_market_scan_skill_registered_and_outward():
     assert "never auto-write" in market.content and "never auto-create" in market.content
     # token-envelope gate before any web spend.
     assert "confirm the envelope" in market.content
+    # v2: intent-framed verdict — build-vs-adopt for personal tooling, not only saturation.
+    assert "build-vs-adopt" in market.content.lower()
+    assert "deepen-own-use" in market.content and "broaden-adoption" in market.content
+    assert "WRONG yardstick" in market.content  # saturation is the wrong lens for own-use
 
 
-def test_kickstart_skill_registered_and_orchestrates():
-    kick = next(s for s in skills.SKILLS if s.name == "horus-kickstart")
-    assert kick.version == 1
+def test_pathfinder_skill_registered_and_orchestrates():
+    pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
+    assert pf.version == 1
+    # Renamed from horus-kickstart: age-agnostic name, no old slug lingering.
+    assert not any(s.name == "horus-kickstart" for s in skills.SKILLS)
     # Thin orchestrator: sequences existing skills, no new CLI/module.
-    assert "market-scan" in kick.content and "deep-research" in kick.content
-    assert "horus consolidate" in kick.content
-    assert "No new CLI subcommand" in kick.content
+    assert "market-scan" in pf.content and "deep-research" in pf.content
+    assert "horus consolidate" in pf.content
+    assert "No new CLI subcommand" in pf.content
     # Advisory / diff-only, gated at every step, facet DIFF not replace.
-    assert "advisory" in kick.content.lower() and "diff-only" in kick.content.lower()
-    assert "Never auto-apply" in kick.content
-    assert "wholesale replace" in kick.content or "wholesale table" in kick.content
-    assert "add / rename / retire / promote" in kick.content
+    assert "advisory" in pf.content.lower() and "diff-only" in pf.content.lower()
+    assert "Never auto-apply" in pf.content
+    assert "wholesale replace" in pf.content or "wholesale table" in pf.content
+    assert "add / rename / retire / promote" in pf.content
     # Onboarding folds in: no facet table -> propose initial facets + stamp cards.
-    assert "Onboarding fork" in kick.content and "stamp existing cards" in kick.content
+    assert "Onboarding fork" in pf.content and "stamp existing cards" in pf.content
     # Token envelope before any web spend.
-    assert "confirm the token envelope" in kick.content.lower()
+    assert "confirm the token envelope" in pf.content.lower()
+    # Reads for BOTH new and existing projects (the rename's whole point).
+    assert "age-agnostic" in pf.content
+    # Step 0: pin the intent, never assume it (build-vs-adopt vs adoption frame).
+    assert "pin the intent" in pf.content
+    assert "deepen-own-use" in pf.content and "broaden-adoption" in pf.content
+    # Step 1 emits a pinned shipped+vision+audience brief passed into the scan.
+    assert "pinned brief" in pf.content.lower() or "pin a ground-truth brief" in pf.content
+    assert "HARD CONSTRAINT" in pf.content
     # v2 fallback present (asserted for all skills elsewhere, checked explicitly here too).
-    assert "## v2 six-lane projects (fallback)" in kick.content
+    assert "## v2 six-lane projects (fallback)" in pf.content
 
 
-def test_kickstart_skill_projected_to_both_agents():
-    kick = next(s for s in skills.SKILLS if s.name == "horus-kickstart")
+def test_pathfinder_skill_projected_to_both_agents():
+    pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
     for root in (".claude/skills", ".agents/skills"):
-        assert Path(f"{root}/horus-kickstart/SKILL.md").read_text(encoding="utf-8") == kick.content
+        assert Path(f"{root}/pathfinder/SKILL.md").read_text(encoding="utf-8") == pf.content
+        # Old slug's projection is gone, not left orphaned.
+        assert not Path(f"{root}/horus-kickstart/SKILL.md").exists()
 
 
 def test_dispatch_consent_skills_match_claude_and_codex_projections():
