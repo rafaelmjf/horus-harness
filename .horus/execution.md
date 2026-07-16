@@ -1,102 +1,59 @@
 ---
-status: completed
-current_feature: "Usage-limit survival kit (backlog #1): worker-aware emergency state-save + horus run usage preflight + PreToolUse usage guard — one delegated phase (claude/personal, Opus 4.8, full-auto, worktree)."
-supervisor_tier: frontier
-worker_tier: frontier
-delegation_basis: "High volume (three sub-features across usage modules, native_hooks, cli, adapters + tests), low ambiguity once the design below is pinned, deterministic pytest gate. Delegation buys context hygiene; supervisor keeps the hook-guard invariant review and the rescue git-safety review. Work account is at its window edge (resets 21:10 Berlin), so the worker runs on personal/Opus per Rafa."
-last_updated: 2026-07-04
+status: planned
+current_feature: "Worker-lifecycle campaign: attachable detached one-shot workers + the delivery-evidence/completion kernel (backlog: attachable-detached-worker-run, carrying the kernels of worker-progress-heartbeat and deferred-supervision-completion-receipt per their 2026-07-16 reviews)."
+supervisor_tier: unassigned
+worker_tier: unassigned
+delegation_basis: "Set per phase at execution time via execution-decision: phase 0 is design (stays with the supervising session); phases 1–2 are scoped implementation with deterministic gates once the schema is pinned — re-check live calibration then."
+last_updated: 2026-07-16
 ---
 
-# Execution Plan — usage-limit survival kit
+# Execution Plan — worker-lifecycle campaign
 
-Single delegated phase: the three sub-features share one seam (usage reading,
-hook installation, run launch path) and land together as one PR.
+Drafted 2026-07-16 in the session that re-scoped the three worker-lifecycle cards,
+so the design constraints below carry that context to the executing session. Keep
+this file fluid; statuses move as phases land. (Previous completed plan:
+usage-limit survival kit, PR #115 — see git history of this file.)
 
-## Active Phases
+## Why this shape
 
-| phase | status | difficulty | mode | worker_agent | worker_tier | delegation_basis | handoff_note | review gate |
-|---|---|---|---|---|---|---|---|---|
-| survival-kit | merged (PR #115 → v0.0.25; one bounce: no-upstream rescue push; supervisor reproduced CI green on 8319e4e + three live probes incl. sentinel-suppression cross-check; main push CI green post-merge) | medium-high | delegated | claude (account personal, model opus, posture full-auto, worktree) | frontier | see frontmatter | `.horus/temp/survival-kit.md` (worker creates in worktree) | full pytest suite green (required CI on the PR) + supervisor live probes: (1) `horus run` preflight warn/refuse against a faked usage report, (2) guard hook rescue-commit in a scratch worker worktree, (3) main-checkout rescue ref leaves index/worktree untouched |
+Three cards described one feature from three angles (liveness, progress, delivery).
+Implemented independently they would produce three consecutive registry/run-log
+schema changes and risk inconsistent state taxonomies. One campaign, one schema
+design, kernel-only scope: the periodic stall timer and the receipt trimmings are
+explicitly deferred (see the two demoted cards' Reviews).
 
-## Phase spec — survival-kit
+## Design constraints (phase 0 output must satisfy these)
 
-Backlog #1. Evidence: two workers died at the usage limit mid-run (2026-07-03,
-2026-07-04) with uncommitted code. Three sub-features, all deterministic and
-hook-side (zero model tokens):
+- **One worker-state model, three orthogonal dimensions**, designed together even
+  where only partially implemented now:
+  - *liveness*: `running | exited | failed | stale` (reconciliation-owned);
+  - *delivery*: `delivery-ready | blocked | no-op | failed | unknown` — backed by
+    process status plus pushed SHA/PR/continuity receipt; `delivery-ready` is never
+    acceptance or permission to merge;
+  - *progress*: schema reserves the dimension (a last-activity timestamp slot);
+    the periodic heartbeat/stall classifier is deferred — one field later, not a
+    migration.
+- **A clean exit with zero delivery evidence when the brief expected some is
+  surfaced as `no-op`, never bare success** — this is the failure-evidenced kernel
+  (gvfs-parked worker, 2026-07-15 campaign) and is in scope NOW.
+- Detached execution reuses the managed tmux runner + one-shot adapter contracts;
+  no daemon, no second adapter path, no auto-resume/auto-merge/auto-launch on exit.
+- Launcher/caller death (including a foreground caller's SIGTERM on timeout) never
+  kills a dispatched worker — the observed incident this campaign exists to fix.
+- Every tmux-touching test/probe uses a private socket (`tmux -S <path>`); reapers
+  act only on positive registry confirmation (standing rules).
 
-### (a) Cached usage snapshot (shared substrate)
+## Phases
 
-- A small helper (own module `horus/usage_snapshot.py` or similar) returning the
-  freshest usage percent for a target agent+account, with a **file cache under
-  `~/.horus/cache/`, TTL ~60s** (key: agent + account alias or "default").
-- Claude: `claude_usage.latest_usage` honoring the account's isolated
-  `CLAUDE_CONFIG_DIR` mapping (see `horus account`); Codex: `codex_usage`.
-- Any failure (no creds, network, timeout ≤5s) → `None`. Never raise, never block.
+| phase | status | scope | gate |
+|---|---|---|---|
+| 0 state model + schema | planned | registry/run-log fields for the three dimensions; parity map against current foreground `horus run` fields | design reviewed against the constraints above; no code ships without it |
+| 1 detached attachable one-shot | planned | `horus run --worker … --detach` (or equivalent) on the managed tmux host; TUI attach/detach; natural-exit parity (status, rc, run log, datums, delivery facts); caller-death survival | full pytest + required CI green on the exact SHA + live probe: launch detached, kill the launcher, attach/detach, observe clean completion with parity fields recorded |
+| 2 delivery-evidence + completion kernel | planned | `no-op` detection at exit; `delivery-ready|blocked|failed|unknown` exposed via sessions/CLI-JSON without prose parsing | tests for no-op, delivering, failed, unknown; live probe: a scripted worker that exits 0 delivering nothing must surface as `no-op` |
 
-### (b) `horus run` usage preflight
+## Deferred (do not implement in this campaign)
 
-- Before spawn/resume in `cmd_run`, for claude/codex adapters only (the fake
-  adapter is exempt — tests depend on it), read the **target account's** usage.
-- 5h window ≥80%: print a warning (percent + reset time), continue.
-- ≥95%: **refuse** with exit 2 naming the reset time; `--force` proceeds anyway.
-- Unreadable usage: proceed silently (preflight is best-effort, never a wall).
-
-### (c) PreToolUse usage guard + emergency state-save
-
-- New hook command (suggest `horus usage guard --hook`; reuse `usage check`
-  internals where sensible), installed as a **PreToolUse** hook for Claude and
-  Codex via new `install_*` functions in `native_hooks.py`, wired wherever the
-  existing usage hooks are wired (init / upgrade-project / hook sync). Follow the
-  existing marker-comment merge pattern so old configs update cleanly.
-- Behavior on each fire, reading the cached snapshot (a):
-  - **≥90%** (existing advisory threshold): inject an `additionalContext`
-    advisory — once per re-arm window (reuse the `closure_already_fired`-style
-    marker pattern) so it doesn't nag every tool call.
-  - **≥97%** (emergency threshold): perform the **emergency state-save**, once
-    per session/window, then inject context saying state was rescued and the
-    agent should wrap up. **Never deny the tool call, never force a closure.**
-- Emergency state-save, worker-aware:
-  - **Worker context** (linked git worktree — `git rev-parse --git-common-dir`
-    points outside the checkout — or the env marker below): rescue-commit the
-    FULL tree (`git add -A`) to the current branch with a clear
-    `horus rescue:` subject, then best-effort `git push` (failure tolerated,
-    reported in the injected context). Disposable branch ⇒ product code safe.
-  - **Main checkout**: commit **only `.horus/**`** to a rescue ref
-    `refs/horus/rescue/<UTC-timestamp>` built with a **temporary index**
-    (`GIT_INDEX_FILE`) — the user's index, HEAD, and working tree must be
-    untouched. No push. Nothing staged, nothing checked out, no reset ever.
-- Adapter env marker: `SpawnSpec` spawns export `HORUS_RUN_SESSION_ID` (and
-  `HORUS_RUN_WORKER=1` when `--worker`) in the child env for claude/codex
-  adapters, giving hooks a deterministic worker signal; linked-worktree
-  detection stays as the fallback for sessions not launched via `horus run`.
-
-### Hard requirements (hook-guard invariant — supervisor will review these)
-
-- Hook commands signal via **stdout JSON + exit 0**, always — including every
-  failure path. Per-OS silence guards (`|| exit 0` POSIX/Git Bash; the PS
-  5.1-safe probe pattern for Codex Windows) on every committed command string,
-  exactly like the existing hooks in `native_hooks.py`.
-- The only guaranteed spelling is the `horus` console script.
-- PreToolUse must be fast: cache hit is the hot path; cache-miss fetch timeout
-  ≤5s; on any error, silent pass (exit 0, no JSON needed).
-- Three OS targets. Forward-slash paths in anything written to JSON/TOML.
-
-### Fences
-
-- Do NOT touch: `dashboard.py`, `runlog.py`, `worktree.py`, `registry.py`
-  reconciliation, `PRD.md`, hub-related surfaces.
-- Do not change the existing 90% Stop/UserPromptSubmit advisory semantics —
-  (c) adds PreToolUse coverage beside them.
-- Keep the version bump OUT of this phase (release is supervisor mechanics).
-
-### Gate (worker runs, supervisor reproduces)
-
-```
-uv run python -m compileall -q horus tests && uv run pytest -q
-```
-
-Expected: full suite green. Baseline: main is green (push CI success on
-97b7ff6, 2026-07-04). New tests required: snapshot cache TTL + failure paths;
-preflight warn/refuse/`--force`/fake-exempt; guard JSON shape + re-arm marker;
-rescue-commit in a scratch worker worktree; main-checkout rescue ref leaving
-index/HEAD/worktree byte-identical (tmp git repos, no network).
+Periodic heartbeat/stall timer; `active|on-completion` supervision taxonomy;
+usage-close snapshot embedded in the receipt; richer TUI receipt surface. Gated on
+one real campaign using the detached primitive + a check of native-platform
+progress/notification signals at that time.

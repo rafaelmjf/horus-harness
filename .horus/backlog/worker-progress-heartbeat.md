@@ -1,6 +1,6 @@
 ---
 status: open
-priority: high
+priority: low
 tier: sonnet
 created: 2026-07-15
 type: feature
@@ -47,3 +47,17 @@ silent success.
 - Reuse existing run-event / registry fields; add only the minimum progress timestamp.
 - Complements, does not replace, liveness reconciliation in
   [[attachable-detached-worker-run]].
+
+## Reviews
+
+- 2026-07-16 — Owner session split kernel from trimmings. The failure-evidenced
+  kernel (clean exit with zero delivery evidence surfaced as `no-op`, never bare
+  success) moved INTO the [[attachable-detached-worker-run]] campaign — the observed
+  incident (gvfs-parked worker exiting 0 with nothing delivered) is caught at exit
+  by that check. What remains here is the *alive-but-parked* periodic heartbeat /
+  stall timer, deferred until (a) the detached primitive has run one real campaign
+  showing stall frequency and (b) a check of what progress signals the native CLIs
+  have shipped by then — the timer machinery is the part most likely to be served
+  natively; the delivery-evidence judgment is not and stays Horus-owned. Priority
+  high→low accordingly; the campaign's schema phase reserves the progress dimension
+  so adding this later is one field, not a migration.

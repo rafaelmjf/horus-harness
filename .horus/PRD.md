@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "v0.0.57 is stable; the Drive-to-Git campaign has now evidenced two concrete worker-lifecycle gaps: one-shot runs cannot yet be both detached and TUI-attachable, and deferred supervision lacks one compact completion/usage receipt."
-next_action: "Implement `attachable-detached-worker-run` in a fresh harness session, preserving foreground `horus run` semantics while reusing the managed tmux host; then implement its completion-receipt companion."
-next_prompt: "Resume clean horus-harness main and claim `attachable-detached-worker-run`. Reproduce the split between foreground one-shot `horus run` and attachable interactive tmux sessions, then add the smallest shared path that makes a headless worker detached, TUI-attachable, and deterministically complete."
-execution_recommendation: "plan-execution — the attachable one-shot path spans CLI, tmux hosting, registry, logs, and datums with clear parity gates; a bounded phased implementation protects those existing contracts better than editing them opportunistically during a migration campaign."
-last_updated: 2026-07-15
+current_focus: "v0.0.57 stable; the two safe high-priority cards shipped (account-scoped usage check PR #253, inventory reconciliation PR #254 — the latter via a sonnet worker gated by the former). The worker-lifecycle trio was re-scoped 2026-07-16: one campaign carrying the attachable-detached primitive plus the delivery-evidence/completion kernel; stall timer and receipt trimmings deferred by card review."
+next_action: "Execute `.horus/execution.md` (worker-lifecycle campaign) in a fresh session: phase 0 designs the three-dimension worker-state schema once, then the detached attachable primitive, then the no-op/completion kernel."
+next_prompt: "Resume clean horus-harness main, read `.horus/execution.md`, and claim `attachable-detached-worker-run` (it carries the kernels of both sibling cards per their 2026-07-16 Reviews). Run phase 0 (state-model + schema against the plan's design constraints) before any implementation."
+execution_recommendation: "plan-execution — the campaign spans CLI, tmux hosting, registry schema, logs, and datums with parity gates; the phase plan already exists (.horus/execution.md) with design constraints captured from the re-scoping session, so the executing session starts at phase 0 instead of re-deriving."
+last_updated: 2026-07-16
 horus_min_version: 0.0.26
 ---
 
@@ -38,15 +38,18 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Seven post-v0.0.57 cards come from observed cross-machine campaign planning: account-scoped
-usage checks, remote-only TUI start, scoped machine requirements, project-local workflow
-overrides, an optional campaign launch, attachable detached one-shot workers, and a
-deferred-supervision completion receipt. The final two are evidenced by the prepared
-migration campaign; they improve later launches but do not block its first attachable
-interactive worker.
+Eight open cards after the 2026-07-16 product-review pass. One high: the worker-lifecycle
+campaign (`attachable-detached-worker-run`, carrying the delivery-evidence/completion
+kernel of its two sibling cards — plan in `.horus/execution.md`). Two medium:
+remote-only TUI start (launcher completeness, no native overlap) and the release-stamped
+product-audit signal+skill. Five low/deferred, each gated on evidence per its card
+Reviews: heartbeat stall timer, receipt trimmings, init-CI (demoted to instruction
+rung), workflow overrides, scoped machine requirements, campaign launch UI.
 
 ## Shipped
 
+**Bulk-migration inventory reconciliation** (2026-07-16, PR #254): `horus verify-inventory` reconciles source/produced trees by count+size both directions (0 clean / 1 discrepancy / 2 error), treats an empty walk of an expected-non-empty tree as a retryable error, handles non-ASCII names, and the horus-execution skill requires the reconcile before accepting bulk-copy phases; delivered by a dispatched sonnet worker gated by the account-scoped usage check.
+**Account-scoped usage check** (2026-07-16, PR #253): `horus usage check --account <alias>` reads the isolated CLAUDE_CONFIG_DIR/CODEX_HOME mapping without touching the ambient login, names source/freshness/windows, fails unknown aliases instead of falling back, and warns on overseer==worker account collisions (advisory).
 **Optional recovery notes and honest onboarding** (2026-07-15, PR #247, v0.0.57): fresh init keeps a blank tracked backlog and does not pressure immediate inference; generated instructions are not treated as project truth; doctor/close never require or auto-create local notes; v3 infer and Claude/Codex attribution are honest; onboarding preflights and safely inherits repository-local Git identity; hosted/local installs and the selected Horus/Fabric projections were verified.
 **Need-first dispatch routing** (2026-07-15, PR #244, v0.0.56): managed instructions and bundled consolidation/execution/decision skills prove a concrete context, parallelism, or price dividend before model selection; cross-project scope, multiple phases, and calibration alone never force dispatch, live owner evidence may qualify incomplete usage telemetry, and durable guidance carries no pinned model names.
 **Fleet Projection Sync cockpit** (2026-07-15, PR #240): TUI Home shows stale/unknown project counts, a dedicated screen renders each Claude/Codex surface against the canonical projection check, and the optional `horus-agent` curator launch carries a bounded fetch/isolated-worktree/branch→PR prompt without automatic writes.
@@ -167,6 +170,13 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   pinning durable guidance to model names. Workflow tests still require a real distinct
   worker. Codex auto-edit workers get a read-only `.git` and no socket bind: the
   supervisor owns commit, push, and every runtime gate — write briefs accordingly.
+- **Self-documentation has two truth layers, never curated (2026-07-16).** "What exists
+  now" is answered only by code-derived surfaces (`horus --help` / the argparse walk);
+  `backlog/archive/` cards are the append-only historical index ("was this built, where
+  did it live") — dated, SHA-pinned, verified against code before trusting. No
+  supersede/tombstone metadata on archived cards, ever: curation decays, byproducts of
+  the ship ritual don't. The capabilities project record is a display/fleet projection
+  artifact, not an agent entry point.
 - **Capability catalogs stay idempotent EXCEPT the per-project stamp, by design
   (2026-07-11).** The fleet-wide catalog has no timestamps (pure function of
   sources, unchanged run = no write). `horus capabilities --project <name>`

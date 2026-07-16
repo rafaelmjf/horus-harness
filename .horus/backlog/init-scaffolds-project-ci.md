@@ -1,6 +1,6 @@
 ---
 status: open
-priority: medium
+priority: low
 tier: sonnet
 created: 2026-07-15
 type: feature
@@ -36,3 +36,13 @@ should be able to have a deterministic green gate from day one.
   build step or emit a doctor-only gate.
 - The gate is for *acceptance observability*, not deployment; deploy pipelines stay
   project-owned (e.g. the rmjf-notes Pages workflow).
+
+## Reviews
+
+- 2026-07-16 — Owner session demoted this to the instruction rung (priority
+  medium→low): an agent asked to onboard a repo can already write a minimal CI
+  workflow — existing capability defeats the implementation. New first step: one line
+  in the onboard/migration skill guidance ("ensure a deterministic CI gate exists;
+  scaffold a doctor-only workflow if absent"). Promote back to scaffold *code* only
+  if agents observably fail at it repeatedly. Per the controls ladder, the cheap rung
+  goes first.

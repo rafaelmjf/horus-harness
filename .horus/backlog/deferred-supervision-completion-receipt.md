@@ -1,6 +1,6 @@
 ---
 status: open
-priority: high
+priority: low
 tier: sonnet
 created: 2026-07-15
 type: feature
@@ -46,4 +46,16 @@ worker before paying the acceptance-review cost.
 - Owner-provided usage remains a valid override when native telemetry is incomplete.
 - Notifications and automatic chains are separate future decisions; this card provides
   the deterministic signal they would consume.
+
+## Reviews
+
+- 2026-07-16 — Owner session split kernel from trimmings. The kernel — one
+  deterministic completion state (`delivery-ready|blocked|failed|unknown`) backed by
+  process status plus pushed SHA/PR/continuity receipt — moved INTO the
+  [[attachable-detached-worker-run]] campaign, since it is Horus-specific delivery
+  semantics no native platform will ship. What remains here is deferred until one
+  real campaign runs on the detached primitive: the `active|on-completion`
+  supervision-timing taxonomy, the embedded account usage-close snapshot, and the
+  richer TUI/JSON receipt surface — their right shape is unproven and native
+  completion/notification transports may cover part by then. Priority high→low.
 

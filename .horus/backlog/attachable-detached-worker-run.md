@@ -54,3 +54,15 @@ attached and caller-fatal.
   supervision.
 - Do not auto-resume, auto-merge, or auto-launch another worker from a process exit.
 
+## Reviews
+
+- 2026-07-16 — Owner session re-scoped the campaign: this card now also carries the
+  failure-evidenced *kernel* of its two sibling cards — the delivery-evidence check
+  (a worker exit with no branch/commit/PR when the brief expected one is surfaced as
+  `no-op`/`blocked`, never bare success) and a minimal completion state
+  (`delivery-ready|blocked|failed|unknown` backed by process status + pushed SHA/PR).
+  The schema/state-model design phase must cover liveness, delivery, and progress
+  dimensions ONCE, even though the periodic progress timer itself is deferred (see
+  [[worker-progress-heartbeat]] / [[deferred-supervision-completion-receipt]], both
+  demoted to the deferred trimmings). Plan: `.horus/execution.md`.
+
