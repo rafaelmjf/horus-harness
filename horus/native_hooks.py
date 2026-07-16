@@ -89,7 +89,7 @@ def _codex_guard_hook_command() -> dict[str, Any]:
         "command": _guard_posix("horus guard-host --hook"),
         "commandWindows": _guard_windows("horus guard-host --hook"),
         "timeout": 30,
-        "statusMessage": "Checking Horus host safety",
+        "statusMessage": "Checking Horus shell safety",
     }
 
 
@@ -289,7 +289,7 @@ def install_codex_merge_hook(project_root: Path) -> HookAction:
 
 
 def install_codex_guard_hook(project_root: Path) -> HookAction:
-    """Install/update a project-local Codex PreToolUse guard for hosted PTY sessions."""
+    """Install/update the project-local Codex host/worker shell-safety guard."""
     codex_dir = project_root / ".codex"
     path = codex_dir / "hooks.json"
     data = _load_json(path)
@@ -305,9 +305,9 @@ def install_codex_guard_hook(project_root: Path) -> HookAction:
     new_text = json.dumps(data, indent=2) + "\n"
     old_text = path.read_text(encoding="utf-8") if path.exists() else None
     if old_text == new_text:
-        return HookAction("exists", f"Codex hosted-session guard hook already installed in {path}")
+        return HookAction("exists", f"Codex host/worker guard hook already installed in {path}")
     path.write_text(new_text, encoding="utf-8")
-    return HookAction("updated" if old_text is not None else "created", f"installed Codex hosted-session guard hook in {path}")
+    return HookAction("updated" if old_text is not None else "created", f"installed Codex host/worker guard hook in {path}")
 
 
 def install_codex_usage_guard_hook(project_root: Path) -> HookAction:
@@ -389,9 +389,8 @@ def _claude_merge_hook_command() -> dict[str, Any]:
 
 
 def _claude_guard_hook_command() -> dict[str, Any]:
-    # PreToolUse gate that fires only inside a Horus-hosted PTY session (detected via
-    # HORUS_HOSTED_SESSION in the inherited env); it blocks a Bash command that would
-    # restart/kill the dashboard process hosting the session. No-op everywhere else.
+    # A hosted PTY cannot kill its own dashboard host, and a tracked worker cannot
+    # destructively clean user-global Horus/Claude/Codex state.
     return {
         "type": "command",
         "command": _guard_posix("horus guard-host --hook"),
@@ -509,17 +508,18 @@ def install_claude_merge_hook(project_root: Path) -> HookAction:
 
 
 def install_claude_guard_hook(project_root: Path) -> HookAction:
-    """Install/update a Claude `PreToolUse` hook that stops a Horus-hosted PTY session
-    from restarting/killing the dashboard process hosting it. Matches the `Bash` tool;
-    the command no-ops unless run inside a hosted session (HORUS_HOSTED_SESSION), so a
-    normal terminal is unaffected. Coexists with the usage + merge hooks (own marker)."""
+    """Install/update the Claude host/worker shell-safety PreToolUse guard.
+
+    It blocks hosted-session self-restarts and tracked-worker destructive cleanup of
+    user-global agent state. Normal attended terminals are unaffected.
+    """
     path, data, hooks = _claude_hooks_dict(project_root)
     _merge_event_hook(
         hooks, "PreToolUse", _claude_guard_hook_command(),
         matcher=SHELL_TOOL_MATCHER, is_mine=_is_horus_guard_hook,
     )
     data["hooks"] = hooks
-    return _persist_hook(path, data, "Claude hosted-session guard hook")
+    return _persist_hook(path, data, "Claude host/worker guard hook")
 
 
 def install_claude_usage_guard_hook(project_root: Path) -> HookAction:

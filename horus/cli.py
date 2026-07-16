@@ -1275,6 +1275,7 @@ def cmd_execution(args: argparse.Namespace) -> int:
                 execution_recommendation=focus["execution_recommendation"],
                 execution_status=execution_doc.front_matter.get("status", ""),
                 current_feature=execution_doc.front_matter.get("current_feature", ""),
+                prd_structure=frontmatter.has_prd(root),
             )
         )
         return 0
@@ -1666,22 +1667,56 @@ def _is_host_restart_command(command: str, host_pid: str) -> bool:
     return False
 
 
-def _guard_host_hook(root: Path) -> int:
-    """PreToolUse gate: refuse a Bash command that would kill/restart the Horus
-    dashboard process *when run from inside a Horus-hosted PTY session*.
+def _is_worker_global_state_delete(command: str) -> bool:
+    """Match a narrow destructive command aimed at user-global agent state."""
+    lowered = command.lower().replace("\\", "/")
+    cmd_pos = (
+        r"(?:^|[;&|(`]\s*|\$\(\s*"
+        r"|\b(?:sudo|exec|nohup|setsid|env|time|xargs|command)\s+)"
+    )
+    destructive = re.compile(
+        rf"{cmd_pos}(?:rm|rmdir|rd|del|remove-item)\b(?P<args>[^;&|]*)",
+        re.IGNORECASE,
+    )
+    home = Path.home().as_posix().lower().rstrip("/")
+    protected_prefixes = (
+        "~/.horus", "~/.claude", "~/.codex",
+        "$home/.horus", "$home/.claude", "$home/.codex",
+        "${home}/.horus", "${home}/.claude", "${home}/.codex",
+        "%userprofile%/.horus", "%userprofile%/.claude", "%userprofile%/.codex",
+        "$env:userprofile/.horus", "$env:userprofile/.claude", "$env:userprofile/.codex",
+        f"{home}/.horus", f"{home}/.claude", f"{home}/.codex",
+    )
+    for match in destructive.finditer(lowered):
+        segment = match.group(0).replace('"', "").replace("'", "")
+        if any(prefix in segment for prefix in protected_prefixes):
+            return True
+    return False
 
-    The footgun (history.md): an in-app agent restarted the app it was hosted in and
-    killed itself mid-task. ``pty_host`` marks hosted sessions with
-    ``HORUS_HOSTED_SESSION`` + ``HORUS_PTY_HOST_PID`` in the env, which this hook (a
-    child of the agent's shell) inherits. Outside a hosted session it does nothing, so
-    normal terminals are unaffected. Errs toward *allowing* (never wedge the user)."""
-    if os.environ.get("HORUS_HOSTED_SESSION") != "1":
-        return 0  # not inside a Horus-hosted PTY — leave everything alone
+
+def _guard_host_hook(root: Path) -> int:
+    """PreToolUse gate for hosted-session and tracked-worker shell footguns.
+
+    Hosted sessions cannot kill their own dashboard host. Tracked workers cannot
+    destructively clean user-global Horus/Claude/Codex state. Normal attended
+    terminals remain unaffected; ambiguous commands are allowed.
+    """
     hook_input = _read_hook_stdin()
     tool = hook_input.get("tool_name") or hook_input.get("toolName") or ""
     tool_input = hook_input.get("tool_input") or hook_input.get("toolInput") or {}
     command = str(tool_input.get("command", "")) if isinstance(tool_input, dict) else ""
     if tool not in native_hooks.SHELL_TOOL_NAMES or not command:
+        return 0
+    if os.environ.get("HORUS_RUN_WORKER") == "1" and _is_worker_global_state_delete(command):
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": templates.WORKER_GLOBAL_STATE_INSTRUCTION,
+            }
+        }))
+        return 0
+    if os.environ.get("HORUS_HOSTED_SESSION") != "1":
         return 0
     host_pid = os.environ.get("HORUS_PTY_HOST_PID", "")
     if not _is_host_restart_command(command, host_pid):
@@ -2091,8 +2126,8 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
         if kind in ("guard", "all"):
             action = native_hooks.install_codex_guard_hook(root)
             print(f"[{action.status}] {action.message}")
-            print("PreToolUse gate: inside a Horus-hosted PTY session, blocks a Bash command")
-            print("that would restart/kill the dashboard process hosting the session.")
+            print("PreToolUse gate: blocks hosted-session self-restarts and tracked-worker")
+            print("destructive cleanup of user-global Horus/Claude/Codex state.")
         if kind in ("checkpoint", "all"):
             action = native_hooks.install_codex_checkpoint_hook(root)
             print(f"[{action.status}] {action.message}")
@@ -2115,9 +2150,9 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
         if kind in ("guard", "all"):
             action = native_hooks.install_claude_guard_hook(root)
             print(f"[{action.status}] {action.message}")
-            print("PreToolUse gate: inside a Horus-hosted PTY session, blocks a Bash command")
-            print("that would restart/kill the dashboard process hosting the session (so an")
-            print("in-app agent can't kill itself). No effect outside a hosted session.")
+            print("PreToolUse gate: blocks hosted-session self-restarts and tracked-worker")
+            print("destructive cleanup of user-global Horus/Claude/Codex state. Normal")
+            print("attended terminals are unaffected.")
         if kind in ("checkpoint", "all"):
             action = native_hooks.install_claude_checkpoint_hook(root)
             print(f"[{action.status}] {action.message}")
@@ -3410,13 +3445,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_guard = sub.add_parser(
         "guard-host",
-        help="guard a Horus-hosted PTY session from restarting/killing its own host",
+        help="guard hosted-session and tracked-worker shell safety",
     )
     p_guard.add_argument("--path", default=".", help="project root (default: cwd)")
     p_guard.add_argument(
         "--hook", action="store_true",
-        help="PreToolUse hook mode: read a Bash tool call from stdin and block a "
-             "command that would kill/restart the host while inside a hosted session",
+        help="PreToolUse hook mode: block hosted-session self-restarts and tracked-worker "
+             "destructive cleanup of user-global agent state",
     )
     p_guard.set_defaults(func=cmd_guard_host)
 

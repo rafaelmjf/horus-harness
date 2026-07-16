@@ -12,7 +12,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -182,6 +182,10 @@ captured start/end readings and `horus datum report`; show a delta only when Hor
 labels fresh same-window isolated readings unconfounded. Otherwise report the actual
 readings as unknown or confounded. Do not poll continuously or make another model call
 for accounting.
+
+Parallel workers on the same provider account trade attribution for throughput. State
+that trade-off in the consent envelope: serialize or use isolated account aliases when
+per-worker usage matters; otherwise accept `concurrent/confounded` readings.
 
 ## Step 7 — Emit the recommendation
 

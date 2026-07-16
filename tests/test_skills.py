@@ -103,7 +103,7 @@ def test_delegation_rubric_keeps_older_capable_models_in_roster():
 
 def test_delegation_rubric_proves_dividend_before_model_selection():
     rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
-    assert rubric.version == 7
+    assert rubric.version == 8
     assert rubric.content.index("prove delegation has a dividend") < rubric.content.index(
         "Read the calibration data"
     )
@@ -126,6 +126,13 @@ def test_delegation_rubric_distinguishes_calibration_key_from_provider_selector(
     assert "calibration key" in rubric.content
     assert "not always the same string as" in rubric.content
     assert "horus run` rejects a known" in rubric.content
+
+
+def test_delegation_rubric_discloses_same_account_parallel_usage_tradeoff():
+    rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
+    assert "trade attribution for throughput" in rubric.content
+    assert "concurrent/confounded" in rubric.content
+    assert "isolated account aliases" in rubric.content
 
 
 def test_execution_skill_requires_provider_valid_selector_in_consent_envelope():
@@ -238,7 +245,7 @@ def test_distill_history_skill_v3_targets_archive():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 12
+    assert execution.version == 13
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content

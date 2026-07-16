@@ -541,7 +541,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 12 -->
+<!-- horus-skill-version: 13 -->
 
 # Horus execution supervision
 
@@ -600,6 +600,11 @@ effort/runtime/attempt/outcome and start/end usage evidence. Report a percentage
 delta only when the report calls fresh same-window isolated readings unconfounded;
 otherwise preserve its unknown/confounded label. Do not predict task usage, poll
 continuously, or make an extra model call solely for accounting.
+
+If workers overlap on the same provider account, disclose before launch that Horus
+cannot attribute the shared percentage change to either worker. Serialize them or use
+isolated account aliases when per-worker attribution matters; when throughput matters
+more, parallelize and label the readings `concurrent/confounded`.
 
 Be honest about review: in practice most supervisor reviews just confirm green, and a
 review is **not** a safety guarantee. The durable safeguards are model-independent (the
@@ -779,7 +784,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -949,6 +954,10 @@ captured start/end readings and `horus datum report`; show a delta only when Hor
 labels fresh same-window isolated readings unconfounded. Otherwise report the actual
 readings as unknown or confounded. Do not poll continuously or make another model call
 for accounting.
+
+Parallel workers on the same provider account trade attribution for throughput. State
+that trade-off in the consent envelope: serialize or use isolated account aliases when
+per-worker usage matters; otherwise accept `concurrent/confounded` readings.
 
 ## Step 7 — Emit the recommendation
 
@@ -1344,8 +1353,8 @@ SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 11, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 4, _INFER_SKILL),
-    Skill("horus-execution", 12, _EXECUTION_SKILL),
-    Skill("delegation-rubric", 7, _DELEGATION_RUBRIC_SKILL),
+    Skill("horus-execution", 13, _EXECUTION_SKILL),
+    Skill("delegation-rubric", 8, _DELEGATION_RUBRIC_SKILL),
     Skill("execution-decision", 3, _EXECUTION_DECISION_SKILL),
     Skill("dispatch-decision", 3, _DISPATCH_DECISION_SKILL),
     Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
