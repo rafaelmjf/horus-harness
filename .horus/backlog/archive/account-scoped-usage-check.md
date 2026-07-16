@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-15
 type: feature
 parallel: safe
 surface: horus/cli.py, horus/claude_usage.py, horus/codex_usage.py
+shipped_pr: 253
+shipped_sha: 740a64dcb85bcba27055c89cb8d05da603388986
 ---
 
 # Account-scoped usage check for safe dispatch
