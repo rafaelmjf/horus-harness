@@ -3712,8 +3712,13 @@ def process_account_add(form: dict[str, str]) -> str:
     agent = (form.get("agent") or "claude").strip()
     alias = (form.get("alias") or "").strip()
     path = (form.get("path") or "").strip()
-    if not alias or not path:
-        return "error=" + quote_plus("account alias and path are required")
+    if not alias:
+        return "error=" + quote_plus("account alias is required")
+    if not path:
+        # No explicit path: isolate by default — provision the canonical dir from the
+        # current login so an onboarded account never lands on the shared ambient dir.
+        isolated, msg = config.isolate_account(agent, alias)
+        return "account=added" if isolated else "error=" + quote_plus(msg)
     if agent == "codex":
         config.set_account_codex_home(alias, path)
     elif agent == "claude":
