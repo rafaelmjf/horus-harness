@@ -30,6 +30,12 @@ def _store(tmp_path) -> datums.DatumStore:
     return datums.DatumStore(tmp_path / "datums.json")
 
 
+def _run_datum() -> datums.Datum:
+    rows = [datum for datum in datums.DatumStore.default().all() if datum.source == "run"]
+    assert len(rows) == 1
+    return rows[0]
+
+
 # --- exit classification -----------------------------------------------------
 
 def test_classify_exit_maps_status_to_condition():
@@ -330,7 +336,7 @@ def test_rollup_render_is_data_only(tmp_path):
 def test_run_fake_writes_mechanical_datum(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     assert main(["run", "hello", "--agent", "fake", "--model", "sonnet-5", "--path", str(tmp_path)]) == 0
-    d = datums.DatumStore.default().get("fake-session")
+    d = _run_datum()
     assert d is not None
     assert d.model == "sonnet-5" and d.agent == "fake" and d.posture == "default"
     assert d.exit == "completed" and d.runtime_seconds is not None and d.outcome is None
@@ -341,7 +347,7 @@ def test_run_captures_alias_as_canonical_via_fallback_map(tmp_path, monkeypatch)
     # none) -> falls back to the owner-maintained alias map.
     _home(tmp_path, monkeypatch)
     assert main(["run", "hello", "--agent", "fake", "--model", "sonnet", "--path", str(tmp_path)]) == 0
-    d = datums.DatumStore.default().get("fake-session")
+    d = _run_datum()
     assert d.model == "sonnet-5"
 
 
@@ -356,26 +362,26 @@ def test_run_prefers_resolved_model_from_adapter_over_alias_map(tmp_path, monkey
     ]
     monkeypatch.setattr(adapters, "get_adapter", lambda name: adapters.FakeAdapter(script=script))
     assert main(["run", "hello", "--agent", "fake", "--model", "haiku", "--path", str(tmp_path)]) == 0
-    d = datums.DatumStore.default().get("resolved-session")
+    d = _run_datum()
     assert d is not None and d.model == "haiku-4.5"  # resolved capture, not the static map
 
 
 def test_datum_close_cli_attaches_outcome(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["run", "hi", "--agent", "fake", "--model", "opus-4.8", "--path", str(tmp_path)])
-    rc = main(["datum", "close", "fake", "--outcome", "clean", "--shape", "clear/small/short", "--note", "ok"])
+    rc = main(["datum", "close", _run_datum().session_id, "--outcome", "clean", "--shape", "clear/small/short", "--note", "ok"])
     assert rc == 0
     assert "outcome=clean" in capsys.readouterr().out
-    d = datums.DatumStore.default().get("fake-session")
+    d = _run_datum()
     assert d.outcome == "clean" and d.shape == "clear/small/short" and d.note == "ok"
 
 
 def test_datum_close_cli_accepts_void(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["run", "hi", "--agent", "fake", "--model", "opus-4.8", "--path", str(tmp_path)])
-    assert main(["datum", "close", "fake", "--outcome", "void", "--note", "aborted"]) == 0
+    assert main(["datum", "close", _run_datum().session_id, "--outcome", "void", "--note", "aborted"]) == 0
     assert "outcome=void" in capsys.readouterr().out
-    assert datums.DatumStore.default().get("fake-session").outcome == "void"
+    assert _run_datum().outcome == "void"
 
 
 def test_datum_close_cli_bad_id_returns_2(tmp_path, monkeypatch):
@@ -855,7 +861,7 @@ def test_capture_usage_snapshot_never_raises_on_unexpected_failure(monkeypatch):
 def test_run_fake_captures_usage_launch_snapshot(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     assert main(["run", "hello", "--agent", "fake", "--model", "sonnet-5", "--path", str(tmp_path)]) == 0
-    d = datums.DatumStore.default().get("fake-session")
+    d = _run_datum()
     assert d.usage_launch is not None
     assert set(d.usage_launch) == {"claude", "codex"}
     assert d.usage_launch["claude"]["freshness"] == "unavailable"  # no real creds in the fake HOME
@@ -912,7 +918,7 @@ def test_datum_close_cli_new_flags(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["run", "hi", "--agent", "fake", "--model", "opus-4.8", "--path", str(tmp_path)])
     rc = main([
-        "datum", "close", "fake", "--outcome", "clean",
+        "datum", "close", _run_datum().session_id, "--outcome", "clean",
         "--oversight", "heavy", "--follow-on", "2",
         "--counterfactual", "one-worker", "--dividend", "positive",
     ])
@@ -920,7 +926,7 @@ def test_datum_close_cli_new_flags(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "oversight=heavy" in out and "follow-on=2" in out
     assert "counterfactual=one-worker" in out and "dividend=positive" in out
-    d = datums.DatumStore.default().get("fake-session")
+    d = _run_datum()
     assert d.oversight == "heavy" and d.follow_on == 2
     assert d.counterfactual == "one-worker" and d.dividend == "positive"
 
@@ -929,7 +935,7 @@ def test_datum_close_cli_rejects_bad_oversight_choice(tmp_path, monkeypatch, cap
     _home(tmp_path, monkeypatch)
     main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
     with pytest.raises(SystemExit):
-        main(["datum", "close", "fake", "--outcome", "clean", "--oversight", "extreme"])
+        main(["datum", "close", _run_datum().session_id, "--outcome", "clean", "--oversight", "extreme"])
 
 
 # --- one-act acceptance: `horus datum close --card` (2026-07-14 frozen schema) --
@@ -958,7 +964,7 @@ def test_datum_close_cli_card_stamps_card_and_stays_quiet_when_fresh(tmp_path, m
     _write_target_prd(tmp_path, last_updated=today)  # fresh: matches this run's completion
 
     main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
-    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me"])
+    rc = main(["datum", "close", _run_datum().session_id, "--outcome", "clean", "--card", "deliver-me"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "Stamped" in out and "status: done" in out
@@ -975,7 +981,7 @@ def test_datum_close_cli_card_warns_when_target_continuity_stale(tmp_path, monke
     _write_target_prd(tmp_path, last_updated="2020-01-01")  # deliberately ancient
 
     main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
-    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me"])
+    rc = main(["datum", "close", _run_datum().session_id, "--outcome", "clean", "--card", "deliver-me"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "Stamped" in out
@@ -988,11 +994,11 @@ def test_datum_close_cli_card_warns_when_target_continuity_stale(tmp_path, monke
 def test_datum_close_cli_card_missing_card_returns_2(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["run", "hi", "--agent", "fake", "--path", str(tmp_path)])
-    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "no-such-card"])
+    rc = main(["datum", "close", _run_datum().session_id, "--outcome", "clean", "--card", "no-such-card"])
     assert rc == 2
     assert "Could not stamp" in capsys.readouterr().out
     # The datum close itself still went through before the card resolution failed.
-    d = datums.DatumStore.default().get("fake-session")
+    d = _run_datum()
     assert d.outcome == "clean"
 
 

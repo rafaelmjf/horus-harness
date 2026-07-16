@@ -18,8 +18,11 @@ from horus import (
     cli,
     codex_usage,
     config,
+    datums,
     launch,
     registry,
+    run_executor,
+    runlog,
     terminal_app,
     terminal_sessions,
     terminal_tui,
@@ -27,6 +30,7 @@ from horus import (
     usage_snapshot,
 )
 from horus.launch import LaunchResult, PreparedInteractive
+from horus.adapters import FakeAdapter
 from horus.registry import Registry, SessionRecord
 
 
@@ -414,7 +418,8 @@ def test_attach_and_stop_use_horus_generated_tmux_name(tmp_path, monkeypatch):
         ["tmux", "attach-session", "-t", "horus-123456781234"],
         ["tmux", "kill-session", "-t", "horus-123456781234"],
     ]
-    assert Registry.default().get(sid).status == "exited"
+    stopped = Registry.default().get(sid)
+    assert stopped.status == "failed" and stopped.termination_reason == "stopped"
 
 
 def _fake_list_sessions(rows):
@@ -506,7 +511,8 @@ def test_reap_orphans_kills_provably_orphaned_session(tmp_path, monkeypatch):
     monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
     assert terminal_sessions.reap_orphans() == ["horus-abc123456789"]
     assert calls == ["horus-abc123456789"]
-    assert Registry.default().get(sid).status == "orphaned"
+    reaped = Registry.default().get(sid)
+    assert reaped.status == "failed" and reaped.termination_reason == "orphan-reaped"
 
 
 def test_reap_orphans_never_touches_a_session_with_no_registry_record(tmp_path, monkeypatch):
@@ -547,7 +553,8 @@ def test_reap_orphans_kills_a_running_record_whose_tracked_pid_is_dead(tmp_path,
     monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
     assert terminal_sessions.reap_orphans() == ["horus-abc123456789"]
     assert calls == ["horus-abc123456789"]
-    assert Registry.default().get(sid).status == "orphaned"
+    reaped = Registry.default().get(sid)
+    assert reaped.status == "failed" and reaped.termination_reason == "orphan-reaped"
 
 
 def test_cmd_reap_reports_what_it_killed(monkeypatch, capsys):
@@ -581,6 +588,154 @@ def test_tmux_runner_executes_0600_spec_and_records_result(tmp_path, monkeypatch
     assert tmux_runner.main([sid]) == 0
     record = Registry.default().get(sid)
     assert record.status == "exited" and record.returncode == 0
+    assert not path.exists()
+
+
+def test_detached_run_returns_only_after_runner_pid_handoff(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    request = run_executor.RunRequest(
+        session_id="12345678-1234-1234-1234-123456789abc", agent="fake", project=root,
+        prompt="do bounded work", account="isolated", posture="auto-edit", model="test-model",
+        effort="high", worker=True, resume="native-resume", dispatch_base_sha="a" * 40,
+        dispatch_pending=2,
+    )
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    calls = []
+    monkeypatch.setattr(
+        terminal_sessions.subprocess, "run",
+        lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""),
+    )
+
+    def handoff(session_id, store, **_kwargs):
+        store.update(session_id, pid=5150)
+        terminal_sessions._runner_ready_path(session_id).write_text("5150\n", encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(terminal_sessions, "_await_runner_handoff", handoff)
+    result = terminal_sessions.launch_detached_run(request)
+
+    assert result.ok and result.pid == 5150 and result.target_ref == "horus-12345678-123"
+    record = Registry.default().get(request.session_id)
+    assert record.launch_target == "tmux" and record.target_ref == result.target_ref
+    assert record.agent_session_id == "native-resume"
+    assert record.dispatch_base_sha == "a" * 40 and record.delivery_status == "unknown"
+    payload = json.loads(terminal_sessions._runner_spec_path(request.session_id).read_text(encoding="utf-8"))
+    assert payload["kind"] == "run" and payload["run"] == request.payload()
+    assert calls[0][:6] == ["tmux", "new-session", "-d", "-s", result.target_ref, "-c"]
+    assert calls[1] == ["tmux", "set-option", "-t", result.target_ref, "mouse", "on"]
+
+
+def test_detached_run_handoff_failure_kills_only_its_new_tmux_host_and_cleans_files(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    request = run_executor.RunRequest(
+        session_id="22345678-1234-1234-1234-123456789abc", agent="fake", project=root,
+        prompt="do bounded work", account=None, posture="auto-edit", model=None, effort=None,
+        worker=True, resume=None, dispatch_base_sha=None, dispatch_pending=0,
+    )
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    calls = []
+    monkeypatch.setattr(
+        terminal_sessions.subprocess, "run",
+        lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""),
+    )
+
+    def failed_handoff(session_id, _store, **_kwargs):
+        terminal_sessions._runner_ready_path(session_id).write_text("not-ready\n", encoding="utf-8")
+        return False
+
+    monkeypatch.setattr(terminal_sessions, "_await_runner_handoff", failed_handoff)
+    result = terminal_sessions.launch_detached_run(request)
+
+    assert not result.ok and "runner did not report" in result.error
+    target = "horus-22345678-123"
+    assert calls == [
+        ["tmux", "new-session", "-d", "-s", target, "-c", str(root),
+         f"{sys.executable} -m horus.tmux_runner {request.session_id}"],
+        ["tmux", "set-option", "-t", target, "mouse", "on"],
+        ["tmux", "kill-session", "-t", target],
+    ]
+    assert not terminal_sessions._runner_spec_path(request.session_id).exists()
+    assert not terminal_sessions._runner_ready_path(request.session_id).exists()
+    record = Registry.default().get(request.session_id)
+    assert record.status == "failed" and record.termination_reason == "launch-error"
+
+
+def test_foreground_executor_keeps_launcher_pid_until_adapter_child_replaces_it(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    observed = {}
+
+    class InspectingFake(FakeAdapter):
+        def spawn(self, spec):
+            record = Registry.default().get(spec.run_session_id)
+            observed["pid"] = record.pid
+            observed["status"] = record.status
+            run = super().spawn(spec)
+            run.session.pid = 4242
+            return run
+
+    monkeypatch.setattr(run_executor.adapters, "get_adapter", lambda _agent: InspectingFake())
+    request = run_executor.RunRequest(
+        session_id="32345678-1234-1234-1234-123456789abc", agent="fake", project=tmp_path,
+        prompt="foreground liveness", account=None, posture="default", model=None, effort=None,
+        worker=False, resume=None, dispatch_base_sha=None, dispatch_pending=0,
+    )
+
+    assert run_executor.execute(request) == 0
+    assert observed == {"pid": os.getpid(), "status": "running"}
+    assert Registry.default().get(request.session_id).pid == 4242
+
+
+def test_expected_delivery_worker_exiting_cleanly_without_evidence_persists_noop(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    request = run_executor.RunRequest(
+        session_id="42345678-1234-1234-1234-123456789abc", agent="fake", project=tmp_path,
+        prompt="scripted expected delivery", account=None, posture="auto-edit", model=None, effort=None,
+        worker=True, resume=None, dispatch_base_sha="base", dispatch_pending=0, delivery_expected=True,
+    )
+    evidence = run_executor.delivery.DeliveryEvidence(
+        True, "2026-07-16T10:00:00+00:00", branch="worker/test", head_sha="base",
+        pushed_sha=None, local_changes=False, continuity_closed=False,
+        head_beyond_base=False, pushed_beyond_base=False,
+    )
+    monkeypatch.setattr(run_executor.delivery, "capture_delivery_evidence", lambda *_args, **_kwargs: evidence)
+
+    assert run_executor.execute(request) == 0
+
+    record = Registry.default().get(request.session_id)
+    assert record.status == "exited" and record.delivery_expected is True
+    assert record.delivery_status == "no-op" and record.delivery_pushed_sha is None
+    result = runlog.read_events(request.session_id)[-1]
+    assert result["delivery_status"] == "no-op" and result["delivery_expected"] is True
+    datum = datums.DatumStore.default().get(request.session_id)
+    assert datum.delivery_status == "no-op" and datum.delivery_checked_at == evidence.checked_at
+
+
+def test_tmux_runner_routes_detached_run_to_shared_executor(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    sid = "12345678-1234-1234-1234-123456789abc"
+    request = run_executor.RunRequest(
+        session_id=sid, agent="fake", project=root, prompt="work", account=None,
+        posture="auto-edit", model=None, effort=None, worker=True, resume=None,
+        dispatch_base_sha=None, dispatch_pending=0,
+    )
+    path = terminal_sessions._runner_spec_path(sid)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"kind": "run", "run": request.payload()}), encoding="utf-8")
+    Registry.default().upsert(SessionRecord(
+        session_id=sid, agent="fake", project=root.as_posix(), pid=os.getpid(),
+        launch_target="tmux", target_ref="horus-123456781234",
+    ))
+    seen = {}
+    monkeypatch.setattr(run_executor, "execute", lambda received, watcher=None: seen.update(
+        request=received, watcher=watcher,
+    ) or 0)
+
+    assert tmux_runner.main([sid]) == 0
+    assert seen["request"] == request and callable(seen["watcher"])
+    assert Registry.default().get(sid).pid == os.getpid()
     assert not path.exists()
 
 

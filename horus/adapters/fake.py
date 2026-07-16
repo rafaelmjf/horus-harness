@@ -11,6 +11,8 @@ in memory instead of from a subprocess.
 from __future__ import annotations
 
 import json
+import os
+import time
 from collections.abc import Iterator
 
 from horus.adapters.base import (
@@ -109,6 +111,15 @@ class FakeAdapter(AgentAdapter):
         return AgentRun(session, self._emit(spec, resume_id))
 
     def _emit(self, spec: SpawnSpec, resume_id: str | None) -> Iterator[AgentEvent]:
+        # Test-only lifecycle control: unlike the real adapters this in-memory
+        # adapter has no process to keep a managed pane alive for an attach probe.
+        # It is intentionally opt-in and never affects normal fake runs.
+        delay = os.environ.get("HORUS_FAKE_DELAY_SECONDS")
+        if delay:
+            try:
+                time.sleep(float(delay))
+            except ValueError:
+                pass
         for payload in self._script_lines(spec, resume_id):
             yield from self.parse_event(json.dumps(payload))
 

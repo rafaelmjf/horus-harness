@@ -44,7 +44,7 @@ def test_append_event_writes_start_and_result_jsonl(tmp_path, monkeypatch):
     assert [event["event"] for event in events] == ["start", "result"]
     assert events[0]["session_id"] == "sess-1"
     assert events[0]["agent"] == "fake"
-    assert events[1]["status"] == "exited"
+    assert events[-1]["status"] == "exited"
     assert events[1]["rc"] == 0
     for event in events:
         stamp = datetime.fromisoformat(event["ts"])
@@ -60,12 +60,14 @@ def test_run_writes_start_and_result_events(tmp_path, monkeypatch, capsys):
 
     assert rc == 0
     capsys.readouterr()
-    events = runlog.read_events("fake-session")
-    assert [event["event"] for event in events] == ["start", "result"]
+    from horus.registry import Registry
+    run_id = Registry.default().all()[0].session_id
+    events = runlog.read_events(run_id)
+    assert [event["event"] for event in events] == ["start", "activity", "activity", "activity", "result"]
     assert events[0]["agent"] == "fake"
     assert events[0]["project"] == tmp_path.resolve().as_posix()
     assert events[0]["argv"]["prompt"] == "hello there"
-    assert events[1]["status"] == "exited"
+    assert events[-1]["status"] == "exited"
 
 
 def test_runlog_buffers_lines_until_bound(tmp_path, monkeypatch):

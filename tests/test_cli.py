@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from horus import adapters, closure, config, github_catalog, launcher, mergewatch, registry, reinstall, remote_start, upgrade
+from horus import adapters, closure, config, github_catalog, launcher, mergewatch, registry, reinstall, remote_start, terminal_sessions, upgrade
 from horus.cli import main
 from horus.instructions import check_drift
 from horus.registry import Registry, SessionRecord
@@ -17,6 +17,12 @@ from horus.registry import Registry, SessionRecord
 def _home(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def _run_id() -> str:
+    records = Registry.default().all()
+    assert len(records) == 1
+    return records[0].session_id
 
 
 def _git(root: Path, *args: str):
@@ -406,6 +412,45 @@ def test_sessions_running_sorted_before_recent_terminal_rows(tmp_path, monkeypat
     assert out.index("running-now") < out.index("done-recent")
 
 
+def test_sessions_json_exposes_persisted_delivery_fields(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    Registry.default().upsert(SessionRecord(
+        session_id="delivery-json", agent="fake", project=str(tmp_path), pid=None, status="exited",
+        delivery_expected=True, delivery_status="blocked", dispatch_base_sha="base",
+        delivery_branch="worker/test", delivery_head_sha="head", delivery_pushed_sha="pushed",
+        delivery_pr_number=7, delivery_local_changes=True, delivery_continuity_closed=False,
+        delivery_checked_at="2026-07-16T10:00:00+00:00",
+    ))
+
+    assert main(["sessions", "--json"]) == 0
+
+    rows = json.loads(capsys.readouterr().out)
+    assert len(rows) == 1
+    assert rows[0] | {"updated_at": None} == {
+        "account": None, "agent": "fake", "agent_session_id": None,
+        "delivery_branch": "worker/test", "delivery_checked_at": "2026-07-16T10:00:00+00:00",
+        "delivery_continuity_closed": False, "delivery_expected": True, "delivery_head_sha": "head",
+        "delivery_local_changes": True, "delivery_pr_number": 7, "delivery_pushed_sha": "pushed",
+        "delivery_status": "blocked", "dispatch_base_sha": "base", "environment": "host",
+        "last_activity_at": None, "launch_target": "local", "pid": None, "project": str(tmp_path),
+        "returncode": None, "session_id": "delivery-json", "status": "exited", "target_ref": None,
+        "termination_reason": None, "updated_at": None,
+    }
+
+
+def test_sessions_json_is_valid_for_empty_and_fully_hidden_registry(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+
+    assert main(["sessions", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+    Registry.default().upsert(SessionRecord(
+        session_id="old-hidden", agent="fake", project=str(tmp_path), pid=None, status="exited",
+    ), now="2000-01-01T00:00:00+00:00")
+    assert main(["sessions", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
 def _bare_origin_and_worker_clone(tmp_path: Path) -> Path:
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)], check=True, capture_output=True)
@@ -620,13 +665,16 @@ def test_run_fake_adapter_tracks_session(tmp_path, monkeypatch, capsys):
     assert "(fake) hello there" in out and "exited" in out
     recs = Registry.default().all()
     assert len(recs) == 1 and recs[0].agent == "fake"  # spawned session was tracked
+    assert recs[0].session_id != "fake-session" and recs[0].agent_session_id == "fake-session"
+    assert recs[0].delivery_status == "unknown" and recs[0].last_activity_at
 
 
 def test_run_resume_uses_session_id(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     rc = main(["run", "continue", "--agent", "fake", "--resume", "prev-99", "--path", str(tmp_path)])
     assert rc == 0
-    assert "session prev-99" in capsys.readouterr().out  # resumed the given id
+    rec = Registry.default().all()[0]
+    assert rec.agent_session_id == "prev-99" and rec.session_id in capsys.readouterr().out
 
 
 def test_run_tees_event_stream_to_session_log(tmp_path, monkeypatch, capsys):
@@ -635,10 +683,11 @@ def test_run_tees_event_stream_to_session_log(tmp_path, monkeypatch, capsys):
 
     rc = main(["run", "hello there", "--agent", "fake", "--path", str(tmp_path)])
     assert rc == 0
-    text = runlog.run_log_path("fake-session").read_text(encoding="utf-8")
+    run_id = _run_id()
+    text = runlog.run_log_path(run_id).read_text(encoding="utf-8")
     assert "... session fake-session" in text  # session start marker
     assert "(fake) hello there" in text        # assistant text
-    assert "exited — session fake-session" in text  # final status line
+    assert f"exited — session {run_id}" in text  # final status line
 
 
 def test_tail_prints_log_and_final_status(tmp_path, monkeypatch, capsys):
@@ -700,7 +749,7 @@ def test_run_watch_opens_watcher_terminal(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert len(calls) == 1  # spawned once, on the first event carrying the session id
     argv, cwd = calls[0]
-    assert argv == ["horus", "tail", "fake-session"]  # console-script spelling only
+    assert argv == ["horus", "tail", _run_id()]  # console-script spelling only
     assert Path(cwd) == tmp_path.resolve()
 
 
@@ -715,6 +764,48 @@ def test_run_watch_failure_never_breaks_the_run(tmp_path, monkeypatch, capsys):
     assert rc == 0  # the run's exit code is the session's, not the watcher's
     out = capsys.readouterr().out
     assert "continuing headless" in out and "exited" in out
+
+
+def test_run_detach_requires_managed_tmux_worker(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    assert main(["run", "hello", "--agent", "fake", "--detach", "--path", str(tmp_path)]) == 2
+    assert "requires --worker and --target tmux" in capsys.readouterr().out
+
+
+def test_run_detach_preallocates_horus_id_before_managed_handoff(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    captured = {}
+
+    def detached(request):
+        captured["request"] = request
+        return terminal_sessions.launch.LaunchResult(
+            True, request.agent, request.project, account=request.account,
+            session_id=request.session_id, pid=5150, target_ref=f"horus-{request.session_id[:12]}",
+        )
+
+    monkeypatch.setattr(terminal_sessions, "launch_detached_run", detached)
+    assert main([
+        "run", "hello", "--worker", "codex", "--target", "tmux", "--detach",
+        "--resume", "native-thread", "--path", str(tmp_path),
+    ]) == 0
+    request = captured["request"]
+    assert len(request.session_id) == 36 and request.resume == "native-thread"
+    assert request.worker is True and request.posture == "auto-edit"
+    assert request.dispatch_base_sha is None
+    assert request.session_id in capsys.readouterr().out
+
+
+def test_expect_delivery_is_explicit_launch_intent_not_prompt_inference(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert main(["run", "please deliver a PR", "--agent", "fake", "--path", str(tmp_path)]) == 0
+    assert Registry.default().all()[0].delivery_expected is False
+
+    _home(tmp_path / "expected", monkeypatch)
+    assert main([
+        "run", "do no delivery", "--agent", "fake", "--expect-delivery", "--path", str(tmp_path),
+    ]) == 0
+    rows = Registry.default().all()
+    assert any(row.delivery_expected for row in rows)
 
 
 def test_open_launches_and_tracks_running_session(tmp_path, monkeypatch, capsys):
@@ -2458,7 +2549,7 @@ def test_datum_close_card_resolves_against_primary_checkout_not_worktree(tmp_pat
     assert rc == 0
     capsys.readouterr()
 
-    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me"])
+    rc = main(["datum", "close", _run_id(), "--outcome", "clean", "--card", "deliver-me"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "Stamped" in out
@@ -2483,7 +2574,7 @@ def test_datum_close_remove_worktree_removes_when_merged(tmp_path, monkeypatch, 
     worktree_dir = repo.parent / "repo-wt-probe-branch"
     capsys.readouterr()
 
-    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me", "--remove-worktree"])
+    rc = main(["datum", "close", _run_id(), "--outcome", "clean", "--card", "deliver-me", "--remove-worktree"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "Removed worktree" in out
@@ -2500,7 +2591,7 @@ def test_datum_close_remove_worktree_keeps_unmerged(tmp_path, monkeypatch, capsy
     worktree_dir = repo.parent / "repo-wt-probe-branch"
     capsys.readouterr()
 
-    rc = main(["datum", "close", "fake", "--outcome", "clean", "--card", "deliver-me", "--remove-worktree"])
+    rc = main(["datum", "close", _run_id(), "--outcome", "clean", "--card", "deliver-me", "--remove-worktree"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "Kept worktree" in out

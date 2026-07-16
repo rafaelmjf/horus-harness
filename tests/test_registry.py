@@ -1,12 +1,13 @@
 """Tests for the session/process registry."""
 
+import json
 import subprocess
 import sys
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from horus import runlog
+from horus import datums, delivery, registry as registry_mod, runlog
 from horus.adapters import FakeAdapter, SpawnSpec
 from horus.registry import Registry, SessionRecord, is_recent, process_alive, track
 
@@ -31,6 +32,22 @@ def test_upsert_persists_and_survives_reload(tmp_path):
     got = fresh.get("abc")
     assert got is not None and got.account == "work" and got.status == "running"
     assert got.updated_at  # stamped on upsert
+
+
+def test_future_registry_fields_are_ignored_and_preserved_on_known_updates(tmp_path):
+    reg = _reg(tmp_path)
+    reg.path.write_text(
+        '{"sessions":{"future":{"session_id":"future","agent":"codex",'
+        '"project":"/proj","status":"exited","future_signal":"keep-me"}}}\n',
+        encoding="utf-8",
+    )
+
+    got = reg.get("future")
+    assert got is not None and got.status == "exited"
+
+    reg.upsert(got)
+    persisted = json.loads(reg.path.read_text(encoding="utf-8"))
+    assert persisted["sessions"]["future"]["future_signal"] == "keep-me"
 
 
 def test_timestamps_are_aware_utc(tmp_path):
@@ -115,6 +132,34 @@ def test_reconcile_prefers_jsonl_result_event(tmp_path, monkeypatch):
     got = reg.get("done-by-log")
     assert got.status == "exited"
     assert got.returncode == 0
+
+
+def test_reconcile_persists_delivery_completion_when_result_newly_discovered(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(
+        session_id="delivery-result", project="/project", pid=os.getpid(), status="running",
+        delivery_expected=True, dispatch_base_sha="base",
+    ))
+    datums.DatumStore.default().record_launch(datums.Datum(session_id="delivery-result", agent="fake"))
+    runlog.append_event("delivery-result", "result", status="exited", rc=0, ended_at=runlog.utc_iso())
+    evidence = delivery.DeliveryEvidence(
+        True, "2026-07-16T10:00:00+00:00", branch="worker/test", head_sha="base",
+        pushed_sha="base", local_changes=False, continuity_closed=False,
+        head_beyond_base=False, pushed_beyond_base=False,
+    )
+    monkeypatch.setattr(registry_mod.delivery, "capture_delivery_evidence", lambda *_args, **_kwargs: evidence)
+
+    changed = reg.reconcile()
+
+    assert [record.session_id for record in changed] == ["delivery-result"]
+    result = reg.get("delivery-result")
+    assert result.status == "exited" and result.delivery_status == "no-op"
+    assert result.delivery_branch == "worker/test" and result.delivery_checked_at == evidence.checked_at
+    event = runlog.read_events("delivery-result")[-1]
+    assert event["delivery_status"] == "no-op" and event["delivery_branch"] == "worker/test"
+    datum = datums.DatumStore.default().get("delivery-result")
+    assert datum.delivery_status == "no-op" and datum.delivery_checked_at == evidence.checked_at
 
 
 def test_reconcile_falls_back_to_legacy_result_line(tmp_path, monkeypatch):

@@ -160,11 +160,24 @@ class Datum:
     worker: bool = False
     posture: str | None = None
     environment: str = "host"
+    # Horus's durable run id keys the datum; this retains the adapter-native
+    # resumable conversation/thread id once it is known.
+    agent_session_id: str | None = None
     # --- mechanical, captured at completion ----------------------------------
     completed_at: str | None = None
     runtime_seconds: float | None = None
     exit: str | None = None            # one of EXITS
     returncode: int | None = None
+    delivery_expected: bool = False
+    delivery_status: str = "unknown"
+    dispatch_base_sha: str | None = None
+    delivery_branch: str | None = None
+    delivery_head_sha: str | None = None
+    delivery_pushed_sha: str | None = None
+    delivery_pr_number: int | None = None
+    delivery_local_changes: bool | None = None
+    delivery_continuity_closed: bool | None = None
+    delivery_checked_at: str | None = None
     # Captured only where an adapter already surfaces them at completion; left
     # None otherwise (we never block on a field an adapter doesn't expose).
     tokens: int | None = None
@@ -440,6 +453,16 @@ class DatumStore:
         tokens: int | None = None,
         pr_opened: bool | None = None,
         ci: str | None = None,
+        delivery_status: str = "unknown",
+        delivery_expected: bool = False,
+        dispatch_base_sha: str | None = None,
+        delivery_branch: str | None = None,
+        delivery_head_sha: str | None = None,
+        delivery_pushed_sha: str | None = None,
+        delivery_pr_number: int | None = None,
+        delivery_local_changes: bool | None = None,
+        delivery_continuity_closed: bool | None = None,
+        delivery_checked_at: str | None = None,
     ) -> None:
         try:
             rows = self._load()
@@ -450,6 +473,16 @@ class DatumStore:
             row["exit"] = exit
             row["runtime_seconds"] = runtime_seconds
             row["returncode"] = returncode
+            row["delivery_expected"] = delivery_expected
+            row["delivery_status"] = delivery_status
+            row["dispatch_base_sha"] = dispatch_base_sha
+            row["delivery_branch"] = delivery_branch
+            row["delivery_head_sha"] = delivery_head_sha
+            row["delivery_pushed_sha"] = delivery_pushed_sha
+            row["delivery_pr_number"] = delivery_pr_number
+            row["delivery_local_changes"] = delivery_local_changes
+            row["delivery_continuity_closed"] = delivery_continuity_closed
+            row["delivery_checked_at"] = delivery_checked_at
             if tokens is not None:
                 row["tokens"] = tokens
             if pr_opened is not None:

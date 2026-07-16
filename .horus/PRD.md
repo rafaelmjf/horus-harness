@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.57 stable; the two safe high-priority cards shipped (account-scoped usage check PR #253, inventory reconciliation PR #254 — the latter via a sonnet worker gated by the former). The worker-lifecycle trio was re-scoped 2026-07-16: one campaign carrying the attachable-detached primitive plus the delivery-evidence/completion kernel; stall timer and receipt trimmings deferred by card review."
-next_action: "Execute `.horus/execution.md` (worker-lifecycle campaign) in a fresh session: phase 0 designs the three-dimension worker-state schema once, then the detached attachable primitive, then the no-op/completion kernel."
-next_prompt: "Resume clean horus-harness main, read `.horus/execution.md`, and claim `attachable-detached-worker-run` (it carries the kernels of both sibling cards per their 2026-07-16 Reviews). Run phase 0 (state-model + schema against the plan's design constraints) before any implementation."
-execution_recommendation: "plan-execution — the campaign spans CLI, tmux hosting, registry schema, logs, and datums with parity gates; the phase plan already exists (.horus/execution.md) with design constraints captured from the re-scoping session, so the executing session starts at phase 0 instead of re-deriving."
+current_focus: "Worker-lifecycle campaign implementation is complete and pushed on `feat/attachable-detached-worker-run` at `6a655e5`. Phase 1 adds caller-death-safe attachable detached workers; Phase 2 adds explicit delivery intent, evidence, and `delivery-ready|blocked|no-op|failed|unknown` persistence across executor/reconciliation/registry/logs/datums/CLI JSON. Acceptance: 1529 tests plus private-socket lifecycle and expected-no-op probes; registry readers now ignore and preserve future fields after the mixed-version TUI incident."
+next_action: "Open the worker-lifecycle PR from `feat/attachable-detached-worker-run`, observe required CI on the exact head, merge, then ship `attachable-detached-worker-run` with PR/SHA provenance and close continuity."
+next_prompt: "Fetch first and verify `feat/attachable-detached-worker-run` against origin at `6a655e5`. Read PRD.md and `.horus/execution.md`; both phases are accepted, so do not dispatch or change implementation unless CI finds a concrete failure. Open the PR, watch exact-head required CI, merge, ship the claimed card with PR/SHA provenance, and close continuity."
+execution_recommendation: "continue-as-is — only PR creation, exact-head CI observation, merge, card shipping, and continuity closure remain; a worker would duplicate loaded context and add spend without an implementation dividend."
 last_updated: 2026-07-16
 horus_min_version: 0.0.26
 ---
@@ -38,13 +38,14 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Eight open cards after the 2026-07-16 product-review pass. One high: the worker-lifecycle
+Ten active cards after the 2026-07-16 product-review pass. One high: the worker-lifecycle
 campaign (`attachable-detached-worker-run`, carrying the delivery-evidence/completion
 kernel of its two sibling cards — plan in `.horus/execution.md`). Two medium:
 remote-only TUI start (launcher completeness, no native overlap) and the release-stamped
-product-audit signal+skill. Five low/deferred, each gated on evidence per its card
+product-audit signal+skill. Seven lower-priority/deferred items, each gated on evidence per its card
 Reviews: heartbeat stall timer, receipt trimmings, init-CI (demoted to instruction
-rung), workflow overrides, scoped machine requirements, campaign launch UI.
+rung), workflow overrides, scoped machine requirements, campaign launch UI, and Codex
+usage-window semantics pending upstream stability.
 
 ## Shipped
 
@@ -166,9 +167,12 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   concrete context, parallelism, or price dividend that exceeds the fixed supervisor
   tax before selecting a worker. Cross-project scope, multiple phases, and calibration
   goals alone do not justify delegation; integrated campaigns may be cheaper inline.
-  Use live calibration and current owner evidence for model selection instead of
-  pinning durable guidance to model names. Workflow tests still require a real distinct
-  worker. Codex auto-edit workers get a read-only `.git` and no socket bind: the
+  Owner-directed dispatch may instead spend expiring account capacity or protect the
+  supervisor context, but every launch first names the exact model, account, and attempt
+  envelope and obtains approval; any fallback changes that envelope and asks again.
+  Use live calibration and current owner evidence, never a guessed per-task usage delta,
+  for model selection. Workflow tests still require a real distinct worker. Codex
+  auto-edit workers get a read-only `.git` and no socket bind: the
   supervisor owns commit, push, and every runtime gate — write briefs accordingly.
 - **Self-documentation has two truth layers, never curated (2026-07-16).** "What exists
   now" is answered only by code-derived surfaces (`horus --help` / the argparse walk);
@@ -210,9 +214,13 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   is a single shared server regardless of `$HOME`; `reap_orphans()` correctly (per its
   own contract) killed two real pre-existing sessions on the machine because they had
   no record in the probe's fake registry. No real loss this time (owner confirmed both
-  were already-abandoned), but never again: any tmux-touching test or probe MUST use
-  `tmux -S <explicit-path>` (not `-L <path>` — `-L` takes a bare *name* in the standard
-  socket dir, not a path, and silently mis-resolves/errors if given one).
+  were already-abandoned), but never again: any tmux-touching test or probe MUST unset
+  inherited `TMUX` and route every client/cleanup call through `tmux -S <explicit-path>`;
+  a private HOME/TMUX_TMPDIR does not override an inherited server target. Never issue
+  bare `kill-server`. (`-L` takes a bare name, not a path, and can silently mis-resolve.)
+- **Machine-local registries are additive and forward-readable.** Readers ignore fields
+  they do not understand and known-field updates preserve them; source-version probes
+  isolate HOME/registry so an installed older CLI is not fed a future row schema.
 - **Platform traps:** `uv tool install horus-harness` without `--python 3.12` silently resolves
   an ancient version below the floor — compare `horus --version` with `uv run horus --version`,
   `--force --python 3.12` reinstall + restart. A **stale `pip`-installed `horus` on PATH shadows

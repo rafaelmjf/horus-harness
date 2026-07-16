@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import uuid
+from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -50,6 +51,7 @@ from horus import (
     rescue,
     resume_preflight,
     routines,
+    run_executor,
     runlog,
     skills,
     templates,
@@ -693,6 +695,9 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     reg.reconcile()  # correct records left "running" by a crashed/closed run
     if args.prune:
         removed = reg.prune()
+        if args.json:
+            print(json.dumps([], sort_keys=True))
+            return 0
         print(f"Pruned {len(removed)} finished session(s).")
         return 0
     records = sorted(reg.all(), key=lambda r: r.updated_at, reverse=True)
@@ -705,6 +710,11 @@ def cmd_sessions(args: argparse.Namespace) -> int:
         hidden = len(records) - len(visible)
         records = visible
 
+    # Machine output must never be prefixed by an empty-state/filter message.
+    if args.json:
+        print(json.dumps([asdict(record) for record in records], sort_keys=True))
+        return 0
+
     if not records:
         if hidden:
             print(f"No running or recent sessions ({hidden} older session(s) hidden — pass --all to show them).")
@@ -715,7 +725,10 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     for r in records:
         proj = Path(r.project).name
         rc = "" if r.returncode is None else f" rc={r.returncode}"
-        line = f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} pid={r.pid or '-'} {r.session_id}{rc}"
+        line = (
+            f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} "
+            f"pid={r.pid or '-'} {r.session_id}{rc} delivery={r.delivery_status}"
+        )
         if r.status in delivery.NONCLEAN_STATUSES:
             try:
                 session_end = datetime.fromisoformat(r.updated_at) if r.updated_at else None
@@ -875,7 +888,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         root = wt.path.resolve()
 
     try:
-        adapter = adapters.get_adapter(args.agent)
+        adapters.get_adapter(args.agent)
     except KeyError as exc:
         print(exc)
         return 2
@@ -889,113 +902,30 @@ def cmd_run(args: argparse.Namespace) -> int:
     if refusal is not None:
         return refusal
 
-    spec = adapters.SpawnSpec(
-        prompt=args.prompt,
-        project_dir=root,
+    request = run_executor.RunRequest(
+        session_id=str(uuid.uuid4()), agent=args.agent, project=root, prompt=args.prompt,
         account=args.account,
-        posture=adapters.PermissionPosture(_resolve_run_posture(args.posture, getattr(args, "worker", None))),
-        model=args.model,
-        effort=args.effort,
-        worker=bool(getattr(args, "worker", None)),
-        run_session_id=uuid.uuid4().hex[:16],
+        posture=_resolve_run_posture(args.posture, getattr(args, "worker", None)),
+        model=args.model, effort=args.effort, worker=bool(getattr(args, "worker", None)),
+        resume=args.resume, dispatch_base_sha=dispatch_base_sha, dispatch_pending=dispatch_pending,
+        delivery_expected=getattr(args, "expect_delivery", False),
+        watch=getattr(args, "watch", False),
     )
-    reg = registry.Registry.default()
-    try:
-        run = adapter.resume(args.resume, spec) if args.resume else adapter.spawn(spec)
-    except adapters.AccountMismatch as exc:
-        print(f"Refusing to run: {exc}")
+    if getattr(args, "detach", False):
+        if not getattr(args, "worker", None) or args.target != terminal_sessions.TMUX:
+            print("Refusing to run: --detach requires --worker and --target tmux")
+            return 2
+        result = terminal_sessions.launch_detached_run(request)
+        if not result.ok:
+            print(f"Refusing to run: {result.error}")
+            return 2
+        print(f"Started detached {request.agent} worker (tmux, "
+              f"session {request.session_id}, runner pid {result.pid}).")
+        return 0
+    if getattr(args, "target", terminal_sessions.CURRENT) != terminal_sessions.CURRENT:
+        print("Refusing to run: --target tmux requires --detach")
         return 2
-
-    log = runlog.RunLog()
-    watch_pending = getattr(args, "watch", False)
-    event_log_started = False
-    store = datums.DatumStore.default()
-    run_started = time.monotonic()
-    saw_usage_signal = False
-    resolved_model: str | None = None
-
-    def emit(line: str) -> None:
-        print(line)
-        log.line(line)
-
-    for ev in registry.track(reg, run):
-        log.bind(run.session.session_id)
-        # The adapter's own SESSION_STARTED event (Claude Code's system/init)
-        # may carry the concrete model that actually ran, e.g.
-        # "claude-haiku-4-5-20251001" even when spec.model was the bare alias
-        # "haiku" — prefer that resolved capture over the static alias map
-        # (see datums.canonical_model_name) since it stays correct across a
-        # family-default move a static map would mis-record.
-        if ev.type is adapters.EventType.SESSION_STARTED and ev.raw:
-            resolved_model = ev.raw.get("model") or resolved_model
-        if not event_log_started and run.session.session_id:
-            event_log_started = True
-            runlog.append_event(
-                run.session.session_id,
-                "start",
-                agent=run.session.agent,
-                account=run.session.account,
-                project=run.session.project_dir.as_posix(),
-                pid=run.session.pid,
-                argv={
-                    "prompt": spec.prompt,
-                    "posture": spec.posture.value,
-                    "model": spec.model,
-                    "effort": spec.effort,
-                    "resume": args.resume,
-                    "dispatch_base_sha": dispatch_base_sha,
-                    "continuity_pending": dispatch_pending,
-                },
-            )
-            # Mechanical datum capture — the whole overhead win, zero agent cost.
-            # The qualitative half (outcome/shape/note) is added later via
-            # `horus datum close`. Best-effort inside the store; never blocks a run.
-            store.record_launch(
-                datums.Datum(
-                    session_id=run.session.session_id,
-                    model=datums.canonical_model_name(spec.model, resolved=resolved_model),
-                    launched_at=runlog.utc_iso(),
-                    project=run.session.project_dir.as_posix(),
-                    account=run.session.account,
-                    effort=spec.effort,
-                    agent=run.session.agent,
-                    worker=spec.worker,
-                    posture=spec.posture.value,
-                    environment=run.session.environment,
-                    usage_launch=datums.capture_usage_snapshot(run.session.agent, run.session.account),
-                )
-            )
-        if ev.type is adapters.EventType.ERROR and datums.looks_like_usage_death(ev.text):
-            saw_usage_signal = True
-        if watch_pending and run.session.session_id:
-            watch_pending = False
-            _spawn_watcher(run.session.session_id, root)
-        if ev.type is adapters.EventType.SESSION_STARTED:
-            emit(f"... session {ev.session_id}")
-        elif ev.type is adapters.EventType.ASSISTANT_TEXT and ev.text:
-            emit(ev.text)
-        elif ev.type is adapters.EventType.TOOL_USE:
-            emit(f"  [tool] {ev.tool}")
-        elif ev.type is adapters.EventType.ERROR:
-            emit(f"  [error] {ev.text or ''}")
-
-    s = run.session
-    runlog.append_event(
-        s.session_id,
-        "result",
-        status=s.status,
-        rc=s.returncode,
-        ended_at=runlog.utc_iso(),
-    )
-    if s.session_id:
-        store.record_completion(
-            s.session_id,
-            exit=datums.classify_exit(s.status, saw_usage_signal=saw_usage_signal),
-            runtime_seconds=round(time.monotonic() - run_started, 3),
-            returncode=s.returncode,
-        )
-    emit(f"\n{s.status} — session {s.session_id} (account {s.account or '-'})")
-    return 0 if s.status == "exited" else 1
+    return run_executor.execute(request, watcher=_spawn_watcher)
 
 
 def _spawn_watcher(session_id: str, cwd: Path) -> None:
@@ -3094,6 +3024,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--all", action="store_true",
         help="show every tracked session, including long-stale ones (default: running + last 24h only)",
     )
+    p_sessions.add_argument("--json", action="store_true", help="emit persisted session rows as machine-readable JSON")
     p_sessions.set_defaults(func=cmd_sessions)
 
     p_focus = sub.add_parser("focus", help="raise a running session's terminal window (best-effort, Windows)")
@@ -3178,7 +3109,20 @@ def build_parser() -> argparse.ArgumentParser:
              "Infers --agent when omitted; --agent and --posture win if also given.",
     )
     p_run.add_argument("--resume", metavar="SESSION_ID", help="resume an existing session by id")
+    p_run.add_argument(
+        "--expect-delivery", action="store_true",
+        help="explicitly expect a reviewable git/PR delivery; never inferred from prompt text",
+    )
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
+    p_run.add_argument(
+        "--target", choices=(terminal_sessions.CURRENT, terminal_sessions.TMUX),
+        default=terminal_sessions.CURRENT,
+        help="execution host: current process or managed tmux (tmux requires --detach)",
+    )
+    p_run.add_argument(
+        "--detach", action="store_true",
+        help="return after managed-tmux runner PID handoff (requires --worker --target tmux)",
+    )
     p_run.add_argument(
         "--worktree",
         metavar="BRANCH",

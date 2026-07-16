@@ -23,7 +23,7 @@ from pathlib import Path
 
 from horus.adapters.base import AgentSession
 from horus.config import config_dir
-from horus import runlog
+from horus import datums, delivery, runlog
 
 # Terminal statuses never get liveness-reconciled.
 TERMINAL = frozenset({"exited", "failed", "orphaned", "stale"})
@@ -85,6 +85,35 @@ def _legacy_log_result(session_id: str) -> _RunResult | None:
     return None
 
 
+def _apply_delivery_completion(row: dict) -> None:
+    """Persist Phase 2 evidence when reconciliation newly finds a terminal run."""
+    try:
+        ended_at = row.get("updated_at")
+        session_end = datetime.fromisoformat(ended_at) if isinstance(ended_at, str) and ended_at else None
+    except ValueError:
+        session_end = None
+    evidence = delivery.capture_delivery_evidence(
+        str(row.get("project", "")), dispatch_base_sha=row.get("dispatch_base_sha"), session_end=session_end,
+    )
+    row.update(evidence.fields())
+    delivery_status = delivery.classify_delivery(
+        str(row.get("status", "")), delivery_expected=bool(row.get("delivery_expected", False)),
+        dispatch_base_sha=row.get("dispatch_base_sha"), evidence=evidence,
+    )
+    row["delivery_status"] = delivery_status
+    session_id = str(row.get("session_id", ""))
+    runlog.append_event(
+        session_id, "result", agent_session_id=row.get("agent_session_id"), status=row.get("status"),
+        rc=row.get("returncode"), delivery_expected=bool(row.get("delivery_expected", False)),
+        delivery_status=delivery_status, **evidence.fields(), ended_at=runlog.utc_iso(),
+    )
+    datums.DatumStore.default().record_completion(
+        session_id, exit=datums.classify_exit(str(row.get("status", "")), saw_usage_signal=False),
+        runtime_seconds=None, returncode=row.get("returncode"), delivery_expected=bool(row.get("delivery_expected", False)),
+        dispatch_base_sha=row.get("dispatch_base_sha"), delivery_status=delivery_status, **evidence.fields(),
+    )
+
+
 @dataclass
 class SessionRecord:
     session_id: str
@@ -98,6 +127,24 @@ class SessionRecord:
     updated_at: str = ""
     launch_target: str = "local"
     target_ref: str | None = None
+    # ``session_id`` is Horus's durable run identity.  The agent's resumable
+    # conversation/thread id arrives later (or is supplied by --resume), so it
+    # is deliberately separate and nullable for a newly-launched run.
+    agent_session_id: str | None = None
+    termination_reason: str | None = None
+    delivery_expected: bool = False
+    # Phase 1 reserves the delivery/progress schema only.  Phase 2 owns the
+    # evidence snapshot and its no-op/delivery classification.
+    delivery_status: str = "unknown"
+    dispatch_base_sha: str | None = None
+    delivery_branch: str | None = None
+    delivery_head_sha: str | None = None
+    delivery_pushed_sha: str | None = None
+    delivery_pr_number: int | None = None
+    delivery_local_changes: bool | None = None
+    delivery_continuity_closed: bool | None = None
+    delivery_checked_at: str | None = None
+    last_activity_at: str | None = None
 
     @classmethod
     def from_session(cls, session: AgentSession) -> "SessionRecord":
@@ -112,6 +159,7 @@ class SessionRecord:
             pid=session.pid,
             status=session.status,
             returncode=session.returncode,
+            agent_session_id=session.session_id,
         )
 
 
@@ -200,7 +248,7 @@ class Registry:
 
     def all(self) -> list[SessionRecord]:
         self.reconcile()
-        return [SessionRecord(**row) for row in self._load().values()]
+        return [self._record(row) for row in self._load().values()]
 
     def snapshot(self) -> list[SessionRecord]:
         """Read-only liveness projection of every tracked session.
@@ -223,20 +271,26 @@ class Registry:
                         row["returncode"] = result.returncode
                 elif not process_alive(row.get("pid")):
                     row["status"] = "stale"
-            records.append(SessionRecord(**row))
+            records.append(self._record(row))
         return records
 
     def get(self, session_id: str) -> SessionRecord | None:
         self.reconcile()
         row = self._load().get(session_id)
-        return SessionRecord(**row) if row else None
+        return self._record(row) if row else None
 
     # --- writes ---------------------------------------------------------------
 
     def upsert(self, record: SessionRecord, *, now: str | None = None) -> SessionRecord:
         record.updated_at = now or _now_iso()
         sessions = self._load()
-        sessions[record.session_id] = asdict(record)
+        # Preserve fields written by a newer Horus while this version updates
+        # the known row shape.  Forward-compatible readers must not make a
+        # mixed installed/source workflow destructive.
+        existing = sessions.get(record.session_id)
+        row = dict(existing) if isinstance(existing, dict) else {}
+        row.update(asdict(record))
+        sessions[record.session_id] = row
         self._save(sessions)
         return record
 
@@ -248,6 +302,18 @@ class Registry:
         row["status"] = status
         if returncode is not None:
             row["returncode"] = returncode
+        row["updated_at"] = _now_iso()
+        self._save(sessions)
+        return True
+
+    def update(self, session_id: str, **fields: object) -> bool:
+        """Update additive run metadata without replacing the registry row."""
+        sessions = self._load()
+        row = sessions.get(session_id)
+        if row is None:
+            return False
+        known = {field.name for field in SessionRecord.__dataclass_fields__.values()}
+        row.update({key: value for key, value in fields.items() if key in known})
         row["updated_at"] = _now_iso()
         self._save(sessions)
         return True
@@ -282,18 +348,29 @@ class Registry:
                 row["status"] = result.status
                 if result.returncode is not None:
                     row["returncode"] = result.returncode
+                _apply_delivery_completion(row)
                 row["updated_at"] = _now_iso()
                 dirty = True
-                changed.append(SessionRecord(**row))
+                changed.append(self._record(row))
                 continue
             if not process_alive(row.get("pid")):
                 row["status"] = "stale"
+                _apply_delivery_completion(row)
                 row["updated_at"] = _now_iso()
                 dirty = True
-                changed.append(SessionRecord(**row))
+                changed.append(self._record(row))
         if dirty:
             self._save(sessions)
         return changed
+
+    @staticmethod
+    def _record(row: dict) -> SessionRecord:
+        """Read legacy/future rows through the fields this version understands."""
+        known = SessionRecord.__dataclass_fields__
+        normalized = {key: value for key, value in row.items() if key in known}
+        if "agent_session_id" not in normalized:
+            normalized["agent_session_id"] = normalized.get("session_id")
+        return SessionRecord(**normalized)
 
     def prune(self) -> list[str]:
         """Drop terminal records (after reconcile). Returns the removed session ids."""

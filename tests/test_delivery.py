@@ -13,7 +13,105 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from horus import delivery, integration as intmod
+
+
+def _evidence(**kwargs) -> delivery.DeliveryEvidence:
+    values = {
+        "inspectable": True,
+        "checked_at": "2026-07-16T10:00:00+00:00",
+        "branch": "worker/test",
+        "head_sha": "head",
+        "local_changes": False,
+        "continuity_closed": False,
+        "head_beyond_base": False,
+        "pushed_beyond_base": False,
+    }
+    values.update(kwargs)
+    return delivery.DeliveryEvidence(**values)
+
+
+@pytest.mark.parametrize(
+    ("status", "expected", "evidence", "outcome"),
+    [
+        ("exited", True, _evidence(pushed_sha="pushed", pushed_beyond_base=True), "delivery-ready"),
+        ("exited", True, _evidence(local_changes=True, head_beyond_base=True), "blocked"),
+        ("exited", True, _evidence(), "no-op"),
+        ("failed", True, _evidence(), "failed"),
+        ("running", True, _evidence(), "unknown"),
+        ("exited", False, _evidence(pushed_sha="pushed", pushed_beyond_base=True), "unknown"),
+        ("exited", True, _evidence(inspectable=False), "unknown"),
+    ],
+)
+def test_completion_classifier_table(status, expected, evidence, outcome):
+    assert delivery.classify_delivery(
+        status, delivery_expected=expected, dispatch_base_sha="base", evidence=evidence,
+    ) == outcome
+
+
+def test_completion_classifier_does_not_treat_unchanged_base_as_delivery():
+    evidence = _evidence(pushed_sha="base", pushed_beyond_base=False)
+    assert delivery.classify_delivery(
+        "exited", delivery_expected=True, dispatch_base_sha="base", evidence=evidence,
+    ) == "no-op"
+
+
+def test_completion_evidence_treats_clean_non_descendant_head_as_local_evidence(tmp_path, monkeypatch):
+    _no_pr(monkeypatch)
+    _origin, clone = _bare_origin_and_clone(tmp_path)
+    base = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"], check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    _git(clone, "checkout", "--orphan", "worker/rewrite")
+    _git(clone, "rm", "-rf", ".")
+    (clone / "rewritten.txt").write_text("replacement history\n", encoding="utf-8")
+    _git(clone, "add", "rewritten.txt")
+    _git(clone, "commit", "-m", "rewritten root")
+
+    evidence = delivery.capture_delivery_evidence(clone, dispatch_base_sha=base)
+
+    assert evidence.inspectable is True
+    assert evidence.head_sha != base
+    assert evidence.head_beyond_base is False
+    assert evidence.local_changes is True
+    assert delivery.classify_delivery(
+        "exited", delivery_expected=True, dispatch_base_sha=base, evidence=evidence,
+    ) == "blocked"
+
+
+def test_completion_evidence_attributes_only_pr_matching_pushed_sha(tmp_path, monkeypatch):
+    _origin, clone = _bare_origin_and_clone(tmp_path)
+    base = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"], check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    _git(clone, "checkout", "-b", "worker/exact-pr")
+    (clone / "f.txt").write_text("worker work", encoding="utf-8")
+    _git(clone, "commit", "-am", "worker commit")
+    _git(clone, "push", "-u", "origin", "worker/exact-pr")
+    pushed = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"], check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    payload = {"value": '[{"number": 8, "url": "https://gh/pr/8", "state": "OPEN", '
+                        '"title": "wrong commit", "headRefOid": "not-the-pushed-sha"}]'}
+    _patch_gh(monkeypatch, lambda *a, **k: _pr_json(payload["value"]))
+
+    # Receipt callers retain their historical preferred-match/fallback behavior.
+    assert intmod.pr_for_branch(clone, "worker/exact-pr", head_sha=pushed)["number"] == 8
+
+    mismatched = delivery.capture_delivery_evidence(clone, dispatch_base_sha=base)
+
+    assert mismatched.pushed_sha == pushed
+    assert mismatched.pr_number is None
+
+    payload["value"] = (
+        '[{"number": 9, "url": "https://gh/pr/9", "state": "OPEN", '
+        f'"title": "exact commit", "headRefOid": "{pushed}"}}]'
+    )
+    exact = delivery.capture_delivery_evidence(clone, dispatch_base_sha=base)
+
+    assert exact.pr_number == 9
 
 
 def _git(root: Path, *args: str) -> None:
