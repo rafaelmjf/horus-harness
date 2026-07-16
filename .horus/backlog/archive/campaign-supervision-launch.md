@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-15
 type: feature
 parallel: safe
 surface: horus/terminal_tui.py, horus/routines.py
+shipped_pr: 265
+shipped_sha: d75bd4c1890e5ea28dbfe980601c0f8c160fdc9a
 ---
 
 # Optional campaign-supervision launch from the TUI

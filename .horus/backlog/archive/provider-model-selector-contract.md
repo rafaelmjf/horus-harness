@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-16
 type: bug
 parallel: safe
 surface: horus/adapters/claude.py, horus/cli.py, horus/datums.py, bundled decision/execution skills
+shipped_pr: 266
+shipped_sha: ffbb9688c648e10feeeaaa3010fe8c1ca5cb3eb6
 ---
 
 # Provider-valid model selector contract

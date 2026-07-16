@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: inline
 created: 2026-07-16
 type: bug
 parallel: unsafe
 surface: horus/cli.py, horus/native_hooks.py, horus/templates.py, Claude/Codex hook projections
+shipped_pr: 267
+shipped_sha: 14f312cd797bc4971eb5657019d13b65b9544b09
 ---
 
 # Worker guard for destructive global-state cleanup

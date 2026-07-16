@@ -1,86 +1,32 @@
 ---
-status: active
-feature: "Campaign launch + provider-selector guard"
+status: complete
+current_feature: "Campaign launch + provider-selector guard"
 created: 2026-07-16
 updated: 2026-07-16
 ---
 
 # Execution Plan — Campaign launch + provider-selector guard
 
-Two independent, owner-approved worker phases. The first adds the evidenced Campaign
-entry point. The second fixes the provider-selector defect exposed by its initial
-five-second launch failure. Their code surfaces do not overlap.
+Completed as two owner-approved, disjoint Claude worker phases from base `0e39c292`.
+The supervisor owned acceptance, delivery, incident handling, and continuity.
 
 ## Phase 1 — Campaign launch prompt + TUI affordance
 
-- status: ready
-- mode: delegated
-- worker_agent: claude
-- worker_model: `claude-sonnet-5` (provider selector; calibration key `sonnet-5`)
-- worker_effort: medium
-- worker_account: ambient/default Claude personal
-- worker_tier: scoped-impl lead
-- attempts: one executable retry; the prior `sonnet-5` selector failure consumed the
-  original attempt without entering the task
-- delegation_basis: owner-directed use of expiring personal-Claude weekly capacity
-  plus useful parallel protection of the supervisor context; the scope is fenceable
-  and disjoint from Phase 2.
-- scope: `horus/terminal_tui.py`, `horus/routines.py`, and focused tests only.
-- handoff: `.horus/temp/campaign-supervision-launch.md`
-- gate: `uv run pytest -q tests/test_terminal_tui.py tests/test_terminal_sessions.py tests/test_routines.py`
-- runtime_gate: supervisor drives one non-mutating terminal-TUI frame showing
-  Campaign as optional and visibly distinct from Fleet Review.
-
-### Constraints
-
-- Direct project launch remains the default path.
-- Ask for the campaign outcome and target set; do not invent a project archetype.
-- Apply need-first inline-versus-dispatch judgment per bounded unit.
-- Never auto-select a model/account, auto-spawn a worker, or treat cross-project
-  scope alone as a dispatch dividend.
-- Target repositories retain branch/PR/gate/continuity authority.
-- Do not edit `PRD.md`, backlog cards, or this execution plan; the supervisor owns
-  durable continuity.
-
-### Acceptance
-
-Required CI must be green on the worker's exact PR SHA, then the supervisor drives
-the runtime frame. Any different model/account/effort/scope or another executable
-attempt requires renewed owner approval.
+- status: complete
+- delivery: PR #265, merge `d75bd4c1890e5ea28dbfe980601c0f8c160fdc9a`
+- worker_runtime: 583.42 seconds
+- evidence: required CI green on the exact PR SHA; 147 targeted tests and 1556 full-suite tests reported; supervisor drove a private-tmux TUI frame showing optional Campaign separately from Fleet Review with direct project launch intact.
+- outcome: clean delivery with light oversight and a positive parallel/context dividend.
 
 ## Phase 2 — Provider-valid selector preflight + consent contract
 
-- status: ready
-- mode: delegated
-- worker_agent: claude
-- worker_model: `claude-sonnet-5` (provider selector; calibration key `sonnet-5`)
-- worker_effort: medium
-- worker_account: ambient/default Claude personal
-- worker_tier: scoped-impl lead
-- attempts: 1
-- delegation_basis: owner-directed use of expiring personal-Claude capacity plus
-  useful parallelism; the adapter/datums/skills surface is disjoint from Phase 1 and
-  keeps the supervisor from loading implementation detail.
-- scope: Claude adapter/model preflight, canonical datum preservation, bundled
-  decision/execution consent guidance, and focused tests. No TUI/routines changes.
-- handoff: `.horus/temp/provider-model-selector-contract.md`
-- gate: `uv run pytest -q tests/test_claude_adapter.py tests/test_datums.py tests/test_skills.py tests/test_cli.py`
-- runtime_gate: supervisor proves a calibration-only Claude label is rejected before
-  worktree/session creation and a full provider selector reaches the adapter unchanged
-  using a token-free fake/subprocess probe.
+- status: complete by supervisor salvage
+- delivery: PR #266, merge `ffbb9688c648e10feeeaaa3010fe8c1ca5cb3eb6`
+- worker_runtime: 571.381 seconds
+- incident: during an unisolated manual cleanup probe the worker deleted `~/.horus/logs/runs`; historical machine-local streamed run logs were lost, while registry, datums, git/worktrees, tmux metadata, and PR state remained intact. The worker stopped without commit or PR.
+- evidence: supervisor reviewed and committed the bounded diff, observed 313 targeted tests green, proved calibration-only labels fail before side effects and full selectors reach the adapter unchanged, then watched required CI green on the exact PR SHA.
+- outcome: bounced delivery with heavy supervisor oversight and negative delegation dividend. PR #267 subsequently added the worker-only global-state deletion guard and exact isolated-probe guidance.
 
-### Constraints
+## Usage evidence
 
-- Do not auto-select, silently translate, fall back, or probe a provider with model
-  tokens. The owner approves the exact executable selector.
-- Keep provider naming rules inside the adapter boundary.
-- Preserve the canonical `sonnet-5` datum series after Claude reports the resolved
-  model ID.
-- Do not edit `PRD.md`, backlog cards, or this execution plan; the supervisor owns
-  durable continuity.
-
-### Acceptance
-
-Required CI must be green on the worker's exact PR SHA, then the supervisor drives
-the token-free preflight probe. Any different model/account/effort/scope or another
-attempt requires renewed owner approval.
+Both workers shared the ambient personal account and ran concurrently, so per-worker attribution is unavailable by design. The fresh account readings moved from 0% to 33% in the five-hour window and 8% to 10% weekly; these are combined observed percentage-point movements, not task estimates.
