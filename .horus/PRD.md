@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "v0.0.57 stable; the two safe high-priority cards shipped (account-scoped usage check PR #253, inventory reconciliation PR #254 — the latter via a sonnet worker gated by the former). The worker-lifecycle trio was re-scoped 2026-07-16: one campaign carrying the attachable-detached primitive plus the delivery-evidence/completion kernel; stall timer and receipt trimmings deferred by card review."
-next_action: "Execute `.horus/execution.md` (worker-lifecycle campaign) in a fresh session: phase 0 designs the three-dimension worker-state schema once, then the detached attachable primitive, then the no-op/completion kernel."
-next_prompt: "Resume clean horus-harness main, read `.horus/execution.md`, and claim `attachable-detached-worker-run` (it carries the kernels of both sibling cards per their 2026-07-16 Reviews). Run phase 0 (state-model + schema against the plan's design constraints) before any implementation."
-execution_recommendation: "plan-execution — the campaign spans CLI, tmux hosting, registry schema, logs, and datums with parity gates; the phase plan already exists (.horus/execution.md) with design constraints captured from the re-scoping session, so the executing session starts at phase 0 instead of re-deriving."
+current_focus: "Worker-lifecycle campaign is claimed on `feat/attachable-detached-worker-run`; phase 0 is complete in `.horus/execution.md`. The frozen design separates liveness, delivery, and progress, preallocates a stable Horus run id, and routes foreground/detached execution through one adapter path. No product code has changed yet."
+next_action: "Execute phase 1 in `.horus/execution.md`: implement the detached attachable one-shot primitive against the frozen schema and shared-executor parity map, then run the full suite and the private-socket caller-death/attach-detach live probe."
+next_prompt: "Fetch first, resume `feat/attachable-detached-worker-run`, verify it against origin, and read PRD.md plus `.horus/execution.md`. Phase 0 is frozen; start phase 1 without redesigning the schema. Apply the live scoped-implementation tier recommendation, reproduce the full-suite gate, and drive the private `tmux -S` lifecycle probe yourself."
+execution_recommendation: "plan-execution — phase 1 is a bounded, high-volume CLI/tmux/registry implementation with a clear full-suite + live-probe gate; a proven scoped-implementation tier buys lower-tier savings and preserves the supervisor's cross-surface acceptance context beyond the fixed handoff/review tax."
 last_updated: 2026-07-16
 horus_min_version: 0.0.26
 ---
