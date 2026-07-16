@@ -38,9 +38,11 @@ from horus import (
     config,
     fleet_review,
     frontmatter,
+    github_catalog,
     machine_requirements,
     projection_sync,
     registry,
+    remote_start,
     routines,
     terminal_sessions,
     usage_snapshot,
@@ -81,7 +83,12 @@ class _EditCard:
     review: bool = False
 
 
-_Action = _Launch | _Attach | _Stop | _EditCard | str
+@dataclass(frozen=True)
+class _RemoteStart:
+    project: "github_catalog.RemoteProject"
+
+
+_Action = _Launch | _Attach | _Stop | _EditCard | _RemoteStart | str
 
 # Labels for the home-level Defaults screen's one setting: the permission
 # posture new TUI launches (fresh/resume/card-resume) start with, until changed
@@ -138,6 +145,7 @@ class TerminalUI:
         self.project_pending = {
             project: len(closure.pending_delivery_commits(project)) for project in self.projects
         }
+        self.remote_projects, self.remote_ignored, self.remote_errors = _remote_projects()
         self.running = [record for record in registry.Registry.default().all() if record.status == "running"]
         self.screen = "projects"
         self.project: Path | None = None
@@ -333,6 +341,9 @@ class TerminalUI:
             self._show("fleet_review")
         elif self.screen == "projects" and kind == "projection_sync":
             self._show("projection_sync")
+        elif self.screen == "projects" and kind == "remote_project":
+            if isinstance(value, github_catalog.RemoteProject):
+                self.application.exit(result=_RemoteStart(value))
         elif self.screen == "project" and kind == "mode":
             self.pending_mode = str(value)
             self.pending_card = None
@@ -442,6 +453,7 @@ class TerminalUI:
     def _refresh_items(self) -> None:
         if self.screen == "projects":
             self.items = [("project", project) for project in self.projects]
+            self.items.extend(("remote_project", project) for project in self.remote_projects)
             self.items.append(("projection_sync", None))
             self.items.append(("fleet_review", None))
         elif self.screen == "project":
@@ -567,6 +579,7 @@ class TerminalUI:
         lines: StyleAndTextTuples = []
         if self.screen == "projects":
             lines.extend(self._account_summary_text())
+            lines.extend(self._remote_catalog_notes_text())
         elif self.screen == "project":
             pending = self.project_pending.get(self.project, 0)
             if pending:
@@ -614,6 +627,12 @@ class TerminalUI:
                 pending = self.project_pending.get(root, 0)
                 continuity = f" · continuity {pending} pending" if pending else ""
                 lines.append(("class:muted", f"     backlog {card_count} · bugs {bug_count}{continuity}\n"))
+            elif kind == "remote_project":
+                project = value
+                badge = "cloned, not registered" if project.is_local else "remote only"
+                lines.append((style, f"\n {marker} {project.name} · {badge}\n"))
+                detail = project.current_focus or project.full_name
+                lines.append(("class:muted", f"     {detail}\n"))
             elif kind == "fleet_review":
                 lines.append((style, f"\n {marker} Fleet Review\n"))
                 lines.append(
@@ -773,6 +792,24 @@ class TerminalUI:
                         fragments.append(("class:muted", "  "))
                 fragments.append(("", "\n"))
             fragments.append(("", "\n"))
+        fragments.extend(self._remote_catalog_notes_text())
+        remote_items = [
+            (index, project)
+            for index, (kind, project) in enumerate(self.items)
+            if kind == "remote_project"
+        ]
+        if remote_items:
+            fragments.append(("class:section", " Remote projects\n"))
+            for index, project in remote_items:
+                marker = ">" if index == self.selected else " "
+                style = "class:selected" if index == self.selected else "class:item"
+                badge = "cloned, not registered" if project.is_local else "remote only"
+                if index == self.selected:
+                    fragments.append(("[SetCursorPosition]", ""))
+                fragments.append((style, f" {marker} {project.name} · {badge}\n"))
+                detail = project.current_focus or project.full_name
+                fragments.append(("class:muted", f"   {detail}\n"))
+            fragments.append(("", "\n"))
         utility_rows = [
             (index, kind)
             for index, (kind, _value) in enumerate(self.items)
@@ -811,6 +848,20 @@ class TerminalUI:
             for detail in summary:
                 lines.append(("class:muted", f"    {detail}\n"))
         lines.append(("", "\n Projects\n"))
+        return lines
+
+    def _remote_catalog_notes_text(self) -> StyleAndTextTuples:
+        """Surface the 'unavailable' and 'ignored' remote-catalog states as text,
+        distinct from the selectable ``remote_project`` items themselves."""
+        lines: StyleAndTextTuples = []
+        for error in self.remote_errors:
+            lines.append(("class:warning", f"\n  Remote catalog unavailable: {error}\n"))
+        if self.remote_ignored:
+            count = len(self.remote_ignored)
+            lines.append((
+                "class:muted",
+                f"\n  {count} remote repo{'s' if count != 1 else ''} hidden via `horus ignore`\n",
+            ))
         return lines
 
     def _project_sessions(self, root: Path) -> list[registry.SessionRecord]:
@@ -1160,6 +1211,8 @@ def run() -> int:
         elif isinstance(result, _Stop):
             error = terminal_sessions.stop_session(result.session_id)
             status = error or f"Closed {result.session_id[:8]}."
+        elif isinstance(result, _RemoteStart):
+            status = _start_remote(result)
 
 
 def _projects() -> list[Path]:
@@ -1168,6 +1221,32 @@ def _projects() -> list[Path]:
         for raw in config.load_projects()
         if (root := Path(raw).resolve()).is_dir() and (root / ".horus").is_dir()
     ]
+
+
+def _remote_projects() -> tuple[
+    list["github_catalog.RemoteProject"], list["github_catalog.RemoteProject"], list[str]
+]:
+    """Cache-only remote Horus project listing: (visible, ignored, error notes).
+
+    Reads only the on-disk cache that ``horus start`` / the dashboard's background
+    refresh already populate — never calls ``gh`` — so the TUI's first paint never
+    blocks on a network round trip. Already-registered projects are dropped since
+    they already appear as ``project`` items.
+    """
+    local = config.load_projects()
+    all_projects: list[github_catalog.RemoteProject] = []
+    errors: list[str] = []
+    for owner in config.load_github_owners():
+        cached = github_catalog.load_cache(owner, local_projects=local)
+        if cached is None:
+            continue
+        all_projects.extend(cached.projects)
+        if cached.error:
+            when = f" at {cached.error_at}" if cached.error_at else ""
+            errors.append(f"{owner}: last refresh failed{when}: {cached.error}")
+    unregistered = github_catalog.drop_registered(all_projects, registered=local)
+    visible, hidden = github_catalog.filter_ignored(unregistered)
+    return visible, hidden, errors
 
 
 def _projection_counts(records: list[tuple[Path, dict]]) -> tuple[int, int]:
@@ -1441,6 +1520,19 @@ def _edit_card(root: Path, card: backlog.Card, *, review: bool) -> str:
         root, f"Update backlog card {card.name} ({verb} via TUI)", push=True
     )
     return detail if did else f"Not committed: {detail}"
+
+
+def _start_remote(action: "_RemoteStart") -> str:
+    """Clone (if needed) + register + refresh projections for a selected remote
+    project, reusing ``remote_start.start_github_project`` — the same primitive
+    the CLI's ``horus start github:owner/repo`` uses. No second clone/register
+    path is introduced here."""
+    try:
+        result = remote_start.start_github_project(f"github:{action.project.full_name}")
+    except RuntimeError as exc:
+        return f"Remote start failed: {exc}"
+    verb = "Cloned and registered" if result.cloned else "Registered"
+    return f"{verb} {result.project.name} at {result.path}. Select it to resume."
 
 
 def _card_prompt(root: Path, card: backlog.Card) -> str:

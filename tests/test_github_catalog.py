@@ -751,3 +751,48 @@ next_prompt: "PRD prompt"
     assert result.projects[0].current_focus == "PRD focus"
     assert result.projects[0].next_action == "PRD next"
     assert result.projects[0].next_prompt == "PRD prompt"
+
+
+def _remote_project(full_name: str, *, local_path: str | None) -> "github_catalog.RemoteProject":
+    owner, name = full_name.split("/")
+    return github_catalog.RemoteProject(
+        owner=owner,
+        name=name,
+        full_name=full_name,
+        url=f"https://github.com/{full_name}",
+        clone_url=f"git@github.com:{full_name}.git",
+        default_branch="main",
+        pushed_at="2026-06-28T12:00:00Z",
+        local_path=local_path,
+    )
+
+
+def test_drop_registered_filters_only_matching_local_path(tmp_path):
+    registered = tmp_path / "demo"
+    registered.mkdir()
+    other = tmp_path / "other"
+    other.mkdir()
+
+    already_registered = _remote_project("rafaelmjf/demo", local_path=str(registered))
+    cloned_unregistered = _remote_project("rafaelmjf/cloned", local_path=str(other))
+    remote_only = _remote_project("rafaelmjf/remote-only", local_path=None)
+
+    result = github_catalog.drop_registered(
+        [already_registered, cloned_unregistered, remote_only],
+        registered=[str(registered)],
+    )
+
+    assert result == [cloned_unregistered, remote_only]
+
+
+def test_drop_registered_defaults_to_config_load_projects(tmp_path, monkeypatch):
+    registered = tmp_path / "demo"
+    registered.mkdir()
+    monkeypatch.setattr(github_catalog.config, "load_projects", lambda: [str(registered)])
+
+    already_registered = _remote_project("rafaelmjf/demo", local_path=str(registered))
+    remote_only = _remote_project("rafaelmjf/remote-only", local_path=None)
+
+    result = github_catalog.drop_registered([already_registered, remote_only])
+
+    assert result == [remote_only]
