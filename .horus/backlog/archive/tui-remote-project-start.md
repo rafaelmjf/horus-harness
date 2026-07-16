@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-15
 type: feature
 parallel: safe
 surface: horus/terminal_tui.py, horus/github_catalog.py, horus/remote_start.py
+shipped_pr: 257
+shipped_sha: 6c870fa9e31806045ef8a109a24baefc71122bb1
 ---
 
 # Start remote-only GitHub projects from the terminal TUI
