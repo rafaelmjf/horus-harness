@@ -1,5 +1,5 @@
 ---
-status: open
+status: claimed
 priority: high
 tier: sonnet
 created: 2026-07-15
