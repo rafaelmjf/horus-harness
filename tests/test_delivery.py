@@ -413,3 +413,51 @@ def test_render_receipt_empty_for_none_or_no_signal():
 
 def test_nonclean_statuses_are_failed_and_stale_only():
     assert delivery.NONCLEAN_STATUSES == frozenset({"failed", "stale"})
+
+
+# --- dispatch-base gating (a branch resting at base delivered nothing) ---------
+
+
+def _head(root: Path) -> str:
+    return subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def test_receipt_ignores_closure_commit_at_dispatch_base(tmp_path, monkeypatch):
+    """A worker that died at startup left its branch AT the dispatch base. When the
+    base's own HEAD is a continuity-closure commit, the receipt must not credit that
+    closure to the worker — otherwise a never-ran worker reads as failed-but-delivered."""
+    _no_pr(monkeypatch)
+    _origin, clone = _bare_origin_and_clone(tmp_path)
+    (clone / ".horus").mkdir()
+    (clone / ".horus" / "PRD.md").write_text("state\n", encoding="utf-8")
+    _git(clone, "add", ".horus/PRD.md")
+    _git(clone, "commit", "-m", "Update Horus continuity (closure)")
+    base = _head(clone)
+    _git(clone, "checkout", "-b", "worker/died-at-startup")  # branch at base, no commits
+
+    receipt = delivery.delivery_receipt(clone, dispatch_base_sha=base)
+
+    assert receipt is not None
+    assert receipt.continuity_closed is False
+    assert receipt.has_signal is False
+    assert delivery.render_receipt("failed", receipt) == ""
+
+
+def test_receipt_credits_closure_commit_beyond_dispatch_base(tmp_path, monkeypatch):
+    """A closure-shaped commit the worker actually added past base still counts."""
+    _no_pr(monkeypatch)
+    _origin, clone = _bare_origin_and_clone(tmp_path)
+    base = _head(clone)
+    _git(clone, "checkout", "-b", "worker/closed-its-own")
+    (clone / ".horus").mkdir()
+    (clone / ".horus" / "PRD.md").write_text("worker state\n", encoding="utf-8")
+    _git(clone, "add", ".horus/PRD.md")
+    _git(clone, "commit", "-m", "Update Horus continuity (closure)")
+
+    receipt = delivery.delivery_receipt(clone, dispatch_base_sha=base)
+
+    assert receipt is not None
+    assert receipt.continuity_closed is True
+    assert receipt.has_signal is True

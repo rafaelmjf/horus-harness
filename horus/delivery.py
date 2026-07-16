@@ -290,7 +290,10 @@ def capture_delivery_evidence(
     )
 
 
-def delivery_receipt(project_dir: str | Path, *, session_end: datetime | None = None) -> DeliveryReceipt | None:
+def delivery_receipt(
+    project_dir: str | Path, *, dispatch_base_sha: str | None = None,
+    session_end: datetime | None = None,
+) -> DeliveryReceipt | None:
     """Best-effort delivery facts for the worktree/branch checked out at
     ``project_dir``. ``None`` when there's nothing to say — directory gone, not a
     git worktree, or a detached/unresolvable HEAD — callers fall back to the
@@ -302,6 +305,12 @@ def delivery_receipt(project_dir: str | Path, *, session_end: datetime | None = 
     ``session_end`` (the session's own recorded end time) lets the pushed commit
     — and, transitively, the PR built on it — be time-correlated to THIS
     session's window instead of always the branch's current tip.
+
+    With a known ``dispatch_base_sha`` only work BEYOND that base counts as this
+    session's delivery: a branch resting exactly at its dispatch base carries the
+    base's own commits — including a closure-shaped HEAD when the base itself was a
+    continuity-closure commit — which a worker that never committed did not produce.
+    Without a base the legacy best-effort facts are returned unchanged.
     """
     try:
         root = Path(project_dir)
@@ -314,9 +323,27 @@ def delivery_receipt(project_dir: str | Path, *, session_end: datetime | None = 
         if not branch or branch == "?":
             return None
 
+        head_beyond: bool | None = None
+        if dispatch_base_sha:
+            head_ok, head = _checked_git(root, "rev-parse", "HEAD")
+            head_beyond = _is_beyond_base(root, dispatch_base_sha, head) if head_ok and head else None
+            if head_beyond is not True and not state.get("dirty"):
+                # The branch never advanced past the dispatched base — this session
+                # delivered nothing; do not attribute the base's own commits to it.
+                return DeliveryReceipt(branch=branch)
+
         pushed_sha = _pushed_sha(root, branch, session_end=session_end)
-        pr = integration.pr_for_branch(root, branch, head_sha=pushed_sha)
-        continuity_closed = _continuity_closed(root)
+        if dispatch_base_sha:
+            if pushed_sha and _is_beyond_base(root, dispatch_base_sha, pushed_sha) is not True:
+                # A pushed tip at/behind base predates this run — not its delivery.
+                pushed_sha = None
+            # No branch-match PR fallback here: only a commit beyond base is this run's.
+            pr = integration.pr_for_branch(root, branch, head_sha=pushed_sha) if pushed_sha else None
+            # A closure-shaped commit is this run's only when the branch advanced past base.
+            continuity_closed = _continuity_closed(root) if head_beyond is True else False
+        else:
+            pr = integration.pr_for_branch(root, branch, head_sha=pushed_sha)
+            continuity_closed = _continuity_closed(root)
 
         return DeliveryReceipt(
             branch=branch,

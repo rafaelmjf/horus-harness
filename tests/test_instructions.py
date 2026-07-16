@@ -67,3 +67,10 @@ def test_normalize_ignores_trailing_whitespace_and_crlf():
     a = templates.shared_block("CLAUDE.md")
     b = a.replace("\n", "\r\n") + "   "
     assert normalize_block(a) == normalize_block(b)
+
+
+def test_shared_block_carries_config_dir_isolation_rule():
+    block = templates.shared_block("CLAUDE.md")
+    assert "One live agent process per account config dir" in block
+    assert "CLAUDE_CONFIG_DIR" in block and "CODEX_HOME" in block
+    assert "never run two workers on one account" in block
