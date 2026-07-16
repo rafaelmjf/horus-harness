@@ -2,8 +2,8 @@
 status: in-progress
 current_feature: "Worker-lifecycle campaign: attachable detached one-shot workers + the delivery-evidence/completion kernel (backlog: attachable-detached-worker-run, carrying the kernels of worker-progress-heartbeat and deferred-supervision-completion-receipt per their 2026-07-16 reviews)."
 supervisor_tier: frontier
-worker_tier: scoped-implementation
-delegation_basis: "Phase 0 stayed direct because it was design/ambiguity work. Phase 1 is now schema-pinned, fenceable implementation with a full-suite + live-probe gate; the live proven scoped-implementation tier buys lower-tier savings and preserves the supervisor's cross-surface acceptance context beyond the handoff/review tax. Re-decide phase 2 after phase 1 lands."
+worker_tier: value-implementation
+delegation_basis: "Phase 0 stayed direct because it was design/ambiguity work. Phase 1 was accepted after a value-tier worker plus one focused bounce, with supervisor-reproduced full-suite and private-socket lifecycle gates. Phase 2 resumes that worker's loaded state-model context for a schema-pinned pure-classifier slice; retained context plus lower-tier savings exceeds the small bounce/review tax."
 last_updated: 2026-07-16
 ---
 
@@ -48,8 +48,14 @@ explicitly deferred (see the two demoted cards' Reviews).
 | phase | status | scope | gate |
 |---|---|---|---|
 | 0 state model + schema | complete (direct) | registry/run-log fields for the three dimensions; parity map against current foreground `horus run` fields | design below checked against every phase-0 constraint; no product code changed |
-| 1 detached attachable one-shot | planned (delegated; scoped-implementation tier) | `horus run --worker … --detach` (or equivalent) on the managed tmux host; TUI attach/detach; natural-exit parity (status, rc, run log, datums, delivery facts); caller-death survival | full pytest + required CI green on the exact SHA + live probe: launch detached, kill the launcher, attach/detach, observe clean completion with parity fields recorded |
-| 2 delivery-evidence + completion kernel | planned | `no-op` detection at exit; `delivery-ready|blocked|failed|unknown` exposed via sessions/CLI-JSON without prose parsing | tests for no-op, delivering, failed, unknown; live probe: a scripted worker that exits 0 delivering nothing must surface as `no-op` |
+| 1 detached attachable one-shot | complete (accepted; delegated value tier; `363728b`) | `horus run --worker … --detach` on the managed tmux host; stable Horus/native ids; existing attach/detach surfaces; natural-exit registry/log/datum parity; caller-death survival | supervisor: `1513 passed`; private `tmux -S` probe SIGTERMed launcher, attached/detached a real viewer, then observed natural exit + parity |
+| 2 delivery-evidence + completion kernel | planned (delegated; resume same value-tier worker) | pure evidence classifier; `no-op` detection at exit; `delivery-ready|blocked|failed|unknown` persisted and exposed via sessions/CLI-JSON without prose parsing | table tests for no-op, delivering, blocked, failed, unknown + full pytest; live probe: an expected-delivery scripted worker exits 0 with no evidence and surfaces `no-op` |
+
+Phase 1 review caught and bounced two safety gaps before acceptance: a failed runner
+handoff now kills only its newly-created tmux target and cleans its spec/ready files,
+and a foreground pre-row holds the launcher PID until the adapter child replaces it.
+The first Claude route produced no edits and died on two provider 529s; the Codex
+value-tier reroute delivered the phase. No phase-2 classification landed early.
 
 ## Phase 0 frozen design (2026-07-16)
 
