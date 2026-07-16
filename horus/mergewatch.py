@@ -229,26 +229,46 @@ def _workflow_job_contexts(text: str) -> set[str]:
     return contexts
 
 
-def pr_only_contexts(root: Path) -> set[str]:
-    """Context-base names that ONLY ever trigger on a ``pull_request`` event
-    across the repo's committed workflow files under ``.github/workflows/``.
+def _workflow_paths_at_sha(root: Path, sha: str) -> list[str] | None:
+    """Paths of ``.github/workflows/*.yml|*.yaml`` as they existed AT ``sha``
+    (via ``git ls-tree``, never the working tree), or ``None`` when that
+    can't be determined (sha not present locally, no git checkout, etc.)."""
+    r = _run(["git", "ls-tree", "-r", "--name-only", sha, "--", ".github/workflows"], root)
+    if r.returncode != 0:
+        return None
+    paths = [line.strip() for line in r.stdout.splitlines() if line.strip()]
+    return [p for p in paths if p.endswith((".yml", ".yaml"))]
 
-    A required context in this set can never post a check on a plain push
-    (e.g. a post-merge commit landing on main), so a watcher must stop
-    waiting on it rather than sit pending forever. This reads the workflow
-    YAML as static data — never executes it — mirroring the "committed
-    machine probes are data" pattern used elsewhere. A context also produced
-    by a push-triggering workflow is never included, even if another
-    same-named job elsewhere is PR-only."""
-    workflows_dir = root / ".github" / "workflows"
-    if not workflows_dir.is_dir():
+
+def _workflow_text_at_sha(root: Path, sha: str, path: str) -> str | None:
+    """Content of ``path`` AT ``sha`` (via ``git show``), or ``None`` when
+    unreadable."""
+    r = _run(["git", "show", f"{sha}:{path}"], root)
+    return r.stdout if r.returncode == 0 else None
+
+
+def pr_only_contexts(root: Path, sha: str) -> set[str]:
+    """Context-base names that ONLY ever trigger on a ``pull_request`` event,
+    read from the workflow definitions as they existed AT the exact watched
+    ``sha`` — never the current checkout, whose workflow triggers may have
+    since changed. A required context in this set can never post a check on
+    a plain push (e.g. a post-merge commit landing on main), so a watcher
+    must stop waiting on it rather than sit pending forever.
+
+    Fails safe: any git evidence that can't be read or parsed at this exact
+    sha yields an empty result, which filters nothing — a required context
+    is only ever dropped on positive, exact-sha proof it can't apply, never
+    on an absence of proof. A context also produced by a push-triggering
+    workflow is never included, even if another same-named job elsewhere is
+    PR-only."""
+    paths = _workflow_paths_at_sha(root, sha)
+    if not paths:
         return set()
     pr_only: set[str] = set()
     push_triggered: set[str] = set()
-    for path in sorted(workflows_dir.glob("*.y*ml")):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
+    for path in paths:
+        text = _workflow_text_at_sha(root, sha, path)
+        if text is None:
             continue
         has_push, has_pr = _workflow_events(text)
         if not has_pr:
@@ -302,7 +322,7 @@ def watch(
         # (e.g. a PR-only continuity check) can never post here, so drop
         # them rather than wait on them forever. Anything still push-capable
         # stays required and pending until it actually reports.
-        filtered = {c for c in required if _context_base(c) not in pr_only_contexts(root)}
+        filtered = {c for c in required if _context_base(c) not in pr_only_contexts(root, target.sha)}
         required = filtered or None
     label = f"PR #{target.pr_number}" if target.pr_number else target.sha[:12]
     emit(f"merge-watch: watching {target.sha[:12]} ({label}) in {target.owner}/{target.repo}")
