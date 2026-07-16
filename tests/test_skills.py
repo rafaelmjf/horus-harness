@@ -320,3 +320,14 @@ def test_init_no_skills_opts_out(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     initialize.init_project(tmp_path / "b", assume_yes=True, with_skills=False, with_hooks=False)
     assert not (tmp_path / "b" / ".claude").exists()
+
+
+def test_product_audit_skill_registered_and_projected():
+    by_name = {skill.name: skill for skill in skills.SKILLS}
+    skill = by_name["product-audit"]
+    # Evidence-first questions, native-overlap check, ceremony review, closed verdict set.
+    for marker in ("demote", "defer", "retire", "no-change", "last_product_audit", "telemetry"):
+        assert marker in skill.content
+    assert "never propose new features" in skill.content or "New features are out" in skill.content
+    for root in (".claude/skills", ".agents/skills"):
+        assert Path(f"{root}/product-audit/SKILL.md").read_text(encoding="utf-8") == skill.content

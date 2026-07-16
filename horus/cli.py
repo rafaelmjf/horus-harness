@@ -1535,6 +1535,15 @@ def _is_gh_pr_merge_command(command: str) -> bool:
     return False
 
 
+def _print_product_audit_advisory(root: Path) -> None:
+    """One non-blocking product-audit staleness line (advisory; never a gate)."""
+    from horus import product_audit
+
+    line = product_audit.advisory_line(root, installed=__version__)
+    if line:
+        print(f"\n[advisory] {line}")
+
+
 def cmd_close(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     if (rc := _enforce_version_floor(root)) is not None:
@@ -1580,6 +1589,7 @@ def cmd_close(args: argparse.Namespace) -> int:
         # residual hook edits, failed pushes, and unsuccessful/no-op commits.
     findings = closure.closure_status(root, usage_threshold=args.usage_threshold)
     healthy = _print_findings(findings)
+    _print_product_audit_advisory(root)
 
     if healthy and args.commit:
         print("\nContinuity captured — boundary checkpoint committed and ready to resume anywhere.")
@@ -2526,6 +2536,7 @@ def cmd_consolidate(args: argparse.Namespace) -> int:
     print(f"Consolidation check: {root}\n")
     findings = routines.consolidate_signals(root)
     healthy = _print_findings(findings)
+    _print_product_audit_advisory(root)
     if frontmatter.has_prd(root):
         print("\n" + templates.CONSOLIDATE_PROMPT_V3)
         if healthy:
