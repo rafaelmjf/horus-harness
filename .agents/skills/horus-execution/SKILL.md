@@ -11,7 +11,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 11 -->
+<!-- horus-skill-version: 12 -->
 
 # Horus execution supervision
 
@@ -55,6 +55,15 @@ freshness, bounded phase, maximum attempts, expected dividend or owner-directed
 override, and verification gate. Wait for explicit approval. A different model,
 account, effort, scope, or an attempt beyond the allowance requires renewed approval;
 never silently fall back after a provider or capacity failure.
+
+The **concrete model** in that envelope is the exact provider-executable
+selector passed to `--model` — not the calibration key. A Horus calibration
+key (`sonnet-5`, `haiku-4.5`) documents which model ran for calibration
+history but is not itself a valid Claude Code `--model` argument; `claude`
+rejects it before any work starts. Name the alias (`sonnet`) or full selector
+(`claude-sonnet-5`) in the envelope, and `horus run` also rejects a bare
+calibration key before creating a worktree or session. If the executable
+selector changes, that is a different envelope and needs renewed approval.
 
 At completion, run `horus datum report` for mechanically captured model/account/
 effort/runtime/attempt/outcome and start/end usage evidence. Report a percentage-point

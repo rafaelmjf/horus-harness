@@ -81,6 +81,27 @@ def test_build_env_sets_config_dir_per_account():
     assert a.build_env(_spec()) == {}
 
 
+# --- validate_model (provider-selector preflight) ----------------------------
+
+def test_validate_model_rejects_calibration_key():
+    err = ClaudeAdapter().validate_model("sonnet-5")
+    assert err is not None
+    assert "calibration key" in err
+    assert "claude-sonnet-5" in err  # actionable full-selector correction
+    assert "sonnet" in err  # actionable bare-alias correction
+
+
+def test_validate_model_rejects_dotted_minor_calibration_key():
+    err = ClaudeAdapter().validate_model("haiku-4.5")
+    assert err is not None
+    assert "claude-haiku-4-5" in err
+
+
+@pytest.mark.parametrize("model", ["sonnet", "opus", "haiku", "fable", "claude-sonnet-5", "claude-haiku-4-5", None])
+def test_validate_model_accepts_aliases_and_full_selectors_unchanged(model):
+    assert ClaudeAdapter().validate_model(model) is None
+
+
 # --- parse_event (real fixtures) ---------------------------------------------
 
 _INIT = '{"type":"system","subtype":"init","cwd":"C:\\\\x","session_id":"abc-123","model":"claude-haiku-4-5-20251001","permissionMode":"default"}'

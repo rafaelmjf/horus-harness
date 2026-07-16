@@ -2203,6 +2203,45 @@ def test_run_worktree_refuses_non_worktree_target(tmp_path, monkeypatch, capsys)
     assert Registry.default().all() == []  # nothing spawned
 
 
+# --- horus run: provider-valid model selector preflight (before worktree/session) ---
+
+def test_run_rejects_calibration_only_claude_label_before_worktree_or_session(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    repo = _init_repo(tmp_path / "repo")
+    rc = main([
+        "run", "hi", "--agent", "claude", "--model", "sonnet-5",
+        "--worktree", "probe-branch", "--path", str(repo),
+    ])
+    assert rc == 2
+    out = capsys.readouterr().out
+    assert "Refusing to run" in out
+    assert "calibration key" in out
+    assert "claude-sonnet-5" in out  # actionable correction
+    expected = repo.parent / "repo-wt-probe-branch"
+    assert not expected.exists()  # no worktree side effect
+    assert Registry.default().all() == []  # no session created
+
+
+def test_run_accepts_valid_alias_and_full_selector_unchanged(tmp_path, monkeypatch):
+    from horus.adapters.base import AgentRun, AgentSession
+    from horus.adapters.claude import ClaudeAdapter
+
+    _home(tmp_path, monkeypatch)
+    repo = _init_repo(tmp_path / "repo")
+    captured = {}
+
+    def spy(self, spec):
+        captured["model"] = spec.model
+        return AgentRun(AgentSession(agent=self.name, project_dir=spec.project_dir), iter(()))
+
+    monkeypatch.setattr(ClaudeAdapter, "spawn", spy)
+
+    for model in ("sonnet", "claude-sonnet-5"):
+        rc = main(["run", "hi", "--agent", "claude", "--model", model, "--path", str(repo)])
+        assert rc == 0
+        assert captured["model"] == model  # passed through unchanged, never translated
+
+
 def _write_backlog_card(root: Path, name: str, **fields):
     hdir = root / ".horus" / "backlog"
     hdir.mkdir(parents=True, exist_ok=True)

@@ -12,7 +12,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -161,9 +161,19 @@ Before any implementation worker is launched, present one exact consent envelope
 - bounded task, maximum attempts, expected dispatch dividend or owner-directed
   capacity/context override, and the deterministic verification gate.
 
+The **concrete model** is the exact selector the target CLI will execute, which
+is not always the same string as the Horus calibration key that names it in
+history. Horus's calibration keys use a dotted `family-major[.minor]` shape;
+Claude Code's own `--model` flag instead accepts a bare family alias or a full
+dash-separated selector — the calibration-key spelling looks exact but Claude
+Code rejects it before any work starts. `horus run` rejects a known
+calibration-only Claude label before creating a worktree or session as a
+backstop, but the envelope should already name the executable selector.
+
 Wait for explicit owner approval of that envelope. Approval does not authorize a
 different model, account, effort, task scope, or another attempt. Ask again before
-any such change; a provider failure never permits silent fallback. This approval is
+any such change — including a corrected provider selector for the same intended
+model; a provider failure never permits silent fallback. This approval is
 the execution plane's responsibility—Horus records and displays evidence but never
 authorizes, selects, or launches by itself.
 
