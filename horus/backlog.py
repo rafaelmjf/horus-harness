@@ -58,6 +58,8 @@ _INACTIVE_STATUSES = ("done", "folded-in", "retired", "shipped")
 # `--type` filter) rather than folder separation. Unset/blank defaults to "task".
 CARD_TYPES = ("bug", "feature", "chore", "task")
 DEFAULT_TYPE = "task"
+DEFAULT_PHASE = "converge"  # product work; explore cards opt in with `phase: explore`
+EXPLORE_PHASE = "explore"
 
 _LINGERING_DONE_RE = re.compile(
     r"^\s*(?:(?:[-*]|\d+\.)\s*)?(?:\[x\]\s*)?DONE\b\s*(?:$|:|[-—])",
@@ -77,6 +79,8 @@ class Card:
     parallel: str  # "safe" | "exclusive" | "" (unstated)
     surface: tuple[str, ...]
     type: str  # "bug" | "feature" | "chore" | "task" — defaults to "task" if unstated
+    vision_facet: str  # the `## Vision` facet this card advances ("" if unstated)
+    phase: str  # "explore" | "converge" — defaults to "converge" (product work)
     shipped_pr: str
     shipped_sha: str
     shipped: str  # legacy free-text shipped note, used only to detect unflipped drift
@@ -126,6 +130,8 @@ def _card_from_path(path: Path) -> Card:
         parallel=fm.get("parallel", "").strip().lower(),
         surface=_parse_surface(fm.get("surface", "")),
         type=fm.get("type", "").strip().lower() or DEFAULT_TYPE,
+        vision_facet=str(fm.get("vision_facet", "")).strip().strip("'\"").strip(),
+        phase=str(fm.get("phase", "")).strip().lower() or DEFAULT_PHASE,
         shipped_pr=fm.get("shipped_pr", "").strip(),
         shipped_sha=fm.get("shipped_sha", "").strip(),
         shipped=fm.get("shipped", "").strip(),

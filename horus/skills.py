@@ -72,7 +72,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 11 -->
+<!-- horus-skill-version: 12 -->
 
 # Consolidate Horus continuity
 
@@ -128,6 +128,17 @@ them is stale or empty.
    - **Lingering done items** — a backlog item checked `[x]` or prefixed
      `DONE`/`Done:`. Delete the item; a `**Result … PASS**` note continuing a
      still-open item is not itself a done marker, leave those.
+   - **Convergence read-out (phase-aware, advisory)** — maps each active backlog
+     card onto a `## Vision` facet via its `vision_facet` frontmatter. Reports
+     facets with open work, facets with no open cards (converged or untouched —
+     judge each against that facet's stated definition of done), and a separate
+     **exploratory** bucket (`phase: explore` cards, exempt from the facet-link
+     requirement because their job is to discover, not converge). It *warns* when a
+     `converge`-phase card has no `vision_facet` (the reactive/off-vision smell) or
+     names a facet absent from the Vision. Act on a warn by linking the card, setting
+     `phase: explore`, fixing the facet name — or, when exploration has genuinely
+     proven out a new direction, **promoting it into a new Vision facet** (the facet
+     set is a living hypothesis; the roadmap breathes divergence→convergence).
 
 2. **Read `PRD.md`**, any relevant `temp/*.md` handoff notes, and the newest
    `sessions/*.md` recovery note only when one exists.
@@ -136,7 +147,12 @@ them is stale or empty.
    `CLAUDE.md`):
    - Fold capabilities shipped *this session* into `## Shipped` as **one line
      each** — not a paragraph; detail lives in git history and optional recovery notes.
-   - Add or update `## Backlog` items for new or changed open work.
+   - Add or update `## Backlog` items for new or changed open work. New/changed
+     backlog **cards** carry a `vision_facet` (which Vision facet they advance) and,
+     for exploratory PoCs, `phase: explore`; a `converge` card that can name neither
+     is either off-vision (drop/rescope) or should be `phase: explore`. Give a
+     new/next-touched `converge` card one testable acceptance line (EARS-lite:
+     "when X, the tool should Y").
    - Add any newly load-bearing invariant to `## Rules`, concise and
      current-state only (not a dated log — git history and optional recovery
      notes carry rationale when needed).
@@ -1599,7 +1615,7 @@ has is a revise finding.
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 11, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 12, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 4, _INFER_SKILL),
     Skill("horus-execution", 13, _EXECUTION_SKILL),

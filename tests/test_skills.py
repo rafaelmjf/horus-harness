@@ -213,7 +213,7 @@ def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
 
 def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
-    assert consolidate.version == 11
+    assert consolidate.version == 12
     assert "PRD.md" in consolidate.content
     assert "no lane-routing/overlap warnings" in consolidate.content
     assert "~250-line cap" in consolidate.content
@@ -222,6 +222,10 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     assert "Duplicate backlog titles" in consolidate.content
     assert "Lingering done items" in consolidate.content
     assert "one line" in consolidate.content and "not a paragraph" in consolidate.content
+    # v12: the phase-aware convergence read-out.
+    assert "Convergence read-out" in consolidate.content
+    assert "vision_facet" in consolidate.content
+    assert "phase: explore" in consolidate.content
     # sessions/ and temp/ handoff notes stay unchanged in v3.
     assert "temp/" in consolidate.content
 

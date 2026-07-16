@@ -50,7 +50,9 @@ the *instruction* rung (a line in the card), not a gate, unless a real failure e
 
 - **Phase A DONE (2026-07-16, PRD-only):** 7 Vision facets + DoD lines defined in PRD Vision;
   breathing divergence→convergence model added; all 13 cards stamped with `vision_facet`.
-- **Phase B REMAINING (real package code, own checkpoint):** implement the phase-aware read-out
-  in the `horus-consolidate` skill (source + tests + skill-version bump) and add the card
-  `phase: explore|converge` marker + acceptance-line convention to the Structure contract.
-- Lower-risk than `market-scan` (fully in-repo, no outward data, no token-heavy composition).
+- **Phase B DONE (2026-07-16):** `Card.vision_facet`/`phase` parsing (`horus/backlog.py`);
+  `routines.convergence_findings` phase-aware read-out wired into `horus consolidate`;
+  `horus-consolidate` skill v12 documents it; Structure-contract convention added; tests in
+  `test_backlog.py`/`test_routines.py`/`test_skills.py`. Live-probed via `horus consolidate`.
+- Both phases delivered — ready to `horus backlog ship` after the PR merges. `market-scan`
+  is the remaining PO-lifecycle card.

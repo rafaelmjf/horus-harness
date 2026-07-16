@@ -702,3 +702,96 @@ def test_infer_v2_unaffected_by_v3_branch(tmp_path):
     msgs = " ".join(f.message for f in routines.infer_signals(tmp_path))
     assert "placeholder/empty lanes" in msgs
     assert "PRD skeleton" not in msgs
+
+
+
+
+# --------------------------------------------------------------------------- #
+# convergence read-out (v3): map cards onto Vision facets, phase-aware
+# --------------------------------------------------------------------------- #
+
+def _mk_prd_facets(root, *, vision_table=True):
+    hdir = root / ".horus"
+    (hdir / "backlog").mkdir(parents=True, exist_ok=True)
+    vision = "## Vision\n\n"
+    if vision_table:
+        vision += (
+            "| Facet | Definition of done |\n"
+            "|---|---|\n"
+            "| **Continuity core** | resumes. |\n"
+            "| **PO lifecycle** | ships. |\n\n"
+        )
+    prd = (
+        '---\nstatus: active\ncurrent_focus: "x"\nnext_action: "y"\n'
+        'next_prompt: "z"\nexecution_recommendation: "continue-as-is"\n'
+        "last_updated: 2026-07-16\n---\n\n# demo\n\n" + vision
+        + "## Backlog\n\nmenu\n\n## Shipped\n\n- x\n\n## Rules\n\n- y\n"
+    )
+    (hdir / "PRD.md").write_text(prd, encoding="utf-8")
+    return hdir
+
+
+def _facet_card(hdir, name, *, facet="", phase="", status="open"):
+    lines = ["---", f"status: {status}", "created: 2026-07-16"]
+    if facet:
+        lines.append(f'vision_facet: "{facet}"')
+    if phase:
+        lines.append(f"phase: {phase}")
+    lines += ["---", f"# {name}", ""]
+    (hdir / "backlog" / f"{name}.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def test_convergence_maps_cards_to_facets(tmp_path):
+    hdir = _mk_prd_facets(tmp_path)
+    _facet_card(hdir, "a", facet="PO lifecycle")
+    _facet_card(hdir, "b", facet="Continuity core")
+    msgs = " ".join(f.message for f in routines.consolidate_signals(tmp_path))
+    assert "PO lifecycle (1)" in msgs
+    assert "Continuity core (1)" in msgs
+
+
+def test_convergence_reports_facets_with_no_open_cards(tmp_path):
+    hdir = _mk_prd_facets(tmp_path)
+    _facet_card(hdir, "a", facet="PO lifecycle")
+    msgs = " ".join(f.message for f in routines.consolidate_signals(tmp_path))
+    assert "no open cards" in msgs and "Continuity core" in msgs
+
+
+def test_convergence_flags_off_vision_converge_card(tmp_path):
+    hdir = _mk_prd_facets(tmp_path)
+    _facet_card(hdir, "orphan")  # no facet, default converge phase
+    warns = [f.message for f in routines.consolidate_signals(tmp_path) if f.level == "warn"]
+    assert any("orphan" in m and "no vision_facet" in m for m in warns)
+
+
+def test_convergence_exempts_explore_cards(tmp_path):
+    hdir = _mk_prd_facets(tmp_path)
+    _facet_card(hdir, "poc", phase="explore")  # no facet, but exploratory
+    findings = routines.consolidate_signals(tmp_path)
+    warns = [f.message for f in findings if f.level == "warn"]
+    assert not any("poc" in m for m in warns)
+    msgs = " ".join(f.message for f in findings)
+    assert "exploratory" in msgs and "poc" in msgs
+
+
+def test_convergence_flags_unknown_facet(tmp_path):
+    hdir = _mk_prd_facets(tmp_path)
+    _facet_card(hdir, "typo", facet="PO lifcycle")  # not a real facet
+    warns = [f.message for f in routines.consolidate_signals(tmp_path) if f.level == "warn"]
+    assert any("typo" in m and "unknown facet" in m for m in warns)
+
+
+def test_convergence_facet_matching_is_case_insensitive(tmp_path):
+    hdir = _mk_prd_facets(tmp_path)
+    _facet_card(hdir, "a", facet="po lifecycle")  # lower-case variant
+    findings = routines.consolidate_signals(tmp_path)
+    assert not any(f.level == "warn" and "convergence" in f.message for f in findings)
+    msgs = " ".join(f.message for f in findings)
+    assert "PO lifecycle (1)" in msgs
+
+
+def test_convergence_silent_without_a_facet_table(tmp_path):
+    hdir = _mk_prd_facets(tmp_path, vision_table=False)
+    _facet_card(hdir, "a")  # off-vision converge card, but no facets to converge against
+    msgs = " ".join(f.message for f in routines.consolidate_signals(tmp_path))
+    assert "convergence" not in msgs
