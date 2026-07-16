@@ -311,6 +311,43 @@ def test_pr_only_contexts_empty_when_git_show_unavailable(monkeypatch):
     assert mergewatch.pr_only_contexts(Path("."), "sha1") == set()
 
 
+def test_pr_only_contexts_all_or_nothing_when_one_of_several_workflows_is_unreadable(monkeypatch):
+    """A confidently PR-only workflow (``continuity.yml``) must NOT drop its
+    context if some OTHER workflow at the same sha (``tests.yml``) can't be
+    read — that unreadable workflow might have made the very same context
+    push-capable, so partial evidence must yield no filtering at all, not
+    a per-file skip."""
+    def responder(cmd, cwd, *, timeout=20.0):
+        if cmd[:2] == ["git", "ls-tree"]:
+            return _Proc(0, ".github/workflows/continuity.yml\n.github/workflows/tests.yml")
+        if cmd[:2] == ["git", "show"]:
+            path = cmd[2].split(":", 1)[1]
+            if path.endswith("continuity.yml"):
+                return _Proc(0, _CONTINUITY_WORKFLOW)
+            return _Proc(1, stderr="fatal: path exists on disk, but not in 'sha1'")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(mergewatch, "_run", responder)
+    assert mergewatch.pr_only_contexts(Path("."), "sha1") == set()
+
+
+def test_pr_only_contexts_all_or_nothing_when_one_of_several_workflows_is_unparseable(monkeypatch):
+    """Same all-or-nothing guarantee when a workflow is readable but its
+    ``on:``/``jobs:`` block can't be structurally located with confidence."""
+    def responder(cmd, cwd, *, timeout=20.0):
+        if cmd[:2] == ["git", "ls-tree"]:
+            return _Proc(0, ".github/workflows/continuity.yml\n.github/workflows/weird.yml")
+        if cmd[:2] == ["git", "show"]:
+            path = cmd[2].split(":", 1)[1]
+            if path.endswith("continuity.yml"):
+                return _Proc(0, _CONTINUITY_WORKFLOW)
+            return _Proc(0, "this file has no top-level on: or jobs: block at all\n")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(mergewatch, "_run", responder)
+    assert mergewatch.pr_only_contexts(Path("."), "sha1") == set()
+
+
 # --- fetch_check_states -----------------------------------------------------
 
 def test_fetch_check_states_normalizes_check_runs_and_statuses(fake_gh):
@@ -570,6 +607,39 @@ def test_watch_never_filters_when_exact_sha_workflow_evidence_is_unavailable(mon
         emit=lambda line: None, sleep=lambda s: None, now=lambda: 0.0,
     )
     assert outcome.state == "timeout"  # unfiltered required set still blocks on the missing context
+
+
+def test_watch_never_falsely_greens_when_one_of_several_workflows_is_unreadable(monkeypatch):
+    """Multi-workflow regression: at the exact watched sha, ``continuity.yml``
+    is readable and confidently PR-only, but a second workflow
+    (``tests.yml``) at that same sha can't be read (e.g. a partial clone).
+    That unreadable workflow might have been the one that actually made
+    ``freshness`` push-capable — so filtering must be all-or-nothing:
+    ``freshness`` stays required, never posts, and the watch must time out
+    pending, never falsely settle green."""
+    fake = _FakeGh()
+    fake.required_checks = _json_ok({"contexts": ["freshness"]})
+
+    def responder(cmd, cwd, *, timeout=20.0):
+        if cmd[:2] == ["git", "ls-tree"]:
+            return _Proc(0, ".github/workflows/continuity.yml\n.github/workflows/tests.yml")
+        if cmd[:2] == ["git", "show"]:
+            path = cmd[2].split(":", 1)[1]
+            if path.endswith("continuity.yml"):
+                return _Proc(0, _CONTINUITY_WORKFLOW)  # readable, confidently pull_request-only
+            return _Proc(1, stderr="fatal: path exists on disk, but not in 'abc123def'")  # unreadable
+        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/pulls"):
+            return _json_ok([{"number": 9, "state": "closed", "base": {"ref": "main"}}])
+        return _FakeGh.__call__(fake, cmd, cwd, timeout=timeout)
+
+    monkeypatch.setattr(mergewatch, "_run", responder)
+    fake.check_runs_sequence = [_json_ok({"check_runs": []})]  # freshness never posts
+
+    outcome = mergewatch.watch(
+        Path("."), "abc123def", timeout=0.0,
+        emit=lambda line: None, sleep=lambda s: None, now=lambda: 0.0,
+    )
+    assert outcome.state == "timeout"  # pending on the still-required freshness, never a false green
 
 
 def test_watch_times_out(fake_gh):

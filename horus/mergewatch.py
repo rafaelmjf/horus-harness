@@ -201,13 +201,19 @@ def _context_base(name: str) -> str:
     return re.sub(r"\s*\([^)]*\)\s*$", "", name).strip()
 
 
-def _workflow_events(text: str) -> tuple[bool, bool]:
-    """``(has_push, has_pull_request)`` triggers declared by a workflow's
-    ``on:`` block (inline ``on: [push, pull_request]`` or block form)."""
-    match = _ON_BLOCK_RE.search(text)
-    body = match.group(1) if match else ""
-    tokens = set(re.findall(r"[A-Za-z_]+", body))
-    return "push" in tokens, "pull_request" in tokens
+def _parse_workflow(text: str) -> tuple[bool, bool, set[str]] | None:
+    """``(has_push, has_pull_request, contexts)`` for one workflow file, or
+    ``None`` when it can't be structurally parsed with confidence (no
+    top-level ``on:`` or ``jobs:`` block found at all) — callers must treat
+    that as "unknown", never silently as "no push trigger"."""
+    on_match = _ON_BLOCK_RE.search(text)
+    jobs_match = _JOBS_BLOCK_RE.search(text)
+    if on_match is None or jobs_match is None:
+        return None
+    tokens = set(re.findall(r"[A-Za-z_]+", on_match.group(1)))
+    has_push = "push" in tokens
+    has_pr = "pull_request" in tokens
+    return has_push, has_pr, _workflow_job_contexts(text)
 
 
 def _workflow_job_contexts(text: str) -> set[str]:
@@ -255,12 +261,15 @@ def pr_only_contexts(root: Path, sha: str) -> set[str]:
     a plain push (e.g. a post-merge commit landing on main), so a watcher
     must stop waiting on it rather than sit pending forever.
 
-    Fails safe: any git evidence that can't be read or parsed at this exact
-    sha yields an empty result, which filters nothing — a required context
-    is only ever dropped on positive, exact-sha proof it can't apply, never
-    on an absence of proof. A context also produced by a push-triggering
-    workflow is never included, even if another same-named job elsewhere is
-    PR-only."""
+    Fails safe ALL-OR-NOTHING: if any workflow path listed at this exact sha
+    can't be read, or can't be structurally parsed with confidence, the
+    whole result is empty (filters nothing) — a readable, confidently
+    PR-only workflow must never drop a context just because some OTHER,
+    unreadable-or-unparseable workflow might have made that same context
+    push-capable. A required context is only ever dropped on complete,
+    positive, exact-sha proof across every workflow in the tree, never on
+    partial evidence. A context also produced by a push-triggering workflow
+    is never included, even if another same-named job elsewhere is PR-only."""
     paths = _workflow_paths_at_sha(root, sha)
     if not paths:
         return set()
@@ -269,11 +278,13 @@ def pr_only_contexts(root: Path, sha: str) -> set[str]:
     for path in paths:
         text = _workflow_text_at_sha(root, sha, path)
         if text is None:
-            continue
-        has_push, has_pr = _workflow_events(text)
+            return set()
+        parsed = _parse_workflow(text)
+        if parsed is None:
+            return set()
+        has_push, has_pr, contexts = parsed
         if not has_pr:
             continue
-        contexts = _workflow_job_contexts(text)
         if has_push:
             push_triggered.update(contexts)
         else:
