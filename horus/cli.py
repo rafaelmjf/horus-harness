@@ -58,6 +58,7 @@ from horus import (
     upgrade,
     usage_snapshot,
     versioning,
+    verify_inventory,
     vscode,
     worktree,
 )
@@ -2692,6 +2693,25 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_verify_inventory(args: argparse.Namespace) -> int:
+    source_path = Path(args.source).resolve()
+    produced_path = Path(args.produced).resolve()
+    try:
+        source = verify_inventory.load_manifest(source_path, expect_nonempty=not args.allow_empty_source)
+        produced = verify_inventory.load_manifest(produced_path, expect_nonempty=not args.allow_empty_produced)
+    except verify_inventory.EmptyWalkError as exc:
+        print(f"error: {exc}")
+        return 2
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}")
+        return 2
+
+    result = verify_inventory.reconcile(source, produced)
+    for line in verify_inventory.format_report(result):
+        print(line)
+    return 0 if result.clean else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="horus", description=__doc__)
     parser.add_argument("--version", action="version", version=f"horus {__version__}")
@@ -3611,6 +3631,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="repo full-name to un-ignore, e.g. owner/repo or github:owner/repo",
     )
     p_unignore.set_defaults(func=cmd_unignore)
+
+    p_verify_inventory = sub.add_parser(
+        "verify-inventory",
+        help="reconcile a source manifest/tree against a produced tree by count and size",
+    )
+    p_verify_inventory.add_argument(
+        "source", help="source manifest (JSON {path: size}) or directory to walk",
+    )
+    p_verify_inventory.add_argument(
+        "produced", help="produced/committed directory to walk (or a JSON manifest)",
+    )
+    p_verify_inventory.add_argument(
+        "--allow-empty-source", action="store_true",
+        help="do not error if the source walk/manifest is empty (default: error — an "
+             "empty walk of an expected-non-empty source is a retryable failure)",
+    )
+    p_verify_inventory.add_argument(
+        "--allow-empty-produced", action="store_true",
+        help="do not error if the produced walk/manifest is empty (same default as --allow-empty-source)",
+    )
+    p_verify_inventory.set_defaults(func=cmd_verify_inventory)
 
     return parser
 
