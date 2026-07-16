@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "v0.0.57 is stable and the process-retrospective campaign is closed. Follow-up cards now capture end-to-end single/fleet Horus artifact refresh and stale-datum usage-overlap reconciliation; the remote open-model probe remains unclaimed and unauthorized."
+current_focus: "v0.0.58 is released and live — PyPI, the hosted dashboard, and this machine are all upgraded — shipping the forward-compatible SessionRecord reader (6a655e5) that fixed `horus tui`/`horus sessions` crashing on newer registry rows (e.g. `agent_session_id`). Backlog was reviewed before the release: nine cards, none release-blocking, so nothing was bundled. The remote open-model probe remains unclaimed and unauthorized."
 next_action: "Prepare the exact remote open-model probe envelope—host alias, existing runner/models, synthetic task set, data boundary, stopping point, and gates—then obtain owner approval before any Tailscale connection."
 next_prompt: "Fetch clean main, read PRD.md and the remote-open-model-worker-probe card, and prepare a discovery-first consent envelope without connecting or installing anything. Keep important/private work on Claude/Codex and use only synthetic/public fixtures for the first probe."
 execution_recommendation: "continue-as-is — the next step is a small owner-shaped discovery/consent decision; its ambiguity and missing host details make worker briefing and verification cost exceed any delegation dividend."
@@ -87,7 +87,7 @@ Nine active cards: medium — fleet artifact refresh, stale-datum overlap reconc
 **GitHub bridge:** cached discovery; onboard/integrate policy; private-repo fallback; dedup/tracking/ignore; `horus start`.
 **Execution & adapters:** Fake/Claude/Codex adapters; multi-account launch; workflow handoffs; worker marking; hub orchestration.
 **Companion & launch:** Tk mascot; worker badges; owned windows; VS Code tasks; same-version `/health` adoption.
-**Distribution (current v0.0.55):** PyPI trusted publishing; three-OS install smoke; hosted pinned-install deployment; Apache-2.0.
+**Distribution (current v0.0.58):** PyPI trusted publishing; three-OS install smoke; hosted pinned-install deployment; Apache-2.0. v0.0.58 (PR #274) shipped the forward-compatible `SessionRecord` reader (6a655e5) that unblocked `horus tui`/`sessions` crashing on registry rows carrying newer fields; #255's additive dict-reader had left the dataclass `__init__` still rejecting unknown kwargs.
 
 ## Rules (load-bearing)
 
