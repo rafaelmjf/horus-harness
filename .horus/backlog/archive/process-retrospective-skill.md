@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-16
 type: feature
 parallel: safe
 surface: .agents/skills/process-retrospective, Claude/Codex skill projections, tests/test_skills.py
+shipped_pr: 270
+shipped_sha: 5cd7b4216183d166a3e20df4d3b8eafb4aeb3c57
 ---
 
 # Evidence-first process retrospective skill
