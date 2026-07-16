@@ -110,3 +110,46 @@ def test_has_prd(tmp_path):
     assert not frontmatter.has_prd(tmp_path)
     _write_horus(tmp_path, "PRD.md", "# PRD\n")
     assert frontmatter.has_prd(tmp_path)
+
+
+def test_product_audit_staleness_computation(tmp_path):
+    import datetime
+
+    from horus import product_audit
+
+    assert product_audit.parse_stamp("0.0.30 2026-06-20") == product_audit.Stamp(
+        "0.0.30", datetime.date(2026, 6, 20)
+    )
+    assert product_audit.parse_stamp("v0.0.30 2026-06-20").version == "0.0.30"
+    assert product_audit.parse_stamp("0.0.30") is None
+    assert product_audit.parse_stamp("0.0.30 not-a-date") is None
+    assert product_audit.releases_since("0.0.30", "0.0.35") == 5
+    assert product_audit.releases_since("0.0.35", "0.0.30") == 0
+
+    prd = tmp_path / ".horus" / "PRD.md"
+    prd.parent.mkdir(parents=True)
+    today = datetime.date(2026, 7, 16)
+
+    # No PRD / no stamp: silent.
+    assert product_audit.advisory_line(tmp_path / "nope", installed="0.0.57", today=today) is None
+    prd.write_text("---\nstatus: active\n---\n# P\n", encoding="utf-8")
+    assert product_audit.advisory_line(tmp_path, installed="0.0.57", today=today) is None
+
+    # Fresh stamp (<5 releases, <30 days): silent.
+    prd.write_text("---\nlast_product_audit: 0.0.55 2026-07-10\n---\n# P\n", encoding="utf-8")
+    assert product_audit.advisory_line(tmp_path, installed="0.0.57", today=today) is None
+
+    # 5 releases stale: advisory fires, never blocks.
+    prd.write_text("---\nlast_product_audit: 0.0.52 2026-07-10\n---\n# P\n", encoding="utf-8")
+    line = product_audit.advisory_line(tmp_path, installed="0.0.57", today=today)
+    assert line and "5 releases" in line and "product-audit" in line
+
+    # 30 days stale on the same version: advisory fires.
+    prd.write_text("---\nlast_product_audit: 0.0.57 2026-06-01\n---\n# P\n", encoding="utf-8")
+    line = product_audit.advisory_line(tmp_path, installed="0.0.57", today=today)
+    assert line and "45 days" in line
+
+    # Unreadable stamp: advisory, still non-blocking.
+    prd.write_text("---\nlast_product_audit: whenever\n---\n# P\n", encoding="utf-8")
+    line = product_audit.advisory_line(tmp_path, installed="0.0.57", today=today)
+    assert line and "unreadable" in line
