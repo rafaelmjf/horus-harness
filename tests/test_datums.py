@@ -160,6 +160,16 @@ def test_canonical_model_name_passes_through_unrecognized():
     assert datums.canonical_model_name("sonnet", resolved="not-a-recognized-id") == "sonnet-5"
 
 
+def test_canonical_model_name_joins_full_provider_selector_launches_to_the_same_series():
+    # A launch with the full provider selector (not a bare alias, so it is NOT a
+    # key in ALIAS_TO_CANONICAL) still joins the one canonical calibration series
+    # once Claude reports what actually ran — the provider-selector contract must
+    # not fork a second series for datums launched with `claude-sonnet-5` instead
+    # of the bare `sonnet` alias.
+    assert datums.canonical_model_name("claude-sonnet-5", resolved="claude-sonnet-5-20260101") == "sonnet-5"
+    assert datums.canonical_model_name("claude-haiku-4-5", resolved="claude-haiku-4-5-20251001") == "haiku-4.5"
+
+
 # --- datums.json bare->proper migration ---------------------------------------
 
 def test_migrate_names_merges_bare_into_canonical(tmp_path):

@@ -883,6 +883,16 @@ def cmd_run(args: argparse.Namespace) -> int:
     # default is None. Let the worker's named agent select the matching adapter;
     # an explicit --agent remains authoritative.
     args.agent = args.agent or args.worker or "claude"
+    try:
+        adapter = adapters.get_adapter(args.agent)
+    except KeyError as exc:
+        print(exc)
+        return 2
+    model_error = adapter.validate_model(getattr(args, "model", None))
+    if model_error is not None:
+        print(f"Refusing to run: {model_error}")
+        return 2
+
     root = Path(args.path).resolve()
     dispatch_base_sha: str | None = None
     dispatch_pending = 0
@@ -913,12 +923,6 @@ def cmd_run(args: argparse.Namespace) -> int:
         verb = "Created" if wt.created else "Reusing"
         print(f"{verb} worktree {wt.path} (branch {wt.branch})")
         root = wt.path.resolve()
-
-    try:
-        adapters.get_adapter(args.agent)
-    except KeyError as exc:
-        print(exc)
-        return 2
 
     refusal = _run_usage_preflight(
         args.agent,

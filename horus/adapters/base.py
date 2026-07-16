@@ -161,6 +161,16 @@ class AgentAdapter(ABC):
         """Extra environment for the child (per-account isolation, etc.). Default: none."""
         return {}
 
+    def validate_model(self, model: str | None) -> str | None:
+        """Reject a ``model`` selector this adapter's CLI cannot execute.
+
+        Returns an actionable error message, or ``None`` when `model` is
+        unset or provider-valid. Purely local/static — never queries the
+        provider or spends tokens to discover a selector. Default: no
+        adapter-specific naming rules, so every selector passes through.
+        """
+        return None
+
     @abstractmethod
     def parse_event(self, line: str) -> list[AgentEvent]:
         """Parse one output line into zero or more events.

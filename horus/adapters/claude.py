@@ -17,6 +17,7 @@ Subscription-auth only: it runs the user's own logged-in ``claude``; no API key.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,6 +42,24 @@ class IdentityCheck:
     config_dir: str | None
     detected_email: str | None
     ok: bool
+
+# Horus's canonical calibration key uses a dotted family-major[.minor] shape
+# (`sonnet-5`, `haiku-4.5` — see `horus/datums.py`'s `ALIAS_TO_CANONICAL`) that
+# names WHICH model ran for calibration history. It is never itself a valid
+# Claude Code `--model` selector: the CLI accepts only a bare family alias
+# (`sonnet`) or a full dash-separated selector (`claude-sonnet-5`,
+# `claude-haiku-4-5`). Passing the calibration key straight through failed in
+# five seconds with no delivery (2026-07-16, session 5e704890-...) because it
+# looked exact but wasn't executable.
+_CALIBRATION_ONLY_MODEL_RE = re.compile(r"^(?:sonnet|opus|haiku|fable)-\d+(?:\.\d+)?$")
+
+
+def _provider_selector_for(calibration_key: str) -> str:
+    """Best-effort full-selector spelling for a calibration-only key, for the
+    correction message only — never used to substitute a selector at launch."""
+    family, _, version = calibration_key.partition("-")
+    return f"claude-{family}-{version.replace('.', '-')}"
+
 
 # Normalized posture -> Claude Code --permission-mode value. Claude has no pure
 # read-only mode, so READ_ONLY maps to "plan" (its no-side-effects stance).
@@ -97,6 +116,22 @@ class ClaudeAdapter(AgentAdapter):
         if spec.worker:
             env["HORUS_RUN_WORKER"] = "1"
         return env
+
+    def validate_model(self, model: str | None) -> str | None:
+        """Reject a known calibration-only label before it reaches ``claude``.
+
+        Static and local — matches the dotted family-major[.minor] shape of a
+        Horus calibration key, never queries the provider. A bare alias
+        (``sonnet``) or a full selector (``claude-sonnet-5``) both pass
+        through unchanged; only the calibration-key spelling is rejected.
+        """
+        if model and _CALIBRATION_ONLY_MODEL_RE.match(model):
+            return (
+                f"{model!r} is a Horus calibration key, not a Claude Code --model "
+                f"selector. Pass a bare alias (e.g. {model.split('-')[0]!r}) or the "
+                f"full provider selector (e.g. {_provider_selector_for(model)!r}) instead."
+            )
+        return None
 
     def interactive_command(self, spec: SpawnSpec, *, session_id: str) -> list[str]:
         """Argv for an *attended* TUI session (no ``-p``): the user types in it.
