@@ -332,6 +332,82 @@ def _prd_skeleton_gaps(prd_body: str) -> list[str]:
     return gaps
 
 
+def _vision_facets(prd_body: str) -> list[str]:
+    """Facet names from the markdown table under `## Vision` — the bold text of each
+    row's first column. Header/separator rows carry no bold and are skipped."""
+    facets: list[str] = []
+    for line in _section(prd_body, "Vision").splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        first = line.strip("|").split("|", 1)[0].strip()
+        m = _BOLD_TITLE_RE.match(first)
+        if m:
+            facets.append(m.group(1).strip())
+    return facets
+
+
+def _norm_facet(name: str) -> str:
+    """Whitespace/case-insensitive key so a card's `vision_facet` matches a Vision
+    facet without demanding byte-exact casing/spacing."""
+    return " ".join(name.lower().split())
+
+
+def convergence_findings(root: Path, prd_body: str) -> list[Finding]:
+    """Phase-aware convergence read-out: map active backlog cards onto `## Vision`
+    facets via their `vision_facet` frontmatter and report coverage. Advisory and
+    read-only. `converge`-phase cards (the default) must name a known facet; `explore`
+    cards are exempt and reported in a separate bucket. No facet table ⇒ no read-out."""
+    facets = _vision_facets(prd_body)
+    if not facets:
+        return []
+    facet_by_key = {_norm_facet(f): f for f in facets}
+    counts: dict[str, int] = {f: 0 for f in facets}
+    explore: list[str] = []
+    flags: list[Finding] = []
+
+    for card in backlog.load_active_cards(root):
+        if card.phase == backlog.EXPLORE_PHASE:
+            explore.append(card.name)
+            continue
+        if not card.vision_facet:
+            flags.append(Finding(
+                "warn",
+                f"convergence: card '{card.name}' is converge-phase with no vision_facet — "
+                f"link it to a Vision facet or set `phase: explore`",
+            ))
+            continue
+        matched = facet_by_key.get(_norm_facet(card.vision_facet))
+        if matched is None:
+            flags.append(Finding(
+                "warn",
+                f"convergence: card '{card.name}' targets unknown facet "
+                f"'{card.vision_facet}' — fix the name or add the facet to the Vision",
+            ))
+            continue
+        counts[matched] += 1
+
+    findings: list[Finding] = []
+    with_work = [f"{f} ({n})" for f, n in counts.items() if n]
+    no_work = [f for f, n in counts.items() if not n]
+    if with_work:
+        findings.append(Finding("ok", "convergence: facets with open work — " + ", ".join(with_work)))
+    if no_work:
+        findings.append(Finding(
+            "ok",
+            "convergence: no open cards (converged or untouched — judge vs the facet's "
+            "definition of done) — " + ", ".join(no_work),
+        ))
+    if explore:
+        findings.append(Finding(
+            "ok",
+            f"convergence: {len(explore)} exploratory card(s), Ready-gate exempt — "
+            + ", ".join(sorted(explore)),
+        ))
+    findings.extend(flags)
+    return findings
+
+
 def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
     """Backlog-hygiene checks for structure v3 (PRD.md + sessions/). Read-only."""
     findings: list[Finding] = []
@@ -406,6 +482,11 @@ def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
             ))
 
     findings.extend(backlog.hygiene_findings(root))
+
+    # 6. Phase-aware convergence read-out (advisory): where the backlog sits against
+    # the Vision facets. Its "ok" lines are a report and always print; only off-vision
+    # or unknown-facet cards raise a warn.
+    findings.extend(convergence_findings(root, doc.body))
 
     if not any(f.level in ("warn", "fail") for f in findings):
         findings.append(Finding(

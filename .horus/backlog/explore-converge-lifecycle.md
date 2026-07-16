@@ -44,7 +44,11 @@ default part of the roadmap rather than an off-book detour.
 
 ## Notes
 
-- Build after / alongside `roadmap-convergence` — they share the consolidate read-out (Phase B
-  package work: source + tests + skill-version bump).
+- **Mostly DELIVERED alongside `roadmap-convergence` Phase B (2026-07-16):** the `phase:
+  explore|converge` marker, the Ready-gate exemption, and the exploratory bucket in the
+  `horus consolidate` read-out all ship. **Remaining:** the usage-ripeness flag ("explore
+  card with usage but not yet converged") is deferred — it needs a usage signal we do not
+  yet capture per-card; today converge-or-drop stays owner judgment. Keep this card open for
+  that piece.
 - Reframes, doesn't replace, `roadmap-convergence`: convergence stays exactly as scoped; this
   card adds the explore phase and the promotion/drop dynamic around it.

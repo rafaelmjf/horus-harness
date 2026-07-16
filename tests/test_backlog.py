@@ -40,6 +40,25 @@ def test_load_cards_back_compat_no_new_fields(tmp_path):
     assert cards[0].surface == ()
 
 
+def test_load_cards_reads_vision_facet_and_phase(tmp_path):
+    hdir = tmp_path / ".horus" / "backlog"
+    hdir.mkdir(parents=True, exist_ok=True)
+    (hdir / "c.md").write_text(
+        '---\nstatus: open\nvision_facet: "PO lifecycle"\nphase: explore\n---\n# C\n',
+        encoding="utf-8",
+    )
+    card = backlog.load_cards(tmp_path)[0]
+    assert card.vision_facet == "PO lifecycle"
+    assert card.phase == "explore"
+
+
+def test_card_phase_defaults_to_converge_and_facet_empty(tmp_path):
+    _mk_card(tmp_path, "d")
+    card = backlog.load_cards(tmp_path)[0]
+    assert card.phase == "converge"
+    assert card.vision_facet == ""
+
+
 def test_load_cards_type_defaults_to_task(tmp_path):
     _mk_card(tmp_path, "untyped")
     cards = backlog.load_cards(tmp_path)
