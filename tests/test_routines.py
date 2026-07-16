@@ -454,6 +454,27 @@ def test_resume_prompt_v2_unchanged(tmp_path):
     assert "PRD.md" not in prompt
 
 
+def test_campaign_prompt_names_outcome_targets_and_need_first_guardrails():
+    prompt = routines.campaign_prompt(
+        outcome="Ship the launch prompt across both repos",
+        cockpit="horus-agent",
+        targets=["demo", "other"],
+    )
+    assert "horus-agent" in prompt
+    assert "Ship the launch prompt across both repos" in prompt
+    assert "- demo" in prompt and "- other" in prompt
+    assert "never auto-select" in prompt.lower()
+    assert "auto-spawn" in prompt
+    normalized = " ".join(prompt.split())
+    assert "retains its own branch/PR/gate/continuity authority" in normalized
+    assert "Direct per-project launch stays the default" in normalized
+
+
+def test_campaign_prompt_without_targets_scopes_to_cockpit_only():
+    prompt = routines.campaign_prompt(outcome="Tidy the backlog", cockpit="horus-agent", targets=[])
+    assert "scoped to the cockpit project only" in prompt
+
+
 # --------------------------------------------------------------------------- #
 # consolidate — structure v3 (PRD.md + sessions/): backlog hygiene only
 # --------------------------------------------------------------------------- #

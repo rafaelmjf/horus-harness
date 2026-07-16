@@ -223,6 +223,34 @@ Continue with this authored handoff:
     return f"{readiness_warning}\n\n{prompt}" if readiness_warning else prompt
 
 
+def campaign_prompt(*, outcome: str, cockpit: str, targets: list[str]) -> str:
+    """Compose a bounded campaign brief for the optional TUI Campaign entry point.
+
+    Unlike ``resume_prompt``, the outcome and target set are owner-authored at
+    launch time — this never invents a project archetype or a target list."""
+    target_lines = (
+        "\n".join(f"- {name}" for name in targets)
+        if targets
+        else "- (none named — this campaign is scoped to the cockpit project only)"
+    )
+    return f"""Supervise this campaign from {cockpit}. Desired outcome:
+{outcome}
+
+Named target projects:
+{target_lines}
+
+Apply need-first judgment separately for each bounded unit of work: default to working
+inline, and only dispatch a worker when a concrete context, parallelism, or price
+dividend exceeds the brief/review/gate/merge/closure tax. Cross-project scope or
+multiple named targets alone are never a dispatch dividend. Never auto-select a model
+or account, auto-spawn a worker, or fall back to a different envelope without renewed
+approval. Every named target project retains its own branch/PR/gate/continuity
+authority — land changes there through its normal review path. Direct per-project
+launch stays the default way to work; use this campaign framing only to keep the
+cross-project outcome coherent.
+"""
+
+
 # --------------------------------------------------------------------------- #
 # consolidate
 # --------------------------------------------------------------------------- #

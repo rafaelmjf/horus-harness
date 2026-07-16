@@ -88,7 +88,12 @@ class _RemoteStart:
     project: "github_catalog.RemoteProject"
 
 
-_Action = _Launch | _Attach | _Stop | _EditCard | _RemoteStart | str
+@dataclass(frozen=True)
+class _Campaign:
+    pass
+
+
+_Action = _Launch | _Attach | _Stop | _EditCard | _RemoteStart | _Campaign | str
 
 # Labels for the home-level Defaults screen's one setting: the permission
 # posture new TUI launches (fresh/resume/card-resume) start with, until changed
@@ -344,6 +349,8 @@ class TerminalUI:
         elif self.screen == "projects" and kind == "remote_project":
             if isinstance(value, github_catalog.RemoteProject):
                 self.application.exit(result=_RemoteStart(value))
+        elif self.screen == "projects" and kind == "campaign":
+            self.application.exit(result=_Campaign())
         elif self.screen == "project" and kind == "mode":
             self.pending_mode = str(value)
             self.pending_card = None
@@ -456,6 +463,8 @@ class TerminalUI:
             self.items.extend(("remote_project", project) for project in self.remote_projects)
             self.items.append(("projection_sync", None))
             self.items.append(("fleet_review", None))
+            if _cockpit_project(self.projects) is not None:
+                self.items.append(("campaign", None))
         elif self.screen == "project":
             self.items = [
                 ("mode", "resume"),
@@ -513,7 +522,7 @@ class TerminalUI:
                 )
         elif self.screen == "projection_sync":
             self.items = []
-            curator = next((project for project in self.projects if project.name == "horus-agent"), None)
+            curator = _cockpit_project(self.projects)
             if curator is not None:
                 self.items.append(("projection_curator", curator))
             self.items.extend(("projection_project", record) for record in self.projection_records)
@@ -637,6 +646,14 @@ class TerminalUI:
                 lines.append((style, f"\n {marker} Fleet Review\n"))
                 lines.append(
                     ("class:muted", "     Compare remote shipped truth with local working state\n")
+                )
+            elif kind == "campaign":
+                lines.append((style, f"\n {marker} Campaign\n"))
+                lines.append(
+                    (
+                        "class:muted",
+                        "     Optional cross-project supervision — asks for outcome + targets\n",
+                    )
                 )
             elif kind == "projection_sync":
                 stale, unknown = _projection_counts(self.projection_records)
@@ -813,7 +830,7 @@ class TerminalUI:
         utility_rows = [
             (index, kind)
             for index, (kind, _value) in enumerate(self.items)
-            if kind in {"projection_sync", "fleet_review"}
+            if kind in {"projection_sync", "fleet_review", "campaign"}
         ]
         for utility_index, kind in utility_rows:
             selected = utility_index == self.selected
@@ -830,10 +847,15 @@ class TerminalUI:
                     summary = "all tracked projects in sync"
                 fragments.append((style, f" {marker} Projection Sync\n"))
                 fragments.append(("class:muted", f"   {summary} · Claude/Codex vs installed CLI\n"))
-            else:
+            elif kind == "fleet_review":
                 fragments.append((style, f" {marker} Fleet Review\n"))
                 fragments.append(
                     ("class:muted", "   Compare remote shipped truth with local working state\n")
+                )
+            else:
+                fragments.append((style, f" {marker} Campaign\n"))
+                fragments.append(
+                    ("class:muted", "   Optional cross-project supervision — asks for outcome + targets\n")
                 )
         return fragments
 
@@ -1175,8 +1197,19 @@ _STYLE = Style.from_dict(
 def run() -> int:
     """Run frames until quit, suspending the alternate screen for agent commands."""
     status = ""
+    pending_campaign: tuple[Path, str] | None = None
     while True:
         ui = TerminalUI(status=status)
+        if pending_campaign is not None:
+            project, prompt_text = pending_campaign
+            pending_campaign = None
+            if project in ui.projects:
+                ui.project = project
+                ui.pending_mode = "resume"
+                ui.pending_card = None
+                ui.pending_prompt = prompt_text
+                ui.pending_origin = "projects"
+                ui._show("accounts")
         result = ui.application.run()
         if result == "quit":
             return 0
@@ -1213,6 +1246,20 @@ def run() -> int:
             status = error or f"Closed {result.session_id[:8]}."
         elif isinstance(result, _RemoteStart):
             status = _start_remote(result)
+        elif isinstance(result, _Campaign):
+            outcome = _run_campaign_prompt(_projects())
+            pending_campaign = outcome
+            status = (
+                "Campaign brief ready — choose an agent/account for the cockpit."
+                if outcome is not None
+                else "Campaign cancelled — no outcome provided."
+            )
+
+
+def _cockpit_project(projects: list[Path]) -> Path | None:
+    """The registered `horus-agent` workspace, if any — the compatible cockpit
+    that the optional Campaign entry point supervises other projects from."""
+    return next((project for project in projects if project.name == "horus-agent"), None)
 
 
 def _projects() -> list[Path]:
@@ -1533,6 +1580,34 @@ def _start_remote(action: "_RemoteStart") -> str:
         return f"Remote start failed: {exc}"
     verb = "Cloned and registered" if result.cloned else "Registered"
     return f"{verb} {result.project.name} at {result.path}. Select it to resume."
+
+
+def _run_campaign_prompt(projects: list[Path]) -> tuple[Path, str] | None:
+    """Between-frames flow for the optional Campaign entry point: ask the owner
+    for the outcome and target set in plain text — never inventing either. The
+    cockpit's own account/agent is still chosen normally on the accounts screen
+    that follows, so this never auto-selects a model or account."""
+    cockpit = _cockpit_project(projects)
+    if cockpit is None:
+        return None
+    outcome = input("\nCampaign outcome - what should be true when this campaign is done? ").strip()
+    if not outcome:
+        return None
+    raw_targets = input(
+        "Target projects (comma-separated registered names, blank = cockpit only): "
+    ).strip()
+    names = [name.strip() for name in raw_targets.split(",") if name.strip()]
+    known = {project.name: project for project in projects}
+    targets = [known[name] for name in names if name in known]
+    unknown = [name for name in names if name not in known]
+    if unknown:
+        print(f"Ignoring unrecognized project name(s): {', '.join(unknown)}")
+    prompt = routines.campaign_prompt(
+        outcome=outcome,
+        cockpit=cockpit.name,
+        targets=[project.name for project in targets],
+    )
+    return cockpit, prompt
 
 
 def _card_prompt(root: Path, card: backlog.Card) -> str:
