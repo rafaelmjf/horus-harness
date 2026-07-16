@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-15
 type: feature
 parallel: safe
 surface: horus/doctor_machine.py, bundled dispatch/migration skills, new horus/verify_inventory.py (or equivalent helper)
+shipped_pr: 254
+shipped_sha: b94099e
 ---
 
 # Bulk-migration inventory reconciliation (empty-walk-is-an-error)
