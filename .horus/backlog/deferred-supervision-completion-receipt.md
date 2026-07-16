@@ -1,6 +1,6 @@
 ---
-status: claimed
-priority: high
+status: open
+priority: low
 tier: sonnet
 created: 2026-07-15
 type: feature
@@ -65,3 +65,10 @@ worker before paying the acceptance-review cost.
   pushed PR/SHA evidence. Fix that terminal-state/runtime/delivery truth first;
   keep `active|on-completion` taxonomy and richer receipt UI deferred. Priority
   low→high.
+- 2026-07-16 — Correctness kernel shipped in PR #261 at
+  `cb1bbf077da7304b89de040493a831c1b12c885d`. The tmux runner PID now remains
+  authoritative while its adapter child exits, and deterministic + live
+  private-socket probes prove reconciliation cannot overwrite the clean receipt
+  or runtime. Remaining scope is only the still-unproven supervision-timing
+  taxonomy, embedded usage-close convenience, and richer receipt UI. Status
+  claimed→open; priority high→low.
