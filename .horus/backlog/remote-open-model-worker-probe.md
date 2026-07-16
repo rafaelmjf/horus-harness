@@ -3,6 +3,7 @@ status: open
 priority: medium
 tier: sonnet
 created: 2026-07-16
+vision_facet: "Delegation calibration"
 type: feature
 parallel: safe
 surface: remote Tailscale model host, disposable probe workspace, model datums/adapters only after evidence

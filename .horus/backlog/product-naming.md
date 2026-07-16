@@ -3,6 +3,7 @@ status: open
 priority: low
 tier: sonnet
 created: 2026-07-16
+vision_facet: "Distribution"
 type: ops
 parallel: safe
 surface: pyproject.toml (name/description), README tagline, GitHub about, scripts/deploy-hosted.sh, managed-block install text

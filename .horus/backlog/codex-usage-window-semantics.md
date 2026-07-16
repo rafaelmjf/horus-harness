@@ -3,6 +3,7 @@ status: open
 priority: low
 tier: sonnet
 created: 2026-07-16
+vision_facet: "Delegation calibration"
 type: bug
 parallel: safe
 surface: horus/codex_usage.py, horus/usage_snapshot.py, horus/datums.py, horus/dashboard.py, horus/terminal_tui.py

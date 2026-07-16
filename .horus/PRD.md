@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "PO-capability direction established (2026-07-16). Dogfooded market research on the agent-PO tooling landscape (superpowers/BMAD/spec-kit/Kiro/task-master/Cline/Pocock), landed the receipt at .horus/research/2026-07-16-po-capabilities.md, and expanded the Vision from 'continuity layer' to 'repo-local product owner' — continuity stays the spine, two lifecycle gaps become sanctioned direction. Two idea-ledger cards captured: market-scan-skill (outward research, composes deep-research) and roadmap-convergence (vision-convergent backlog + DoD). v0.0.58 still live; no release this session."
-next_action: "Build roadmap-convergence (the lower-risk, fully-in-repo first card): add a one-line measurable definition-of-done per Vision facet, extend the card template + Structure contract with a testable acceptance line + Vision-facet link (the 'Ready' gate), and draft the advisory horus-converge read-out. market-scan follows. Naming stays deferred (product-naming) — keep horus-harness for now; both horus-po and horus-continuity rejected, want a more creative name at first distribution."
-next_prompt: "Fetch clean main, read PRD.md (Vision now = repo-local product owner) and .horus/backlog/. Vision expansion + PO-capability cards landed. Proceed with roadmap-convergence: Vision-facet DoD lines, card-template acceptance+vision-link conventions, and the horus-converge advisory skill. See research receipt .horus/research/2026-07-16-po-capabilities.md for the scoped minimal subset."
-execution_recommendation: "continue-as-is — roadmap-convergence is well-scoped, fully in-repo PRD/skill work with no cross-project or parallelism dividend; single-agent inline is cheapest."
+current_focus: "roadmap-convergence Phase A landed (2026-07-16, PRD-only). Vision now resolves into 7 named facets each with a definition of done (added Introspection & self-improvement per owner); the roadmap is explicitly a *breathing* divergence→convergence loop (convergence is usage-triggered, the facet set is a living hypothesis that grows from proven exploration). All 13 backlog cards stamped with a `vision_facet`; new card explore-converge-lifecycle captures the divergence/explore phase. v0.0.58 still live; no release this session."
+next_action: "roadmap-convergence Phase B (real package code — its own checkpoint): teach the horus-consolidate skill to emit the phase-aware convergence read-out (per-facet coverage verdict + separate exploratory bucket; flag explore cards with usage but no convergence). Add the card `phase: explore|converge` marker + require the EARS-lite acceptance line on new/next-touched converge cards (Structure contract). Skill-version bump + tests. market-scan-skill follows. Naming still deferred (keep horus-harness)."
+next_prompt: "Fetch clean main, read PRD.md (Vision = 7 facets + breathing divergence→convergence model) and .horus/backlog/ (roadmap-convergence, explore-converge-lifecycle). Phase A (facets/DoD/divergence framing + per-card vision_facet) is landed. Do Phase B: implement the phase-aware convergence read-out in the horus-consolidate skill (source + tests + skill-version bump) and the card phase marker + acceptance-line convention. See .horus/research/2026-07-16-po-capabilities.md for the scoped minimal subset."
+execution_recommendation: "continue-as-is — Phase B is a bounded single-repo skill+test change; no cross-project or parallelism dividend, single-agent inline is cheapest."
 last_updated: 2026-07-16
 last_product_audit: 0.0.58 2026-07-16
 horus_min_version: 0.0.26
@@ -15,12 +15,19 @@ The one maintained continuity file: **PRD.md + sessions/** (prototype, 2026-07-0
 
 ## Vision
 
-Horus is a lightweight, repo-local **product owner** for official coding-agent CLIs (Claude Code, Codex, more later) — a PO's memory *and* rituals, made repo-local so any native agent session can pick up the role. Continuity is the proven spine; the fuller lens is the product-owner lifecycle kept in `.horus/`:
+Horus is a lightweight, repo-local **product owner** for official coding-agent CLIs (Claude Code, Codex, more later) — a PO's memory *and* rituals, made repo-local so any native agent session can pick up the role. Continuity is the proven spine. The Vision resolves into named **facets**, each with a definition of done the backlog converges toward (cards carry `vision_facet`):
 
-- **Discovery** — evidence-first market/competitive research when starting or pivoting, distilled into dated repo-local receipts (outward).
-- **Vision & roadmap** — the durable north-star this file holds, with a stateable definition of done, and a backlog that *converges* toward it (each item traced to a Vision facet), not an ad-hoc pile.
-- **Backlog, shipping & closure** — card-backed work and a closure ritual so nothing disappears into a stale conversation.
-- **Health** — product audits and process retrospectives that keep the surface honest.
+| Facet | Definition of done |
+|---|---|
+| **Continuity core** | A fresh agent session resumes the exact next step from durable state alone, fetch-first, across machines. |
+| **Dashboard / cockpit** | Owner sees fleet state and launches/resumes any project from web or phone, no terminal command. |
+| **Accounts & isolation** | Every account runs isolated by default; cross-account corruption impossible; usage visible per account. |
+| **Delegation calibration** | Agent picks execute-vs-dispatch + a model tier from live measured data, owner-gated, honest cost — never auto-routing. |
+| **PO lifecycle** | The forward loop — market research → vision → vision-convergent roadmap → ship — runs repo-local (frontier: discovery + convergence are the open gap). |
+| **Introspection & self-improvement** | Every recurring surface, skill, and process can be audited against reality on evidence, yielding owner-gated verdicts (demote/defer/retire/revise), never ceremony. |
+| **Distribution** | `uv tool install` yields a safe, current, isolated setup on all three OSes; the hosted app tracks releases. |
+
+**The roadmap breathes — divergence then convergence (2026-07-16):** the facet set and their DoD are a *living hypothesis*, not a frozen contract. A project's real path is research → **divergence** (ideas explored as PoCs, some outside the first vision) → usage → **convergence** (drop, trim, rescope toward a consistent product; directions that prove out are promoted into new facets). Convergence is triggered by usage evidence, not schedule; exploratory work is expected to lack a facet/DoD until it earns one or is dropped. This repo is the worked example (six-lane → consolidated PRD/backlog). Cards: `roadmap-convergence` (convergence machinery) + `explore-converge-lifecycle` (the explore phase).
 
 The durable value is the **memory + planning plane, never orchestration**: repo-local `.horus/` files any native agent can use without Horus running; a read-mostly dashboard (projects, current focus, next step, sessions, accounts/usage); visibility into which agent/account/environment touched a project. Deliberately NOT the superpowers/spec-kit framework depth.
 
@@ -28,7 +35,7 @@ Model concretely: `project + agent + account + environment + session` — no abs
 
 **Out of scope:** the execution/orchestration plane (distributed worker control, agent marketplace); multi-user SaaS; identity abstraction; continuous external monitoring (the always-on competitor-scraping SaaS category — discovery is one-shot, evidence-first, not a live feed).
 
-**Product-owner expansion (2026-07-16):** widened from "continuity layer" to "repo-local product owner" after dogfooded landscape research (`research/2026-07-16-po-capabilities.md`); continuity stays the core, and two lifecycle gaps — outward market-research discovery (`market-scan-skill`) and vision-convergent roadmap grooming (`roadmap-convergence`) — are the sanctioned next direction, both advisory and lightweight.
+**Product-owner expansion (2026-07-16):** widened from "continuity layer" to "repo-local product owner" after dogfooded landscape research (`research/2026-07-16-po-capabilities.md`); continuity stays the core. The open frontier is the PO-lifecycle facet (discovery + convergence).
 
 **Continuity value finding (updated 2026-07-15):** the proven spine is resume
 frontmatter + pushed git/PR state + fetch-first; local recovery notes are an optional
@@ -42,7 +49,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Twelve active cards: medium — fleet artifact refresh, stale-datum overlap reconciliation, remote open-model probe, project workflow overrides, scoped machine requirements, and the two PO-capability cards (market-scan-skill, roadmap-convergence — vision expansion that gated them is now landed, so both are unblocked); low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, heartbeat stall detection, and product-naming (rename pinned to first external distribution; horus-po/horus-continuity both rejected — want a more creative name).
+Thirteen active cards, each stamped with a `vision_facet`: medium — fleet artifact refresh, stale-datum overlap reconciliation, remote open-model probe, project workflow overrides, scoped machine requirements, and the three PO-lifecycle cards (market-scan-skill; roadmap-convergence — convergence machinery; explore-converge-lifecycle — the divergence/explore phase); low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, heartbeat stall detection, and product-naming (rename pinned to first external distribution; horus-po/horus-continuity both rejected — want a more creative name).
 
 ## Shipped
 

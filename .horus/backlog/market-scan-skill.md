@@ -3,10 +3,10 @@ status: open
 priority: medium
 tier: sonnet
 created: 2026-07-16
+vision_facet: "PO lifecycle"
 type: feature
 parallel: safe
 surface: new bundled skill (sibling to product-audit); composes deep-research; .horus/research/ receipt dir; horus-consolidate hand-off into PRD Vision + candidate cards
-depends-on: vision-expansion decision (continuity-layer → repo-local product owner); see product-naming
 ---
 
 # market-scan — outward, evidence-first market/competitive research skill
@@ -49,6 +49,6 @@ commercial SaaS category — out of scope).
 
 - Token-intensive by nature (composes deep-research): the skill must state its research
   envelope and get owner confirmation before spending, per the grounding rule.
-- Decide build order vs `roadmap-convergence` later; both are gated on the vision-expansion
-  decision (whether Horus's Vision expands from "continuity layer" to "repo-local product
-  owner"). This is an idea-ledger card until that decision lands.
+- Vision expansion has landed (Vision = repo-local product owner, PO-lifecycle facet), so this
+  is no longer gated. Build order: after `roadmap-convergence` (the lower-risk, fully-in-repo
+  card is going first); this one is the higher-leverage outward capability that follows.
