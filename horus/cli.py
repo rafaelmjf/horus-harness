@@ -761,7 +761,12 @@ def cmd_sessions(args: argparse.Namespace) -> int:
                 session_end = datetime.fromisoformat(r.updated_at) if r.updated_at else None
             except ValueError:
                 session_end = None
-            suffix = delivery.render_receipt(r.status, delivery.delivery_receipt(r.project, session_end=session_end))
+            suffix = delivery.render_receipt(
+                r.status,
+                delivery.delivery_receipt(
+                    r.project, dispatch_base_sha=r.dispatch_base_sha, session_end=session_end
+                ),
+            )
             if suffix:
                 line += f" · {suffix}"
         print(line)
@@ -813,6 +818,72 @@ def _resolve_run_posture(explicit: str | None, worker: str | None) -> str:
     if worker:
         return _WORKER_POSTURE[worker]
     return "default"
+
+
+def _resolved_config_dir(agent: str, account: str | None) -> Path | None:
+    """The CLAUDE_CONFIG_DIR / CODEX_HOME an ``agent`` run under ``account`` will use.
+
+    A mapped isolated account resolves to its own dir; an unmapped or absent account
+    falls back to the ambient default (the env var, else the tool's home directory).
+    Returns ``None`` for agents with no config-dir model (e.g. the fake test adapter)."""
+    try:
+        if agent == "claude":
+            mapped = config.load_account_config_dirs().get(account) if account else None
+            raw = mapped or os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
+        elif agent == "codex":
+            mapped = config.load_account_codex_homes().get(account) if account else None
+            raw = mapped or os.environ.get("CODEX_HOME") or str(Path.home() / ".codex")
+        else:
+            return None
+        return Path(raw).expanduser().resolve()
+    except OSError:
+        return None
+
+
+def _config_dir_conflict_guard(agent: str, account: str | None, *, force: bool) -> int | None:
+    """Refuse to launch a second live agent process into a config dir already in use.
+
+    Two agent CLIs sharing one ``CLAUDE_CONFIG_DIR`` / ``CODEX_HOME`` race on its JSON
+    config and corrupt it, so both can die on startup. Returns an exit code to refuse
+    the run, or ``None`` to proceed. The launching session sharing its OWN dir with the
+    new worker (overseer==worker) is the tolerated case — it warns and proceeds.
+    ``--force`` downgrades a refusal to a warning. A registry read failure never blocks."""
+    if agent not in ("claude", "codex"):
+        return None
+    target = _resolved_config_dir(agent, account)
+    if target is None:
+        return None
+    try:
+        live = [
+            rec for rec in registry.Registry.default().all()
+            if rec.agent == agent and rec.status == "running"
+            and registry.process_alive(rec.pid)
+            and _resolved_config_dir(agent, rec.account) == target
+        ]
+    except Exception:
+        return None  # a registry read must never block a launch
+    if not live:
+        return None
+    label = "CLAUDE_CONFIG_DIR" if agent == "claude" else "CODEX_HOME"
+    peer = live[0]
+    if target == _resolved_config_dir(agent, None) and len(live) == 1:
+        print(
+            f"Note: this run shares {label} {target} with the launching session "
+            f"(live {agent} session {peer.session_id[:8]}). One config dir, two {agent} "
+            "processes can race on startup — proceeding since the peer is this session."
+        )
+        return None
+    print(
+        f"{'Warning' if force else 'Refusing to run'}: {label} {target} is already in use "
+        f"by a live {agent} session ({peer.session_id[:8]}, pid {peer.pid})."
+    )
+    print(
+        f"Two {agent} processes on one config dir race on its JSON state and corrupt it — "
+        "both can die on startup. Use a different --account (its own isolated dir) or wait "
+        + ("for the peer to finish (overriding anyway: --force)." if force
+           else "for the peer to finish; pass --force to override.")
+    )
+    return None if force else 2
 
 
 def _run_usage_preflight(
@@ -914,6 +985,12 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "Warning: canonical continuity does not cover the latest delivery commits; "
                 "include their relevant state in the worker brief or checkpoint before dispatch."
             )
+
+    guard_refusal = _config_dir_conflict_guard(
+        args.agent, args.account, force=getattr(args, "force", False)
+    )
+    if guard_refusal is not None:
+        return guard_refusal
     if getattr(args, "worktree", None):
         try:
             wt = worktree.ensure_worktree(root, args.worktree)

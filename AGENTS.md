@@ -115,6 +115,12 @@ Working discipline (every session, whether or not the work is delegated):
   per-task usage percentage, auto-route from cost, poll continuously, or add a second
   model call solely for accounting. Record the execution-mode choice only in an
   existing durable handoff/card, never in a new continuity artifact made just for it.
+- **One live agent process per account config dir.** Give every account its own
+  isolated `CLAUDE_CONFIG_DIR` (Claude) / `CODEX_HOME` (Codex) — never an ambient
+  shared default. Two agent CLIs pointed at one config dir race on its JSON state and
+  corrupt it, so both can die on startup; never run two workers on one account
+  concurrently. `horus run` refuses a second live process on a dir already in use
+  (`--force` overrides; the launching session sharing its own dir only warns).
 
 Version floor (check before writing `.horus/`):
 

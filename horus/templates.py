@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 10
+BLOCK_VERSION = 11
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -125,6 +125,12 @@ Working discipline (every session, whether or not the work is delegated):
   per-task usage percentage, auto-route from cost, poll continuously, or add a second
   model call solely for accounting. Record the execution-mode choice only in an
   existing durable handoff/card, never in a new continuity artifact made just for it.
+- **One live agent process per account config dir.** Give every account its own
+  isolated `CLAUDE_CONFIG_DIR` (Claude) / `CODEX_HOME` (Codex) — never an ambient
+  shared default. Two agent CLIs pointed at one config dir race on its JSON state and
+  corrupt it, so both can die on startup; never run two workers on one account
+  concurrently. `horus run` refuses a second live process on a dir already in use
+  (`--force` overrides; the launching session sharing its own dir only warns).
 
 Version floor (check before writing `.horus/`):
 

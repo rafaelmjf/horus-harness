@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry, routines
+from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry, routines, templates
 from horus.registry import Registry, SessionRecord
 from horus.upgrade import UpgradeAction
 
@@ -1139,7 +1139,7 @@ def test_process_upgrade_project_clean_manual_lists_uncommitted_paths(tmp_path, 
     for name in ("AGENTS.md", "CLAUDE.md"):
         path = proj / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("horus-block-version: 10", "horus-block-version: 9"), encoding="utf-8")
+        path.write_text(text.replace(f"horus-block-version: {templates.BLOCK_VERSION}", "horus-block-version: 9"), encoding="utf-8")
     _commit_scaffold(proj)
     config.set_workflow_policy(commit="manual")
 
@@ -1169,7 +1169,7 @@ def test_process_upgrade_project_clean_automerge_dispatches_branch_pr_and_leaves
     for name in ("AGENTS.md", "CLAUDE.md"):
         path = proj / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("horus-block-version: 10", "horus-block-version: 9"), encoding="utf-8")
+        path.write_text(text.replace(f"horus-block-version: {templates.BLOCK_VERSION}", "horus-block-version: 9"), encoding="utf-8")
     _commit_scaffold_with_origin(proj, tmp_path)
     monkeypatch.setattr(dashboard.integration, "_run", _fake_git_real_gh_faked())
 
@@ -1193,7 +1193,7 @@ def test_process_upgrade_project_clean_automerge_records_integration_failure(tmp
     for name in ("AGENTS.md", "CLAUDE.md"):
         path = proj / name
         text = path.read_text(encoding="utf-8")
-        path.write_text(text.replace("horus-block-version: 10", "horus-block-version: 9"), encoding="utf-8")
+        path.write_text(text.replace(f"horus-block-version: {templates.BLOCK_VERSION}", "horus-block-version: 9"), encoding="utf-8")
     _commit_scaffold_with_origin(proj, tmp_path)
     monkeypatch.setattr(dashboard.integration, "_run", _fake_git_real_gh_faked(pr_create_ok=False))
 
