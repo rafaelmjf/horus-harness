@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-16
@@ -8,6 +8,8 @@ type: feature
 parallel: safe
 surface: PRD.md (Vision facets + Structure contract), backlog card template/frontmatter, new thin skill (or fold into horus-consolidate)
 relates-to: explore-converge-lifecycle (divergence-side counterpart, shares the read-out)
+shipped_pr: 282
+shipped_sha: 026d94c
 ---
 
 # roadmap-convergence — a healthy backlog that converges toward the Vision, with a DoD
