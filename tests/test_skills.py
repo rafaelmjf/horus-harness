@@ -68,6 +68,32 @@ def test_market_scan_skill_registered_and_outward():
     assert "confirm the envelope" in market.content
 
 
+def test_kickstart_skill_registered_and_orchestrates():
+    kick = next(s for s in skills.SKILLS if s.name == "horus-kickstart")
+    assert kick.version == 1
+    # Thin orchestrator: sequences existing skills, no new CLI/module.
+    assert "market-scan" in kick.content and "deep-research" in kick.content
+    assert "horus consolidate" in kick.content
+    assert "No new CLI subcommand" in kick.content
+    # Advisory / diff-only, gated at every step, facet DIFF not replace.
+    assert "advisory" in kick.content.lower() and "diff-only" in kick.content.lower()
+    assert "Never auto-apply" in kick.content
+    assert "wholesale replace" in kick.content or "wholesale table" in kick.content
+    assert "add / rename / retire / promote" in kick.content
+    # Onboarding folds in: no facet table -> propose initial facets + stamp cards.
+    assert "Onboarding fork" in kick.content and "stamp existing cards" in kick.content
+    # Token envelope before any web spend.
+    assert "confirm the token envelope" in kick.content.lower()
+    # v2 fallback present (asserted for all skills elsewhere, checked explicitly here too).
+    assert "## v2 six-lane projects (fallback)" in kick.content
+
+
+def test_kickstart_skill_projected_to_both_agents():
+    kick = next(s for s in skills.SKILLS if s.name == "horus-kickstart")
+    for root in (".claude/skills", ".agents/skills"):
+        assert Path(f"{root}/horus-kickstart/SKILL.md").read_text(encoding="utf-8") == kick.content
+
+
 def test_dispatch_consent_skills_match_claude_and_codex_projections():
     by_name = {skill.name: skill for skill in skills.SKILLS}
     for name in ("delegation-rubric", "execution-decision", "dispatch-decision", "horus-execution"):
