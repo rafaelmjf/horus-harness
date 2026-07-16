@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from prompt_toolkit.data_structures import Point, Size
@@ -1009,8 +1010,9 @@ def test_terminal_tui_fleet_review_is_optional_after_direct_projects(tmp_path, m
 
     ui = terminal_tui.TerminalUI()
     assert ui.items[0] == ("project", project)
-    assert ui.items[-1][0] == "fleet_review"
-    ui.move(len(ui.items) - 1)
+    assert ui.items[-1][0] == "campaign"
+    fleet_review_index = next(index for index, item in enumerate(ui.items) if item[0] == "fleet_review")
+    ui.move(fleet_review_index)
     ui.activate()
     assert ui.screen == "fleet_review" and calls == [[project.as_posix(), curator.as_posix()]]
 
@@ -1024,6 +1026,79 @@ def test_terminal_tui_fleet_review_is_optional_after_direct_projects(tmp_path, m
     ui.activate()
     assert ui.screen == "accounts"
     assert ui.project == curator and ui.pending_mode == "resume"
+
+
+def test_campaign_is_absent_without_a_registered_cockpit(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.register_project(_project(tmp_path, "demo"))
+
+    ui = terminal_tui.TerminalUI()
+    assert "campaign" not in {kind for kind, _value in ui.items}
+
+
+def test_campaign_is_optional_and_distinct_from_fleet_review(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    project = _project(tmp_path, "demo")
+    cockpit = _project(tmp_path, "horus-agent")
+    config.register_project(project)
+    config.register_project(cockpit)
+
+    ui = terminal_tui.TerminalUI()
+    kinds = [kind for kind, _value in ui.items]
+    assert kinds.count("fleet_review") == 1
+    assert kinds.count("campaign") == 1
+    assert kinds.index("campaign") > kinds.index("fleet_review")
+
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "Campaign" in rendered
+    assert "Fleet Review" in rendered
+
+    campaign_index = kinds.index("campaign")
+    ui.move(campaign_index)
+    ui.application.exit = Mock()
+    ui.activate()
+    ui.application.exit.assert_called_once()
+    assert isinstance(ui.application.exit.call_args.kwargs["result"], terminal_tui._Campaign)
+
+
+def test_run_campaign_prompt_composes_bounded_brief_and_ignores_unknown_targets(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    demo = _project(tmp_path, "demo")
+    other = _project(tmp_path, "other")
+    cockpit = _project(tmp_path, "horus-agent")
+    answers = iter(["Ship the launch prompt", "demo, other, bogus"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+    printed: list[str] = []
+    monkeypatch.setattr("builtins.print", lambda *args, **kwargs: printed.append(" ".join(str(a) for a in args)))
+
+    result = terminal_tui._run_campaign_prompt([demo, other, cockpit])
+
+    assert result is not None
+    project, prompt = result
+    assert project == cockpit
+    assert "Ship the launch prompt" in prompt
+    assert "demo" in prompt and "other" in prompt
+    assert "bogus" not in prompt
+    assert any("bogus" in line for line in printed)
+
+
+def test_run_campaign_prompt_cancels_on_empty_outcome(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    cockpit = _project(tmp_path, "horus-agent")
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "")
+
+    assert terminal_tui._run_campaign_prompt([cockpit]) is None
+
+
+def test_run_campaign_prompt_none_without_cockpit(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    demo = _project(tmp_path, "demo")
+
+    def _fail_input(_prompt=""):
+        raise AssertionError("must not prompt without a compatible cockpit")
+
+    monkeypatch.setattr("builtins.input", _fail_input)
+    assert terminal_tui._run_campaign_prompt([demo]) is None
 
 
 def test_terminal_tui_projection_sync_reports_drift_and_launches_curator(tmp_path, monkeypatch):
