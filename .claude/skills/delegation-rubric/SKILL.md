@@ -12,7 +12,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -48,6 +48,9 @@ reviewing, observing the gate, merging, and closing continuity.
   session may be the cheapest place for cross-project judgment because it already
   holds the context that handoffs would discard.
 - Never manufacture work or a worker solely to earn a datum.
+- An explicit owner direction may instead optimize expiring isolated-account
+  capacity or protect supervisor context. Label that as the dispatch basis; do not
+  pretend it is a feature-economics dividend.
 
 ## Step 1 — Read the calibration data
 
@@ -149,7 +152,28 @@ claim, whoever wrote it.
   gate at the phase boundary; overseer: observe required CI green on the merge
   SHA). The dial above is the same in both.
 
-## Step 6 — Emit the recommendation
+## Step 6 — Bind dispatch to explicit owner consent
+
+Before any implementation worker is launched, present one exact consent envelope:
+
+- agent and concrete model (not only a tier), effort, and account alias;
+- current usage and reset evidence for that account, including source and freshness;
+- bounded task, maximum attempts, expected dispatch dividend or owner-directed
+  capacity/context override, and the deterministic verification gate.
+
+Wait for explicit owner approval of that envelope. Approval does not authorize a
+different model, account, effort, task scope, or another attempt. Ask again before
+any such change; a provider failure never permits silent fallback. This approval is
+the execution plane's responsibility—Horus records and displays evidence but never
+authorizes, selects, or launches by itself.
+
+Do not predict a per-task usage percentage. At completion, use the mechanically
+captured start/end readings and `horus datum report`; show a delta only when Horus
+labels fresh same-window isolated readings unconfounded. Otherwise report the actual
+readings as unknown or confounded. Do not poll continuously or make another model call
+for accounting.
+
+## Step 7 — Emit the recommendation
 
 Emit three things for the agent to APPLY (never auto-apply them):
 
@@ -157,6 +181,9 @@ Emit three things for the agent to APPLY (never auto-apply them):
 - **tier** — a concrete model, chosen from the data + shape,
 - **verification depth** — observe-only vs observe+probe vs owner-eyeball, with
   the one deterministic gate you'll observe named explicitly.
+
+For a dispatched mode, also emit the complete consent envelope from Step 6 and
+state `awaiting owner approval`; never launch as part of the recommendation.
 
 **When the mode is a dispatched one** (anything that spawns a tracked worker
 rather than staying inline — `dispatched-worker`/`dispatched-plan` in

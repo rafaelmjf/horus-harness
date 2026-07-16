@@ -541,7 +541,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 10 -->
+<!-- horus-skill-version: 11 -->
 
 # Horus execution supervision
 
@@ -574,6 +574,23 @@ merely because work spans projects or phases, or to collect a model datum.
 Runtime matters — name the actual context, parallelism, or price dividend in
 `delegation_basis`, using live calibration data for model selection. If no concrete
 benefit remains after the task is bounded, stay inline and do not create the plan.
+An explicit owner direction to spend expiring isolated-account capacity or protect
+supervisor context is also a valid basis when labelled honestly.
+
+## Obtain exact-envelope approval before every worker launch
+
+Before invoking a native subagent or `horus run`, show the owner the exact agent,
+concrete model, effort, account alias, current usage/reset evidence with source and
+freshness, bounded phase, maximum attempts, expected dividend or owner-directed
+override, and verification gate. Wait for explicit approval. A different model,
+account, effort, scope, or an attempt beyond the allowance requires renewed approval;
+never silently fall back after a provider or capacity failure.
+
+At completion, run `horus datum report` for mechanically captured model/account/
+effort/runtime/attempt/outcome and start/end usage evidence. Report a percentage-point
+delta only when the report calls fresh same-window isolated readings unconfounded;
+otherwise preserve its unknown/confounded label. Do not predict task usage, poll
+continuously, or make an extra model call solely for accounting.
 
 Be honest about review: in practice most supervisor reviews just confirm green, and a
 review is **not** a safety guarantee. The durable safeguards are model-independent (the
@@ -654,7 +671,9 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
    economics, risk isolation, context splitting, parallelism, or "not worth delegating".
    Different agents may reasonably choose differently.
 
-4. **Delegate bounded phases only.** Ask native workers/subagents to implement one
+4. **Authorize, then delegate bounded phases only.** Present the exact consent
+   envelope above and wait for explicit owner approval. Then ask native
+   workers/subagents to implement one
    phase at a time. Read live tier roles and measured evidence from
    `horus capabilities --models`; use lower-cost tiers only for clear, narrow work
    and reserve stronger reasoning tiers for work whose ambiguity actually needs them.
@@ -751,7 +770,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -787,6 +806,9 @@ reviewing, observing the gate, merging, and closing continuity.
   session may be the cheapest place for cross-project judgment because it already
   holds the context that handoffs would discard.
 - Never manufacture work or a worker solely to earn a datum.
+- An explicit owner direction may instead optimize expiring isolated-account
+  capacity or protect supervisor context. Label that as the dispatch basis; do not
+  pretend it is a feature-economics dividend.
 
 ## Step 1 — Read the calibration data
 
@@ -888,7 +910,28 @@ claim, whoever wrote it.
   gate at the phase boundary; overseer: observe required CI green on the merge
   SHA). The dial above is the same in both.
 
-## Step 6 — Emit the recommendation
+## Step 6 — Bind dispatch to explicit owner consent
+
+Before any implementation worker is launched, present one exact consent envelope:
+
+- agent and concrete model (not only a tier), effort, and account alias;
+- current usage and reset evidence for that account, including source and freshness;
+- bounded task, maximum attempts, expected dispatch dividend or owner-directed
+  capacity/context override, and the deterministic verification gate.
+
+Wait for explicit owner approval of that envelope. Approval does not authorize a
+different model, account, effort, task scope, or another attempt. Ask again before
+any such change; a provider failure never permits silent fallback. This approval is
+the execution plane's responsibility—Horus records and displays evidence but never
+authorizes, selects, or launches by itself.
+
+Do not predict a per-task usage percentage. At completion, use the mechanically
+captured start/end readings and `horus datum report`; show a delta only when Horus
+labels fresh same-window isolated readings unconfounded. Otherwise report the actual
+readings as unknown or confounded. Do not poll continuously or make another model call
+for accounting.
+
+## Step 7 — Emit the recommendation
 
 Emit three things for the agent to APPLY (never auto-apply them):
 
@@ -896,6 +939,9 @@ Emit three things for the agent to APPLY (never auto-apply them):
 - **tier** — a concrete model, chosen from the data + shape,
 - **verification depth** — observe-only vs observe+probe vs owner-eyeball, with
   the one deterministic gate you'll observe named explicitly.
+
+For a dispatched mode, also emit the complete consent envelope from Step 6 and
+state `awaiting owner approval`; never launch as part of the recommendation.
 
 **When the mode is a dispatched one** (anything that spawns a tracked worker
 rather than staying inline — `dispatched-worker`/`dispatched-plan` in
@@ -985,7 +1031,7 @@ description: >-
   dispatch use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Execution decision (in-project, subagents substrate)
 
@@ -999,8 +1045,8 @@ delegate.
 ## Load the shared rubric first
 
 Read **`../delegation-rubric/SKILL.md`** and apply its dividend precondition plus
-six steps (read the data, read the task shape, the tier-trust ladder,
-shape→mode+tier, verification depth, emit). Everything about reading
+seven steps (read the data, read the task shape, the tier-trust ladder,
+shape→mode+tier, verification depth, bind consent, emit). Everything about reading
 `horus capabilities --models` and dialing
 verification by tier-trust lives there — do not restate or fork it here.
 
@@ -1036,9 +1082,11 @@ surface still defaults to the owner's eyeball.
 
 `mode` (`inline` | `subagent-plan`) + `tier` (a concrete model from the data) +
 `verification depth` (observe-only | observe+probe | owner-eyeball, with the
-gate command named). Show the calibration that drove it. Spawning the subagent,
-selecting the model, and running the gate are all YOUR actions — this skill
-recommends, it does not route.
+gate command named). For `subagent-plan`, include the exact agent/model/effort/
+account/usage+reset/task/attempts/dividend-or-owner-override/gate consent envelope,
+mark it awaiting explicit owner approval, and ask again on any fallback or extra
+attempt. Spawning the subagent, selecting the model, and running the gate are all
+YOUR actions — this skill recommends, it does not route.
 
 ## v2 six-lane projects (fallback)
 
@@ -1066,7 +1114,7 @@ description: >-
   single repo use `execution-decision` instead.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Dispatch decision (cockpit / multi-project, sessions substrate)
 
@@ -1079,7 +1127,7 @@ routing, and one substrate note.
 ## Load the shared rubric first
 
 Read **`../delegation-rubric/SKILL.md`** and apply its dividend precondition plus
-six steps. All of the calibration-data reading and the verification-depth dial
+seven steps. All calibration, consent-envelope, and verification-depth logic
 live there; do not restate or fork it.
 
 ## Mode vocabulary (this skill's output for the rubric's Step 4 axis)
@@ -1110,6 +1158,9 @@ real work, never the reason to create a worker.
   `guard` flags. This is a check you OBSERVE, not an auto-throttle. When native
   telemetry is incomplete or temporarily lifted, accept a current owner-provided
   reading as the routing signal and label that override explicitly.
+- An owner may explicitly choose an account to spend capacity before its reset or
+  protect the overseer context. This supplies the dispatch basis, but does not waive
+  the exact-envelope approval or authorize a silent fallback.
 
 ## Overseer verification note (the substrate specialization of rubric Step 5)
 
@@ -1128,10 +1179,12 @@ to the owner's eyeball.
 `mode` (`inline-here` | `dispatched-worker` | `dispatched-plan`) + `account`
 (which isolated alias, or "hold — usage") + `tier` (a concrete model from the
 data) + `verification depth` (observe-CI | observe-CI+probe | owner-eyeball).
-Show the calibration + the usage-check result that drove it. Selecting the
-account, spawning the worker, and observing CI are all YOUR actions — this skill
-recommends; `horus` never auto-routes a dispatch (the hard boundary:
-`research/omnigent.md`).
+Show the calibration + usage/reset evidence that drove it. For either dispatched
+mode, present the full consent envelope from the rubric and stop for explicit owner
+approval. Any changed model/account/effort/scope or additional attempt requires a new
+approval; provider errors never authorize fallback. Selecting the account, spawning
+the worker, and observing CI are all YOUR actions — this skill recommends; `horus`
+never auto-routes a dispatch (the hard boundary: `research/omnigent.md`).
 
 ## v2 six-lane projects (fallback)
 
@@ -1210,10 +1263,10 @@ SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 11, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 4, _INFER_SKILL),
-    Skill("horus-execution", 10, _EXECUTION_SKILL),
-    Skill("delegation-rubric", 5, _DELEGATION_RUBRIC_SKILL),
-    Skill("execution-decision", 2, _EXECUTION_DECISION_SKILL),
-    Skill("dispatch-decision", 2, _DISPATCH_DECISION_SKILL),
+    Skill("horus-execution", 11, _EXECUTION_SKILL),
+    Skill("delegation-rubric", 6, _DELEGATION_RUBRIC_SKILL),
+    Skill("execution-decision", 3, _EXECUTION_DECISION_SKILL),
+    Skill("dispatch-decision", 3, _DISPATCH_DECISION_SKILL),
     Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
 )
 

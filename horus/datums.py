@@ -186,7 +186,7 @@ class Datum:
     # --- mechanical usage snapshots, best-effort readings only (NEVER a
     # computed delta/cost score — see `capture_usage_snapshot`) --------------
     usage_launch: dict | None = None   # captured at `record_launch`
-    usage_close: dict | None = None    # captured at `horus datum close` time
+    usage_close: dict | None = None    # captured at process completion
     # --- qualitative, agent-supplied at review time --------------------------
     outcome: str | None = None         # one of OUTCOMES
     shape: str | None = None           # ambiguity/volume/runtime, agent's words
@@ -226,9 +226,9 @@ def looks_like_usage_death(error_text: str | None) -> bool:
 
 # ---------------------------------------------------------------------------
 # Mechanical usage snapshots (`usage_launch` / `usage_close`) — readings only,
-# NEVER a computed delta or cost score (the 2026-07-14 frozen schema). Captured
-# at `record_launch` and at `horus datum close` time; the agent's judgment
-# about the delta between the two lands separately via the `--dividend` flag.
+# NEVER a predicted cost score. Captured once at launch and once at process
+# completion. A report may subtract comparable readings after the fact; the
+# agent's qualitative judgment still lands separately via the `--dividend` flag.
 # ---------------------------------------------------------------------------
 
 
@@ -300,8 +300,10 @@ def _claude_usage_entry(account: str | None, *, persist_cache: bool = True) -> d
     entry: dict = {"read_at": read_at, "freshness": "fresh"}
     if snap.percent is not None:
         entry["pct_5h"] = snap.percent
+        entry["resets_5h"] = snap.resets_at
     if snap.weekly_percent is not None:
         entry["pct_weekly"] = snap.weekly_percent
+        entry["resets_weekly"] = snap.weekly_resets_at
     return entry
 
 
@@ -322,9 +324,11 @@ def _codex_usage_entry(account: str | None, *, since: str | None) -> dict:
     entry: dict = {"read_at": read_at, "pct_context": report.context_percent}
     if report.primary_percent is not None:
         entry["pct_5h"] = report.primary_percent
+        entry["resets_5h"] = getattr(report, "primary_resets_at", None)
     secondary_percent = getattr(report, "secondary_percent", None)
     if secondary_percent is not None:
         entry["pct_weekly"] = secondary_percent
+        entry["resets_weekly"] = getattr(report, "secondary_resets_at", None)
     now = time.time()
     reset_expired = report.primary_resets_at is not None and report.primary_resets_at <= now
     predates_run = False
@@ -334,6 +338,170 @@ def _codex_usage_entry(account: str | None, *, since: str | None) -> dict:
         predates_run = bool(report_epoch) and bool(since_epoch) and report_epoch < since_epoch
     entry["freshness"] = "stale" if (reset_expired or predates_run) else "fresh"
     return entry
+
+
+def _iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.astimezone()
+    return stamp.astimezone(timezone.utc)
+
+
+def _tracked_overlap(datum: Datum, peers: list[Datum]) -> bool:
+    """Whether another tracked worker used this exact account concurrently."""
+    start = _iso_datetime(datum.launched_at)
+    if start is None:
+        return False
+    end = _iso_datetime(datum.completed_at) or datetime.now(timezone.utc)
+    for peer in peers:
+        if peer.session_id == datum.session_id or not peer.worker:
+            continue
+        if peer.agent != datum.agent or peer.account != datum.account:
+            continue
+        peer_start = _iso_datetime(peer.launched_at)
+        if peer_start is None:
+            continue
+        peer_end = _iso_datetime(peer.completed_at) or datetime.now(timezone.utc)
+        if start <= peer_end and peer_start <= end:
+            return True
+    return False
+
+
+def usage_accounting(datum: Datum, peers: list[Datum] | None = None) -> dict:
+    """Classify stored start/end usage evidence without estimating future cost.
+
+    A percentage-point delta is shown only for an explicit isolated account,
+    fresh readings, the same provider reset window, and no overlapping tracked
+    worker on that account. Ambient/default accounts are conservatively labelled
+    shared because supervisor or unrelated activity cannot be separated.
+    """
+    target = datum.agent or ""
+    start = (datum.usage_launch or {}).get(target)
+    end = (datum.usage_close or {}).get(target)
+    result = {"status": "unknown", "start": start, "end": end, "deltas": {}}
+    if not isinstance(start, dict) or not isinstance(end, dict):
+        result["detail"] = "start/end usage unavailable"
+        return result
+    if datum.account is None:
+        result["status"] = "shared-account/confounded"
+        result["detail"] = "ambient/default account may include supervisor or unrelated activity"
+        return result
+    if _tracked_overlap(datum, peers or []):
+        result["status"] = "concurrent/confounded"
+        result["detail"] = "another tracked worker overlapped on this account"
+        return result
+    if start.get("freshness") != "fresh" or end.get("freshness") != "fresh":
+        result["detail"] = "start/end readings are not both fresh"
+        return result
+
+    deltas: dict[str, float] = {}
+    for label, pct_key, reset_key in (
+        ("5h", "pct_5h", "resets_5h"),
+        ("weekly", "pct_weekly", "resets_weekly"),
+    ):
+        before, after = start.get(pct_key), end.get(pct_key)
+        start_reset, end_reset = start.get(reset_key), end.get(reset_key)
+        if not isinstance(before, int | float) or not isinstance(after, int | float):
+            continue
+        if start_reset is None or start_reset != end_reset:
+            continue
+        deltas[label] = round(float(after) - float(before), 1)
+    if not deltas:
+        result["detail"] = "no fresh comparable provider window"
+        return result
+    result["status"] = "observed"
+    result["deltas"] = deltas
+    result["detail"] = "isolated account; no overlapping tracked worker"
+    return result
+
+
+def worker_breakdown(rows: list[Datum]) -> list[dict]:
+    """Render-ready per-attempt worker actuals, grouped by native session id."""
+    workers = sorted(
+        (row for row in rows if row.worker),
+        key=lambda row: (row.launched_at, row.session_id),
+    )
+    groups: dict[tuple[str | None, str | None, str], list[Datum]] = {}
+    for row in workers:
+        native = row.agent_session_id or row.session_id
+        groups.setdefault((row.agent, row.account, native), []).append(row)
+
+    breakdown: list[dict] = []
+    for row in workers:
+        native = row.agent_session_id or row.session_id
+        group = groups[(row.agent, row.account, native)]
+        breakdown.append({
+            "run_id": row.session_id,
+            "agent_session_id": row.agent_session_id,
+            "agent": row.agent,
+            "model": row.model,
+            "account": row.account,
+            "effort": row.effort,
+            "runtime_seconds": row.runtime_seconds,
+            "attempt": group.index(row) + 1,
+            "attempts": len(group),
+            "outcome": row.outcome,
+            "exit": row.exit,
+            "delivery_status": row.delivery_status,
+            "launched_at": row.launched_at,
+            "completed_at": row.completed_at,
+            "usage": usage_accounting(row, workers),
+        })
+    return breakdown
+
+
+def _runtime_label(seconds: float | None) -> str:
+    if seconds is None:
+        return "unknown"
+    total = max(0, round(seconds))
+    minutes, secs = divmod(total, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}m{secs:02d}s"
+    return f"{minutes}m{secs:02d}s"
+
+
+def _usage_reading_label(entry: object) -> str:
+    if not isinstance(entry, dict):
+        return "unavailable"
+    parts = []
+    if isinstance(entry.get("pct_5h"), int | float):
+        parts.append(f"5h={entry['pct_5h']:g}%")
+    if isinstance(entry.get("pct_weekly"), int | float):
+        parts.append(f"weekly={entry['pct_weekly']:g}%")
+    if not parts:
+        return str(entry.get("freshness", "unavailable"))
+    return "/".join(parts) + f"[{entry.get('freshness', 'unknown')}]"
+
+
+def render_worker_breakdown(rows: list[dict]) -> str:
+    if not rows:
+        return "No worker runs recorded.\n"
+    lines = ["Worker actuals (observed readings only; never an estimate):"]
+    for row in rows:
+        usage = row["usage"]
+        if usage["status"] == "observed":
+            deltas = ", ".join(f"{window} {delta:+g}pp" for window, delta in usage["deltas"].items())
+            usage_label = f"observed {deltas}"
+        else:
+            usage_label = f"{usage['status']} ({usage.get('detail', 'no detail')})"
+        usage_label += (
+            f" start={_usage_reading_label(usage.get('start'))}"
+            f" end={_usage_reading_label(usage.get('end'))}"
+        )
+        lines.append(
+            f"  {row['run_id'][:8]} {row['agent'] or '-'} model={row['model'] or '-'} "
+            f"account={row['account'] or 'default'} effort={row['effort'] or 'default'} "
+            f"runtime={_runtime_label(row['runtime_seconds'])} "
+            f"attempt={row['attempt']}/{row['attempts']} "
+            f"outcome={row['outcome'] or row['exit'] or 'open'} usage={usage_label}"
+        )
+    return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -483,6 +651,10 @@ class DatumStore:
             row["delivery_local_changes"] = delivery_local_changes
             row["delivery_continuity_closed"] = delivery_continuity_closed
             row["delivery_checked_at"] = delivery_checked_at
+            row["usage_close"] = capture_usage_snapshot(
+                row.get("agent"), row.get("account"), since=row.get("launched_at"),
+                persist_cache=False,
+            )
             if tokens is not None:
                 row["tokens"] = tokens
             if pr_opened is not None:
@@ -512,9 +684,9 @@ class DatumStore:
         these fields — never inferred, never auto-scored (the 2026-07-14 frozen
         cost-envelope schema keeps the same hard boundary as ``outcome``).
 
-        Also captures the mechanical ``usage_close`` snapshot (best-effort,
-        readings only) — the close moment is when the agent's cost judgment
-        lands, so it's also when the harness takes its second usage reading."""
+        Legacy datums that predate completion capture get a best-effort
+        ``usage_close`` snapshot here. New runs already carry their mechanical
+        end reading before this qualitative review happens."""
         if outcome not in OUTCOMES:
             raise ValueError(f"outcome must be one of {', '.join(OUTCOMES)} (got {outcome!r})")
         if oversight is not None and oversight not in OVERSIGHT_LEVELS:
@@ -544,12 +716,13 @@ class DatumStore:
             row["counterfactual"] = counterfactual
         if dividend is not None:
             row["dividend"] = dividend
-        try:
-            row["usage_close"] = capture_usage_snapshot(
-                row.get("agent"), row.get("account"), since=row.get("launched_at")
-            )
-        except Exception:  # noqa: BLE001 (best-effort: never blocks a close)
-            pass
+        if row.get("usage_close") is None:
+            try:
+                row["usage_close"] = capture_usage_snapshot(
+                    row.get("agent"), row.get("account"), since=row.get("launched_at")
+                )
+            except Exception:  # noqa: BLE001 (best-effort: never blocks a close)
+                pass
         self._save(rows)
         return Datum.from_row(row)
 

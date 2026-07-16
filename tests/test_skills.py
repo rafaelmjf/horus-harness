@@ -1,5 +1,7 @@
 """Tests for the bundled agent-skills layer (scaffold, version-aware install, doctor)."""
 
+from pathlib import Path
+
 from horus import initialize, skills
 
 
@@ -54,6 +56,14 @@ def test_delegation_decision_skills_registered():
     assert {"delegation-rubric", "execution-decision", "dispatch-decision"} <= names
 
 
+def test_dispatch_consent_skills_match_claude_and_codex_projections():
+    by_name = {skill.name: skill for skill in skills.SKILLS}
+    for name in ("delegation-rubric", "execution-decision", "dispatch-decision", "horus-execution"):
+        expected = by_name[name].content
+        assert Path(f".agents/skills/{name}/SKILL.md").read_text(encoding="utf-8") == expected
+        assert Path(f".claude/skills/{name}/SKILL.md").read_text(encoding="utf-8") == expected
+
+
 def test_delegation_rubric_is_the_shared_single_source_of_truth():
     rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
     # Reads the Slice 1 data-only surface, never a pick/router.
@@ -93,13 +103,19 @@ def test_delegation_rubric_keeps_older_capable_models_in_roster():
 
 def test_delegation_rubric_proves_dividend_before_model_selection():
     rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
-    assert rubric.version == 5
+    assert rubric.version == 6
     assert rubric.content.index("prove delegation has a dividend") < rubric.content.index(
         "Read the calibration data"
     )
     assert "Cross-project scope, multiple phases" in rubric.content
     assert "Never manufacture work or a worker solely to earn a datum" in rubric.content
     assert "temporarily lifted" in rubric.content and "owner-provided" in rubric.content
+    assert "expiring isolated-account" in rubric.content
+    assert "Bind dispatch to explicit owner consent" in rubric.content
+    for field in ("concrete model", "effort", "account alias", "maximum attempts"):
+        assert field in rubric.content
+    assert "never permits silent fallback" in rubric.content
+    assert "Do not predict a per-task usage percentage" in rubric.content
     assert "today:" not in rubric.content
     for pinned_model in ("sonnet-5", "opus-4.8", "haiku-4.5", "gpt-5.6"):
         assert pinned_model not in rubric.content
@@ -134,18 +150,20 @@ def test_both_consumer_skills_import_the_shared_rubric():
 
 def test_execution_decision_skill_is_in_project_subagents():
     skill = next(s for s in skills.SKILLS if s.name == "execution-decision")
-    assert skill.version == 2
+    assert skill.version == 3
     # Its mode vocabulary + the in-project verification specialization.
     assert "`inline`" in skill.content and "`subagent-plan`" in skill.content
     assert "RUNS the gate at the phase boundary" in skill.content
     assert "TRUSTS the code" in skill.content
     assert "execution_recommendation" in skill.content
     assert "horus datum close" in skill.content
+    assert "awaiting explicit owner approval" in skill.content
+    assert "fallback or extra" in skill.content
 
 
 def test_dispatch_decision_skill_is_cockpit_multiproject():
     skill = next(s for s in skills.SKILLS if s.name == "dispatch-decision")
-    assert skill.version == 2
+    assert skill.version == 3
     # Its mode vocabulary, account routing, and the overseer verification note.
     assert "`inline-here`" in skill.content
     assert "`dispatched-worker`" in skill.content
@@ -156,6 +174,9 @@ def test_dispatch_decision_skill_is_cockpit_multiproject():
     assert "Cross-project scope alone is insufficient" in skill.content
     assert "Do not dispatch merely to collect a datum" in skill.content
     assert "owner-provided" in skill.content
+    assert "spend capacity before its reset" in skill.content
+    assert "stop for explicit owner" in skill.content
+    assert "provider errors never authorize fallback" in skill.content
     # Observe CI green on the merge SHA; do not re-run the suite.
     assert "required CI check green on the merge SHA" in skill.content
     assert "Do NOT re-run" in skill.content
@@ -202,7 +223,7 @@ def test_distill_history_skill_v3_targets_archive():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 10
+    assert execution.version == 11
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -223,6 +244,9 @@ def test_execution_skill_requires_real_delegation_for_model_separation():
     assert "worker_agent: codex" in execution.content
     assert "horus run --agent codex" in execution.content
     assert "shares no conversation history" in execution.content
+    assert "Obtain exact-envelope approval" in execution.content
+    assert "horus datum report" in execution.content
+    assert "Do not predict task usage" in execution.content
     assert "reproduce the gate yourself" in execution.content
     # v7: signal-based acceptance — required CI green counts as reproduction of the
     # test gate; one runtime probe stays with the supervisor; no proof narratives.

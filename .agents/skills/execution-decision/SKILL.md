@@ -13,7 +13,7 @@ description: >-
   dispatch use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Execution decision (in-project, subagents substrate)
 
@@ -27,8 +27,8 @@ delegate.
 ## Load the shared rubric first
 
 Read **`../delegation-rubric/SKILL.md`** and apply its dividend precondition plus
-six steps (read the data, read the task shape, the tier-trust ladder,
-shape→mode+tier, verification depth, emit). Everything about reading
+seven steps (read the data, read the task shape, the tier-trust ladder,
+shape→mode+tier, verification depth, bind consent, emit). Everything about reading
 `horus capabilities --models` and dialing
 verification by tier-trust lives there — do not restate or fork it here.
 
@@ -64,9 +64,11 @@ surface still defaults to the owner's eyeball.
 
 `mode` (`inline` | `subagent-plan`) + `tier` (a concrete model from the data) +
 `verification depth` (observe-only | observe+probe | owner-eyeball, with the
-gate command named). Show the calibration that drove it. Spawning the subagent,
-selecting the model, and running the gate are all YOUR actions — this skill
-recommends, it does not route.
+gate command named). For `subagent-plan`, include the exact agent/model/effort/
+account/usage+reset/task/attempts/dividend-or-owner-override/gate consent envelope,
+mark it awaiting explicit owner approval, and ask again on any fallback or extra
+attempt. Spawning the subagent, selecting the model, and running the gate are all
+YOUR actions — this skill recommends, it does not route.
 
 ## v2 six-lane projects (fallback)
 
