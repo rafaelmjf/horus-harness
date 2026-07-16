@@ -50,6 +50,11 @@ class Target:
     sha: str
     pr_number: int | None
     base_branch: str | None
+    # True unless we positively learned the owning PR is closed/merged — a
+    # currently-open PR's head sha still gets a genuine `pull_request` event,
+    # so its required contexts are never filtered. Defaults permissive when
+    # the PR state is unknown/unreported.
+    is_open_pr: bool = True
 
 
 @dataclass(frozen=True)
@@ -90,7 +95,7 @@ def resolve_target(root: Path, ref: str) -> Target:
     pr_number = int(match.group(1)) if match else (int(ref) if ref.isdigit() else None)
 
     if pr_number is not None:
-        r = _run(["gh", "pr", "view", str(pr_number), "--json", "headRefOid,baseRefName"], root)
+        r = _run(["gh", "pr", "view", str(pr_number), "--json", "headRefOid,baseRefName,state"], root)
         if r.returncode != 0:
             raise MergeWatchError(f"gh pr view {pr_number} failed: {(r.stderr or r.stdout).strip()}")
         try:
@@ -99,12 +104,14 @@ def resolve_target(root: Path, ref: str) -> Target:
         except (ValueError, KeyError, TypeError) as exc:
             raise MergeWatchError(f"could not parse `gh pr view {pr_number}` output") from exc
         base = data.get("baseRefName") if isinstance(data, dict) else None
-        return Target(owner=owner, repo=repo, sha=sha, pr_number=pr_number, base_branch=base)
+        is_open = _is_open_state(data.get("state") if isinstance(data, dict) else None)
+        return Target(owner=owner, repo=repo, sha=sha, pr_number=pr_number, base_branch=base, is_open_pr=is_open)
 
     sha = ref
     r = _run(["gh", "api", f"repos/{owner}/{repo}/commits/{sha}/pulls"], root)
     found_pr: int | None = None
     base_branch: str | None = None
+    is_open = True
     if r.returncode == 0:
         try:
             prs = json.loads(r.stdout)
@@ -112,9 +119,19 @@ def resolve_target(root: Path, ref: str) -> Target:
                 number = prs[0].get("number")
                 found_pr = number if isinstance(number, int) else None
                 base_branch = (prs[0].get("base") or {}).get("ref")
+                is_open = _is_open_state(prs[0].get("state"))
         except (ValueError, AttributeError, TypeError):
             pass
-    return Target(owner=owner, repo=repo, sha=sha, pr_number=found_pr, base_branch=base_branch)
+    return Target(owner=owner, repo=repo, sha=sha, pr_number=found_pr, base_branch=base_branch, is_open_pr=is_open)
+
+
+def _is_open_state(state: object) -> bool:
+    """Permissive by default (``True``) — only a positively-reported
+    non-"open" PR state (``gh pr view``'s ``OPEN/CLOSED/MERGED`` or the REST
+    API's lowercase ``open/closed``) flips this to ``False``."""
+    if not isinstance(state, str):
+        return True
+    return state.strip().lower() == "open"
 
 
 def required_contexts(root: Path, owner: str, repo: str, base: str | None) -> set[str] | None:
@@ -171,6 +188,110 @@ def fetch_check_states(root: Path, owner: str, repo: str, sha: str) -> dict[str,
     return states
 
 
+_JOB_ID_RE = re.compile(r"^  ([A-Za-z0-9_.-]+):[ \t]*$", re.MULTILINE)
+_JOB_NAME_RE = re.compile(r"^ {4,}name:[ \t]*(.+?)[ \t]*$", re.MULTILINE)
+_ON_BLOCK_RE = re.compile(r"^on:[ \t]*(.*?)(?=^\S|\Z)", re.MULTILINE | re.DOTALL)
+_JOBS_BLOCK_RE = re.compile(r"^jobs:[ \t]*\n(.*)", re.MULTILINE | re.DOTALL)
+
+
+def _context_base(name: str) -> str:
+    """Strip a matrix suffix like ``" (3.12)"`` so a required context (as
+    reported by a check-run) can be matched back to the job that produces
+    it."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", name).strip()
+
+
+def _parse_workflow(text: str) -> tuple[bool, bool, set[str]] | None:
+    """``(has_push, has_pull_request, contexts)`` for one workflow file, or
+    ``None`` when it can't be structurally parsed with confidence (no
+    top-level ``on:`` or ``jobs:`` block found at all) — callers must treat
+    that as "unknown", never silently as "no push trigger"."""
+    on_match = _ON_BLOCK_RE.search(text)
+    jobs_match = _JOBS_BLOCK_RE.search(text)
+    if on_match is None or jobs_match is None:
+        return None
+    tokens = set(re.findall(r"[A-Za-z_]+", on_match.group(1)))
+    has_push = "push" in tokens
+    has_pr = "pull_request" in tokens
+    return has_push, has_pr, _workflow_job_contexts(text)
+
+
+def _workflow_job_contexts(text: str) -> set[str]:
+    """Context-base names (job ids and any ``name:`` override) declared under
+    a workflow's ``jobs:`` block."""
+    jobs_match = _JOBS_BLOCK_RE.search(text)
+    if not jobs_match:
+        return set()
+    body = jobs_match.group(1)
+    contexts: set[str] = set()
+    for job_match in _JOB_ID_RE.finditer(body):
+        contexts.add(_context_base(job_match.group(1)))
+        block_start = job_match.end()
+        next_job = _JOB_ID_RE.search(body, block_start)
+        block_end = next_job.start() if next_job else len(body)
+        name_match = _JOB_NAME_RE.search(body, block_start, block_end)
+        if name_match:
+            contexts.add(_context_base(name_match.group(1).strip("'\"")))
+    return contexts
+
+
+def _workflow_paths_at_sha(root: Path, sha: str) -> list[str] | None:
+    """Paths of ``.github/workflows/*.yml|*.yaml`` as they existed AT ``sha``
+    (via ``git ls-tree``, never the working tree), or ``None`` when that
+    can't be determined (sha not present locally, no git checkout, etc.)."""
+    r = _run(["git", "ls-tree", "-r", "--name-only", sha, "--", ".github/workflows"], root)
+    if r.returncode != 0:
+        return None
+    paths = [line.strip() for line in r.stdout.splitlines() if line.strip()]
+    return [p for p in paths if p.endswith((".yml", ".yaml"))]
+
+
+def _workflow_text_at_sha(root: Path, sha: str, path: str) -> str | None:
+    """Content of ``path`` AT ``sha`` (via ``git show``), or ``None`` when
+    unreadable."""
+    r = _run(["git", "show", f"{sha}:{path}"], root)
+    return r.stdout if r.returncode == 0 else None
+
+
+def pr_only_contexts(root: Path, sha: str) -> set[str]:
+    """Context-base names that ONLY ever trigger on a ``pull_request`` event,
+    read from the workflow definitions as they existed AT the exact watched
+    ``sha`` — never the current checkout, whose workflow triggers may have
+    since changed. A required context in this set can never post a check on
+    a plain push (e.g. a post-merge commit landing on main), so a watcher
+    must stop waiting on it rather than sit pending forever.
+
+    Fails safe ALL-OR-NOTHING: if any workflow path listed at this exact sha
+    can't be read, or can't be structurally parsed with confidence, the
+    whole result is empty (filters nothing) — a readable, confidently
+    PR-only workflow must never drop a context just because some OTHER,
+    unreadable-or-unparseable workflow might have made that same context
+    push-capable. A required context is only ever dropped on complete,
+    positive, exact-sha proof across every workflow in the tree, never on
+    partial evidence. A context also produced by a push-triggering workflow
+    is never included, even if another same-named job elsewhere is PR-only."""
+    paths = _workflow_paths_at_sha(root, sha)
+    if not paths:
+        return set()
+    pr_only: set[str] = set()
+    push_triggered: set[str] = set()
+    for path in paths:
+        text = _workflow_text_at_sha(root, sha, path)
+        if text is None:
+            return set()
+        parsed = _parse_workflow(text)
+        if parsed is None:
+            return set()
+        has_push, has_pr, contexts = parsed
+        if not has_pr:
+            continue
+        if has_push:
+            push_triggered.update(contexts)
+        else:
+            pr_only.update(contexts)
+    return pr_only - push_triggered
+
+
 def overall_state(states: dict[str, str], required: set[str] | None) -> str:
     """``"pending" | "success" | "failure"`` across the watched set (required
     contexts when known, else every check present). Failure wins over
@@ -206,6 +327,14 @@ def watch(
     per state change — never a verbose CI-log tail — via ``emit``."""
     target = resolve_target(root, ref)
     required = required_contexts(root, target.owner, target.repo, target.base_branch)
+    if required and not target.is_open_pr:
+        # A closed/merged owning PR means this sha only ever gets a push
+        # event — required contexts that are exclusively pull_request-gated
+        # (e.g. a PR-only continuity check) can never post here, so drop
+        # them rather than wait on them forever. Anything still push-capable
+        # stays required and pending until it actually reports.
+        filtered = {c for c in required if _context_base(c) not in pr_only_contexts(root, target.sha)}
+        required = filtered or None
     label = f"PR #{target.pr_number}" if target.pr_number else target.sha[:12]
     emit(f"merge-watch: watching {target.sha[:12]} ({label}) in {target.owner}/{target.repo}")
 
@@ -213,7 +342,7 @@ def watch(
     prev_overall: str | None = None
     deadline = now() + timeout
     while True:
-        if target.pr_number is not None:
+        if target.pr_number is not None and target.is_open_pr:
             r = _run(["gh", "pr", "view", str(target.pr_number), "--json", "headRefOid"], root)
             if r.returncode == 0:
                 try:
