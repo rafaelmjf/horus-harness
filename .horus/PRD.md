@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Two owner-approved, one-attempt Claude phases are ready: fix post-merge check settling on the work account and add the event-driven process-retrospective skill on the personal account. A separate remote open-model probe is backlog-only and not authorized to connect."
-next_action: "Merge the plan/card checkpoint, launch both approved workers from its exact base on isolated Claude accounts, and accept each only on exact-PR CI plus its named live validation."
-next_prompt: "Fetch clean main, read PRD.md plus the active execution plan, and supervise the two approved disjoint phases. Do not retry or change model, effort, account, or scope without renewed approval; do not start the remote-model probe."
-execution_recommendation: "plan-execution — the owner explicitly chose available isolated Claude capacity to protect a nearly exhausted Codex supervisor budget; the two scopes are disjoint, bounded, independently gated, and attributable by account."
+current_focus: "The event-driven process-retrospective skill and fail-safe post-merge check watching shipped in PRs #270/#271. The watch fix needed two owner-approved corrections; exact PR/main CI and a live main-merge probe are green. The remote open-model probe remains unclaimed and unauthorized."
+next_action: "Prepare the exact remote open-model probe envelope—host alias, existing runner/models, synthetic task set, data boundary, stopping point, and gates—then obtain owner approval before any Tailscale connection."
+next_prompt: "Fetch clean main, read PRD.md and the remote-open-model-worker-probe card, and prepare a discovery-first consent envelope without connecting or installing anything. Keep important/private work on Claude/Codex and use only synthetic/public fixtures for the first probe."
+execution_recommendation: "continue-as-is — the next step is a small owner-shaped discovery/consent decision; its ambiguity and missing host details make worker briefing and verification cost exceed any delegation dividend."
 last_updated: 2026-07-16
 last_product_audit: 0.0.57 2026-07-16
 horus_min_version: 0.0.26
@@ -39,10 +39,11 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Nine active cards: medium — post-merge check settling, process retrospective, remote open-model probe, project workflow overrides, and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
+Seven active cards: medium — remote open-model probe, project workflow overrides, and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
 
 ## Shipped
 
+**Evidence-first process retrospectives + exact post-merge CI watching** (2026-07-16, PRs #270/#271): a shared event-driven skill attributes one bounded incident and recommends at most three owner-gated cheapest-rung changes without automatic ceremony; literal merge-SHA watches discard PR-only contexts only from complete exact-SHA workflow evidence, fail closed on partial/unparseable evidence, preserve open-PR movement checks, and settled their own main merge green.
 **Worker/supervisor process hardening** (2026-07-16, PR #267): tracked workers deny destructive cleanup of user-global Horus/Claude/Codex state while isolated probes remain possible; v3 execution prompts load only PRD plus the active plan, and shared delegation guidance discloses same-account parallel attribution loss before launch.
 **Provider-valid model selector contract** (2026-07-16, PR #266): consent and execution plans distinguish calibration keys from executable provider selectors; known calibration-only Claude labels fail before side effects, accepted selectors pass unchanged, and canonical resolved model IDs preserve datum continuity.
 **Optional Campaign supervision launch** (2026-07-16, PR #265): the TUI offers an owner-bounded Campaign entry distinct from Fleet Review while preserving direct-project launch, need-first dispatch judgment, explicit worker consent, and target-repository authority.
@@ -95,6 +96,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
 - **Repo-local `.horus/` is the source of truth** — committed, vendor-neutral, works without Horus installed. Horus is a helper, never a required runtime.
 - **Controls climb a ladder: instruction → deterministic signal → hard gate.** Start with instructions; promote only after an observed field failure (fetch-first + branch→PR instructions failed, so SessionStart signal + block v7 followed). Never enforce preemptively.
 - **Server-side continuity is granularity-aware.** The required PR check always verifies field validity + git checkpoint state; `delivery` additionally requires canonical PRD/card hygiene in every PR, while default `handoff` and `manual` accept product commits as durable receipts until the next visible boundary checkpoint. Local PreToolUse parsing is fast feedback only and must match `gh pr merge` at shell command position, never inside quoted prompt prose.
+- **Post-merge check filtering fails closed.** A literal SHA stays pinned, and only complete workflow evidence from that exact git object may remove a context proven PR-only; missing, partial, or structurally unparseable evidence leaves required contexts intact even if that means timing out.
 - **Continuity must beat re-derivation.** Every capability must give a fresh session something CLAUDE.md + git log cannot, at lower cost. PRD.md is state, not behavior; behavioral text belongs in the managed block, and Rules holds only project-specific invariants earned by failure.
 - **Continuity checkpoints at context boundaries; delivery safety never relaxes.** Default `handoff` batches canonical PRD/card/session prose until agent/account/machine change, dispatch, pause, release, or end; `delivery` closes every PR and `manual` keeps warnings until explicit close. Branches, commits, pushed refs, PRs, deterministic gates, dispatch base/receipts, and commit/push checkpoints apply in every mode. Pending delivery truth derives from product commits after the latest canonical-continuity commit, so it survives machines and squash merges.
 - **Closure reaches the remote, fetch-first and self-reference-free** — at the configured boundary run `close --commit --push`; refuse newer remote continuity, seal the closing SHA without appending it into its own note, and refuse to push residual dirty continuity. Start each session with `git fetch --all --prune` before trusting local refs or prose.

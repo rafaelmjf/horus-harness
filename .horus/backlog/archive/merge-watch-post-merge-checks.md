@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-16
 type: bug
 parallel: safe
 surface: horus/mergewatch.py, horus/cli.py, tests/test_mergewatch.py, tests/test_cli.py
+shipped_pr: 271
+shipped_sha: a1179a4b996b71879905fb7e85cea312f3b372c1
 ---
 
 # Merge-watch settles applicable checks on a post-merge SHA
