@@ -1,32 +1,68 @@
 ---
-status: complete
-current_feature: "Campaign launch + provider-selector guard"
+status: active
+current_feature: "Post-merge watch correctness + process retrospective"
 created: 2026-07-16
 updated: 2026-07-16
 ---
 
-# Execution Plan — Campaign launch + provider-selector guard
+# Execution Plan — two isolated Claude workers
 
-Completed as two owner-approved, disjoint Claude worker phases from base `0e39c292`.
-The supervisor owned acceptance, delivery, incident handling, and continuity.
+Two disjoint, owner-approved phases will start from the same merged plan SHA. The work
+and personal accounts keep usage attribution isolated. The remote open-model probe card
+is not part of this plan and carries no authorization to connect.
 
-## Phase 1 — Campaign launch prompt + TUI affordance
+## Phase 1 — Post-merge check settling
 
-- status: complete
-- delivery: PR #265, merge `d75bd4c1890e5ea28dbfe980601c0f8c160fdc9a`
-- worker_runtime: 583.42 seconds
-- evidence: required CI green on the exact PR SHA; 147 targeted tests and 1556 full-suite tests reported; supervisor drove a private-tmux TUI frame showing optional Campaign separately from Fleet Review with direct project launch intact.
-- outcome: clean delivery with light oversight and a positive parallel/context dividend.
+- status: ready
+- mode: delegated
+- worker_agent: claude
+- worker_model: `claude-sonnet-5` (provider selector; calibration key `sonnet-5`)
+- worker_effort: medium
+- worker_account: `work`
+- usage_at_approval: live isolated OAuth reading — 5h 0% (reset unknown), weekly 1% (resets 2026-07-19 22:59)
+- attempts: 1
+- delegation_basis: owner-directed use of available isolated Claude capacity plus a
+  crisp, fenceable implementation that avoids loading detail into the Codex supervisor.
+- scope: `horus/mergewatch.py`, `horus/cli.py`, `tests/test_mergewatch.py`, and focused
+  CLI tests only.
+- handoff: `.horus/temp/merge-watch-post-merge-checks.md`
+- gate: `uv run pytest -q tests/test_mergewatch.py tests/test_cli.py`
+- runtime_gate: supervisor watches known merge SHA `28a96c25271fff06a19f858a8a8cf571ac97530b`
+  with a short explicit timeout and observes success after its applicable push checks.
 
-## Phase 2 — Provider-valid selector preflight + consent contract
+### Constraints
 
-- status: complete by supervisor salvage
-- delivery: PR #266, merge `ffbb9688c648e10feeeaaa3010fe8c1ca5cb3eb6`
-- worker_runtime: 571.381 seconds
-- incident: during an unisolated manual cleanup probe the worker deleted `~/.horus/logs/runs`; historical machine-local streamed run logs were lost, while registry, datums, git/worktrees, tmux metadata, and PR state remained intact. The worker stopped without commit or PR.
-- evidence: supervisor reviewed and committed the bounded diff, observed 313 targeted tests green, proved calibration-only labels fail before side effects and full selectors reach the adapter unchanged, then watched required CI green on the exact PR SHA.
-- outcome: bounced delivery with heavy supervisor oversight and negative delegation dividend. PR #267 subsequently added the worker-only global-state deletion guard and exact isolated-probe guidance.
+- Keep caller-supplied SHAs pinned and retain open-PR head-movement protection.
+- Do not weaken PR required checks or treat merged state/prose as gate evidence.
+- Do not edit `.horus/`, skill sources/projections, or unrelated tests.
+- Any retry, fallback, or envelope change requires renewed owner approval.
 
-## Usage evidence
+## Phase 2 — Evidence-first process retrospective skill
 
-Both workers shared the ambient personal account and ran concurrently, so per-worker attribution is unavailable by design. The fresh account readings moved from 0% to 33% in the five-hour window and 8% to 10% weekly; these are combined observed percentage-point movements, not task estimates.
+- status: ready
+- mode: delegated
+- worker_agent: claude
+- worker_model: `claude-sonnet-5` (provider selector; calibration key `sonnet-5`)
+- worker_effort: medium
+- worker_account: ambient/default personal
+- usage_at_approval: live OAuth reading — 5h 33% (resets 2026-07-16 19:19), weekly 10% (resets 2026-07-17 09:59)
+- attempts: 1
+- delegation_basis: owner-directed use of available personal-Claude capacity and
+  protection of the remaining Codex supervisor budget; code surfaces are independent
+  from Phase 1.
+- scope: canonical `.agents/skills/process-retrospective/`, generated Claude/Codex
+  projections, and focused skill tests only.
+- handoff: `.horus/temp/process-retrospective-skill.md`
+- gate: skill quick-validation plus `uv run pytest -q tests/test_skills.py`
+- runtime_gate: supervisor compares canonical/Claude/Codex projections and checks the
+  output contract against today's raw campaign artifacts without another model call.
+
+### Constraints
+
+- Follow the system skill-creator initialization and validation workflow, but match the
+  repository's lean canonical-skill convention and add no unused resources/artifacts.
+- Keep the skill advisory, event-driven, evidence-first, capped, and owner-gated exactly
+  as the card specifies; do not fold it into product-audit or consolidation.
+- Do not edit `.horus/`, merge-watch code/tests, or unrelated skill behavior.
+- Independent model forward-testing is outside this one-attempt envelope.
+- Any retry, fallback, or envelope change requires renewed owner approval.
