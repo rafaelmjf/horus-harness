@@ -422,6 +422,7 @@ def execution_supervisor_prompt(
     execution_recommendation: str,
     execution_status: str,
     current_feature: str,
+    prd_structure: bool,
 ) -> str:
     """Return a target-aware prompt for supervising a phased execution plan."""
     if target == "claude":
@@ -453,17 +454,25 @@ def execution_supervisor_prompt(
             "mandatory: do not implement the delegated phase in the supervisor context."
         )
 
+    focus_label = "PRD NEXT" if prd_structure else "Roadmap NEXT"
+    continuity_read = (
+        "Read `.horus/PRD.md` and `.horus/execution.md`. Lazy-load only relevant "
+        "backlog cards or local handoff notes."
+        if prd_structure
+        else "Read `.horus/project.md`, `.horus/roadmap.md`, `.horus/features.md`,\n"
+        "`.horus/decisions.md`, `.horus/history.md`, and `.horus/execution.md`."
+    )
+
     return f"""Horus execution supervisor prompt
 
 Project: {project}
 Target agent: {target}
-Roadmap NEXT: {next_action or "(not set)"}
+{focus_label}: {next_action or "(not set)"}
 Execution recommendation: {execution_recommendation or "(not set)"}
 Execution status: {execution_status or "(unknown)"}
 Current feature: {current_feature or "(not set)"}
 
-Read `.horus/project.md`, `.horus/roadmap.md`, `.horus/features.md`,
-`.horus/decisions.md`, `.horus/history.md`, and `.horus/execution.md`.
+{continuity_read}
 
 Supervisor workflow:
 
@@ -949,6 +958,15 @@ HOSTED_RESTART_INSTRUCTION = (
     "dashboard (a normal terminal), or open a separate terminal that Horus does not "
     "host. Note: Python does not hot-reload, so a long-running dashboard keeps serving "
     "its old in-memory build until it is restarted from outside."
+)
+
+WORKER_GLOBAL_STATE_INSTRUCTION = (
+    "This command was blocked by Horus because this is an unattended tracked worker "
+    "(HORUS_RUN_WORKER=1) and the command would destructively remove user-global "
+    "Horus/Claude/Codex state. A real worker once meant to clean an isolated probe but "
+    "deleted ~/.horus/logs/runs instead. Create a dedicated isolated probe home first, "
+    "pass that exact path explicitly to the probe, and clean only the directory the probe "
+    "created. Never use broad cleanup against ~/.horus, ~/.claude, or ~/.codex from a worker."
 )
 
 

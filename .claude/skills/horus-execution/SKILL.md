@@ -11,7 +11,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 12 -->
+<!-- horus-skill-version: 13 -->
 
 # Horus execution supervision
 
@@ -70,6 +70,11 @@ effort/runtime/attempt/outcome and start/end usage evidence. Report a percentage
 delta only when the report calls fresh same-window isolated readings unconfounded;
 otherwise preserve its unknown/confounded label. Do not predict task usage, poll
 continuously, or make an extra model call solely for accounting.
+
+If workers overlap on the same provider account, disclose before launch that Horus
+cannot attribute the shared percentage change to either worker. Serialize them or use
+isolated account aliases when per-worker attribution matters; when throughput matters
+more, parallelize and label the readings `concurrent/confounded`.
 
 Be honest about review: in practice most supervisor reviews just confirm green, and a
 review is **not** a safety guarantee. The durable safeguards are model-independent (the

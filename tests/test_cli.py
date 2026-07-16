@@ -554,7 +554,10 @@ def test_execution_prompt_uses_roadmap_and_target(tmp_path, monkeypatch, capsys)
     assert main(["execution", "prompt", "--path", str(tmp_path), "--target", "codex"]) == 0
     out = capsys.readouterr().out
     assert "Target agent: codex" in out
+    assert "PRD NEXT: Implement phase routing" in out
     assert "Implement phase routing" in out
+    assert "Read `.horus/PRD.md` and `.horus/execution.md`" in out
+    assert "`.horus/roadmap.md`" not in out
     assert "Codex subagents" in out
     assert "testing model separation" in out
     assert "do not implement the delegated phase in the supervisor context" in out
@@ -562,6 +565,28 @@ def test_execution_prompt_uses_roadmap_and_target(tmp_path, monkeypatch, capsys)
     assert "stay inline for small" in out
     assert "delegation_basis" in out
     assert "worker_tier` alone is only a tier hint" in out
+
+
+def test_execution_prompt_keeps_six_lane_context_for_v2(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    hdir = tmp_path / ".horus"
+    hdir.mkdir()
+    (hdir / "roadmap.md").write_text(
+        '---\nnext_action: "Continue legacy phase"\n'
+        'execution_recommendation: "plan-execution"\n---\n# Roadmap\n',
+        encoding="utf-8",
+    )
+    (hdir / "execution.md").write_text(
+        '---\nstatus: active\ncurrent_feature: "Legacy phase"\n---\n# Execution\n',
+        encoding="utf-8",
+    )
+
+    assert main(["execution", "prompt", "--path", str(tmp_path), "--target", "claude"]) == 0
+    out = capsys.readouterr().out
+    assert "Roadmap NEXT: Continue legacy phase" in out
+    assert "`.horus/roadmap.md`" in out
+    assert "`.horus/features.md`" in out
+    assert "Read `.horus/PRD.md`" not in out
 
 
 def test_execution_handoff_creates_temp_note_and_refuses_clobber(tmp_path, monkeypatch, capsys):
@@ -1947,7 +1972,10 @@ def test_merge_hook_gates_merge_from_powershell_tool(monkeypatch, capsys):
 
 # --- hosted-session self-restart guard (`horus guard-host --hook`) ---
 
-def _guard_hook_run(monkeypatch, capsys, *, command, hosted=True, host_pid="4242", tool="Bash"):
+def _guard_hook_run(
+    monkeypatch, capsys, *, command, hosted=True, worker=False,
+    host_pid="4242", tool="Bash",
+):
     from pathlib import Path
 
     from horus import cli
@@ -1958,6 +1986,10 @@ def _guard_hook_run(monkeypatch, capsys, *, command, hosted=True, host_pid="4242
     else:
         monkeypatch.delenv("HORUS_HOSTED_SESSION", raising=False)
         monkeypatch.delenv("HORUS_PTY_HOST_PID", raising=False)
+    if worker:
+        monkeypatch.setenv("HORUS_RUN_WORKER", "1")
+    else:
+        monkeypatch.delenv("HORUS_RUN_WORKER", raising=False)
     monkeypatch.setattr(cli, "_read_hook_stdin",
                         lambda: {"tool_name": tool, "tool_input": {"command": command}})
     rc = cli._guard_host_hook(Path("."))
@@ -2041,6 +2073,51 @@ def test_guard_noop_outside_hosted_session(monkeypatch, capsys):
 
 def test_guard_ignores_non_bash_tool(monkeypatch, capsys):
     rc, out = _guard_hook_run(monkeypatch, capsys, command="horus app", tool="Edit")
+    assert rc == 0 and out.strip() == ""
+
+
+def test_worker_guard_blocks_observed_global_run_log_cleanup(monkeypatch, capsys):
+    rc, out = _guard_hook_run(
+        monkeypatch, capsys, hosted=False, worker=True,
+        command="rm -rf ~/.horus/logs/runs",
+    )
+    assert rc == 0
+    hso = json.loads(out)["hookSpecificOutput"]
+    assert hso["permissionDecision"] == "deny"
+    assert "isolated probe home" in hso["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize("command,tool", [
+    ('sudo rm -rf "$HOME/.claude/file-history"', "Bash"),
+    ("Remove-Item -Recurse -Force $HOME/.horus/logs/runs", "PowerShell"),
+    (r"rmdir /s /q %USERPROFILE%\.codex", "PowerShell"),
+])
+def test_worker_guard_blocks_global_agent_state_spellings(monkeypatch, capsys, command, tool):
+    rc, out = _guard_hook_run(
+        monkeypatch, capsys, hosted=False, worker=True, command=command, tool=tool,
+    )
+    assert rc == 0
+    assert json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize("command", [
+    "rm -rf /tmp/horus-probe-123",
+    "rm -rf .horus/temp/probe-output",
+    "ls -la ~/.horus/logs/runs",
+    'echo "rm -rf ~/.horus/logs/runs"',
+])
+def test_worker_guard_allows_scoped_cleanup_and_read_only_mentions(monkeypatch, capsys, command):
+    rc, out = _guard_hook_run(
+        monkeypatch, capsys, hosted=False, worker=True, command=command,
+    )
+    assert rc == 0 and out.strip() == ""
+
+
+def test_global_state_cleanup_is_not_blocked_in_attended_terminal(monkeypatch, capsys):
+    rc, out = _guard_hook_run(
+        monkeypatch, capsys, hosted=False, worker=False,
+        command="rm -rf ~/.horus/logs/runs",
+    )
     assert rc == 0 and out.strip() == ""
 
 
