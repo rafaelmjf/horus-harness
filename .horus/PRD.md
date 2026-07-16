@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Detached completion truth is fixed in PR #261: managed tmux workers retain the runner PID while the adapter child exits, so concurrent reconciliation can no longer overwrite an exited/delivery-ready receipt and precise runtime with stale/blocked/null. The race is pinned by a deterministic test plus a real token-free private-socket tmux probe."
-next_action: "Claim `campaign-supervision-launch` now that the Drive-to-Git campaign proved the cockpit contract through ordinary Resume; add the optional Campaign TUI launch separately from Fleet Review, preserving need-first judgment and target-project authority."
-next_prompt: "Fetch clean main after the detached-receipt closure, read PRD.md and `campaign-supervision-launch`, and verify the completed horus-agent Drive-to-Git campaign as its prerequisite. If the owner has not yet approved the exact worker envelope, present it; otherwise claim the card, prepare one bounded execution phase, and gate the prompt/frame behavior plus a non-mutating live TUI frame."
-execution_recommendation: "plan-execution — the owner explicitly requested a safe personal-Claude parallel dispatch to spend expiring weekly capacity and protect supervisor context; the now-evidenced Campaign launch has fenceable TUI/routines scope, a prompt/frame gate, and no overlap with current work, while launch still awaits approval of the exact envelope."
+current_focus: "Two independent personal-Claude phases are owner-approved: the optional Campaign TUI entry point and a provider-selector contract prompted by a five-second failed launch where calibration key `sonnet-5` was not the executable Claude selector `claude-sonnet-5`."
+next_action: "Dispatch both approved one-attempt `claude-sonnet-5` workers from the same exact base, accept each only on exact-PR CI plus its live/token-free runtime probe, then distill the process findings from today's campaign."
+next_prompt: "Fetch clean main, read PRD.md plus `.horus/execution.md`, and supervise the two owner-approved parallel phases. Do not retry or change model/account/effort/scope without renewed approval; preserve calibration key versus executable provider selector explicitly."
+execution_recommendation: "plan-execution — the owner approved two disjoint, fenceable phases on ambient personal Claude Sonnet 5 to use expiring capacity, protect supervisor context, and gain real parallelism; each has one attempt and an independent deterministic gate."
 last_updated: 2026-07-16
 last_product_audit: 0.0.57 2026-07-16
 horus_min_version: 0.0.26
@@ -39,7 +39,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Seven active cards: medium — campaign launch UI, project workflow overrides, and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
+Eight active cards: high — provider-valid model selector contract; medium — campaign launch UI, project workflow overrides, and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
 
 ## Shipped
 
