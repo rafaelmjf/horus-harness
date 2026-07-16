@@ -14,7 +14,7 @@ description: >-
   single repo use `execution-decision` instead.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Dispatch decision (cockpit / multi-project, sessions substrate)
 
@@ -27,7 +27,7 @@ routing, and one substrate note.
 ## Load the shared rubric first
 
 Read **`../delegation-rubric/SKILL.md`** and apply its dividend precondition plus
-six steps. All of the calibration-data reading and the verification-depth dial
+seven steps. All calibration, consent-envelope, and verification-depth logic
 live there; do not restate or fork it.
 
 ## Mode vocabulary (this skill's output for the rubric's Step 4 axis)
@@ -58,6 +58,9 @@ real work, never the reason to create a worker.
   `guard` flags. This is a check you OBSERVE, not an auto-throttle. When native
   telemetry is incomplete or temporarily lifted, accept a current owner-provided
   reading as the routing signal and label that override explicitly.
+- An owner may explicitly choose an account to spend capacity before its reset or
+  protect the overseer context. This supplies the dispatch basis, but does not waive
+  the exact-envelope approval or authorize a silent fallback.
 
 ## Overseer verification note (the substrate specialization of rubric Step 5)
 
@@ -76,10 +79,12 @@ to the owner's eyeball.
 `mode` (`inline-here` | `dispatched-worker` | `dispatched-plan`) + `account`
 (which isolated alias, or "hold — usage") + `tier` (a concrete model from the
 data) + `verification depth` (observe-CI | observe-CI+probe | owner-eyeball).
-Show the calibration + the usage-check result that drove it. Selecting the
-account, spawning the worker, and observing CI are all YOUR actions — this skill
-recommends; `horus` never auto-routes a dispatch (the hard boundary:
-`research/omnigent.md`).
+Show the calibration + usage/reset evidence that drove it. For either dispatched
+mode, present the full consent envelope from the rubric and stop for explicit owner
+approval. Any changed model/account/effort/scope or additional attempt requires a new
+approval; provider errors never authorize fallback. Selecting the account, spawning
+the worker, and observing CI are all YOUR actions — this skill recommends; `horus`
+never auto-routes a dispatch (the hard boundary: `research/omnigent.md`).
 
 ## v2 six-lane projects (fallback)
 

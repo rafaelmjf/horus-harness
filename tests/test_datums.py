@@ -800,7 +800,11 @@ def test_capture_usage_snapshot_claude_fresh_at_read_time(monkeypatch):
         lambda agent, account, **kw: usage_snapshot.UsageSnapshot(42.0, "1h", 37.0, "3d") if agent == "claude" else None,
     )
     snap = datums.capture_usage_snapshot("claude", "acct-a")
-    assert snap["claude"] == {"read_at": snap["claude"]["read_at"], "freshness": "fresh", "pct_5h": 42.0, "pct_weekly": 37.0}
+    assert snap["claude"] == {
+        "read_at": snap["claude"]["read_at"], "freshness": "fresh",
+        "pct_5h": 42.0, "resets_5h": "1h",
+        "pct_weekly": 37.0, "resets_weekly": "3d",
+    }
 
 
 def test_capture_usage_snapshot_codex_stale_when_reset_past(monkeypatch):
@@ -863,8 +867,104 @@ def test_run_fake_captures_usage_launch_snapshot(tmp_path, monkeypatch):
     assert main(["run", "hello", "--agent", "fake", "--model", "sonnet-5", "--path", str(tmp_path)]) == 0
     d = _run_datum()
     assert d.usage_launch is not None
+    assert d.usage_close is not None  # second reading lands at process completion
     assert set(d.usage_launch) == {"claude", "codex"}
     assert d.usage_launch["claude"]["freshness"] == "unavailable"  # no real creds in the fake HOME
+
+
+def _usage_pair(agent="claude", *, start=10.0, end=16.0, reset="window-a"):
+    return (
+        {agent: {"freshness": "fresh", "pct_5h": start, "resets_5h": reset}},
+        {agent: {"freshness": "fresh", "pct_5h": end, "resets_5h": reset}},
+    )
+
+
+def test_usage_accounting_observes_only_isolated_same_window_actuals():
+    launch, close = _usage_pair()
+    row = datums.Datum(
+        session_id="isolated", agent_session_id="native", agent="claude", account="work",
+        worker=True, launched_at="2026-07-16T10:00:00+00:00",
+        completed_at="2026-07-16T10:10:00+00:00", usage_launch=launch, usage_close=close,
+    )
+    actual = datums.usage_accounting(row, [row])
+    assert actual["status"] == "observed"
+    assert actual["deltas"] == {"5h": 6.0}
+    assert actual["start"]["pct_5h"] == 10.0 and actual["end"]["pct_5h"] == 16.0
+
+
+def test_usage_accounting_marks_ambient_worker_shared_and_confounded():
+    launch, close = _usage_pair(start=5, end=35)
+    row = datums.Datum(
+        session_id="ambient", agent="claude", account=None, worker=True,
+        launched_at="2026-07-16T10:00:00+00:00",
+        completed_at="2026-07-16T10:10:00+00:00", usage_launch=launch, usage_close=close,
+    )
+    actual = datums.usage_accounting(row, [row])
+    assert actual["status"] == "shared-account/confounded"
+    assert actual["deltas"] == {}
+
+
+def test_usage_accounting_marks_tracked_overlap_confounded():
+    launch, close = _usage_pair()
+    first = datums.Datum(
+        session_id="first", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:00:00+00:00", completed_at="2026-07-16T10:20:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    second = datums.Datum(
+        session_id="second", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:05:00+00:00", completed_at="2026-07-16T10:10:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    assert datums.usage_accounting(first, [first, second])["status"] == "concurrent/confounded"
+
+
+def test_usage_accounting_does_not_cross_reset_windows():
+    launch, _ = _usage_pair(reset="window-a")
+    _, close = _usage_pair(reset="window-b")
+    row = datums.Datum(
+        session_id="reset", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:00:00+00:00", completed_at="2026-07-16T10:10:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    actual = datums.usage_accounting(row, [row])
+    assert actual["status"] == "unknown" and actual["deltas"] == {}
+
+
+def test_worker_breakdown_groups_resumed_native_session_as_attempts():
+    launch, close = _usage_pair()
+    rows = [
+        datums.Datum(
+            session_id=f"run-{n}", agent_session_id="native-thread", agent="claude",
+            model="sonnet-5", account="work", effort="high", worker=True,
+            launched_at=f"2026-07-16T10:0{n}:00+00:00",
+            completed_at=f"2026-07-16T10:0{n}:30+00:00", runtime_seconds=30,
+            usage_launch=launch, usage_close=close,
+        )
+        for n in (1, 2)
+    ]
+    report = datums.worker_breakdown(rows)
+    assert [(row["attempt"], row["attempts"]) for row in report] == [(1, 2), (2, 2)]
+    assert all(row["model"] == "sonnet-5" and row["account"] == "work" for row in report)
+    rendered = datums.render_worker_breakdown(report)
+    assert "start=5h=10%[fresh]" in rendered and "end=5h=16%[fresh]" in rendered
+
+
+def test_datum_report_cli_renders_worker_actuals_without_run_id_lookup(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    launch, close = _usage_pair()
+    datums.DatumStore.default().record_launch(datums.Datum(
+        session_id="report-worker", agent_session_id="native-report", agent="claude",
+        model="sonnet-5", account="work", effort="high", worker=True,
+        launched_at="2026-07-16T10:00:00+00:00", completed_at="2026-07-16T10:10:00+00:00",
+        runtime_seconds=600, exit="completed", outcome="clean",
+        usage_launch=launch, usage_close=close,
+    ))
+    assert main(["datum", "report", "--all", "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report[0]["run_id"] == "report-worker"
+    assert report[0]["usage"]["status"] == "observed"
+    assert report[0]["runtime_seconds"] == 600
 
 
 # --- supervisor-cost envelope: agent-supplied close flags --------------------
@@ -891,11 +991,22 @@ def test_close_cost_flags_all_optional_existing_datums_stay_valid(tmp_path):
     assert d.counterfactual is None and d.dividend is None
 
 
-def test_close_captures_usage_close_snapshot(tmp_path, monkeypatch):
+def test_completion_captures_usage_close_snapshot(tmp_path, monkeypatch):
     store = _store(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        datums, "capture_usage_snapshot",
+        lambda *args, **kwargs: calls.append(kwargs) or {
+            "claude": {"freshness": "fresh"}, "codex": {"freshness": "unavailable"},
+        },
+    )
     store.record_launch(datums.Datum(session_id="cost-3", agent="claude", launched_at="2026-07-14T00:00:00+00:00"))
+    store.record_completion("cost-3", exit="completed", runtime_seconds=1, returncode=0)
+    before_review = store.get("cost-3").usage_close
     d = store.close("cost-3", outcome="clean", shape=None, note=None)
     assert d.usage_close is not None and set(d.usage_close) == {"claude", "codex"}
+    assert d.usage_close == before_review
+    assert len(calls) == 1 and calls[0]["persist_cache"] is False
 
 
 @pytest.mark.parametrize(

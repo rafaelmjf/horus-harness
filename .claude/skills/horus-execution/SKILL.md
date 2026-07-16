@@ -11,7 +11,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 10 -->
+<!-- horus-skill-version: 11 -->
 
 # Horus execution supervision
 
@@ -44,6 +44,23 @@ merely because work spans projects or phases, or to collect a model datum.
 Runtime matters — name the actual context, parallelism, or price dividend in
 `delegation_basis`, using live calibration data for model selection. If no concrete
 benefit remains after the task is bounded, stay inline and do not create the plan.
+An explicit owner direction to spend expiring isolated-account capacity or protect
+supervisor context is also a valid basis when labelled honestly.
+
+## Obtain exact-envelope approval before every worker launch
+
+Before invoking a native subagent or `horus run`, show the owner the exact agent,
+concrete model, effort, account alias, current usage/reset evidence with source and
+freshness, bounded phase, maximum attempts, expected dividend or owner-directed
+override, and verification gate. Wait for explicit approval. A different model,
+account, effort, scope, or an attempt beyond the allowance requires renewed approval;
+never silently fall back after a provider or capacity failure.
+
+At completion, run `horus datum report` for mechanically captured model/account/
+effort/runtime/attempt/outcome and start/end usage evidence. Report a percentage-point
+delta only when the report calls fresh same-window isolated readings unconfounded;
+otherwise preserve its unknown/confounded label. Do not predict task usage, poll
+continuously, or make an extra model call solely for accounting.
 
 Be honest about review: in practice most supervisor reviews just confirm green, and a
 review is **not** a safety guarantee. The durable safeguards are model-independent (the
@@ -124,7 +141,9 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
    economics, risk isolation, context splitting, parallelism, or "not worth delegating".
    Different agents may reasonably choose differently.
 
-4. **Delegate bounded phases only.** Ask native workers/subagents to implement one
+4. **Authorize, then delegate bounded phases only.** Present the exact consent
+   envelope above and wait for explicit owner approval. Then ask native
+   workers/subagents to implement one
    phase at a time. Read live tier roles and measured evidence from
    `horus capabilities --models`; use lower-cost tiers only for clear, narrow work
    and reserve stronger reasoning tiers for work whose ambiguity actually needs them.

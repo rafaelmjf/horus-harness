@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 9
+BLOCK_VERSION = 10
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -110,13 +110,21 @@ Working discipline (every session, whether or not the work is delegated):
   Implement on a feature branch and land it via PR; do not commit straight to the
   default branch unless the project's workflow policy or the user explicitly allows
   it (continuity closure commits follow that same policy).
-- **Prove delegation pays before selecting a worker.** Define the bounded unit and
-  name the concrete dividend — context avoided, useful parallelism, or lower-tier
-  savings — before choosing a model or execution plane. Compare it with the fixed
-  brief/review/gate/merge/closure tax; cross-project scope, multiple phases, and
-  calibration goals alone do not justify delegation. Default inline when the benefit
-  is unclear. Record the choice only in an existing durable handoff or backlog item;
-  do not create a card or rewrite continuity solely to document execution mode.
+- **Authorize the exact worker envelope before spending.** Agent-initiated delegation
+  first proves a concrete context, parallelism, or lower-tier dividend exceeds the
+  brief/review/gate/merge/closure tax; default inline when unclear. An owner may instead
+  direct dispatch to spend expiring isolated-account capacity or protect supervisor
+  context. Before every implementation-worker launch, show the exact agent, concrete
+  model, effort, account, current usage/reset evidence (with source/freshness), bounded
+  task, maximum attempts, expected dividend or owner override, and verification gate;
+  obtain explicit approval for that envelope. Changing model, account, effort, task
+  scope, or attempt allowance requires new approval — never silently fall back. After
+  completion, report actual model/account/effort/runtime/attempt/outcome and start/end
+  usage; show a percentage-point delta only for fresh same-window isolated readings
+  without tracked overlap, otherwise label it unknown or confounded. Never predict a
+  per-task usage percentage, auto-route from cost, poll continuously, or add a second
+  model call solely for accounting. Record the execution-mode choice only in an
+  existing durable handoff/card, never in a new continuity artifact made just for it.
 
 Version floor (check before writing `.horus/`):
 

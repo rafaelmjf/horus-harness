@@ -12,7 +12,7 @@ import sys
 import time
 import uuid
 from dataclasses import asdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from horus import (
@@ -502,6 +502,33 @@ def cmd_datum_migrate_names(args: argparse.Namespace) -> int:
     for alias, count in sorted(renamed.items()):
         canonical = datums.ALIAS_TO_CANONICAL[alias]
         print(f"Renamed {count} datum(s): {alias!r} -> {canonical!r}")
+    return 0
+
+
+def cmd_datum_report(args: argparse.Namespace) -> int:
+    """Render recent per-worker actuals without requiring run-id archaeology."""
+    rows = [row for row in datums.DatumStore.default().all() if row.worker]
+    if args.path:
+        root = Path(args.path).resolve()
+        rows = [row for row in rows if row.project and Path(row.project).resolve() == root]
+    if not args.all:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        recent: list[datums.Datum] = []
+        for row in rows:
+            try:
+                stamp = datetime.fromisoformat(row.launched_at.replace("Z", "+00:00"))
+                if stamp.tzinfo is None:
+                    stamp = stamp.astimezone()
+            except (ValueError, AttributeError):
+                continue
+            if stamp.astimezone(timezone.utc) >= cutoff:
+                recent.append(row)
+        rows = recent
+    breakdown = datums.worker_breakdown(rows)
+    if args.json:
+        print(json.dumps(breakdown, indent=2, sort_keys=True))
+    else:
+        print(datums.render_worker_breakdown(breakdown), end="")
     return 0
 
 
@@ -2910,6 +2937,21 @@ def build_parser() -> argparse.ArgumentParser:
              "otherwise the worktree is left in place and the reason is printed",
     )
     p_datum_close.set_defaults(func=cmd_datum_close)
+
+    p_datum_report = datum_sub.add_parser(
+        "report",
+        help="render recent per-worker model/account/runtime/attempt/outcome/usage actuals",
+    )
+    p_datum_report.add_argument(
+        "--path", default=None,
+        help="limit to an exact worker project path (default: all projects)",
+    )
+    p_datum_report.add_argument(
+        "--all", action="store_true",
+        help="include worker runs older than 24 hours",
+    )
+    p_datum_report.add_argument("--json", action="store_true", help="emit the breakdown as JSON")
+    p_datum_report.set_defaults(func=cmd_datum_report)
 
     p_datum_migrate = datum_sub.add_parser(
         "migrate-names",

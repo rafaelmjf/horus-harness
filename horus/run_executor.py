@@ -221,5 +221,12 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
         delivery_status=delivery_status, delivery_expected=request.delivery_expected,
         dispatch_base_sha=request.dispatch_base_sha, **evidence.fields(),
     )
+    if request.worker:
+        actual = next(
+            (row for row in datums.worker_breakdown(store.all()) if row["run_id"] == request.session_id),
+            None,
+        )
+        if actual is not None:
+            emit("\n" + datums.render_worker_breakdown([actual]).rstrip())
     emit(f"\n{status} — session {request.session_id} (account {request.account or '-'})")
     return 0 if status == "exited" else 1

@@ -51,12 +51,16 @@ def test_shared_block_carries_version_floor_instruction():
     assert "uv tool install --force" in block
 
 
-def test_shared_block_requires_a_dispatch_dividend_without_continuity_ceremony():
+def test_shared_block_requires_exact_dispatch_consent_without_cost_prediction():
     block = templates.shared_block("CLAUDE.md")
-    assert "Prove delegation pays before selecting a worker" in block
-    assert "cross-project scope, multiple phases" in block
-    assert "calibration goals alone do not justify delegation" in block
-    assert "do not create a card or rewrite continuity solely" in block
+    compact = " ".join(block.split())
+    assert "Authorize the exact worker envelope before spending" in block
+    for field in ("exact agent", "concrete model", "effort", "account", "maximum attempts"):
+        assert field in compact
+    assert "owner may instead" in block and "expiring isolated-account capacity" in block
+    assert "requires new approval" in block and "never silently fall back" in block
+    assert "Never predict a" in block and "auto-route" in block
+    assert "never in a new continuity artifact" in block
 
 
 def test_normalize_ignores_trailing_whitespace_and_crlf():
