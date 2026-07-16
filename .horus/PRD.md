@@ -38,13 +38,14 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Eight open cards after the 2026-07-16 product-review pass. One high: the worker-lifecycle
+Ten active cards after the 2026-07-16 product-review pass. One high: the worker-lifecycle
 campaign (`attachable-detached-worker-run`, carrying the delivery-evidence/completion
 kernel of its two sibling cards — plan in `.horus/execution.md`). Two medium:
 remote-only TUI start (launcher completeness, no native overlap) and the release-stamped
-product-audit signal+skill. Five low/deferred, each gated on evidence per its card
+product-audit signal+skill. Seven lower-priority/deferred items, each gated on evidence per its card
 Reviews: heartbeat stall timer, receipt trimmings, init-CI (demoted to instruction
-rung), workflow overrides, scoped machine requirements, campaign launch UI.
+rung), workflow overrides, scoped machine requirements, campaign launch UI, and Codex
+usage-window semantics pending upstream stability.
 
 ## Shipped
 
