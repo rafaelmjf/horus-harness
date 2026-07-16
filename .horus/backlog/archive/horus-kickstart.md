@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-17
 vision_facet: "PO lifecycle"
@@ -10,6 +10,8 @@ parallel: safe
 surface: new thin orchestrator skill composing market-scan + deep-research + horus consolidate; PRD Vision (facet-diff); backlog cards (proposals)
 depends-on: market-scan-skill (building block)
 relates-to: roadmap-convergence, explore-converge-lifecycle
+shipped_pr: 285
+shipped_sha: 653f982
 ---
 
 # horus-kickstart — one guided divergence→convergence re-baseline (also the onboarding path)
