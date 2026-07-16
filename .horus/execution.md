@@ -1,5 +1,5 @@
 ---
-status: complete-awaiting-merge
+status: complete
 current_feature: "Worker-lifecycle campaign: attachable detached one-shot workers + the delivery-evidence/completion kernel (backlog: attachable-detached-worker-run, carrying the kernels of worker-progress-heartbeat and deferred-supervision-completion-receipt per their 2026-07-16 reviews)."
 supervisor_tier: frontier
 worker_tier: value-implementation

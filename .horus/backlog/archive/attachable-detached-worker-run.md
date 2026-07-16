@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-15
 type: feature
 parallel: unsafe
 surface: horus/cli.py, horus/terminal_sessions.py, horus/tmux_runner.py, horus/runlog.py, horus/registry.py, horus/terminal_tui.py
+shipped_pr: 255
+shipped_sha: 170876fb654e380c8349baf8c067f36da2a9e6b1
 ---
 
 # Attachable detached one-shot worker runs

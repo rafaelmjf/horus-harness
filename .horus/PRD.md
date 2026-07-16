@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Worker-lifecycle campaign implementation is complete and pushed on `feat/attachable-detached-worker-run` at `6a655e5`. Phase 1 adds caller-death-safe attachable detached workers; Phase 2 adds explicit delivery intent, evidence, and `delivery-ready|blocked|no-op|failed|unknown` persistence across executor/reconciliation/registry/logs/datums/CLI JSON. Acceptance: 1529 tests plus private-socket lifecycle and expected-no-op probes; registry readers now ignore and preserve future fields after the mixed-version TUI incident."
-next_action: "Open the worker-lifecycle PR from `feat/attachable-detached-worker-run`, observe required CI on the exact head, merge, then ship `attachable-detached-worker-run` with PR/SHA provenance and close continuity."
-next_prompt: "Fetch first and verify `feat/attachable-detached-worker-run` against origin at `6a655e5`. Read PRD.md and `.horus/execution.md`; both phases are accepted, so do not dispatch or change implementation unless CI finds a concrete failure. Open the PR, watch exact-head required CI, merge, ship the claimed card with PR/SHA provenance, and close continuity."
-execution_recommendation: "continue-as-is — only PR creation, exact-head CI observation, merge, card shipping, and continuity closure remain; a worker would duplicate loaded context and add spend without an implementation dividend."
+current_focus: "Worker-lifecycle campaign shipped in PR #255 at `170876f`: stable-ID foreground/detached workers share one caller-death-safe executor; explicit delivery evidence persists `delivery-ready|blocked|no-op|failed|unknown` through registry, reconciliation, logs, datums, and sessions JSON; additive registry reads preserve unknown future fields. Next priority is the incident-earned dispatch consent/accounting contract."
+next_action: "Claim and implement `worker-dispatch-consent-and-cost-accounting` inline: exact model/account/attempt-envelope approval before launch, owner-directed context/capacity override, and automatic post-run actuals with confounded readings labelled honestly; no usage estimator or worker dispatch for this card."
+next_prompt: "Fetch clean main at or beyond `170876f`, read PRD.md and the `worker-dispatch-consent-and-cost-accounting` card, then claim it. Implement the shared Claude/Codex consent contract and low-overhead actual-cost breakdown inline. Do not dispatch a worker, predict per-task percentage usage, or add an auto-router."
+execution_recommendation: "continue-as-is — the supervisor holds the failure context and the next feature is an integrated policy/schema correction; dispatching it before its consent gate exists would duplicate context and repeat the exact failure being fixed."
 last_updated: 2026-07-16
 horus_min_version: 0.0.26
 ---
@@ -38,17 +38,12 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Ten active cards after the 2026-07-16 product-review pass. One high: the worker-lifecycle
-campaign (`attachable-detached-worker-run`, carrying the delivery-evidence/completion
-kernel of its two sibling cards — plan in `.horus/execution.md`). Two medium:
-remote-only TUI start (launcher completeness, no native overlap) and the release-stamped
-product-audit signal+skill. Seven lower-priority/deferred items, each gated on evidence per its card
-Reviews: heartbeat stall timer, receipt trimmings, init-CI (demoted to instruction
-rung), workflow overrides, scoped machine requirements, campaign launch UI, and Codex
-usage-window semantics pending upstream stability.
+Ten active cards: high — explicit worker dispatch consent/cost accounting after the same-account quota incident; medium — remote-only TUI start and the release-stamped product-audit signal+skill.
+Seven evidence-gated/deferred items: heartbeat stall timer, receipt trimmings, init-CI, workflow overrides, scoped machine requirements, campaign launch UI, and Codex usage-window semantics.
 
 ## Shipped
 
+**Attachable detached workers + delivery completion evidence** (2026-07-16, PR #255): foreground/detached one-shot workers share a stable-ID caller-death-safe tmux executor; explicit delivery intent/evidence persists `delivery-ready|blocked|no-op|failed|unknown` across reconciliation, registry, JSONL, datums, and sessions JSON; additive registry readers preserve unknown future fields.
 **Bulk-migration inventory reconciliation** (2026-07-16, PR #254): `horus verify-inventory` reconciles source/produced trees by count+size both directions (0 clean / 1 discrepancy / 2 error), treats an empty walk of an expected-non-empty tree as a retryable error, handles non-ASCII names, and the horus-execution skill requires the reconcile before accepting bulk-copy phases; delivered by a dispatched sonnet worker gated by the account-scoped usage check.
 **Account-scoped usage check** (2026-07-16, PR #253): `horus usage check --account <alias>` reads the isolated CLAUDE_CONFIG_DIR/CODEX_HOME mapping without touching the ambient login, names source/freshness/windows, fails unknown aliases instead of falling back, and warns on overseer==worker account collisions (advisory).
 **Optional recovery notes and honest onboarding** (2026-07-15, PR #247, v0.0.57): fresh init keeps a blank tracked backlog and does not pressure immediate inference; generated instructions are not treated as project truth; doctor/close never require or auto-create local notes; v3 infer and Claude/Codex attribution are honest; onboarding preflights and safely inherits repository-local Git identity; hosted/local installs and the selected Horus/Fabric projections were verified.
