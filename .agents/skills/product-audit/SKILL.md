@@ -8,24 +8,35 @@ description: >-
   advisory, or when the owner asks "audit the product", "what should we
   retire", or "is this feature still earning its keep". Advisory only: every
   verdict is demote / defer / retire / no-change — this audit can never
-  propose new features, add telemetry, or auto-archive anything.
+  propose new features, add telemetry, or auto-archive anything. Verdicts land
+  in a dated one-page receipt under `.horus/audits/`.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Product audit — prune, never grow
 
 You are auditing Horus itself, not a target project. The CLI supplied only the
 deterministic trigger (the staleness advisory); you supply the judgment.
 
+**Initial stamp:** if no receipt exists under `.horus/audits/` for the stamped
+audit (the stamp was set when the audit feature shipped, with no verdicts
+behind it), treat this run as the first real audit: widen every "since the
+last audit" question to the whole live surface instead of the stamp window.
+
 ## Questions (evidence, not recall)
 
 1. **Usage.** Which Horus surfaces did the owner *demonstrably* use since the
    last audit? Evidence means shell history the owner shows you, `.horus/`
    artifacts, git history, and a short interview — plus grepping the
-   integration points (hooks, skills, TUI bindings) for surfaces nothing
-   references. Do NOT build or propose command-usage telemetry; the
-   interview + integration-point grep is the current rung.
+   integration points for surfaces nothing references. The canonical
+   integration points to grep for `horus <cmd>` references: the managed
+   blocks (`CLAUDE.md`/`AGENTS.md`), hook templates (`horus/native_hooks.py`
+   and installed `.claude/settings.json`), the TUI (`horus/terminal_tui.py`),
+   the dashboard, bundled skills (`.claude/skills/` / `.agents/skills/`), and
+   `scripts/`. A registered command referenced only by its own implementation
+   counts as unreferenced. Do NOT build or propose command-usage telemetry;
+   the interview + integration-point grep is the current rung.
 2. **Native overlap.** What have Claude Code and Codex shipped natively since
    the stamped version that overlaps a Horus surface? Check their changelogs /
    release notes. A surface a host app now covers is a demote/retire candidate.
@@ -42,13 +53,21 @@ of scope for this audit by construction.
 
 ## Close the audit
 
+- Write the receipt: `.horus/audits/<YYYY-MM-DD>-product.md` — **one page,
+  never a transcript**: a verdict table (finding | verdict | one-line
+  evidence), with every defer carrying the reason the next audit needs to
+  re-open it. Committed, so it travels between machines; the receipt is what
+  makes defers recallable and the anti-ceremony guard checkable. (Owner
+  approved per-audit receipt files 2026-07-16, superseding the original
+  no-new-artifact rule.)
 - Update the PRD frontmatter stamp: `last_product_audit: <installed horus
-  version> <today YYYY-MM-DD>` (run `horus --version` for the version).
-- Record verdicts in the existing continuity flow (PRD Rules/Backlog via the
-  owner) — never in a new artifact created just for the audit.
-- **Anti-ceremony guard:** if this and the previous audit were both all
-  no-change, recommend the owner lengthen the audit interval (e.g. 10 releases
-  / 60 days) — note it alongside the stamp.
+  version> <today YYYY-MM-DD>` (run `horus --version` for the version). The
+  stamp stays the cheap pointer; the receipt holds the verdicts.
+- Retire/demote proposals still land through the owner (backlog cards, PRD
+  Rules) — the receipt records the verdict, it does not act on it.
+- **Anti-ceremony guard:** read the previous receipt; if it and this audit
+  are both all no-change, recommend the owner lengthen the audit interval
+  (e.g. 10 releases / 60 days) — note it in the receipt.
 
 ## v2 six-lane projects (fallback)
 

@@ -1298,24 +1298,35 @@ description: >-
   advisory, or when the owner asks "audit the product", "what should we
   retire", or "is this feature still earning its keep". Advisory only: every
   verdict is demote / defer / retire / no-change — this audit can never
-  propose new features, add telemetry, or auto-archive anything.
+  propose new features, add telemetry, or auto-archive anything. Verdicts land
+  in a dated one-page receipt under `.horus/audits/`.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Product audit — prune, never grow
 
 You are auditing Horus itself, not a target project. The CLI supplied only the
 deterministic trigger (the staleness advisory); you supply the judgment.
 
+**Initial stamp:** if no receipt exists under `.horus/audits/` for the stamped
+audit (the stamp was set when the audit feature shipped, with no verdicts
+behind it), treat this run as the first real audit: widen every "since the
+last audit" question to the whole live surface instead of the stamp window.
+
 ## Questions (evidence, not recall)
 
 1. **Usage.** Which Horus surfaces did the owner *demonstrably* use since the
    last audit? Evidence means shell history the owner shows you, `.horus/`
    artifacts, git history, and a short interview — plus grepping the
-   integration points (hooks, skills, TUI bindings) for surfaces nothing
-   references. Do NOT build or propose command-usage telemetry; the
-   interview + integration-point grep is the current rung.
+   integration points for surfaces nothing references. The canonical
+   integration points to grep for `horus <cmd>` references: the managed
+   blocks (`CLAUDE.md`/`AGENTS.md`), hook templates (`horus/native_hooks.py`
+   and installed `.claude/settings.json`), the TUI (`horus/terminal_tui.py`),
+   the dashboard, bundled skills (`.claude/skills/` / `.agents/skills/`), and
+   `scripts/`. A registered command referenced only by its own implementation
+   counts as unreferenced. Do NOT build or propose command-usage telemetry;
+   the interview + integration-point grep is the current rung.
 2. **Native overlap.** What have Claude Code and Codex shipped natively since
    the stamped version that overlaps a Horus surface? Check their changelogs /
    release notes. A surface a host app now covers is a demote/retire candidate.
@@ -1332,13 +1343,21 @@ of scope for this audit by construction.
 
 ## Close the audit
 
+- Write the receipt: `.horus/audits/<YYYY-MM-DD>-product.md` — **one page,
+  never a transcript**: a verdict table (finding | verdict | one-line
+  evidence), with every defer carrying the reason the next audit needs to
+  re-open it. Committed, so it travels between machines; the receipt is what
+  makes defers recallable and the anti-ceremony guard checkable. (Owner
+  approved per-audit receipt files 2026-07-16, superseding the original
+  no-new-artifact rule.)
 - Update the PRD frontmatter stamp: `last_product_audit: <installed horus
-  version> <today YYYY-MM-DD>` (run `horus --version` for the version).
-- Record verdicts in the existing continuity flow (PRD Rules/Backlog via the
-  owner) — never in a new artifact created just for the audit.
-- **Anti-ceremony guard:** if this and the previous audit were both all
-  no-change, recommend the owner lengthen the audit interval (e.g. 10 releases
-  / 60 days) — note it alongside the stamp.
+  version> <today YYYY-MM-DD>` (run `horus --version` for the version). The
+  stamp stays the cheap pointer; the receipt holds the verdicts.
+- Retire/demote proposals still land through the owner (backlog cards, PRD
+  Rules) — the receipt records the verdict, it does not act on it.
+- **Anti-ceremony guard:** read the previous receipt; if it and this audit
+  are both all no-change, recommend the owner lengthen the audit interval
+  (e.g. 10 releases / 60 days) — note it in the receipt.
 
 ## v2 six-lane projects (fallback)
 
@@ -1485,6 +1504,100 @@ unchanged.
 """
 
 
+_SKILL_AUDIT_SKILL = """\
+---
+name: skill-audit
+description: >-
+  On-demand, evidence-first audit of ONE skill's text against reality: does
+  every command/flag/path it references still match the live surface, where
+  did real runs have to improvise around vague or missing instructions, and
+  which of its internal steps became ceremony. Owner-invoked only ("audit the
+  X skill", "test this skill", "improve this skill from that run") — there is
+  deliberately no staleness advisory. Verdicts are revise (with the exact
+  replacement text, owner-approved) / demote / defer / retire / no-change;
+  the outcome lands in a dated `.horus/audits/` receipt. Never auto-edits a
+  skill. For the whole product surface use `product-audit`; for one
+  campaign's execution use `process-retrospective`.
+---
+
+<!-- horus-skill-version: 1 -->
+
+# Skill audit — one skill's text vs reality
+
+You are auditing the *text* of one skill against how the world and its real
+runs actually behaved. This is distinct from `product-audit` (the whole
+product surface, prune-only, can never propose growth) and
+`process-retrospective` (one campaign incident). This skill's whole purpose
+is amendment — its verdict set includes the one thing product-audit forbids:
+proposing better text.
+
+## When this fires
+
+- The owner asks to audit, test, or improve a specific skill.
+- A real run just exposed the skill's instructions failing: the agent had to
+  improvise, a referenced surface didn't exist, a step was ambiguous.
+- **Never** on a schedule. There is no deterministic trigger by design;
+  propose one only after un-audited skill drift causes an observed field
+  failure (the control ladder, applied to itself).
+
+## Scope: one skill per audit
+
+Name the skill under audit before reading anything. Do not widen into a
+sweep of the whole bundled set — that is a series of audits, each bounded.
+
+## Questions (evidence, not recall)
+
+1. **Fidelity.** Check every claim the skill's text makes against the live
+   surface: commands and flags against `horus --help` / `horus <cmd> --help`,
+   file paths and structure against the actual repo, named integration points
+   against the code. Every mismatch is a finding — skills are instruction-ware
+   and drift silently as the product moves.
+2. **Executability.** Run the skill for real on a genuine trigger, or replay
+   its most recent real run from the receipt/conversation. Log every place
+   the executing agent improvised, interpreted ambiguity, fell back, or
+   skipped ahead. Each improvisation is a missing or vague sentence in the
+   skill — the gap is in the text, not the agent.
+3. **Internal ceremony.** Which of the skill's own steps were skipped or
+   rubber-stamped across recent invocations? A step every run bypasses is
+   evidence against the step.
+
+## Verdicts — five, because amendment is the point
+
+Per finding: **revise** (propose the exact replacement text as a diff — the
+owner approves before anything is edited), **demote** (weaker rung),
+**defer** (revisit with the reason), **retire** (propose removal — the owner
+acts), or **no-change**.
+
+Applying an approved revise to a bundled skill means editing its constant in
+`horus/skills.py` and bumping that skill's version marker, landed by PR like
+any product change. Never edit the projected `SKILL.md` copies directly —
+they are regenerated and the edit would be silently overwritten.
+
+## Close the audit
+
+- Write the receipt: `.horus/audits/<YYYY-MM-DD>-skill-<name>.md` — one page,
+  never a transcript: verdict table (finding | verdict | one-line evidence),
+  defers with reasons, and for each revise a pointer to the applied version
+  bump (or its pending state).
+- This skill audits itself under exactly the same rules — when its own
+  instructions needed improvising around, that is a finding here.
+
+## Boundaries
+
+- Advisory only: nothing is edited, demoted, or retired without the owner's
+  approval of the specific diff or proposal.
+- One skill per invocation; no telemetry; no new trigger machinery.
+
+## v2 six-lane projects (fallback)
+
+Structure-agnostic: the receipt still lands in `.horus/audits/` (the
+directory is independent of PRD structure), and the fidelity check compares
+each skill's v2 fallback section against the six-lane layout the project
+actually uses — a skill whose fallback describes lanes the project no longer
+has is a revise finding.
+"""
+
+
 SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 11, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
@@ -1494,8 +1607,9 @@ SKILLS: tuple[Skill, ...] = (
     Skill("execution-decision", 3, _EXECUTION_DECISION_SKILL),
     Skill("dispatch-decision", 3, _DISPATCH_DECISION_SKILL),
     Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
-    Skill("product-audit", 1, _PRODUCT_AUDIT_SKILL),
+    Skill("product-audit", 2, _PRODUCT_AUDIT_SKILL),
     Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),
+    Skill("skill-audit", 1, _SKILL_AUDIT_SKILL),
 )
 
 

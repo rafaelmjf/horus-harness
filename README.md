@@ -1,6 +1,8 @@
 # Horus
 
-> Project-centric continuity and control panel for official coding-agent CLIs.
+> Project continuity layer for coding-agent CLIs. Horus keeps a product
+> owner's working memory — PRD, backlog, shipped ledger, closure rituals —
+> repo-local, so any agent, on any machine, can pick up the role.
 
 Horus keeps a project understandable over time - across agents (Claude Code,
 Codex), accounts, environments, and days. It does not reimplement an agent loop
