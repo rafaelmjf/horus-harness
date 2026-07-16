@@ -56,6 +56,18 @@ def test_delegation_decision_skills_registered():
     assert {"delegation-rubric", "execution-decision", "dispatch-decision"} <= names
 
 
+def test_market_scan_skill_registered_and_outward():
+    market = next(s for s in skills.SKILLS if s.name == "market-scan")
+    assert market.version == 1
+    # outward twin of product-audit: composes deep-research, advisory, dated receipt.
+    assert "deep-research" in market.content
+    assert ".horus/research/" in market.content
+    assert "JTBD" in market.content and "PR-FAQ" in market.content
+    assert "never auto-write" in market.content and "never auto-create" in market.content
+    # token-envelope gate before any web spend.
+    assert "confirm the envelope" in market.content
+
+
 def test_dispatch_consent_skills_match_claude_and_codex_projections():
     by_name = {skill.name: skill for skill in skills.SKILLS}
     for name in ("delegation-rubric", "execution-decision", "dispatch-decision", "horus-execution"):
