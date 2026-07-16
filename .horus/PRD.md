@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "The approved personal-Claude parallel trial delivered product-audit PR #258 and terminal-TUI remote start PR #257 in one attempt each; exact CI plus direct audit/TUI probes passed, while overlapping ambient-account readings stayed honestly confounded. The first detached campaign also exposed that successful merged workers are persisted as crashed/stale/blocked with null runtime."
+current_focus: "Remote-only terminal-TUI start is accepted and shipped in PR #257 after a live isolated private-repository probe rendered `remote only`, cloned, registered, resumed, and cleaned up the disposable GitHub/local state. The parallel worker trial's remaining issue is that successful merged detached workers persist as crashed/stale/blocked with null runtime."
 next_action: "Fix the reproduced detached completion-receipt defect under `deferred-supervision-completion-receipt`: terminal one-shot workers with pushed PR evidence must retain a truthful terminal state and runtime instead of `crashed` / `stale` / `blocked` / null. Keep the richer supervision taxonomy deferred."
 next_prompt: "Fetch clean main after the parallel-worker closure, read PRD.md and `deferred-supervision-completion-receipt`, then claim it. Reproduce against datums `ed7a7f2b` and `bf63cc20`, trace executor reconciliation into registry/delivery/datum projection, fix only terminal-state/runtime/delivery truth, and gate with targeted tests plus one cheap isolated detached probe."
 execution_recommendation: "continue-as-is — the next unit is a narrow reproduced lifecycle defect whose exact persisted rows are already in supervisor context; another dispatch would pay the full brief/review/merge tax and use the broken surface to test itself, with no offsetting context, parallelism, or lower-tier dividend."
@@ -39,10 +39,11 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Eight active cards: high — detached completion-receipt correctness; medium — campaign launch UI, project workflow overrides, scoped machine requirements, and remote-only TUI start; low/deferred — Codex usage-window semantics, init-CI, and heartbeat stall detection.
+Seven active cards: high — detached completion-receipt correctness; medium — campaign launch UI, project workflow overrides, and scoped machine requirements; low/deferred — Codex usage-window semantics, init-CI, and heartbeat stall detection.
 
 ## Shipped
 
+**Remote-only terminal-TUI project start** (2026-07-16, PR #257): cache-only first paint distinguishes remote/cloned/ignored/unavailable projects and reuses the canonical clone/register/projection path; a live isolated private-repository frame probe proved remote-only → cloned+registered → resumable before deleting all disposable GitHub/local state.
 **Release-stamped product audit** (2026-07-16, PR #258): `close`/`consolidate` emit a non-blocking advisory after five releases or 30 days, while the bundled evidence-first skill permits only demote/defer/retire/no-change verdicts and updates the PRD stamp without adding telemetry or features.
 **Explicit worker dispatch consent + actual-cost accounting** (2026-07-16, PR #256): shared Claude/Codex instructions and decision/execution skills require owner approval for an exact worker envelope with reapproval on fallback; completion captures one end reading and `horus datum report` renders model/account/effort/runtime/attempt/outcome plus observed or honestly confounded start/end usage without estimation or polling.
 **Attachable detached workers + delivery completion evidence** (2026-07-16, PR #255): foreground/detached one-shot workers share a stable-ID caller-death-safe tmux executor; explicit delivery intent/evidence persists `delivery-ready|blocked|no-op|failed|unknown` across reconciliation, registry, JSONL, datums, and sessions JSON; additive registry readers preserve unknown future fields.
