@@ -56,5 +56,6 @@ closure rules; migration to PRD structure is separate and opt-in.
 ## Close
 
 Record only durable fleet-level decisions in the curator workspace. Do not copy
-project facts into it. Refresh its PRD/session summary and push the checkpoint; the
+project facts into it. Refresh its PRD and add a local recovery note only if needed,
+then push the checkpoint; the
 next review should be reproducible from the manifest plus target remotes.

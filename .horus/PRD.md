@@ -5,7 +5,7 @@ next_action: "Prepare the exact remote open-model probe envelope—host alias, e
 next_prompt: "Fetch clean main, read PRD.md and the remote-open-model-worker-probe card, and prepare a discovery-first consent envelope without connecting or installing anything. Keep important/private work on Claude/Codex and use only synthetic/public fixtures for the first probe."
 execution_recommendation: "continue-as-is — the next step is a small owner-shaped discovery/consent decision; its ambiguity and missing host details make worker briefing and verification cost exceed any delegation dividend."
 last_updated: 2026-07-16
-last_product_audit: 0.0.57 2026-07-16
+last_product_audit: 0.0.58 2026-07-16
 horus_min_version: 0.0.26
 ---
 
