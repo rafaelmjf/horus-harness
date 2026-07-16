@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-16
@@ -7,6 +7,8 @@ vision_facet: "PO lifecycle"
 type: feature
 parallel: safe
 surface: new bundled skill (sibling to product-audit); composes deep-research; .horus/research/ receipt dir; horus-consolidate hand-off into PRD Vision + candidate cards
+shipped_pr: 283
+shipped_sha: 8fff2c625a7541a6a83cee9aa9a4f8e2f8df11c1
 ---
 
 # market-scan — outward, evidence-first market/competitive research skill
