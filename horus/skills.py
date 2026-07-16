@@ -541,7 +541,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 9 -->
+<!-- horus-skill-version: 10 -->
 
 # Horus execution supervision
 
@@ -692,9 +692,12 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
    only: the required CI check green on the worker's exact commit (rerun the gate
    locally only when no required check covers it) plus one runtime probe you drive
    yourself. Review the diff and handoff note for scope and risk, not as evidence
-   that the work works. If accepted, update the phase status in `execution.md`, ask
-   the user before proceeding to the next phase when appropriate, and distill
-   durable results at closure with `horus-consolidate`.
+   that the work works. For a phase that bulk-copies or migrates files, the gate
+   must include a count-and-size reconcile (`horus verify-inventory`) before
+   acceptance — a walk returning empty for a known non-empty source is a retry, not
+   a pass. If accepted, update the phase status in `execution.md`, ask the user
+   before proceeding to the next phase when appropriate, and distill durable
+   results at closure with `horus-consolidate`.
 
 ## Native mapping
 
@@ -1207,7 +1210,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 11, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 4, _INFER_SKILL),
-    Skill("horus-execution", 9, _EXECUTION_SKILL),
+    Skill("horus-execution", 10, _EXECUTION_SKILL),
     Skill("delegation-rubric", 5, _DELEGATION_RUBRIC_SKILL),
     Skill("execution-decision", 2, _EXECUTION_DECISION_SKILL),
     Skill("dispatch-decision", 2, _DISPATCH_DECISION_SKILL),

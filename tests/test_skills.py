@@ -202,7 +202,7 @@ def test_distill_history_skill_v3_targets_archive():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 9
+    assert execution.version == 10
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -213,6 +213,9 @@ def test_execution_skill_requires_real_delegation_for_model_separation():
     # Need-first delegation guard + honest review caveat.
     assert "require a concrete dividend" in execution.content
     assert "Do not enter this workflow" in execution.content
+    # Bulk-copy/migration phases must reconcile by count and size before acceptance.
+    assert "horus verify-inventory" in execution.content
+    assert "a retry, not" in execution.content
     assert "never pin durable guidance to current model names" in execution.content
     assert "safety guarantee" in execution.content  # honest review caveat
     assert "does not satisfy the workflow test" in execution.content
