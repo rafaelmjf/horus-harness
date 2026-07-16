@@ -115,10 +115,15 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
         return 1
 
     launch_fields: dict[str, object] = {"agent_session_id": run.session.session_id}
-    # In-memory adapters (used for deterministic tests/probes) have no child
-    # pid.  Keep the managed runner PID in that case instead of making a live
-    # pane look stale during its own execution.
-    if run.session.pid is not None:
+    # A detached tmux run is hosted by the runner process, which remains alive
+    # while delivery evidence, usage, and the terminal datum are finalized.
+    # Replacing that durable PID with the adapter child creates a false-death
+    # window as soon as the child exits: a concurrent ``sessions`` reconcile can
+    # then overwrite the runner's clean terminal receipt with stale/blocked.
+    # Foreground runs have no durable host, so their adapter child stays the
+    # correct liveness PID. In-memory adapters have no child and keep whichever
+    # launcher/runner PID was already registered.
+    if run.session.pid is not None and record.launch_target != "tmux":
         launch_fields["pid"] = run.session.pid
     reg.update(request.session_id, **launch_fields)
     log = runlog.RunLog()
