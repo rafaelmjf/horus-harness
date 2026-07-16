@@ -1416,7 +1416,19 @@ def cmd_account(args: argparse.Namespace) -> int:
             return 1
         config.set_account_alias(identifier, args.alias)
         print(f"Aliased {agent} account -> {args.alias}")
+        if not getattr(args, "no_isolate", False):
+            isolated, msg = config.isolate_account(agent, args.alias)
+            print(("Isolated by default — " if isolated else "Note: ") + msg)
         return 0
+
+    if getattr(args, "isolate", False):
+        target = args.alias_name or config.alias_for(identifier)
+        if not target:
+            print("No account to isolate (pass --alias-name, or log in so an alias can be resolved).")
+            return 1
+        isolated, msg = config.isolate_account(agent, target)
+        print(("Isolated — " if isolated else "Could not isolate: ") + msg)
+        return 0 if isolated else 1
 
     if args.set_dir is not None:
         # Map an alias to its CLAUDE_CONFIG_DIR for per-account isolation.
@@ -3413,7 +3425,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_account.add_argument("--set", dest="alias", metavar="ALIAS", help="set the public alias for the detected account")
     p_account.add_argument("--set-dir", metavar="PATH", help="map an account alias to its CLAUDE_CONFIG_DIR (isolation)")
     p_account.add_argument("--set-codex-home", metavar="PATH", help="map an account alias to its CODEX_HOME (Codex isolation)")
-    p_account.add_argument("--alias-name", metavar="ALIAS", help="with --set-dir / --set-codex-home: which alias to map (default: current account's)")
+    p_account.add_argument("--alias-name", metavar="ALIAS", help="with --set-dir / --set-codex-home / --isolate: which alias to map (default: current account's)")
+    p_account.add_argument("--isolate", action="store_true", help="provision the canonical isolated dir (~/.horus/accounts/<agent>-<alias>) from the current login and map it")
+    p_account.add_argument("--no-isolate", action="store_true", help="with --set: only alias, do not auto-provision an isolated dir")
     p_account.set_defaults(func=cmd_account)
 
     p_close = sub.add_parser("close", help="verify continuity (git-aware) and print the closure ritual")

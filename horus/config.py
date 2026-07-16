@@ -10,7 +10,9 @@ TOML escaping and work on Windows.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import shutil
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -522,6 +524,67 @@ def set_account_codex_home(alias: str, codex_home_path: str) -> None:
     accts = _load_accounts()
     accts["codex_homes"][alias] = codex_home_path
     _write_accounts(accts["aliases"], accts["config_dirs"], accts["codex_homes"])
+
+
+# Auth/config files that define a login and must be copied when an account is
+# relocated into its own isolated dir. The FIRST entry is the login-defining file
+# whose presence proves a real login exists at a source dir.
+_ACCOUNT_AUTH_FILES = {
+    "claude": (".credentials.json", ".claude.json"),
+    "codex": ("auth.json", "config.toml"),
+}
+
+
+def default_account_dir(agent: str, alias: str) -> Path:
+    """The canonical isolated config dir for an account: ``~/.horus/accounts/<agent>-<alias>``.
+
+    This is the per-account ``CLAUDE_CONFIG_DIR`` / ``CODEX_HOME`` that isolation uses by
+    default, so every account has its own dir and none shares the ambient login."""
+    tool = "codex" if agent == "codex" else "claude"
+    return config_dir() / "accounts" / f"{tool}-{alias}"
+
+
+def _ambient_account_dir(agent: str) -> Path:
+    """Where ``agent``'s current (un-isolated) login lives: the env override if set,
+    else the tool's default home."""
+    if agent == "codex":
+        return Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
+
+
+def isolate_account(agent: str, alias: str) -> tuple[bool, str]:
+    """Give ``alias`` its own isolated config dir by default: copy the current login
+    into ``~/.horus/accounts/<agent>-<alias>`` and map it there, so two accounts never
+    share one config dir (two agent CLIs on one dir corrupt its JSON state).
+
+    Idempotent and non-destructive: a no-op when the alias is already mapped, and it
+    only ever *copies* the source login (the ambient login stays intact). Returns
+    ``(isolated, message)`` — ``isolated`` is False when nothing could be done (unknown
+    agent, or no login found at the source to copy)."""
+    files = _ACCOUNT_AUTH_FILES.get(agent)
+    if not files:
+        return False, f"unknown agent {agent!r} — cannot isolate"
+    dirs = load_account_codex_homes() if agent == "codex" else load_account_config_dirs()
+    if alias in dirs:
+        return True, f"account {alias!r} is already isolated at {dirs[alias]}"
+    dest = default_account_dir(agent, alias)
+    source = _ambient_account_dir(agent)
+    record = set_account_codex_home if agent == "codex" else set_account_config_dir
+    if source.resolve() == dest.resolve():
+        # The login already physically lives in the canonical dir — just map it.
+        record(alias, str(dest))
+        return True, f"mapped {agent} account {alias!r} to its existing dir {dest}"
+    if not (source / files[0]).exists():
+        return False, f"no {agent} login found at {source} to isolate — log in first, then retry"
+    dest.mkdir(parents=True, exist_ok=True)
+    copied = []
+    for name in files:
+        src = source / name
+        if src.exists():
+            shutil.copy2(src, dest / name)
+            copied.append(name)
+    record(alias, str(dest))
+    return True, f"isolated {agent} account {alias!r}: copied {', '.join(copied)} from {source} to {dest}"
 
 
 def remove_account(alias: str) -> bool:
