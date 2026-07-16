@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 tier: inline
 created: 2026-07-16
 type: bug
 parallel: safe
 surface: horus/templates.py, horus/cli.py, tests/test_cli.py
+shipped_pr: 267
+shipped_sha: 14f312cd797bc4971eb5657019d13b65b9544b09
 ---
 
 # Structure-aware execution supervisor prompt

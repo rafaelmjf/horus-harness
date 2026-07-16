@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Two independent personal-Claude phases are owner-approved: the optional Campaign TUI entry point and a provider-selector contract prompted by a five-second failed launch where calibration key `sonnet-5` was not the executable Claude selector `claude-sonnet-5`."
-next_action: "Dispatch both approved one-attempt `claude-sonnet-5` workers from the same exact base, accept each only on exact-PR CI plus its live/token-free runtime probe, then distill the process findings from today's campaign."
-next_prompt: "Fetch clean main, read PRD.md plus `.horus/execution.md`, and supervise the two owner-approved parallel phases. Do not retry or change model/account/effort/scope without renewed approval; preserve calibration key versus executable provider selector explicitly."
-execution_recommendation: "plan-execution — the owner approved two disjoint, fenceable phases on ambient personal Claude Sonnet 5 to use expiring capacity, protect supervisor context, and gain real parallelism; each has one attempt and an independent deterministic gate."
+current_focus: "Campaign launch and dispatch hardening shipped in PRs #265-#267: optional Campaign TUI entry, provider-valid selector consent, tracked-worker global cleanup guard, and v3-aware lazy execution prompts. A selector worker deleted historical local run logs during an unsafe probe; registry, datums, git, and PR state survived."
+next_action: "Review scoped-machine-requirements against the three real declarations and decide whether its acceptance is evidenced; do not start workflow overrides without an explicit direct-push need."
+next_prompt: "Fetch clean main, read PRD.md and the scoped-machine-requirements card, then validate the declarations with targeted evidence. Stay inline for the review; if later implementation earns delegation, present the exact worker envelope first."
+execution_recommendation: "continue-as-is — the next step is a targeted evidence/card review whose small, ambiguous scope makes worker brief, review, gate, and closure tax exceed the benefit."
 last_updated: 2026-07-16
 last_product_audit: 0.0.57 2026-07-16
 horus_min_version: 0.0.26
@@ -39,10 +39,13 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Eight active cards: high — provider-valid model selector contract; medium — campaign launch UI, project workflow overrides, and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
+Six active cards: medium — project workflow overrides and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
 
 ## Shipped
 
+**Worker/supervisor process hardening** (2026-07-16, PR #267): tracked workers deny destructive cleanup of user-global Horus/Claude/Codex state while isolated probes remain possible; v3 execution prompts load only PRD plus the active plan, and shared delegation guidance discloses same-account parallel attribution loss before launch.
+**Provider-valid model selector contract** (2026-07-16, PR #266): consent and execution plans distinguish calibration keys from executable provider selectors; known calibration-only Claude labels fail before side effects, accepted selectors pass unchanged, and canonical resolved model IDs preserve datum continuity.
+**Optional Campaign supervision launch** (2026-07-16, PR #265): the TUI offers an owner-bounded Campaign entry distinct from Fleet Review while preserving direct-project launch, need-first dispatch judgment, explicit worker consent, and target-repository authority.
 **Truthful detached-worker terminal receipt** (2026-07-16, PR #261): managed one-shot tmux runs keep the runner PID authoritative through completion, preventing concurrent reconciliation from overwriting `exited`/`delivery-ready` and precise runtime with `stale`/`blocked`/null; deterministic race coverage and a token-free private-socket tmux probe pin the invariant.
 **Remote-only terminal-TUI project start** (2026-07-16, PR #257): cache-only first paint distinguishes remote/cloned/ignored/unavailable projects and reuses the canonical clone/register/projection path; a live isolated private-repository frame probe proved remote-only → cloned+registered → resumable before deleting all disposable GitHub/local state.
 **Release-stamped product audit** (2026-07-16, PR #258): `close`/`consolidate` emit a non-blocking advisory after five releases or 30 days, while the bundled evidence-first skill permits only demote/defer/retire/no-change verdicts and updates the PRD stamp without adding telemetry or features.
@@ -177,6 +180,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   tests still require a real distinct worker. Codex
   auto-edit workers get a read-only `.git` and no socket bind: the
   supervisor owns commit, push, and every runtime gate — write briefs accordingly.
+- **Tracked workers cannot destructively clean user-global agent state.** The shared host guard blocks common destructive spellings targeting `~/.horus`, `~/.claude`, and `~/.codex` only when `HORUS_RUN_WORKER=1`; every worker probe must instead create an isolated home and clean only the exact directory it allocated. This was promoted after a worker deleted historical machine-local run logs while durable registry/datums/git state survived (2026-07-16).
 - **Self-documentation has two truth layers, never curated (2026-07-16).** "What exists
   now" is answered only by code-derived surfaces (`horus --help` / the argparse walk);
   `backlog/archive/` cards are the append-only historical index ("was this built, where
