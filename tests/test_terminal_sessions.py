@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -310,6 +311,60 @@ def test_live_isolated_tmux_session_reports_mouse_on_and_leaves_global_untouched
             capture_output=True, text=True, check=False,
         )
         assert "on" not in global_mouse.stdout  # the server/user default was never touched
+    finally:
+        real_run(["tmux", "-S", str(socket_path), "kill-server"], capture_output=True, check=False)
+
+
+def test_live_isolated_detached_fake_run_keeps_terminal_receipt(tmp_path, monkeypatch):
+    """Drive the real tmux runner while continuously reconciling its registry.
+
+    The socket is explicit and throwaway: this probe cannot inspect or affect
+    the user's tmux server. A fake adapter keeps it token-free while exercising
+    the detached host, child/runner PID boundary, JSONL result, and datum store.
+    """
+    if shutil.which("tmux") is None:
+        pytest.skip("tmux is not installed")
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    socket_path = tmp_path / "horus-detached-receipt-probe.sock"
+    real_run = subprocess.run
+
+    def isolated_run(argv, **kwargs):
+        if argv and argv[0] == "tmux":
+            argv = ["tmux", "-S", str(socket_path), *argv[1:]]
+        return real_run(argv, **kwargs)
+
+    monkeypatch.setattr(terminal_sessions.subprocess, "run", isolated_run)
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.delenv("TMUX", raising=False)
+    sid = "28345678-1234-1234-1234-123456789abc"
+    request = run_executor.RunRequest(
+        session_id=sid, agent="fake", project=root, prompt="isolated detached receipt probe",
+        account=None, posture="auto-edit", model=None, effort=None, worker=True,
+        resume=None, dispatch_base_sha=None, dispatch_pending=0,
+    )
+
+    try:
+        result = terminal_sessions.launch_detached_run(request)
+        assert result.ok, result.error
+        deadline = time.monotonic() + 10
+        record = Registry.default().get(sid)
+        datum = datums.DatumStore.default().get(sid)
+        while time.monotonic() < deadline:
+            Registry.default().reconcile()
+            record = Registry.default().get(sid)
+            datum = datums.DatumStore.default().get(sid)
+            if record and record.status == "exited" and datum and datum.runtime_seconds is not None:
+                break
+            time.sleep(0.02)
+
+        assert record is not None and record.status == "exited"
+        assert datum is not None and datum.exit == "completed" and datum.runtime_seconds is not None
+        terminal_results = [
+            event for event in runlog.read_events(sid)
+            if event.get("event") == "result" and event.get("status") in {"exited", "failed", "stale"}
+        ]
+        assert [event["status"] for event in terminal_results] == ["exited"]
     finally:
         real_run(["tmux", "-S", str(socket_path), "kill-server"], capture_output=True, check=False)
 
@@ -685,6 +740,70 @@ def test_foreground_executor_keeps_launcher_pid_until_adapter_child_replaces_it(
     assert run_executor.execute(request) == 0
     assert observed == {"pid": os.getpid(), "status": "running"}
     assert Registry.default().get(request.session_id).pid == 4242
+
+
+def test_detached_executor_keeps_runner_pid_through_concurrent_completion_reconcile(tmp_path, monkeypatch):
+    """The adapter child may exit while the tmux runner is still finalizing.
+
+    A concurrent ``horus sessions`` used to see the dead child PID, append a
+    stale/blocked result after the correct exited/delivery-ready result, and
+    overwrite the precise runtime with null. The runner PID is the liveness
+    authority for a detached run until its terminal receipt is durable.
+    """
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    sid = "37345678-1234-1234-1234-123456789abc"
+    Registry.default().upsert(SessionRecord(
+        session_id=sid, agent="fake", project=root.as_posix(), pid=os.getpid(),
+        launch_target="tmux", target_ref="horus-373456781234",
+        dispatch_base_sha="base", delivery_expected=True,
+    ))
+
+    class ChildPidFake(FakeAdapter):
+        def spawn(self, spec):
+            run = super().spawn(spec)
+            run.session.pid = 4242
+            run.session.returncode = 0
+            return run
+
+    monkeypatch.setattr(run_executor.adapters, "get_adapter", lambda _agent: ChildPidFake())
+    monkeypatch.setattr(registry, "process_alive", lambda pid: pid == os.getpid())
+    evidence = run_executor.delivery.DeliveryEvidence(
+        True, "2026-07-16T10:00:00+00:00", branch="worker/test", head_sha="head",
+        pushed_sha="pushed", local_changes=False, continuity_closed=True,
+        head_beyond_base=True, pushed_beyond_base=True,
+    )
+    reconciled = False
+
+    def capture(*_args, **_kwargs):
+        nonlocal reconciled
+        if not reconciled:
+            reconciled = True
+            assert Registry.default().reconcile() == []
+            assert Registry.default().get(sid).status == "running"
+        return evidence
+
+    monkeypatch.setattr(run_executor.delivery, "capture_delivery_evidence", capture)
+    request = run_executor.RunRequest(
+        session_id=sid, agent="fake", project=root, prompt="detached completion race",
+        account=None, posture="auto-edit", model=None, effort=None, worker=True,
+        resume=None, dispatch_base_sha="base", dispatch_pending=0, delivery_expected=True,
+    )
+
+    assert run_executor.execute(request) == 0
+
+    record = Registry.default().get(sid)
+    assert record.pid == os.getpid()
+    assert record.status == "exited" and record.returncode == 0
+    assert record.delivery_status == "delivery-ready"
+    datum = datums.DatumStore.default().get(sid)
+    assert datum.exit == "completed" and datum.runtime_seconds is not None
+    assert datum.delivery_status == "delivery-ready"
+    terminal_results = [
+        event for event in runlog.read_events(sid)
+        if event.get("event") == "result" and event.get("status") in {"exited", "failed", "stale"}
+    ]
+    assert [event["status"] for event in terminal_results] == ["exited"]
 
 
 def test_expected_delivery_worker_exiting_cleanly_without_evidence_persists_noop(tmp_path, monkeypatch):
