@@ -108,6 +108,42 @@ def test_resolve_target_raises_when_repo_unresolvable(monkeypatch):
         mergewatch.resolve_target(Path("."), "42")
 
 
+def test_resolve_target_pr_number_defaults_open_when_state_missing(fake_gh):
+    fake_gh.pr_view_sequence = [_json_ok({"headRefOid": "deadbeef", "baseRefName": "main"})]
+    target = mergewatch.resolve_target(Path("."), "42")
+    assert target.is_open_pr is True
+
+
+def test_resolve_target_pr_number_marks_merged_pr_as_not_open(fake_gh):
+    fake_gh.pr_view_sequence = [_json_ok({"headRefOid": "deadbeef", "baseRefName": "main", "state": "MERGED"})]
+    target = mergewatch.resolve_target(Path("."), "42")
+    assert target.is_open_pr is False
+
+
+def test_resolve_target_pr_number_marks_open_pr_as_open(fake_gh):
+    fake_gh.pr_view_sequence = [_json_ok({"headRefOid": "deadbeef", "baseRefName": "main", "state": "OPEN"})]
+    target = mergewatch.resolve_target(Path("."), "42")
+    assert target.is_open_pr is True
+
+
+def test_resolve_target_sha_owned_by_merged_pr_is_not_open(monkeypatch, fake_gh):
+    def responder(cmd, cwd, *, timeout=20.0):
+        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/pulls"):
+            return _json_ok([{"number": 9, "state": "closed", "base": {"ref": "main"}}])
+        return _FakeGh.__call__(fake_gh, cmd, cwd, timeout=timeout)
+
+    monkeypatch.setattr(mergewatch, "_run", responder)
+    target = mergewatch.resolve_target(Path("."), "abc123def")
+    assert target.pr_number == 9
+    assert target.is_open_pr is False
+
+
+def test_resolve_target_sha_with_no_owning_pr_is_open(fake_gh):
+    target = mergewatch.resolve_target(Path("."), "abc123def")
+    assert target.pr_number is None
+    assert target.is_open_pr is True
+
+
 # --- required_contexts ----------------------------------------------------
 
 def test_required_contexts_parses_protection_contexts(fake_gh):
@@ -156,6 +192,93 @@ def test_overall_state_falls_back_to_all_checks_when_required_unknown():
     assert mergewatch.overall_state(states, None) == "success"
     states_with_failure = {"pytest": "success", "freshness": "failure"}
     assert mergewatch.overall_state(states_with_failure, None) == "failure"
+
+
+# --- pr_only_contexts -------------------------------------------------------
+
+_TESTS_WORKFLOW = """\
+name: tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    strategy:
+      matrix:
+        python-version: ['3.12', '3.13']
+    steps:
+      - name: Run tests
+        run: pytest
+"""
+
+_CONTINUITY_WORKFLOW = """\
+name: continuity
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Continuity-policy check
+        run: python -m horus close --check
+"""
+
+_RELEASE_WORKFLOW = """\
+name: Install smoke
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  install-smoke:
+    name: Install smoke (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - name: Install uv
+        run: true
+"""
+
+
+def _write_workflows(tmp_path: Path, **files: str) -> Path:
+    workflows_dir = tmp_path / ".github" / "workflows"
+    workflows_dir.mkdir(parents=True)
+    for name, content in files.items():
+        (workflows_dir / f"{name}.yml").write_text(content)
+    return tmp_path
+
+
+def test_pr_only_contexts_excludes_job_with_both_triggers(tmp_path):
+    root = _write_workflows(tmp_path, tests=_TESTS_WORKFLOW)
+    assert mergewatch.pr_only_contexts(root) == set()
+
+
+def test_pr_only_contexts_includes_pull_request_only_job(tmp_path):
+    root = _write_workflows(tmp_path, continuity=_CONTINUITY_WORKFLOW)
+    assert mergewatch.pr_only_contexts(root) == {"freshness"}
+
+
+def test_pr_only_contexts_across_workflows_matches_the_repo_scenario(tmp_path):
+    root = _write_workflows(tmp_path, tests=_TESTS_WORKFLOW, continuity=_CONTINUITY_WORKFLOW)
+    assert mergewatch.pr_only_contexts(root) == {"freshness"}
+
+
+def test_pr_only_contexts_ignores_non_pull_request_workflows(tmp_path):
+    root = _write_workflows(tmp_path, release=_RELEASE_WORKFLOW)
+    assert mergewatch.pr_only_contexts(root) == set()
+
+
+def test_pr_only_contexts_empty_without_workflows_dir(tmp_path):
+    assert mergewatch.pr_only_contexts(tmp_path) == set()
 
 
 # --- fetch_check_states -----------------------------------------------------
@@ -234,6 +357,78 @@ def test_watch_warns_when_pr_head_moves(fake_gh):
     lines: list[str] = []
     mergewatch.watch(Path("."), "42", emit=lines.append, sleep=lambda s: None, now=lambda: 0.0)
     assert any("WARNING PR #42 head moved to sha2" in line for line in lines)
+
+
+def test_watch_settles_green_on_post_merge_sha_despite_pr_only_freshness(tmp_path, monkeypatch):
+    """Reproduces the reported bug: a squash-merge sha linked to an already
+    merged PR loads the base branch's required contexts (pytest matrix +
+    the PR-only ``freshness`` check). ``freshness`` never posts on the push
+    event, so it must not keep the watch pending forever."""
+    root = _write_workflows(tmp_path, tests=_TESTS_WORKFLOW, continuity=_CONTINUITY_WORKFLOW)
+    fake = _FakeGh()
+    fake.required_checks = _json_ok({"contexts": ["pytest (3.12)", "freshness"]})
+
+    def responder(cmd, cwd, *, timeout=20.0):
+        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/pulls"):
+            return _json_ok([{"number": 9, "state": "closed", "base": {"ref": "main"}}])
+        return _FakeGh.__call__(fake, cmd, cwd, timeout=timeout)
+
+    monkeypatch.setattr(mergewatch, "_run", responder)
+    fake.check_runs_sequence = [_json_ok({"check_runs": [
+        {"name": "pytest (3.12)", "status": "completed", "conclusion": "success"},
+    ]})]
+
+    lines: list[str] = []
+    outcome = mergewatch.watch(
+        root, "28a96c25271fff06a19f858a8a8cf571ac97530b",
+        emit=lines.append, sleep=lambda s: pytest.fail("should not sleep"), now=lambda: 0.0,
+    )
+    assert outcome.state == "success"
+    assert not any("freshness" in line for line in lines)
+
+
+def test_watch_post_merge_sha_still_pending_on_delayed_applicable_check(tmp_path, monkeypatch):
+    """A push-triggered required check that simply hasn't posted yet must
+    still block success — dropping the PR-only ``freshness`` context must
+    not cause an early green for other, genuinely-applicable checks."""
+    root = _write_workflows(tmp_path, tests=_TESTS_WORKFLOW, continuity=_CONTINUITY_WORKFLOW)
+    fake = _FakeGh()
+    fake.required_checks = _json_ok({"contexts": ["pytest (3.12)", "freshness"]})
+
+    def responder(cmd, cwd, *, timeout=20.0):
+        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/pulls"):
+            return _json_ok([{"number": 9, "state": "closed", "base": {"ref": "main"}}])
+        return _FakeGh.__call__(fake, cmd, cwd, timeout=timeout)
+
+    monkeypatch.setattr(mergewatch, "_run", responder)
+    fake.check_runs_sequence = [_json_ok({"check_runs": [
+        {"name": "pytest (3.12)", "status": "in_progress"},
+    ]})]
+
+    outcome = mergewatch.watch(
+        root, "abc123def", timeout=0.0,
+        emit=lambda line: None, sleep=lambda s: None, now=lambda: 0.0,
+    )
+    assert outcome.state == "timeout"
+
+
+def test_watch_open_pr_still_waits_on_pull_request_only_context(tmp_path, fake_gh):
+    """An actually-open PR's head sha legitimately gets a pull_request event
+    — its PR-only required context must not be dropped."""
+    root = _write_workflows(tmp_path, tests=_TESTS_WORKFLOW, continuity=_CONTINUITY_WORKFLOW)
+    fake_gh.pr_view_sequence = [
+        _json_ok({"headRefOid": "sha1", "baseRefName": "main", "state": "OPEN"}),  # resolve_target
+        _json_ok({"headRefOid": "sha1"}),  # head-moved check inside the loop
+    ]
+    fake_gh.required_checks = _json_ok({"contexts": ["pytest (3.12)", "freshness"]})
+    fake_gh.check_runs_sequence = [_json_ok({"check_runs": [
+        {"name": "pytest (3.12)", "status": "completed", "conclusion": "success"},
+    ]})]
+
+    outcome = mergewatch.watch(
+        root, "42", timeout=0.0, emit=lambda line: None, sleep=lambda s: None, now=lambda: 0.0,
+    )
+    assert outcome.state == "timeout"
 
 
 def test_watch_times_out(fake_gh):
