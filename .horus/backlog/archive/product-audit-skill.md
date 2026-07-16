@@ -1,11 +1,14 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-16
 type: feature
 parallel: safe
 surface: new .claude/skills/product-audit (bundled via horus/skills.py), horus/cli.py (staleness signal), PRD frontmatter stamp
+shipped: 2026-07-16
+shipped_pr: 258
+shipped_sha: 4076929c08e481e42d13cc76b9f51430ed864fa4
 ---
 
 # Release-stamped product audit (signal + skill)

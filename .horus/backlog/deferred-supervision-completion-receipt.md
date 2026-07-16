@@ -1,6 +1,6 @@
 ---
 status: open
-priority: low
+priority: high
 tier: sonnet
 created: 2026-07-15
 type: feature
@@ -58,4 +58,10 @@ worker before paying the acceptance-review cost.
   supervision-timing taxonomy, the embedded account usage-close snapshot, and the
   richer TUI/JSON receipt surface — their right shape is unproven and native
   completion/notification transports may cover part by then. Priority high→low.
-
+- 2026-07-16 — First real detached campaign reactivated the correctness kernel.
+  Two one-attempt workers pushed PRs #257/#258 and both merged cleanly, but the
+  persisted rows report `exit=crashed`, session `status=stale`, delivery
+  `blocked`, and `runtime_seconds=null` despite launch/completion timestamps and
+  pushed PR/SHA evidence. Fix that terminal-state/runtime/delivery truth first;
+  keep `active|on-completion` taxonomy and richer receipt UI deferred. Priority
+  low→high.
