@@ -412,6 +412,45 @@ def test_sessions_running_sorted_before_recent_terminal_rows(tmp_path, monkeypat
     assert out.index("running-now") < out.index("done-recent")
 
 
+def test_sessions_json_exposes_persisted_delivery_fields(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    Registry.default().upsert(SessionRecord(
+        session_id="delivery-json", agent="fake", project=str(tmp_path), pid=None, status="exited",
+        delivery_expected=True, delivery_status="blocked", dispatch_base_sha="base",
+        delivery_branch="worker/test", delivery_head_sha="head", delivery_pushed_sha="pushed",
+        delivery_pr_number=7, delivery_local_changes=True, delivery_continuity_closed=False,
+        delivery_checked_at="2026-07-16T10:00:00+00:00",
+    ))
+
+    assert main(["sessions", "--json"]) == 0
+
+    rows = json.loads(capsys.readouterr().out)
+    assert len(rows) == 1
+    assert rows[0] | {"updated_at": None} == {
+        "account": None, "agent": "fake", "agent_session_id": None,
+        "delivery_branch": "worker/test", "delivery_checked_at": "2026-07-16T10:00:00+00:00",
+        "delivery_continuity_closed": False, "delivery_expected": True, "delivery_head_sha": "head",
+        "delivery_local_changes": True, "delivery_pr_number": 7, "delivery_pushed_sha": "pushed",
+        "delivery_status": "blocked", "dispatch_base_sha": "base", "environment": "host",
+        "last_activity_at": None, "launch_target": "local", "pid": None, "project": str(tmp_path),
+        "returncode": None, "session_id": "delivery-json", "status": "exited", "target_ref": None,
+        "termination_reason": None, "updated_at": None,
+    }
+
+
+def test_sessions_json_is_valid_for_empty_and_fully_hidden_registry(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+
+    assert main(["sessions", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+    Registry.default().upsert(SessionRecord(
+        session_id="old-hidden", agent="fake", project=str(tmp_path), pid=None, status="exited",
+    ), now="2000-01-01T00:00:00+00:00")
+    assert main(["sessions", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
 def _bare_origin_and_worker_clone(tmp_path: Path) -> Path:
     origin = tmp_path / "origin.git"
     subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)], check=True, capture_output=True)
@@ -754,6 +793,19 @@ def test_run_detach_preallocates_horus_id_before_managed_handoff(tmp_path, monke
     assert request.worker is True and request.posture == "auto-edit"
     assert request.dispatch_base_sha is None
     assert request.session_id in capsys.readouterr().out
+
+
+def test_expect_delivery_is_explicit_launch_intent_not_prompt_inference(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert main(["run", "please deliver a PR", "--agent", "fake", "--path", str(tmp_path)]) == 0
+    assert Registry.default().all()[0].delivery_expected is False
+
+    _home(tmp_path / "expected", monkeypatch)
+    assert main([
+        "run", "do no delivery", "--agent", "fake", "--expect-delivery", "--path", str(tmp_path),
+    ]) == 0
+    rows = Registry.default().all()
+    assert any(row.delivery_expected for row in rows)
 
 
 def test_open_launches_and_tracks_running_session(tmp_path, monkeypatch, capsys):

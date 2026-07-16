@@ -169,7 +169,8 @@ def open_horus_prs(root: str | Path, *, timeout: float = _PR_LIST_TIMEOUT) -> li
 
 
 def pr_for_branch(
-    root: str | Path, branch: str, *, head_sha: str | None = None, timeout: float = _PR_LIST_TIMEOUT
+    root: str | Path, branch: str, *, head_sha: str | None = None, exact_head: bool = False,
+    timeout: float = _PR_LIST_TIMEOUT,
 ) -> dict[str, Any] | None:
     """Any PR (open, merged, or closed) whose head is ``branch``, or ``None`` when
     there is none or the answer is unknowable (no ``gh``, unauthenticated, no
@@ -182,7 +183,9 @@ def pr_for_branch(
     retry both pushing to the same branch, each opening their own PR) — when
     ``head_sha`` is given, the PR whose ``headRefOid`` matches it is preferred
     over the newest/first one, so an older PR isn't shadowed by a newer PR on
-    the same branch. Never raises.
+    the same branch. ``exact_head`` removes that legacy branch-match fallback:
+    with it, a supplied ``head_sha`` must match exactly or no PR is attributed.
+    Never raises.
     """
     if not (Path(root) / ".git").exists():  # covers dirs and worktree files
         return None
@@ -210,6 +213,8 @@ def pr_for_branch(
         matched = next((p for p in prs if isinstance(p, dict) and p.get("headRefOid") == head_sha), None)
         if matched is not None:
             pr = matched
+        elif exact_head:
+            return None
     if not isinstance(pr, dict):
         return None
     number = pr.get("number")

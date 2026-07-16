@@ -18,9 +18,11 @@ from horus import (
     cli,
     codex_usage,
     config,
+    datums,
     launch,
     registry,
     run_executor,
+    runlog,
     terminal_app,
     terminal_sessions,
     terminal_tui,
@@ -683,6 +685,31 @@ def test_foreground_executor_keeps_launcher_pid_until_adapter_child_replaces_it(
     assert run_executor.execute(request) == 0
     assert observed == {"pid": os.getpid(), "status": "running"}
     assert Registry.default().get(request.session_id).pid == 4242
+
+
+def test_expected_delivery_worker_exiting_cleanly_without_evidence_persists_noop(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    request = run_executor.RunRequest(
+        session_id="42345678-1234-1234-1234-123456789abc", agent="fake", project=tmp_path,
+        prompt="scripted expected delivery", account=None, posture="auto-edit", model=None, effort=None,
+        worker=True, resume=None, dispatch_base_sha="base", dispatch_pending=0, delivery_expected=True,
+    )
+    evidence = run_executor.delivery.DeliveryEvidence(
+        True, "2026-07-16T10:00:00+00:00", branch="worker/test", head_sha="base",
+        pushed_sha=None, local_changes=False, continuity_closed=False,
+        head_beyond_base=False, pushed_beyond_base=False,
+    )
+    monkeypatch.setattr(run_executor.delivery, "capture_delivery_evidence", lambda *_args, **_kwargs: evidence)
+
+    assert run_executor.execute(request) == 0
+
+    record = Registry.default().get(request.session_id)
+    assert record.status == "exited" and record.delivery_expected is True
+    assert record.delivery_status == "no-op" and record.delivery_pushed_sha is None
+    result = runlog.read_events(request.session_id)[-1]
+    assert result["delivery_status"] == "no-op" and result["delivery_expected"] is True
+    datum = datums.DatumStore.default().get(request.session_id)
+    assert datum.delivery_status == "no-op" and datum.delivery_checked_at == evidence.checked_at
 
 
 def test_tmux_runner_routes_detached_run_to_shared_executor(tmp_path, monkeypatch):

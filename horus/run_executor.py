@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from horus import adapters, datums, registry, runlog
+from horus import adapters, datums, delivery, registry, runlog
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class RunRequest:
     resume: str | None
     dispatch_base_sha: str | None
     dispatch_pending: int
+    delivery_expected: bool = False
     watch: bool = False
 
     def payload(self) -> dict:
@@ -50,6 +52,8 @@ class RunRequest:
                 raise ValueError(f"runner run request has invalid {name}")
         if not isinstance(payload.get("worker"), bool) or not isinstance(payload.get("dispatch_pending"), int):
             raise ValueError("runner run request has invalid worker metadata")
+        if not isinstance(payload.get("delivery_expected", False), bool):
+            raise ValueError("runner run request has invalid delivery expectation")
         if not isinstance(payload.get("watch", False), bool):
             raise ValueError("runner run request has invalid watch flag")
         root = Path(project)
@@ -60,7 +64,8 @@ class RunRequest:
             account=payload.get("account"), posture=posture, model=payload.get("model"),
             effort=payload.get("effort"), worker=payload["worker"], resume=payload.get("resume"),
             dispatch_base_sha=payload.get("dispatch_base_sha"),
-            dispatch_pending=payload["dispatch_pending"], watch=payload.get("watch", False),
+            dispatch_pending=payload["dispatch_pending"],
+            delivery_expected=payload.get("delivery_expected", False), watch=payload.get("watch", False),
         )
 
 
@@ -93,7 +98,7 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
         record = registry.SessionRecord(
             session_id=request.session_id, agent=request.agent, project=request.project.as_posix(),
             account=request.account, pid=os.getpid(), agent_session_id=request.resume,
-            dispatch_base_sha=request.dispatch_base_sha,
+            dispatch_base_sha=request.dispatch_base_sha, delivery_expected=request.delivery_expected,
         )
         reg.upsert(record)
     try:
@@ -141,6 +146,7 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
             "resume": request.resume,
             "dispatch_base_sha": request.dispatch_base_sha,
             "continuity_pending": request.dispatch_pending,
+            "delivery_expected": request.delivery_expected,
         },
     )
     usage_launch = datums.capture_usage_snapshot(request.agent, request.account)
@@ -152,6 +158,7 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
             launched_at=runlog.utc_iso(), project=request.project.as_posix(), account=request.account,
             effort=request.effort, agent=request.agent, worker=request.worker, posture=request.posture,
             environment=run.session.environment, usage_launch=usage_launch,
+            delivery_expected=request.delivery_expected, dispatch_base_sha=request.dispatch_base_sha,
         ))
 
     record_launch(started_native_id, resolved_model)
@@ -186,15 +193,33 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
 
     session = run.session
     status = session.status
-    reg.update(request.session_id, agent_session_id=session.session_id, termination_reason="natural")
+    ended_at = runlog.utc_iso()
+    try:
+        session_end = datetime.fromisoformat(ended_at)
+    except ValueError:  # utc_iso is controlled, but delivery must never break completion
+        session_end = None
+    evidence = delivery.capture_delivery_evidence(
+        request.project, dispatch_base_sha=request.dispatch_base_sha, session_end=session_end,
+    )
+    delivery_status = delivery.classify_delivery(
+        status, delivery_expected=request.delivery_expected,
+        dispatch_base_sha=request.dispatch_base_sha, evidence=evidence,
+    )
+    reg.update(
+        request.session_id, agent_session_id=session.session_id, termination_reason="natural",
+        delivery_status=delivery_status, **evidence.fields(),
+    )
     reg.set_status(request.session_id, status, returncode=session.returncode)
     runlog.append_event(
         request.session_id, "result", agent_session_id=session.session_id,
-        status=status, rc=session.returncode, delivery_status="unknown", ended_at=runlog.utc_iso(),
+        status=status, rc=session.returncode, delivery_status=delivery_status,
+        delivery_expected=request.delivery_expected, **evidence.fields(), ended_at=ended_at,
     )
     store.record_completion(
         request.session_id, exit=datums.classify_exit(status, saw_usage_signal=saw_usage_signal),
         runtime_seconds=round(time.monotonic() - run_started, 3), returncode=session.returncode,
+        delivery_status=delivery_status, delivery_expected=request.delivery_expected,
+        dispatch_base_sha=request.dispatch_base_sha, **evidence.fields(),
     )
     emit(f"\n{status} — session {request.session_id} (account {request.account or '-'})")
     return 0 if status == "exited" else 1

@@ -243,7 +243,7 @@ def launch_detached_run(request: "RunRequest", *, reg: registry.Registry | None 
         session_id=request.session_id, agent=request.agent, project=request.project.as_posix(),
         account=request.account, pid=os.getpid(), status="running", launch_target=TMUX,
         target_ref=tmux_name, agent_session_id=request.resume,
-        dispatch_base_sha=request.dispatch_base_sha,
+        dispatch_base_sha=request.dispatch_base_sha, delivery_expected=request.delivery_expected,
     ))
     spec_path = _write_runner_payload({"kind": "run", "run": request.payload()}, request.session_id)
     runner = shlex.join([sys.executable, "-m", "horus.tmux_runner", request.session_id])

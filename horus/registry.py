@@ -23,7 +23,7 @@ from pathlib import Path
 
 from horus.adapters.base import AgentSession
 from horus.config import config_dir
-from horus import runlog
+from horus import datums, delivery, runlog
 
 # Terminal statuses never get liveness-reconciled.
 TERMINAL = frozenset({"exited", "failed", "orphaned", "stale"})
@@ -83,6 +83,35 @@ def _legacy_log_result(session_id: str) -> _RunResult | None:
             if "exited" in line:
                 return _RunResult("exited")
     return None
+
+
+def _apply_delivery_completion(row: dict) -> None:
+    """Persist Phase 2 evidence when reconciliation newly finds a terminal run."""
+    try:
+        ended_at = row.get("updated_at")
+        session_end = datetime.fromisoformat(ended_at) if isinstance(ended_at, str) and ended_at else None
+    except ValueError:
+        session_end = None
+    evidence = delivery.capture_delivery_evidence(
+        str(row.get("project", "")), dispatch_base_sha=row.get("dispatch_base_sha"), session_end=session_end,
+    )
+    row.update(evidence.fields())
+    delivery_status = delivery.classify_delivery(
+        str(row.get("status", "")), delivery_expected=bool(row.get("delivery_expected", False)),
+        dispatch_base_sha=row.get("dispatch_base_sha"), evidence=evidence,
+    )
+    row["delivery_status"] = delivery_status
+    session_id = str(row.get("session_id", ""))
+    runlog.append_event(
+        session_id, "result", agent_session_id=row.get("agent_session_id"), status=row.get("status"),
+        rc=row.get("returncode"), delivery_expected=bool(row.get("delivery_expected", False)),
+        delivery_status=delivery_status, **evidence.fields(), ended_at=runlog.utc_iso(),
+    )
+    datums.DatumStore.default().record_completion(
+        session_id, exit=datums.classify_exit(str(row.get("status", "")), saw_usage_signal=False),
+        runtime_seconds=None, returncode=row.get("returncode"), delivery_expected=bool(row.get("delivery_expected", False)),
+        dispatch_base_sha=row.get("dispatch_base_sha"), delivery_status=delivery_status, **evidence.fields(),
+    )
 
 
 @dataclass
@@ -313,12 +342,14 @@ class Registry:
                 row["status"] = result.status
                 if result.returncode is not None:
                     row["returncode"] = result.returncode
+                _apply_delivery_completion(row)
                 row["updated_at"] = _now_iso()
                 dirty = True
                 changed.append(self._record(row))
                 continue
             if not process_alive(row.get("pid")):
                 row["status"] = "stale"
+                _apply_delivery_completion(row)
                 row["updated_at"] = _now_iso()
                 dirty = True
                 changed.append(self._record(row))

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import uuid
+from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -694,6 +695,9 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     reg.reconcile()  # correct records left "running" by a crashed/closed run
     if args.prune:
         removed = reg.prune()
+        if args.json:
+            print(json.dumps([], sort_keys=True))
+            return 0
         print(f"Pruned {len(removed)} finished session(s).")
         return 0
     records = sorted(reg.all(), key=lambda r: r.updated_at, reverse=True)
@@ -706,6 +710,11 @@ def cmd_sessions(args: argparse.Namespace) -> int:
         hidden = len(records) - len(visible)
         records = visible
 
+    # Machine output must never be prefixed by an empty-state/filter message.
+    if args.json:
+        print(json.dumps([asdict(record) for record in records], sort_keys=True))
+        return 0
+
     if not records:
         if hidden:
             print(f"No running or recent sessions ({hidden} older session(s) hidden — pass --all to show them).")
@@ -716,7 +725,10 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     for r in records:
         proj = Path(r.project).name
         rc = "" if r.returncode is None else f" rc={r.returncode}"
-        line = f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} pid={r.pid or '-'} {r.session_id}{rc}"
+        line = (
+            f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} "
+            f"pid={r.pid or '-'} {r.session_id}{rc} delivery={r.delivery_status}"
+        )
         if r.status in delivery.NONCLEAN_STATUSES:
             try:
                 session_end = datetime.fromisoformat(r.updated_at) if r.updated_at else None
@@ -896,6 +908,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         posture=_resolve_run_posture(args.posture, getattr(args, "worker", None)),
         model=args.model, effort=args.effort, worker=bool(getattr(args, "worker", None)),
         resume=args.resume, dispatch_base_sha=dispatch_base_sha, dispatch_pending=dispatch_pending,
+        delivery_expected=getattr(args, "expect_delivery", False),
         watch=getattr(args, "watch", False),
     )
     if getattr(args, "detach", False):
@@ -3011,6 +3024,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--all", action="store_true",
         help="show every tracked session, including long-stale ones (default: running + last 24h only)",
     )
+    p_sessions.add_argument("--json", action="store_true", help="emit persisted session rows as machine-readable JSON")
     p_sessions.set_defaults(func=cmd_sessions)
 
     p_focus = sub.add_parser("focus", help="raise a running session's terminal window (best-effort, Windows)")
@@ -3095,6 +3109,10 @@ def build_parser() -> argparse.ArgumentParser:
              "Infers --agent when omitted; --agent and --posture win if also given.",
     )
     p_run.add_argument("--resume", metavar="SESSION_ID", help="resume an existing session by id")
+    p_run.add_argument(
+        "--expect-delivery", action="store_true",
+        help="explicitly expect a reviewable git/PR delivery; never inferred from prompt text",
+    )
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
     p_run.add_argument(
         "--target", choices=(terminal_sessions.CURRENT, terminal_sessions.TMUX),
