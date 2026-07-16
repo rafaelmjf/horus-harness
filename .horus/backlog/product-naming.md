@@ -34,3 +34,10 @@ launch).
   any time.
 - The rename decision itself stays deferred until first external distribution; check
   PyPI availability for the chosen name before attachment.
+
+## Reviews
+
+### 2026-07-16 — Rafael Figueiredo (manual)
+Verdict: defer-name-keep-role
+
+Owner (2026-07-16): the ROLE direction is settled — Horus is a repo-local product owner (Vision expanded this session). But keep the horus-harness package/repo name for now; renaming is mostly ceremony until first external distribution. Both listed candidates are REJECTED: horus-po (opaque suffix) and horus-continuity (under-describes a tool that also does discovery + roadmap grooming). Want a more CREATIVE name, not a literal one. Find/decide the official name when this card ships at first distribution; check PyPI availability then.
