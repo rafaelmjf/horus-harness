@@ -515,6 +515,24 @@ def _untracked_from_cache(owner: str, item: dict[str, Any], local_by_remote: dic
     )
 
 
+def drop_registered(
+    repos: list[Any],
+    registered: list[str] | None = None,
+) -> list[Any]:
+    """Filter out entries already registered as a local project on this machine.
+
+    An entry (``RemoteProject`` or ``UntrackedRepo``, both carry ``.local_path``)
+    already registered in ``config.load_projects()`` belongs to the main project
+    list, not the remote catalog — showing it in both would be a duplicate (same
+    reasoning as the dashboard's registered-project dedup). *registered* defaults
+    to ``config.load_projects()``.
+    """
+    if registered is None:
+        registered = config.load_projects()
+    reg = {str(Path(p).resolve()) for p in registered}
+    return [r for r in repos if not (r.local_path and str(Path(r.local_path).resolve()) in reg)]
+
+
 def filter_ignored(
     repos: list[Any],
     ignored: list[str] | None = None,
