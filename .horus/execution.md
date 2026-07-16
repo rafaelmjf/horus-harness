@@ -1,9 +1,9 @@
 ---
-status: in-progress
+status: complete-awaiting-merge
 current_feature: "Worker-lifecycle campaign: attachable detached one-shot workers + the delivery-evidence/completion kernel (backlog: attachable-detached-worker-run, carrying the kernels of worker-progress-heartbeat and deferred-supervision-completion-receipt per their 2026-07-16 reviews)."
 supervisor_tier: frontier
 worker_tier: value-implementation
-delegation_basis: "Phase 0 stayed direct because it was design/ambiguity work. Phase 1 was accepted after a value-tier worker plus one focused bounce, with supervisor-reproduced full-suite and private-socket lifecycle gates. Phase 2 resumes that worker's loaded state-model context for a schema-pinned pure-classifier slice; retained context plus lower-tier savings exceeds the small bounce/review tax."
+delegation_basis: "Phase 0 stayed direct. Phases 1/2 used one value-tier worker plus focused bounces and passed supervisor-owned gates, but the Codex worker shared the overseer account and consumed substantial quota; its Phase 2 datum records a negative dividend and direct execution as the cheaper counterfactual. No further dispatch is authorized for this campaign."
 last_updated: 2026-07-16
 ---
 
@@ -49,13 +49,17 @@ explicitly deferred (see the two demoted cards' Reviews).
 |---|---|---|---|
 | 0 state model + schema | complete (direct) | registry/run-log fields for the three dimensions; parity map against current foreground `horus run` fields | design below checked against every phase-0 constraint; no product code changed |
 | 1 detached attachable one-shot | complete (accepted; delegated value tier; `363728b`) | `horus run --worker … --detach` on the managed tmux host; stable Horus/native ids; existing attach/detach surfaces; natural-exit registry/log/datum parity; caller-death survival | supervisor: `1513 passed`; private `tmux -S` probe SIGTERMed launcher, attached/detached a real viewer, then observed natural exit + parity |
-| 2 delivery-evidence + completion kernel | planned (delegated; resume same value-tier worker) | pure evidence classifier; `no-op` detection at exit; `delivery-ready|blocked|failed|unknown` persisted and exposed via sessions/CLI-JSON without prose parsing | table tests for no-op, delivering, blocked, failed, unknown + full pytest; live probe: an expected-delivery scripted worker exits 0 with no evidence and surfaces `no-op` |
+| 2 delivery-evidence + completion kernel | complete (accepted; `6ed0698`, compatibility fix `6a655e5`) | pure evidence classifier; `no-op` detection at exit; `delivery-ready|blocked|failed|unknown` persisted and exposed via sessions/CLI-JSON without prose parsing | supervisor: `1529 passed`; isolated HOME + explicit private-socket expected-delivery fake worker exited 0 and persisted `no-op` in registry/JSONL/datum |
 
 Phase 1 review caught and bounced two safety gaps before acceptance: a failed runner
 handoff now kills only its newly-created tmux target and cleans its spec/ready files,
 and a foreground pre-row holds the launcher PID until the adapter child replaces it.
 The first Claude route produced no edits and died on two provider 529s; the Codex
 value-tier reroute delivered the phase. No phase-2 classification landed early.
+Phase 2 review bounced empty JSON output, rewritten/non-descendant HEAD safety, and
+exact-SHA PR attribution before acceptance. The final live probe also exposed two
+campaign-level guardrails: inherited `TMUX` must be unset even with a private socket,
+and mixed installed/source versions require forward-compatible registry reads.
 
 ## Phase 0 frozen design (2026-07-16)
 

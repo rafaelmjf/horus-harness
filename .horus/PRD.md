@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Worker-lifecycle campaign remains claimed on `feat/attachable-detached-worker-run`. Phase 1 shipped to the branch at `363728b`: foreground and detached workers share one stable-ID executor, managed tmux handoff is attachable and caller-death-safe, and liveness/progress/datum parity is additive. Supervisor acceptance: 1513 tests plus an independent private-socket SIGTERM/attach-detach/natural-exit probe."
-next_action: "Execute phase 2 in `.horus/execution.md`: implement the pure delivery-evidence classifier and persist/expose `delivery-ready|blocked|no-op|failed|unknown`, then prove expected no-op, delivering, failed, blocked, and unknown cases plus the scripted zero-delivery live probe."
-next_prompt: "Fetch first, resume `feat/attachable-detached-worker-run`, verify it against origin, and read PRD.md plus `.horus/execution.md`. Phase 1 is accepted at `363728b`; do not redesign or duplicate the shared executor. Resume the same value-tier implementation worker for phase 2 only, then reproduce its full-suite gate and independently probe an expected-delivery worker that exits 0 without evidence and must surface `no-op`."
-execution_recommendation: "plan-execution — phase 2 is a schema-pinned classifier/projection slice with deterministic table tests and one live no-op probe; resuming the same value implementation worker preserves its loaded state-model context and lower-tier savings beyond the small bounce/review tax."
+current_focus: "Worker-lifecycle campaign implementation is complete and pushed on `feat/attachable-detached-worker-run` at `6a655e5`. Phase 1 adds caller-death-safe attachable detached workers; Phase 2 adds explicit delivery intent, evidence, and `delivery-ready|blocked|no-op|failed|unknown` persistence across executor/reconciliation/registry/logs/datums/CLI JSON. Acceptance: 1529 tests plus private-socket lifecycle and expected-no-op probes; registry readers now ignore and preserve future fields after the mixed-version TUI incident."
+next_action: "Open the worker-lifecycle PR from `feat/attachable-detached-worker-run`, observe required CI on the exact head, merge, then ship `attachable-detached-worker-run` with PR/SHA provenance and close continuity."
+next_prompt: "Fetch first and verify `feat/attachable-detached-worker-run` against origin at `6a655e5`. Read PRD.md and `.horus/execution.md`; both phases are accepted, so do not dispatch or change implementation unless CI finds a concrete failure. Open the PR, watch exact-head required CI, merge, ship the claimed card with PR/SHA provenance, and close continuity."
+execution_recommendation: "continue-as-is — only PR creation, exact-head CI observation, merge, card shipping, and continuity closure remain; a worker would duplicate loaded context and add spend without an implementation dividend."
 last_updated: 2026-07-16
 horus_min_version: 0.0.26
 ---
@@ -167,9 +167,12 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   concrete context, parallelism, or price dividend that exceeds the fixed supervisor
   tax before selecting a worker. Cross-project scope, multiple phases, and calibration
   goals alone do not justify delegation; integrated campaigns may be cheaper inline.
-  Use live calibration and current owner evidence for model selection instead of
-  pinning durable guidance to model names. Workflow tests still require a real distinct
-  worker. Codex auto-edit workers get a read-only `.git` and no socket bind: the
+  Owner-directed dispatch may instead spend expiring account capacity or protect the
+  supervisor context, but every launch first names the exact model, account, and attempt
+  envelope and obtains approval; any fallback changes that envelope and asks again.
+  Use live calibration and current owner evidence, never a guessed per-task usage delta,
+  for model selection. Workflow tests still require a real distinct worker. Codex
+  auto-edit workers get a read-only `.git` and no socket bind: the
   supervisor owns commit, push, and every runtime gate — write briefs accordingly.
 - **Self-documentation has two truth layers, never curated (2026-07-16).** "What exists
   now" is answered only by code-derived surfaces (`horus --help` / the argparse walk);
@@ -211,9 +214,13 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   is a single shared server regardless of `$HOME`; `reap_orphans()` correctly (per its
   own contract) killed two real pre-existing sessions on the machine because they had
   no record in the probe's fake registry. No real loss this time (owner confirmed both
-  were already-abandoned), but never again: any tmux-touching test or probe MUST use
-  `tmux -S <explicit-path>` (not `-L <path>` — `-L` takes a bare *name* in the standard
-  socket dir, not a path, and silently mis-resolves/errors if given one).
+  were already-abandoned), but never again: any tmux-touching test or probe MUST unset
+  inherited `TMUX` and route every client/cleanup call through `tmux -S <explicit-path>`;
+  a private HOME/TMUX_TMPDIR does not override an inherited server target. Never issue
+  bare `kill-server`. (`-L` takes a bare name, not a path, and can silently mis-resolve.)
+- **Machine-local registries are additive and forward-readable.** Readers ignore fields
+  they do not understand and known-field updates preserve them; source-version probes
+  isolate HOME/registry so an installed older CLI is not fed a future row schema.
 - **Platform traps:** `uv tool install horus-harness` without `--python 3.12` silently resolves
   an ancient version below the floor — compare `horus --version` with `uv run horus --version`,
   `--force --python 3.12` reinstall + restart. A **stale `pip`-installed `horus` on PATH shadows
