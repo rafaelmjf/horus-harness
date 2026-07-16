@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Campaign launch and dispatch hardening shipped in PRs #265-#267: optional Campaign TUI entry, provider-valid selector consent, tracked-worker global cleanup guard, and v3-aware lazy execution prompts. A selector worker deleted historical local run logs during an unsafe probe; registry, datums, git, and PR state survived."
-next_action: "Review scoped-machine-requirements against the three real declarations and decide whether its acceptance is evidenced; do not start workflow overrides without an explicit direct-push need."
-next_prompt: "Fetch clean main, read PRD.md and the scoped-machine-requirements card, then validate the declarations with targeted evidence. Stay inline for the review; if later implementation earns delegation, present the exact worker envelope first."
-execution_recommendation: "continue-as-is — the next step is a targeted evidence/card review whose small, ambiguous scope makes worker brief, review, gate, and closure tax exceed the benefit."
+current_focus: "Two owner-approved, one-attempt Claude phases are ready: fix post-merge check settling on the work account and add the event-driven process-retrospective skill on the personal account. A separate remote open-model probe is backlog-only and not authorized to connect."
+next_action: "Merge the plan/card checkpoint, launch both approved workers from its exact base on isolated Claude accounts, and accept each only on exact-PR CI plus its named live validation."
+next_prompt: "Fetch clean main, read PRD.md plus the active execution plan, and supervise the two approved disjoint phases. Do not retry or change model, effort, account, or scope without renewed approval; do not start the remote-model probe."
+execution_recommendation: "plan-execution — the owner explicitly chose available isolated Claude capacity to protect a nearly exhausted Codex supervisor budget; the two scopes are disjoint, bounded, independently gated, and attributable by account."
 last_updated: 2026-07-16
 last_product_audit: 0.0.57 2026-07-16
 horus_min_version: 0.0.26
@@ -39,7 +39,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Six active cards: medium — project workflow overrides and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
+Nine active cards: medium — post-merge check settling, process retrospective, remote open-model probe, project workflow overrides, and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
 
 ## Shipped
 
