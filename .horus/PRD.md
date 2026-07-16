@@ -1,6 +1,6 @@
 ---
 status: active
-current_focus: "The event-driven process-retrospective skill and fail-safe post-merge check watching shipped in PRs #270/#271. The watch fix needed two owner-approved corrections; exact PR/main CI and a live main-merge probe are green. The remote open-model probe remains unclaimed and unauthorized."
+current_focus: "v0.0.57 is stable and the process-retrospective campaign is closed. Follow-up cards now capture end-to-end single/fleet Horus artifact refresh and stale-datum usage-overlap reconciliation; the remote open-model probe remains unclaimed and unauthorized."
 next_action: "Prepare the exact remote open-model probe envelope—host alias, existing runner/models, synthetic task set, data boundary, stopping point, and gates—then obtain owner approval before any Tailscale connection."
 next_prompt: "Fetch clean main, read PRD.md and the remote-open-model-worker-probe card, and prepare a discovery-first consent envelope without connecting or installing anything. Keep important/private work on Claude/Codex and use only synthetic/public fixtures for the first probe."
 execution_recommendation: "continue-as-is — the next step is a small owner-shaped discovery/consent decision; its ambiguity and missing host details make worker briefing and verification cost exceed any delegation dividend."
@@ -39,7 +39,7 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Seven active cards: medium — remote open-model probe, project workflow overrides, and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
+Nine active cards: medium — fleet artifact refresh, stale-datum overlap reconciliation, remote open-model probe, project workflow overrides, and scoped machine requirements; low/deferred — Codex usage-window semantics, completion-receipt trimmings, init-CI, and heartbeat stall detection.
 
 ## Shipped
 
