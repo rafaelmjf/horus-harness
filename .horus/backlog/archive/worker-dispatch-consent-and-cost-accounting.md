@@ -1,11 +1,13 @@
 ---
-status: claimed
+status: shipped
 priority: high
 tier: sonnet
 created: 2026-07-16
 type: feature
 parallel: unsafe
 surface: shared AGENTS.md/CLAUDE.md managed block, .agents/skills/delegation-rubric, execution-decision, dispatch-decision, horus-execution, horus/datums.py, horus/run_executor.py, horus/cli.py
+shipped_pr: 256
+shipped_sha: 1b3cffa8fe042980238e8bc89a815efd5af30fc3
 ---
 
 # Explicit worker dispatch consent and cost accounting

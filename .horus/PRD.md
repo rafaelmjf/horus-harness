@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "Worker-lifecycle campaign shipped in PR #255 at `170876f`: stable-ID foreground/detached workers share one caller-death-safe executor; explicit delivery evidence persists `delivery-ready|blocked|no-op|failed|unknown` through registry, reconciliation, logs, datums, and sessions JSON; additive registry reads preserve unknown future fields. Next priority is the incident-earned dispatch consent/accounting contract."
-next_action: "Claim and implement `worker-dispatch-consent-and-cost-accounting` inline: exact model/account/attempt-envelope approval before launch, owner-directed context/capacity override, and automatic post-run actuals with confounded readings labelled honestly; no usage estimator or worker dispatch for this card."
-next_prompt: "Fetch clean main at or beyond `170876f`, read PRD.md and the `worker-dispatch-consent-and-cost-accounting` card, then claim it. Implement the shared Claude/Codex consent contract and low-overhead actual-cost breakdown inline. Do not dispatch a worker, predict per-task percentage usage, or add an auto-router."
-execution_recommendation: "continue-as-is — the supervisor holds the failure context and the next feature is an integrated policy/schema correction; dispatching it before its consent gate exists would duplicate context and repeat the exact failure being fixed."
+current_focus: "Dispatch consent and actual-cost accounting shipped in PR #256 at `1b3cffa`: Claude/Codex supervisors must obtain approval for an exact agent/model/effort/account/task/attempt/gate envelope; owner-directed capacity/context overrides stay explicit; worker completion captures start/end usage and `horus datum report` renders attempts while conservatively labelling ambient or overlapping readings confounded."
+next_action: "Claim `tui-remote-project-start` and add cached remote-only projects to the terminal TUI by reusing the existing catalog/start primitives; keep first paint non-blocking and preserve distinct local/remote/ignored/unavailable states."
+next_prompt: "Fetch clean main at or beyond `1b3cffa`, read PRD.md and the `tui-remote-project-start` card, then claim it. Implement the scoped TUI integration inline, reuse existing remote catalog/start paths, run targeted tests, and plan the disposable-repository live probe without mutating an external repo until the owner authorizes that probe."
+execution_recommendation: "continue-as-is — the next card is a scoped integration over existing catalog/start primitives and no concrete context, parallelism, or lower-tier dividend currently exceeds the fixed dispatch tax; any later worker proposal must present the new exact consent envelope first."
 last_updated: 2026-07-16
 horus_min_version: 0.0.26
 ---
@@ -38,11 +38,11 @@ is a menu, not a contract. Mark bugs **[bug]**, ops chores **[ops]**.
 
 ### Open / deferred — see `.horus/backlog/`
 
-Ten active cards: high — explicit worker dispatch consent/cost accounting after the same-account quota incident; medium — remote-only TUI start and the release-stamped product-audit signal+skill.
-Seven evidence-gated/deferred items: heartbeat stall timer, receipt trimmings, init-CI, workflow overrides, scoped machine requirements, campaign launch UI, and Codex usage-window semantics.
+Nine active cards: medium — campaign launch UI, product-audit signal+skill, project workflow overrides, scoped machine requirements, and remote-only TUI start; low/deferred — Codex usage-window semantics, receipt trimmings, init-CI, and heartbeat stall detection.
 
 ## Shipped
 
+**Explicit worker dispatch consent + actual-cost accounting** (2026-07-16, PR #256): shared Claude/Codex instructions and decision/execution skills require owner approval for an exact worker envelope with reapproval on fallback; completion captures one end reading and `horus datum report` renders model/account/effort/runtime/attempt/outcome plus observed or honestly confounded start/end usage without estimation or polling.
 **Attachable detached workers + delivery completion evidence** (2026-07-16, PR #255): foreground/detached one-shot workers share a stable-ID caller-death-safe tmux executor; explicit delivery intent/evidence persists `delivery-ready|blocked|no-op|failed|unknown` across reconciliation, registry, JSONL, datums, and sessions JSON; additive registry readers preserve unknown future fields.
 **Bulk-migration inventory reconciliation** (2026-07-16, PR #254): `horus verify-inventory` reconciles source/produced trees by count+size both directions (0 clean / 1 discrepancy / 2 error), treats an empty walk of an expected-non-empty tree as a retryable error, handles non-ASCII names, and the horus-execution skill requires the reconcile before accepting bulk-copy phases; delivered by a dispatched sonnet worker gated by the account-scoped usage check.
 **Account-scoped usage check** (2026-07-16, PR #253): `horus usage check --account <alias>` reads the isolated CLAUDE_CONFIG_DIR/CODEX_HOME mapping without touching the ambient login, names source/freshness/windows, fails unknown aliases instead of falling back, and warns on overseer==worker account collisions (advisory).
@@ -163,10 +163,14 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   tax before selecting a worker. Cross-project scope, multiple phases, and calibration
   goals alone do not justify delegation; integrated campaigns may be cheaper inline.
   Owner-directed dispatch may instead spend expiring account capacity or protect the
-  supervisor context, but every launch first names the exact model, account, and attempt
-  envelope and obtains approval; any fallback changes that envelope and asks again.
-  Use live calibration and current owner evidence, never a guessed per-task usage delta,
-  for model selection. Workflow tests still require a real distinct worker. Codex
+  supervisor context, but every launch first names the exact agent, concrete model,
+  effort, account, current usage/reset evidence, bounded task, attempt allowance, and
+  gate and obtains approval; any fallback changes that envelope and asks again. Worker
+  completion captures one end reading; show a percentage-point delta only for fresh
+  same-window isolated readings without tracked overlap, otherwise retain the actual
+  start/end evidence with an unknown/confounded label. Never estimate task usage,
+  auto-route, continuously poll, or spend another model call on accounting. Workflow
+  tests still require a real distinct worker. Codex
   auto-edit workers get a read-only `.git` and no socket bind: the
   supervisor owns commit, push, and every runtime gate — write briefs accordingly.
 - **Self-documentation has two truth layers, never curated (2026-07-16).** "What exists
