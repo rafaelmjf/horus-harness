@@ -3,6 +3,7 @@ status: open
 priority: medium
 tier: sonnet
 created: 2026-07-16
+vision_facet: "Delegation calibration"
 type: bug
 parallel: safe
 surface: horus/datums.py, horus/session_registry.py

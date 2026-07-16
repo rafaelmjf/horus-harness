@@ -3,6 +3,7 @@ status: open
 priority: low
 tier: sonnet
 created: 2026-07-15
+vision_facet: "Delegation calibration"
 type: feature
 parallel: unsafe
 surface: horus/cli.py, horus/registry.py, horus/delivery.py, horus/datums.py, horus/terminal_tui.py, bundled dispatch/execution skills

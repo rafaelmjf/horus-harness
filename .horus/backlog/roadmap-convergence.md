@@ -3,10 +3,11 @@ status: open
 priority: medium
 tier: sonnet
 created: 2026-07-16
+vision_facet: "PO lifecycle"
 type: feature
 parallel: safe
 surface: PRD.md (Vision facets + Structure contract), backlog card template/frontmatter, new thin skill (or fold into horus-consolidate)
-depends-on: vision-expansion decision (continuity-layer → repo-local product owner); see product-naming
+relates-to: explore-converge-lifecycle (divergence-side counterpart, shares the read-out)
 ---
 
 # roadmap-convergence — a healthy backlog that converges toward the Vision, with a DoD
@@ -26,22 +27,30 @@ the *instruction* rung (a line in the card), not a gate, unless a real failure e
 
 - **Per Vision facet: a one-line measurable definition of done** — so "converged" is a
   stateable condition, not a vibe (the lightest possible "constitution").
-- **Per backlog card: one testable acceptance line (EARS-lite: "when X, the tool should Y")
-  + a one-line link to which Vision facet it advances.** A card that can state neither is
-  parked — the "Ready" gate that stops off-vision, reactive-only cards from accreting. Extend
-  the card frontmatter/template + Structure contract accordingly.
+- **Per `converge`-phase card: one testable acceptance line (EARS-lite: "when X, the tool
+  should Y") + a `vision_facet` link.** A converge card that can state neither is parked —
+  the "Ready" gate that stops off-vision, reactive-only cards from accreting. **Phase-aware:**
+  `explore`-phase cards are exempt (they discover, not converge — see
+  `explore-converge-lifecycle`). DECIDED: `vision_facet` links applied to all existing cards
+  now; the acceptance line is required going-forward on new/next-touched converge cards (not a
+  full retrofit). Extend the card template + Structure contract accordingly.
 - **Frame Backlog explicitly as "the gap between Vision and Shipped"** in the PRD, so an
   empty/closing backlog against stated Vision-DoD *is* the definition of converged.
-- **A thin skill (`horus-converge`, or fold into `consolidate`):** reads Vision facets + DoD
-  + Shipped, emits per-facet a one-line coverage verdict (converged / partial-with-open-cards
-  / uncovered-no-cards), and flags cards with no vision link and vision facets with no cards
-  (the reactive-backlog smell). Advisory only — no auto-editing.
+- **Read-out folded into `horus-consolidate`** (DECIDED — not a standalone skill; cheapest
+  rung, runs at the consolidation/grooming boundary): reads Vision facets + DoD + Shipped +
+  each card's `vision_facet`/phase, emits per-facet a one-line coverage verdict (converged /
+  partial-with-open-cards / uncovered-no-cards) plus a separate **exploratory** bucket, and
+  flags off-vision converge cards (missing facet/DoD) and explore cards ripe to converge or
+  drop. Advisory only — no auto-editing.
 - Deliberately OMITS: agent-persona zoos (BMAD), per-feature multi-file spec trees (spec-kit
   6 files / Kiro triad), JSON task DB + complexity-scoring LLM passes + MCP (task-master),
   pre-impl architecture gates and formal INVEST checklists.
 
 ## Notes
 
-- Lower-risk than `market-scan` (fully in-repo, no outward data, no token-heavy composition) —
-  a candidate to build first.
-- Gated on the vision-expansion decision; idea-ledger card until that lands.
+- **Phase A DONE (2026-07-16, PRD-only):** 7 Vision facets + DoD lines defined in PRD Vision;
+  breathing divergence→convergence model added; all 13 cards stamped with `vision_facet`.
+- **Phase B REMAINING (real package code, own checkpoint):** implement the phase-aware read-out
+  in the `horus-consolidate` skill (source + tests + skill-version bump) and add the card
+  `phase: explore|converge` marker + acceptance-line convention to the Structure contract.
+- Lower-risk than `market-scan` (fully in-repo, no outward data, no token-heavy composition).

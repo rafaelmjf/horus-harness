@@ -3,6 +3,7 @@ status: open
 priority: medium
 tier: sonnet
 created: 2026-07-16
+vision_facet: "Dashboard / cockpit"
 created_by: owner
 type: feature
 parallel: unsafe

@@ -3,6 +3,7 @@ status: open
 priority: medium
 tier: sonnet
 created: 2026-07-15
+vision_facet: "Continuity core"
 type: feature
 parallel: safe
 surface: horus/machine_requirements.py, horus/terminal_tui.py, horus/dashboard.py
