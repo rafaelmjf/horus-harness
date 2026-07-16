@@ -98,6 +98,24 @@ class SessionRecord:
     updated_at: str = ""
     launch_target: str = "local"
     target_ref: str | None = None
+    # ``session_id`` is Horus's durable run identity.  The agent's resumable
+    # conversation/thread id arrives later (or is supplied by --resume), so it
+    # is deliberately separate and nullable for a newly-launched run.
+    agent_session_id: str | None = None
+    termination_reason: str | None = None
+    delivery_expected: bool = False
+    # Phase 1 reserves the delivery/progress schema only.  Phase 2 owns the
+    # evidence snapshot and its no-op/delivery classification.
+    delivery_status: str = "unknown"
+    dispatch_base_sha: str | None = None
+    delivery_branch: str | None = None
+    delivery_head_sha: str | None = None
+    delivery_pushed_sha: str | None = None
+    delivery_pr_number: int | None = None
+    delivery_local_changes: bool | None = None
+    delivery_continuity_closed: bool | None = None
+    delivery_checked_at: str | None = None
+    last_activity_at: str | None = None
 
     @classmethod
     def from_session(cls, session: AgentSession) -> "SessionRecord":
@@ -112,6 +130,7 @@ class SessionRecord:
             pid=session.pid,
             status=session.status,
             returncode=session.returncode,
+            agent_session_id=session.session_id,
         )
 
 
@@ -200,7 +219,7 @@ class Registry:
 
     def all(self) -> list[SessionRecord]:
         self.reconcile()
-        return [SessionRecord(**row) for row in self._load().values()]
+        return [self._record(row) for row in self._load().values()]
 
     def snapshot(self) -> list[SessionRecord]:
         """Read-only liveness projection of every tracked session.
@@ -223,13 +242,13 @@ class Registry:
                         row["returncode"] = result.returncode
                 elif not process_alive(row.get("pid")):
                     row["status"] = "stale"
-            records.append(SessionRecord(**row))
+            records.append(self._record(row))
         return records
 
     def get(self, session_id: str) -> SessionRecord | None:
         self.reconcile()
         row = self._load().get(session_id)
-        return SessionRecord(**row) if row else None
+        return self._record(row) if row else None
 
     # --- writes ---------------------------------------------------------------
 
@@ -248,6 +267,18 @@ class Registry:
         row["status"] = status
         if returncode is not None:
             row["returncode"] = returncode
+        row["updated_at"] = _now_iso()
+        self._save(sessions)
+        return True
+
+    def update(self, session_id: str, **fields: object) -> bool:
+        """Update additive run metadata without replacing the registry row."""
+        sessions = self._load()
+        row = sessions.get(session_id)
+        if row is None:
+            return False
+        known = {field.name for field in SessionRecord.__dataclass_fields__.values()}
+        row.update({key: value for key, value in fields.items() if key in known})
         row["updated_at"] = _now_iso()
         self._save(sessions)
         return True
@@ -284,16 +315,24 @@ class Registry:
                     row["returncode"] = result.returncode
                 row["updated_at"] = _now_iso()
                 dirty = True
-                changed.append(SessionRecord(**row))
+                changed.append(self._record(row))
                 continue
             if not process_alive(row.get("pid")):
                 row["status"] = "stale"
                 row["updated_at"] = _now_iso()
                 dirty = True
-                changed.append(SessionRecord(**row))
+                changed.append(self._record(row))
         if dirty:
             self._save(sessions)
         return changed
+
+    @staticmethod
+    def _record(row: dict) -> SessionRecord:
+        """Read legacy rows without turning their old native id into ``None``."""
+        normalized = dict(row)
+        if "agent_session_id" not in normalized:
+            normalized["agent_session_id"] = normalized.get("session_id")
+        return SessionRecord(**normalized)
 
     def prune(self) -> list[str]:
         """Drop terminal records (after reconcile). Returns the removed session ids."""

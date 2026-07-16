@@ -16,8 +16,12 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from horus import config, launch, launcher, registry
+
+if TYPE_CHECKING:
+    from horus.run_executor import RunRequest
 
 CURRENT = "current"
 TMUX = "tmux"
@@ -224,6 +228,69 @@ def launch_tmux(
     )
 
 
+def launch_detached_run(request: "RunRequest", *, reg: registry.Registry | None = None) -> launch.LaunchResult:
+    """Host a one-shot worker in managed tmux and return after runner handoff.
+
+    The pane executes the exact same adapter executor as a foreground ``run``;
+    this function only provides lifetime isolation and the attachable tmux target.
+    """
+    if not tmux_available():
+        return launch.LaunchResult(False, request.agent, request.project, account=request.account,
+                                   error="tmux is not installed or is unavailable on this platform")
+    tmux_name = f"horus-{request.session_id[:12]}"
+    store = reg or registry.Registry.default()
+    store.upsert(registry.SessionRecord(
+        session_id=request.session_id, agent=request.agent, project=request.project.as_posix(),
+        account=request.account, pid=os.getpid(), status="running", launch_target=TMUX,
+        target_ref=tmux_name, agent_session_id=request.resume,
+        dispatch_base_sha=request.dispatch_base_sha,
+    ))
+    spec_path = _write_runner_payload({"kind": "run", "run": request.payload()}, request.session_id)
+    runner = shlex.join([sys.executable, "-m", "horus.tmux_runner", request.session_id])
+    created = subprocess.run(  # noqa: S603,S607 - fixed tmux argv; runner is shell-quoted
+        ["tmux", "new-session", "-d", "-s", tmux_name, "-c", str(request.project), runner],
+        capture_output=True, text=True, check=False,
+    )
+    if created.returncode != 0:
+        spec_path.unlink(missing_ok=True)
+        _runner_ready_path(request.session_id).unlink(missing_ok=True)
+        store.update(request.session_id, termination_reason="launch-error")
+        store.set_status(request.session_id, "failed", returncode=created.returncode)
+        detail = (created.stderr or created.stdout).strip() or f"tmux exited {created.returncode}"
+        return launch.LaunchResult(False, request.agent, request.project, account=request.account,
+                                   session_id=request.session_id, target_ref=tmux_name,
+                                   error=f"failed to create tmux session: {detail}")
+    mouse_error = _enable_mouse_mode(tmux_name)
+    if mouse_error:
+        return _failed_detached_launch(
+            request, store, tmux_name, spec_path,
+            error=f"failed to enable tmux mouse mode for the new session: {mouse_error}",
+        )
+    if not _await_runner_handoff(request.session_id, store):
+        current = store.get(request.session_id)
+        detail = "runner did not report its PID handoff"
+        if current and current.status != "running":
+            detail = f"runner ended during launch ({current.status})"
+        return _failed_detached_launch(request, store, tmux_name, spec_path, error=detail)
+    current = store.get(request.session_id)
+    return launch.LaunchResult(True, request.agent, request.project, account=request.account,
+                               session_id=request.session_id, pid=current.pid if current else None,
+                               target_ref=tmux_name)
+
+
+def _failed_detached_launch(
+    request: "RunRequest", store: registry.Registry, tmux_name: str, spec_path: Path, *, error: str,
+) -> launch.LaunchResult:
+    """Undo a known newly-created detached host after its handoff fails."""
+    _kill_tmux_session(tmux_name)
+    spec_path.unlink(missing_ok=True)
+    _runner_ready_path(request.session_id).unlink(missing_ok=True)
+    store.update(request.session_id, termination_reason="launch-error")
+    store.set_status(request.session_id, "failed")
+    return launch.LaunchResult(False, request.agent, request.project, account=request.account,
+                               session_id=request.session_id, target_ref=tmux_name, error=error)
+
+
 def launch_window(
     *,
     agent: str,
@@ -314,7 +381,8 @@ def stop_session(session_id: str, *, reg: registry.Registry | None = None) -> st
         capture_output=True,
         check=False,
     )
-    store.set_status(record.session_id, "exited")
+    store.update(record.session_id, termination_reason="stopped")
+    store.set_status(record.session_id, "failed")
     _runner_spec_path(record.session_id).unlink(missing_ok=True)
     return None
 
@@ -379,7 +447,8 @@ def reap_orphans(
         if record.status == "running" and registry.process_alive(record.pid):
             continue
         _kill_tmux_session(name)
-        store.set_status(record.session_id, "orphaned")
+        store.update(record.session_id, termination_reason="orphan-reaped")
+        store.set_status(record.session_id, "failed")
         _runner_spec_path(record.session_id).unlink(missing_ok=True)
         reaped.append(name)
     return reaped
@@ -449,11 +518,13 @@ def _runner_spec_path(session_id: str) -> Path:
     return _runner_dir() / f"{session_id}.json"
 
 
+def _runner_ready_path(session_id: str) -> Path:
+    return _runner_dir() / f"{session_id}.ready"
+
+
 def _write_runner_spec(prepared: launch.PreparedInteractive, *, argv: list[str] | None = None) -> Path:
-    directory = _runner_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    path = _runner_spec_path(prepared.session_id)
     payload = {
+        "kind": "interactive",
         "session_id": prepared.session_id,
         "agent": prepared.agent,
         "account": prepared.account,
@@ -464,8 +535,31 @@ def _write_runner_spec(prepared: launch.PreparedInteractive, *, argv: list[str] 
         # parent environment (which may contain credentials).
         "env": {"PATH": os.environ.get("PATH", ""), **prepared.env},
     }
+    return _write_runner_payload(payload, prepared.session_id)
+
+
+def _write_runner_payload(payload: dict, session_id: str) -> Path:
+    directory = _runner_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    path = _runner_spec_path(session_id)
+    _runner_ready_path(session_id).unlink(missing_ok=True)
     encoded = json.dumps(payload).encode("utf-8")
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "wb") as stream:
         stream.write(encoded)
     return path
+
+
+def _await_runner_handoff(session_id: str, store: registry.Registry, *, timeout: float = 5.0) -> bool:
+    """Wait only for the runner's durable PID handoff, never for its agent."""
+    ready = _runner_ready_path(session_id)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if ready.exists():
+            current = store.get(session_id)
+            return bool(current and current.pid and current.pid != os.getpid() and current.status == "running")
+        current = store.get(session_id)
+        if current is not None and current.status in registry.TERMINAL:
+            return False
+        time.sleep(0.02)
+    return False

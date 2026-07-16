@@ -160,11 +160,17 @@ class Datum:
     worker: bool = False
     posture: str | None = None
     environment: str = "host"
+    # Horus's durable run id keys the datum; this retains the adapter-native
+    # resumable conversation/thread id once it is known.
+    agent_session_id: str | None = None
     # --- mechanical, captured at completion ----------------------------------
     completed_at: str | None = None
     runtime_seconds: float | None = None
     exit: str | None = None            # one of EXITS
     returncode: int | None = None
+    delivery_status: str = "unknown"
+    delivery_pushed_sha: str | None = None
+    delivery_pr_number: int | None = None
     # Captured only where an adapter already surfaces them at completion; left
     # None otherwise (we never block on a field an adapter doesn't expose).
     tokens: int | None = None
@@ -440,6 +446,9 @@ class DatumStore:
         tokens: int | None = None,
         pr_opened: bool | None = None,
         ci: str | None = None,
+        delivery_status: str = "unknown",
+        delivery_pushed_sha: str | None = None,
+        delivery_pr_number: int | None = None,
     ) -> None:
         try:
             rows = self._load()
@@ -450,6 +459,9 @@ class DatumStore:
             row["exit"] = exit
             row["runtime_seconds"] = runtime_seconds
             row["returncode"] = returncode
+            row["delivery_status"] = delivery_status
+            row["delivery_pushed_sha"] = delivery_pushed_sha
+            row["delivery_pr_number"] = delivery_pr_number
             if tokens is not None:
                 row["tokens"] = tokens
             if pr_opened is not None:
