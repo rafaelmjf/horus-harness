@@ -1825,7 +1825,84 @@ def _usage_check_claude(args: argparse.Namespace) -> int:
     return 0
 
 
+def _usage_account_mapping(target: str) -> tuple[dict[str, str], str]:
+    """The alias -> isolated-dir mapping for ``target`` and its env-var name."""
+    if target == "claude":
+        return config.load_account_config_dirs(), "CLAUDE_CONFIG_DIR"
+    return config.load_account_codex_homes(), "CODEX_HOME"
+
+
+def _overseer_collision(target: str, alias: str, mapped: Path) -> bool:
+    """True when the requested isolated account is the same underlying account this
+    session runs under — a dispatched worker would share the overseer's rate-limit
+    pool, so the isolation is nominal only."""
+    try:
+        if target == "claude":
+            ambient = claude_usage.current_account()
+            requested = claude_usage.current_account(mapped / ".claude.json")
+        else:
+            ambient = codex_usage.current_account()
+            requested = codex_usage.current_account(mapped)
+        if ambient and requested and ambient == requested:
+            return True
+        return bool(ambient) and config.alias_for(ambient) == alias
+    except Exception:  # noqa: BLE001 (identity is best-effort; no evidence = no warning)
+        return False
+
+
+def _usage_check_account(args: argparse.Namespace) -> int:
+    """Explicit account-scoped check: resolve the isolated mapping for the alias
+    without touching the ambient login. An unknown alias fails (exit 2) rather than
+    silently reporting the ambient account's usage as if it were the target's."""
+    alias = args.account
+    target = args.target
+    if args.hook:
+        print("--account is incompatible with --hook: hooks always read the ambient session account.")
+        return 2
+    mapping, kind = _usage_account_mapping(target)
+    mapped = mapping.get(alias)
+    if not mapped:
+        known = ", ".join(sorted(mapping)) or "none configured"
+        print(f"Unknown {target} account alias {alias!r} (isolated accounts: {known}).")
+        print("Refusing the ambient-login fallback for an explicit --account check.")
+        return 2
+
+    print(f"account: {alias} ({target}; {kind} {mapped})")
+    if target == "claude":
+        print("source:  live OAuth /usage read of the isolated credentials")
+    else:
+        print("source:  local rollout telemetry — only as fresh as this account's latest Codex activity")
+    if _overseer_collision(target, alias, Path(mapped)):
+        print(
+            f"  [warn] overseer==worker: {alias!r} is the account this session runs under — "
+            "a dispatched worker shares its rate-limit pool (advisory; nothing is blocked)"
+        )
+
+    snap = usage_snapshot.refresh_usage(target, alias)
+    if snap is None:
+        print("no usage signal for this account (missing/expired credentials, offline, or no telemetry yet)")
+        return 0
+    fresh = snap.without_expired_windows()
+    over = False
+    for label, pct, reset, fresh_pct in (
+        ("5h", snap.percent, snap.resets_at, fresh.percent),
+        ("weekly", snap.weekly_percent, snap.weekly_resets_at, fresh.weekly_percent),
+    ):
+        if pct is None:
+            print(f"{label} window: no reading")
+        elif fresh_pct is None:
+            print(f"{label} window: snapshot stale (reset {reset} has passed)")
+        else:
+            print(f"{label} window: {pct:.0f}% (resets {reset or 'unknown reset'})")
+            over = over or pct >= args.threshold
+    if over:
+        print(f"  [warn] usage at/over the {args.threshold:.0f}% threshold — a risky dispatch target this window")
+    return 1 if over else 0
+
+
 def cmd_usage_check(args: argparse.Namespace) -> int:
+    if getattr(args, "account", None):
+        return _usage_check_account(args)
     if args.target == "claude":
         return _usage_check_claude(args)
 
@@ -3380,6 +3457,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--hook",
         action="store_true",
         help="hook mode: print only actionable warnings and always exit 0",
+    )
+    p_usage_check.add_argument(
+        "--account",
+        help="isolated account alias to check (resolves its mapped CLAUDE_CONFIG_DIR/"
+             "CODEX_HOME without changing the ambient login; unknown aliases fail, "
+             "never fall back to the ambient account)",
     )
     p_usage_check.set_defaults(func=cmd_usage_check)
 

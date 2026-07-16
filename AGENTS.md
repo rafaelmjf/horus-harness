@@ -132,6 +132,8 @@ Instruction synchronization:
 
 - Prefer small, explicit edits.
 - Keep the project lightweight and shaped around current user needs.
+- Before assuming a capability is missing, `horus --help` / `horus <group> --help`
+  is the live command surface.
 
 ## Releasing horus-harness
 
