@@ -353,3 +353,39 @@ def test_product_audit_skill_registered_and_projected():
     assert "never propose new features" in skill.content or "New features are out" in skill.content
     for root in (".claude/skills", ".agents/skills"):
         assert Path(f"{root}/product-audit/SKILL.md").read_text(encoding="utf-8") == skill.content
+
+
+def test_process_retrospective_skill_registered_and_projected():
+    by_name = {skill.name: skill for skill in skills.SKILLS}
+    skill = by_name["process-retrospective"]
+    assert skill.version == 1
+    # Event-driven trigger, never automatic at closure.
+    assert "explicit owner request" in skill.content
+    assert "Never fires" in skill.content
+    # Six-bucket cost attribution.
+    for bucket in (
+        "Inherent task cost",
+        "Delegation tax",
+        "Supervisor error",
+        "Worker error",
+        "Horus/skill defect",
+        "External failure",
+    ):
+        assert bucket in skill.content
+    # Cheapest-rung ladder, capped at three, existing-coverage check first.
+    assert "No-change" in skill.content
+    assert "Guidance clarification" in skill.content
+    assert "Deterministic signal" in skill.content
+    assert "Hard guard" in skill.content
+    assert "capped at" in skill.content.lower() and "three" in skill.content.lower()
+    assert "Check existing coverage" in skill.content
+    # Advisory boundary: no auto-writes, no token estimates, no model launches, no broad rereads.
+    assert "never estimates tokens" in skill.content.lower() or "estimate token" in skill.content.lower()
+    assert "no new artifacts" in skill.content.lower() or "never a new" in skill.content.lower()
+    assert "Stay inline" in skill.content
+    # Distinguished from the periodic product audit and continuity closure.
+    assert "product-audit" in skill.content
+    assert "horus-consolidate" in skill.content
+    assert "## v2 six-lane projects (fallback)" in skill.content
+    for root in (".claude/skills", ".agents/skills"):
+        assert Path(f"{root}/process-retrospective/SKILL.md").read_text(encoding="utf-8") == skill.content
