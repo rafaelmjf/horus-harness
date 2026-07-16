@@ -284,7 +284,13 @@ class Registry:
     def upsert(self, record: SessionRecord, *, now: str | None = None) -> SessionRecord:
         record.updated_at = now or _now_iso()
         sessions = self._load()
-        sessions[record.session_id] = asdict(record)
+        # Preserve fields written by a newer Horus while this version updates
+        # the known row shape.  Forward-compatible readers must not make a
+        # mixed installed/source workflow destructive.
+        existing = sessions.get(record.session_id)
+        row = dict(existing) if isinstance(existing, dict) else {}
+        row.update(asdict(record))
+        sessions[record.session_id] = row
         self._save(sessions)
         return record
 
@@ -359,8 +365,9 @@ class Registry:
 
     @staticmethod
     def _record(row: dict) -> SessionRecord:
-        """Read legacy rows without turning their old native id into ``None``."""
-        normalized = dict(row)
+        """Read legacy/future rows through the fields this version understands."""
+        known = SessionRecord.__dataclass_fields__
+        normalized = {key: value for key, value in row.items() if key in known}
         if "agent_session_id" not in normalized:
             normalized["agent_session_id"] = normalized.get("session_id")
         return SessionRecord(**normalized)

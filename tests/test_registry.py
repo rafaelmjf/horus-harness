@@ -1,5 +1,6 @@
 """Tests for the session/process registry."""
 
+import json
 import subprocess
 import sys
 import os
@@ -31,6 +32,22 @@ def test_upsert_persists_and_survives_reload(tmp_path):
     got = fresh.get("abc")
     assert got is not None and got.account == "work" and got.status == "running"
     assert got.updated_at  # stamped on upsert
+
+
+def test_future_registry_fields_are_ignored_and_preserved_on_known_updates(tmp_path):
+    reg = _reg(tmp_path)
+    reg.path.write_text(
+        '{"sessions":{"future":{"session_id":"future","agent":"codex",'
+        '"project":"/proj","status":"exited","future_signal":"keep-me"}}}\n',
+        encoding="utf-8",
+    )
+
+    got = reg.get("future")
+    assert got is not None and got.status == "exited"
+
+    reg.upsert(got)
+    persisted = json.loads(reg.path.read_text(encoding="utf-8"))
+    assert persisted["sessions"]["future"]["future_signal"] == "keep-me"
 
 
 def test_timestamps_are_aware_utc(tmp_path):
