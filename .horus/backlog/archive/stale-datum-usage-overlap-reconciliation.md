@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-16
@@ -7,6 +7,8 @@ vision_facet: "Delegation calibration"
 type: bug
 parallel: safe
 surface: horus/datums.py, horus/session_registry.py
+shipped_pr: 304
+shipped_sha: 393bf3e
 ---
 
 # Stale datum usage-overlap reconciliation
