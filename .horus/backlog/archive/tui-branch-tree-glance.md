@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-17
 vision_facet: "Dashboard / cockpit"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: new `horus backlog --tree` projection (canonical), horus/terminal_tui.py renderer, horus/fleet_backlog.py (branch: key aware)
+shipped_pr: 303
+shipped_sha: 0e385b7
 ---
 
 # tui-branch-tree-glance — the backlog as a tree, at a glance, on the phone
