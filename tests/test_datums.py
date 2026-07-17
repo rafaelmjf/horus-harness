@@ -941,6 +941,175 @@ def test_usage_accounting_does_not_cross_reset_windows():
     assert actual["status"] == "unknown" and actual["deltas"] == {}
 
 
+# --- stale-datum usage-overlap reconciliation --------------------------------
+# The bug: a tracked run whose datum never got `completed_at` used to be treated
+# as running "until now" forever, so every later sequential worker looked like it
+# overlapped it. These tests cover: naming the exact overlapping peers, bounding
+# a missing completion from positive terminal registry/run-event evidence, a
+# genuinely running peer still confounding, missing/ambiguous evidence never
+# being treated as proof (and surfacing for remediation), and sequential retry
+# attempts whose intervals do and do not overlap.
+
+from horus.registry import Registry, SessionRecord  # noqa: E402
+
+
+def test_usage_accounting_names_overlapping_peer_ids_and_intervals():
+    launch, close = _usage_pair()
+    first = datums.Datum(
+        session_id="first", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:00:00+00:00", completed_at="2026-07-16T10:20:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    second = datums.Datum(
+        session_id="second", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:05:00+00:00", completed_at="2026-07-16T10:10:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    result = datums.usage_accounting(first, [first, second])
+    assert result["status"] == "concurrent/confounded"
+    assert result["overlap_peers"] == [
+        {"session_id": "second", "start": "2026-07-16T10:05:00+00:00", "end": "2026-07-16T10:10:00+00:00", "bounded": True}
+    ]
+    assert "second" in result["detail"] and "another tracked worker" not in result["detail"]
+
+
+def test_terminal_registry_evidence_bounds_missing_datum_completion(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    reg = Registry.default()
+    # The legacy peer never got a mechanical `completed_at`, but the registry
+    # positively reconciled it as `exited` well before the later run launched.
+    reg.upsert(SessionRecord(session_id="legacy", agent="claude", project="/proj", account="work", status="exited"),
+               now="2026-07-15T09:00:00+00:00")
+
+    legacy = datums.Datum(
+        session_id="legacy", agent="claude", account="work", worker=True,
+        launched_at="2026-07-15T08:00:00+00:00", completed_at=None,
+    )
+    launch, close = _usage_pair()
+    later = datums.Datum(
+        session_id="later", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:00:00+00:00", completed_at="2026-07-16T10:10:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    result = datums.usage_accounting(later, [legacy, later])
+    assert result["status"] != "concurrent/confounded"  # bounded end predates `later`'s launch
+
+
+def test_genuinely_running_peer_still_confounds_attribution(tmp_path, monkeypatch):
+    import os
+
+    _home(tmp_path, monkeypatch)
+    reg = Registry.default()
+    reg.upsert(SessionRecord(
+        session_id="live", agent="claude", project="/proj", account="work", pid=os.getpid(), status="running",
+    ))
+
+    live = datums.Datum(
+        session_id="live", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:00:00+00:00", completed_at=None,
+    )
+    launch, close = _usage_pair()
+    later = datums.Datum(
+        session_id="later", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:05:00+00:00", completed_at="2026-07-16T10:10:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    result = datums.usage_accounting(later, [live, later])
+    assert result["status"] == "concurrent/confounded"
+    assert result["overlap_peers"][0]["session_id"] == "live"
+    assert result["overlap_peers"][0]["bounded"] is False
+
+
+def test_missing_ambiguous_evidence_confounds_and_is_flagged_unresolved(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    # No registry row at all for "ghost" — absence alone is never proof either way.
+    ghost = datums.Datum(
+        session_id="ghost", agent="claude", account="work", worker=True,
+        launched_at="2026-07-01T08:00:00+00:00", completed_at=None,
+    )
+    launch, close = _usage_pair()
+    later = datums.Datum(
+        session_id="later", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:00:00+00:00", completed_at="2026-07-16T10:10:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    result = datums.usage_accounting(later, [ghost, later])
+    assert result["status"] == "concurrent/confounded"
+    assert result["overlap_peers"][0]["bounded"] is False
+
+    store = datums.DatumStore.default()
+    store.record_launch(ghost)
+    unresolved = store.unresolved_legacy_runs(now=datetime(2026, 7, 17, tzinfo=timezone.utc))
+    assert [d.session_id for d in unresolved] == ["ghost"]
+
+
+def test_dead_pid_alone_never_confirms_a_datum_completion(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    reg = Registry.default()
+    # A PID that is dead (never reused) with no RESULT log/event at all.
+    reg.upsert(SessionRecord(session_id="deadpid", agent="claude", project="/proj", account="work",
+                              pid=999999999, status="running"))
+    store = datums.DatumStore.default()
+    store.record_launch(datums.Datum(session_id="deadpid", agent="claude", account="work", worker=True,
+                                      launched_at="2026-07-15T08:00:00+00:00"))
+
+    reg.reconcile()  # dead PID -> registry status "stale", but no positive RESULT evidence
+
+    assert reg.get("deadpid").status == "stale"
+    assert store.get("deadpid").completed_at is None  # never silently backfilled off a dead PID alone
+    backfilled = store.reconcile_missing_completions()
+    assert backfilled == []  # "stale" is not positive evidence either
+
+
+def test_reconcile_missing_completions_backfills_only_from_positive_evidence(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    reg = Registry.default()
+    reg.upsert(SessionRecord(session_id="legacy", agent="claude", project="/proj", account="work", status="exited"),
+               now="2026-07-15T09:00:00+00:00")
+
+    store = datums.DatumStore.default()
+    store.record_launch(datums.Datum(session_id="legacy", agent="claude", account="work", worker=True,
+                                      launched_at="2026-07-15T08:00:00+00:00"))
+
+    changed = store.reconcile_missing_completions()
+    assert [d.session_id for d in changed] == ["legacy"]
+    backfilled = store.get("legacy")
+    assert backfilled.completed_at == "2026-07-15T09:00:00+00:00"
+    assert backfilled.exit == "completed"
+
+    # A positively reconciled legacy run no longer poisons a later isolated reading.
+    later = datums.Datum(
+        session_id="later", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:00:00+00:00", completed_at="2026-07-16T10:10:00+00:00",
+    )
+    result = datums.usage_accounting(later, [backfilled, later])
+    assert result["status"] != "concurrent/confounded"
+
+
+def test_sequential_retry_attempts_overlap_only_when_intervals_actually_overlap():
+    launch, close = _usage_pair()
+    attempt1 = datums.Datum(
+        session_id="attempt-1", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:00:00+00:00", completed_at="2026-07-16T10:05:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    attempt2 = datums.Datum(
+        session_id="attempt-2", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:06:00+00:00", completed_at="2026-07-16T10:10:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    attempt3 = datums.Datum(
+        session_id="attempt-3", agent="claude", account="work", worker=True,
+        launched_at="2026-07-16T10:08:00+00:00", completed_at="2026-07-16T10:15:00+00:00",
+        usage_launch=launch, usage_close=close,
+    )
+    # attempt1/attempt2 are back-to-back and never overlap one another.
+    assert datums.usage_accounting(attempt1, [attempt1, attempt2])["status"] != "concurrent/confounded"
+    assert datums.usage_accounting(attempt2, [attempt1, attempt2])["status"] != "concurrent/confounded"
+    # attempt3 launched (10:08) before attempt2 finished (10:10) -> real overlap.
+    assert datums.usage_accounting(attempt3, [attempt2, attempt3])["status"] == "concurrent/confounded"
+
+
 def test_worker_breakdown_groups_resumed_native_session_as_attempts():
     launch, close = _usage_pair()
     rows = [
