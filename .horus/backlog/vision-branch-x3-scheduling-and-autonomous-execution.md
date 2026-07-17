@@ -140,3 +140,16 @@ design settles first.
   `schedule-local-dispatcher` would replace.
 - "branch x3" is the owner's working identifier for this vision branch; refine the card-type
   conventions (naming, frontmatter, how a branch converges) in a future session.
+
+## Reviews
+
+- 2026-07-17 — **Dispatch motivation clarified (owner + partial data):** measured
+  dividend judgments for supervisor→sonnet dispatch are roughly split (+4/~0/-2 on
+  `sonnet-5` plus +2/~1/-3 on the unjoined `claude-sonnet-5` alias ≈ 6 positive vs
+  5 negative), weakly supporting the owner's impression that supervisor→worker
+  costs MORE overall than one capable inline session when actively interacting; no
+  controlled token comparison exists by design (never estimate/poll). Therefore:
+  the X3 loop's value case is **away-mode/unattended operation, expiring isolated
+  capacity, and true parallelism — NOT cost reduction during active work**; inline
+  stays the interactive default (existing need-first rule). Validate during kit
+  dogfood; if it holds, fold one line into the delegation-rubric skill.
