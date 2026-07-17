@@ -23,6 +23,44 @@ from typing import Any, NamedTuple
 from horus.continuity import Finding
 
 
+# A rate-limit window describes its own length, so nothing here hardcodes which
+# window Codex happens to serve today. Anything at or under this many minutes is
+# a "fast" window (the 5-hour lane, 300); anything longer is a "slow" one (the
+# weekly lane, 10080). Observed 2026-07-17: Codex temporarily dropped the 5-hour
+# limit, so `primary` carried window_minutes=10080 — the weekly lane — while
+# `secondary` was null. Reading the label off the position instead of the data
+# reported "5h limit 92% (resets 2026-07-23)": a 5-hour window that resets in six
+# days. Whichever way that policy settles, the data still says what it is.
+FAST_WINDOW_MAX_MINUTES = 720
+
+
+class RateWindow(NamedTuple):
+    """One rate-limit lane as Codex reported it, able to name itself."""
+
+    percent: float | None
+    resets_at: int | None
+    window_minutes: int | None
+    # What to call this lane when Codex did not declare its length (a rollout
+    # predating `window_minutes`): the historical positional assumption, kept so
+    # older rollouts read exactly as they always did.
+    fallback_label: str = "rate"
+
+    def label(self) -> str:
+        """What this window actually is, derived from its own declared length."""
+        minutes = self.window_minutes
+        if minutes is None:
+            return self.fallback_label
+        if minutes >= 10080 and minutes % 10080 == 0:
+            weeks = minutes // 10080
+            return "weekly" if weeks == 1 else f"{weeks}-week"
+        if minutes >= 1440 and minutes % 1440 == 0:
+            days = minutes // 1440
+            return "daily" if days == 1 else f"{days}-day"
+        if minutes >= 60 and minutes % 60 == 0:
+            return f"{minutes // 60}h"
+        return f"{minutes}min"
+
+
 class UsageReport(NamedTuple):
     rollout: Path
     timestamp: str
@@ -33,6 +71,38 @@ class UsageReport(NamedTuple):
     primary_resets_at: int | None
     secondary_percent: float | None
     secondary_resets_at: int | None
+    # Window lengths as Codex reported them (None when a rollout predates the
+    # field, or on schema drift) — the input to `windows()` below.
+    primary_window_minutes: int | None = None
+    secondary_window_minutes: int | None = None
+
+    def windows(self) -> tuple[RateWindow | None, RateWindow | None]:
+        """This report's (fast, slow) lanes, classified by their own declared
+        length rather than by which slot Codex happened to put them in.
+
+        When a lane does not declare its length, fall back to the historical
+        positional convention (primary=fast, secondary=slow) so an older rollout
+        reads exactly as it did before.
+        """
+        primary = RateWindow(
+            self.primary_percent, self.primary_resets_at, self.primary_window_minutes, "5h"
+        ) if self.primary_percent is not None else None
+        secondary = RateWindow(
+            self.secondary_percent, self.secondary_resets_at, self.secondary_window_minutes, "weekly"
+        ) if self.secondary_percent is not None else None
+
+        present = [w for w in (primary, secondary) if w is not None]
+        if not present:
+            return None, None
+        if any(w.window_minutes is None for w in present):
+            return primary, secondary  # undeclared length -> positional, as before
+
+        fast = min(present, key=lambda w: w.window_minutes)
+        slow = max(present, key=lambda w: w.window_minutes)
+        return (
+            fast if fast.window_minutes <= FAST_WINDOW_MAX_MINUTES else None,
+            slow if slow.window_minutes > FAST_WINDOW_MAX_MINUTES else None,
+        )
 
 
 def codex_home() -> Path:
@@ -107,6 +177,7 @@ def _report_from_event(path: Path, event: dict[str, Any]) -> UsageReport | None:
     rate_limits = payload.get("rate_limits")
     primary_percent = secondary_percent = None
     primary_resets_at = secondary_resets_at = None
+    primary_minutes = secondary_minutes = None
     if isinstance(rate_limits, dict):
         primary = rate_limits.get("primary")
         if isinstance(primary, dict):
@@ -114,12 +185,16 @@ def _report_from_event(path: Path, event: dict[str, Any]) -> UsageReport | None:
             primary_percent = float(pct) if isinstance(pct, int | float) else None
             reset = primary.get("resets_at")
             primary_resets_at = reset if isinstance(reset, int) else None
+            mins = primary.get("window_minutes")
+            primary_minutes = mins if isinstance(mins, int) else None
         secondary = rate_limits.get("secondary")
         if isinstance(secondary, dict):
             pct = secondary.get("used_percent")
             secondary_percent = float(pct) if isinstance(pct, int | float) else None
             reset = secondary.get("resets_at")
             secondary_resets_at = reset if isinstance(reset, int) else None
+            mins = secondary.get("window_minutes")
+            secondary_minutes = mins if isinstance(mins, int) else None
 
     return UsageReport(
         rollout=path,
@@ -131,6 +206,8 @@ def _report_from_event(path: Path, event: dict[str, Any]) -> UsageReport | None:
         primary_resets_at=primary_resets_at,
         secondary_percent=secondary_percent,
         secondary_resets_at=secondary_resets_at,
+        primary_window_minutes=primary_minutes,
+        secondary_window_minutes=secondary_minutes,
     )
 
 
@@ -229,20 +306,21 @@ def usage_findings(project_root: Path, *, threshold: float = 90.0, home: Path | 
         parts.append(f"Codex context {report.context_percent:.1f}% ({report.context_tokens}/{report.context_window} tokens)")
         over = report.context_percent >= threshold
 
-    def add_limit(label: str, percent: float | None, resets_at: int | None) -> None:
+    def add_limit(window: "RateWindow | None") -> None:
         nonlocal over
-        if percent is None:
+        if window is None or window.percent is None:
             return
-        reset = _fmt_reset(resets_at)
-        if resets_at is not None and resets_at <= time.time():
-            parts.append(f"{label} limit snapshot stale (reset {reset})")
+        reset = _fmt_reset(window.resets_at)
+        if window.resets_at is not None and window.resets_at <= time.time():
+            parts.append(f"{window.label()} limit snapshot stale (reset {reset})")
             return
-        parts.append(f"{label} limit {percent:.0f}% (resets {reset})")
-        over = over or percent >= threshold
+        parts.append(f"{window.label()} limit {window.percent:.0f}% (resets {reset})")
+        over = over or window.percent >= threshold
 
     if account_report is not None:
-        add_limit("5h", account_report.primary_percent, account_report.primary_resets_at)
-        add_limit("weekly", account_report.secondary_percent, account_report.secondary_resets_at)
+        fast, slow = account_report.windows()
+        add_limit(fast)
+        add_limit(slow)
 
     level = "warn" if over else "ok"
     suffix = "; run the closure ritual before starting another large turn" if over else ""
