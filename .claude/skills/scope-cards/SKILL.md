@@ -12,7 +12,7 @@ description: >-
   per item; only approved items are written.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # scope-cards — from a chosen branch to a fresh-agent-ready backlog
 
@@ -57,13 +57,24 @@ do not fabricate the findings.
   as explicit per-card proposals (field change or archival, with the reason).
 - **Vision facet diff** — exact replacement definition-of-done text per touched
   facet (add / rename / rescope / retire), never a wholesale table rewrite.
+- **Vision-branch umbrella** — when the direction spans multiple cards and should
+  be judged as a unit (every `explore` direction; any branch the owner may later
+  promote or drop whole), draft a thin `vision-branch-*` umbrella card (thesis,
+  exists-vs-gaps map, ordered children, convergence criterion) and stamp each
+  child `branch: <umbrella-name>`, per the PRD structure contract. Keep the
+  umbrella thin — agents-first, minimal overhead; never mirror child status
+  into it.
 
 ## Gate, then write
 
-Present ALL drafts — new cards, existing-card diffs, Vision edits — and let the
-owner approve, amend, or drop each item individually. Only then write the approved
-items: new cards as files under `.horus/backlog/`, facet edits into `## Vision`,
-existing-card changes in place. Anything not approved stays unwritten; say so.
+Present ALL drafts — new cards, existing-card diffs, Vision edits — as concrete
+options plus a free-text alternative, and let the owner
+approve, amend, or drop each item individually. Only then write the approved items: new cards as files
+under `.horus/backlog/`, facet edits into `## Vision`, existing-card changes in
+place. Owner rejections and rescopes of EXISTING cards are written into that
+card's `## Reviews` at decision time — a verdict that lives only in a receipt or
+the conversation does not bind future planning runs (calibration 2026-07-17).
+Anything not approved stays unwritten; say so.
 
 ## Deliberately omit
 
