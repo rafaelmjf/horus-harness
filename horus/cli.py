@@ -2289,20 +2289,40 @@ def _usage_check_account(args: argparse.Namespace) -> int:
         return 2
 
     print(f"account: {alias} ({target}; {kind} {mapped})")
-    if target == "claude":
-        print("source:  live OAuth /usage read of the isolated credentials")
-    else:
-        print("source:  local rollout telemetry — only as fresh as this account's latest Codex activity")
     if _overseer_collision(target, alias, Path(mapped)):
         print(
             f"  [warn] overseer==worker: {alias!r} is the account this session runs under — "
             "a dispatched worker shares its rate-limit pool (advisory; nothing is blocked)"
         )
 
-    snap = usage_snapshot.refresh_usage(target, alias)
+    # Prefer a fresh reading, but never invent one. A statusline-recorded reading
+    # already sitting in the cache is BETTER than a live poll of the experimental
+    # OAuth endpoint (which 429s under any real polling), so consult the cache
+    # first and only reach for the network when nothing fresh is there.
+    entry = usage_snapshot.read_cache_entry(target, alias)
+    snap = usage_snapshot.cached_usage(target, alias)
     if snap is None:
-        print("no usage signal for this account (missing/expired credentials, offline, or no telemetry yet)")
-        return 0
+        # A live attempt just failed. If a previous reading exists, it is still the
+        # best evidence we have — serving it with its age beats claiming to know
+        # nothing, and beats naming causes we did not diagnose.
+        if entry is not None and entry.snapshot is not None:
+            snap = entry.snapshot
+            age = entry.age_seconds()
+            print(f"source:  {usage_snapshot.source_label(entry.source)}"
+                  f"{f' — {_age_phrase(age)}' if age is not None else ''} "
+                  "(a fresh read failed; showing the last reading)")
+        else:
+            print("no usage reading available for this account, and a fresh read just failed.")
+            print("Cause not diagnosed here — it may be rate limiting, credentials, or being offline.")
+            if target == "claude":
+                print("Tip: wire `horus usage record` into your statusline (see `horus usage record --help`); "
+                      "Claude Code pushes rate_limits there, so it never needs the endpoint.")
+            return 0
+    else:
+        entry = usage_snapshot.read_cache_entry(target, alias)
+        age = entry.age_seconds() if entry else None
+        source = usage_snapshot.source_label(entry.source) if entry else "live read"
+        print(f"source:  {source}{f' — {_age_phrase(age)}' if age is not None else ''}")
     fresh = snap.without_expired_windows()
     over = False
     for label, pct, reset, fresh_pct in (
@@ -2319,6 +2339,75 @@ def _usage_check_account(args: argparse.Namespace) -> int:
     if over:
         print(f"  [warn] usage at/over the {args.threshold:.0f}% threshold — a risky dispatch target this window")
     return 1 if over else 0
+
+
+def _age_phrase(seconds: float | None) -> str:
+    """How old a reading is, in words — a usage number without its age invites the
+    reader to treat an hour-old snapshot as current capacity."""
+    if seconds is None:
+        return "age unknown"
+    if seconds < 90:
+        return "just now" if seconds < 10 else f"{int(seconds)}s ago"
+    if seconds < 5400:
+        return f"{int(seconds // 60)}m ago"
+    if seconds < 172800:
+        return f"{int(seconds // 3600)}h ago"
+    return f"{int(seconds // 86400)}d ago"
+
+
+def _account_for_ambient_config_dir(agent: str) -> str | None:
+    """The alias whose isolated dir this process is running under, or ``None``.
+
+    The statusline payload names no account, but the statusline command inherits
+    the agent's environment — so the config dir it runs under *is* the account
+    identity, resolved back through the same mapping `--account` uses.
+    """
+    env = os.environ.get("CLAUDE_CONFIG_DIR" if agent == "claude" else "CODEX_HOME")
+    if not env:
+        return None
+    try:
+        target = Path(env).resolve()
+    except OSError:
+        return None
+    mapping = (
+        config.load_account_config_dirs() if agent == "claude" else config.load_account_codex_homes()
+    )
+    for alias, path in mapping.items():
+        try:
+            if Path(path).resolve() == target:
+                return alias
+        except OSError:
+            continue
+    return None
+
+
+def cmd_usage_record(args: argparse.Namespace) -> int:
+    """Record a usage reading pushed by an agent's statusline (stdin JSON).
+
+    Always exits 0 and prints nothing by default: this runs inside the owner's
+    statusline, where a non-zero exit or stray stdout would corrupt what they see.
+    Unusable input is simply not recorded.
+    """
+    try:
+        payload = json.loads(sys.stdin.read())
+    except (json.JSONDecodeError, ValueError, OSError):
+        if args.verbose:
+            print("no usage recorded: stdin was not the statusline JSON payload")
+        return 0
+    snapshot = usage_snapshot.snapshot_from_claude_statusline(payload)
+    if snapshot is None:
+        # Normal, not an error: rate_limits is absent on non-Pro/Max plans and
+        # until the session's first API response.
+        if args.verbose:
+            print("no usage recorded: payload carried no rate_limits block")
+        return 0
+    account = args.account or _account_for_ambient_config_dir("claude")
+    path = usage_snapshot.record_snapshot("claude", account, snapshot)
+    if args.verbose:
+        pct, reset, window = snapshot.worst()
+        who = account or "ambient account"
+        print(f"recorded {who}: {window} {pct:.0f}% (resets {reset or 'unknown'}) -> {path}")
+    return 0
 
 
 def cmd_usage_check(args: argparse.Namespace) -> int:
@@ -4039,6 +4128,39 @@ def build_parser() -> argparse.ArgumentParser:
              "never fall back to the ambient account)",
     )
     p_usage_check.set_defaults(func=cmd_usage_check)
+
+    p_usage_record = usage_sub.add_parser(
+        "record",
+        help="record a usage reading pushed by Claude Code's statusline (reads the payload on stdin)",
+        description=(
+            "Claude Code PUSHES a `rate_limits` block into the JSON it hands a statusLine "
+            "command on every render — the official, documented usage surface. It needs no "
+            "credentials, no network call, and cannot be rate-limited, unlike the "
+            "experimental OAuth /usage endpoint (which answers 429 under any real polling). "
+            "This records that pushed reading into the same cache every Horus consumer "
+            "already reads, so the preflight, the PreToolUse guard, the envelope usage "
+            "floor and the dashboard all get a fresh signal for free.\n\n"
+            "Wire it into your statusline script — one line, backgrounded so it can never "
+            "slow rendering:\n\n"
+            "  input=$(cat)\n"
+            "  printf '%s' \"$input\" | horus usage record >/dev/null 2>&1 &\n"
+            "  # ... then render from \"$input\" as before\n\n"
+            "It always exits 0 and prints nothing, so it cannot corrupt a statusline. The "
+            "account is resolved from the CLAUDE_CONFIG_DIR the statusline runs under; pass "
+            "--account to override. Codex needs no equivalent: its statusline is declarative "
+            "(built-in segments, no stdin payload), so its rollout JSONL stays the source."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_usage_record.add_argument(
+        "--account", default=None,
+        help="alias this reading belongs to (default: resolved from the ambient CLAUDE_CONFIG_DIR)",
+    )
+    p_usage_record.add_argument(
+        "--verbose", action="store_true",
+        help="print what was recorded (for wiring it up); never enable inside a statusline",
+    )
+    p_usage_record.set_defaults(func=cmd_usage_record)
 
     p_usage_guard = usage_sub.add_parser(
         "guard",
