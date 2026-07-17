@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-18
 vision_facet: "Accounts & isolation"
@@ -9,6 +9,8 @@ type: bug
 parallel: safe
 created_by: owner
 surface: horus/cli.py (_config_dir_conflict_guard + run call site), tests/test_config_dir_guard.py, CLAUDE.md/AGENTS.md managed block
+shipped_pr: 310
+shipped_sha: 12f11213641d76b01c457318529e42d24af18199
 ---
 
 # config-dir-guard-advisory — same-account concurrency is advised, not refused
