@@ -13,7 +13,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -69,6 +69,13 @@ usually beats a full adversarial report for a product decision.
 
 Plus a **market-size sanity** line — ONE sentence ("big enough / already
 saturated?"). Hard-cap it; never let it become a spreadsheet.
+
+**Branch-check variant (scoped):** when the scan targets ONE direction/branch gap
+rather than the whole product, a bounded variant is legitimate: competitive
+teardown + intent-framed verdict + sources only — skip the JTBD hypothesis and
+the PR-FAQ paragraph, and say in the receipt header that it is a scoped branch
+check (precedent: the 2026-07-17 X3 scan). Never use the variant for a
+whole-product re-baseline.
 
 ## Write the receipt (dated, committed, mirrors `.horus/audits/`)
 

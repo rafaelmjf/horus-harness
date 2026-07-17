@@ -1630,7 +1630,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -1686,6 +1686,13 @@ usually beats a full adversarial report for a product decision.
 
 Plus a **market-size sanity** line — ONE sentence ("big enough / already
 saturated?"). Hard-cap it; never let it become a spreadsheet.
+
+**Branch-check variant (scoped):** when the scan targets ONE direction/branch gap
+rather than the whole product, a bounded variant is legitimate: competitive
+teardown + intent-framed verdict + sources only — skip the JTBD hypothesis and
+the PR-FAQ paragraph, and say in the receipt header that it is a scoped branch
+check (precedent: the 2026-07-17 X3 scan). Never use the variant for a
+whole-product re-baseline.
 
 ## Write the receipt (dated, committed, mirrors `.horus/audits/`)
 
@@ -1760,7 +1767,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -1781,6 +1788,12 @@ exists to surface.
 - **The market-scan receipt** (`.horus/research/`) — the outward evidence. If none
   exists, say the tree is inward-only and offer to run `market-scan` first; do not
   quietly substitute your own untested market beliefs.
+- **Prior branch-tree receipts** (earlier trees under `.horus/research/`) — a
+  re-baseline consumes its predecessors: carry forward unresolved branches,
+  unscoped imports, and owner verdicts recorded there, re-justified against the
+  CURRENT intent — never blindly inherited, never silently dropped. (Calibration
+  2026-07-17: an owner rescope lived only in a prior receipt and a fresh run
+  missed it entirely.)
 
 ## The deliverable — one dated receipt, fixed template
 
@@ -1824,7 +1837,7 @@ sections, then STOP for the owner to pick:
 6. **Recommendation, held loosely.** Primary / secondary / filler / park across the
    branches, one paragraph of reasoning. The owner reorders freely.
 
-## Two disciplines that make the tree trustworthy
+## Three disciplines that make the tree trustworthy
 
 - **Re-justify the existing backlog — inherit nothing.** Every open card either
   earns its place inside some branch or gets explicit push-back (demote / defer /
@@ -1833,6 +1846,11 @@ sections, then STOP for the owner to pick:
 - **Claims discipline.** Every "X is missing / weak / better" names its
   comparison baseline: what exists today, and why it is insufficient for the
   intent. No claim without its baseline.
+- **Every candidate exits with a disposition.** Anything considered — market-
+  receipt candidate items, prior-tree branches, existing cards — either lands in
+  a branch or is dropped WITH the stated reason. Silent omission is the failure
+  mode (calibration 2026-07-17: one run silently omitted a receipt candidate the
+  sibling run had dropped with a reason).
 
 ## Onboarding fork
 
@@ -1845,8 +1863,11 @@ offer IS the assisted onboarding, no separate migration.
 
 The owner picks one or more branches (or amends the tree). The chosen branch —
 its numbered roadmap, item depth, and implied Vision edits — is the input
-`scope-cards` consumes. You never edit the Vision, never create cards, never
-reorder the backlog yourself.
+`scope-cards` consumes. Owner verdicts at this gate that rescope, demote, or
+re-prioritize an EXISTING card must be recorded in that card's `## Reviews` when
+the decision lands (`scope-cards` writes them) — a verdict that lives only in a
+receipt or the conversation does not bind future planning runs. You never edit
+the Vision, never create cards, never reorder the backlog yourself.
 
 ## Deliberately omit
 
@@ -1880,7 +1901,7 @@ description: >-
   per item; only approved items are written.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # scope-cards — from a chosen branch to a fresh-agent-ready backlog
 
@@ -1925,13 +1946,24 @@ do not fabricate the findings.
   as explicit per-card proposals (field change or archival, with the reason).
 - **Vision facet diff** — exact replacement definition-of-done text per touched
   facet (add / rename / rescope / retire), never a wholesale table rewrite.
+- **Vision-branch umbrella** — when the direction spans multiple cards and should
+  be judged as a unit (every `explore` direction; any branch the owner may later
+  promote or drop whole), draft a thin `vision-branch-*` umbrella card (thesis,
+  exists-vs-gaps map, ordered children, convergence criterion) and stamp each
+  child `branch: <umbrella-name>`, per the PRD structure contract. Keep the
+  umbrella thin — agents-first, minimal overhead; never mirror child status
+  into it.
 
 ## Gate, then write
 
-Present ALL drafts — new cards, existing-card diffs, Vision edits — and let the
-owner approve, amend, or drop each item individually. Only then write the approved
-items: new cards as files under `.horus/backlog/`, facet edits into `## Vision`,
-existing-card changes in place. Anything not approved stays unwritten; say so.
+Present ALL drafts — new cards, existing-card diffs, Vision edits — as concrete
+options plus a free-text alternative, and let the owner
+approve, amend, or drop each item individually. Only then write the approved items: new cards as files
+under `.horus/backlog/`, facet edits into `## Vision`, existing-card changes in
+place. Owner rejections and rescopes of EXISTING cards are written into that
+card's `## Reviews` at decision time — a verdict that lives only in a receipt or
+the conversation does not bind future planning runs (calibration 2026-07-17).
+Anything not approved stays unwritten; say so.
 
 ## Deliberately omit
 
@@ -1970,7 +2002,7 @@ description: >-
   token envelope before any web work. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -2044,7 +2076,9 @@ Step 2 fans out web research. Before any web work, state: the intent (from Step
 directions you already suspect, and the research depth — then get the owner's
 confirmation. A light comparative sweep usually beats a full adversarial report
 for a direction call. A fresh, still-valid receipt may be reused instead of a new
-scan — say so explicitly and get a nod. If the owner only wants the inward pass,
+scan — say so explicitly and get a nod; that nod already carries the owner's
+reaction to the evidence, so it REPLACES Step 2's STOP (do not re-gate reused
+evidence — calibration 2026-07-17). If the owner only wants the inward pass,
 skip the scan and let `roadmap-branches` mark its tree inward-only.
 
 ## The flow
@@ -2057,8 +2091,10 @@ skip the scan and let `roadmap-branches` mark its tree inward-only.
    research stays anchored to what the project already is and who it is for.
    STOP for the owner to confirm the brief (unless straight-through).
 2. **`market-scan`** with the intent + brief, under the confirmed envelope. Its
-   dated receipt is the outward evidence. STOP for the owner to react.
-3. **`roadmap-branches`** consuming the brief + receipt → the branch-tree
+   dated receipt is the outward evidence. STOP for the owner to react (already
+   satisfied when the receipt was reused under the envelope nod — proceed).
+3. **`roadmap-branches`** consuming the brief + receipt (+ prior branch-tree
+   receipts when they exist) → the branch-tree
    receipt: per-facet position, market shells → verdict → risk, one branch per
    direction (each with a market-position line, a numbered roadmap, a convergence
    criterion, implied Vision edits), 1-2 speculative branches, explicit
@@ -2107,10 +2143,10 @@ SKILLS: tuple[Skill, ...] = (
     Skill("product-audit", 2, _PRODUCT_AUDIT_SKILL),
     Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),
     Skill("skill-audit", 1, _SKILL_AUDIT_SKILL),
-    Skill("market-scan", 4, _MARKET_SCAN_SKILL),
-    Skill("roadmap-branches", 2, _ROADMAP_BRANCHES_SKILL),
-    Skill("scope-cards", 1, _SCOPE_CARDS_SKILL),
-    Skill("pathfinder", 3, _PATHFINDER_SKILL),
+    Skill("market-scan", 5, _MARKET_SCAN_SKILL),
+    Skill("roadmap-branches", 3, _ROADMAP_BRANCHES_SKILL),
+    Skill("scope-cards", 2, _SCOPE_CARDS_SKILL),
+    Skill("pathfinder", 4, _PATHFINDER_SKILL),
 )
 
 

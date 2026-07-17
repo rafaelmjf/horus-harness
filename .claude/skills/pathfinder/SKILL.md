@@ -17,7 +17,7 @@ description: >-
   token envelope before any web work. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -91,7 +91,9 @@ Step 2 fans out web research. Before any web work, state: the intent (from Step
 directions you already suspect, and the research depth — then get the owner's
 confirmation. A light comparative sweep usually beats a full adversarial report
 for a direction call. A fresh, still-valid receipt may be reused instead of a new
-scan — say so explicitly and get a nod. If the owner only wants the inward pass,
+scan — say so explicitly and get a nod; that nod already carries the owner's
+reaction to the evidence, so it REPLACES Step 2's STOP (do not re-gate reused
+evidence — calibration 2026-07-17). If the owner only wants the inward pass,
 skip the scan and let `roadmap-branches` mark its tree inward-only.
 
 ## The flow
@@ -104,8 +106,10 @@ skip the scan and let `roadmap-branches` mark its tree inward-only.
    research stays anchored to what the project already is and who it is for.
    STOP for the owner to confirm the brief (unless straight-through).
 2. **`market-scan`** with the intent + brief, under the confirmed envelope. Its
-   dated receipt is the outward evidence. STOP for the owner to react.
-3. **`roadmap-branches`** consuming the brief + receipt → the branch-tree
+   dated receipt is the outward evidence. STOP for the owner to react (already
+   satisfied when the receipt was reused under the envelope nod — proceed).
+3. **`roadmap-branches`** consuming the brief + receipt (+ prior branch-tree
+   receipts when they exist) → the branch-tree
    receipt: per-facet position, market shells → verdict → risk, one branch per
    direction (each with a market-position line, a numbered roadmap, a convergence
    criterion, implied Vision edits), 1-2 speculative branches, explicit

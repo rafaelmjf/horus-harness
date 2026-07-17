@@ -14,7 +14,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -35,6 +35,12 @@ exists to surface.
 - **The market-scan receipt** (`.horus/research/`) — the outward evidence. If none
   exists, say the tree is inward-only and offer to run `market-scan` first; do not
   quietly substitute your own untested market beliefs.
+- **Prior branch-tree receipts** (earlier trees under `.horus/research/`) — a
+  re-baseline consumes its predecessors: carry forward unresolved branches,
+  unscoped imports, and owner verdicts recorded there, re-justified against the
+  CURRENT intent — never blindly inherited, never silently dropped. (Calibration
+  2026-07-17: an owner rescope lived only in a prior receipt and a fresh run
+  missed it entirely.)
 
 ## The deliverable — one dated receipt, fixed template
 
@@ -78,7 +84,7 @@ sections, then STOP for the owner to pick:
 6. **Recommendation, held loosely.** Primary / secondary / filler / park across the
    branches, one paragraph of reasoning. The owner reorders freely.
 
-## Two disciplines that make the tree trustworthy
+## Three disciplines that make the tree trustworthy
 
 - **Re-justify the existing backlog — inherit nothing.** Every open card either
   earns its place inside some branch or gets explicit push-back (demote / defer /
@@ -87,6 +93,11 @@ sections, then STOP for the owner to pick:
 - **Claims discipline.** Every "X is missing / weak / better" names its
   comparison baseline: what exists today, and why it is insufficient for the
   intent. No claim without its baseline.
+- **Every candidate exits with a disposition.** Anything considered — market-
+  receipt candidate items, prior-tree branches, existing cards — either lands in
+  a branch or is dropped WITH the stated reason. Silent omission is the failure
+  mode (calibration 2026-07-17: one run silently omitted a receipt candidate the
+  sibling run had dropped with a reason).
 
 ## Onboarding fork
 
@@ -99,8 +110,11 @@ offer IS the assisted onboarding, no separate migration.
 
 The owner picks one or more branches (or amends the tree). The chosen branch —
 its numbered roadmap, item depth, and implied Vision edits — is the input
-`scope-cards` consumes. You never edit the Vision, never create cards, never
-reorder the backlog yourself.
+`scope-cards` consumes. Owner verdicts at this gate that rescope, demote, or
+re-prioritize an EXISTING card must be recorded in that card's `## Reviews` when
+the decision lands (`scope-cards` writes them) — a verdict that lives only in a
+receipt or the conversation does not bind future planning runs. You never edit
+the Vision, never create cards, never reorder the backlog yourself.
 
 ## Deliberately omit
 
