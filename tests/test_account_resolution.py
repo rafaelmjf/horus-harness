@@ -168,3 +168,30 @@ def test_an_alias_containing_an_agent_name_resolves_as_itself(accounts):
 def test_an_alias_named_after_the_other_agent_still_resolves(accounts):
     accounts(claude=("codex",), codex=())
     assert _label("codex") == "claude-codex"
+
+
+# --- the resolver binds agents that HAVE accounts, and only those -------------
+
+
+def test_the_fake_adapter_is_not_held_to_account_resolution(accounts, monkeypatch, tmp_path):
+    """`fake` has no config dir, no login and no rate-limit pool, so its --account is
+    a free-text label. Enforcing resolution there refused every `--agent fake
+    --account personal` run — caught by a live scheduled dispatch, not by unit tests.
+    """
+    import argparse
+    from horus import cli
+
+    args = argparse.Namespace(
+        agent="fake", account="personal", model=None, path=str(tmp_path),
+        prompt="x", posture=None, effort=None, resume=None, worker=None,
+        unattended=False, envelope=None, card=None, target=None, detach=False,
+        worktree=None, watch=False, force=False, expect_delivery=False,
+    )
+    # The guard must leave a fake run's account untouched rather than refuse it.
+    assert cli._envelope_guard(args, tmp_path) == (None, None)
+    assert args.account == "personal"
+
+
+def test_a_real_agent_is_still_held_to_it(accounts):
+    r = config.resolve_account("personal", agent="claude")
+    assert r.ok and r.ref.label == "claude-personal"

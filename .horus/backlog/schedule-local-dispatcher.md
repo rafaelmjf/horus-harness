@@ -70,3 +70,42 @@ A `horus schedule` verb that registers a future `horus run` on this machine:
   "just scheduling" will be subsumed natively.
 - Depends conceptually on `unattended-dispatch-attachable-worktree-defaults` for its launch
   defaults. Shares `horus/cli.py` with the other branch cards (hence `parallel: unsafe`).
+
+## Reviews
+
+- 2026-07-17 — **Built (`horus schedule run|list|cancel`); all three open questions
+  answered by measurement, not preference.** (1) *crontab vs systemd:* **systemd --user**,
+  and specifically **on-disk unit files, not `systemd-run`**. Probed live: transient units
+  live in `/run/user/<uid>/systemd/transient` — RAM — so a reboot silently erases every
+  pending dispatch, which over a six-day trip is one kernel update away. On-disk +
+  `enable` + `Persistent=true` survives reboot and catches up a slot missed while
+  suspended. `at`/`atd` are not installed here. (2) *Where the registry lives:* **nowhere —
+  systemd owns it.** The unit files under `~/.config/systemd/user` are the record, and
+  `list` reads them plus systemd's live view; a parallel JSON registry would just drift
+  from the timers that actually fire (cf. the repo's "never a second parser/state path"
+  rule). (3) *Thin wrapper or daemon:* **wrapper**, per the scan — this module owns no
+  scheduling logic, only unit writing/reading, and passes the whole `horus run` surface
+  through untouched. `--cron` and `--when-capacity` remain unbuilt (one-shot ships first,
+  as the card said).
+- 2026-07-17 — **`loginctl` linger is the away-mode precondition nobody would have
+  noticed.** Without it, user timers stop at logout — exactly the away condition. This
+  machine has `Linger=yes` already; `schedule run` warns loudly when it is off, since a
+  silently-never-firing schedule is the worst outcome of the whole kit.
+- 2026-07-17 — **Three defects the live probe caught that 1800+ unit tests could not.**
+  (a) `--at` must be a FLAG: as a positional, `argparse.REMAINDER` starts capturing at the
+  next argument and swallowed this command's own `--describe` into the pass-through, so
+  the scheduled dispatch fired into `horus run: error: unrecognized arguments`. The card's
+  original `--at` spelling was right and the "improvement" to a positional broke it.
+  (b) The alias guard from PR #297 refused `--agent fake --account personal`: the fake
+  adapter has no config dir, login or rate-limit pool, so its `--account` is a free-text
+  label — resolution now binds only agents that HAVE accounts. (c) Reading "has it fired?"
+  is a minefield: a one-shot's `LastTriggerUSecRealtime` reads EMPTY once elapsed,
+  `ActiveState` still reads `active` right after firing, and Persistent's stamp file
+  EXISTS from the moment the timer is enabled. The honest signals are `NextElapse` (set ⇒
+  pending) and the stamp's **mtime** advancing to the trigger time (⇒ fired), which is
+  what survives a reboot.
+- 2026-07-17 — **Not yet proven end-to-end:** a scheduled dispatch composed with
+  `--unattended --envelope` (the actual away-mode path). The scheduler was probed with the
+  fake adapter, and `--unattended` requires a worker-capable agent, so proving the
+  composition costs a real worker launch — deliberately not spent without owner approval.
+  Worth doing as the away-kit dogfood once `supervise-verify-merge-close` lands.

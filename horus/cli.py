@@ -54,6 +54,7 @@ from horus import (
     routines,
     run_executor,
     runlog,
+    schedule,
     skills,
     templates,
     terminal_app,
@@ -1145,7 +1146,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 2
     # Name the account before anything routes work to it: a misspelled alias used to
     # fall through to the ambient login or to a pool that isn't the one intended.
-    if getattr(args, "account", None):
+    # Only agents that HAVE accounts are held to this: the fake adapter has no config
+    # dir, no login and no rate-limit pool, so its --account is a free-text label and
+    # resolving it would refuse every `--agent fake --account <anything>` run.
+    if getattr(args, "account", None) and args.agent in _WORKER_POSTURE:
         resolution = config.resolve_account(args.account, agent=args.agent)
         if not resolution.ok:
             print(f"Refusing to run: {resolution.error}")
@@ -1243,6 +1247,113 @@ def cmd_run(args: argparse.Namespace) -> int:
         print("Refusing to run: --target tmux requires --detach")
         return 2
     return run_executor.execute(request, watcher=_spawn_watcher)
+
+
+def cmd_schedule_at(args: argparse.Namespace) -> int:
+    """Register a one-shot `horus run` to fire later on this machine."""
+    ready = schedule.availability()
+    if not ready.ok:
+        print(f"Refusing to schedule: {ready.reason}.")
+        print("Scheduling is machine-local by design (never cloud); run the dispatch "
+              "directly with `horus run` instead.")
+        return 2
+    try:
+        when = schedule.parse_when(args.at)
+    except schedule.ScheduleError as exc:
+        print(f"Refusing to schedule: {exc}")
+        return 2
+
+    run_args = list(args.run_args)
+    if run_args and run_args[0] == "--":
+        run_args = run_args[1:]
+    if not run_args:
+        print("Refusing to schedule: nothing to run — pass the `horus run` arguments after `--`.")
+        print('  horus schedule run --at "+2h" -- "<prompt>" --unattended --envelope trip --card <card>')
+        return 2
+
+    # `sys.executable -m horus` rather than a bare `horus`: a systemd unit starts with
+    # a minimal PATH, and this is the spelling that cannot miss (companion.py does the
+    # same). The run surface is passed straight through — this scheduler re-implements
+    # none of it.
+    command = (sys.executable, "-m", "horus", "run", *run_args)
+    description = args.describe or _describe_run(run_args)
+    try:
+        created = schedule.create(
+            when=when, command=command, description=description,
+            cwd=Path(getattr(args, "path", ".")).resolve(),
+        )
+    except schedule.ScheduleError as exc:
+        print(f"Refusing to schedule: {exc}")
+        return 2
+
+    print(f"Scheduled {created.id}: {description}")
+    print(f"  fires   : {created.when} (local)")
+    print(f"  backend : systemd --user timer {created.unit}.timer "
+          "(survives reboot; a slot missed while suspended fires on resume)")
+    print(f"  logs    : journalctl --user -u {created.unit}.service")
+    print(f"  cancel  : horus schedule cancel {created.id}")
+    linger = schedule.linger_enabled()
+    if linger is False:
+        print("\n  [warn] linger is OFF for this user, so user timers stop at logout — an "
+              "unattended schedule would never fire.")
+        print("         Fix: loginctl enable-linger $USER")
+    elif linger is None:
+        print("\n  [note] could not confirm linger; without it, user timers stop at logout "
+              "(`loginctl show-user $USER -p Linger`).")
+    return 0
+
+
+def _describe_run(run_args: list[str]) -> str:
+    """A human label for a scheduled dispatch: the card if there is one, else the prompt."""
+    for flag in ("--card", "--envelope"):
+        if flag in run_args:
+            index = run_args.index(flag)
+            if index + 1 < len(run_args):
+                return f"{flag.lstrip('-')} {run_args[index + 1]}"
+    first = next((a for a in run_args if not a.startswith("-")), "")
+    return (first[:60] + "…") if len(first) > 60 else (first or "horus run")
+
+
+def cmd_schedule_list(args: argparse.Namespace) -> int:
+    ready = schedule.availability()
+    if not ready.ok:
+        print(f"No schedules: {ready.reason}.")
+        return 0
+    try:
+        schedules = schedule.load_all()
+    except schedule.ScheduleError as exc:
+        print(f"Could not read schedules: {exc}")
+        return 1
+    if getattr(args, "stdout", False):
+        print(json.dumps([asdict(s) for s in schedules], indent=2))
+        return 0
+    if not schedules:
+        print("No scheduled dispatches. Create one with `horus schedule --at`.")
+        return 0
+    print(f"{'ID':<10} {'STATE':<8} {'FIRES':<21} DESCRIPTION")
+    for item in schedules:
+        state = "fired" if item.fired else "pending"
+        print(f"{item.id:<10} {state:<8} {item.when:<21} {item.description}")
+    if any(s.fired for s in schedules):
+        print("\nFired one-shots stay listed until removed: `horus schedule cancel <id>`.")
+    return 0
+
+
+def cmd_schedule_cancel(args: argparse.Namespace) -> int:
+    ready = schedule.availability()
+    if not ready.ok:
+        print(f"Nothing to cancel: {ready.reason}.")
+        return 2
+    try:
+        cancelled = schedule.cancel(args.id)
+    except schedule.ScheduleError as exc:
+        print(f"Could not cancel: {exc}")
+        return 1
+    if cancelled is None:
+        print(f"No single schedule matches {args.id!r} (see `horus schedule list`).")
+        return 1
+    print(f"Cancelled {cancelled.id}: {cancelled.description} (was due {cancelled.when}).")
+    return 0
 
 
 def cmd_envelope_create(args: argparse.Namespace) -> int:
@@ -3442,6 +3553,61 @@ def build_parser() -> argparse.ArgumentParser:
              "every field regardless of this flag",
     )
     p_capabilities.set_defaults(func=cmd_capabilities)
+
+    p_schedule = sub.add_parser(
+        "schedule",
+        help="schedule a `horus run` to fire later on THIS machine (never cloud)",
+        description=(
+            "Registers a one-shot systemd --user timer that runs `horus run` at a chosen "
+            "time on this machine. Everything after `--` is passed to `horus run` "
+            "untouched — this scheduler re-implements none of the run surface, which is "
+            "the whole point: scheduling itself is commoditized, while isolated-account "
+            "routing, delivery receipts/datums, and the attachable + worktree-isolated "
+            "posture are not.\n\n"
+            "  horus schedule run --at '+2h' -- 'do the thing' \\\n"
+            "      --unattended --envelope trip --card my-card --account personal\n\n"
+            "Units are written to ~/.config/systemd/user, so a pending dispatch survives a "
+            "reboot, and Persistent=true fires a slot missed while the machine was "
+            "suspended. Needs linger (`loginctl enable-linger $USER`) to fire with nobody "
+            "logged in — which is the away-mode case."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    schedule_sub = p_schedule.add_subparsers(dest="schedule_cmd", required=True)
+
+    # `--at` is a FLAG, not a positional, and that is load-bearing: with a positional
+    # WHEN, argparse.REMAINDER starts capturing at the next argument and swallows this
+    # command's own flags into the pass-through (observed: `--describe` reached
+    # `horus run`, which refused it). As options, they are consumed before REMAINDER.
+    p_sched_at = schedule_sub.add_parser(
+        "run", help="schedule a one-shot `horus run` (a card is done once, so one-shot is the only mode)"
+    )
+    p_sched_at.add_argument(
+        "--at", required=True, metavar="WHEN",
+        help="when to fire: an offset (+30m, +2h, +1d) or an absolute local time "
+             "('2026-07-22 09:00', or RFC3339). No natural language — a misread time "
+             "fires a real worker at the wrong hour",
+    )
+    p_sched_at.add_argument(
+        "--describe", default=None, metavar="TEXT",
+        help="label for `schedule list` (default: derived from --card/--envelope/prompt)",
+    )
+    p_sched_at.add_argument(
+        "--path", default=".", help="working directory for the run (default: cwd)",
+    )
+    p_sched_at.add_argument(
+        "run_args", nargs=argparse.REMAINDER,
+        help="everything after `--` is passed to `horus run` verbatim",
+    )
+    p_sched_at.set_defaults(func=cmd_schedule_at)
+
+    p_sched_list = schedule_sub.add_parser("list", help="list scheduled dispatches on this machine")
+    p_sched_list.add_argument("--stdout", action="store_true", help="emit JSON instead of a table")
+    p_sched_list.set_defaults(func=cmd_schedule_list)
+
+    p_sched_cancel = schedule_sub.add_parser("cancel", help="disarm and delete a scheduled dispatch")
+    p_sched_cancel.add_argument("id", help="schedule id or unique prefix (see `horus schedule list`)")
+    p_sched_cancel.set_defaults(func=cmd_schedule_cancel)
 
     p_envelope = sub.add_parser(
         "envelope",
