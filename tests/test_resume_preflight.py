@@ -186,3 +186,28 @@ def test_cli_fleet_stdout_wires_registered_projects(tmp_path, monkeypatch, capsy
     assert seen["roots"] == [first, second]
     assert seen["do_fetch"] is False and seen["mode"] == "fleet"
     assert json.loads(capsys.readouterr().out) == {"mode": "fleet"}
+
+
+def test_render_surfaces_a_parallel_delivery_signal():
+    # A fresh session must see a sibling delivery it did not create.
+    digest = {
+        "mode": "project", "fetch": "ok", "generated_at": "2026-07-17T00:00:00+00:00",
+        "usage": {}, "open_datums": [], "sessions": [], "stale_sessions": [], "collisions": [],
+        "projects": [{
+            "name": "demo", "path": "/repo",
+            "git": {"available": False, "fetch": "ok"},
+            "version": {"installed": "0.0.60", "floor": "0.0.26", "meets_floor": True},
+            "handoff": {"current_focus": "f", "next_action": "n", "next_prompt": "p",
+                        "execution_recommendation": "continue-as-is"},
+            "continuity": {
+                "granularity": "handoff", "pending": 0, "deliveries": [],
+                "parallel": [{"kind": "merged-pr", "ref": "42",
+                              "detail": "PR #42 merged (abc12345) not yet in canonical continuity"}],
+            },
+            "hygiene": [],
+        }],
+    }
+    rendered = resume_preflight.render_text(digest)
+    assert "PARALLEL demo [WARN] PR #42 merged" in rendered
+    # a parallel signal alone flips CONTINUITY to WARN even with pending=0
+    assert "CONTINUITY demo [WARN] mode=handoff pending=0" in rendered

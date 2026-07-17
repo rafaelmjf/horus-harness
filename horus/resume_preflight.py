@@ -74,6 +74,14 @@ def _project_projection(root: Path, *, installed: str, do_fetch: bool) -> dict[s
         if finding.level in {"warn", "fail"}
     ]
     pending = closure.pending_delivery_commits(root)
+    # Naming sibling PRs needs gh, so only when this run already accepted network
+    # (a fetch). Live co-sessions are registry-local and cheap, but we compute both
+    # through one call for a single code path.
+    parallel = (
+        [{"kind": s.kind, "ref": s.ref, "detail": s.detail}
+         for s in closure.parallel_deliveries(root)[0]]
+        if do_fetch else []
+    )
     return {
         "name": root.name,
         "path": str(root),
@@ -98,6 +106,7 @@ def _project_projection(root: Path, *, installed: str, do_fetch: bool) -> dict[s
             "deliveries": [
                 {"sha": sha, "subject": subject} for sha, subject in pending
             ],
+            "parallel": parallel,
         },
         "hygiene": hygiene,
     }
@@ -238,11 +247,16 @@ def render_text(digest: dict[str, Any]) -> str:
         )
         continuity = project["continuity"]
         pending = continuity["pending"]
-        state = "WARN" if pending else "OK"
+        parallel = continuity.get("parallel", [])
+        state = "WARN" if pending or parallel else "OK"
         lines.append(
             f"CONTINUITY {project['name']} [{state}] mode={continuity['granularity']} "
             f"pending={pending}"
         )
+        for signal in parallel:
+            lines.append(
+                f"PARALLEL {project['name']} [WARN] {_compact(signal['detail'])}"
+            )
         for finding in project.get("hygiene", []):
             lines.append(
                 f"HYGIENE {project['name']} [{finding['level'].upper()}] {_compact(finding['message'])}"
