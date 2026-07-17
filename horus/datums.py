@@ -352,24 +352,89 @@ def _iso_datetime(value: str | None) -> datetime | None:
     return stamp.astimezone(timezone.utc)
 
 
-def _tracked_overlap(datum: Datum, peers: list[Datum]) -> bool:
-    """Whether another tracked worker used this exact account concurrently."""
-    start = _iso_datetime(datum.launched_at)
-    if start is None:
+def _registry_positive_completion(session_id: str) -> tuple[datetime, str, int | None] | None:
+    """``(effective_end, exit, returncode)`` from POSITIVE terminal registry/
+    run-event evidence only — a real reconciled ``exited``/``failed`` result.
+
+    A dead PID, an absent row, or a merely ``stale`` row (dead PID, no result)
+    is never treated as proof of the worker's outcome (see
+    ``stale-datum-usage-overlap-reconciliation``); those cases return
+    ``None`` and the caller keeps the interval open/confounded instead of
+    fabricating a completion. Deferred import: :mod:`horus.registry` imports
+    this module, so a module-level import here would cycle.
+    """
+    try:
+        from horus import registry as registry_module
+
+        row = registry_module.Registry.default().get(session_id)
+    except Exception:  # noqa: BLE001 (best-effort: overlap classification must never raise)
+        return None
+    if row is None or row.status not in ("exited", "failed"):
+        return None
+    end = _iso_datetime(row.updated_at)
+    if end is None:
+        return None
+    return end, classify_exit(row.status, saw_usage_signal=False), row.returncode
+
+
+def _registry_genuinely_running(session_id: str) -> bool:
+    """Whether the registry independently confirms this session is still live
+    (not merely a PID that hasn't been checked)."""
+    try:
+        from horus import registry as registry_module
+
+        row = registry_module.Registry.default().get(session_id)
+    except Exception:  # noqa: BLE001
         return False
-    end = _iso_datetime(datum.completed_at) or datetime.now(timezone.utc)
+    return row is not None and row.status == "running"
+
+
+def _effective_interval(row: Datum, *, now: datetime | None = None) -> tuple[datetime | None, datetime, bool]:
+    """``(start, effective_end, bounded)`` for one datum.
+
+    ``bounded`` is True when ``end`` reflects real evidence — the datum's own
+    mechanical completion, or positive terminal registry/run-event evidence —
+    rather than "still open as of now". An unbounded end keeps confounding
+    overlap checks (the peer is genuinely live, or the evidence is missing/
+    ambiguous) instead of ever being reported as resolved.
+    """
+    start = _iso_datetime(row.launched_at)
+    end = _iso_datetime(row.completed_at)
+    if end is not None:
+        return start, end, True
+    positive = _registry_positive_completion(row.session_id)
+    if positive is not None:
+        return start, positive[0], True
+    return start, now or datetime.now(timezone.utc), False
+
+
+def _overlap_peers(datum: Datum, peers: list[Datum]) -> list[dict]:
+    """Tracked workers on the same account whose effective interval overlaps
+    ``datum``'s, each named with its own run id and the interval actually used
+    for the check — so a usage report can say exactly who overlapped instead
+    of only "another tracked worker overlapped" (see
+    ``stale-datum-usage-overlap-reconciliation``).
+    """
+    start, end, _ = _effective_interval(datum)
+    if start is None:
+        return []
+    overlaps: list[dict] = []
     for peer in peers:
         if peer.session_id == datum.session_id or not peer.worker:
             continue
         if peer.agent != datum.agent or peer.account != datum.account:
             continue
-        peer_start = _iso_datetime(peer.launched_at)
+        peer_start, peer_end, peer_bounded = _effective_interval(peer)
         if peer_start is None:
             continue
-        peer_end = _iso_datetime(peer.completed_at) or datetime.now(timezone.utc)
         if start <= peer_end and peer_start <= end:
-            return True
-    return False
+            overlaps.append({
+                "session_id": peer.session_id,
+                "start": peer.launched_at,
+                "end": peer_end.isoformat(timespec="seconds"),
+                "bounded": peer_bounded,
+            })
+    return overlaps
 
 
 def usage_accounting(datum: Datum, peers: list[Datum] | None = None) -> dict:
@@ -391,9 +456,12 @@ def usage_accounting(datum: Datum, peers: list[Datum] | None = None) -> dict:
         result["status"] = "shared-account/confounded"
         result["detail"] = "ambient/default account may include supervisor or unrelated activity"
         return result
-    if _tracked_overlap(datum, peers or []):
+    overlaps = _overlap_peers(datum, peers or [])
+    if overlaps:
         result["status"] = "concurrent/confounded"
-        result["detail"] = "another tracked worker overlapped on this account"
+        result["overlap_peers"] = overlaps
+        peer_desc = ", ".join(f"{o['session_id']} [{o['start']}..{o['end']}]" for o in overlaps)
+        result["detail"] = f"overlapping tracked worker(s): {peer_desc}"
         return result
     if start.get("freshness") != "fresh" or end.get("freshness") != "fresh":
         result["detail"] = "start/end readings are not both fresh"
@@ -504,6 +572,22 @@ def render_worker_breakdown(rows: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_unresolved_legacy_runs(rows: list[Datum]) -> str:
+    """Explicit owner/supervisor remediation surface for stuck legacy runs —
+    never printed as resolved, never auto-closed."""
+    if not rows:
+        return ""
+    lines = [
+        "Unresolved legacy run(s) — no terminal evidence and no confirmed-live "
+        "process; each keeps confounding overlap checks until an owner/supervisor "
+        "resolves it (`horus datum close <id> --outcome void`, or inspect the "
+        "registry row by hand):"
+    ]
+    for row in rows:
+        lines.append(f"  {row.session_id[:8]} launched={row.launched_at} account={row.account or 'default'}")
+    return "\n".join(lines) + "\n"
+
+
 # ---------------------------------------------------------------------------
 # Backfill — the known hand-written datums, so the roll-up renders immediately
 # ---------------------------------------------------------------------------
@@ -594,7 +678,69 @@ class DatumStore:
         """Datums whose session id starts with ``prefix`` (git-short-hash style)."""
         return [Datum.from_row(row) for sid, row in self._load().items() if sid.startswith(prefix)]
 
+    def unresolved_legacy_runs(self, *, stale_after_hours: float = 24.0, now: datetime | None = None) -> list[Datum]:
+        """Worker datums missing ``completed_at`` with no positive terminal
+        evidence and no confirmed-live process backing them, old enough that
+        they are not simply still in flight.
+
+        These are exactly the rows a mere dead PID or absent registry entry
+        must never silently resolve (see
+        ``stale-datum-usage-overlap-reconciliation``) — they need an explicit
+        owner/supervisor call (e.g. ``horus datum close <id> --outcome void``,
+        or inspecting the registry row by hand), never an automatic close.
+        """
+        moment = now or datetime.now(timezone.utc)
+        unresolved: list[Datum] = []
+        for datum in self.all():
+            if not datum.worker or datum.completed_at:
+                continue
+            launched = _iso_datetime(datum.launched_at)
+            if launched is None or (moment - launched) < timedelta(hours=stale_after_hours):
+                continue
+            if _registry_positive_completion(datum.session_id) is not None:
+                continue  # reconcile_missing_completions would resolve this one
+            if _registry_genuinely_running(datum.session_id):
+                continue  # genuinely live — confounds attribution, but not "unresolved"
+            unresolved.append(datum)
+        return unresolved
+
     # --- writes (best-effort: swallow I/O so measurement never breaks a run) --
+
+    def reconcile_missing_completions(self) -> list[Datum]:
+        """Backfill ``completed_at`` for worker datums that never got a
+        mechanical completion, using ONLY positive terminal registry/run-event
+        evidence — never a dead PID or an absent/stale registry row alone.
+
+        A backfilled row gets a real bounded interval, so it stops confounding
+        every later overlap check on the same account forever. Rows with no
+        positive evidence (genuinely live, or merely ambiguous) are left
+        untouched here; ``unresolved_legacy_runs`` surfaces the ambiguous ones
+        for explicit remediation instead of a silent auto-close.
+        """
+        try:
+            rows = self._load()
+        except (OSError, json.JSONDecodeError):
+            return []
+        changed: list[Datum] = []
+        for row in rows.values():
+            if not row.get("worker") or row.get("completed_at"):
+                continue
+            session_id = str(row.get("session_id", ""))
+            positive = _registry_positive_completion(session_id)
+            if positive is None:
+                continue
+            end, exit_value, returncode = positive
+            row["completed_at"] = end.isoformat(timespec="seconds")
+            row["exit"] = exit_value
+            if returncode is not None:
+                row["returncode"] = returncode
+            changed.append(Datum.from_row(row))
+        if changed:
+            try:
+                self._save(rows)
+            except OSError:
+                return []
+        return changed
 
     def record_launch(self, datum: Datum) -> None:
         """Write the mechanical launch row. An existing row (e.g. a resume of the

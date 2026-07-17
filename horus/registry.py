@@ -85,8 +85,21 @@ def _legacy_log_result(session_id: str) -> _RunResult | None:
     return None
 
 
-def _apply_delivery_completion(row: dict) -> None:
-    """Persist Phase 2 evidence when reconciliation newly finds a terminal run."""
+def _apply_delivery_completion(row: dict, *, confirmed_exit: bool) -> None:
+    """Persist Phase 2 evidence when reconciliation newly finds a terminal run.
+
+    ``confirmed_exit`` distinguishes a real terminal RESULT/run-event (safe to
+    also write the datum's mechanical completion) from a dead-PID-only finding
+    (``status`` just went ``stale``) — a dead process alone is never proof of
+    the worker's actual outcome (see the
+    ``stale-datum-usage-overlap-reconciliation`` backlog card: this used to
+    write a confident ``exit="crashed"`` datum completion off nothing but a
+    dead/reused PID, which is exactly the false-confidence bug that card
+    fixes). The dead-PID path still records real delivery/git evidence — that
+    part is independently verifiable — but leaves the datum's completion
+    unset so it surfaces via ``DatumStore.unresolved_legacy_runs`` for an
+    explicit owner/supervisor call instead of a silent, guessed auto-close.
+    """
     try:
         ended_at = row.get("updated_at")
         session_end = datetime.fromisoformat(ended_at) if isinstance(ended_at, str) and ended_at else None
@@ -107,6 +120,8 @@ def _apply_delivery_completion(row: dict) -> None:
         rc=row.get("returncode"), delivery_expected=bool(row.get("delivery_expected", False)),
         delivery_status=delivery_status, **evidence.fields(), ended_at=runlog.utc_iso(),
     )
+    if not confirmed_exit:
+        return
     datums.DatumStore.default().record_completion(
         session_id, exit=datums.classify_exit(str(row.get("status", "")), saw_usage_signal=False),
         runtime_seconds=None, returncode=row.get("returncode"), delivery_expected=bool(row.get("delivery_expected", False)),
@@ -348,14 +363,14 @@ class Registry:
                 row["status"] = result.status
                 if result.returncode is not None:
                     row["returncode"] = result.returncode
-                _apply_delivery_completion(row)
+                _apply_delivery_completion(row, confirmed_exit=True)
                 row["updated_at"] = _now_iso()
                 dirty = True
                 changed.append(self._record(row))
                 continue
             if not process_alive(row.get("pid")):
                 row["status"] = "stale"
-                _apply_delivery_completion(row)
+                _apply_delivery_completion(row, confirmed_exit=False)
                 row["updated_at"] = _now_iso()
                 dirty = True
                 changed.append(self._record(row))

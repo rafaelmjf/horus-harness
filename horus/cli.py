@@ -563,7 +563,10 @@ def cmd_datum_migrate_names(args: argparse.Namespace) -> int:
 
 def cmd_datum_report(args: argparse.Namespace) -> int:
     """Render recent per-worker actuals without requiring run-id archaeology."""
-    rows = [row for row in datums.DatumStore.default().all() if row.worker]
+    store = datums.DatumStore.default()
+    store.reconcile_missing_completions()
+    unresolved = store.unresolved_legacy_runs()
+    rows = [row for row in store.all() if row.worker]
     if args.path:
         root = Path(args.path).resolve()
         rows = [row for row in rows if row.project and Path(row.project).resolve() == root]
@@ -585,6 +588,7 @@ def cmd_datum_report(args: argparse.Namespace) -> int:
         print(json.dumps(breakdown, indent=2, sort_keys=True))
     else:
         print(datums.render_worker_breakdown(breakdown), end="")
+        print(datums.render_unresolved_legacy_runs(unresolved), end="")
     return 0
 
 
