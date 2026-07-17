@@ -265,6 +265,19 @@ def create(
         raise EnvelopeError("an envelope must authorize something: pass --card and/or --branch")
     if not accounts:
         raise EnvelopeError("an envelope must name at least one --account")
+    # A typo'd alias is the worst failure this artifact has: the envelope looks
+    # created, the owner leaves for a week, and every dispatch silently refuses on a
+    # bound nobody meant to set. Refuse it here, where the owner can still read the
+    # message — matching `usage check`, which fails unknown aliases rather than
+    # falling back to the ambient login.
+    known = set(config.load_account_config_dirs()) | set(config.load_account_codex_homes())
+    unknown = [a for a in accounts if a not in known]
+    if unknown:
+        raise EnvelopeError(
+            f"unknown account alias(es): {', '.join(unknown)}. "
+            f"Isolated accounts are: {', '.join(sorted(known)) or '(none configured)'}. "
+            "An envelope naming an account that does not exist would authorize nothing."
+        )
     if not tiers:
         raise EnvelopeError("an envelope must allow at least one --tier")
     if not 0 <= usage_floor <= 100:
@@ -435,18 +448,23 @@ def validate(
             f"{env.max_dispatches_per_day} dispatches allowed today",
         )
 
-    # Unknown capacity is not healthy capacity. Nobody is watching an unattended
-    # run, so a blind spot refuses rather than proceeding on a courtesy.
-    if usage_remaining is None:
-        return Refusal(
-            USAGE_UNKNOWN_BOUND,
-            f"capacity is unknown for account {request.account or '(none)'!r} "
-            "(offline, missing creds, or schema drift) — an unattended dispatch fails closed",
-        )
-    if usage_remaining < env.usage_floor:
-        return Refusal(
-            USAGE_UNKNOWN_BOUND,
-            f"account {request.account or '(none)'!r} has {usage_remaining}% of its window "
-            f"remaining, below the {env.usage_floor}% reserve floor of envelope {env.name!r}",
-        )
+    # The floor is opt-in, and fail-closed binds the bound the owner actually set.
+    # With no floor (0) there is no capacity guarantee to verify, so an unreadable
+    # signal is irrelevant and must not ground the dispatch. With a floor, unknown
+    # capacity is NOT healthy capacity: nobody is watching, so it refuses.
+    if env.usage_floor > 0:
+        if usage_remaining is None:
+            return Refusal(
+                USAGE_UNKNOWN_BOUND,
+                f"capacity is unknown for account {request.account or '(none)'!r} "
+                "(offline, missing creds, or schema drift), so the "
+                f"{env.usage_floor}% reserve floor of envelope {env.name!r} cannot be "
+                "verified — an unattended dispatch fails closed",
+            )
+        if usage_remaining < env.usage_floor:
+            return Refusal(
+                USAGE_UNKNOWN_BOUND,
+                f"account {request.account or '(none)'!r} has {usage_remaining}% of its window "
+                f"remaining, below the {env.usage_floor}% reserve floor of envelope {env.name!r}",
+            )
     return None
