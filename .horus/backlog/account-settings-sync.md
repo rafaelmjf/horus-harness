@@ -43,3 +43,8 @@ account's settings, and stays machine-local.
 
 - Scope guard: this is a convenience over machine-local isolated dirs, NOT a shared/central
   config store — isolation stays the invariant. Do not reintroduce ambient inheritance.
+- **Overlaps `horus-statusline-default`** (2026-07-17), which needs
+  `statusLine` written into every account dir on every machine. Whichever ships first owns
+  the account-settings writer; the other consumes it. Do not build two writers. That card
+  also answers this one's first open question by example: `statusLine` and `hooks` are the
+  keys that actually drift, because they are the ones Horus itself has an opinion about.
