@@ -148,13 +148,16 @@ def _read_codex(account: str | None) -> UsageSnapshot | None:
     report = codex_usage.latest_account_usage(home=home)
     if report is None:
         return None
-    sec_pct = report.secondary_percent
-    sec_reset = codex_usage._fmt_reset(report.secondary_resets_at) if sec_pct is not None else None
+    # Route each lane by the length Codex declared for it, not by its slot: this
+    # snapshot's `percent` MEANS the fast window, so putting a weekly reading
+    # there makes every consumer say "5h" about a window that resets in six days
+    # (observed 2026-07-17, while Codex had the 5-hour limit removed).
+    fast, slow = report.windows()
     return UsageSnapshot(
-        report.primary_percent,
-        codex_usage._fmt_reset(report.primary_resets_at),
-        sec_pct,
-        sec_reset,
+        fast.percent if fast else None,
+        codex_usage._fmt_reset(fast.resets_at) if fast else None,
+        slow.percent if slow else None,
+        codex_usage._fmt_reset(slow.resets_at) if slow else None,
     )
 
 
