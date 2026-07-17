@@ -272,3 +272,109 @@ def test_start_remote_reports_failure_without_raising(monkeypatch):
 
     assert "Remote start failed" in status
     assert "boom" in status
+
+
+# ---------------------------------------------------------------------------
+# Backlog tree screen (branch umbrellas + facets) and the receipts shelf
+# ---------------------------------------------------------------------------
+
+
+def _project_with_branch_tree(tmp_path, monkeypatch) -> tuple[terminal_tui.TerminalUI, object]:
+    """A UI parked on the backlog screen of a project with one branch umbrella
+    (one child) plus one facet-only card, and one dated research receipt."""
+    _isolated_home(tmp_path, monkeypatch)
+    root = tmp_path / "demo"
+    hdir = root / ".horus" / "backlog"
+    hdir.mkdir(parents=True)
+    (hdir / "umbrella-a.md").write_text(
+        "---\nstatus: open\npriority: medium\n---\n"
+        "# Umbrella A\n\n## Acceptance\n\n- Converged when it ships.\n",
+        encoding="utf-8",
+    )
+    (hdir / "child-1.md").write_text(
+        "---\nstatus: open\npriority: high\ntier: sonnet\nbranch: umbrella-a\n---\n# Child one\n",
+        encoding="utf-8",
+    )
+    (hdir / "lonely.md").write_text(
+        '---\nstatus: open\npriority: low\nvision_facet: "Dashboard"\n---\n# Lonely card\n',
+        encoding="utf-8",
+    )
+    rdir = root / ".horus" / "research"
+    rdir.mkdir(parents=True)
+    (rdir / "2026-07-17-x.md").write_text("# X receipt\n\nbody\n", encoding="utf-8")
+    monkeypatch.setattr(terminal_tui.config, "load_projects", lambda: [str(root)])
+    inp = create_pipe_input()
+    ui = terminal_tui.TerminalUI(input=inp, output=DummyOutput())
+    ui.project = root
+    ui._show("backlog")
+    return ui, root
+
+
+def test_backlog_screen_shows_collapsed_branch_and_facet_section(tmp_path, monkeypatch):
+    ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
+
+    kinds = [kind for kind, _value in ui.items]
+    assert kinds == ["branch", "facet", "card"]  # branch collapsed; facet + its card shown
+
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "Umbrella A (1)" in rendered
+    assert "converges: Converged when it ships." in rendered
+    assert "Dashboard (1)" in rendered
+    assert "[task] Lonely card" in rendered
+    assert "Child one" not in rendered  # collapsed umbrella hides its child
+
+
+def test_selecting_a_branch_expands_it_inline(tmp_path, monkeypatch):
+    ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
+    ui.selected = 0  # the branch header
+    assert ui.items[0][0] == "branch"
+
+    ui.activate()
+
+    kinds = [kind for kind, _value in ui.items]
+    assert kinds == ["branch", "card", "facet", "card"]
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "Child one" in rendered
+
+    # Selecting it again collapses it back.
+    ui.selected = 0
+    ui.activate()
+    kinds = [kind for kind, _value in ui.items]
+    assert kinds == ["branch", "facet", "card"]
+
+
+def test_backlog_screen_with_no_branches_stays_flat(tmp_path, monkeypatch):
+    """Forward-readable degrade: a project with no `branch:` keys renders
+    exactly like the pre-tree flat card list (no branch/facet headers)."""
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+
+    kinds = [kind for kind, _value in ui.items]
+    assert kinds == ["card", "card"]
+
+
+def test_project_screen_offers_receipts_entry(tmp_path, monkeypatch):
+    ui, root = _project_with_branch_tree(tmp_path, monkeypatch)
+    ui._show("project")
+
+    assert ("receipts", None) in ui.items
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "Receipts" in rendered
+    assert "1 research receipt" in rendered
+
+
+def test_receipts_screen_lists_newest_first_and_opens_read_only(tmp_path, monkeypatch):
+    ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
+    ui._show("receipts")
+
+    assert [value.title for _kind, value in ui.items] == ["X receipt"]
+
+    ui.selected = 0
+    ui.activate()
+
+    assert ui.screen == "receipt"
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "X receipt" in rendered
+    assert "body" in rendered
+
+    ui.back()
+    assert ui.screen == "receipts"

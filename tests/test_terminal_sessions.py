@@ -1303,7 +1303,7 @@ def test_terminal_tui_capabilities_failure_does_not_block_project_actions(tmp_pa
     ui = terminal_tui.TerminalUI()
     ui.activate()
     assert ui.screen == "project"
-    assert [kind for kind, _value in ui.items] == ["mode", "mode", "backlog", "capabilities"]
+    assert [kind for kind, _value in ui.items] == ["mode", "mode", "backlog", "capabilities", "receipts"]
     rendered = "".join(fragment[1] for fragment in ui._body_text())
     assert "Capabilities unavailable: record unavailable" in rendered
 
