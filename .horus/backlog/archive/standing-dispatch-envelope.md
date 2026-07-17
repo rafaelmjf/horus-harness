@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-17
 vision_facet: "Autonomous dispatch"
@@ -10,6 +10,8 @@ type: feature
 parallel: unsafe
 created_by: owner
 surface: PRD.md Rules (delegation amendment), horus/run_executor.py + new horus/schedule.py + new horus/supervise.py consent checks, ~/.horus/ machine-local envelope store, dispatch-decision/horus-execution skills
+shipped_pr: 293
+shipped_sha: a1b1561
 ---
 
 # standing-dispatch-envelope — bounded pre-authorization for unattended dispatch

@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-17
 tier: sonnet
@@ -10,6 +10,8 @@ vision_facet: "Autonomous dispatch"
 branch: vision-branch-x3-scheduling-and-autonomous-execution
 created_by: owner
 surface: horus/cli.py (run parser + cmd_run gate logic ~:1073-1087); horus/terminal_sessions.py (is_attachable :55-57, launch_detached_run :231-278); horus/worktree.py
+shipped_pr: 294
+shipped_sha: a13dc22
 ---
 
 # unattended-dispatch-attachable-worktree-defaults — make scheduled/detached runs attachable + isolated by default

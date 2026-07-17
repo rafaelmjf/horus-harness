@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-17
 tier: sonnet
@@ -10,6 +10,8 @@ vision_facet: "Autonomous dispatch"
 branch: vision-branch-x3-scheduling-and-autonomous-execution
 created_by: owner
 surface: new `horus schedule` subcommand; horus/cli.py (parser + handler); new horus/schedule.py; wraps horus run (horus/run_executor.py); crontab or systemd-timer backed
+shipped_pr: 298
+shipped_sha: f407d07
 ---
 
 # schedule-local-dispatcher — a first-class local one-shot/cron dispatcher for `horus run`
