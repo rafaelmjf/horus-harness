@@ -1690,13 +1690,111 @@ def test_terminal_tui_resume_returns_ambient_personal_launch(tmp_path, monkeypat
             ui = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
             task = asyncio.create_task(ui.application.run_async())
             await asyncio.sleep(0.02)
-            pipe_input.send_bytes(b"\r\r\r")
+            # project -> mode -> account -> model (default) -> effort (default)
+            pipe_input.send_bytes(b"\r\r\r\r\r")
             return await asyncio.wait_for(task, timeout=1)
 
     result = asyncio.run(drive())
     assert isinstance(result, terminal_tui._Launch)
     assert result.project == root and result.mode == "resume"
     assert result.agent == "claude" and result.account is None and result.card is None
+    # Back-compat: accepting every default launches exactly as before —
+    # the agent's own default model, no explicit reasoning effort.
+    assert result.model is None and result.effort is None
+
+
+def test_terminal_tui_model_and_effort_thread_into_the_launch(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    config.register_project(root)
+    config.set_account_alias("claude-personal-id", "personal")
+    monkeypatch.setattr(claude_usage, "current_account", lambda *args, **kwargs: "claude-personal-id")
+    monkeypatch.setattr(codex_usage, "current_account", lambda *args, **kwargs: None)
+
+    async def drive():
+        with create_pipe_input() as pipe_input:
+            ui = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
+            task = asyncio.create_task(ui.application.run_async())
+            await asyncio.sleep(0.02)
+            pipe_input.send_bytes(b"\r")  # project
+            await asyncio.sleep(0.02)
+            pipe_input.send_bytes(b"\r")  # mode: resume
+            await asyncio.sleep(0.02)
+            pipe_input.send_bytes(b"\r")  # account: ambient personal
+            await asyncio.sleep(0.02)
+            assert ui.screen == "models"
+            ui.selected = [value for _kind, value in ui.items].index("sonnet")
+            pipe_input.send_bytes(b"\r")
+            await asyncio.sleep(0.02)
+            assert ui.screen == "effort"
+            ui.selected = [value for _kind, value in ui.items].index("xhigh")
+            pipe_input.send_bytes(b"\r")
+            return await asyncio.wait_for(task, timeout=1)
+
+    result = asyncio.run(drive())
+    assert isinstance(result, terminal_tui._Launch)
+    assert result.model == "sonnet" and result.effort == "xhigh"
+
+
+def test_terminal_tui_models_screen_scoped_to_the_selected_account_agent(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    ui = terminal_tui.TerminalUI()
+
+    ui.pending_account = terminal_tui.LaunchAccount("claude", "personal", None)
+    ui._show("models")
+    claude_models = [value for _kind, value in ui.items]
+    assert claude_models == [None, "opus", "sonnet", "haiku", "fable"]
+
+    ui.pending_account = terminal_tui.LaunchAccount("codex", "personal", None)
+    ui._show("models")
+    codex_models = [value for _kind, value in ui.items]
+    assert codex_models == [None, "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"]
+    # A codex account never offers a claude model and vice-versa.
+    assert not set(codex_models[1:]) & set(claude_models[1:])
+
+
+def test_terminal_tui_effort_screen_offers_the_full_vocabulary(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    ui = terminal_tui.TerminalUI()
+    ui._show("effort")
+    assert [value for _kind, value in ui.items] == [None, "low", "medium", "high", "xhigh", "max"]
+
+
+def test_terminal_tui_recommended_tag_present_for_tiered_resume_or_card_absent_for_fresh(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    card_path = _card(root, "tiered", title="Tiered card", priority="now", type="feature", detail="x")
+    card_path.write_text(
+        card_path.read_text(encoding="utf-8").replace("type: feature\n", "type: feature\ntier: sonnet\n"),
+        encoding="utf-8",
+    )
+    config.register_project(root)
+    ui = terminal_tui.TerminalUI()
+    ui.project = root
+    ui.pending_account = terminal_tui.LaunchAccount("claude", "personal", None)
+    card = ui.project_cards[root][0]
+    assert card.tier == "sonnet"
+
+    # Card-launch (resume): the tier's model is tagged recommended.
+    ui.pending_mode = "resume"
+    ui.pending_card = card
+    ui._show("models")
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "sonnet (recommended)" in rendered
+    assert "opus (recommended)" not in rendered
+
+    # Plain resume (no explicit card): falls back to the project's top open
+    # card as the "next action" proxy — still recommended.
+    ui.pending_card = None
+    ui._show("models")
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "sonnet (recommended)" in rendered
+
+    # Fresh launch: never recommends, even though a tiered card exists.
+    ui.pending_mode = "fresh"
+    ui._show("models")
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "(recommended)" not in rendered
 
 
 def test_terminal_tui_project_kpis_and_backlog_card_resume(tmp_path, monkeypatch):

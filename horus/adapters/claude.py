@@ -43,6 +43,12 @@ class IdentityCheck:
     detected_email: str | None
     ok: bool
 
+# The bare family aliases Claude Code's `--model` accepts (probed live,
+# Claude Code 2.1.206). Single-sourced here: the calibration-key rejection
+# regex below and `KNOWN_MODELS` (the TUI's per-account model choice) both
+# derive from this same tuple instead of duplicating the family list.
+_MODEL_FAMILIES: tuple[str, ...] = ("opus", "sonnet", "haiku", "fable")
+
 # Horus's canonical calibration key uses a dotted family-major[.minor] shape
 # (`sonnet-5`, `haiku-4.5` — see `horus/datums.py`'s `ALIAS_TO_CANONICAL`) that
 # names WHICH model ran for calibration history. It is never itself a valid
@@ -51,7 +57,7 @@ class IdentityCheck:
 # `claude-haiku-4-5`). Passing the calibration key straight through failed in
 # five seconds with no delivery (2026-07-16, session 5e704890-...) because it
 # looked exact but wasn't executable.
-_CALIBRATION_ONLY_MODEL_RE = re.compile(r"^(?:sonnet|opus|haiku|fable)-\d+(?:\.\d+)?$")
+_CALIBRATION_ONLY_MODEL_RE = re.compile(rf"^(?:{'|'.join(_MODEL_FAMILIES)})-\d+(?:\.\d+)?$")
 
 
 def _provider_selector_for(calibration_key: str) -> str:
@@ -74,6 +80,7 @@ _PERMISSION_MODE: dict[PermissionPosture, str] = {
 
 class ClaudeAdapter(AgentAdapter):
     name = "claude"
+    KNOWN_MODELS = _MODEL_FAMILIES
 
     def __init__(self, *, executable: str = "claude", config_dirs: dict[str, str] | None = None) -> None:
         """``config_dirs`` maps an account alias to its ``CLAUDE_CONFIG_DIR`` for
@@ -145,6 +152,8 @@ class ClaudeAdapter(AgentAdapter):
         argv = [self.executable, "--session-id", session_id]
         if spec.model:
             argv += ["--model", spec.model]
+        if spec.effort:
+            argv += ["--effort", spec.effort]
         if spec.posture is not PermissionPosture.DEFAULT:
             argv += self.permission_flags(spec.posture)
         argv += list(spec.extra_args)

@@ -68,6 +68,7 @@ def run_attached(
     account: str | None = None,
     posture: str = "default",
     model: str | None = None,
+    effort: str | None = None,
     prompt: str = "",
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
@@ -78,6 +79,7 @@ def run_attached(
         account=account,
         posture=posture,
         model=model,
+        effort=effort,
         prompt=prompt,
     )
     root = Path(project_dir).resolve()
@@ -121,6 +123,7 @@ def launch_tmux(
     account: str | None = None,
     posture: str = "default",
     model: str | None = None,
+    effort: str | None = None,
     prompt: str = "",
     attach: bool = True,
     cols: int | None = None,
@@ -146,6 +149,7 @@ def launch_tmux(
         account=account,
         posture=posture,
         model=model,
+        effort=effort,
         prompt=prompt,
     )
     if prepared is None:
@@ -298,6 +302,7 @@ def launch_window(
     account: str | None = None,
     posture: str = "default",
     model: str | None = None,
+    effort: str | None = None,
     prompt: str = "",
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
@@ -309,6 +314,7 @@ def launch_window(
             account=account,
             posture=posture,
             model=model,
+            effort=effort,
             prompt=prompt,
             reg=reg,
         )
@@ -319,6 +325,7 @@ def launch_window(
         account=account,
         posture=posture,
         model=model,
+        effort=effort,
         prompt=prompt,
         attach=False,
         reg=reg,
