@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
@@ -92,11 +92,39 @@ class UsageSnapshot(NamedTuple):
         return max(candidates, key=lambda c: c[0])
 
 
+# Where a reading came from. Recorded alongside it so a read-out can say which
+# surface answered instead of asserting one: a number pushed by the statusline and
+# a number polled from the experimental endpoint are not equally authoritative,
+# and neither is a cached one that is an hour old.
+SOURCE_STATUSLINE = "statusline"   # pushed by Claude Code (official, unmetered)
+SOURCE_OAUTH = "oauth"             # polled from the experimental /usage endpoint
+SOURCE_ROLLOUT = "rollout"         # read from Codex's local rollout JSONL
+SOURCE_UNKNOWN = "unknown"
+
+_SOURCE_LABELS = {
+    SOURCE_STATUSLINE: "recorded from Claude Code's statusline",
+    SOURCE_OAUTH: "live OAuth /usage read",
+    SOURCE_ROLLOUT: "local Codex rollout telemetry",
+    SOURCE_UNKNOWN: "unknown source",
+}
+
+
+def source_label(source: str) -> str:
+    return _SOURCE_LABELS.get(source, _SOURCE_LABELS[SOURCE_UNKNOWN])
+
+
 class _Cached(NamedTuple):
     """A fresh cache entry. ``snapshot`` is ``None`` for a cached negative result
     (distinguished from a cache miss, which is a plain ``None`` return)."""
 
     snapshot: UsageSnapshot | None
+    source: str = SOURCE_UNKNOWN
+    ts: float | None = None
+
+    def age_seconds(self, *, now: float | None = None) -> float | None:
+        if self.ts is None:
+            return None
+        return max(0.0, (time.time() if now is None else now) - self.ts)
 
 
 def cache_dir() -> Path:
@@ -161,6 +189,71 @@ def _read_codex(account: str | None) -> UsageSnapshot | None:
     )
 
 
+def _fmt_epoch(ts: object) -> str | None:
+    """Local ``%Y-%m-%d %H:%M`` for a unix-epoch-seconds reset, which is the shape
+    the statusline reports (the OAuth endpoint uses ISO strings instead)."""
+    if not isinstance(ts, int | float) or isinstance(ts, bool):
+        return None
+    try:
+        return datetime.fromtimestamp(float(ts), tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
+def _statusline_window(block: object) -> tuple[float | None, str | None]:
+    if not isinstance(block, dict):
+        return None, None
+    pct = block.get("used_percentage")
+    percent = float(pct) if isinstance(pct, int | float) and not isinstance(pct, bool) else None
+    return percent, _fmt_epoch(block.get("resets_at"))
+
+
+def snapshot_from_claude_statusline(payload: object) -> UsageSnapshot | None:
+    """A snapshot from the JSON Claude Code passes to a ``statusLine`` command.
+
+    This is the OFFICIAL, documented usage surface: Claude Code *pushes*
+    ``rate_limits`` into the statusline payload on every render, so reading it
+    needs no credentials, no network call, and cannot be rate-limited. The OAuth
+    ``/usage`` endpoint this module also reads is, by contrast, an experimental
+    surface that answers 429 under any real polling — which is why a recorded
+    statusline reading is preferred whenever one is fresh.
+
+    ``rate_limits`` is absent on non-Pro/Max plans and until a session's first API
+    response, so ``None`` here is an ordinary outcome, never an error.
+    """
+    if not isinstance(payload, dict):
+        return None
+    limits = payload.get("rate_limits")
+    if not isinstance(limits, dict):
+        return None
+    five_pct, five_reset = _statusline_window(limits.get("five_hour"))
+    week_pct, week_reset = _statusline_window(limits.get("seven_day"))
+    if five_pct is None and week_pct is None:
+        return None
+    return UsageSnapshot(five_pct, five_reset, week_pct, week_reset)
+
+
+def record_snapshot(
+    agent: str, account: str | None, snapshot: UsageSnapshot, *, now: float | None = None
+) -> Path:
+    """Persist a pushed reading into the shared cache every consumer already reads.
+
+    Deliberately the same file and format as a live read, so recording costs no
+    consumer any change: the preflight, the PreToolUse guard, the envelope's usage
+    floor and the dashboard all just find a fresh entry and never reach for the
+    rate-limited endpoint.
+    """
+    path = _cache_path(agent, account)
+    _write_cache(
+        path, snapshot, now=time.time() if now is None else now, source=SOURCE_STATUSLINE
+    )
+    return path
+
+
+def _live_source(agent: str) -> str:
+    return SOURCE_OAUTH if agent == "claude" else SOURCE_ROLLOUT
+
+
 def _read_live(agent: str, account: str | None, *, timeout: float) -> UsageSnapshot | None:
     """A single live usage read for ``agent``+``account``. Never raises."""
     try:
@@ -188,7 +281,7 @@ def refresh_usage(
     now = time.time() if now is None else now
     snapshot = _read_live(agent, account, timeout=timeout)
     if snapshot is not None:
-        _write_cache(_cache_path(agent, account), snapshot, now=now)
+        _write_cache(_cache_path(agent, account), snapshot, now=now, source=_live_source(agent))
     return snapshot
 
 
@@ -215,8 +308,10 @@ def _load_cache(path: Path, *, ttl: float | None, now: float) -> _Cached | None:
     # Stale, or a clock that jumped backwards past the write — treat as a miss.
     if ttl is not None and (now - ts >= ttl or now < ts):
         return None
+    source = data.get("source")
+    source = source if isinstance(source, str) and source else SOURCE_UNKNOWN
     if not data.get("ok"):
-        return _Cached(None)
+        return _Cached(None, source, ts)
     pct = data.get("percent")
     percent = float(pct) if isinstance(pct, int | float) else None
     resets = data.get("resets_at")
@@ -224,12 +319,16 @@ def _load_cache(path: Path, *, ttl: float | None, now: float) -> _Cached | None:
     wpct = data.get("weekly_percent")
     weekly_percent = float(wpct) if isinstance(wpct, int | float) else None
     wresets = data.get("weekly_resets_at")
-    return _Cached(UsageSnapshot(
-        percent,
-        resets if isinstance(resets, str) else None,
-        weekly_percent,
-        wresets if isinstance(wresets, str) else None,
-    ))
+    return _Cached(
+        UsageSnapshot(
+            percent,
+            resets if isinstance(resets, str) else None,
+            weekly_percent,
+            wresets if isinstance(wresets, str) else None,
+        ),
+        source,
+        ts,
+    )
 
 
 def _reset_timestamp(value: str | None) -> float | None:
@@ -253,15 +352,18 @@ def _window_expired(reset: str | None, now: float) -> bool:
     return ts is not None and ts <= now
 
 
-def _write_cache(path: Path, snapshot: UsageSnapshot | None, *, now: float) -> None:
+def _write_cache(
+    path: Path, snapshot: UsageSnapshot | None, *, now: float, source: str = SOURCE_UNKNOWN
+) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         if snapshot is None:
-            payload: dict[str, object] = {"ts": now, "ok": False}
+            payload: dict[str, object] = {"ts": now, "ok": False, "source": source}
         else:
             payload = {
                 "ts": now,
                 "ok": True,
+                "source": source,
                 "percent": snapshot.percent,
                 "resets_at": snapshot.resets_at,
                 "weekly_percent": snapshot.weekly_percent,
@@ -294,8 +396,18 @@ def cached_usage(
     if cached is not None:
         return cached.snapshot
     snapshot = _read_live(agent, account, timeout=timeout)
-    _write_cache(path, snapshot, now=now)
+    _write_cache(path, snapshot, now=now, source=_live_source(agent))
     return snapshot
+
+
+def read_cache_entry(agent: str, account: str | None = None) -> _Cached | None:
+    """Whatever is cached for ``agent``+``account`` — at any age — with the source
+    and timestamp attached, or ``None`` on a miss.
+
+    For read-outs that must say where a number came from and how old it is rather
+    than presenting every reading as equally live.
+    """
+    return _load_cache(_cache_path(agent, account), ttl=None, now=time.time())
 
 
 def read_cache_only(agent: str, account: str | None = None) -> UsageSnapshot | None:
