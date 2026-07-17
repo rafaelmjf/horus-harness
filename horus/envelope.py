@@ -98,6 +98,10 @@ class DispatchRequest:
 
     ``tier``/``branch`` come from the card's own frontmatter, not from the caller —
     a scheduled run cannot talk its way past the tier bound by asserting a tier.
+
+    ``account`` is the canonical ``<agent>-<alias>`` label (see
+    ``config.resolve_account``), which is what an envelope stores: an alias alone
+    names a different rate-limit pool under each agent.
     """
 
     card: str
@@ -265,19 +269,23 @@ def create(
         raise EnvelopeError("an envelope must authorize something: pass --card and/or --branch")
     if not accounts:
         raise EnvelopeError("an envelope must name at least one --account")
-    # A typo'd alias is the worst failure this artifact has: the envelope looks
+    # A misnamed account is the worst failure this artifact has: the envelope looks
     # created, the owner leaves for a week, and every dispatch silently refuses on a
-    # bound nobody meant to set. Refuse it here, where the owner can still read the
-    # message — matching `usage check`, which fails unknown aliases rather than
-    # falling back to the ambient login.
-    known = set(config.load_account_config_dirs()) | set(config.load_account_codex_homes())
-    unknown = [a for a in accounts if a not in known]
-    if unknown:
-        raise EnvelopeError(
-            f"unknown account alias(es): {', '.join(unknown)}. "
-            f"Isolated accounts are: {', '.join(sorted(known)) or '(none configured)'}. "
-            "An envelope naming an account that does not exist would authorize nothing."
-        )
+    # bound nobody meant to set. Resolve every name to exactly one real account and
+    # store the canonical `<agent>-<alias>` label — `personal` alone is a different
+    # rate-limit pool under claude than under codex, so an envelope must not be
+    # vague about which one it authorizes.
+    resolved: list[str] = []
+    for account_name in accounts:
+        resolution = config.resolve_account(account_name)
+        if not resolution.ok:
+            raise EnvelopeError(
+                f"{resolution.error} An envelope naming an account that does not "
+                "resolve would authorize nothing."
+            )
+        if resolution.ref.label not in resolved:
+            resolved.append(resolution.ref.label)
+    accounts = tuple(resolved)
     if not tiers:
         raise EnvelopeError("an envelope must allow at least one --tier")
     if not 0 <= usage_floor <= 100:
@@ -418,7 +426,9 @@ def validate(
         return Refusal(
             "account-set",
             f"account {request.account or '(none)'!r} is not in envelope {env.name!r}; "
-            f"it allows: {', '.join(env.accounts)}",
+            f"it allows: {', '.join(env.accounts)}. Accounts are named "
+            "`<agent>-<alias>`, because one alias is a different rate-limit pool "
+            "under each agent",
         )
     if request.tier not in env.tiers:
         return Refusal(

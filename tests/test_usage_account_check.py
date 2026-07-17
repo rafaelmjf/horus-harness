@@ -96,8 +96,8 @@ def test_unknown_alias_fails_without_ambient_fallback(monkeypatch, capsys):
     rc = cli.cmd_usage_check(_args(account="work"))
     out = capsys.readouterr().out
     assert rc == 2
-    assert "Unknown claude account alias 'work'" in out
-    assert "other" in out  # names the known isolated accounts
+    assert "unknown account 'work'" in out
+    assert "claude-other" in out  # names the known isolated accounts, canonically
     assert "Refusing the ambient-login fallback" in out
     assert calls == []  # no usage read at all — never the ambient account's
 

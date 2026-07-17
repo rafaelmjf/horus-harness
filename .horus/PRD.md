@@ -147,6 +147,29 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   unit would silently un-gate the public dashboard, so treat the harness flag + the
   deploy unit as one lockstep change. Persist a client-side seen-flag in `localStorage`,
   not `sessionStorage` (per-tab → resets on every new window Horus opens).
+- **An account is named `<agent>-<alias>`, and names are resolved, never guessed.** Identity
+  is (agent, alias) — `personal` is a different rate-limit pool under claude than under codex
+  — but accounts.toml keys on the bare alias while its isolated dir is `<agent>-<alias>`, so
+  every surface showing a config dir invites the wrong name. That mismatch caused silent
+  damage (split usage caches `usage-claude-claude-personal.json` beside
+  `usage-claude-personal.json`; an envelope naming a misspelled account authorizes nothing
+  while looking correct). So `config.resolve_account` accepts what a human writes —
+  `claude-personal`, `claude personal`, `personal claude acc`, `personal` — trying the literal
+  alias, then the canonical label, then tokens; the canonical `<agent>-<alias>` label is the
+  display form AND an accepted input (the "mistake" is the better name; adopt it). Anything
+  unresolvable or ambiguous is REFUSED with the real accounts named — never a best guess,
+  because a wrong account spends someone else's subscription. Durable artifacts (envelopes)
+  store the canonical label.
+- **Usage comes from the surface the app pushes, not one we poll.** Claude Code hands
+  `rate_limits` to every statusline render (official, documented, unauthenticated,
+  unmeterable); `GET /api/oauth/usage` is experimental and 429s under real polling. `horus
+  usage record` captures the pushed reading into the shared cache, so every consumer stops
+  reaching for the endpoint. Codex has no equivalent (its statusline is declarative), so its
+  rollout JSONL stays the source — and each rollout lane declares its own `window_minutes`,
+  so never infer a window from its slot (that reported "5h limit 92%" for a window resetting
+  in six days). Readings carry a source and an age; a read-out never asserts a cause it did
+  not diagnose ("missing credentials" for what was rate limiting sent us hunting a
+  non-existent bug).
 - **Accounts:** login-driven setup into isolated dirs; TOFU identity adoption; the real
   email never lands in a commit; forward-slash every path written to TOML/JSON. A
   `CLAUDE_CONFIG_DIR` isolates renderer preferences too — compare account settings when

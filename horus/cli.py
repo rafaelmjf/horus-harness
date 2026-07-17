@@ -1001,9 +1001,11 @@ def _envelope_guard(args: argparse.Namespace, root: Path) -> tuple[int | None, _
         print(f"Refusing to run: card {card_name!r} was not found in {backlog.backlog_dir(root)}.")
         print("An envelope authorizes named cards, so an unknown card cannot be authorized.")
         return 2, None
+    # The envelope stores canonical `<agent>-<alias>` labels, so compare like with
+    # like: `args.account` is a bare alias by this point (cmd_run resolved it).
     request = envelope.DispatchRequest(
         card=card.name,
-        account=args.account,
+        account=config.AccountRef(args.agent, args.account).label if args.account else None,
         tier=card.tier,
         effort=getattr(args, "effort", None) or "",
         branch=card.field_value("branch"),
@@ -1141,6 +1143,18 @@ def cmd_run(args: argparse.Namespace) -> int:
     if model_error is not None:
         print(f"Refusing to run: {model_error}")
         return 2
+    # Name the account before anything routes work to it: a misspelled alias used to
+    # fall through to the ambient login or to a pool that isn't the one intended.
+    if getattr(args, "account", None):
+        resolution = config.resolve_account(args.account, agent=args.agent)
+        if not resolution.ok:
+            print(f"Refusing to run: {resolution.error}")
+            return 2
+        if resolution.ref.agent != args.agent:
+            print(f"Refusing to run: {resolution.ref.label!r} is a {resolution.ref.agent} "
+                  f"account, but this run is --agent {args.agent}.")
+            return 2
+        args.account = resolution.ref.alias
 
     root = Path(args.path).resolve()
     # The standing envelope is the outermost authorization: refuse before any git
@@ -2275,16 +2289,22 @@ def _usage_check_account(args: argparse.Namespace) -> int:
     """Explicit account-scoped check: resolve the isolated mapping for the alias
     without touching the ambient login. An unknown alias fails (exit 2) rather than
     silently reporting the ambient account's usage as if it were the target's."""
-    alias = args.account
     target = args.target
     if args.hook:
         print("--account is incompatible with --hook: hooks always read the ambient session account.")
         return 2
+    resolution = config.resolve_account(args.account, agent=target)
+    if not resolution.ok:
+        print(f"Refusing to check usage: {resolution.error}")
+        print("Refusing the ambient-login fallback for an explicit --account check.")
+        return 2
+    alias = resolution.ref.alias
     mapping, kind = _usage_account_mapping(target)
     mapped = mapping.get(alias)
     if not mapped:
         known = ", ".join(sorted(mapping)) or "none configured"
-        print(f"Unknown {target} account alias {alias!r} (isolated accounts: {known}).")
+        print(f"Account {resolution.ref.label!r} is not a {target} account "
+              f"({target} accounts: {known}).")
         print("Refusing the ambient-login fallback for an explicit --account check.")
         return 2
 

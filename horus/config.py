@@ -778,6 +778,160 @@ def load_dashboard_access() -> DashboardAccess | None:
     return DashboardAccess(owner_email=owner_email, access=access)
 
 
+# --------------------------------------------------------------------------- #
+# Naming an account
+#
+# An account's real identity is (agent, alias): `personal` means one rate-limit
+# pool under claude and a different one under codex. But the alias alone is what
+# accounts.toml keys on, while the isolated dir it maps to is named
+# ``<agent>-<alias>`` (see `default_account_dir`) — so every surface that shows a
+# config dir path invites `claude-personal` as the name, when the alias is
+# `personal`. That mismatch has produced real, silent damage: split usage caches
+# on this machine (`usage-claude-claude-personal.json` beside
+# `usage-claude-personal.json`), and an envelope created against a misspelled
+# account would have authorized nothing at all while looking correct.
+#
+# So: resolve names instead of demanding one exact spelling. `<agent>-<alias>` is
+# the canonical DISPLAY form *and* an accepted input — the "mistake" is arguably
+# the better name, so it is adopted rather than fought. Whatever cannot be
+# resolved unambiguously is refused with the real accounts named; nothing is ever
+# guessed, because guessing an account routes work to the wrong pool.
+# --------------------------------------------------------------------------- #
+
+_AGENT_NAMES = ("claude", "codex")
+# Words a human sprinkles when naming an account that carry no identity.
+_ACCOUNT_NOISE = frozenset({
+    "acc", "account", "accounts", "the", "my", "a", "an", "for", "on", "under", "s",
+})
+
+
+@dataclass(frozen=True)
+class AccountRef:
+    """One configured isolated account. ``label`` is both how it is displayed and a
+    spelling `resolve_account` accepts back."""
+
+    agent: str
+    alias: str
+
+    @property
+    def label(self) -> str:
+        return f"{self.agent}-{self.alias}"
+
+
+@dataclass(frozen=True)
+class AccountResolution:
+    """The outcome of naming an account. Exactly one of ``ref`` / ``error`` is set."""
+
+    ref: AccountRef | None = None
+    error: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.ref is not None
+
+
+def known_accounts() -> list[AccountRef]:
+    """Every configured isolated account, claude first then codex, alias-sorted."""
+    refs = [AccountRef("claude", a) for a in sorted(load_account_config_dirs())]
+    refs += [AccountRef("codex", a) for a in sorted(load_account_codex_homes())]
+    return refs
+
+
+def _name_tokens(text: str) -> tuple[str | None, list[str]]:
+    """Split a human account name into (agent hint, identity tokens).
+
+    "claude personal", "personal claude acc", "claude-personal", "personal acc
+    (claude)" all reduce to ("claude", ["personal"]).
+    """
+    agent: str | None = None
+    rest: list[str] = []
+    for token in re.split(r"[^A-Za-z0-9]+", text.lower()):
+        if not token:
+            continue
+        if token in _AGENT_NAMES and agent is None:
+            agent = token
+        elif token not in _ACCOUNT_NOISE:
+            rest.append(token)
+    return agent, rest
+
+
+def _alias_tokens(alias: str) -> list[str]:
+    return [t for t in re.split(r"[^A-Za-z0-9]+", alias.lower()) if t]
+
+
+def _slug(text: str) -> str:
+    """``Claude Work`` / ``claude_work`` / ``claude-work`` all -> ``claude-work``."""
+    return "-".join(t for t in re.split(r"[^A-Za-z0-9]+", text.lower()) if t)
+
+
+def resolve_account(text: str | None, *, agent: str | None = None) -> AccountResolution:
+    """Resolve a human account name to exactly one configured account.
+
+    ``agent`` is the caller's context (the adapter being run, the target being
+    checked) and is used only when the name itself does not say. A name that
+    matches nothing, or matches more than one account, is REFUSED with the real
+    accounts named — never resolved to a best guess, because a wrong account sends
+    work to a different rate-limit pool under someone else's subscription.
+
+    Three strategies, most literal first, so an alias that happens to contain an
+    agent's name (``work-codex``) still resolves as itself rather than having that
+    word read as a hint and stripped:
+
+    1. the alias exactly (``personal``, ``work-codex``);
+    2. the canonical label (``claude-personal``) — what the isolated dir is called,
+       so it is the name every surface suggests;
+    3. tokens, agent word extracted and noise dropped (``personal claude acc``).
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return AccountResolution(error="no account named")
+
+    known = known_accounts()
+    if not known:
+        return AccountResolution(
+            error=f"no isolated accounts are configured, so {raw!r} cannot be resolved. "
+                  "Add one with `horus account --set <alias> --isolate`."
+        )
+
+    context = [ref for ref in known if agent not in _AGENT_NAMES or ref.agent == agent]
+    slug = _slug(raw)
+
+    def _resolve(matches: list[AccountRef]) -> AccountResolution | None:
+        if len(matches) == 1:
+            return AccountResolution(ref=matches[0])
+        if len(matches) > 1:
+            names = ", ".join(m.label for m in matches)
+            return AccountResolution(
+                error=f"{raw!r} is ambiguous — it matches {names}. Name the agent too "
+                      f"(e.g. {matches[0].label!r})."
+            )
+        return None
+
+    # 1. the alias, verbatim.
+    found = _resolve([ref for ref in context if _slug(ref.alias) == slug])
+    # 2. the canonical `<agent>-<alias>` label.
+    found = found or _resolve([ref for ref in known if ref.label == slug])
+    if found:
+        return found
+
+    # 3. tokens: pull the agent word out, drop noise, compare what identity is left.
+    hinted_agent, tokens = _name_tokens(raw)
+    agent_filter = hinted_agent or (agent if agent in _AGENT_NAMES else None)
+    pool = [ref for ref in known if agent_filter is None or ref.agent == agent_filter]
+    matches = [ref for ref in pool if _alias_tokens(ref.alias) == tokens]
+    if not matches:
+        # Order-insensitive pass: "phone work" still names `work-phone`.
+        matches = [ref for ref in pool if sorted(_alias_tokens(ref.alias)) == sorted(tokens)]
+    found = _resolve(matches)
+    if found:
+        return found
+
+    return AccountResolution(
+        error=f"unknown account {raw!r}. Configured accounts: "
+              f"{', '.join(ref.label for ref in known)}."
+    )
+
+
 def alias_for(identifier: str | None) -> str | None:
     """Public alias for a raw account identifier (email/uuid).
 
