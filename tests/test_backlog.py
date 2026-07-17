@@ -33,6 +33,25 @@ def test_load_cards_reads_new_optional_fields(tmp_path):
     assert c.surface == ("horus/dashboard.py", "horus/pty_*")
 
 
+def test_load_cards_records_raw_frontmatter_fields(tmp_path):
+    _mk_card(tmp_path, "a", parallel="exclusive", type="feature")
+    card = backlog.load_cards(tmp_path)[0]
+
+    # Every key the card carries, in file order — what the TUI field picker offers.
+    assert [key for key, _value in card.fields] == [
+        "status", "priority", "tier", "created", "parallel", "type",
+    ]
+    assert card.field_value("tier") == "sonnet"
+    assert card.field_value("parallel") == "exclusive"
+    assert card.field_value("vision_facet") == ""  # absent reads as empty, never raises
+
+
+def test_cards_stay_hashable_with_raw_fields(tmp_path):
+    _mk_card(tmp_path, "a")
+    _mk_card(tmp_path, "b")
+    assert len(set(backlog.load_cards(tmp_path))) == 2
+
+
 def test_load_cards_back_compat_no_new_fields(tmp_path):
     _mk_card(tmp_path, "old-style")
     cards = backlog.load_cards(tmp_path)

@@ -61,6 +61,24 @@ LAUNCH_POSTURE_CHOICES: tuple[str, ...] = ("plan", "read-only", "default", "auto
 CONTINUITY_DEFAULTS: dict[str, str] = {"granularity": "handoff"}
 CONTINUITY_GRANULARITY_CHOICES: tuple[str, ...] = ("handoff", "delivery", "manual")
 
+# ---------------------------------------------------------------------------
+# TUI backlog fields: which card frontmatter keys the TUI's backlog list renders
+# inline after each card title. A user-level preference (every project's backlog
+# on this machine), because it expresses how the owner likes to read a list, not
+# anything about one repo. Empty is the default and means "render the classic
+# row untouched" — there is deliberately no built-in starter set.
+#
+# Values are frontmatter key names, not a fixed choice list: cards may carry any
+# key, so the TUI picker offers what the cards in front of you actually have.
+# ---------------------------------------------------------------------------
+
+TUI_DEFAULTS: dict[str, list[str]] = {"backlog_fields": []}
+
+# A frontmatter key as `horus.frontmatter` can parse one back: no whitespace, no
+# ':', nothing needing TOML escaping. Anything else can't name a real field, so it
+# is dropped on read and refused on write rather than persisted into the config.
+_FIELD_KEY_RE = re.compile(r"[A-Za-z0-9_.-]+")
+
 
 def config_dir() -> Path:
     return Path.home() / ".horus"
@@ -126,6 +144,7 @@ def _write_projects(projects: list[str]) -> None:
 # `register_project` write.
 _MANAGED_KEYS = frozenset({
     "workspace_root", "projects", "github_owners", "ignored_repos", "workflow", "launch", "continuity",
+    "tui",
 })
 
 
@@ -172,6 +191,7 @@ def _write_config(
     ignored_repos: list[str] | None = None,
     launch: dict[str, str] | None = None,
     continuity: dict[str, str] | None = None,
+    tui: dict[str, list[str]] | None = None,
 ) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
     root = workspace_root or load_workspace_root()
@@ -186,6 +206,9 @@ def _write_config(
         launch = load_launch_defaults()
     if continuity is None:
         continuity = load_continuity_defaults()
+    # Preserve the current TUI preferences when the caller doesn't supply them.
+    if tui is None:
+        tui = load_tui_defaults()
     # Round-trip any table/key we don't manage (e.g. [access]) — read before we write.
     extra_scalars, extra_tables = _unmanaged_entries()
     lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"']
@@ -206,6 +229,8 @@ def _write_config(
     lines += [f'{k} = "{v}"' for k, v in launch.items()]
     lines += ["", "[continuity]"]
     lines += [f'{k} = "{v}"' for k, v in continuity.items()]
+    lines += ["", "[tui]"]
+    lines += [f"{k} = {_toml_value(v)}" for k, v in tui.items()]
     lines += extra_tables
     config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -387,6 +412,75 @@ def set_continuity_granularity(granularity: str) -> str:
         continuity={"granularity": granularity},
     )
     return granularity
+
+
+def _clean_backlog_fields(raw: object) -> list[str]:
+    """Normalize a backlog-fields value: keep well-formed key names, in order, once
+    each. Anything else (non-list, non-string entry, a key that can't name a real
+    frontmatter field) is dropped — a garbled preference degrades to the plain
+    default row rather than breaking the backlog list."""
+    if not isinstance(raw, list):
+        return []
+    cleaned: list[str] = []
+    for entry in raw:
+        if not isinstance(entry, str):
+            continue
+        key = entry.strip()
+        if not _FIELD_KEY_RE.fullmatch(key) or key in cleaned:
+            continue
+        cleaned.append(key)
+    return cleaned
+
+
+def load_tui_defaults() -> dict[str, list[str]]:
+    """Return the persisted user-level TUI preferences, falling back to
+    :data:`TUI_DEFAULTS`. Keys: ``backlog_fields`` (card frontmatter keys the
+    backlog list renders inline after the title, in render order).
+    """
+    path = config_path()
+    if not path.exists():
+        return {"backlog_fields": []}
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return {"backlog_fields": []}
+    raw = data.get("tui") or {}
+    if not isinstance(raw, dict):
+        return {"backlog_fields": []}
+    return {"backlog_fields": _clean_backlog_fields(raw.get("backlog_fields", []))}
+
+
+def load_backlog_fields() -> list[str]:
+    """The card frontmatter keys the TUI backlog list renders inline, in order."""
+    return load_tui_defaults()["backlog_fields"]
+
+
+def set_backlog_fields(fields: list[str]) -> list[str]:
+    """Persist the inline backlog fields (global, every project). Returns the stored
+    list. Raises ``ValueError`` for anything that cannot name a frontmatter field."""
+    cleaned: list[str] = []
+    for entry in fields:
+        key = entry.strip()
+        if not _FIELD_KEY_RE.fullmatch(key):
+            raise ValueError(f"Invalid backlog field name {entry!r}.")
+        if key not in cleaned:
+            cleaned.append(key)
+    _write_config(
+        load_projects(), load_github_owners(), load_workspace_root(),
+        tui={"backlog_fields": cleaned},
+    )
+    return cleaned
+
+
+def toggle_backlog_field(field: str) -> list[str]:
+    """Add ``field`` to the inline backlog fields, or drop it when already present.
+    Persists immediately and returns the new list. New fields append, so the render
+    order is the order they were picked."""
+    current = load_backlog_fields()
+    key = field.strip()
+    if key in current:
+        return set_backlog_fields([f for f in current if f != key])
+    return set_backlog_fields([*current, key])
 
 
 def register_project(project_path: Path) -> bool:

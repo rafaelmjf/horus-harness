@@ -85,6 +85,19 @@ class Card:
     shipped_sha: str
     shipped: str  # legacy free-text shipped note, used only to detect unflipped drift
     title: str
+    # Every frontmatter key/value as written, in file order — the named fields above
+    # are the ones tooling reasons about; this is the raw record so display surfaces
+    # (the TUI's backlog field picker) can offer whatever a card actually carries
+    # without re-reading the file per render. Pairs, not a dict, to keep Card frozen
+    # *and* hashable.
+    fields: tuple[tuple[str, str], ...] = ()
+
+    def field_value(self, key: str) -> str:
+        """The card's raw frontmatter value for ``key``, or "" when it has none."""
+        for name, value in self.fields:
+            if name == key:
+                return value
+        return ""
 
 
 def _parse_surface(raw: str) -> tuple[str, ...]:
@@ -136,6 +149,7 @@ def _card_from_path(path: Path) -> Card:
         shipped_sha=fm.get("shipped_sha", "").strip(),
         shipped=fm.get("shipped", "").strip(),
         title=_title(doc.body, path.stem),
+        fields=tuple((key, str(value).strip()) for key, value in fm.items()),
     )
 
 
