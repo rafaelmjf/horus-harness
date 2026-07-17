@@ -12,7 +12,9 @@ the printed ritual. No agent is spawned here.
 
 from __future__ import annotations
 
+import os
 import subprocess
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
@@ -105,6 +107,14 @@ def _canonical_continuity_paths(root: Path) -> tuple[str, ...]:
     return (".horus/project.md", ".horus/roadmap.md", ".horus/features.md")
 
 
+def _canonical_checkpoint(root: Path) -> str | None:
+    """The latest commit that touched canonical continuity — the point everything
+    after which is an as-yet-unconsolidated delivery."""
+    return _git(
+        root, "log", "-1", "--format=%H", "--", *_canonical_continuity_paths(root),
+    ) or None
+
+
 def pending_delivery_commits(root: Path) -> list[tuple[str, str]]:
     """Product commits after the latest canonical-continuity commit.
 
@@ -116,9 +126,7 @@ def pending_delivery_commits(root: Path) -> list[tuple[str, str]]:
     """
     if not is_git_repo(root):
         return []
-    checkpoint = _git(
-        root, "log", "-1", "--format=%H", "--", *_canonical_continuity_paths(root),
-    )
+    checkpoint = _canonical_checkpoint(root)
     if not checkpoint:
         return []
     out = _git(
@@ -152,9 +160,136 @@ def pending_delivery_findings(root: Path) -> list[Finding]:
     )]
 
 
+@dataclass(frozen=True)
+class ParallelSignal:
+    """One other writer that a closing/resuming session must not miss."""
+
+    kind: str      # "live-session" | "open-pr" | "merged-pr"
+    ref: str       # session id / PR number
+    detail: str
+
+
+def _is_ancestor(root: Path, commit: str, of: str) -> bool | None:
+    """Is ``commit`` an ancestor of ``of``? None when it cannot be decided (unknown
+    object) — the caller then fails quiet rather than raising a false alarm."""
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", commit, of],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode == 0:
+        return True
+    if r.returncode == 1:
+        return False
+    return None  # 128/other: bad object, detached, etc.
+
+
+def _gh_json(root: Path, *args: str) -> object | None:
+    """A best-effort `gh ... --json` call. None on any failure (gh absent, offline,
+    not a GitHub repo) so a machine without gh degrades silently — never a false
+    'no parallel work' nor a crash."""
+    import json as _json
+    try:
+        r = subprocess.run(
+            ["gh", *args], cwd=str(root), capture_output=True, text=True, timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        return _json.loads(r.stdout)
+    except (ValueError, TypeError):
+        return None
+
+
+def parallel_deliveries(
+    root: Path, *, self_session_id: str | None = None,
+) -> tuple[list[ParallelSignal], bool]:
+    """Detect other concurrent writers on this project. Returns (signals, pr_checked);
+    ``pr_checked`` is False when gh could not be consulted, so callers avoid a false
+    all-clear. Deterministic and best-effort — no locks, no mutation."""
+    signals: list[ParallelSignal] = []
+
+    # (a) Another live registered session/worker on this same project.
+    from horus import registry
+    try:
+        records = registry.Registry.default().snapshot()
+    except Exception:  # noqa: BLE001 - best-effort machine-local signal
+        records = []
+    # Exclude the current writer: a `horus run` worker knows its own id, and an
+    # interactive Claude/Codex session is registered under CLAUDE_CODE_SESSION_ID —
+    # flagging yourself as a parallel writer is noise, not a signal.
+    self_ids = {
+        self_session_id,
+        os.environ.get("HORUS_RUN_SESSION_ID"),
+        os.environ.get("CLAUDE_CODE_SESSION_ID"),
+    }
+    self_ids.discard(None)
+    here = root.resolve().as_posix()
+    for rec in records:
+        if rec.status != "running" or rec.session_id in self_ids:
+            continue
+        try:
+            same = Path(rec.project).resolve().as_posix() == here
+        except (OSError, ValueError):
+            same = rec.project == here
+        if same:
+            signals.append(ParallelSignal(
+                "live-session", rec.session_id,
+                f"live {rec.agent} session {rec.session_id[:8]} on this project",
+            ))
+
+    if not is_git_repo(root):
+        return signals, False
+
+    # (b) Sibling PRs on the same repo not yet folded into canonical continuity.
+    current_branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    open_prs = _gh_json(root, "pr", "list", "--state", "open", "--json", "number,headRefName,title")
+    merged_prs = _gh_json(
+        root, "pr", "list", "--state", "merged", "--limit", "10",
+        "--json", "number,mergeCommit,headRefName",
+    )
+    pr_checked = open_prs is not None or merged_prs is not None
+
+    for pr in open_prs or []:
+        if pr.get("headRefName") and pr.get("headRefName") != current_branch:
+            signals.append(ParallelSignal(
+                "open-pr", str(pr.get("number")),
+                f"PR #{pr.get('number')} open on {pr.get('headRefName')} — {pr.get('title', '')}".rstrip(" —"),
+            ))
+
+    checkpoint = _canonical_checkpoint(root)
+    for pr in merged_prs or []:
+        sha = (pr.get("mergeCommit") or {}).get("oid") if isinstance(pr.get("mergeCommit"), dict) else None
+        if not sha or not checkpoint:
+            continue
+        # Flag only merges NOT yet covered by the latest continuity commit. Unknown
+        # objects (None) are skipped: better silent than a false alarm on old history.
+        if _is_ancestor(root, sha, checkpoint) is False:
+            signals.append(ParallelSignal(
+                "merged-pr", str(pr.get("number")),
+                f"PR #{pr.get('number')} merged ({sha[:8]}) not yet in canonical continuity",
+            ))
+    return signals, pr_checked
+
+
+def parallel_delivery_findings(root: Path, *, self_session_id: str | None = None) -> list[Finding]:
+    """Render :func:`parallel_deliveries` as gate findings. Empty (not a false
+    'all clear') when gh is unavailable and no live co-session exists."""
+    signals, pr_checked = parallel_deliveries(root, self_session_id=self_session_id)
+    if signals:
+        return [Finding("warn", f"parallel delivery pending: {s.detail}") for s in signals]
+    if pr_checked:
+        return [Finding("ok", "no parallel deliveries detected")]
+    return []
+
+
 def boundary_freshness_gate(root: Path) -> list[Finding]:
     """A real pause/handoff close must fold every pending delivery."""
-    return freshness_gate(root) + pending_delivery_findings(root)
+    return freshness_gate(root) + pending_delivery_findings(root) + parallel_delivery_findings(root)
 
 
 def pr_diff_freshness(

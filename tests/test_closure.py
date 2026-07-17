@@ -560,3 +560,122 @@ def test_target_continuity_staleness_never_auto_fixes(tmp_path):
     closure.target_continuity_staleness(tmp_path, completed_at="2026-07-14T12:00:00+00:00")
     after = (tmp_path / ".horus" / "PRD.md").read_text(encoding="utf-8")
     assert before == after
+
+
+# --- parallel-delivery reconciliation (item 5) -------------------------------
+
+from horus import registry as _registry  # noqa: E402
+
+
+def _rec(session_id, project, status="running", agent="claude"):
+    return _registry.SessionRecord(session_id=session_id, agent=agent, project=project, status=status)
+
+
+def _fake_reg(records):
+    class _Reg:
+        @classmethod
+        def default(cls):
+            r = cls()
+            return r
+        def snapshot(self):
+            return records
+    return _Reg
+
+
+def test_parallel_deliveries_names_a_live_cosession(tmp_path, monkeypatch):
+    monkeypatch.setattr(_registry, "Registry", _fake_reg([_rec("sibling-1", str(tmp_path))]))
+    monkeypatch.setattr(closure, "is_git_repo", lambda root: False)  # skip PR probe
+    signals, pr_checked = closure.parallel_deliveries(tmp_path)
+    assert pr_checked is False
+    assert [s.kind for s in signals] == ["live-session"]
+    assert "sibling-1"[:8] in signals[0].detail
+
+
+def test_parallel_deliveries_excludes_self(tmp_path, monkeypatch):
+    monkeypatch.setattr(_registry, "Registry", _fake_reg([_rec("me-123", str(tmp_path))]))
+    monkeypatch.setattr(closure, "is_git_repo", lambda root: False)
+    monkeypatch.setenv("HORUS_RUN_SESSION_ID", "me-123")
+    signals, _ = closure.parallel_deliveries(tmp_path)
+    assert signals == []
+
+
+def test_parallel_deliveries_ignores_a_non_running_session(tmp_path, monkeypatch):
+    monkeypatch.setattr(_registry, "Registry", _fake_reg([_rec("done-1", str(tmp_path), status="exited")]))
+    monkeypatch.setattr(closure, "is_git_repo", lambda root: False)
+    signals, _ = closure.parallel_deliveries(tmp_path)
+    assert signals == []
+
+
+def _gh_stub(open_prs, merged_prs):
+    def stub(root, *args):
+        state = args[args.index("--state") + 1] if "--state" in args else ""
+        return {"open": open_prs, "merged": merged_prs}.get(state)
+    return stub
+
+
+def test_parallel_deliveries_flags_open_sibling_pr_not_current_branch(tmp_path, monkeypatch):
+    monkeypatch.setattr(_registry, "Registry", _fake_reg([]))
+    monkeypatch.setattr(closure, "is_git_repo", lambda root: True)
+    monkeypatch.setattr(closure, "_git", lambda root, *a: "my-branch" if a[:1] == ("rev-parse",) else "")
+    monkeypatch.setattr(closure, "_canonical_checkpoint", lambda root: "checkpointsha")
+    monkeypatch.setattr(closure, "_gh_json", _gh_stub(
+        open_prs=[
+            {"number": 7, "headRefName": "other-branch", "title": "sibling"},
+            {"number": 8, "headRefName": "my-branch", "title": "mine — skip"},
+        ],
+        merged_prs=[],
+    ))
+    signals, pr_checked = closure.parallel_deliveries(tmp_path)
+    assert pr_checked is True
+    kinds = [(s.kind, s.ref) for s in signals]
+    assert ("open-pr", "7") in kinds
+    assert ("open-pr", "8") not in kinds  # current branch is not "parallel"
+
+
+def test_parallel_deliveries_flags_only_uncovered_merged_pr(tmp_path, monkeypatch):
+    monkeypatch.setattr(_registry, "Registry", _fake_reg([]))
+    monkeypatch.setattr(closure, "is_git_repo", lambda root: True)
+    monkeypatch.setattr(closure, "_git", lambda root, *a: "my-branch")
+    monkeypatch.setattr(closure, "_canonical_checkpoint", lambda root: "checkpointsha")
+    # covered → ancestor True (skip); uncovered → False (flag); unknown → None (skip)
+    ancestry = {"coveredsha": True, "uncoveredsha": False, "unknownsha": None}
+    monkeypatch.setattr(closure, "_is_ancestor", lambda root, sha, of: ancestry[sha])
+    monkeypatch.setattr(closure, "_gh_json", _gh_stub(
+        open_prs=[],
+        merged_prs=[
+            {"number": 1, "mergeCommit": {"oid": "coveredsha"}},
+            {"number": 2, "mergeCommit": {"oid": "uncoveredsha"}},
+            {"number": 3, "mergeCommit": {"oid": "unknownsha"}},
+        ],
+    ))
+    signals, _ = closure.parallel_deliveries(tmp_path)
+    refs = [s.ref for s in signals if s.kind == "merged-pr"]
+    assert refs == ["2"]  # only the uncovered merge
+
+
+def test_findings_are_empty_when_gh_unavailable_and_no_cosession(tmp_path, monkeypatch):
+    monkeypatch.setattr(_registry, "Registry", _fake_reg([]))
+    monkeypatch.setattr(closure, "is_git_repo", lambda root: True)
+    monkeypatch.setattr(closure, "_git", lambda root, *a: "my-branch")
+    monkeypatch.setattr(closure, "_gh_json", lambda root, *a: None)  # gh absent/offline
+    findings = closure.parallel_delivery_findings(tmp_path)
+    assert findings == []  # no false "all clear"
+
+
+def test_findings_report_ok_when_checked_and_clean(tmp_path, monkeypatch):
+    monkeypatch.setattr(_registry, "Registry", _fake_reg([]))
+    monkeypatch.setattr(closure, "is_git_repo", lambda root: True)
+    monkeypatch.setattr(closure, "_git", lambda root, *a: "my-branch")
+    monkeypatch.setattr(closure, "_canonical_checkpoint", lambda root: "cp")
+    monkeypatch.setattr(closure, "_gh_json", _gh_stub(open_prs=[], merged_prs=[]))
+    findings = closure.parallel_delivery_findings(tmp_path)
+    assert len(findings) == 1 and findings[0].level == "ok"
+
+
+def test_boundary_gate_includes_parallel_findings(tmp_path, monkeypatch):
+    monkeypatch.setattr(closure, "freshness_gate", lambda root: [])
+    monkeypatch.setattr(closure, "pending_delivery_commits", lambda root: [])
+    monkeypatch.setattr(closure, "parallel_deliveries",
+                        lambda root, **k: ([closure.ParallelSignal("open-pr", "9", "PR #9 open on x")], True))
+    findings = closure.boundary_freshness_gate(tmp_path)
+    assert any("parallel delivery pending" in f.message and "PR #9" in f.message for f in findings)
