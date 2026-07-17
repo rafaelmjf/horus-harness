@@ -266,6 +266,11 @@ def halt_dependents(root: Path, failed_card: str, reason: str) -> list[str]:
 
 
 def _escalate(ctx: SupervisionContext, summary: str) -> notify.EscalationResult:
+    # Bounded action buttons for the inbound `horus notify listen` dispatcher: a red-gate
+    # push is actionable with one tap. Each callback_data is a command the grammar maps.
+    actions: tuple[tuple[str, str], ...] = (("Sessions", "sessions"), ("Schedule", "schedule"))
+    if ctx.session_id:
+        actions += (("Re-supervise", f"supervise {ctx.session_id[:8]}"),)
     return notify.escalate(notify.Escalation(
         event=notify.SUPERVISE_GATE,
         project=ctx.root.name,
@@ -275,6 +280,7 @@ def _escalate(ctx: SupervisionContext, summary: str) -> notify.EscalationResult:
         sha=(ctx.head_sha or "")[:12] or None,
         pr=int(ctx.pr_ref) if (ctx.pr_ref or "").isdigit() else None,
         inspect=f"horus sessions · PR {ctx.pr_ref}" if ctx.pr_ref else "horus sessions",
+        actions=actions,
     ))
 
 
