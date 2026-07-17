@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-17
 tier: sonnet
@@ -10,6 +10,8 @@ vision_facet: "Autonomous dispatch"
 branch: vision-branch-x3-scheduling-and-autonomous-execution
 created_by: owner
 surface: horus/cli.py; horus/native_hooks.py (band sentinels ~:739-751); new notify wiring (webhook / OS notification / harness PushNotification); machine-local config under ~/.horus/
+shipped_pr: 299
+shipped_sha: 6d771ed
 ---
 
 # unattended-escalation-channel — a push channel so a headless supervisor can reach the owner
