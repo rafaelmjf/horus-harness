@@ -79,3 +79,23 @@ def test_launch_interactive_reports_terminal_failure(tmp_path, monkeypatch):
     result = launch.launch_interactive(agent="fake", project_dir=tmp_path)
     assert not result.ok and "no console" in result.error
     assert Registry.default().all() == []
+
+
+# --- launch session modes (launch-mode-process-skill) ------------------------
+
+def test_mode_preamble_loads_the_inline_batch_skill():
+    from horus import launch
+    pre = launch.mode_preamble("inline-batch")
+    assert "inline-batch-session" in pre and "invoke" in pre.lower()
+
+
+def test_mode_preamble_is_empty_for_standard_or_none():
+    from horus import launch
+    assert launch.mode_preamble("standard") == ""
+    assert launch.mode_preamble(None) == ""
+    assert launch.mode_preamble("") == ""
+
+
+def test_launch_modes_are_standard_and_inline_batch():
+    from horus import launch
+    assert launch.LAUNCH_MODES == ("standard", "inline-batch")

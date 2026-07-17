@@ -1691,7 +1691,8 @@ def test_terminal_tui_resume_returns_ambient_personal_launch(tmp_path, monkeypat
             task = asyncio.create_task(ui.application.run_async())
             await asyncio.sleep(0.02)
             # project -> mode -> account -> model (default) -> effort (default)
-            pipe_input.send_bytes(b"\r\r\r\r\r")
+            #   -> session_mode (standard, the default first item)
+            pipe_input.send_bytes(b"\r\r\r\r\r\r")
             return await asyncio.wait_for(task, timeout=1)
 
     result = asyncio.run(drive())
@@ -1699,8 +1700,9 @@ def test_terminal_tui_resume_returns_ambient_personal_launch(tmp_path, monkeypat
     assert result.project == root and result.mode == "resume"
     assert result.agent == "claude" and result.account is None and result.card is None
     # Back-compat: accepting every default launches exactly as before —
-    # the agent's own default model, no explicit reasoning effort.
+    # the agent's own default model, no explicit reasoning effort, standard mode.
     assert result.model is None and result.effort is None
+    assert result.session_mode == "standard"
 
 
 def test_terminal_tui_model_and_effort_thread_into_the_launch(tmp_path, monkeypatch):
@@ -1729,11 +1731,16 @@ def test_terminal_tui_model_and_effort_thread_into_the_launch(tmp_path, monkeypa
             assert ui.screen == "effort"
             ui.selected = [value for _kind, value in ui.items].index("xhigh")
             pipe_input.send_bytes(b"\r")
+            await asyncio.sleep(0.02)
+            assert ui.screen == "session_mode"
+            ui.selected = [value for _kind, value in ui.items].index("inline-batch")
+            pipe_input.send_bytes(b"\r")
             return await asyncio.wait_for(task, timeout=1)
 
     result = asyncio.run(drive())
     assert isinstance(result, terminal_tui._Launch)
     assert result.model == "sonnet" and result.effort == "xhigh"
+    assert result.session_mode == "inline-batch"
 
 
 def test_terminal_tui_models_screen_scoped_to_the_selected_account_agent(tmp_path, monkeypatch):
