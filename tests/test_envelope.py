@@ -24,9 +24,12 @@ NOW = datetime(2026, 7, 22, 9, 0, tzinfo=timezone.utc)
 def _isolated_home(tmp_path, monkeypatch):
     """Envelopes live under ~/.horus; never touch the real one from a test."""
     monkeypatch.setattr(config, "config_dir", lambda: tmp_path / "horus-home")
+    # Real shape: accounts.toml keys on the ALIAS ("personal"), while the isolated
+    # dir it maps to is named "claude-personal". Envelopes store the canonical
+    # `<agent>-<alias>` label, which is also an accepted spelling.
     monkeypatch.setattr(
         config, "load_account_config_dirs",
-        lambda: {"claude-personal": "/x/personal", "claude-work": "/x/work"},
+        lambda: {"personal": "/x/personal", "work": "/x/work"},
     )
     monkeypatch.setattr(config, "load_account_codex_homes", lambda: {})
     return tmp_path
@@ -49,6 +52,7 @@ def _make(**overrides) -> envelope.Envelope:
 
 
 def _req(**overrides) -> envelope.DispatchRequest:
+    # Accounts travel as the canonical `<agent>-<alias>` label, never a bare alias.
     fields = dict(card="card-a", account="claude-personal", tier="sonnet")
     fields.update(overrides)
     return envelope.DispatchRequest(**fields)
@@ -82,21 +86,40 @@ def test_create_refuses_an_envelope_that_authorizes_nothing():
         _make(tiers=())
 
 
-def test_create_refuses_an_unknown_account_alias():
-    """The worst failure this artifact has: a typo'd alias creates an envelope that
-    looks fine, the owner leaves for a week, and every dispatch silently refuses."""
-    with pytest.raises(envelope.EnvelopeError, match="unknown account alias"):
-        _make(accounts=("personal",))  # the isolated alias is 'claude-personal'
+def test_create_refuses_an_account_that_resolves_to_nothing():
+    """The worst failure this artifact has: a misnamed account creates an envelope
+    that looks fine, the owner leaves for a week, and every dispatch silently
+    refuses on a bound nobody meant to set."""
+    with pytest.raises(envelope.EnvelopeError, match="unknown account"):
+        _make(accounts=("typo",))
 
 
-def test_create_names_the_known_aliases_when_it_refuses():
+def test_create_names_the_real_accounts_when_it_refuses():
     with pytest.raises(envelope.EnvelopeError, match="claude-personal, claude-work"):
         _make(accounts=("typo",))
 
 
-def test_create_accepts_a_codex_isolated_alias(monkeypatch):
-    monkeypatch.setattr(config, "load_account_codex_homes", lambda: {"codex-personal": "/x/c"})
-    assert _make(accounts=("codex-personal",)).accounts == ("codex-personal",)
+def test_create_canonicalises_however_the_owner_spelled_it():
+    """`personal`, `claude personal`, `claude-personal` are one account."""
+    for spelling in ("personal", "claude personal", "claude-personal", "personal claude acc"):
+        envelope.envelope_path("trip").unlink(missing_ok=True)
+        assert _make(accounts=(spelling,)).accounts == ("claude-personal",)
+
+
+def test_create_refuses_an_ambiguous_account(monkeypatch):
+    """`personal` is a different rate-limit pool under each agent."""
+    monkeypatch.setattr(config, "load_account_codex_homes", lambda: {"personal": "/x/c"})
+    with pytest.raises(envelope.EnvelopeError, match="ambiguous"):
+        _make(accounts=("personal",))
+
+
+def test_create_accepts_a_codex_account(monkeypatch):
+    monkeypatch.setattr(config, "load_account_codex_homes", lambda: {"personal": "/x/c"})
+    assert _make(accounts=("codex personal",)).accounts == ("codex-personal",)
+
+
+def test_create_dedupes_spellings_of_one_account():
+    assert _make(accounts=("personal", "claude-personal")).accounts == ("claude-personal",)
 
 
 def test_create_refuses_duplicate_name():
@@ -311,8 +334,10 @@ def _project(tmp_path: Path, *, tier: str = "sonnet", branch: str = "") -> Path:
 
 
 def _args(root: Path, **overrides) -> argparse.Namespace:
+    # `cmd_run` resolves --account to a bare alias before the guard runs; the guard
+    # recombines it with --agent into the canonical label the envelope stores.
     fields = dict(
-        agent="claude", account="claude-personal", effort=None, path=str(root),
+        agent="claude", account="personal", effort=None, path=str(root),
         unattended=True, envelope="trip", card="card-a",
     )
     fields.update(overrides)
