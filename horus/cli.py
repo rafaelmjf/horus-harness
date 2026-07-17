@@ -900,14 +900,17 @@ def _resolved_config_dir(agent: str, account: str | None) -> Path | None:
         return None
 
 
-def _config_dir_conflict_guard(agent: str, account: str | None, *, force: bool) -> int | None:
-    """Refuse to launch a second live agent process into a config dir already in use.
+def _config_dir_conflict_guard(agent: str, account: str | None) -> int | None:
+    """Advise (never refuse) when a launch shares a live config dir.
 
-    Two agent CLIs sharing one ``CLAUDE_CONFIG_DIR`` / ``CODEX_HOME`` race on its JSON
-    config and corrupt it, so both can die on startup. Returns an exit code to refuse
-    the run, or ``None`` to proceed. The launching session sharing its OWN dir with the
-    new worker (overseer==worker) is the tolerated case — it warns and proceeds.
-    ``--force`` downgrades a refusal to a warning. A registry read failure never blocks."""
+    Claude Code and Codex both support several concurrent sessions on one
+    ``CLAUDE_CONFIG_DIR`` / ``CODEX_HOME``; long-lived sessions coexist safely.
+    The one observed corruption (2026-07-16) was two workers *cold-starting
+    simultaneously* on a shared *ambient* dir — a narrow startup-window race that
+    per-account isolation has since largely dissolved. So this is advisory: it
+    always proceeds, but names the live peer so the shared config dir (and its
+    shared rate-limit budget) is never silent. Always returns ``None``; a
+    registry read failure is silently ignored."""
     if agent not in ("claude", "codex"):
         return None
     target = _resolved_config_dir(agent, account)
@@ -928,22 +931,18 @@ def _config_dir_conflict_guard(agent: str, account: str | None, *, force: bool) 
     peer = live[0]
     if target == _resolved_config_dir(agent, None) and len(live) == 1:
         print(
-            f"Note: this run shares {label} {target} with the launching session "
-            f"(live {agent} session {peer.session_id[:8]}). One config dir, two {agent} "
-            "processes can race on startup — proceeding since the peer is this session."
+            f"Note: sharing {label} {target} with the launching session "
+            f"({peer.session_id[:8]}); proceeding."
         )
         return None
+    project = peer.project.rstrip("/").rsplit("/", 1)[-1] or peer.project
+    extra = f" (+{len(live) - 1} more)" if len(live) > 1 else ""
     print(
-        f"{'Warning' if force else 'Refusing to run'}: {label} {target} is already in use "
-        f"by a live {agent} session ({peer.session_id[:8]}, pid {peer.pid})."
+        f"Note: sharing {label} {target} with live {agent} session "
+        f"{peer.session_id[:8]} ({project}){extra}. Concurrent cold-starts can "
+        "race; proceeding."
     )
-    print(
-        f"Two {agent} processes on one config dir race on its JSON state and corrupt it — "
-        "both can die on startup. Use a different --account (its own isolated dir) or wait "
-        + ("for the peer to finish (overriding anyway: --force)." if force
-           else "for the peer to finish; pass --force to override.")
-    )
-    return None if force else 2
+    return None
 
 
 @dataclass(frozen=True)
@@ -1200,11 +1199,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "include their relevant state in the worker brief or checkpoint before dispatch."
             )
 
-    guard_refusal = _config_dir_conflict_guard(
-        args.agent, args.account, force=getattr(args, "force", False)
-    )
-    if guard_refusal is not None:
-        return guard_refusal
+    _config_dir_conflict_guard(args.agent, args.account)
     if getattr(args, "worktree", None):
         try:
             wt = worktree.ensure_worktree(root, args.worktree)
