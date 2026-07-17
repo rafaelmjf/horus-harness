@@ -67,3 +67,20 @@ revoke`) instantly grounds all pending scheduled work — the owner's kill switc
   card's stamps) before scheduling.
 - No auto-renewal, no learning, no spend estimation — hard bounds and refusals
   only, per the calibration rules (never estimate task usage, never auto-route).
+
+## Reviews
+
+- 2026-07-17 — **Built; two design changes and two deferrals.** (1) The guard binds
+  at `horus run` (`cli._envelope_guard`), not in `schedule.py`/`supervise.py` as this
+  card's `surface` line proposed — a wrapper-level check is bypassed by any cron entry
+  or dispatcher bug calling `horus run` directly, so the bound sits where the worker
+  launches. Items 2/4 become thin callers and inherit it for free. (2) The tier bound
+  is an **allow-list of `tier:` labels, not an ordered ceiling**: `vendor-neutral-delegation-tiers`
+  is about to replace opus/sonnet with low/medium/high/frontier, and an allow-list bounds
+  exactly as hard without this module owning a total order that card will redefine.
+  Deferred, genuinely blocked on later kit items: refusals are visible in `horus envelope
+  show`/`list` but not yet in `horus schedule list` (item 2) or the escalation channel
+  (item 3) — both should surface the `Refusal.bound` string, which is machine-readable
+  for exactly that. Known seam for `vendor-neutral-delegation-tiers` to close: the
+  envelope bounds the **card's** tier, while `--model` still passes through unbounded
+  (model→tier mapping is that card's to own).
