@@ -44,6 +44,7 @@ from horus import (
     machine_requirements,
     mergewatch,
     native_hooks,
+    notify,
     offboard,
     overhead,
     registry,
@@ -1484,6 +1485,33 @@ def cmd_envelope_revoke(args: argparse.Namespace) -> int:
     print("Pending scheduled dispatches validate at fire time, so they are refused from now on.")
     print("Live attached sessions are untouched — stop those with `horus stop <session>`.")
     return 0
+
+
+def cmd_notify_show(args: argparse.Namespace) -> int:
+    """Print the machine-local escalation sink and enabled events (token redacted)."""
+    cfg = notify.load_notify_config()
+    print(notify.render_config(cfg))
+    if cfg.sink == "none":
+        print("\nNo sink configured — escalations stay pull-based (horus sessions/close).")
+        print(f"Configure [notify] in {config.config_path()} to enable a push channel.")
+    return 0
+
+
+def cmd_notify_test(args: argparse.Namespace) -> int:
+    """Send a sample escalation through the configured sink to prove the channel.
+
+    Bypasses the per-event enable gate (``force=True``) so it exercises the transport
+    regardless of which events are on. Exits non-zero if the sink is unconfigured or the
+    send fails, so setup problems are visible here rather than silently at 05:30."""
+    esc = notify.Escalation(
+        event=notify.SUPERVISE_GATE,
+        project=Path(args.path).resolve().name,
+        summary="test escalation from `horus notify test`",
+        inspect="this is a test; no action needed",
+    )
+    result = notify.escalate(esc, force=True)
+    print(result.describe())
+    return 0 if result.delivered else 1
 
 
 def _spawn_watcher(session_id: str, cwd: Path) -> None:
@@ -3687,6 +3715,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_env_revoke.add_argument("name", help="envelope name")
     p_env_revoke.set_defaults(func=cmd_envelope_revoke)
+
+    p_notify = sub.add_parser(
+        "notify",
+        help="machine-local push channel for unattended escalations (telegram/hermes/webhook)",
+        description=(
+            "A thin, machine-local push channel an unattended supervisor uses to reach the "
+            "owner when a run ends badly. Every escalation surface is otherwise pull-based "
+            "(horus sessions / horus close). Configure the sink in ~/.horus/config.toml "
+            "[notify] — never committed, never in fleet.toml (it holds a token):\n\n"
+            "  [notify]\n"
+            "  sink = \"telegram\"      # none | telegram | hermes | webhook\n"
+            "  token = \"<bot-token>\"  # telegram: a dedicated bot; needs no Hermes\n"
+            "  chat_id = 123456789\n"
+            "  # events = [\"delivery-failed\", \"usage-band\", \"supervise-gate\"]  # default\n"
+            "  # add \"success\" for an opt-in clean-accept ping\n\n"
+            "With no sink (the default) escalations stay pull-based and every other command "
+            "behaves exactly as today. A sink that fails never fails the run it reports on."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    notify_sub = p_notify.add_subparsers(dest="notify_cmd", required=True)
+    p_notify_show = notify_sub.add_parser(
+        "show", help="show the configured sink and enabled events (token redacted)"
+    )
+    p_notify_show.set_defaults(func=cmd_notify_show)
+    p_notify_test = notify_sub.add_parser(
+        "test", help="send a sample escalation through the configured sink to prove it works"
+    )
+    p_notify_test.add_argument(
+        "--path", default=".", help="project whose name labels the test message (default: cwd)"
+    )
+    p_notify_test.set_defaults(func=cmd_notify_test)
 
     p_datum = sub.add_parser(
         "datum",

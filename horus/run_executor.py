@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from horus import adapters, datums, delivery, registry, runlog
+from horus import adapters, datums, delivery, notify, registry, runlog
 
 
 @dataclass(frozen=True)
@@ -233,5 +233,52 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
         )
         if actual is not None:
             emit("\n" + datums.render_worker_breakdown([actual]).rstrip())
+        result = _escalate_completion(
+            request, status, delivery_status, evidence, saw_usage_signal=saw_usage_signal,
+        )
+        if result is not None and not result.delivered and result.error:
+            emit(f"  [notify] {result.describe()}")
+        elif result is not None and result.delivered:
+            emit(f"  [notify] {result.describe()}")
     emit(f"\n{status} — session {request.session_id} (account {request.account or '-'})")
     return 0 if status == "exited" else 1
+
+
+def _escalate_completion(
+    request: RunRequest,
+    status: str,
+    delivery_status: str | None,
+    evidence: "delivery.DeliveryEvidence",
+    *,
+    saw_usage_signal: bool,
+) -> notify.EscalationResult | None:
+    """Push a best-effort escalation when an unattended worker ends badly.
+
+    Fires only for worker/unattended runs, and only on an actionable outcome — a run
+    halted on usage, or a ``blocked``/``failed`` delivery. A clean accept stays silent
+    (no ``success`` ping unless the owner opts in, which the event gate handles). Never
+    raises: :func:`notify.escalate` is best-effort, so this can never fail completion.
+    """
+    branch = evidence.branch
+    card = branch[len("auto/"):] if branch and branch.startswith("auto/") else None
+    common = dict(
+        project=request.project.name,
+        session_id=request.session_id,
+        card=card,
+        sha=(evidence.head_sha or "")[:12] or None,
+        pr=evidence.pr_number,
+        inspect=f"horus sessions · session {request.session_id}",
+    )
+    if saw_usage_signal and status != "exited":
+        esc = notify.Escalation(
+            event=notify.USAGE_BAND, summary="unattended run halted on usage", **common,
+        )
+    elif delivery_status in {"blocked", "failed"}:
+        esc = notify.Escalation(
+            event=notify.DELIVERY_FAILED,
+            summary=f"scheduled worker delivery {delivery_status}",
+            **common,
+        )
+    else:
+        return None
+    return notify.escalate(esc)
