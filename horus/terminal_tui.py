@@ -688,6 +688,7 @@ class TerminalUI:
             "accounts": f"HORUS · {self.pending_mode.title() if self.pending_mode else 'Choose'} account",
             "models": f"HORUS · {self.pending_account.agent.title() if self.pending_account else 'Choose'} model",
             "effort": "HORUS · Effort",
+            "session_mode": "HORUS · Session mode",
             "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
             "backlog_fields": "HORUS · Backlog card fields",
             "capabilities": f"HORUS · {self.project.name if self.project else 'Project'} capabilities",
