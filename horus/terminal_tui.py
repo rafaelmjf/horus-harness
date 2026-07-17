@@ -42,6 +42,7 @@ from horus import (
     fleet_review,
     frontmatter,
     github_catalog,
+    launch,
     machine_requirements,
     projection_sync,
     registry,
@@ -69,6 +70,7 @@ class _Launch:
     prompt_override: str | None = None
     model: str | None = None
     effort: str | None = None
+    session_mode: str | None = None
 
 
 @dataclass(frozen=True)
@@ -115,6 +117,12 @@ _CONTINUITY_LABELS: dict[str, str] = {
     "handoff": "Handoffs & pauses — batch related deliveries (recommended)",
     "delivery": "Every delivery — update canonical continuity for each PR",
     "manual": "Manual only — keep warnings until an explicit checkpoint",
+}
+
+# Session mode: a working posture loaded as a skill at launch (`launch.LAUNCH_MODES`).
+_SESSION_MODE_LABELS: dict[str, str] = {
+    "standard": "Standard — no posture skill (today's behavior)",
+    "inline-batch": "Inline-batch — ship several cards in a row, continuity at close",
 }
 
 
@@ -172,6 +180,7 @@ class TerminalUI:
         self.pending_account: LaunchAccount | None = None
         self.pending_model: str | None = None
         self.pending_effort: str | None = None
+        self.pending_session_mode: str | None = None
         self.card: backlog.Card | None = None
         self.card_scroll = 0
         self.backlog_fields = config.load_backlog_fields()
@@ -426,12 +435,16 @@ class TerminalUI:
                 self.pending_account = value
                 self.pending_model = None
                 self.pending_effort = None
+                self.pending_session_mode = None
                 self._show("models")
         elif self.screen == "models" and kind == "model":
             self.pending_model = value if value is None else str(value)
             self._show("effort")
         elif self.screen == "effort" and kind == "effort":
             self.pending_effort = value if value is None else str(value)
+            self._show("session_mode")
+        elif self.screen == "session_mode" and kind == "session_mode":
+            self.pending_session_mode = value if value is None else str(value)
             if self.pending_account is not None:
                 self._exit_launch(self.pending_account)
         elif self.screen == "settings" and kind == "posture":
@@ -492,6 +505,8 @@ class TerminalUI:
             self._show("accounts")
         elif self.screen == "effort":
             self._show("models")
+        elif self.screen == "session_mode":
+            self._show("effort")
         elif self.screen == "backlog":
             self._show("project")
         elif self.screen == "backlog_fields":
@@ -547,6 +562,8 @@ class TerminalUI:
             self.items = [("model", None)] + [("model", model) for model in _agent_models(agent)]
         elif self.screen == "effort":
             self.items = [("effort", None)] + [("effort", level) for level in adapters.EFFORT_LEVELS]
+        elif self.screen == "session_mode":
+            self.items = [("session_mode", mode) for mode in launch.LAUNCH_MODES]
         elif self.screen == "receipts":
             self.items = [("receipt", receipt) for receipt in self.project_receipts.get(self.project, [])]
         elif self.screen == "receipt":
@@ -639,6 +656,7 @@ class TerminalUI:
                 self.pending_prompt,
                 self.pending_model,
                 self.pending_effort,
+                self.pending_session_mode,
             )
         )
 
@@ -837,6 +855,12 @@ class TerminalUI:
                     lines.append(("class:muted", "     Agent's default reasoning effort\n"))
                 else:
                     lines.append((style, f"\n {marker} {value}\n"))
+            elif kind == "session_mode":
+                label = _SESSION_MODE_LABELS.get(str(value), str(value))
+                head, _, detail = label.partition(" — ")
+                lines.append((style, f"\n {marker} {head}\n"))
+                if detail:
+                    lines.append(("class:muted", f"     {detail}\n"))
             elif kind == "card":
                 card = value
                 status = " · claimed" if card.status == "claimed" else ""
@@ -1450,12 +1474,7 @@ def run() -> int:
             return 130
         if isinstance(result, _Launch):
             target = terminal_sessions.default_target()
-            if result.prompt_override is not None:
-                prompt = result.prompt_override
-            elif result.card is not None:
-                prompt = _card_prompt(result.project, result.card)
-            else:
-                prompt = routines.resume_prompt(result.project) if result.mode == "resume" else ""
+            prompt = _launch_prompt(result)
             launched = _launch(
                 target=target,
                 agent=result.agent,
@@ -1922,6 +1941,19 @@ def _card_prompt(root: Path, card: backlog.Card) -> str:
         f"`.horus/backlog/{card.path.name}` before changing code, and treat it as the "
         "first item for this session."
     )
+
+
+def _launch_prompt(result: _Launch) -> str:
+    """The initial prompt for a launched session, with the session-mode skill preamble
+    prepended (so an `inline-batch` launch loads its posture skill first). Kept module-level
+    and pure so the mode wiring is testable without driving the interactive app."""
+    if result.prompt_override is not None:
+        prompt = result.prompt_override
+    elif result.card is not None:
+        prompt = _card_prompt(result.project, result.card)
+    else:
+        prompt = routines.resume_prompt(result.project) if result.mode == "resume" else ""
+    return launch.mode_preamble(result.session_mode) + prompt
 
 
 def _launch(

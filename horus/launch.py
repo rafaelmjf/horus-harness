@@ -19,6 +19,28 @@ from pathlib import Path
 
 from horus import adapters, launcher, registry
 
+# Launch "session modes": a posture the session adopts, made reliable by loading a bundled
+# skill at launch (cross-account, cross-model, via git projection) rather than trusting the
+# model to remember a rule. `standard` is today's behavior. See
+# `.claude/skills/<mode-skill>` and card `launch-mode-process-skill`.
+LAUNCH_MODES: tuple[str, ...] = ("standard", "inline-batch")
+_MODE_SKILL: dict[str, str] = {"inline-batch": "inline-batch-session"}
+
+
+def mode_preamble(session_mode: str | None) -> str:
+    """The prompt preamble that loads a mode's skill, or "" for standard/none.
+
+    Prepended to the launch prompt so the session's first act is to invoke the skill —
+    the reliable, cross-account/model way to make the posture hold without PRD prose."""
+    skill = _MODE_SKILL.get((session_mode or "").strip())
+    if not skill:
+        return ""
+    return (
+        f"[session mode: {session_mode}] Before anything else this session, invoke the "
+        f"`{skill}` skill and follow it throughout — it defines how you batch work and "
+        f"continuity for this session.\n\n"
+    )
+
 
 @dataclass
 class LaunchResult:
