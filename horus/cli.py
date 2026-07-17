@@ -57,6 +57,7 @@ from horus import (
     runlog,
     schedule,
     skills,
+    supervise,
     templates,
     terminal_app,
     terminal_sessions,
@@ -1333,10 +1334,14 @@ def cmd_schedule_list(args: argparse.Namespace) -> int:
         return 0
     print(f"{'ID':<10} {'STATE':<8} {'FIRES':<21} DESCRIPTION")
     for item in schedules:
-        state = "fired" if item.fired else "pending"
+        state = "halted" if item.halted else ("fired" if item.fired else "pending")
         print(f"{item.id:<10} {state:<8} {item.when:<21} {item.description}")
+        if item.halted and item.halt_reason:
+            print(f"{'':<10} └─ {item.halt_reason}")
     if any(s.fired for s in schedules):
         print("\nFired one-shots stay listed until removed: `horus schedule cancel <id>`.")
+    if any(s.halted for s in schedules):
+        print("Halted dispatches were disarmed by a supervisor escalation and will not fire.")
     return 0
 
 
@@ -1485,6 +1490,28 @@ def cmd_envelope_revoke(args: argparse.Namespace) -> int:
     print("Pending scheduled dispatches validate at fire time, so they are refused from now on.")
     print("Live attached sessions are untouched — stop those with `horus stop <session>`.")
     return 0
+
+
+def cmd_supervise(args: argparse.Namespace) -> int:
+    """Unattended verify → merge → close → escalate for a dispatched card.
+
+    Resolves the delivery from durable state (registry + the authorizing envelope's
+    merge authority), reproduces the acceptance gate itself, then accepts or escalates —
+    never trusting the worker's own 'done'. Exit 0 = accepted/verified/no-op; 1 = escalated.
+    """
+    ctx = supervise.resolve_context(args.target, path=getattr(args, "path", None))
+    if ctx is None:
+        print(f"Refusing to supervise: {args.target!r} matches more than one session — "
+              "give the full id (see `horus sessions`).")
+        return 2
+    outcome = supervise.supervise(ctx, probe=getattr(args, "probe", None))
+    print(f"supervise: {outcome.verdict} — {outcome.reason}")
+    if outcome.escalation is not None:
+        print(f"  escalation: {outcome.escalation.describe()}")
+    if outcome.halted:
+        print(f"  andon: halted {len(outcome.halted)} dependent scheduled dispatch(es): "
+              f"{', '.join(outcome.halted)}")
+    return outcome.exit_code
 
 
 def cmd_notify_show(args: argparse.Namespace) -> int:
@@ -3715,6 +3742,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_env_revoke.add_argument("name", help="envelope name")
     p_env_revoke.set_defaults(func=cmd_envelope_revoke)
+
+    p_supervise = sub.add_parser(
+        "supervise",
+        help="unattended verify → merge → close → escalate for a dispatched card",
+        description=(
+            "The headless andon for a scheduled dispatch. After a worker finishes, "
+            "`horus supervise <session|pr>` independently reproduces the acceptance gate — "
+            "required CI green on the EXACT head SHA + the freshness/continuity gate + (before "
+            "an authorized merge) one live probe — then either accepts (merge + close + ship) "
+            "or escalates and halts dependent scheduled work. It never trusts the worker's own "
+            "'done'.\n\n"
+            "Merge is OPT-IN and bounded: it fires only when the run's standing envelope was "
+            "created with `--allow-merge`, AND `--probe` names a live probe to run first. "
+            "Without merge authority (the default) or a pinned dispatch base, it verifies and "
+            "escalates but merges nothing. Escalation uses the `horus notify` channel; an "
+            "escalation disarms every scheduled dispatch whose card transitively `depends-on` "
+            "the failed card (visible in `horus schedule list`).\n\n"
+            "  horus supervise <session-id> --probe 'horus notify show && python -m pytest -q'"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_supervise.add_argument("target", help="a worker session id/prefix (preferred) or a PR number/URL")
+    p_supervise.add_argument(
+        "--path", default=None,
+        help="project dir to verify in (default: the session's own project from the registry)",
+    )
+    p_supervise.add_argument(
+        "--probe", default=None, metavar="CMD",
+        help="owner-authored, machine-local live probe run before an authorized merge "
+             "(shell command, run in the project dir). Required to merge; never read from the repo.",
+    )
+    p_supervise.set_defaults(func=cmd_supervise)
 
     p_notify = sub.add_parser(
         "notify",
