@@ -542,3 +542,13 @@ def test_process_retrospective_skill_registered_and_projected():
     assert "## v2 six-lane projects (fallback)" in skill.content
     for root in (".claude/skills", ".agents/skills"):
         assert Path(f"{root}/process-retrospective/SKILL.md").read_text(encoding="utf-8") == skill.content
+
+
+def test_inline_batch_session_skill_registered_and_batches():
+    s = next(x for x in skills.SKILLS if x.name == "inline-batch-session")
+    assert s.version == 1
+    # posture: per-card delivery-safety rungs kept, canonical continuity deferred to close
+    assert "delivery-safety" in s.content
+    assert "do NOT do per card" in s.content or "Batch to the boundary" in s.content
+    assert "handoff" in s.content
+    assert "## v2 six-lane projects (fallback)" in s.content

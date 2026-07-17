@@ -378,3 +378,26 @@ def test_receipts_screen_lists_newest_first_and_opens_read_only(tmp_path, monkey
 
     ui.back()
     assert ui.screen == "receipts"
+
+
+def test_launch_prompt_prepends_inline_batch_skill_preamble():
+    from pathlib import Path
+    from horus import terminal_tui
+    launch = terminal_tui._Launch(
+        Path("/repo"), "claude", "fresh", None,
+        None, None, None, None, "inline-batch",
+    )
+    prompt = terminal_tui._launch_prompt(launch)
+    assert "inline-batch-session" in prompt
+
+
+def test_launch_prompt_has_no_preamble_for_standard_mode():
+    from pathlib import Path
+    from horus import terminal_tui
+    launch = terminal_tui._Launch(
+        Path("/repo"), "claude", "fresh", None,
+        None, None, None, None, "standard",
+    )
+    prompt = terminal_tui._launch_prompt(launch)
+    assert "inline-batch-session" not in prompt
+    assert prompt == ""  # fresh + standard = today's empty prompt
