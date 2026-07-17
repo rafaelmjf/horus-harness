@@ -1050,6 +1050,49 @@ def test_close_check_gates_on_freshness(tmp_path, monkeypatch, capsys):
     assert "Stale" in capsys.readouterr().out
 
 
+def test_close_check_names_sibling_pr_but_stays_fresh(tmp_path, monkeypatch, capsys):
+    """A merely-open sibling PR (item 5's parallel-delivery signal) must not flip
+    'Fresh' to 'Stale — action needed' — it is advisory, not a close-blocking gate."""
+    from horus import closure as _closure
+    from tests.test_routines import _mk_fresh
+
+    _home(tmp_path, monkeypatch)
+    _mk_fresh(tmp_path)
+    monkeypatch.setattr(
+        _closure, "parallel_deliveries",
+        lambda root, **k: (
+            [_closure.ParallelSignal("open-pr", "117", "PR #117 open on other-branch — sibling")],
+            True,
+        ),
+    )
+    assert main(["close", "--check", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "PR #117" in out
+    assert "Fresh" in out
+    assert "Stale" not in out
+
+
+def test_close_check_stays_stale_with_parallel_signal_and_real_freshness_failure(tmp_path, monkeypatch, capsys):
+    """A genuine freshness failure alongside a parallel signal must still flip to
+    stale — the informational parallel signal must never mask a real gate failure."""
+    from horus import closure as _closure
+    from tests.test_routines import _mk_fresh
+
+    _home(tmp_path, monkeypatch)
+    _mk_fresh(tmp_path, proj_updated="2026-06-01", road_updated="2026-06-01")
+    monkeypatch.setattr(
+        _closure, "parallel_deliveries",
+        lambda root, **k: (
+            [_closure.ParallelSignal("open-pr", "117", "PR #117 open on other-branch — sibling")],
+            True,
+        ),
+    )
+    assert main(["close", "--check", "--path", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "PR #117" in out
+    assert "Stale" in out
+
+
 def test_usage_check_cli_warns_and_codex_stop_hook_blocks_with_json(tmp_path, monkeypatch, capsys):
     import io
 

@@ -679,3 +679,21 @@ def test_boundary_gate_includes_parallel_findings(tmp_path, monkeypatch):
                         lambda root, **k: ([closure.ParallelSignal("open-pr", "9", "PR #9 open on x")], True))
     findings = closure.boundary_freshness_gate(tmp_path)
     assert any("parallel delivery pending" in f.message and "PR #9" in f.message for f in findings)
+
+
+def test_parallel_delivery_findings_are_info_not_warn(tmp_path, monkeypatch):
+    """A named sibling PR must PRINT but never count toward warn/fail aggregation —
+    the signal is advisory, not a close-blocking gate (see parallel-signal-informational-not-verdict)."""
+    monkeypatch.setattr(_registry, "Registry", _fake_reg([]))
+    monkeypatch.setattr(closure, "is_git_repo", lambda root: True)
+    monkeypatch.setattr(closure, "_git", lambda root, *a: "my-branch")
+    monkeypatch.setattr(closure, "_canonical_checkpoint", lambda root: "checkpointsha")
+    monkeypatch.setattr(closure, "_gh_json", _gh_stub(
+        open_prs=[{"number": 117, "headRefName": "other-branch", "title": "sibling"}],
+        merged_prs=[],
+    ))
+    findings = closure.parallel_delivery_findings(tmp_path)
+    assert len(findings) == 1
+    assert findings[0].level == "info"
+    assert "PR #117" in findings[0].message
+    assert findings[0].level not in ("warn", "fail")

@@ -278,10 +278,15 @@ def parallel_deliveries(
 
 def parallel_delivery_findings(root: Path, *, self_session_id: str | None = None) -> list[Finding]:
     """Render :func:`parallel_deliveries` as gate findings. Empty (not a false
-    'all clear') when gh is unavailable and no live co-session exists."""
+    'all clear') when gh is unavailable and no live co-session exists.
+
+    Rendered at ``info`` level: a named sibling PR or co-session is advisory —
+    it must be surfaced so it isn't missed, but a supervisor legitimately closes
+    while siblings exist, so it must never flip a fresh verdict to stale (unlike
+    ``warn``/``fail``, which every ``healthy``/gate computation aggregates)."""
     signals, pr_checked = parallel_deliveries(root, self_session_id=self_session_id)
     if signals:
-        return [Finding("warn", f"parallel delivery pending: {s.detail}") for s in signals]
+        return [Finding("info", f"parallel delivery pending: {s.detail}") for s in signals]
     if pr_checked:
         return [Finding("ok", "no parallel deliveries detected")]
     return []
