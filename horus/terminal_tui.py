@@ -29,6 +29,7 @@ from prompt_toolkit.output import Output
 from prompt_toolkit.styles import Style
 
 from horus import (
+    adapters,
     backlog,
     backlog_migrate,
     backlog_tree,
@@ -37,6 +38,7 @@ from horus import (
     closure,
     codex_usage,
     config,
+    datums,
     fleet_review,
     frontmatter,
     github_catalog,
@@ -65,6 +67,8 @@ class _Launch:
     account: str | None
     card: backlog.Card | None = None
     prompt_override: str | None = None
+    model: str | None = None
+    effort: str | None = None
 
 
 @dataclass(frozen=True)
@@ -165,6 +169,9 @@ class TerminalUI:
         self.pending_card: backlog.Card | None = None
         self.pending_prompt: str | None = None
         self.pending_origin: str | None = None
+        self.pending_account: LaunchAccount | None = None
+        self.pending_model: str | None = None
+        self.pending_effort: str | None = None
         self.card: backlog.Card | None = None
         self.card_scroll = 0
         self.backlog_fields = config.load_backlog_fields()
@@ -416,7 +423,17 @@ class TerminalUI:
             self._show("session")
         elif self.screen == "accounts" and kind == "account":
             if isinstance(value, LaunchAccount):
-                self._exit_launch(value)
+                self.pending_account = value
+                self.pending_model = None
+                self.pending_effort = None
+                self._show("models")
+        elif self.screen == "models" and kind == "model":
+            self.pending_model = value if value is None else str(value)
+            self._show("effort")
+        elif self.screen == "effort" and kind == "effort":
+            self.pending_effort = value if value is None else str(value)
+            if self.pending_account is not None:
+                self._exit_launch(self.pending_account)
         elif self.screen == "settings" and kind == "posture":
             posture = str(value)
             config.set_launch_default_posture(posture)
@@ -471,6 +488,10 @@ class TerminalUI:
             self._show("projects")
         elif self.screen == "accounts":
             self._show(self.pending_origin or ("card" if self.pending_card is not None else "project"))
+        elif self.screen == "models":
+            self._show("accounts")
+        elif self.screen == "effort":
+            self._show("models")
         elif self.screen == "backlog":
             self._show("project")
         elif self.screen == "backlog_fields":
@@ -521,6 +542,11 @@ class TerminalUI:
             ]
         elif self.screen == "accounts":
             self.items = [("account", account) for account in self.accounts]
+        elif self.screen == "models":
+            agent = self.pending_account.agent if self.pending_account else ""
+            self.items = [("model", None)] + [("model", model) for model in _agent_models(agent)]
+        elif self.screen == "effort":
+            self.items = [("effort", None)] + [("effort", level) for level in adapters.EFFORT_LEVELS]
         elif self.screen == "receipts":
             self.items = [("receipt", receipt) for receipt in self.project_receipts.get(self.project, [])]
         elif self.screen == "receipt":
@@ -611,14 +637,39 @@ class TerminalUI:
                 account.account,
                 self.pending_card,
                 self.pending_prompt,
+                self.pending_model,
+                self.pending_effort,
             )
         )
+
+    def _launch_tier(self) -> str:
+        """The `tier:` a resume/card-launch resolves a recommendation from.
+
+        A backlog-card launch reads the card's own tier; a plain resume reads
+        the project's top open card (its sorted-by-priority "next action") as
+        a proxy for the project's current focus. A fresh launch never
+        recommends — it has no continuity context to recommend from.
+        """
+        if self.pending_mode != "resume":
+            return ""
+        if self.pending_card is not None:
+            return self.pending_card.tier
+        cards = self.project_cards.get(self.project) if self.project is not None else None
+        return cards[0].tier if cards else ""
+
+    def _recommended_model_for_launch(self) -> str | None:
+        tier = self._launch_tier()
+        if not tier or self.pending_account is None:
+            return None
+        return _resolve_recommended_model(tier, _agent_models(self.pending_account.agent))
 
     def _header_text(self) -> StyleAndTextTuples:
         title = {
             "projects": "HORUS · Projects",
             "project": f"HORUS · {self.project.name if self.project else 'Project'}",
             "accounts": f"HORUS · {self.pending_mode.title() if self.pending_mode else 'Choose'} account",
+            "models": f"HORUS · {self.pending_account.agent.title() if self.pending_account else 'Choose'} model",
+            "effort": "HORUS · Effort",
             "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
             "backlog_fields": "HORUS · Backlog card fields",
             "capabilities": f"HORUS · {self.project.name if self.project else 'Project'} capabilities",
@@ -695,6 +746,7 @@ class TerminalUI:
                 lines.append(("class:muted", f"\n  {vision}\n"))
             elif self.capabilities_error:
                 lines.append(("class:muted", f"\n  Capabilities unavailable: {self.capabilities_error}\n"))
+        recommended_model = self._recommended_model_for_launch() if self.screen == "models" else None
         for index, (kind, value) in enumerate(self.items):
             selected = index == self.selected
             marker = ">" if selected else " "
@@ -770,6 +822,21 @@ class TerminalUI:
                 lines.append((style, f"\n {marker} {account.agent.title()} {account.alias}\n"))
                 for usage_line in _usage_lines(self.account_usage.get((account.agent, account.alias))):
                     lines.append(("class:muted", f"     {usage_line}\n"))
+            elif kind == "model":
+                if value is None:
+                    lines.append((style, f"\n {marker} Default\n"))
+                    lines.append(("class:muted", "     Agent's default model\n"))
+                else:
+                    label = str(value)
+                    if value == recommended_model:
+                        label += " (recommended)"
+                    lines.append((style, f"\n {marker} {label}\n"))
+            elif kind == "effort":
+                if value is None:
+                    lines.append((style, f"\n {marker} Default\n"))
+                    lines.append(("class:muted", "     Agent's default reasoning effort\n"))
+                else:
+                    lines.append((style, f"\n {marker} {value}\n"))
             elif kind == "card":
                 card = value
                 status = " · claimed" if card.status == "claimed" else ""
@@ -1396,6 +1463,8 @@ def run() -> int:
                 account=result.account,
                 prompt=prompt,
                 posture=config.load_launch_defaults()["posture"],
+                model=result.model,
+                effort=result.effort,
             )
             status = (
                 f"Session {launched.session_id[:8]} returned to Horus."
@@ -1576,6 +1645,32 @@ def _ambient_alias(agent: str) -> str | None:
         return config.alias_for(claude_usage.current_account())
     if agent == "codex":
         return config.alias_for(codex_usage.current_account())
+    return None
+
+
+def _agent_models(agent: str) -> list[str]:
+    """The `--model` selectors valid for `agent`, straight from its adapter —
+    never a list hardcoded here, so a new adapter model shows up automatically."""
+    try:
+        return list(adapters.get_adapter(agent).KNOWN_MODELS)
+    except KeyError:
+        return []
+
+
+def _resolve_recommended_model(tier: str, models: list[str]) -> str | None:
+    """Resolve a card's `tier:` to one of `models`, via the SAME tier->model
+    normalization `horus capabilities` uses (`datums.canonical_model_name`),
+    so this stays correct once vendor-neutral tiers make the mapping
+    per-provider. A bare Claude family alias (today's tier vocabulary) matches
+    a Claude account's own model list directly; a generic alias like
+    `gpt-5.6` resolves to its canonical variant (`gpt-5.6-sol`) for Codex."""
+    if not tier:
+        return None
+    if tier in models:
+        return tier
+    canonical = datums.canonical_model_name(tier)
+    if canonical and canonical in models:
+        return canonical
     return None
 
 
@@ -1829,8 +1924,26 @@ def _card_prompt(root: Path, card: backlog.Card) -> str:
     )
 
 
-def _launch(*, target: str, agent: str, root: Path, account: str | None, prompt: str, posture: str = "default"):
-    kwargs = {"agent": agent, "project_dir": root, "account": account, "prompt": prompt, "posture": posture}
+def _launch(
+    *,
+    target: str,
+    agent: str,
+    root: Path,
+    account: str | None,
+    prompt: str,
+    posture: str = "default",
+    model: str | None = None,
+    effort: str | None = None,
+):
+    kwargs = {
+        "agent": agent,
+        "project_dir": root,
+        "account": account,
+        "prompt": prompt,
+        "posture": posture,
+        "model": model,
+        "effort": effort,
+    }
     if target == terminal_sessions.TMUX:
         return terminal_sessions.launch_tmux(**kwargs)
     return terminal_sessions.run_attached(**kwargs)

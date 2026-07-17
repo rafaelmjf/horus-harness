@@ -162,6 +162,22 @@ def test_interactive_command_is_a_tui_with_preassigned_session():
     assert "-p" not in argv and "--output-format" not in argv  # interactive, not headless
 
 
+def test_interactive_command_carries_effort_flag():
+    # The TUI's attended launch path needs --effort too, not just headless -p runs.
+    argv = ClaudeAdapter().interactive_command(_spec(effort="xhigh"), session_id="s1")
+    assert ["--effort", "xhigh"] == [argv[argv.index("--effort")], argv[argv.index("--effort") + 1]]
+    assert "--effort" not in ClaudeAdapter().interactive_command(_spec(), session_id="s1")
+
+
+def test_known_models_are_the_bare_family_aliases():
+    # The TUI's per-account model picker reads this directly — never a list of
+    # its own — so it must carry the CLI-executable bare aliases, not the
+    # dotted calibration-key spelling (see validate_model's rejection of those).
+    assert ClaudeAdapter.KNOWN_MODELS == ("opus", "sonnet", "haiku", "fable")
+    for model in ClaudeAdapter.KNOWN_MODELS:
+        assert ClaudeAdapter().validate_model(model) is None
+
+
 def test_interactive_command_carries_permission_posture():
     # Bypass posture -> the real Claude --permission-mode value (valid interactively).
     bypass = ClaudeAdapter().interactive_command(

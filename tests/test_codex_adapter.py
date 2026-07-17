@@ -137,6 +137,22 @@ def test_interactive_command_prompt_seeded():
     assert "resume the project" not in fresh
 
 
+def test_interactive_command_carries_effort_flag():
+    # The TUI's attended launch path needs the reasoning-effort override too,
+    # not just headless `codex exec` runs.
+    argv = CodexAdapter().interactive_command(_spec(effort="high"), session_id="s1")
+    assert "-c" in argv
+    assert "model_reasoning_effort=high" == argv[argv.index("-c") + 1]
+    assert "-c" not in CodexAdapter().interactive_command(_spec(), session_id="s1")
+
+
+def test_known_models_are_the_gpt_family_roster():
+    # The TUI's per-account model picker reads this directly — never a list of
+    # its own — and it must stay disjoint from Claude's family aliases so a
+    # codex account never offers a claude model.
+    assert CodexAdapter.KNOWN_MODELS == ("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5")
+
+
 def test_interactive_command_full_auto_bypasses():
     argv = CodexAdapter().interactive_command(
         _spec(posture=PermissionPosture.FULL_AUTO), session_id="s1"

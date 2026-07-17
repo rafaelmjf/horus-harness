@@ -51,6 +51,7 @@ def prepare_interactive(
     account: str | None = None,
     posture: str = "default",
     model: str | None = None,
+    effort: str | None = None,
     prompt: str = "",
     session_id: str | None = None,
 ) -> tuple[PreparedInteractive | None, str | None]:
@@ -73,6 +74,7 @@ def prepare_interactive(
         account=account,
         posture=permission_posture,
         model=model,
+        effort=effort,
     )
     # Never enter an attended session under a mapped alias whose login differs.
     if account and getattr(adapter, "config_dirs", {}).get(account) and hasattr(adapter, "verify_account"):
@@ -101,6 +103,7 @@ def launch_interactive(
     account: str | None = None,
     posture: str = "default",
     model: str | None = None,
+    effort: str | None = None,
     prompt: str = "",
     reg: registry.Registry | None = None,
 ) -> LaunchResult:
@@ -119,6 +122,7 @@ def launch_interactive(
         account=account,
         posture=posture,
         model=model,
+        effort=effort,
         prompt=prompt,
     )
     if prepared is None:

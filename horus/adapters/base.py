@@ -147,6 +147,12 @@ class AgentAdapter(ABC):
 
     name: str = "agent"
 
+    # The `--model`/`-m` selectors this adapter's CLI actually accepts, for
+    # surfaces (like the TUI's launch flow) that need to offer a scoped choice
+    # without hardcoding a model list of their own. Empty by default; a real
+    # adapter overrides it with its own static roster.
+    KNOWN_MODELS: tuple[str, ...] = ()
+
     # --- the contract: adapter-specific, pure, individually testable ---------
 
     @abstractmethod

@@ -60,6 +60,11 @@ _SANDBOX_FLAGS: dict[PermissionPosture, list[str]] = {
 
 class CodexAdapter(AgentAdapter):
     name = "codex"
+    # The GPT-5.6 family variants + the retained prior generation Horus tracks
+    # today (mirrors `horus/datums.py`'s `PRIORS_SEED` roster). Edit alongside
+    # that seed as the fleet's model roster grows — this is the TUI's per-
+    # account model choice, not a routing table.
+    KNOWN_MODELS = ("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5")
 
     def __init__(
         self,
@@ -133,6 +138,8 @@ class CodexAdapter(AgentAdapter):
         argv = [self.executable]
         if spec.model:
             argv += ["-m", spec.model]
+        if spec.effort:
+            argv += ["-c", f"model_reasoning_effort={spec.effort}"]
         # Interactive mode surfaces approval prompts in the TUI; no sandbox flag needed.
         # FULL_AUTO is the only posture worth forcing headlessly (skips the interactive prompt).
         if spec.posture is PermissionPosture.FULL_AUTO:

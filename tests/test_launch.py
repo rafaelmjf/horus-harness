@@ -52,6 +52,16 @@ def test_launch_interactive_injects_prompt(tmp_path, monkeypatch):
     assert captured["argv"][-1] == "continue the widget work"  # seeded into the session
 
 
+def test_prepare_interactive_threads_model_and_effort(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    prepared, error = launch.prepare_interactive(
+        agent="claude", project_dir=tmp_path, model="sonnet", effort="xhigh",
+    )
+    assert error is None and prepared is not None
+    assert ["--model", "sonnet"] == [prepared.argv[prepared.argv.index("--model")], prepared.argv[prepared.argv.index("--model") + 1]]
+    assert ["--effort", "xhigh"] == [prepared.argv[prepared.argv.index("--effort")], prepared.argv[prepared.argv.index("--effort") + 1]]
+
+
 def test_launch_interactive_unknown_agent(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     result = launch.launch_interactive(agent="nope", project_dir=tmp_path)
