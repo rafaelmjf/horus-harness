@@ -76,6 +76,26 @@ def test_market_scan_skill_registered_and_outward():
     assert "Branch-check variant" in market.content
 
 
+def test_cockpit_dispatch_contract_skill_registered_and_sequences():
+    ct = next(s for s in skills.SKILLS if s.name == "cockpit-autonomous-dispatch-contract")
+    assert ct.version == 1
+    # A thin sequencer: composes the decision skills, never re-implements them.
+    assert "dispatch-decision" in ct.content
+    assert "scope-cards" in ct.content and "pathfinder" in ct.content
+    # Wires the away-mode kit commands built this campaign.
+    for cmd in ("horus envelope", "horus schedule", "horus supervise", "horus notify"):
+        assert cmd in ct.content
+    assert "horus run --unattended" in ct.content
+    # Merge stays opt-in + probe-gated; default posture is verify+escalate-only.
+    assert "--allow-merge" in ct.content
+    assert "verify + escalate only" in ct.content or "verify+escalate-only" in ct.content
+    # Advisory + owner-gated: proposes, never launches or selects a model itself.
+    assert "Never selects a model" in ct.content or "never selects a model" in ct.content
+    assert "Proposes, never performs" in ct.content
+    # Account routed away from the overseer, gated on usage.
+    assert "horus usage check" in ct.content
+
+
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
     assert pf.version == 4
