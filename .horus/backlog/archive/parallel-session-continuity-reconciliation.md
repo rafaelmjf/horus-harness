@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-17
 vision_facet: "Continuity core"
@@ -8,6 +8,8 @@ tier: sonnet
 type: feature
 parallel: safe
 surface: close/resume/dispatch signals (deterministic parallel-delivery detection)
+shipped_pr: 301
+shipped_sha: 03dbd8a
 ---
 
 # parallel-session-continuity-reconciliation — two sessions, one continuity

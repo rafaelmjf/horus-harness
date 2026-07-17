@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-17
 tier: opus
@@ -11,6 +11,8 @@ branch: vision-branch-x3-scheduling-and-autonomous-execution
 created_by: owner
 depends-on: schedule-local-dispatcher, standing-dispatch-envelope
 surface: new .claude/skills/<name>/SKILL.md (+ .agents/skills mirror); references horus-agent/.horus/PRD.md to wire the loop; composes existing dispatch-decision / execution-decision / delegation-rubric / scope-cards skills
+shipped_pr: 302
+shipped_sha: e8d8f1a
 ---
 
 # cockpit-autonomous-dispatch-contract — a skill wiring discover→pick→scope→dispatch/schedule→supervise
