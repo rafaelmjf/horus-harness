@@ -66,6 +66,12 @@ class Schedule:
     command: tuple[str, ...]
     next_run: str | None = None   # systemd's view; None once it has elapsed
     fired: bool = False
+    # Andon: a supervisor escalation halts scheduled dispatches whose card
+    # (transitively) depends on the failed one. The timer is disabled so it can
+    # never fire on a red base, but the units are KEPT so the halt stays visible
+    # in `horus schedule list` with its reason.
+    halted: bool = False
+    halt_reason: str | None = None
 
     @property
     def unit(self) -> str:
@@ -259,7 +265,7 @@ def _stderr(result: subprocess.CompletedProcess) -> str:
 
 
 def _remove_units(ident: str) -> None:
-    for suffix in (".service", ".timer"):
+    for suffix in (".service", ".timer", ".halt"):
         (unit_dir() / f"{UNIT_PREFIX}{ident}{suffix}").unlink(missing_ok=True)
     # Drop Persistent's stamp too: it outlives the units, and a recycled id would
     # otherwise read as already-fired.
@@ -316,14 +322,59 @@ def load_all() -> list[Schedule]:
         description = _read_directive(timer_text, "Description")
         description = description.split(": ", 1)[-1] if ": " in description else description
         when = _read_directive(timer_text, "OnCalendar")
+        halt_reason = _read_halt(ident)
+        if halt_reason is not None:
+            # A halted timer is disabled, so its live NextElapse is gone — reporting
+            # it through _live_state would mislabel it "fired". Present it as halted.
+            live = {"next_run": None, "fired": False}
+        else:
+            live = _live_state(f"{UNIT_PREFIX}{ident}", when)
         schedules.append(Schedule(
             id=ident,
             description=description,
             when=when,
             command=_unquote_exec(_read_directive(service_text, "ExecStart")),
-            **_live_state(f"{UNIT_PREFIX}{ident}", when),
+            halted=halt_reason is not None,
+            halt_reason=halt_reason,
+            **live,
         ))
     return sorted(schedules, key=lambda s: (s.fired, s.when))
+
+
+def _halt_marker(ident: str) -> Path:
+    return unit_dir() / f"{UNIT_PREFIX}{ident}.halt"
+
+
+def _read_halt(ident: str) -> str | None:
+    """The halt reason for ``ident``, or ``None`` when it is not halted."""
+    marker = _halt_marker(ident)
+    if not marker.exists():
+        return None
+    try:
+        return marker.read_text(encoding="utf-8").strip() or "halted"
+    except OSError:
+        return "halted"
+
+
+def halt(ident: str, reason: str) -> Schedule | None:
+    """Andon: disarm a pending scheduled dispatch so it cannot fire, but keep its
+    units so the halt stays visible in `horus schedule list`. Idempotent; ``None``
+    when no such (unique) schedule exists. Only touches ``horus-sched-`` units.
+    """
+    matches = [s for s in load_all() if s.id == ident or s.id.startswith(ident)]
+    if len(matches) != 1:
+        return None
+    found = matches[0]
+    # `disable --now` stops the running timer AND removes it from timers.target.wants,
+    # so it also stays disarmed across a reboot — the safety-critical part.
+    _systemctl("disable", "--now", f"{found.unit}.timer")
+    _halt_marker(found.id).write_text(reason.strip() or "halted", encoding="utf-8")
+    _systemctl("daemon-reload")
+    return Schedule(
+        id=found.id, description=found.description, when=found.when,
+        command=found.command, next_run=None, fired=False,
+        halted=True, halt_reason=reason.strip() or "halted",
+    )
 
 
 def stamp_path(unit: str) -> Path:

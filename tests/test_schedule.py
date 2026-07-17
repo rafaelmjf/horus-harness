@@ -383,3 +383,38 @@ def test_list_and_cancel_are_quiet_where_unavailable(monkeypatch, capsys):
     monkeypatch.setattr(schedule, "availability", lambda: schedule.Availability(False, "this is Windows"))
     assert cli.cmd_schedule_list(argparse.Namespace(stdout=False)) == 0
     assert "this is Windows" in capsys.readouterr().out
+
+
+# --- andon: halt a pending dispatch but keep it visible ----------------------
+
+
+def test_halt_disarms_the_timer_and_records_the_reason(units, tmp_path):
+    created = _create(tmp_path)
+    halted = schedule.halt(created.id, "blocked: depends on failed card foo")
+    assert halted is not None and halted.halted and "depends on failed card foo" in halted.halt_reason
+    # the timer was disabled (disarmed) so it can never fire on a red base
+    assert any(call and call[0] == "disable" for call in units)
+    # and the marker persists so the halt stays visible
+    assert (schedule.unit_dir() / f"horus-sched-{created.id}.halt").exists()
+
+
+def test_load_all_surfaces_a_halted_dispatch_with_its_reason(units, tmp_path):
+    created = _create(tmp_path)
+    schedule.halt(created.id, "blocked: depends on failed card foo")
+    listed = [s for s in schedule.load_all() if s.id == created.id]
+    assert listed and listed[0].halted
+    assert listed[0].halt_reason and "foo" in listed[0].halt_reason
+    assert listed[0].fired is False  # halted, not fired
+
+
+def test_cancel_clears_the_halt_marker(units, tmp_path):
+    created = _create(tmp_path)
+    schedule.halt(created.id, "blocked")
+    assert (schedule.unit_dir() / f"horus-sched-{created.id}.halt").exists()
+    schedule.cancel(created.id)
+    assert not (schedule.unit_dir() / f"horus-sched-{created.id}.halt").exists()
+
+
+def test_halt_is_none_for_an_unknown_id(units, tmp_path):
+    _create(tmp_path)
+    assert schedule.halt("nonexistent", "reason") is None
