@@ -58,7 +58,7 @@ def test_delegation_decision_skills_registered():
 
 def test_market_scan_skill_registered_and_outward():
     market = next(s for s in skills.SKILLS if s.name == "market-scan")
-    assert market.version == 2
+    assert market.version == 3
     # outward twin of product-audit: composes deep-research, advisory, dated receipt.
     assert "deep-research" in market.content
     assert ".horus/research/" in market.content
@@ -74,38 +74,97 @@ def test_market_scan_skill_registered_and_outward():
 
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    assert pf.version == 1
+    assert pf.version == 2
     # Renamed from horus-kickstart: age-agnostic name, no old slug lingering.
     assert not any(s.name == "horus-kickstart" for s in skills.SKILLS)
-    # Thin orchestrator: sequences existing skills, no new CLI/module.
+    # v2: genuinely thin — sequences the factored step skills, no analysis inline.
     assert "market-scan" in pf.content and "deep-research" in pf.content
+    assert "roadmap-branches" in pf.content and "scope-cards" in pf.content
     assert "horus consolidate" in pf.content
     assert "No new CLI subcommand" in pf.content
-    # Advisory / diff-only, gated at every step, facet DIFF not replace.
-    assert "advisory" in pf.content.lower() and "diff-only" in pf.content.lower()
+    assert "No analysis inside pathfinder" in pf.content
+    # Receipts are the step interfaces so the chain pauses/resumes across sessions.
+    assert "Receipts are the interfaces" in pf.content
+    # Advisory, gated; straight-through pre-auth still never writes unapproved.
+    assert "advisory" in pf.content.lower()
     assert "Never auto-apply" in pf.content
-    assert "wholesale replace" in pf.content or "wholesale table" in pf.content
+    assert "straight-through" in pf.content
+    assert "WRITTEN without explicit approval" in pf.content
+    # Facet changes stay a diff, never wholesale.
+    assert "wholesale" in pf.content
     assert "add / rename / retire / promote" in pf.content
-    # Onboarding folds in: no facet table -> propose initial facets + stamp cards.
+    # Onboarding folds in (delegated to roadmap-branches): initial facets + stamp cards.
     assert "Onboarding fork" in pf.content and "stamp existing cards" in pf.content
-    # Token envelope before any web spend.
+    # Token envelope before any web spend; a fresh receipt may be reused.
     assert "confirm the token envelope" in pf.content.lower()
+    assert "may be reused" in pf.content
     # Reads for BOTH new and existing projects (the rename's whole point).
     assert "age-agnostic" in pf.content
     # Step 0: pin the intent, never assume it (build-vs-adopt vs adoption frame).
     assert "pin the intent" in pf.content
     assert "deepen-own-use" in pf.content and "broaden-adoption" in pf.content
-    # Step 1 emits a pinned shipped+vision+audience brief passed into the scan.
+    # Step 1 emits a pinned shipped+vision+audience brief passed into every step.
     assert "pinned brief" in pf.content.lower() or "pin a ground-truth brief" in pf.content
     assert "HARD CONSTRAINT" in pf.content
     # v2 fallback present (asserted for all skills elsewhere, checked explicitly here too).
     assert "## v2 six-lane projects (fallback)" in pf.content
 
 
-def test_pathfinder_skill_projected_to_both_agents():
-    pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
+def test_roadmap_branches_skill_registered_divergence_tree():
+    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
+    assert rb.version == 1
+    # The deliverable is a TREE of alternative roadmaps, never one merged roadmap.
+    assert "never collapse the tree into one merged roadmap" in rb.content
+    # Speculative branches (directions with no facet yet) are part of the contract.
+    assert "Speculative branches" in rb.content
+    # Market evidence appears INSIDE every branch, not only in the market section.
+    assert "Market position" in rb.content
+    assert "therefore these items" in rb.content
+    # Consumes the existing signals; never re-researches or improvises evidence.
+    assert "horus consolidate" in rb.content and "market-scan" in rb.content
+    assert ".horus/research/" in rb.content
+    assert "No new web research" in rb.content
+    # Re-justifies the existing backlog with explicit push-back; inherits nothing.
+    assert "inherit nothing" in rb.content.lower() or "inherits" in rb.content
+    assert "Re-justify the existing backlog" in rb.content
+    assert "push-back" in rb.content
+    # Claims discipline + no-repetition template rules.
+    assert "comparison baseline" in rb.content
+    assert "State each fact exactly once" in rb.content
+    # Facet changes are a diff; onboarding fork proposes the initial facet set.
+    assert "add / rename / retire / promote" in rb.content
+    assert "Onboarding fork" in rb.content and "stamp existing cards" in rb.content
+    # Advisory: owner picks; the skill never edits Vision or creates cards.
+    assert "never edits the Vision" in rb.content
+    assert "## v2 six-lane projects (fallback)" in rb.content
+
+
+def test_scope_cards_skill_registered_self_sufficient():
+    sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
+    assert sc.version == 1
+    # The one bar: a fresh agent + PRD + card can start correctly.
+    assert "self-sufficiency test" in sc.content
+    assert "fresh agent" in sc.content
+    # Card template carries the full understanding.
+    assert "vision_facet" in sc.content and "phase" in sc.content
+    assert "Acceptance" in sc.content and "Non-goals" in sc.content
+    # Thin input is flagged, never silently padded; findings are never pre-invented.
+    assert "do not silently invent" in sc.content
+    assert "do not fabricate the findings" in sc.content
+    # Also drafts the branch's Vision diff + existing-card push-back edits.
+    assert "Vision facet diff" in sc.content
+    assert "demote / defer / retire" in sc.content
+    # Per-item owner gate before anything is written.
+    assert "approve, amend, or drop each item individually" in sc.content
+    assert "## v2 six-lane projects (fallback)" in sc.content
+
+
+def test_pathfinder_step_skills_projected_to_both_agents():
+    for name in ("pathfinder", "roadmap-branches", "scope-cards"):
+        bundled = next(s for s in skills.SKILLS if s.name == name)
+        for root in (".claude/skills", ".agents/skills"):
+            assert Path(f"{root}/{name}/SKILL.md").read_text(encoding="utf-8") == bundled.content
     for root in (".claude/skills", ".agents/skills"):
-        assert Path(f"{root}/pathfinder/SKILL.md").read_text(encoding="utf-8") == pf.content
         # Old slug's projection is gone, not left orphaned.
         assert not Path(f"{root}/horus-kickstart/SKILL.md").exists()
 

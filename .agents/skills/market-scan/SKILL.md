@@ -13,7 +13,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -104,8 +104,8 @@ Sources: [URLs from deep-research]
 
 Inputs are a trigger + a one-line problem statement; outputs are the receipt
 path, the Vision draft, and the candidate cards. Keep those clean so a larger
-re-baseline flow can call this as one step and feed its output into a
-divergence-directions proposal.
+re-baseline flow can call this as one step and feed the receipt into
+`roadmap-branches` (the divergence tree of alternative roadmaps).
 
 ## Deliberately omit
 
