@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-17
 tier: sonnet
@@ -9,6 +9,8 @@ phase: converge
 vision_facet: "Continuity core"
 created_by: owner
 surface: horus/closure.py (parallel_delivery_findings level / how boundary_freshness_gate composes it), horus/cli.py (cmd_close healthy verdict)
+shipped_pr: 306
+shipped_sha: c3f258e
 ---
 
 # parallel-signal-informational-not-verdict — a named sibling PR shouldn't read as "Stale"
