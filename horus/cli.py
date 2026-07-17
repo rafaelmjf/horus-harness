@@ -1258,12 +1258,20 @@ def cmd_envelope_create(args: argparse.Namespace) -> int:
     print(f"  accounts   : {', '.join(env.accounts)}")
     print(f"  tiers      : {', '.join(env.tiers)}")
     print(f"  efforts    : {', '.join(env.efforts) or '(any)'}")
-    print(f"  usage floor: {env.usage_floor}% remaining (unknown capacity refuses)")
+    print(f"  usage floor: {_usage_floor_label(env)}")
     print(f"  attempts   : {env.max_attempts_per_card}/card · {env.max_dispatches_per_day}/day")
     print(f"  merge      : {'authorized on green gates' if env.merge_authority else 'NOT authorized (verify + escalate only)'}")
     print(f"\nStored at {envelope.envelope_path(env.name)} — machine-local, never commit it.")
     print(f"Revoke at any time with `horus envelope revoke {env.name}`.")
     return 0
+
+
+def _usage_floor_label(env: "envelope.Envelope") -> str:
+    """The floor is opt-in, so say which regime this envelope is actually in — the
+    owner reads this while setting up a trip they cannot correct from."""
+    if env.usage_floor <= 0:
+        return "none (capacity not checked; dispatches even when usage is unreadable)"
+    return f"{env.usage_floor}% remaining (unreadable capacity refuses)"
 
 
 def _envelope_state(env: "envelope.Envelope", *, today: date) -> str:
@@ -1329,7 +1337,7 @@ def cmd_envelope_show(args: argparse.Namespace) -> int:
     print(f"  accounts   : {', '.join(env.accounts)}")
     print(f"  tiers      : {', '.join(env.tiers)}")
     print(f"  efforts    : {', '.join(env.efforts) or '(any)'}")
-    print(f"  usage floor: {env.usage_floor}% remaining")
+    print(f"  usage floor: {_usage_floor_label(env)}")
     print(f"  merge      : {'authorized on green gates' if env.merge_authority else 'NOT authorized (verify + escalate only)'}")
     print(f"\nSpend (from the append-only ledger, {envelope.ledger_path(env.name)}):")
     print(f"  dispatches today : {used.dispatches_today}/{env.max_dispatches_per_day}")

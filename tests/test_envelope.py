@@ -466,3 +466,11 @@ def test_attended_run_keeps_an_explicit_target():
 def test_auto_branch_slug_maps_to_a_sibling_worktree_path(tmp_path):
     """`auto/<card>` must survive the pinned <repo>-wt-<slug> convention."""
     assert worktree.branch_slug("auto/card-a") == "auto-card-a"
+
+
+def test_usage_floor_label_tells_the_truth_about_which_regime_applies():
+    """The owner reads this while setting up a trip they cannot correct from, so it
+    must not claim a capacity check that no longer happens at floor 0."""
+    assert "not checked" in cli._usage_floor_label(_make(usage_floor=0))
+    assert "30% remaining" in cli._usage_floor_label(_make(name="f", usage_floor=30))
+    assert "refuses" in cli._usage_floor_label(_make(name="g", usage_floor=30))
