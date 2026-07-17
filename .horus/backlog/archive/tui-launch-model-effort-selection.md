@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-17
 tier: sonnet
@@ -10,6 +10,8 @@ vision_facet: "Dashboard / cockpit"
 created_by: owner
 depends-on: tui-branch-tree-glance
 surface: horus/terminal_tui.py (new model+effort step after account select; `_Launch` carries model/effort), the launch-execution path (terminal_sessions/run_executor), horus/adapters/ (per-agent valid model list), horus/capabilities.py (tier→recommended-model)
+shipped_pr: 305
+shipped_sha: bb4cfdf
 ---
 
 # tui-launch-model-effort-selection — pick model + effort at launch, not after
