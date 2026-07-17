@@ -46,6 +46,7 @@ from horus import (
     mergewatch,
     native_hooks,
     notify,
+    notify_listen,
     offboard,
     overhead,
     registry,
@@ -1539,6 +1540,35 @@ def cmd_notify_test(args: argparse.Namespace) -> int:
     result = notify.escalate(esc, force=True)
     print(result.describe())
     return 0 if result.delivered else 1
+
+
+def _parse_listen_duration(text: str | None) -> float | None:
+    """Parse ``8h`` / ``30m`` / ``90s`` / ``120`` into seconds; None ⇒ run until
+    interrupted. Raises ``ValueError`` on garbage so the CLI reports it."""
+    if not text:
+        return None
+    text = text.strip().lower()
+    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    if text[-1] in units:
+        return float(text[:-1]) * units[text[-1]]
+    return float(text)
+
+
+def cmd_notify_listen(args: argparse.Namespace) -> int:
+    """Long-poll the telegram sink for bounded steering commands from the owner.
+
+    The inbound half of the notify channel — deterministic, owner-chat-locked, no LLM.
+    Maps a bounded command grammar 1:1 onto existing ``horus`` commands; see
+    ``horus.notify_listen`` for the surface and security invariants."""
+    try:
+        duration = _parse_listen_duration(getattr(args, "for_", None))
+    except ValueError:
+        print(f"invalid --for duration: {args.for_!r} (use e.g. 8h, 30m, 90s)")
+        return 2
+    repo = str(Path(args.path).resolve()) if getattr(args, "path", None) else None
+    code, message = notify_listen.run_listen(duration=duration, repo=repo)
+    print(message)
+    return code
 
 
 def _spawn_watcher(session_id: str, cwd: Path) -> None:
@@ -3817,6 +3847,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--path", default=".", help="project whose name labels the test message (default: cwd)"
     )
     p_notify_test.set_defaults(func=cmd_notify_test)
+    p_notify_listen = notify_sub.add_parser(
+        "listen",
+        help="inbound: long-poll telegram for bounded steering commands (owner-only, no LLM)",
+        description=(
+            "The inbound half of the notify channel. Long-polls the telegram sink for the "
+            "configured owner chat_id and maps a BOUNDED command grammar 1:1 onto existing "
+            "deterministic horus commands, so the owner can steer projects from the phone.\n\n"
+            "Read-mostly: sessions, schedule, backlog, usage. Bounded mutations: cancel <id>, "
+            "supervise <session>. Unknown input returns the help card; never a shell, never an "
+            "LLM, never envelope/merge authority. Kill switch: don't run it (or sink = none)."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_notify_listen.add_argument(
+        "--for", dest="for_", default=None,
+        help="bound the listen window (e.g. 8h, 30m, 90s); omit to run until interrupted",
+    )
+    p_notify_listen.add_argument(
+        "--path", default=None,
+        help="repo a `supervise <session>` re-fire runs in (default: the session's own project)",
+    )
+    p_notify_listen.set_defaults(func=cmd_notify_listen)
 
     p_datum = sub.add_parser(
         "datum",

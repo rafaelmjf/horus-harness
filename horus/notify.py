@@ -92,6 +92,10 @@ class Escalation:
     sha: str | None = None
     pr: int | None = None
     inspect: str | None = None
+    # Optional inline-keyboard actions for the telegram sink: (label, callback_data)
+    # pairs the inbound `horus notify listen` dispatcher understands. Empty ⇒ no
+    # keyboard (every other sink ignores these).
+    actions: tuple[tuple[str, str], ...] = ()
 
     def subject(self) -> str:
         return f"[horus] {self.project}: {self.summary}"
@@ -220,6 +224,12 @@ def _send_telegram(cfg: NotifyConfig, esc: Escalation) -> None:
         raise ValueError("telegram sink needs both token and chat_id in [notify]")
     url = f"https://api.telegram.org/bot{cfg.token}/sendMessage"
     payload = {"chat_id": cfg.chat_id, "text": esc.text(), "disable_web_page_preview": True}
+    if esc.actions:
+        # One row of bounded action buttons; each callback_data is a command string the
+        # inbound `horus notify listen` dispatcher maps 1:1 onto a deterministic command.
+        payload["reply_markup"] = {
+            "inline_keyboard": [[{"text": label, "callback_data": data} for label, data in esc.actions]]
+        }
     status, body = _post_json(url, payload)
     if status != 200 or '"ok":true' not in body.replace(" ", ""):
         raise RuntimeError(f"telegram API returned {status}: {body[:200]}")
