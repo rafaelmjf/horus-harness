@@ -73,7 +73,7 @@ from horus.continuity import HORUS_DIR, SESSIONS_DIR, Finding, check_project
 from horus.doctor_machine import machine_findings
 from horus.instructions import block_version, check_drift, reconcile
 
-_LEVEL_TAG = {"ok": "[ ok ]", "warn": "[warn]", "fail": "[fail]"}
+_LEVEL_TAG = {"ok": "[ ok ]", "warn": "[warn]", "fail": "[fail]", "info": "[info]"}
 
 
 def _skill_targets(value: str) -> tuple[str, ...]:
