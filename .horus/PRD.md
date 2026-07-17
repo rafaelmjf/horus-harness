@@ -186,6 +186,18 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   tests still require a real distinct worker. Codex
   auto-edit workers get a read-only `.git` and no socket bind: the
   supervisor owns commit, push, and every runtime gate — write briefs accordingly.
+- **Unattended dispatch runs under a standing envelope, or it does not run.** Authority has
+  two forms and no third: the owner approves that exact launch, OR approved a bounded
+  **expiring** envelope (`horus envelope create`) the launch validates against. An envelope
+  *bounds* — cards/branch, accounts, tier allow-list, effort, usage floor, attempts/card,
+  dispatches/day, expiry, merge authority (default: verify + escalate only) — and never
+  selects card, account, or model. Widening means a new envelope: bounds are written once,
+  only `revoke` mutates one, `--force` never overrides them. It binds at `horus run`, where
+  the worker actually launches, so no scheduler, cron entry, or dispatcher bug routes around
+  it; it is read at fire time, so `revoke` grounds pending work instantly without touching
+  live sessions. Attempts derive from an append-only ledger, never a mutable counter.
+  Unknown capacity refuses — unattended has no one to read a courtesy notice. Machine-local,
+  never committed (envelopes name accounts).
 - **Tracked workers cannot destructively clean user-global agent state.** The shared host guard blocks common destructive spellings targeting `~/.horus`, `~/.claude`, and `~/.codex` only when `HORUS_RUN_WORKER=1`; every worker probe must instead create an isolated home and clean only the exact directory it allocated. This was promoted after a worker deleted historical machine-local run logs while durable registry/datums/git state survived (2026-07-16).
 - **Self-documentation has two truth layers, never curated (2026-07-16).** "What exists
   now" is answered only by code-derived surfaces (`horus --help` / the argparse walk);

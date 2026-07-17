@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -31,6 +31,7 @@ from horus import (
     dashboard,
     datums,
     delivery,
+    envelope,
     fetchcheck,
     fleet_backlog,
     fleet_review,
@@ -937,6 +938,88 @@ def _config_dir_conflict_guard(agent: str, account: str | None, *, force: bool) 
     return None if force else 2
 
 
+@dataclass(frozen=True)
+class _EnvelopeAuth:
+    """An authorized unattended dispatch, carried from the guard to the ledger write."""
+
+    name: str
+    request: "envelope.DispatchRequest"
+
+
+def _envelope_usage_remaining(agent: str, account: str | None) -> int | None:
+    """Percent of the account's most-constraining window still available, or ``None``
+    when the signal is unreadable (which an envelope treats as a refusal, not health).
+
+    Agents with no usage window at all (the fake adapter) report full capacity: there
+    is no window to reserve, so the floor cannot bind.
+    """
+    if agent not in ("claude", "codex"):
+        return 100
+    now = time.time()
+    snap = usage_snapshot.cached_usage(agent, account)
+    if snap is not None and snap.has_expired_window(now=now):
+        snap = usage_snapshot.refresh_usage(agent, account, now=now) or snap
+    if snap is not None:
+        snap = snap.without_expired_windows(now=now)
+    pct, _reset, _window = snap.worst() if snap is not None else (None, None, "5h")
+    return None if pct is None else int(100 - pct)
+
+
+def _envelope_guard(args: argparse.Namespace, root: Path) -> tuple[int | None, _EnvelopeAuth | None]:
+    """Validate an unattended dispatch against its standing envelope.
+
+    Returns ``(exit_code, None)`` to refuse, or ``(None, auth)`` to proceed — with
+    ``auth`` set only when an envelope authorized the run and its ledger is owed a
+    line. An attended run with no ``--envelope`` passes straight through unchanged.
+
+    This binds here, at the launch itself, rather than in the scheduler that calls
+    it: a wrapper-level check is bypassed by any cron entry, script, or dispatcher
+    bug that invokes ``horus run`` directly. The bound belongs where the worker
+    actually starts.
+    """
+    name = getattr(args, "envelope", None)
+    if getattr(args, "unattended", False) and not name:
+        print("Refusing to run: --unattended requires --envelope <name>.")
+        print("Unattended dispatch runs under an owner-created standing envelope; "
+              "create one with `horus envelope create`.")
+        return 2, None
+    if not name:
+        return None, None
+
+    card_name = getattr(args, "card", None)
+    if not card_name:
+        print("Refusing to run: --envelope requires --card <name> (the envelope bounds which cards may run).")
+        return 2, None
+    env = envelope.load(name)
+    if env is None:
+        print(f"Refusing to run: no readable envelope named {name!r} (looked in {envelope.envelopes_dir()}).")
+        return 2, None
+    # The card's own frontmatter supplies tier/branch: a caller cannot talk its way
+    # past the tier bound by asserting a tier the card does not carry.
+    card = backlog.find_card(root, card_name)
+    if card is None:
+        print(f"Refusing to run: card {card_name!r} was not found in {backlog.backlog_dir(root)}.")
+        print("An envelope authorizes named cards, so an unknown card cannot be authorized.")
+        return 2, None
+    request = envelope.DispatchRequest(
+        card=card.name,
+        account=args.account,
+        tier=card.tier,
+        effort=getattr(args, "effort", None) or "",
+        branch=card.field_value("branch"),
+    )
+    refusal = envelope.validate(
+        env, request, usage_remaining=_envelope_usage_remaining(args.agent, args.account)
+    )
+    if refusal is not None:
+        print(f"Refusing to run: {refusal.message}")
+        print(f"Violated bound: {refusal.bound}. Envelope bounds are the owner's standing "
+              "authorization — widen it by creating a new envelope, never by overriding here.")
+        return 2, None
+    print(f"Envelope {env.name}: dispatch of {card.name} authorized (expires {env.expires}).")
+    return None, _EnvelopeAuth(name=env.name, request=request)
+
+
 def _run_usage_preflight(
     agent: str, account: str | None, *, force: bool, refuse_on_unknown: bool = False
 ) -> int | None:
@@ -1016,6 +1099,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 2
 
     root = Path(args.path).resolve()
+    # The standing envelope is the outermost authorization: refuse before any git
+    # work, worktree creation, or usage read happens on an unauthorized dispatch.
+    refusal, envelope_auth = _envelope_guard(args, root)
+    if refusal is not None:
+        return refusal
+
     dispatch_base_sha: str | None = None
     dispatch_pending = 0
     if getattr(args, "worker", None):
@@ -1070,6 +1159,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         delivery_expected=getattr(args, "expect_delivery", False),
         watch=getattr(args, "watch", False),
     )
+    # Record the attempt at authorization, not at success: a worker that dies or
+    # bounces has still spent an attempt, which is exactly what the bound protects.
+    if envelope_auth is not None:
+        envelope.record_dispatch(
+            envelope_auth.name, envelope_auth.request, session_id=request.session_id
+        )
     if getattr(args, "detach", False):
         if not getattr(args, "worker", None) or args.target != terminal_sessions.TMUX:
             print("Refusing to run: --detach requires --worker and --target tmux")
@@ -1085,6 +1180,128 @@ def cmd_run(args: argparse.Namespace) -> int:
         print("Refusing to run: --target tmux requires --detach")
         return 2
     return run_executor.execute(request, watcher=_spawn_watcher)
+
+
+def cmd_envelope_create(args: argparse.Namespace) -> int:
+    """Create a bounded standing envelope. Bad bounds refuse at create rather than
+    silently never matching at fire time."""
+    try:
+        env = envelope.create(
+            name=args.name,
+            expires=args.expires,
+            cards=tuple(args.card),
+            branch=args.branch.strip(),
+            accounts=tuple(args.account),
+            tiers=tuple(args.tier),
+            efforts=tuple(args.effort),
+            usage_floor=args.usage_floor,
+            max_attempts_per_card=args.max_attempts,
+            max_dispatches_per_day=args.max_dispatches_per_day,
+            merge_authority=args.allow_merge,
+        )
+    except envelope.EnvelopeError as exc:
+        print(f"Refusing to create envelope: {exc}")
+        return 2
+    print(f"Created envelope {env.name} (expires {env.expires}, inclusive).")
+    print(f"  cards      : {', '.join(env.cards) or '(none)'}")
+    if env.branch:
+        print(f"  branch     : {env.branch} (every card stamped `branch: {env.branch}`)")
+    print(f"  accounts   : {', '.join(env.accounts)}")
+    print(f"  tiers      : {', '.join(env.tiers)}")
+    print(f"  efforts    : {', '.join(env.efforts) or '(any)'}")
+    print(f"  usage floor: {env.usage_floor}% remaining (unknown capacity refuses)")
+    print(f"  attempts   : {env.max_attempts_per_card}/card · {env.max_dispatches_per_day}/day")
+    print(f"  merge      : {'authorized on green gates' if env.merge_authority else 'NOT authorized (verify + escalate only)'}")
+    print(f"\nStored at {envelope.envelope_path(env.name)} — machine-local, never commit it.")
+    print(f"Revoke at any time with `horus envelope revoke {env.name}`.")
+    return 0
+
+
+def _envelope_state(env: "envelope.Envelope", *, today: date) -> str:
+    if env.revoked:
+        return "revoked"
+    return "expired" if env.is_expired(today=today) else "active"
+
+
+def cmd_envelope_list(args: argparse.Namespace) -> int:
+    envs = envelope.load_all()
+    today = datetime.now(timezone.utc).date()
+    if getattr(args, "stdout", False):
+        print(json.dumps(
+            [
+                {
+                    **asdict(env),
+                    "state": _envelope_state(env, today=today),
+                    "spend": asdict(envelope.spend(env.name)),
+                }
+                for env in envs
+            ],
+            indent=2,
+        ))
+        return 0
+    if not envs:
+        print("No standing envelopes. Create one with `horus envelope create`.")
+        return 0
+    print(f"{'NAME':<24} {'STATE':<8} {'EXPIRES':<12} {'TODAY':<7} CARDS")
+    for env in envs:
+        used = envelope.spend(env.name)
+        scope = ", ".join(env.cards) or (f"branch:{env.branch}" if env.branch else "(none)")
+        per_day = f"{used.dispatches_today}/{env.max_dispatches_per_day}"
+        print(f"{env.name:<24} {_envelope_state(env, today=today):<8} {env.expires:<12} {per_day:<7} {scope}")
+    return 0
+
+
+def cmd_envelope_show(args: argparse.Namespace) -> int:
+    env = envelope.load(args.name)
+    if env is None:
+        print(f"No readable envelope named {args.name!r} (looked in {envelope.envelopes_dir()}).")
+        return 1
+    today = datetime.now(timezone.utc).date()
+    used = envelope.spend(env.name)
+    if getattr(args, "stdout", False):
+        print(json.dumps(
+            {
+                **asdict(env),
+                "state": _envelope_state(env, today=today),
+                "spend": asdict(used),
+                "ledger": envelope.read_ledger(env.name),
+            },
+            indent=2,
+        ))
+        return 0
+    print(f"Envelope {env.name} — {_envelope_state(env, today=today)}")
+    print(f"  created    : {env.created}")
+    print(f"  expires    : {env.expires} (inclusive)")
+    if env.revoked:
+        print(f"  revoked    : {env.revoked_at or 'yes'}")
+    print(f"  cards      : {', '.join(env.cards) or '(none)'}")
+    if env.branch:
+        print(f"  branch     : {env.branch}")
+    print(f"  accounts   : {', '.join(env.accounts)}")
+    print(f"  tiers      : {', '.join(env.tiers)}")
+    print(f"  efforts    : {', '.join(env.efforts) or '(any)'}")
+    print(f"  usage floor: {env.usage_floor}% remaining")
+    print(f"  merge      : {'authorized on green gates' if env.merge_authority else 'NOT authorized (verify + escalate only)'}")
+    print(f"\nSpend (from the append-only ledger, {envelope.ledger_path(env.name)}):")
+    print(f"  dispatches today : {used.dispatches_today}/{env.max_dispatches_per_day}")
+    print(f"  dispatches total : {used.total}")
+    if not used.attempts_by_card:
+        print("  attempts         : none yet")
+    for card, count in sorted(used.attempts_by_card.items()):
+        exhausted = " (exhausted)" if count >= env.max_attempts_per_card else ""
+        print(f"  attempts         : {card} {count}/{env.max_attempts_per_card}{exhausted}")
+    return 0
+
+
+def cmd_envelope_revoke(args: argparse.Namespace) -> int:
+    env = envelope.revoke(args.name)
+    if env is None:
+        print(f"No readable envelope named {args.name!r} (looked in {envelope.envelopes_dir()}).")
+        return 1
+    print(f"Revoked envelope {env.name} at {env.revoked_at}.")
+    print("Pending scheduled dispatches validate at fire time, so they are refused from now on.")
+    print("Live attached sessions are untouched — stop those with `horus stop <session>`.")
+    return 0
 
 
 def _spawn_watcher(session_id: str, cwd: Path) -> None:
@@ -3060,6 +3277,85 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_capabilities.set_defaults(func=cmd_capabilities)
 
+    p_envelope = sub.add_parser(
+        "envelope",
+        help="manage standing dispatch envelopes (bounded pre-authorization for unattended runs)",
+        description=(
+            "A standing envelope is the owner's bounded, expiring authorization for "
+            "unattended dispatch. It BOUNDS only — it never selects a card, account, or "
+            "model. `horus run --unattended --envelope <name> --card <card>` validates "
+            "against it and refuses to exceed it. Stored machine-locally (it names "
+            "accounts); never commit one to a repo."
+        ),
+    )
+    envelope_sub = p_envelope.add_subparsers(dest="envelope_cmd", required=True)
+
+    p_env_create = envelope_sub.add_parser(
+        "create", help="create a bounded, expiring standing envelope"
+    )
+    p_env_create.add_argument("name", help="envelope name (letters, digits, '.', '_', '-')")
+    p_env_create.add_argument(
+        "--expires", required=True, metavar="YYYY-MM-DD",
+        help="last day this envelope authorizes anything (inclusive) — no evergreen authority",
+    )
+    p_env_create.add_argument(
+        "--card", action="append", default=[], metavar="NAME",
+        help="a card name this envelope authorizes (repeatable)",
+    )
+    p_env_create.add_argument(
+        "--branch", default="", metavar="NAME",
+        help="authorize every card stamped `branch: <NAME>` (a vision branch)",
+    )
+    p_env_create.add_argument(
+        "--account", action="append", default=[], metavar="ALIAS", required=True,
+        help="an isolated account this envelope may dispatch to (repeatable)",
+    )
+    p_env_create.add_argument(
+        "--tier", action="append", default=[], metavar="TIER", required=True,
+        help="an allowed card `tier:` label (repeatable). An allow-list, not an ordered "
+             "ceiling, so it stays correct across tier-vocabulary changes",
+    )
+    p_env_create.add_argument(
+        "--effort", action="append", default=[], metavar="EFFORT",
+        help="an allowed effort label (repeatable); omit to allow any effort",
+    )
+    p_env_create.add_argument(
+        "--usage-floor", type=int, default=0, metavar="PCT",
+        help="refuse to dispatch when the account has less than PCT%% of its window "
+             "remaining (default: 0). Unknown capacity always refuses",
+    )
+    p_env_create.add_argument(
+        "--max-attempts", type=int, default=1, metavar="N",
+        help="maximum dispatches of any one card over the envelope's life (default: 1)",
+    )
+    p_env_create.add_argument(
+        "--max-dispatches-per-day", type=int, default=1, metavar="N",
+        help="maximum dispatches per UTC day across all cards (default: 1)",
+    )
+    p_env_create.add_argument(
+        "--allow-merge", action="store_true",
+        help="permit unattended merge on green gates; omit for verify-and-escalate only "
+             "(the default, and the away-mode cut line)",
+    )
+    p_env_create.set_defaults(func=cmd_envelope_create)
+
+    p_env_list = envelope_sub.add_parser("list", help="list standing envelopes and their state")
+    p_env_list.add_argument("--stdout", action="store_true", help="emit JSON instead of a table")
+    p_env_list.set_defaults(func=cmd_envelope_list)
+
+    p_env_show = envelope_sub.add_parser("show", help="show one envelope's bounds and what it has spent")
+    p_env_show.add_argument("name", help="envelope name")
+    p_env_show.add_argument("--stdout", action="store_true", help="emit JSON instead of a table")
+    p_env_show.set_defaults(func=cmd_envelope_show)
+
+    p_env_revoke = envelope_sub.add_parser(
+        "revoke",
+        help="ground the envelope: pending scheduled dispatches are refused from now on "
+             "(live attached sessions keep running)",
+    )
+    p_env_revoke.add_argument("name", help="envelope name")
+    p_env_revoke.set_defaults(func=cmd_envelope_revoke)
+
     p_datum = sub.add_parser(
         "datum",
         help="EXPERIMENTAL: record the qualitative half of a measured run datum",
@@ -3378,6 +3674,26 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="for a critical launch: refuse (exit 2) when usage capacity is unknown for the "
              "target agent+account, instead of the default courtesy notice + proceed",
+    )
+    p_run.add_argument(
+        "--unattended",
+        action="store_true",
+        help="this dispatch has no live supervisor: requires --envelope, and every envelope "
+             "bound is enforced (--force does not override them)",
+    )
+    p_run.add_argument(
+        "--envelope",
+        default=None,
+        metavar="NAME",
+        help="validate this dispatch against the owner's standing envelope NAME and refuse to "
+             "exceed its bounds (see `horus envelope`); requires --card",
+    )
+    p_run.add_argument(
+        "--card",
+        default=None,
+        metavar="NAME",
+        help="the backlog card this dispatch is for; its `tier:`/`branch:` frontmatter is what "
+             "the envelope's bounds are checked against",
     )
     p_run.set_defaults(func=cmd_run)
 
