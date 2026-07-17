@@ -1630,7 +1630,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -1657,7 +1657,10 @@ adoption frame silently:
 - **both** → keep both verdicts side by side.
 
 When `pathfinder` invokes this skill it passes the pinned intent + shipped/vision
-brief; honor it. Standalone, ASK the owner the intent before spending.
+brief confirmed with the owner at its Step 0; honor it. Standalone — or whenever
+the owner has not confirmed the intent THIS session (an intent pre-declared in
+args or a stored prompt is a proposal) — ASK before spending: present the three
+options plus a free-text alternative.
 
 ## Before you spend — confirm the envelope
 
@@ -1757,7 +1760,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -1813,7 +1816,11 @@ sections, then STOP for the owner to pick:
 5. **Speculative branches (1-2).** Directions with NO current facet, derived from
    position + market + intent: the gap it names, the idea, the cheapest PoC, why it
    fits the intent, the risk. These are the "imaginary visions" — the tree is
-   incomplete without at least one.
+   incomplete without at least one. At least one candidate must RE-TEST the
+   Vision's out-of-scope list against fresh usage evidence — an out-of-scope line
+   is a hypothesis too. (Calibration: both 2026-07-17 runs missed the owner's
+   strongest live direction, scheduled autonomous dispatch, because it sat behind
+   an out-of-scope declaration neither run questioned.)
 6. **Recommendation, held loosely.** Primary / secondary / filler / park across the
    branches, one paragraph of reasoning. The owner reorders freely.
 
@@ -1963,7 +1970,7 @@ description: >-
   token envelope before any web work. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -2018,6 +2025,12 @@ run — the research frame AND the verdict criteria. Do NOT default to one silen
 - **broaden-adoption** — reach new users. Research reads as market gap /
   prior-art / differentiation.
 - **both** — run the outward scan but summarize through both lenses.
+
+**Confirm interactively, even when the intent arrives pre-declared.** An intent
+carried in args, a stored `next_prompt`, or a scheduled brief is a PROPOSAL, not
+a confirmation — present the options above plus a free-text alternative and get
+the owner's pick before launching any machinery. (Calibration: the 2026-07-17
+convergence-test run treated a pre-pinned intent as settled and skipped the ask.)
 
 The pinned intent travels into every step: the envelope statement, the
 `market-scan` framing, the `roadmap-branches` theses, and the `scope-cards`
@@ -2094,10 +2107,10 @@ SKILLS: tuple[Skill, ...] = (
     Skill("product-audit", 2, _PRODUCT_AUDIT_SKILL),
     Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),
     Skill("skill-audit", 1, _SKILL_AUDIT_SKILL),
-    Skill("market-scan", 3, _MARKET_SCAN_SKILL),
-    Skill("roadmap-branches", 1, _ROADMAP_BRANCHES_SKILL),
+    Skill("market-scan", 4, _MARKET_SCAN_SKILL),
+    Skill("roadmap-branches", 2, _ROADMAP_BRANCHES_SKILL),
     Skill("scope-cards", 1, _SCOPE_CARDS_SKILL),
-    Skill("pathfinder", 2, _PATHFINDER_SKILL),
+    Skill("pathfinder", 3, _PATHFINDER_SKILL),
 )
 
 

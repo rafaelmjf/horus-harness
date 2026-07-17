@@ -1,6 +1,6 @@
 ---
 status: open
-priority: medium
+priority: high
 created: 2026-07-17
 vision_facet: "Continuity core"
 phase: converge
@@ -44,3 +44,12 @@ session.
   signal only, per the controls ladder (promote only after another field failure).
 - Not the scheduled-dispatch feature itself (separate card if/when the owner
   files it); this is only the reconciliation signal.
+
+## Reviews
+
+- 2026-07-17 — priority medium→high; joins the X3 away-mode kit. Second incident
+  in 24h: PR #289 (scheduled parallel session) again needed the owner to point at
+  the sibling delivery by hand before the supervisor merged and re-folded
+  continuity. Scheduled autonomous dispatch (vision-branch-x3, now the primary
+  thread) makes sibling deliveries the NORM, not the exception — the deterministic
+  parallel-delivery signal must exist before the owner is away (2026-07-22).

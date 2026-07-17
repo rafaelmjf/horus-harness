@@ -58,7 +58,7 @@ def test_delegation_decision_skills_registered():
 
 def test_market_scan_skill_registered_and_outward():
     market = next(s for s in skills.SKILLS if s.name == "market-scan")
-    assert market.version == 3
+    assert market.version == 4
     # outward twin of product-audit: composes deep-research, advisory, dated receipt.
     assert "deep-research" in market.content
     assert ".horus/research/" in market.content
@@ -70,11 +70,13 @@ def test_market_scan_skill_registered_and_outward():
     assert "build-vs-adopt" in market.content.lower()
     assert "deepen-own-use" in market.content and "broaden-adoption" in market.content
     assert "WRONG yardstick" in market.content  # saturation is the wrong lens for own-use
+    # v4: a pre-declared intent is a proposal — ask with options + free text.
+    assert "free-text alternative" in market.content
 
 
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    assert pf.version == 2
+    assert pf.version == 3
     # Renamed from horus-kickstart: age-agnostic name, no old slug lingering.
     assert not any(s.name == "horus-kickstart" for s in skills.SKILLS)
     # v2: genuinely thin — sequences the factored step skills, no analysis inline.
@@ -108,15 +110,19 @@ def test_pathfinder_skill_registered_and_orchestrates():
     assert "HARD CONSTRAINT" in pf.content
     # v2 fallback present (asserted for all skills elsewhere, checked explicitly here too).
     assert "## v2 six-lane projects (fallback)" in pf.content
+    # v3: Step 0 confirms the intent interactively even when pre-declared in args.
+    assert "Confirm interactively, even when the intent arrives pre-declared" in pf.content
 
 
 def test_roadmap_branches_skill_registered_divergence_tree():
     rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
-    assert rb.version == 1
+    assert rb.version == 2
     # The deliverable is a TREE of alternative roadmaps, never one merged roadmap.
     assert "never collapse the tree into one merged roadmap" in rb.content
     # Speculative branches (directions with no facet yet) are part of the contract.
     assert "Speculative branches" in rb.content
+    # v2: speculative branches must re-test the Vision's out-of-scope list.
+    assert "RE-TEST" in rb.content and "out-of-scope list" in rb.content
     # Market evidence appears INSIDE every branch, not only in the market section.
     assert "Market position" in rb.content
     assert "therefore these items" in rb.content

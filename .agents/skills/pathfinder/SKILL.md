@@ -17,7 +17,7 @@ description: >-
   token envelope before any web work. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -72,6 +72,12 @@ run — the research frame AND the verdict criteria. Do NOT default to one silen
 - **broaden-adoption** — reach new users. Research reads as market gap /
   prior-art / differentiation.
 - **both** — run the outward scan but summarize through both lenses.
+
+**Confirm interactively, even when the intent arrives pre-declared.** An intent
+carried in args, a stored `next_prompt`, or a scheduled brief is a PROPOSAL, not
+a confirmation — present the options above plus a free-text alternative and get
+the owner's pick before launching any machinery. (Calibration: the 2026-07-17
+convergence-test run treated a pre-pinned intent as settled and skipped the ask.)
 
 The pinned intent travels into every step: the envelope statement, the
 `market-scan` framing, the `roadmap-branches` theses, and the `scope-cards`

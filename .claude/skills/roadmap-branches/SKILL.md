@@ -14,7 +14,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -70,7 +70,11 @@ sections, then STOP for the owner to pick:
 5. **Speculative branches (1-2).** Directions with NO current facet, derived from
    position + market + intent: the gap it names, the idea, the cheapest PoC, why it
    fits the intent, the risk. These are the "imaginary visions" — the tree is
-   incomplete without at least one.
+   incomplete without at least one. At least one candidate must RE-TEST the
+   Vision's out-of-scope list against fresh usage evidence — an out-of-scope line
+   is a hypothesis too. (Calibration: both 2026-07-17 runs missed the owner's
+   strongest live direction, scheduled autonomous dispatch, because it sat behind
+   an out-of-scope declaration neither run questioned.)
 6. **Recommendation, held loosely.** Primary / secondary / filler / park across the
    branches, one paragraph of reasoning. The owner reorders freely.
 

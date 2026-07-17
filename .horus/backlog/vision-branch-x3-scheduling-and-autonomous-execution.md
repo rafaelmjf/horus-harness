@@ -5,7 +5,8 @@ created: 2026-07-17
 tier: opus
 type: feature
 parallel: safe
-phase: explore
+phase: converge
+vision_facet: "Autonomous dispatch"
 created_by: owner
 surface: .horus/backlog/ (divergence umbrella); may inform a future PRD Vision facet; links five explore cards
 ---
@@ -98,6 +99,31 @@ Mapped from horus-harness source. Flow step → status → mechanism:
   owner about a problem.
 - `cockpit-autonomous-dispatch-contract` — a cockpit skill (+ horus-agent PRD reference)
   wiring the existing skills into this loop, with the owner-consent gate pinned.
+
+## Promotion + kit order (owner, 2026-07-17)
+
+**PROMOTED to the Vision facet "Autonomous dispatch"** (out-of-scope line amended:
+*distributed* multi-machine control stays out). Owner away from 2026-07-22 (6 days);
+the away-mode kit is the deadline. Mini market scan
+`research/2026-07-17-x3-autonomous-dispatch-scan.md` (YELLOW): scheduling itself is
+commoditized (native Desktop scheduled tasks / cloud Routines / Devin scheduled
+sessions) — the uncovered triad this branch builds is (1) INDEPENDENT deterministic
+supervision (every competitor stops at human review or lets the worker bless its own
+work), (2) own-machine multi-account routing under existing subscriptions, (3)
+continuity-closing the loop. Build the envelope/supervisor/closure; keep anything
+that is "just scheduling" wrapper-thin over native/OS primitives.
+
+**Kit order (dependency-sorted):** 0. `standing-dispatch-envelope` (NEW — the bounded
+pre-authorization rule + refusal guards everything unattended runs under; per-launch
+consent cannot serve an unattended loop) → 1. `unattended-dispatch-attachable-worktree-defaults`
+→ 2. `schedule-local-dispatcher` (one-shot first; capacity-pull trigger — dispatch on
+usage-window reset, the kanban pull no competitor has — if time) → 3.
+`unattended-escalation-channel` → 4. `supervise-verify-merge-close` (andon: an
+escalation halts all depends-on descendants) → 5. `parallel-session-continuity-reconciliation`
+(kit member: scheduled dispatch makes sibling deliveries routine) → 6.
+`cockpit-autonomous-dispatch-contract`. Cut line: 0–3+5 give a trustable
+verify+escalate-only away loop; 4's unattended MERGE ships only if its live-probe
+design settles first.
 
 ## Acceptance (for the branch, not the individual cards)
 

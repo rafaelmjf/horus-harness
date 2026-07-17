@@ -5,9 +5,11 @@ created: 2026-07-17
 tier: opus
 type: feature
 parallel: unsafe
-phase: explore
+phase: converge
+vision_facet: "Autonomous dispatch"
+branch: vision-branch-x3-scheduling-and-autonomous-execution
 created_by: owner
-depends-on: unattended-escalation-channel
+depends-on: unattended-escalation-channel, standing-dispatch-envelope
 surface: new `horus supervise` subcommand; horus/cli.py; new horus/supervise.py; composes horus/mergewatch.py + horus/closure.py + horus/delivery.py + horus/registry.py + gh pr merge + horus/backlog.py (ship)
 ---
 
@@ -51,12 +53,23 @@ A `horus supervise <session-id|pr>` verb that runs the acceptance gate unattende
   emits an escalation.
 - It refuses to accept on worker self-report alone (no `--expect-delivery` / no pinned base
   → escalate, don't guess).
+- **Andon:** an escalation halts every scheduled dispatch whose card `depends-on`
+  (transitively) the failed card — no dependent work fires on top of a red base;
+  independent scheduled work is unaffected. The halt is visible in
+  `horus schedule list` with the blocking reason.
+
+## Preconditions (not open questions)
+
+- **The headless live-probe definition must be settled BEFORE implementation** —
+  what deterministic probe of the changed surface a supervisor can run per project
+  type (start with: this repo's pytest-required checks + one `horus <verb>` smoke
+  of the changed surface). Until settled, this card ships verify+escalate-only:
+  it may classify and escalate but NOT merge (the away-mode cut line, 2026-07-17).
 
 ## Open questions
 
 - Should merge stay `gh pr merge` here, or should `integration.integrate()` be generalised
   beyond onboarding and reused? (Prefer reuse to avoid a second merge path.)
-- What counts as the mandatory "one live probe" for a headless run, per project type.
 - Idempotency / re-run safety if a supervise run is itself scheduled and fires twice.
 
 ## Notes
