@@ -31,6 +31,7 @@ from prompt_toolkit.styles import Style
 from horus import (
     backlog,
     backlog_migrate,
+    backlog_tree,
     capabilities,
     claude_usage,
     closure,
@@ -147,6 +148,11 @@ class TerminalUI:
         self.project_metrics = {
             project: _backlog_metrics(project, self.project_cards[project]) for project in self.projects
         }
+        self.project_trees = {project: _project_tree(project) for project in self.projects}
+        self.project_receipts = {project: _receipts(project) for project in self.projects}
+        self.expanded_branches: set[tuple[Path, str]] = set()
+        self.receipt: backlog_tree.Receipt | None = None
+        self.receipt_scroll = 0
         self.project_pending = {
             project: len(closure.pending_delivery_commits(project)) for project in self.projects
         }
@@ -332,6 +338,11 @@ class TerminalUI:
             self.card_scroll = max(0, min(len(lines) - 1, self.card_scroll + amount))
             self.application.invalidate()
             return
+        if self.screen == "receipt":
+            lines = self._receipt_lines()
+            self.receipt_scroll = max(0, min(len(lines) - 1, self.receipt_scroll + amount))
+            self.application.invalidate()
+            return
         self.move(amount)
 
     def activate(self) -> None:
@@ -364,6 +375,23 @@ class TerminalUI:
             self._show("backlog")
         elif self.screen == "project" and kind == "capabilities":
             self._show("capabilities")
+        elif self.screen == "project" and kind == "receipts":
+            self._show("receipts")
+        elif self.screen == "backlog" and kind == "branch":
+            group = value  # type: ignore[assignment]
+            key = (self.project, group.branch)
+            if key in self.expanded_branches:
+                self.expanded_branches.discard(key)
+            else:
+                self.expanded_branches.add(key)
+            selected = self.selected
+            self._refresh_items()
+            self.selected = min(selected, max(0, len(self.items) - 1))
+            self.application.invalidate()
+        elif self.screen == "receipts" and kind == "receipt":
+            self.receipt = value  # type: ignore[assignment]
+            self.receipt_scroll = 0
+            self._show("receipt")
         elif self.screen == "backlog_fields" and kind == "backlog_field":
             field = str(value)
             self.backlog_fields = config.toggle_backlog_field(field)
@@ -449,6 +477,10 @@ class TerminalUI:
             self._show("backlog")
         elif self.screen == "capabilities":
             self._show("project")
+        elif self.screen == "receipts":
+            self._show("project")
+        elif self.screen == "receipt":
+            self._show("receipts")
         elif self.screen == "card":
             self._show("backlog")
         elif self.screen == "sessions":
@@ -485,11 +517,30 @@ class TerminalUI:
                 ("mode", "fresh"),
                 ("backlog", None),
                 ("capabilities", None),
+                ("receipts", None),
             ]
         elif self.screen == "accounts":
             self.items = [("account", account) for account in self.accounts]
+        elif self.screen == "receipts":
+            self.items = [("receipt", receipt) for receipt in self.project_receipts.get(self.project, [])]
+        elif self.screen == "receipt":
+            self.items = []
         elif self.screen == "backlog":
-            self.items = [("card", card) for card in self.project_cards.get(self.project, [])]
+            tree = self.project_trees.get(self.project) or backlog_tree.Tree()
+            if not tree.branches and len(tree.facets) <= 1:
+                # No branch umbrellas (and nothing to facet-split either) — the
+                # forward-readable degrade: identical to the pre-tree flat view.
+                self.items = [("card", card) for card in self.project_cards.get(self.project, [])]
+            else:
+                items: list[tuple[str, object]] = []
+                for group in tree.branches:
+                    items.append(("branch", group))
+                    if (self.project, group.branch) in self.expanded_branches:
+                        items.extend(("card", card) for card in group.children)
+                for group in tree.facets:
+                    items.append(("facet", group))
+                    items.extend(("card", card) for card in group.children)
+                self.items = items
         elif self.screen == "backlog_fields":
             choices = _card_field_choices(self.project_cards.get(self.project, []), self.backlog_fields)
             self.items = [("backlog_field", key) for key in choices]
@@ -572,6 +623,8 @@ class TerminalUI:
             "backlog_fields": "HORUS · Backlog card fields",
             "capabilities": f"HORUS · {self.project.name if self.project else 'Project'} capabilities",
             "card": "HORUS · Backlog card",
+            "receipts": f"HORUS · {self.project.name if self.project else 'Project'} receipts",
+            "receipt": "HORUS · Receipt",
             "sessions": "HORUS · Running sessions",
             "session": "HORUS · Session",
             "confirm": "HORUS · Close session?",
@@ -585,6 +638,8 @@ class TerminalUI:
     def _body_text(self) -> StyleAndTextTuples:
         if self.screen == "card":
             return self._card_body_text()
+        if self.screen == "receipt":
+            return self._receipt_body_text()
         if self.screen == "capabilities":
             return self._capabilities_body_text()
         if self.screen == "fleet_review":
@@ -596,6 +651,8 @@ class TerminalUI:
                 message = "No tracked projects. Run `horus init` first."
             elif self.screen == "backlog":
                 message = "No open backlog cards."
+            elif self.screen == "receipts":
+                message = "No research receipts yet."
             elif self.screen == "backlog_fields":
                 message = "No frontmatter fields on these cards."
             elif self.screen == "accounts":
@@ -704,6 +761,10 @@ class TerminalUI:
                 lines.append((style, f"\n {marker} Capabilities\n"))
                 detail = self.capabilities_error or f"{count} shipped capabilities"
                 lines.append(("class:muted", f"     {detail}\n"))
+            elif kind == "receipts":
+                count = len(self.project_receipts.get(self.project, []))
+                lines.append((style, f"\n {marker} Receipts\n"))
+                lines.append(("class:muted", f"     {count} research receipt{'s' if count != 1 else ''}\n"))
             elif kind == "account":
                 account = value
                 lines.append((style, f"\n {marker} {account.agent.title()} {account.alias}\n"))
@@ -718,6 +779,23 @@ class TerminalUI:
                 # inline field — then it's already on the row above.
                 if card.priority and "priority" not in self.backlog_fields:
                     lines.append(("class:muted", f"     priority {card.priority}\n"))
+            elif kind == "branch":
+                group = value
+                expanded = (self.project, group.branch) in self.expanded_branches
+                caret = "v" if expanded else ">"
+                lines.append((style, f"\n {marker} {caret} {group.title} ({len(group.children)})\n"))
+                if group.convergence:
+                    lines.append(("class:muted", f"     converges: {group.convergence}\n"))
+                elif not group.resolved:
+                    lines.append(("class:muted", "     no matching umbrella card\n"))
+            elif kind == "facet":
+                group = value
+                label = group.facet or "Unsorted"
+                lines.append(("class:section", f"\n  {label} ({len(group.children)})\n"))
+            elif kind == "receipt":
+                receipt = value
+                lines.append((style, f"\n {marker} {receipt.title}\n"))
+                lines.append(("class:muted", f"     {receipt.date or 'undated'} · {receipt.path.name}\n"))
             elif kind == "backlog_field":
                 if index == 0:
                     lines.append(("class:section", "\n  Shown inline after each card title\n"))
@@ -961,6 +1039,42 @@ class TerminalUI:
             fragments.append((style, f" {line}\n"))
         return fragments
 
+    def _receipt_lines(self) -> list[str]:
+        if self.receipt is None:
+            return ["", "Receipt unavailable."]
+        try:
+            body = self.receipt.path.read_text(encoding="utf-8")
+        except OSError:
+            body = "Receipt could not be read."
+        description = body.splitlines()
+        for index, line in enumerate(description):
+            if line.strip():
+                if line.lstrip().startswith("# "):
+                    description.pop(index)
+                break
+        return [
+            "",
+            f"[{self.receipt.date or 'undated'}]",
+            self.receipt.title,
+            "",
+            *description,
+            "",
+        ]
+
+    def _receipt_body_text(self) -> StyleAndTextTuples:
+        fragments: StyleAndTextTuples = []
+        for index, line in enumerate(self._receipt_lines()):
+            if index == self.receipt_scroll:
+                fragments.append(("[SetCursorPosition]", ""))
+            if index == 1:
+                style = "class:meta"
+            elif index == 2:
+                style = "class:card-title"
+            else:
+                style = "class:item"
+            fragments.append((style, f" {line}\n"))
+        return fragments
+
     def _load_project_capabilities(self) -> None:
         """Regenerate and retain the one canonical per-project capability record."""
         self.capabilities_record = None
@@ -1177,10 +1291,16 @@ class TerminalUI:
             return [("class:footer", text)]
         if self.screen == "backlog":
             text = (
-                " ↑↓ · Enter open · f fields · Esc"
+                " ↑↓ · Enter open/expand · f fields · Esc"
                 if narrow
-                else " ↑↓/swipe scroll   Enter open   f fields   Esc back   q quit"
+                else " ↑↓/swipe scroll   Enter open card / expand branch   f fields   Esc back   q quit"
             )
+            return [("class:footer", text)]
+        if self.screen == "receipts":
+            text = " ↑↓ · Enter open · Esc back" if narrow else " ↑↓/swipe scroll   Enter open (read-only)   Esc back   q quit"
+            return [("class:footer", text)]
+        if self.screen == "receipt":
+            text = " ↑↓ read · Esc back" if narrow else " ↑↓/swipe read   Esc back   q quit"
             return [("class:footer", text)]
         if self.screen == "backlog_fields":
             text = (
@@ -1428,6 +1548,20 @@ def _open_cards(root: Path) -> list[backlog.Card]:
     except (OSError, ValueError):
         return []
     return sorted(cards, key=lambda card: (_PRIORITY_RANK.get(card.priority, 99), card.title.casefold()))
+
+
+def _project_tree(root: Path) -> backlog_tree.Tree:
+    try:
+        return backlog_tree.build_tree(root)
+    except (OSError, ValueError):
+        return backlog_tree.Tree()
+
+
+def _receipts(root: Path) -> list[backlog_tree.Receipt]:
+    try:
+        return backlog_tree.list_receipts(root)
+    except OSError:
+        return []
 
 
 def _backlog_metrics(root: Path, cards: list[backlog.Card]) -> tuple[int, int]:

@@ -21,6 +21,7 @@ from horus import (
     backend,
     backlog,
     backlog_migrate,
+    backlog_tree,
     brainstorm,
     capabilities,
     claude_usage,
@@ -1896,6 +1897,17 @@ def cmd_backlog(args: argparse.Namespace) -> int:
     (guarded by an overlap check against currently in-progress cards)."""
     root = _resolve_dir(args.path)
     if root is None:
+        return 2
+
+    if args.backlog_cmd is None:
+        if getattr(args, "tree", False):
+            tree = backlog_tree.build_tree(root)
+            if getattr(args, "json", False):
+                print(backlog_tree.render_json(tree), end="")
+            else:
+                print(backlog_tree.render_text(tree), end="")
+            return 0
+        print("error: pass a backlog subcommand (list|migrate|claim|ship|review) or --tree")
         return 2
 
     if args.backlog_cmd == "list":
@@ -4267,7 +4279,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_backlog = sub.add_parser(
         "backlog", help="work with .horus/backlog/ cards (parallel-safety metadata + claim check)"
     )
-    backlog_sub = p_backlog.add_subparsers(dest="backlog_cmd", required=True)
+    p_backlog.add_argument("--path", default=".", help="project root (default: cwd); only used with --tree")
+    p_backlog.add_argument(
+        "--tree", action="store_true",
+        help="canonical branch/facet projection: active cards grouped by `branch:` umbrella, "
+        "then by `vision_facet` for unbranched cards",
+    )
+    p_backlog.add_argument("--json", action="store_true", help="with --tree, emit the projection as JSON")
+    p_backlog.set_defaults(func=cmd_backlog, backlog_cmd=None)
+    backlog_sub = p_backlog.add_subparsers(dest="backlog_cmd", required=False)
     p_backlog_list = backlog_sub.add_parser(
         "list", help="list backlog cards with status/priority/tier/type/parallel/surface"
     )
