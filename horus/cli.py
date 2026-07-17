@@ -1020,6 +1020,50 @@ def _envelope_guard(args: argparse.Namespace, root: Path) -> tuple[int | None, _
     return None, _EnvelopeAuth(name=env.name, request=request)
 
 
+def _apply_unattended_defaults(args: argparse.Namespace) -> int | None:
+    """Give `--unattended` the safe dispatch posture, then return ``None`` to proceed
+    (or an exit code to refuse).
+
+    An unattended worker has nobody watching it, which implies two things the
+    attended default cannot assume:
+
+    - **Attachable.** ``horus run`` hosts the agent in the caller's own process by
+      default, so a cron-launched worker is unreachable — the 2026-07-17 dogfood hit
+      exactly this: real work, registered in `horus sessions`, but never
+      `horus attach`-able. Unattended runs go to managed tmux, detached, so the owner
+      can always look in or intervene.
+    - **Isolated.** An unattended worker in the shared checkout can switch branches
+      under a concurrent session's feet, so it gets its own worktree.
+
+    Every implied flag yields to an explicit one, and attended ``horus run`` is
+    untouched: this only fills in blanks on the unattended path.
+    """
+    unattended = getattr(args, "unattended", False)
+    # argparse cannot distinguish an omitted --target from its default, so the flag
+    # defaults to None and the real default is resolved here, per posture.
+    if not unattended:
+        args.target = getattr(args, "target", None) or terminal_sessions.CURRENT
+        return None
+
+    if args.agent not in _WORKER_POSTURE:
+        print(f"Refusing to run: --unattended needs a worker-capable agent "
+              f"({', '.join(sorted(_WORKER_POSTURE))}), not {args.agent!r}.")
+        print("Unattended dispatch is worker dispatch: it runs headless, detached, with no "
+              "live supervisor, so it needs an agent with a worker posture.")
+        return 2
+
+    args.worker = getattr(args, "worker", None) or args.agent
+    args.target = getattr(args, "target", None) or terminal_sessions.TMUX
+    args.detach = True
+    if not getattr(args, "worktree", None):
+        # --unattended requires --envelope, which requires --card, so a card slug is
+        # always available here. `auto/` namespaces machine-created branches: coming
+        # back from a trip, `git branch` says at a glance what was dispatched, and an
+        # auto branch can never collide with one the owner cut for the same card.
+        args.worktree = f"auto/{args.card}"
+    return None
+
+
 def _run_usage_preflight(
     agent: str, account: str | None, *, force: bool, refuse_on_unknown: bool = False
 ) -> int | None:
@@ -1102,6 +1146,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     # The standing envelope is the outermost authorization: refuse before any git
     # work, worktree creation, or usage read happens on an unauthorized dispatch.
     refusal, envelope_auth = _envelope_guard(args, root)
+    if refusal is not None:
+        return refusal
+    # Before the worker/worktree work below, so an unattended run reaches it already
+    # wearing the attachable + isolated posture.
+    refusal = _apply_unattended_defaults(args)
     if refusal is not None:
         return refusal
 
@@ -3644,8 +3693,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
     p_run.add_argument(
         "--target", choices=(terminal_sessions.CURRENT, terminal_sessions.TMUX),
-        default=terminal_sessions.CURRENT,
-        help="execution host: current process or managed tmux (tmux requires --detach)",
+        default=None,
+        help="execution host: current process or managed tmux (tmux requires --detach). "
+             "Default: current, or tmux under --unattended",
     )
     p_run.add_argument(
         "--detach", action="store_true",
@@ -3678,8 +3728,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument(
         "--unattended",
         action="store_true",
-        help="this dispatch has no live supervisor: requires --envelope, and every envelope "
-             "bound is enforced (--force does not override them)",
+        help="this dispatch has no live supervisor: requires --envelope (every bound enforced; "
+             "--force does not override them), and implies the safe posture — managed tmux, "
+             "detached, --worker <agent>, and a per-card `auto/<card>` worktree — so the run is "
+             "attachable and cannot disturb the main checkout. Explicit flags win",
     )
     p_run.add_argument(
         "--envelope",

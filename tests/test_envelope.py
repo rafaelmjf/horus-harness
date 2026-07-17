@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from horus import backlog, cli, config, envelope
+from horus import backlog, cli, config, envelope, worktree
 
 TODAY = date(2026, 7, 22)
 NOW = datetime(2026, 7, 22, 9, 0, tzinfo=timezone.utc)
@@ -24,6 +24,11 @@ NOW = datetime(2026, 7, 22, 9, 0, tzinfo=timezone.utc)
 def _isolated_home(tmp_path, monkeypatch):
     """Envelopes live under ~/.horus; never touch the real one from a test."""
     monkeypatch.setattr(config, "config_dir", lambda: tmp_path / "horus-home")
+    monkeypatch.setattr(
+        config, "load_account_config_dirs",
+        lambda: {"claude-personal": "/x/personal", "claude-work": "/x/work"},
+    )
+    monkeypatch.setattr(config, "load_account_codex_homes", lambda: {})
     return tmp_path
 
 
@@ -75,6 +80,23 @@ def test_create_refuses_an_envelope_that_authorizes_nothing():
         _make(accounts=())
     with pytest.raises(envelope.EnvelopeError, match="--tier"):
         _make(tiers=())
+
+
+def test_create_refuses_an_unknown_account_alias():
+    """The worst failure this artifact has: a typo'd alias creates an envelope that
+    looks fine, the owner leaves for a week, and every dispatch silently refuses."""
+    with pytest.raises(envelope.EnvelopeError, match="unknown account alias"):
+        _make(accounts=("personal",))  # the isolated alias is 'claude-personal'
+
+
+def test_create_names_the_known_aliases_when_it_refuses():
+    with pytest.raises(envelope.EnvelopeError, match="claude-personal, claude-work"):
+        _make(accounts=("typo",))
+
+
+def test_create_accepts_a_codex_isolated_alias(monkeypatch):
+    monkeypatch.setattr(config, "load_account_codex_homes", lambda: {"codex-personal": "/x/c"})
+    assert _make(accounts=("codex-personal",)).accounts == ("codex-personal",)
 
 
 def test_create_refuses_duplicate_name():
@@ -158,11 +180,21 @@ def test_refuses_below_the_usage_reserve_floor():
     assert "29%" in refusal.message and "30%" in refusal.message
 
 
-def test_unknown_capacity_fails_closed():
-    """Unattended has no one to read a courtesy notice: unknown refuses."""
-    refusal = envelope.validate(_make(), _req(), usage_remaining=None, now=NOW)
+def test_unknown_capacity_fails_closed_when_a_floor_was_set():
+    """Unattended has no one to read a courtesy notice: an unverifiable floor refuses."""
+    refusal = envelope.validate(_make(usage_floor=30), _req(), usage_remaining=None, now=NOW)
     assert refusal.bound == "usage-floor"
-    assert "unknown" in refusal.message
+    assert "unknown" in refusal.message and "cannot be verified" in refusal.message
+
+
+def test_no_floor_means_no_capacity_check_at_all():
+    """The floor is opt-in, and fail-closed binds the bound the owner actually set.
+    Refusing an unknown signal with usage_floor=0 would ground an entire away trip on
+    a guarantee nobody asked for — the live read on this machine returns no signal.
+    """
+    env = _make(usage_floor=0)
+    assert envelope.validate(env, _req(), usage_remaining=None, now=NOW) is None
+    assert envelope.validate(env, _req(), usage_remaining=1, now=NOW) is None
 
 
 # --- expiry and revocation ---------------------------------------------------
@@ -371,3 +403,66 @@ def test_guard_refuses_when_capacity_is_unknown(tmp_path, monkeypatch):
 
 def test_agents_without_a_usage_window_report_full_capacity(monkeypatch):
     assert cli._envelope_usage_remaining("fake", None) == 100
+
+
+# --- the unattended posture: attachable + worktree-isolated by default -------
+
+
+def _posture_args(**overrides) -> argparse.Namespace:
+    fields = dict(
+        agent="claude", unattended=True, card="card-a", worker=None,
+        target=None, detach=False, worktree=None,
+    )
+    fields.update(overrides)
+    return argparse.Namespace(**fields)
+
+
+def test_unattended_implies_the_attachable_isolated_bundle():
+    """The whole point: a scheduled worker must be reachable and must not touch the
+    main checkout."""
+    args = _posture_args()
+    assert cli._apply_unattended_defaults(args) is None
+    assert args.target == "tmux"     # attachable...
+    assert args.detach is True       # ...and hosted beyond the caller
+    assert args.worker == "claude"   # detach requires a worker
+    assert args.worktree == "auto/card-a"
+
+
+def test_unattended_worktree_is_derived_per_card():
+    args = _posture_args(card="another-card")
+    cli._apply_unattended_defaults(args)
+    assert args.worktree == "auto/another-card"
+
+
+def test_explicit_flags_beat_the_unattended_defaults():
+    args = _posture_args(worktree="feat/mine", worker="codex", agent="codex")
+    cli._apply_unattended_defaults(args)
+    assert args.worktree == "feat/mine"
+    assert args.worker == "codex"
+
+
+def test_unattended_refuses_an_agent_with_no_worker_posture(capsys):
+    """Unattended dispatch IS worker dispatch: headless, detached, unsupervised."""
+    args = _posture_args(agent="fake")
+    assert cli._apply_unattended_defaults(args) == 2
+    assert "worker-capable agent" in capsys.readouterr().out
+
+
+def test_attended_run_posture_is_untouched():
+    args = _posture_args(unattended=False, agent="fake")
+    assert cli._apply_unattended_defaults(args) is None
+    assert args.target == "current"   # the pre-existing default, resolved from None
+    assert args.detach is False
+    assert args.worker is None
+    assert args.worktree is None
+
+
+def test_attended_run_keeps_an_explicit_target():
+    args = _posture_args(unattended=False, target="tmux")
+    cli._apply_unattended_defaults(args)
+    assert args.target == "tmux"
+
+
+def test_auto_branch_slug_maps_to_a_sibling_worktree_path(tmp_path):
+    """`auto/<card>` must survive the pinned <repo>-wt-<slug> convention."""
+    assert worktree.branch_slug("auto/card-a") == "auto-card-a"
