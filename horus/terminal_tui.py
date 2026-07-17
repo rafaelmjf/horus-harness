@@ -161,6 +161,7 @@ class TerminalUI:
         self.pending_origin: str | None = None
         self.card: backlog.Card | None = None
         self.card_scroll = 0
+        self.backlog_fields = config.load_backlog_fields()
         self.project_focus: dict[str, str] = {}
         self.project_requirements: machine_requirements.Report | None = None
         self.capabilities_record: dict | None = None
@@ -265,6 +266,8 @@ class TerminalUI:
             if self.screen == "projects":
                 self._load_fleet_review()
                 self._show("fleet_review")
+            elif self.screen == "backlog":
+                self._show("backlog_fields")
 
         on_card = Condition(lambda: self.screen == "card" and self.card is not None)
 
@@ -361,6 +364,15 @@ class TerminalUI:
             self._show("backlog")
         elif self.screen == "project" and kind == "capabilities":
             self._show("capabilities")
+        elif self.screen == "backlog_fields" and kind == "backlog_field":
+            field = str(value)
+            self.backlog_fields = config.toggle_backlog_field(field)
+            selected = self.selected
+            self._refresh_items()
+            self.selected = min(selected, max(0, len(self.items) - 1))
+            shown = "shown on" if field in self.backlog_fields else "hidden from"
+            self.status = f"{field} {shown} every backlog card row."
+            self.application.invalidate()
         elif self.screen == "backlog" and kind == "card":
             self.card = value  # type: ignore[assignment]
             self.card_scroll = 4
@@ -433,6 +445,8 @@ class TerminalUI:
             self._show(self.pending_origin or ("card" if self.pending_card is not None else "project"))
         elif self.screen == "backlog":
             self._show("project")
+        elif self.screen == "backlog_fields":
+            self._show("backlog")
         elif self.screen == "capabilities":
             self._show("project")
         elif self.screen == "card":
@@ -476,6 +490,9 @@ class TerminalUI:
             self.items = [("account", account) for account in self.accounts]
         elif self.screen == "backlog":
             self.items = [("card", card) for card in self.project_cards.get(self.project, [])]
+        elif self.screen == "backlog_fields":
+            choices = _card_field_choices(self.project_cards.get(self.project, []), self.backlog_fields)
+            self.items = [("backlog_field", key) for key in choices]
         elif self.screen == "capabilities":
             project = (self.capabilities_record or {}).get("project", {})
             records = project.get("capabilities", []) if isinstance(project, dict) else []
@@ -552,6 +569,7 @@ class TerminalUI:
             "project": f"HORUS · {self.project.name if self.project else 'Project'}",
             "accounts": f"HORUS · {self.pending_mode.title() if self.pending_mode else 'Choose'} account",
             "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
+            "backlog_fields": "HORUS · Backlog card fields",
             "capabilities": f"HORUS · {self.project.name if self.project else 'Project'} capabilities",
             "card": "HORUS · Backlog card",
             "sessions": "HORUS · Running sessions",
@@ -578,6 +596,8 @@ class TerminalUI:
                 message = "No tracked projects. Run `horus init` first."
             elif self.screen == "backlog":
                 message = "No open backlog cards."
+            elif self.screen == "backlog_fields":
+                message = "No frontmatter fields on these cards."
             elif self.screen == "accounts":
                 message = "No agent accounts detected."
             else:
@@ -692,9 +712,21 @@ class TerminalUI:
             elif kind == "card":
                 card = value
                 status = " · claimed" if card.status == "claimed" else ""
-                lines.append((style, f"\n {marker} [{card.type}{status}] {card.title}\n"))
-                if card.priority:
+                suffix = _card_field_suffix(card, self.backlog_fields)
+                lines.append((style, f"\n {marker} [{card.type}{status}] {card.title}{suffix}\n"))
+                # The classic priority sub-line, unless priority was picked as an
+                # inline field — then it's already on the row above.
+                if card.priority and "priority" not in self.backlog_fields:
                     lines.append(("class:muted", f"     priority {card.priority}\n"))
+            elif kind == "backlog_field":
+                if index == 0:
+                    lines.append(("class:section", "\n  Shown inline after each card title\n"))
+                field = str(value)
+                cards = self.project_cards.get(self.project, [])
+                shown = field in self.backlog_fields
+                box = "x" if shown else " "
+                lines.append((style, f"\n {marker} [{box}] {field}\n"))
+                lines.append(("class:muted", f"     {_card_field_detail(field, cards)}\n"))
             elif kind == "session":
                 record = value
                 lines.append(
@@ -1143,6 +1175,20 @@ class TerminalUI:
                 else " ↑↓ select   Enter save   Esc back   q quit"
             )
             return [("class:footer", text)]
+        if self.screen == "backlog":
+            text = (
+                " ↑↓ · Enter open · f fields · Esc"
+                if narrow
+                else " ↑↓/swipe scroll   Enter open   f fields   Esc back   q quit"
+            )
+            return [("class:footer", text)]
+        if self.screen == "backlog_fields":
+            text = (
+                " ↑↓ · Enter toggle · Esc back"
+                if narrow
+                else " ↑↓/swipe select   Enter toggle (saved for every project)   Esc back   q quit"
+            )
+            return [("class:footer", text)]
         if self.screen == "capabilities":
             text = " ↑↓ scroll · Esc back" if narrow else " ↑↓/swipe scroll   Esc back   q quit"
             return [("class:footer", text)]
@@ -1344,6 +1390,36 @@ def _projection_curator_prompt(records: list[tuple[Path, dict]]) -> str:
 
 
 _PRIORITY_RANK = {"now": 0, "next": 1, "high": 2, "medium": 3, "low": 4, "later": 5, "deferred": 6}
+
+
+def _card_field_suffix(card: backlog.Card, fields: list[str]) -> str:
+    """The ` · <key> <value>` run appended to a backlog row for the picked fields.
+
+    A field the card doesn't carry (or carries empty) is skipped entirely, so a card
+    missing one reads as a shorter row rather than showing a blank or "None" slot.
+    With no fields picked this is "" and the row is byte-for-byte the classic one.
+    """
+    parts = [f" · {key} {card.field_value(key)}" for key in fields if card.field_value(key)]
+    return "".join(parts)
+
+
+def _card_field_choices(cards: list[backlog.Card], configured: list[str]) -> list[str]:
+    """Pickable frontmatter keys: whatever these cards actually carry, plus any
+    already-picked key — a field picked elsewhere stays visible (and removable) in a
+    project whose cards happen not to use it."""
+    keys = {key for card in cards for key, value in card.fields if value}
+    keys.update(configured)
+    return sorted(keys)
+
+
+def _card_field_detail(field: str, cards: list[backlog.Card]) -> str:
+    """One muted line under a picker row: how many cards carry the field, and a
+    sample value, so the choice is concrete before it's made."""
+    values = [card.field_value(field) for card in cards if card.field_value(field)]
+    if not values:
+        return "on no card here"
+    sample = values[0]
+    return f"on {len(values)} of {len(cards)} cards · e.g. {sample}"
 
 
 def _open_cards(root: Path) -> list[backlog.Card]:

@@ -35,6 +35,114 @@ def _new_ui(tmp_path, monkeypatch) -> terminal_tui.TerminalUI:
     return terminal_tui.TerminalUI(input=inp, output=DummyOutput())
 
 
+def _project_with_cards(tmp_path, monkeypatch) -> tuple[terminal_tui.TerminalUI, object]:
+    """A UI parked on the backlog screen of a project with two cards: one carrying
+    the full field set, one missing `tier` entirely."""
+    _isolated_home(tmp_path, monkeypatch)
+    root = tmp_path / "demo"
+    hdir = root / ".horus" / "backlog"
+    hdir.mkdir(parents=True)
+    (hdir / "full.md").write_text(
+        "---\nstatus: open\npriority: now\ntier: sonnet\ntype: feature\n---\n# My card\n",
+        encoding="utf-8",
+    )
+    (hdir / "sparse.md").write_text(
+        "---\nstatus: open\ntype: bug\n---\n# Thin card\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(terminal_tui.config, "load_projects", lambda: [str(root)])
+    inp = create_pipe_input()
+    ui = terminal_tui.TerminalUI(input=inp, output=DummyOutput())
+    ui.project = root
+    ui._show("backlog")
+    return ui, root
+
+
+def test_backlog_rows_are_unchanged_when_no_fields_are_configured(tmp_path, monkeypatch):
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+
+    rendered = "".join(text for _style, text in ui._body_text())
+
+    assert "[feature] My card\n" in rendered  # nothing appended after the title
+    assert "     priority now\n" in rendered  # the classic sub-line survives
+    assert " · " not in rendered
+
+
+def test_backlog_rows_render_configured_fields_inline_in_pick_order(tmp_path, monkeypatch):
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+    ui.backlog_fields = ["tier", "status"]
+
+    rendered = "".join(text for _style, text in ui._body_text())
+
+    assert "[feature] My card · tier sonnet · status open\n" in rendered
+    # The card without `tier` omits it cleanly rather than showing a blank slot.
+    assert "[bug] Thin card · status open\n" in rendered
+
+
+def test_inline_priority_replaces_the_priority_sub_line(tmp_path, monkeypatch):
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+    ui.backlog_fields = ["priority"]
+
+    rendered = "".join(text for _style, text in ui._body_text())
+
+    assert "[feature] My card · priority now\n" in rendered
+    assert "     priority now\n" not in rendered  # not repeated below the row
+
+
+def test_field_picker_offers_every_key_present_on_the_cards(tmp_path, monkeypatch):
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+    ui._show("backlog_fields")
+
+    assert [value for _kind, value in ui.items] == ["priority", "status", "tier", "type"]
+
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "[ ] tier\n" in rendered
+    assert "on 1 of 2 cards · e.g. sonnet" in rendered
+
+
+def test_field_picker_keeps_a_configured_field_visible_where_no_card_has_it(tmp_path, monkeypatch):
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+    ui.backlog_fields = ["vision_facet"]
+    ui._show("backlog_fields")
+
+    assert "vision_facet" in [value for _kind, value in ui.items]
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "[x] vision_facet\n" in rendered
+    assert "on no card here" in rendered
+
+
+def test_toggling_a_field_saves_globally_and_renders_immediately(tmp_path, monkeypatch):
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+    ui._show("backlog_fields")
+    ui.selected = [value for _kind, value in ui.items].index("tier")
+
+    ui.activate()
+
+    assert ui.backlog_fields == ["tier"]
+    assert config.load_backlog_fields() == ["tier"]  # persisted, not just in memory
+    assert "[x] tier" in "".join(text for _style, text in ui._body_text())
+    ui._show("backlog")
+    assert "[feature] My card · tier sonnet" in "".join(text for _style, text in ui._body_text())
+
+    # Toggling again removes it, and that removal persists too.
+    ui._show("backlog_fields")
+    ui.selected = [value for _kind, value in ui.items].index("tier")
+    ui.activate()
+    assert config.load_backlog_fields() == []
+
+
+def test_saved_fields_apply_on_the_next_launch(tmp_path, monkeypatch):
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+    config.set_backlog_fields(["type"])
+
+    fresh = terminal_tui.TerminalUI(input=create_pipe_input(), output=DummyOutput())
+    fresh.project = ui.project
+    fresh._show("backlog")
+
+    assert fresh.backlog_fields == ["type"]
+    assert "[feature] My card · type feature" in "".join(text for _style, text in fresh._body_text())
+
+
 def test_remote_projects_reads_cache_only_and_never_calls_gh(tmp_path, monkeypatch):
     _isolated_home(tmp_path, monkeypatch)
 

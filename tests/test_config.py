@@ -258,3 +258,68 @@ def test_continuity_setting_tolerates_malformed_stored_value(tmp_path, monkeypat
     config.config_dir().mkdir(parents=True, exist_ok=True)
     config.config_path().write_text('[continuity]\ngranularity = "sometimes"\n', encoding="utf-8")
     assert config.load_continuity_defaults() == {"granularity": "handoff"}
+
+
+# --------------------------------------------------------------------------- #
+# TUI backlog fields ([tui] table, backlog field picker). User-level: one list
+# for every project's backlog on this machine.
+# --------------------------------------------------------------------------- #
+
+
+def test_backlog_fields_default_to_empty(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.load_backlog_fields() == []
+    assert config.load_tui_defaults() == {"backlog_fields": []}
+
+
+def test_set_backlog_fields_round_trips_and_keeps_pick_order(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.set_backlog_fields(["tier", "status"]) == ["tier", "status"]
+    assert config.load_backlog_fields() == ["tier", "status"]
+
+    # Order is the owner's, not sorted: it's the render order on the card row.
+    assert config.set_backlog_fields(["status", "tier"]) == ["status", "tier"]
+    assert config.load_backlog_fields() == ["status", "tier"]
+
+
+def test_set_backlog_fields_dedupes_and_rejects_unusable_names(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.set_backlog_fields(["tier", "tier", " status "]) == ["tier", "status"]
+
+    for bad in ["not a field", "with:colon", ""]:
+        with pytest.raises(ValueError):
+            config.set_backlog_fields([bad])
+    assert config.load_backlog_fields() == ["tier", "status"]  # unchanged
+
+
+def test_toggle_backlog_field_adds_then_removes(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.toggle_backlog_field("tier") == ["tier"]
+    assert config.toggle_backlog_field("status") == ["tier", "status"]
+    assert config.toggle_backlog_field("tier") == ["status"]
+    assert config.load_backlog_fields() == ["status"]
+
+
+def test_backlog_fields_tolerate_malformed_stored_value(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.config_dir().mkdir(parents=True, exist_ok=True)
+    config.config_path().write_text(
+        '[tui]\nbacklog_fields = ["tier", 3, "not a field", "tier", "status"]\n',
+        encoding="utf-8",
+    )
+    # Garbled entries drop out; the readable ones still render.
+    assert config.load_backlog_fields() == ["tier", "status"]
+
+    config.config_path().write_text('[tui]\nbacklog_fields = "tier"\n', encoding="utf-8")
+    assert config.load_backlog_fields() == []
+
+
+def test_backlog_fields_survive_other_config_writes(tmp_path, monkeypatch):
+    config = _home_cfg(tmp_path, monkeypatch)
+    config.set_backlog_fields(["tier", "vision_facet"])
+    config.register_project(tmp_path / "project")
+    config.set_launch_default_posture("auto-edit")
+    config.set_continuity_granularity("delivery")
+
+    assert config.load_backlog_fields() == ["tier", "vision_facet"]
+    assert config.load_dashboard_access() is not None
