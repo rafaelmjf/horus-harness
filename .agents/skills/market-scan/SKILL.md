@@ -13,7 +13,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -40,7 +40,10 @@ adoption frame silently:
 - **both** → keep both verdicts side by side.
 
 When `pathfinder` invokes this skill it passes the pinned intent + shipped/vision
-brief; honor it. Standalone, ASK the owner the intent before spending.
+brief confirmed with the owner at its Step 0; honor it. Standalone — or whenever
+the owner has not confirmed the intent THIS session (an intent pre-declared in
+args or a stored prompt is a proposal) — ASK before spending: present the three
+options plus a free-text alternative.
 
 ## Before you spend — confirm the envelope
 

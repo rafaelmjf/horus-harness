@@ -5,7 +5,9 @@ created: 2026-07-17
 tier: sonnet
 type: feature
 parallel: unsafe
-phase: explore
+phase: converge
+vision_facet: "Autonomous dispatch"
+branch: vision-branch-x3-scheduling-and-autonomous-execution
 created_by: owner
 surface: new `horus schedule` subcommand; horus/cli.py (parser + handler); new horus/schedule.py; wraps horus run (horus/run_executor.py); crontab or systemd-timer backed
 ---
@@ -34,6 +36,12 @@ A `horus schedule` verb that registers a future `horus run` on this machine:
   scheduler's expected TZ.
 - Writes a per-schedule log path and records the schedule in a machine-local registry
   (never in git / never in `fleet.toml`).
+- **Capacity-pull trigger (kanban pull, novel per the 2026-07-17 scan):**
+  `--when-capacity <account> [--threshold N%]` fires when the account's usage window
+  resets / drops below the threshold (checked via `horus usage check` at coarse
+  intervals or at reset timestamps — no continuous polling), so free capacity PULLS
+  the next ready card instead of the owner pushing dispatches. Stretch goal for the
+  away-mode kit; one-shot `--at` ships first.
 
 ## Acceptance
 
@@ -54,5 +62,11 @@ A `horus schedule` verb that registers a future `horus run` on this machine:
 
 ## Notes
 
+- **Build-vs-adopt (scan 2026-07-17):** native scheduling now ships three ways
+  (session cron tools w/ 7-day expiry, Claude Desktop scheduled tasks, cloud
+  Routines) — none can route isolated accounts, produce `horus run`
+  receipts/datums, or set the attachable+worktree posture, which is exactly the
+  wrapper this card builds. Keep the cron/systemd backend thin; anything that is
+  "just scheduling" will be subsumed natively.
 - Depends conceptually on `unattended-dispatch-attachable-worktree-defaults` for its launch
   defaults. Shares `horus/cli.py` with the other branch cards (hence `parallel: unsafe`).

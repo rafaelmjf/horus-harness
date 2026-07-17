@@ -5,9 +5,11 @@ created: 2026-07-17
 tier: opus
 type: feature
 parallel: safe
-phase: explore
+phase: converge
+vision_facet: "Autonomous dispatch"
+branch: vision-branch-x3-scheduling-and-autonomous-execution
 created_by: owner
-depends-on: schedule-local-dispatcher
+depends-on: schedule-local-dispatcher, standing-dispatch-envelope
 surface: new .claude/skills/<name>/SKILL.md (+ .agents/skills mirror); references horus-agent/.horus/PRD.md to wire the loop; composes existing dispatch-decision / execution-decision / delegation-rubric / scope-cards skills
 ---
 
