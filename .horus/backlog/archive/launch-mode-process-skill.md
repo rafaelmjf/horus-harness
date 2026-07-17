@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-17
 tier: sonnet
@@ -9,6 +9,8 @@ phase: converge
 vision_facet: "Continuity core"
 created_by: owner
 surface: horus/terminal_tui.py (a launch "mode" pick beside account/model/effort), horus/skills.py (a bundled mode skill, e.g. inline-batch-session), the launch prompt/preamble or a SessionStart surface that loads the mode skill, horus/config.py (map mode -> effective continuity granularity)
+shipped_pr: 307
+shipped_sha: bba6cd5
 ---
 
 # launch-mode-process-skill — a launch mode attaches a process skill so the working posture holds
