@@ -1,9 +1,14 @@
 # RESCUE — a Claude session went "api unresponsive" after proxy wiring
 
+> **Status (v0.0.65, mode B): this can no longer happen through Horus.** Enabling the proxy
+> now injects env **per-launch**, never into a shared `settings.json`, so it cannot redirect
+> a running session. This runbook is kept for **legacy sessions** or **manual meddling** with
+> `ANTHROPIC_BASE_URL` / a hand-edited `settings.json`. The recovery steps still apply verbatim.
+
 **Read this if a Claude Code session stopped responding (API errors / "unresponsive")
 right after someone enabled the CLIProxyAPI / GPT-in-Claude-Code integration.** This is a
 copy-paste recovery runbook. It needs nothing from the session that broke. Related:
-backlog card `x4-stage1-cliproxy-wiring`, branch `wip/x4-cliproxy-stage1`, spike
+backlog card `x4-stage1-cliproxy-wiring` (shipped v0.0.65) and spike
 `research/2026-07-18-x4-stage0-gpt-in-claude-code-spike.md`.
 
 ## What happened (the mechanism)

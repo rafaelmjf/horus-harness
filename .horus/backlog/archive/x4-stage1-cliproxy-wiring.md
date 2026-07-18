@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-18
 vision_facet: "Delegation calibration"
@@ -10,6 +10,8 @@ parallel: safe
 created_by: owner
 branch: vision-branch-x4-model-harness-plane
 surface: horus/proxy.py + cli.py/config.py/schedule.py/terminal_tui.py — ALL on branch `wip/x4-cliproxy-stage1` (pushed), NOT on main
+shipped_pr: 330
+shipped_sha: b4af62f
 ---
 
 # x4-stage1-cliproxy-wiring — finish the CLIProxyAPI toggle, fix the wiring bugs

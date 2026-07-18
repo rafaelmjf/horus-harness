@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-18
 vision_facet: "Dashboard / cockpit"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/terminal_tui.py — split the `c` Control pane (shipped #325) into two panes; calls existing schedule/notify/warmup + future hermes/proxy toggle primitives (no new state path)
+shipped_pr: 328
+shipped_sha: 9cd5020
 ---
 
 # tui-mission-control-and-settings-split — split Control into Mission Control + Settings
