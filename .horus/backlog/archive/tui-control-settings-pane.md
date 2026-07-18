@@ -1,5 +1,5 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 created: 2026-07-18
 vision_facet: "Dashboard / cockpit"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/terminal_tui.py (new pane + keybinding), calls existing schedule/notify/warmup/statusline CLI primitives (no new state path)
+shipped_pr: 325
+shipped_sha: 02a44b5
 ---
 
 # tui-control-settings-pane — a machine Control pane in the TUI

@@ -1,5 +1,5 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 created: 2026-07-18
 vision_facet: "Accounts & isolation"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/keepwarm.py (new loop), horus/schedule.py (per-account persistent service), horus/cli.py (warmup --keep/--service/--stop/--restart), horus/usage_snapshot.py (public reset-epoch helper)
+shipped_pr: 323
+shipped_sha: b45c071
 ---
 
 # warmup-keep-window — keep a Claude account's 5h window continuously warm

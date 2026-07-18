@@ -1,5 +1,5 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 created: 2026-07-18
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/schedule.py or new horus/activity.py (the join), horus/cli.py (schedule status), feeds terminal_tui.py + notify_listen.py + dashboard
+shipped_pr: 324
+shipped_sha: c7b5c0f
 ---
 
 # autonomous-activity-timeline — one read-out of what's armed + what ran
