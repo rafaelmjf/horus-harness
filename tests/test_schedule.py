@@ -666,3 +666,96 @@ def test_cli_notify_listen_service_refused_on_bad_config(units, tmp_path, capsys
     ns = argparse.Namespace(path=None, service=True, stop=False, for_=None)
     assert cli.cmd_notify_listen(ns) == 2
     assert "token and chat_id" in capsys.readouterr().out
+
+
+# --- keep-warm services: one persistent unit PER ACCOUNT ---------------------
+
+def test_keepwarm_unit_sanitises_the_alias():
+    assert schedule.keepwarm_unit("claude-personal") == "horus-keepwarm-claude-personal"
+    # An alias with odd characters can never produce an unwritable unit path.
+    assert schedule.keepwarm_unit("weird/../name") == "horus-keepwarm-weird-..-name"
+
+
+def test_install_keepwarm_service_writes_an_absolute_execstart(units, tmp_path, monkeypatch):
+    monkeypatch.setattr(schedule.shutil, "which", lambda name: "/home/rafa/.local/bin/horus")
+    schedule.install_keepwarm_service(
+        account="claude-personal",
+        command=("horus", "warmup", "--keep", "--account", "claude-personal"),
+        cwd=Path("/repo"),
+    )
+    unit = schedule.unit_dir() / "horus-keepwarm-claude-personal.service"
+    text = unit.read_text()
+    execstart = next(l for l in text.splitlines() if l.startswith("ExecStart="))
+    assert execstart == "ExecStart=/home/rafa/.local/bin/horus warmup --keep --account claude-personal"
+    assert "ExecStart=horus " not in execstart  # never the bare name (203/EXEC regression)
+    assert "Restart=always" in text
+    assert any(call and call[0] == "enable" for call in units)
+
+
+def test_keepwarm_allows_a_second_account_unlike_the_single_listener(units, tmp_path):
+    for alias in ("claude-personal", "claude-work"):
+        schedule.install_keepwarm_service(
+            account=alias, command=("horus", "warmup", "--keep", "--account", alias), cwd=Path("/repo"),
+        )
+    assert (schedule.unit_dir() / "horus-keepwarm-claude-personal.service").exists()
+    assert (schedule.unit_dir() / "horus-keepwarm-claude-work.service").exists()
+
+
+@pytest.mark.parametrize("state,live", [("active", True), ("activating", True), ("inactive", False), ("", False)])
+def test_keepwarm_service_active_reads_systemd_state(units, tmp_path, monkeypatch, state, live):
+    schedule.install_keepwarm_service(
+        account="claude-work", command=("horus", "warmup", "--keep", "--account", "claude-work"), cwd=Path("/repo"),
+    )
+
+    class _State:
+        returncode = 0
+        stdout = state
+        stderr = ""
+
+    monkeypatch.setattr(schedule, "_systemctl", lambda *a, **k: _State())
+    assert schedule.keepwarm_service_active("claude-work") is live
+
+
+def test_keepwarm_active_accounts_maps_each_installed_unit(units, tmp_path, monkeypatch):
+    schedule.install_keepwarm_service(
+        account="claude-personal", command=("horus", "warmup"), cwd=Path("/repo"),
+    )
+    monkeypatch.setattr(schedule, "keepwarm_service_active", lambda alias: alias == "claude-personal")
+    assert schedule.keepwarm_active_accounts() == {"claude-personal": True}
+
+
+def test_remove_keepwarm_service_tears_down_only_that_account(units, tmp_path):
+    schedule.install_keepwarm_service(account="claude-work", command=("horus", "warmup"), cwd=Path("/repo"))
+    assert schedule.remove_keepwarm_service("claude-work") is True
+    assert not (schedule.unit_dir() / "horus-keepwarm-claude-work.service").exists()
+    assert schedule.remove_keepwarm_service("claude-work") is False
+
+
+def _warmup_ns(**over):
+    base = dict(account=None, model="haiku", keep=False, service=False, stop=False, restart=False, status=False)
+    base.update(over)
+    return argparse.Namespace(**base)
+
+
+def test_cli_warmup_keep_service_installs_then_stops(units, tmp_path, capsys, monkeypatch):
+    from horus import warmup
+    monkeypatch.setattr(warmup, "claude_accounts", lambda: ["claude-personal"])
+    monkeypatch.setattr(schedule, "linger_enabled", lambda: True)
+    assert cli.cmd_warmup(_warmup_ns(account="claude-personal", service=True)) == 0
+    assert "Installed keep-warm service" in capsys.readouterr().out
+    assert cli.cmd_warmup(_warmup_ns(account="claude-personal", stop=True)) == 0
+    assert "Stopped and removed" in capsys.readouterr().out
+
+
+def test_cli_warmup_keep_refuses_an_unknown_account(units, tmp_path, capsys, monkeypatch):
+    from horus import warmup
+    monkeypatch.setattr(warmup, "claude_accounts", lambda: ["claude-personal"])
+    assert cli.cmd_warmup(_warmup_ns(account="nope", service=True)) == 1
+    assert "No isolated Claude account" in capsys.readouterr().out
+
+
+def test_cli_warmup_keep_status_lists_services(units, tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(schedule, "keepwarm_active_accounts", lambda: {"claude-personal": True, "claude-work": False})
+    assert cli.cmd_warmup(_warmup_ns(status=True)) == 0
+    out = capsys.readouterr().out
+    assert "claude-personal: active" in out and "claude-work: installed (not running)" in out

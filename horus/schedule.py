@@ -680,3 +680,114 @@ def remove_listen_service() -> bool:
         pass
     _systemctl("daemon-reload")
     return True
+
+
+# --------------------------------------------------------------------------- #
+# Per-account keep-warm services — a long-running `horus warmup --keep` loop.
+#
+# Same persistent systemd --user posture as the listener, but there is ONE unit
+# PER ACCOUNT (the loop keeps a single Claude account's 5h window open), so unlike
+# the single-consumer listener a second install for a DIFFERENT account is allowed
+# — the unit name carries the account alias. Claude-only (Codex has no 5h window).
+# --------------------------------------------------------------------------- #
+
+KEEPWARM_PREFIX = "horus-keepwarm-"
+_UNIT_SAFE_RE = re.compile(r"[^A-Za-z0-9_.-]")
+
+
+def keepwarm_unit(account: str) -> str:
+    """The unit basename for an account's keep-warm service. The alias is
+    sanitised to systemd's allowed unit-name character set so an odd alias can
+    never produce an unwritable (or ambiguous) unit path."""
+    return f"{KEEPWARM_PREFIX}{_UNIT_SAFE_RE.sub('-', account)}"
+
+
+def _keepwarm_service_unit(*, account: str, command: tuple[str, ...], cwd: Path) -> str:
+    return "\n".join([
+        "[Unit]",
+        f"Description=Horus keep-warm — Claude account {_escape(account)} 5h window",
+        "",
+        "[Service]",
+        "Type=simple",
+        f"WorkingDirectory={cwd}",
+        f"Environment=PATH={_escape(os.environ.get('PATH', ''))}",
+        # Unbuffered so each warm cycle reaches the journal live (same 24/7 remote-
+        # debug reason as the listener).
+        "Environment=PYTHONUNBUFFERED=1",
+        "ExecStart=" + " ".join(_quote(part) for part in command),
+        # The loop sleeps ~5h between warms; a crash should bring it back rather than
+        # silently leave the window to lapse.
+        "Restart=always",
+        "RestartSec=5",
+        "",
+        "[Install]",
+        "WantedBy=default.target",
+        "",
+    ])
+
+
+def keepwarm_service_installed(account: str) -> bool:
+    """Whether a keep-warm unit for ``account`` exists on disk."""
+    return (unit_dir() / f"{keepwarm_unit(account)}.service").exists()
+
+
+def keepwarm_service_active(account: str) -> bool:
+    """Whether ``account``'s keep-warm service is running or coming up."""
+    if not keepwarm_service_installed(account):
+        return False
+    try:
+        state = _systemctl("is-active", f"{keepwarm_unit(account)}.service")
+    except ScheduleError:
+        return False
+    return state.stdout.strip() in _LISTEN_LIVE_STATES
+
+
+def install_keepwarm_service(*, account: str, command: tuple[str, ...], cwd: Path) -> None:
+    """Write and enable ``account``'s keep-warm service. Idempotent re-install is
+    fine (one unit per account). Raises ``ScheduleError`` on an unavailable systemd
+    or a failed start."""
+    ready = availability()
+    if not ready.ok:
+        raise ScheduleError(ready.reason)
+    directory = unit_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{keepwarm_unit(account)}.service").write_text(
+        _keepwarm_service_unit(account=account, command=_absolute_exec(command), cwd=cwd),
+        encoding="utf-8",
+    )
+    _systemctl("daemon-reload")
+    enable = _systemctl("enable", "--now", f"{keepwarm_unit(account)}.service")
+    if enable.returncode != 0:
+        raise ScheduleError(f"could not start the keep-warm service: {_stderr(enable)}")
+
+
+def restart_keepwarm_service(account: str) -> bool:
+    """Restart ``account``'s keep-warm service so it adopts an upgraded pinned CLI.
+    ``False`` when none is installed."""
+    if not keepwarm_service_installed(account):
+        return False
+    _systemctl("restart", f"{keepwarm_unit(account)}.service")
+    return True
+
+
+def remove_keepwarm_service(account: str) -> bool:
+    """Stop and remove ``account``'s keep-warm service. ``False`` when none is installed."""
+    if not keepwarm_service_installed(account):
+        return False
+    _systemctl("disable", "--now", f"{keepwarm_unit(account)}.service")
+    try:
+        (unit_dir() / f"{keepwarm_unit(account)}.service").unlink()
+    except OSError:
+        pass
+    _systemctl("daemon-reload")
+    return True
+
+
+def keepwarm_active_accounts() -> dict[str, bool]:
+    """Every account with a keep-warm unit on disk → whether it is currently active.
+    Backs the Control pane's per-account ``[x]/[ ]`` toggles."""
+    result: dict[str, bool] = {}
+    for path in sorted(unit_dir().glob(f"{KEEPWARM_PREFIX}*.service")):
+        alias = path.stem[len(KEEPWARM_PREFIX):]
+        result[alias] = keepwarm_service_active(alias)
+    return result

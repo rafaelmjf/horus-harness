@@ -348,6 +348,14 @@ def _reset_timestamp(value: str | None) -> float | None:
     return dt.timestamp()
 
 
+def reset_epoch(value: str | None) -> float | None:
+    """Public: parse a human-readable reset string into a POSIX timestamp, or
+    ``None`` when it is absent/unparseable. Callers that need to schedule off a
+    recorded window reset (e.g. the keep-warm loop) reuse the one parser here
+    rather than reinventing the format handling."""
+    return _reset_timestamp(value)
+
+
 def _window_expired(reset: str | None, now: float) -> bool:
     ts = _reset_timestamp(reset)
     return ts is not None and ts <= now
