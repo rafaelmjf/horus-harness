@@ -437,6 +437,37 @@ def halt(ident: str, reason: str) -> Schedule | None:
     )
 
 
+def release(ident: str) -> Schedule | None:
+    """Andon inverse: re-arm a halted dispatch once its base is fixed.
+
+    The exact undo of :func:`halt` — clears the ``.halt`` marker and re-enables
+    the timer so it fires again on its original ``OnCalendar``. Returns ``None``
+    when no such (unique) schedule exists OR when it is not halted (a cancelled
+    dispatch has no units left to match, and a fired/pending one has nothing to
+    release — only an andon-halted dispatch is releasable, mirroring the card's
+    contract). Only touches ``horus-sched-`` units.
+    """
+    matches = [s for s in load_all() if s.id == ident or s.id.startswith(ident)]
+    if len(matches) != 1:
+        return None
+    found = matches[0]
+    if not found.halted:
+        return None
+    # `enable --now` re-arms the timer AND restores it to timers.target.wants, so
+    # it survives a reboot again — the exact inverse of halt's `disable --now`.
+    _systemctl("enable", "--now", f"{found.unit}.timer")
+    try:
+        _halt_marker(found.id).unlink()
+    except OSError:
+        pass
+    _systemctl("daemon-reload")
+    live = _live_state(found.unit, found.when)
+    return Schedule(
+        id=found.id, description=found.description, when=found.when,
+        command=found.command, halted=False, halt_reason=None, **live,
+    )
+
+
 def stamp_path(unit: str) -> Path:
     """Where ``Persistent=true`` records that a timer last fired.
 
@@ -525,3 +556,100 @@ def cancel(ident: str) -> Schedule | None:
     _remove_units(found.id)
     _systemctl("daemon-reload")
     return found
+
+
+# --------------------------------------------------------------------------- #
+# Persistent steering listener — a long-running `horus notify listen` service.
+#
+# The scheduler above installs one-shot TIMERS; this installs one long-running
+# SERVICE (the inbound Telegram poller) with the SAME systemd --user posture, so
+# the steering channel survives a terminal close and — under linger — a reboot,
+# which is the trip-mode requirement (`horus notify listen --for`/interactive
+# dies with its terminal). getUpdates is single-consumer, so there is exactly ONE
+# such unit per machine: a second install is refused with the live one named.
+# --------------------------------------------------------------------------- #
+
+LISTEN_UNIT = "horus-notify-listen"
+
+
+def _listen_service_unit(*, command: tuple[str, ...], cwd: Path) -> str:
+    return "\n".join([
+        "[Unit]",
+        "Description=Horus notify listen — inbound Telegram steering channel",
+        "",
+        "[Service]",
+        "Type=simple",
+        f"WorkingDirectory={cwd}",
+        f"Environment=PATH={_escape(os.environ.get('PATH', ''))}",
+        "ExecStart=" + " ".join(_quote(part) for part in command),
+        # The poller is best-effort and self-heals a transport blip; a crash should
+        # bring it back, not leave the owner steering-blind for the rest of the trip.
+        "Restart=always",
+        "RestartSec=5",
+        "",
+        "[Install]",
+        "WantedBy=default.target",
+        "",
+    ])
+
+
+def listen_service_installed() -> bool:
+    """Whether the persistent listen unit file exists on disk."""
+    return (unit_dir() / f"{LISTEN_UNIT}.service").exists()
+
+
+# systemd states that mean a poller is (or is about to be) consuming getUpdates.
+# "activating" matters: a Type=simple unit sits there for the first moment after
+# `enable --now`, and a second install racing that window would still be a rival
+# consumer — so it must be refused too (observed live 2026-07-18).
+_LISTEN_LIVE_STATES = frozenset({"active", "activating", "reloading"})
+
+
+def listen_service_active() -> bool:
+    """Whether the persistent listen service is running or coming up."""
+    if not listen_service_installed():
+        return False
+    try:
+        state = _systemctl("is-active", f"{LISTEN_UNIT}.service")
+    except ScheduleError:
+        return False
+    return state.stdout.strip() in _LISTEN_LIVE_STATES
+
+
+def install_listen_service(*, command: tuple[str, ...], cwd: Path) -> None:
+    """Write and enable the persistent listen service. Refuses a second one.
+
+    getUpdates is single-consumer: a second poller fights the first for every
+    update (Telegram 409s one of them), so an already-active service is named and
+    the install refused rather than starting a rival. Raises ``ScheduleError`` on
+    an unavailable systemd or a failed start."""
+    ready = availability()
+    if not ready.ok:
+        raise ScheduleError(ready.reason)
+    if listen_service_active():
+        raise ScheduleError(
+            f"a listen service is already running ({LISTEN_UNIT}.service) — getUpdates is "
+            "single-consumer; stop it first with `horus notify listen --stop`"
+        )
+    directory = unit_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{LISTEN_UNIT}.service").write_text(
+        _listen_service_unit(command=command, cwd=cwd), encoding="utf-8"
+    )
+    _systemctl("daemon-reload")
+    enable = _systemctl("enable", "--now", f"{LISTEN_UNIT}.service")
+    if enable.returncode != 0:
+        raise ScheduleError(f"could not start the listen service: {_stderr(enable)}")
+
+
+def remove_listen_service() -> bool:
+    """Stop and remove the persistent listen service. ``False`` when none is installed."""
+    if not listen_service_installed():
+        return False
+    _systemctl("disable", "--now", f"{LISTEN_UNIT}.service")
+    try:
+        (unit_dir() / f"{LISTEN_UNIT}.service").unlink()
+    except OSError:
+        pass
+    _systemctl("daemon-reload")
+    return True

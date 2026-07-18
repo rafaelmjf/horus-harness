@@ -59,7 +59,7 @@ def _no_real_effects(monkeypatch):
         return notify.EscalationResult(sink="telegram", delivered=True)
 
     monkeypatch.setattr(supervise.notify, "escalate", _fake_escalate)
-    monkeypatch.setattr(supervise, "halt_dependents", lambda root, card, reason: ["dep-card"])
+    monkeypatch.setattr(supervise, "halt_dependents", lambda root, card, reason: [("dep-card", "schedid")])
     return {"merges": merges, "ships": ships, "escalations": escalations}
 
 
@@ -193,9 +193,35 @@ def test_halt_dependents_halts_only_transitive_dependents(monkeypatch):
     halted_ids: list[str] = []
     monkeypatch.setattr(supervise.schedule, "halt", lambda ident, reason: halted_ids.append(ident) or True)
 
-    halted_cards = supervise.halt_dependents(Path("/repo"), "a", "red gate")
-    assert set(halted_cards) == {"b", "c"}      # e is independent, fired-b skipped
+    halted = supervise.halt_dependents(Path("/repo"), "a", "red gate")
+    assert {card for card, _ in halted} == {"b", "c"}   # e is independent, fired-b skipped
+    assert {sched_id for _, sched_id in halted} == {"s1", "s2"}  # (card, schedule_id) pairs
     assert set(halted_ids) == {"s1", "s2"}
+
+
+def test_escalation_carries_a_release_button_per_halted_dependent(monkeypatch):
+    """Andon-reply: an escalation that halted dependents offers a one-tap `release
+    <id>` per halted dispatch, so the owner re-arms it from the phone."""
+    captured: dict = {}
+
+    def _capture(esc, **kw):
+        captured["actions"] = esc.actions
+        return notify.EscalationResult(sink="telegram", delivered=True)
+
+    monkeypatch.setattr(supervise.notify, "escalate", _capture)
+    monkeypatch.setattr(
+        supervise, "halt_dependents",
+        lambda root, card, reason: [("dep-b", "s1"), ("dep-c", "s2")],
+    )
+    ctx = supervise.SupervisionContext(
+        root=Path("/repo"), pr_ref="7", head_sha="abc", base_ref="base",
+        card="a", delivery_expected=True, merge_authority=False, session_id="sess1234",
+    )
+    outcome = supervise._escalate_and_halt(ctx, "red gate")
+    assert outcome.halted == ("dep-b", "dep-c")  # card names preserved for the CLI
+    data = {label: cb for label, cb in captured["actions"]}
+    assert data.get("Release dep-b") == "release s1"
+    assert data.get("Release dep-c") == "release s2"
 
 
 def test_resolve_context_treats_a_non_session_as_a_verify_only_pr(monkeypatch):
