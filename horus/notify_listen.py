@@ -73,6 +73,9 @@ COMMANDS: dict[str, Command] = {
     "schedule": Command(("schedule", "list"), "schedule — scheduled dispatches"),
     "backlog": Command(("backlog", "list"), "backlog — open cards"),
     "usage": Command(("usage", "check"), "usage — capacity"),
+    "warmup": Command(
+        ("warmup",), "warmup — start the 5h window on each Claude account", mutating=True,
+    ),
     "cancel": Command(
         ("schedule", "cancel"), "cancel <id> — stop a pending dispatch",
         takes_arg=True, mutating=True,

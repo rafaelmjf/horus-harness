@@ -68,6 +68,7 @@ from horus import (
     versioning,
     verify_inventory,
     vscode,
+    warmup,
     worktree,
 )
 from horus.continuity import HORUS_DIR, SESSIONS_DIR, Finding, check_project
@@ -1672,6 +1673,24 @@ def cmd_notify_listen(args: argparse.Namespace) -> int:
     code, message = notify_listen.run_listen(duration=duration, repo=repo)
     print(message)
     return code
+
+
+def cmd_warmup(args: argparse.Namespace) -> int:
+    """Open one cheap turn per Claude account to start its 5h usage window.
+
+    Claude only starts counting a window from the first turn; this primes it on
+    demand. Best-effort per account; exit 0 unless every targeted account failed."""
+    accounts = [args.account] if getattr(args, "account", None) else None
+    model = None if getattr(args, "model", "") == "" else args.model
+    results = warmup.warmup(accounts, model=model or warmup.DEFAULT_MODEL)
+    if not results:
+        print("No Claude accounts configured (see `horus account`). Nothing to warm.")
+        return 0
+    for r in results:
+        print(f"  {'✓' if r.ok else '✗'} {r.account}: {r.detail}")
+    ok = sum(1 for r in results if r.ok)
+    print(f"warmup: {ok}/{len(results)} account(s) warmed.")
+    return 0 if ok else 1
 
 
 def _spawn_watcher(session_id: str, cwd: Path) -> None:
@@ -4626,6 +4645,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="skip the fetch TTL cache and fetch now",
     )
     p_fetch_check.set_defaults(func=cmd_fetch_check)
+
+    p_warmup = sub.add_parser(
+        "warmup",
+        help="start the 5h usage window on each Claude account (one cheap 'hi' turn)",
+        description=(
+            "Claude's 5-hour usage window only starts counting from the first turn. This "
+            "opens one cheap throwaway turn per configured Claude account (under its own "
+            "isolated CLAUDE_CONFIG_DIR) to start the window now, then exits. Compose with "
+            "`horus schedule run --at ... -- warmup` to align the window on a heavy day."
+        ),
+    )
+    p_warmup.add_argument("--account", default=None, help="warm only this account alias (default: all configured)")
+    p_warmup.add_argument(
+        "--model", default=warmup.DEFAULT_MODEL,
+        help=f"model for the warmup turn (default: {warmup.DEFAULT_MODEL}; the cheapest that starts the window)",
+    )
+    p_warmup.set_defaults(func=cmd_warmup)
 
     p_usage = sub.add_parser("usage", help="inspect native app usage signals")
     usage_sub = p_usage.add_subparsers(dest="usage_cmd", required=True)
