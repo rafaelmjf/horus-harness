@@ -657,3 +657,91 @@ def test_project_columns_narrow_vs_wide(tmp_path, monkeypatch):
     assert ui._project_columns(240) == 3    # ultra-wide → three, fluid
     ui.screen = "sessions"
     assert ui._project_columns(240) == 1    # non-projects list is always single-column
+
+
+# Backlog visual guidance (item 3) — branch membership + priority dots.
+
+def test_backlog_expanded_branch_children_get_tree_connectors_and_priority_dots(tmp_path, monkeypatch):
+    from horus import terminal_tui
+    ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
+    # Expand the branch.
+    branch_index = next(i for i, (k, _v) in enumerate(ui.items) if k == "branch")
+    ui.selected = branch_index
+    ui.activate()
+
+    frags = ui._body_text()
+    rendered = "".join(text for _style, text in frags)
+    # The child card is nested under the branch with a tree connector...
+    assert "└─" in rendered or "├─" in rendered
+    assert "Child one" in rendered
+    # ...and its priority renders as a colored dot fragment.
+    assert any(style == "class:prio-high" and "●" in text for style, text in frags)
+    # The branch header caret + accent style is present.
+    assert any(style == "class:branch" and "▾" in text for style, text in frags) or \
+           any(style == "class:selected" and "▾" in text for style, text in frags)
+
+
+def test_priority_dot_colors_by_band_and_omits_when_absent():
+    from horus import terminal_tui
+    assert terminal_tui._priority_dot("high") == ("class:prio-high", "● ")
+    assert terminal_tui._priority_dot("Medium") == ("class:prio-medium", "● ")
+    assert terminal_tui._priority_dot("low") == ("class:prio-low", "● ")
+    assert terminal_tui._priority_dot("") == ("", "")
+    assert terminal_tui._priority_dot(None) == ("", "")
+    # Unknown priority word still gets a (muted) dot rather than crashing.
+    assert terminal_tui._priority_dot("someday")[1] == "● "
+
+
+# Inline priority picker (item 4) — reprioritize a card without the editor.
+
+def test_backlog_set_priority_writes_frontmatter_in_place(tmp_path):
+    from horus import backlog
+    card = tmp_path / "c.md"
+    card.write_text("---\nstatus: open\npriority: low\ntier: sonnet\n---\n# C\n", encoding="utf-8")
+    backlog.set_priority(card, "high")
+    assert "priority: high" in card.read_text()
+    assert "tier: sonnet" in card.read_text()  # other frontmatter untouched
+    import pytest
+    with pytest.raises(ValueError):
+        backlog.set_priority(card, "sometime")
+
+
+def test_backlog_set_priority_inserts_when_absent(tmp_path):
+    from horus import backlog
+    card = tmp_path / "c.md"
+    card.write_text("---\nstatus: open\n---\n# C\n", encoding="utf-8")
+    backlog.set_priority(card, "medium")
+    assert "priority: medium" in card.read_text()
+
+
+def test_tui_priority_picker_sets_priority_and_returns_to_backlog(tmp_path, monkeypatch):
+    from horus import terminal_tui, backlog
+    ui, root = _project_with_cards(tmp_path, monkeypatch)  # cards: full (now→) + sparse
+    # Park on the backlog, select the first card, open the picker.
+    card_index = next(i for i, (k, _v) in enumerate(ui.items) if k == "card")
+    ui.selected = card_index
+    card = ui.items[card_index][1]
+    ui.priority_card = card
+    ui._show("card_priority")
+    assert [v for _k, v in ui.items] == list(backlog.PRIORITY_CHOICES)
+    # Pick 'high' and confirm it writes + returns.
+    ui.selected = backlog.PRIORITY_CHOICES.index("high")
+    ui.activate()
+    assert ui.screen == "backlog"
+    assert "priority set to high" in ui.status
+    assert "priority: high" in card.path.read_text()
+    # The reloaded backlog reflects the new priority.
+    assert any(c.name == card.name and c.priority == "high" for c in ui.project_cards[root])
+
+
+def test_tui_priority_picker_esc_returns_without_writing(tmp_path, monkeypatch):
+    from horus import terminal_tui
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+    card = next(v for k, v in ui.items if k == "card")
+    before = card.path.read_text()
+    ui.priority_card = card
+    ui._show("card_priority")
+    ui.back()
+    assert ui.screen == "backlog"
+    assert ui.priority_card is None
+    assert card.path.read_text() == before  # nothing written on cancel

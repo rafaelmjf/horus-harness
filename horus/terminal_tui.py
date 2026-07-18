@@ -179,6 +179,7 @@ class TerminalUI:
         self.project_trees = {project: _project_tree(project) for project in self.projects}
         self.project_receipts = {project: _receipts(project) for project in self.projects}
         self.expanded_branches: set[tuple[Path, str]] = set()
+        self.priority_card: backlog.Card | None = None  # card whose priority the picker edits
         self.receipt: backlog_tree.Receipt | None = None
         self.receipt_scroll = 0
         self.project_pending = {
@@ -347,6 +348,16 @@ class TerminalUI:
         def _review_card(event) -> None:
             self._exit_edit(review=True)
 
+        @keys.add("p")
+        def _priority(event) -> None:
+            # Quick reprioritize from the backlog without opening the editor — open
+            # the priority picker for the selected card.
+            if self.screen == "backlog" and self.items:
+                kind, value = self.items[self.selected]
+                if kind == "card":
+                    self.priority_card = value  # type: ignore[assignment]
+                    self._show("card_priority")
+
         @keys.add("q")
         def _quit(event) -> None:
             event.app.exit(result="quit")
@@ -428,6 +439,13 @@ class TerminalUI:
         elif target != self.selected:
             self.move(target - self.selected)
 
+    def _reload_project_backlog(self, project: Path) -> None:
+        """Re-read one project's cards, tree, and metrics after an in-place card
+        edit (e.g. a priority change) so the backlog re-renders immediately."""
+        self.project_cards[project] = _open_cards(project)
+        self.project_metrics[project] = _backlog_metrics(project, self.project_cards[project])
+        self.project_trees[project] = _project_tree(project)
+
     def scroll(self, amount: int) -> None:
         if self.screen == "card":
             lines = self._card_lines()
@@ -504,6 +522,21 @@ class TerminalUI:
             self.card = value  # type: ignore[assignment]
             self.card_scroll = 4
             self._show("card")
+        elif self.screen == "card_priority" and kind == "priority_choice":
+            choice = str(value)
+            card = self.priority_card
+            message = ""
+            if card is not None:
+                try:
+                    backlog.set_priority(card.path, choice)
+                    if self.project is not None:
+                        self._reload_project_backlog(self.project)
+                    message = f"{card.name}: priority set to {choice}."
+                except (ValueError, OSError) as exc:
+                    message = f"Could not set priority: {exc}"
+            self.priority_card = None
+            self._show("backlog")  # clears status, so set the outcome after
+            self.status = message
         elif self.screen == "card" and kind == "card_resume":
             self.pending_mode = "resume"
             self.pending_card = self.card
@@ -606,6 +639,9 @@ class TerminalUI:
         elif self.screen == "backlog":
             self._show("project")
         elif self.screen == "backlog_fields":
+            self._show("backlog")
+        elif self.screen == "card_priority":
+            self.priority_card = None
             self._show("backlog")
         elif self.screen == "capabilities":
             self._show("project")
@@ -801,6 +837,11 @@ class TerminalUI:
                     items.append(("facet", group))
                     items.extend(("card", card) for card in group.children)
                 self.items = items
+        elif self.screen == "card_priority":
+            self.items = [("priority_choice", p) for p in backlog.PRIORITY_CHOICES]
+            current = self.priority_card.priority if self.priority_card else ""
+            if current in backlog.PRIORITY_CHOICES:
+                self.selected = backlog.PRIORITY_CHOICES.index(current)
         elif self.screen == "backlog_fields":
             choices = _card_field_choices(self.project_cards.get(self.project, []), self.backlog_fields)
             self.items = [("backlog_field", key) for key in choices]
@@ -911,6 +952,7 @@ class TerminalUI:
             "session_mode": "HORUS · Session mode",
             "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
             "backlog_fields": "HORUS · Backlog card fields",
+            "card_priority": f"HORUS · Priority: {self.priority_card.name if self.priority_card else 'card'}",
             "capabilities": f"HORUS · {self.project.name if self.project else 'Project'} capabilities",
             "skills": f"HORUS · {self.project.name if self.project else 'Project'} skills",
             "card": "HORUS · Backlog card",
@@ -995,10 +1037,15 @@ class TerminalUI:
             elif self.capabilities_error:
                 lines.append(("class:muted", f"\n  Capabilities unavailable: {self.capabilities_error}\n"))
         recommended_model = self._recommended_model_for_launch() if self.screen == "models" else None
+        under_branch = False  # backlog: are we rendering an expanded branch's children?
         for index, (kind, value) in enumerate(self.items):
             selected = index == self.selected
             marker = ">" if selected else " "
             style = "class:selected" if selected else "class:item"
+            if kind == "branch":
+                under_branch = True
+            elif kind == "facet":
+                under_branch = False
             if selected:
                 lines.append(("[SetCursorPosition]", ""))
             if kind == "project":
@@ -1098,16 +1145,27 @@ class TerminalUI:
                 card = value
                 status = " · claimed" if card.status == "claimed" else ""
                 suffix = _card_field_suffix(card, self.backlog_fields)
-                lines.append((style, f"\n {marker} [{card.type}{status}] {card.title}{suffix}\n"))
+                # A card under an expanded branch gets a tree connector + indent so
+                # its membership is visible; the last child closes with └─.
+                if under_branch:
+                    last = index + 1 >= len(self.items) or self.items[index + 1][0] != "card"
+                    connector = "   └─ " if last else "   ├─ "
+                else:
+                    connector = " "
+                lines.append((style, f"\n{connector}{marker} "))
+                lines.append(_priority_dot(card.priority))
+                lines.append((style, f"[{card.type}{status}] {card.title}{suffix}\n"))
                 # The classic priority sub-line, unless priority was picked as an
                 # inline field — then it's already on the row above.
                 if card.priority and "priority" not in self.backlog_fields:
-                    lines.append(("class:muted", f"     priority {card.priority}\n"))
+                    indent = "        " if under_branch else "     "
+                    lines.append(("class:muted", f"{indent}priority {card.priority}\n"))
             elif kind == "branch":
                 group = value
                 expanded = (self.project, group.branch) in self.expanded_branches
-                caret = "v" if expanded else ">"
-                lines.append((style, f"\n {marker} {caret} {group.title} ({len(group.children)})\n"))
+                caret = "▾" if expanded else "▸"
+                header_style = "class:selected" if selected else "class:branch"
+                lines.append((header_style, f"\n {marker} {caret} {group.title} ({len(group.children)})\n"))
                 if group.convergence:
                     lines.append(("class:muted", f"     converges: {group.convergence}\n"))
                 elif not group.resolved:
@@ -1120,6 +1178,16 @@ class TerminalUI:
                 receipt = value
                 lines.append((style, f"\n {marker} {receipt.title}\n"))
                 lines.append(("class:muted", f"     {receipt.date or 'undated'} · {receipt.path.name}\n"))
+            elif kind == "priority_choice":
+                if index == 0:
+                    title = self.priority_card.title if self.priority_card else ""
+                    lines.append(("class:section", f"\n  Set priority — {title}\n"))
+                choice = str(value)
+                current = self.priority_card.priority if self.priority_card else ""
+                active = "current" if choice == current else "      "
+                lines.append((style, f"\n {marker} "))
+                lines.append(_priority_dot(choice))
+                lines.append((style, f"[{active}] {choice}\n"))
             elif kind == "backlog_field":
                 if index == 0:
                     lines.append(("class:section", "\n  Shown inline after each card title\n"))
@@ -1763,9 +1831,16 @@ class TerminalUI:
             return [("class:footer", text)]
         if self.screen == "backlog":
             text = (
-                " ↑↓ · Enter open/expand · f fields · Esc"
+                " ↑↓ · Enter open/expand · p priority · f fields · Esc"
                 if narrow
-                else " ↑↓/swipe scroll   Enter open card / expand branch   f fields   Esc back   q quit"
+                else " ↑↓/swipe scroll   Enter open / expand   p priority   f fields   Esc back   q quit"
+            )
+            return [("class:footer", text)]
+        if self.screen == "card_priority":
+            text = (
+                " ↑↓ · Enter set · Esc back"
+                if narrow
+                else " ↑↓ select   Enter set priority   Esc back   q quit"
             )
             return [("class:footer", text)]
         if self.screen == "receipts":
@@ -1839,6 +1914,11 @@ _STYLE = Style.from_dict(
         "usage-ok": "#3fb950",
         "usage-warn": "#e3b341",
         "usage-high": "#f85149",
+        # Backlog visual guidance: branch umbrellas + priority dots.
+        "branch": "bold #6cb6ff",
+        "prio-high": "#f85149",
+        "prio-medium": "#e3b341",
+        "prio-low": "#8c98a5",
     }
 )
 
@@ -2049,6 +2129,22 @@ def _projection_curator_prompt(records: list[tuple[Path, dict]]) -> str:
 
 
 _PRIORITY_RANK = {"now": 0, "next": 1, "high": 2, "medium": 3, "low": 4, "later": 5, "deferred": 6}
+
+
+_PRIORITY_STYLE = {
+    "now": "class:prio-high", "high": "class:prio-high", "urgent": "class:prio-high",
+    "medium": "class:prio-medium", "med": "class:prio-medium",
+    "low": "class:prio-low", "later": "class:prio-low", "deferred": "class:prio-low",
+}
+
+
+def _priority_dot(priority: str | None) -> tuple[str, str]:
+    """A colored ``●`` for a card's priority so the backlog scans at a glance —
+    red high, yellow medium, dim low. A card with no priority gets no dot, keeping
+    unprioritized rows clean and closest to the classic view."""
+    if not priority:
+        return ("", "")
+    return (_PRIORITY_STYLE.get(priority.strip().lower(), "class:muted"), "● ")
 
 
 def _card_field_suffix(card: backlog.Card, fields: list[str]) -> str:
