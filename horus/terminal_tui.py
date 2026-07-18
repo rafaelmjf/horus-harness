@@ -264,19 +264,23 @@ class TerminalUI:
 
         @keys.add("k")
         def _up(event) -> None:
-            self.scroll(-1)
+            self._nav("up")
 
         @keys.add("j")
         def _down(event) -> None:
-            self.scroll(1)
+            self._nav("down")
 
         @keys.add("up")
         def _terminal_up(event) -> None:
-            self.scroll(1 if self.invert_mobile_scroll else -1)
+            self._nav("down" if self.invert_mobile_scroll else "up")
 
         @keys.add("down")
         def _terminal_down(event) -> None:
-            self.scroll(-1 if self.invert_mobile_scroll else 1)
+            self._nav("up" if self.invert_mobile_scroll else "down")
+
+        @keys.add("right")
+        def _terminal_right(event) -> None:
+            self._nav("right")
 
         @keys.add("pageup")
         def _page_up(event) -> None:
@@ -291,10 +295,15 @@ class TerminalUI:
             self.activate()
 
         @keys.add("escape")
-        @keys.add("left")
         @keys.add("b")
         def _back(event) -> None:
             self.back()
+
+        @keys.add("left")
+        def _left(event) -> None:
+            # On the wide projects grid, left moves a column; with no column to its
+            # left (single list, tail, or narrow) it falls through to Back.
+            self._nav("left")
 
         @keys.add("s")
         def _sessions(event) -> None:
@@ -384,6 +393,40 @@ class TerminalUI:
             # home to the top so wheel/arrow navigation is reversible.
             self.body_window.vertical_scroll = 0
         self.application.invalidate()
+
+    def _project_columns(self, width: int | None = None) -> int:
+        """Column count for the projects home grid — the single source of truth
+        shared by the wide render and grid navigation. 1 (a single scrollable list)
+        on a narrow/mobile width or any non-projects screen; a fluid 2–3 on the
+        wide cockpit."""
+        if self.screen != "projects":
+            return 1
+        if width is None:
+            width = self.application.output.get_size().columns
+        if width < 96:
+            return 1
+        return min(3, max(2, width // 72))
+
+    def _nav(self, direction: str) -> None:
+        """Arrow/vim navigation. Card/receipt screens scroll their text body;
+        every list screen routes through the 2D-aware grid nav so on the wide
+        projects grid down/up move a row and left/right move a column, while a
+        single-column list keeps linear up/down with left = Back."""
+        if self.screen in ("card", "receipt"):
+            if direction == "up":
+                self.scroll(-1)
+            elif direction == "down":
+                self.scroll(1)
+            elif direction == "left":
+                self.back()
+            return
+        cols = self._project_columns()
+        projects = sum(1 for kind, _ in self.items if kind == "project")
+        target = _grid_nav_target(self.selected, len(self.items), projects, cols, direction)
+        if target is None:
+            self.back()
+        elif target != self.selected:
+            self.move(target - self.selected)
 
     def scroll(self, amount: int) -> None:
         if self.screen == "card":
@@ -1161,8 +1204,8 @@ class TerminalUI:
             fragments.append(("class:muted", " No agent accounts detected.\n\n"))
 
         fragments.append(("class:section", " Projects\n"))
-        project_columns = 2
-        project_width = max(1, (width - 2) // project_columns)
+        project_columns = self._project_columns(width)
+        project_width = max(1, (width - 2 * (project_columns - 1)) // project_columns)
         project_items = [
             (index, root)
             for index, (kind, root) in enumerate(self.items)
@@ -2168,6 +2211,48 @@ def _fit_cell(text: str, width: int) -> str:
     if len(text) > width:
         text = f"{text[: max(0, width - 1)]}…"
     return text.ljust(width)
+
+
+def _grid_nav_target(selected: int, count: int, projects: int, cols: int, direction: str) -> int | None:
+    """Next selection index for arrow navigation over the projects home.
+
+    Layout mirrored from the wide render: items ``[0, projects)`` are a ``cols``-wide
+    row-major grid; items ``[projects, count)`` are a single-column tail stacked
+    below it (remote projects, Projection Sync, Fleet Review, Campaign). ``down``/
+    ``up`` move a visual row, ``left``/``right`` move a column. Returns the new index,
+    the same index for a no-op, or ``None`` for ``left`` with no column to its left
+    (the caller then performs Back — preserving left-as-Back on a single list).
+
+    With ``cols == 1`` (narrow/mobile, or any non-projects list) this reduces to the
+    old linear behavior: down/up = ±1, right = no-op, left = Back.
+    """
+    if count == 0:
+        return None if direction == "left" else selected
+    i = max(0, min(count - 1, selected))
+    in_grid = cols > 1 and i < projects
+    if direction == "right":
+        if in_grid and i % cols < cols - 1 and i + 1 < projects:
+            return i + 1
+        return i
+    if direction == "left":
+        if in_grid and i % cols > 0:
+            return i - 1
+        return None  # no left column → Back
+    if direction == "down":
+        if in_grid:
+            if i + cols < projects:
+                return i + cols
+            if projects < count:            # off the last project row → into the tail
+                return projects
+            return i
+        return min(count - 1, i + 1)         # tail or single list: linear
+    if direction == "up":
+        if cols > 1 and i == projects:       # first tail item → back up into the grid
+            return projects - 1
+        if in_grid:
+            return i - cols if i - cols >= 0 else i
+        return max(0, i - 1)
+    return i
 
 
 def _capability_freshness(
