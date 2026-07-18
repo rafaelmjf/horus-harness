@@ -1644,6 +1644,16 @@ def cmd_notify_listen(args: argparse.Namespace) -> int:
               if removed else "No persistent listen service is installed.")
         return 0 if removed else 1
 
+    if getattr(args, "restart", False):
+        try:
+            restarted = schedule.restart_listen_service()
+        except schedule.ScheduleError as exc:
+            print(f"Could not restart the listen service: {exc}")
+            return 1
+        print("Restarted the persistent listen service (now on the current pinned CLI)."
+              if restarted else "No persistent listen service is installed.")
+        return 0 if restarted else 1
+
     if getattr(args, "service", False):
         invalid = notify_listen.validate_config()
         if invalid is not None:
@@ -4160,6 +4170,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_notify_listen.add_argument(
         "--stop", action="store_true",
         help="stop and remove the persistent --service listener",
+    )
+    p_notify_listen.add_argument(
+        "--restart", action="store_true",
+        help="restart the persistent listener so it adopts an upgraded pinned CLI",
     )
     p_notify_listen.set_defaults(func=cmd_notify_listen)
 

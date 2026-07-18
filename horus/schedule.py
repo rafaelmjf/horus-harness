@@ -581,6 +581,9 @@ def _listen_service_unit(*, command: tuple[str, ...], cwd: Path) -> str:
         "Type=simple",
         f"WorkingDirectory={cwd}",
         f"Environment=PATH={_escape(os.environ.get('PATH', ''))}",
+        # Unbuffered so the poller's status/errors reach the journal live — this is a
+        # 24/7 service the owner debugs remotely (`journalctl --user -u …`).
+        "Environment=PYTHONUNBUFFERED=1",
         "ExecStart=" + " ".join(_quote(part) for part in command),
         # The poller is best-effort and self-heals a transport blip; a crash should
         # bring it back, not leave the owner steering-blind for the rest of the trip.
@@ -616,6 +619,19 @@ def listen_service_active() -> bool:
     return state.stdout.strip() in _LISTEN_LIVE_STATES
 
 
+def _absolute_exec(command: tuple[str, ...]) -> tuple[str, ...]:
+    """Resolve the command's executable to an ABSOLUTE path.
+
+    systemd resolves a bare ``ExecStart`` name against the manager's own
+    compiled-in PATH (system bin dirs only) — NOT the unit's ``Environment=PATH``
+    — so ``ExecStart=horus …`` fails ``203/EXEC`` wherever ``horus`` lives in
+    ``~/.local/bin`` (the normal `uv tool install` location). Bake the absolute
+    path so the unit runs regardless (observed live 2026-07-18; escaped in
+    v0.0.62 because unit tests stub systemctl and never exec the unit)."""
+    resolved = shutil.which(command[0])
+    return (resolved, *command[1:]) if resolved else command
+
+
 def install_listen_service(*, command: tuple[str, ...], cwd: Path) -> None:
     """Write and enable the persistent listen service. Refuses a second one.
 
@@ -634,12 +650,23 @@ def install_listen_service(*, command: tuple[str, ...], cwd: Path) -> None:
     directory = unit_dir()
     directory.mkdir(parents=True, exist_ok=True)
     (directory / f"{LISTEN_UNIT}.service").write_text(
-        _listen_service_unit(command=command, cwd=cwd), encoding="utf-8"
+        _listen_service_unit(command=_absolute_exec(command), cwd=cwd), encoding="utf-8"
     )
     _systemctl("daemon-reload")
     enable = _systemctl("enable", "--now", f"{LISTEN_UNIT}.service")
     if enable.returncode != 0:
         raise ScheduleError(f"could not start the listen service: {_stderr(enable)}")
+
+
+def restart_listen_service() -> bool:
+    """Restart the listen service so it picks up an upgraded pinned CLI. ``False``
+    when none is installed. The service runs the pinned ``~/.local/bin/horus``, so
+    after a `uv tool install --force --refresh` (or `deploy-hosted.sh`) it keeps
+    running the OLD process until restarted — call this to adopt the new code."""
+    if not listen_service_installed():
+        return False
+    _systemctl("restart", f"{LISTEN_UNIT}.service")
+    return True
 
 
 def remove_listen_service() -> bool:
