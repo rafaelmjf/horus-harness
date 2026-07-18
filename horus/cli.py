@@ -1284,6 +1284,7 @@ def cmd_schedule_at(args: argparse.Namespace) -> int:
         created = schedule.create(
             when=when, command=command, description=description,
             cwd=Path(getattr(args, "path", ".")).resolve(),
+            card=_run_arg_value(run_args, "--card"),
         )
     except schedule.ScheduleError as exc:
         print(f"Refusing to schedule: {exc}")
@@ -1306,13 +1307,21 @@ def cmd_schedule_at(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_arg_value(run_args: list[str], flag: str) -> str | None:
+    """The value passed to ``flag`` in a pass-through `horus run` arg list, or None."""
+    if flag in run_args:
+        index = run_args.index(flag)
+        if index + 1 < len(run_args):
+            return run_args[index + 1]
+    return None
+
+
 def _describe_run(run_args: list[str]) -> str:
     """A human label for a scheduled dispatch: the card if there is one, else the prompt."""
     for flag in ("--card", "--envelope"):
-        if flag in run_args:
-            index = run_args.index(flag)
-            if index + 1 < len(run_args):
-                return f"{flag.lstrip('-')} {run_args[index + 1]}"
+        value = _run_arg_value(run_args, flag)
+        if value is not None:
+            return f"{flag.lstrip('-')} {value}"
     first = next((a for a in run_args if not a.startswith("-")), "")
     return (first[:60] + "…") if len(first) > 60 else (first or "horus run")
 
@@ -1540,6 +1549,36 @@ def cmd_notify_test(args: argparse.Namespace) -> int:
     result = notify.escalate(esc, force=True)
     print(result.describe())
     return 0 if result.delivered else 1
+
+
+def cmd_notify_escalate(args: argparse.Namespace) -> int:
+    """Push one escalation now — the machine-local entrypoint a scheduled dispatch's
+    ``OnFailure=`` unit calls when its `horus run` exits non-zero before launch.
+
+    Best-effort by construction: :func:`notify.escalate` never raises and this always
+    exits 0, so a failing or absent sink can never turn a pre-launch death into a
+    second failure. With no sink configured it is a silent no-op — escalations stay
+    pull-based, exactly as today. Not forced: the event's per-event enable gate applies
+    (``dispatch-launch-failed`` is on by default)."""
+    project = Path(getattr(args, "path", ".") or ".").resolve().name
+    summary = "scheduled dispatch launch failed"
+    inspect = None
+    if args.unit:
+        summary = f"scheduled dispatch launch failed — {schedule.unit_exit_detail(args.unit)}"
+        inspect = f"journalctl --user -u {args.unit}"
+    detail = (args.detail or "").strip()
+    if detail:
+        summary = f"{summary} ({detail})"
+    esc = notify.Escalation(
+        event=args.event or notify.DISPATCH_LAUNCH_FAILED,
+        project=project,
+        summary=summary,
+        card=args.card,
+        inspect=inspect,
+    )
+    result = notify.escalate(esc)
+    print(result.describe())
+    return 0
 
 
 def _parse_listen_duration(text: str | None) -> float | None:
@@ -3828,7 +3867,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  sink = \"telegram\"      # none | telegram | hermes | webhook\n"
             "  token = \"<bot-token>\"  # telegram: a dedicated bot; needs no Hermes\n"
             "  chat_id = 123456789\n"
-            "  # events = [\"delivery-failed\", \"usage-band\", \"supervise-gate\"]  # default\n"
+            "  # events = [\"delivery-failed\", \"usage-band\", \"supervise-gate\", \"dispatch-launch-failed\"]  # default\n"
             "  # add \"success\" for an opt-in clean-accept ping\n\n"
             "With no sink (the default) escalations stay pull-based and every other command "
             "behaves exactly as today. A sink that fails never fails the run it reports on."
@@ -3847,6 +3886,38 @@ def build_parser() -> argparse.ArgumentParser:
         "--path", default=".", help="project whose name labels the test message (default: cwd)"
     )
     p_notify_test.set_defaults(func=cmd_notify_test)
+    p_notify_escalate = notify_sub.add_parser(
+        "escalate",
+        help="machine-local: push one escalation now (used by a scheduled dispatch's OnFailure= unit)",
+        description=(
+            "Push a single escalation through the configured sink and exit. This is the "
+            "entrypoint a scheduled dispatch's generated OnFailure= unit calls when its "
+            "`horus run` exits non-zero BEFORE launching a worker (an argparse error, a "
+            "refused envelope) — the failure would otherwise die only in the journal.\n\n"
+            "Best-effort: it never fails. With no sink configured it is a silent no-op, so "
+            "a failed dispatch behaves exactly as today. Always exits 0."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_notify_escalate.add_argument(
+        "--event", default=notify.DISPATCH_LAUNCH_FAILED,
+        help=f"notify event to emit (default: {notify.DISPATCH_LAUNCH_FAILED})",
+    )
+    p_notify_escalate.add_argument(
+        "--card", default=None, help="the card whose scheduled dispatch failed (names it in the message)",
+    )
+    p_notify_escalate.add_argument(
+        "--unit", default=None,
+        help="the failed service unit; its exit status is read for the message and "
+             "`journalctl --user -u <unit>` is offered to inspect",
+    )
+    p_notify_escalate.add_argument(
+        "--detail", default=None, help="extra context appended to the escalation summary",
+    )
+    p_notify_escalate.add_argument(
+        "--path", default=".", help="project whose name labels the message (default: cwd)",
+    )
+    p_notify_escalate.set_defaults(func=cmd_notify_escalate)
     p_notify_listen = notify_sub.add_parser(
         "listen",
         help="inbound: long-poll telegram for bounded steering commands (owner-only, no LLM)",
