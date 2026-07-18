@@ -36,8 +36,10 @@ def _render(payload, **kw):
     return statusline.render(payload, **kw)
 
 
-def test_full_payload_renders_three_rows():
-    out = _render(_payload())
+def test_full_payload_renders_three_rows(tmp_path):
+    # workspace.current_dir must exist for the branch segment (the renderer guards
+    # git behind is_dir); use tmp_path so this holds in CI too. branch_of is stubbed.
+    out = _render(_payload(workspace={"current_dir": str(tmp_path)}))
     rows = out.split("\n")
     assert len(rows) == 3
     # row 1: user@host + ~-collapsed cwd + model
