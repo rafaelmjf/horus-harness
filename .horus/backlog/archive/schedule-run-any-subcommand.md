@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-18
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: bug
 parallel: safe
 created_by: agent
 surface: horus/cli.py (cmd_schedule_at command assembly + schedule-run parser help)
+shipped_pr: 339
+shipped_sha: 2f69908
 ---
 
 # schedule-run-any-subcommand — the scheduler can't arm a `supervise` (or `warmup`)
