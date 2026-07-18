@@ -6,6 +6,8 @@ existing horus commands, and every other sender/command is refused or ignored.
 
 from __future__ import annotations
 
+import pytest
+
 from horus import notify, notify_listen
 from horus.notify import NotifyConfig
 
@@ -214,3 +216,53 @@ def test_escalation_without_actions_has_no_keyboard(monkeypatch):
     esc = notify.Escalation(event=notify.SUPERVISE_GATE, project="p", summary="s")
     notify.escalate(esc, cfg=_cfg(), force=True)
     assert "reply_markup" not in captured["p"]
+
+
+# --------------------------------------------------------------------------- #
+# input bridge — answer verb + pushing pending requests (D)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def _bridge_home(tmp_path, monkeypatch):
+    from horus import config
+    monkeypatch.setattr(config, "config_dir", lambda: tmp_path / "h")
+
+
+def test_answer_button_tap_writes_the_response(_bridge_home):
+    from horus import input_bridge
+    req = input_bridge.write_request("Approach?", ["A", "B"], now=1.0)
+    # A button tap arrives as callback data `answer <id> #<i>` — same path as typed.
+    out = notify_listen.dispatch(f"answer {req.id} #1")
+    assert "B" in out
+    assert input_bridge.read_response(req.id).answer == "B"
+
+
+def test_answer_typed_reply_binds_to_the_single_open_request(_bridge_home):
+    from horus import input_bridge
+    req = input_bridge.write_request("Q", free_text=True, now=1.0)
+    out = notify_listen.dispatch("answer take the safe option")
+    assert req.id[:8] in out
+    assert input_bridge.read_response(req.id).answer == "take the safe option"
+
+
+def test_answer_without_arg_shows_usage(_bridge_home):
+    assert notify_listen.dispatch("answer").startswith("usage: answer")
+
+
+def test_emit_pending_requests_pushes_with_option_buttons(_bridge_home):
+    from horus import input_bridge
+    req = input_bridge.write_request("Ship it?", ["yes", "no"], session_id="sess1234", now=1.0)
+    pushes: list[tuple[str, dict | None]] = []
+
+    def _push(cfg, text, keyboard):
+        pushes.append((text, keyboard))
+
+    sent = notify_listen.emit_pending_requests(_cfg(), push=_push)
+    assert sent == 1
+    text, keyboard = pushes[0]
+    assert "Ship it?" in text and "horus tail sess1234" in text
+    cbs = [b["callback_data"] for b in keyboard["inline_keyboard"][0]]
+    assert cbs == [f"answer {req.id} #0", f"answer {req.id} #1"]
+    # Marked pushed -> a second emit does not re-send it.
+    assert notify_listen.emit_pending_requests(_cfg(), push=_push) == 0
