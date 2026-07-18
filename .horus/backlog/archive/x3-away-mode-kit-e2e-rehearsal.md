@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-17
 tier: opus
@@ -10,6 +10,8 @@ vision_facet: "Autonomous dispatch"
 branch: vision-branch-x3-scheduling-and-autonomous-execution
 created_by: owner
 surface: no code — a live rehearsal of the shipped kit (horus envelope/schedule/run/supervise/notify) on a real small card + isolated account
+shipped_pr: 312
+shipped_sha: dc1a18b636b0e5558336da687a00f794e8a1a109
 ---
 
 # x3-away-mode-kit-e2e-rehearsal — dogfood the whole away loop once, end-to-end
@@ -51,3 +53,10 @@ if it surfaces a defect, that becomes its own bug card.
 - `parallel: unsafe` only in the sense that it drives live systemd timers + real
   dispatch on this machine; it touches no source. Do it on a low-stakes real card so a
   merge is genuinely acceptable.
+
+## Reviews
+
+### 2026-07-18 — Rafael Figueiredo (agent)
+Verdict: complete
+
+COMPLETE 2026-07-18: both passes dogfooded live. Pass A (escalate): red gate on PR #311, supervise verified red on exact head, escalated to the telegram bot + andon halted rehearsal-dependent. Pass B (merge): PR #312 green, supervise --allow-merge + probe merged/closed/shipped unattended. Findings carded: scheduled-dispatch-launch-failure-escalates + config-dir-guard-advisory (shipped #310) + supervise session-resolution gap (Rules).
