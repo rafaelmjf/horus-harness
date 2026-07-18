@@ -1,5 +1,5 @@
 ---
-status: open
+status: claimed
 priority: medium
 created: 2026-07-18
 vision_facet: "Dashboard / cockpit"
@@ -48,7 +48,15 @@ The pane RENDERS + TRIGGERS existing CLI primitives — never a second state pat
   toggles only as real controls appear (the "we don't need a fancy widget" bar).
 - No new machine mutation the CLI can't already do (the pane is a front-end).
 
-## Open questions (owner)
+## Decisions (owner, 2026-07-18)
 
-- New `Control` pane vs. extend `Defaults`?
-- Which extras beyond the listener earn a slot (warmup / notify-test / statusline)?
+- **New dedicated `Control` pane on `c`** (sibling to `s`/`d`), not an extension of
+  Defaults — machine-global services stay separate from per-project launch posture.
+- **Earned a slot:** the steering listener (on/off + restart-when-active), per-account
+  **keep-warm** `[x]/[ ]` toggles ([[warmup-keep-window]]), and a `notify test` quick
+  action. **Read-only facts:** linger (with the `enable-linger` hint when off), notify
+  sink, standing envelopes (each with its `horus envelope revoke <name>` hint).
+  **Activity bands** from [[autonomous-activity-timeline]] (`activity.collect`): Armed +
+  Recent runs with outcome glyphs. **Deferred:** `statusline --install` (one-time setup,
+  not a standing control) and an in-pane envelope-revoke *action* (destructive → kept on
+  the CLI so a single keypress can't ground the away loop; the hint is shown).
