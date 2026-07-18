@@ -45,9 +45,15 @@ from horus import config
 DELIVERY_FAILED = "delivery-failed"   # a scheduled/unattended worker ended blocked/failed
 USAGE_BAND = "usage-band"             # an unattended run halted on a usage band/death
 SUPERVISE_GATE = "supervise-gate"     # a headless supervisor hit a red required gate
+# A scheduled dispatch's `horus run` exited non-zero BEFORE launching a worker (an
+# argparse error, a refused envelope, …). Without this the failure dies only in the
+# journal where nobody is looking — the exact pre-launch death this channel escalates.
+DISPATCH_LAUNCH_FAILED = "dispatch-launch-failed"
 SUCCESS = "success"                   # a clean accept (opt-in only)
 
-DEFAULT_EVENTS: frozenset[str] = frozenset({DELIVERY_FAILED, USAGE_BAND, SUPERVISE_GATE})
+DEFAULT_EVENTS: frozenset[str] = frozenset(
+    {DELIVERY_FAILED, USAGE_BAND, SUPERVISE_GATE, DISPATCH_LAUNCH_FAILED}
+)
 KNOWN_EVENTS: frozenset[str] = DEFAULT_EVENTS | {SUCCESS}
 
 VALID_SINKS: frozenset[str] = frozenset({"none", "telegram", "hermes", "webhook"})

@@ -11,9 +11,11 @@ The acceptance the card pins, at the unit layer:
 
 from __future__ import annotations
 
+import argparse
+
 import pytest
 
-from horus import config, notify
+from horus import cli, config, notify, schedule
 
 
 @pytest.fixture(autouse=True)
@@ -273,3 +275,64 @@ def test_render_config_redacts_the_token():
     rendered = notify.render_config(cfg)
     assert "SECRETSECRET" not in rendered
     assert "chat_id: 42" in rendered
+
+
+# --------------------------------------------------------------------------- #
+# Pre-launch dispatch death escalates via `horus notify escalate`
+# --------------------------------------------------------------------------- #
+
+
+def test_dispatch_launch_failed_is_on_by_default():
+    """A pre-launch death is actionable, so it escalates without opt-in — like the
+    other failure events, unlike the opt-in `success` ping."""
+    assert notify.DISPATCH_LAUNCH_FAILED == "dispatch-launch-failed"
+    assert notify.DISPATCH_LAUNCH_FAILED in notify.DEFAULT_EVENTS
+
+
+def _escalate_args(**kw):
+    base = dict(event=None, card=None, unit=None, detail=None, path=".")
+    base.update(kw)
+    return argparse.Namespace(**base)
+
+
+def test_escalate_with_no_sink_is_a_silent_noop(capsys):
+    """No sink configured ⇒ behaves exactly as today: no escalation, no failure."""
+    assert cli.cmd_notify_escalate(_escalate_args(card="c", unit="horus-sched-x.service")) == 0
+    assert "skipped" in capsys.readouterr().out
+
+
+def test_escalate_names_the_card_and_exit_code(_isolated_config, monkeypatch, capsys):
+    _write(_isolated_config, '[notify]\nsink = "telegram"\ntoken = "t"\nchat_id = "1"\n')
+    monkeypatch.setattr(schedule, "unit_exit_detail", lambda unit: "exit status 2, result: exit-code")
+    sent = {}
+    monkeypatch.setattr(notify, "_SINKS", {"telegram": lambda cfg, esc: sent.setdefault("esc", esc)})
+
+    rc = cli.cmd_notify_escalate(_escalate_args(card="my-card", unit="horus-sched-abc.service"))
+    assert rc == 0
+    esc = sent["esc"]
+    assert esc.event == notify.DISPATCH_LAUNCH_FAILED   # on by default, so the gate passes
+    assert esc.card == "my-card"
+    assert "exit status 2" in esc.summary
+    assert esc.inspect == "journalctl --user -u horus-sched-abc.service"
+    assert "delivered" in capsys.readouterr().out
+
+
+def test_escalate_appends_an_explicit_detail(_isolated_config, monkeypatch):
+    _write(_isolated_config, '[notify]\nsink = "telegram"\ntoken = "t"\nchat_id = "1"\n')
+    sent = {}
+    monkeypatch.setattr(notify, "_SINKS", {"telegram": lambda cfg, esc: sent.setdefault("esc", esc)})
+    cli.cmd_notify_escalate(_escalate_args(card="c", detail="unrecognized arguments"))
+    assert "unrecognized arguments" in sent["esc"].summary
+
+
+def test_escalate_never_fails_even_when_the_sink_errors(_isolated_config, monkeypatch, capsys):
+    """Best-effort by construction: a dead bot must never turn a pre-launch death into
+    a second failure."""
+    _write(_isolated_config, '[notify]\nsink = "telegram"\ntoken = "t"\nchat_id = "1"\n')
+
+    def _boom(cfg, esc):
+        raise RuntimeError("bot is down")
+
+    monkeypatch.setattr(notify, "_SINKS", {"telegram": _boom})
+    assert cli.cmd_notify_escalate(_escalate_args(card="c")) == 0
+    assert "failed" in capsys.readouterr().out

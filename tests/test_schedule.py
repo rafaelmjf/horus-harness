@@ -182,6 +182,89 @@ def test_a_rejected_unit_leaves_nothing_behind(monkeypatch, tmp_path):
     assert not list((tmp_path / "u").glob("*.service"))
 
 
+# --- pre-launch death escalates, not dies in the journal ---------------------
+
+
+def test_create_writes_an_onfailure_escalation_unit(units, tmp_path):
+    """ANY non-zero launch exit must escalate — including an argparse error that exits
+    before the Python handler runs. That is why it lives at the unit level."""
+    created = _create(tmp_path, card="my-card")
+    directory = schedule.unit_dir()
+    notify_unit = directory / f"horus-sched-{created.id}-notify.service"
+    assert notify_unit.exists()
+    service = (directory / f"horus-sched-{created.id}.service").read_text()
+    assert f"OnFailure=horus-sched-{created.id}-notify.service" in service
+
+
+def test_the_escalation_unit_calls_notify_escalate_with_card_and_unit(units, tmp_path):
+    created = _create(tmp_path, card="my-card")
+    escalate = (schedule.unit_dir() / f"horus-sched-{created.id}-notify.service").read_text()
+    exec_line = next(l for l in escalate.splitlines() if l.startswith("ExecStart="))
+    assert "notify escalate" in exec_line
+    assert "--event dispatch-launch-failed" in exec_line
+    assert f"--unit horus-sched-{created.id}.service" in exec_line
+    assert "--card my-card" in exec_line
+    # oneshot, so a dead escalation never lingers as an active unit
+    assert "Type=oneshot" in escalate
+
+
+def test_the_escalation_unit_omits_card_when_there_is_none(units, tmp_path):
+    created = _create(tmp_path, card=None)
+    escalate = (schedule.unit_dir() / f"horus-sched-{created.id}-notify.service").read_text()
+    assert "--card" not in escalate
+    assert "--event dispatch-launch-failed" in escalate
+
+
+def test_cancel_removes_the_escalation_unit(units, tmp_path):
+    created = _create(tmp_path, card="x")
+    notify_unit = schedule.unit_dir() / f"horus-sched-{created.id}-notify.service"
+    assert notify_unit.exists()
+    schedule.cancel(created.id)
+    assert not notify_unit.exists()
+
+
+def test_a_rejected_unit_leaves_no_escalation_unit_behind(monkeypatch, tmp_path):
+    monkeypatch.setattr(schedule, "unit_dir", lambda: tmp_path / "u")
+    monkeypatch.setattr(schedule, "availability", lambda: schedule.Availability(True, "ok"))
+    monkeypatch.setattr(schedule, "_live_state", lambda unit, when: {"next_run": None, "fired": False})
+
+    class _Fail:
+        returncode = 1
+        stdout = ""
+        stderr = "bad unit"
+
+    monkeypatch.setattr(schedule, "_systemctl", lambda *a, **k: _Fail())
+    with pytest.raises(schedule.ScheduleError):
+        _create(tmp_path, card="x")
+    assert not list((tmp_path / "u").glob("*-notify.service"))
+
+
+def test_the_escalation_unit_is_not_read_back_as_a_schedule(units, tmp_path):
+    """It has no timer, so `schedule list` must never surface it as a dispatch."""
+    _create(tmp_path, card="x")
+    assert len(schedule.load_all()) == 1
+
+
+def test_unit_exit_detail_reads_the_failed_units_exit_code(monkeypatch):
+    class _Show:
+        returncode = 0
+        stdout = "ExecMainStatus=2\nResult=exit-code\n"
+        stderr = ""
+
+    monkeypatch.setattr(schedule, "_systemctl", lambda *a, **k: _Show())
+    detail = schedule.unit_exit_detail("horus-sched-abc.service")
+    assert "exit status 2" in detail
+    assert "exit-code" in detail
+
+
+def test_unit_exit_detail_is_best_effort_when_systemd_is_unreadable(monkeypatch):
+    def _boom(*a, **k):
+        raise schedule.ScheduleError("systemctl failed")
+
+    monkeypatch.setattr(schedule, "_systemctl", _boom)
+    assert schedule.unit_exit_detail("x.service") == "exit status unavailable"
+
+
 # --- reading them back --------------------------------------------------------
 
 
@@ -337,6 +420,14 @@ def test_cli_passes_the_run_surface_through_untouched(units, tmp_path):
 def test_cli_describes_a_dispatch_by_its_card(units, tmp_path):
     cli.cmd_schedule_at(_args(run_args=["--", "p", "--card", "my-card"]))
     assert schedule.load_all()[0].description == "card my-card"
+
+
+def test_cli_wires_the_card_into_the_escalation_unit(units, tmp_path):
+    """A pre-launch death should name the card that failed, not just an exit code."""
+    cli.cmd_schedule_at(_args(run_args=["--", "p", "--card", "my-card"]))
+    created = schedule.load_all()[0]
+    escalate = (schedule.unit_dir() / f"horus-sched-{created.id}-notify.service").read_text()
+    assert "--card my-card" in escalate
 
 
 def test_the_parser_does_not_leak_its_own_flags_into_the_run(units, tmp_path):

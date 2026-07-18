@@ -37,6 +37,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from horus import notify
+
 UNIT_PREFIX = "horus-sched-"
 # systemd's default AccuracySec is 1 minute, so a timer may fire up to a minute late
 # (observed: an 11s delay on a 25s probe). Dispatch does not need the jitter.
@@ -172,13 +174,44 @@ def _escape(value: str) -> str:
     return value.replace("\n", " ").replace("\r", " ").strip()
 
 
-def _service_unit(*, description: str, command: tuple[str, ...], cwd: Path) -> str:
+def _service_unit(
+    *, description: str, command: tuple[str, ...], cwd: Path, on_failure: str | None = None,
+) -> str:
     # PATH is carried in explicitly: a systemd user unit starts with a minimal
     # environment, and the worker this launches has to find the `claude`/`codex`
     # binary. Without this the dispatch fires and fails at the last inch.
-    return "\n".join([
+    unit_section = [
         "[Unit]",
         f"Description=Horus scheduled dispatch: {_escape(description)}",
+    ]
+    if on_failure:
+        # ANY non-zero launch exit escalates, uniformly. This lives at the unit level
+        # on purpose: an argparse error (`unrecognized arguments`) exits 2 BEFORE the
+        # Python handler runs, so an in-handler try/except cannot catch it. `OnFailure=`
+        # fires the escalation unit on the service entering `failed`, whatever the cause.
+        unit_section.append(f"OnFailure={on_failure}")
+    return "\n".join([
+        *unit_section,
+        "",
+        "[Service]",
+        "Type=oneshot",
+        f"WorkingDirectory={cwd}",
+        f"Environment=PATH={_escape(os.environ.get('PATH', ''))}",
+        "ExecStart=" + " ".join(_quote(part) for part in command),
+        "",
+    ])
+
+
+def _notify_unit(*, description: str, command: tuple[str, ...], cwd: Path) -> str:
+    """The `OnFailure=` handler that escalates a pre-launch dispatch death.
+
+    A plain oneshot that runs `horus notify escalate` — which is best-effort and never
+    raises, so with no sink configured it is a silent no-op and the failed dispatch
+    behaves exactly as it does today.
+    """
+    return "\n".join([
+        "[Unit]",
+        f"Description=Horus scheduled dispatch launch-failure escalation: {_escape(description)}",
         "",
         "[Service]",
         "Type=oneshot",
@@ -222,8 +255,16 @@ def create(
     command: tuple[str, ...],
     description: str,
     cwd: Path | None = None,
+    card: str | None = None,
+    launcher: tuple[str, ...] = (sys.executable, "-m", "horus"),
 ) -> Schedule:
-    """Write and enable a one-shot timer for ``command``. Raises ``ScheduleError``."""
+    """Write and enable a one-shot timer for ``command``. Raises ``ScheduleError``.
+
+    Every generated dispatch also gets an ``OnFailure=`` escalation unit: any non-zero
+    launch exit (including an argparse error that never reaches the Python handler)
+    fires ``horus notify escalate`` so a pre-launch death cannot die silently in the
+    journal. With no sink configured that escalation is a best-effort no-op.
+    """
     ready = availability()
     if not ready.ok:
         raise ScheduleError(f"cannot schedule here: {ready.reason}")
@@ -233,10 +274,29 @@ def create(
     ident = uuid.uuid4().hex[:8]
     directory = unit_dir()
     directory.mkdir(parents=True, exist_ok=True)
+    resolved_cwd = cwd or Path.cwd()
     service = directory / f"{UNIT_PREFIX}{ident}.service"
     timer = directory / f"{UNIT_PREFIX}{ident}.timer"
+    notify_unit_name = f"{UNIT_PREFIX}{ident}-notify.service"
+    notify_service = directory / notify_unit_name
+
+    escalate_command = (
+        *launcher, "notify", "escalate",
+        "--event", notify.DISPATCH_LAUNCH_FAILED,
+        "--unit", f"{UNIT_PREFIX}{ident}.service",
+    )
+    if card:
+        escalate_command += ("--card", card)
+
     service.write_text(
-        _service_unit(description=description, command=command, cwd=cwd or Path.cwd()),
+        _service_unit(
+            description=description, command=command, cwd=resolved_cwd,
+            on_failure=notify_unit_name,
+        ),
+        encoding="utf-8",
+    )
+    notify_service.write_text(
+        _notify_unit(description=description, command=escalate_command, cwd=resolved_cwd),
         encoding="utf-8",
     )
     timer.write_text(_timer_unit(description=description, when=when), encoding="utf-8")
@@ -265,7 +325,7 @@ def _stderr(result: subprocess.CompletedProcess) -> str:
 
 
 def _remove_units(ident: str) -> None:
-    for suffix in (".service", ".timer", ".halt"):
+    for suffix in (".service", ".timer", ".halt", "-notify.service"):
         (unit_dir() / f"{UNIT_PREFIX}{ident}{suffix}").unlink(missing_ok=True)
     # Drop Persistent's stamp too: it outlives the units, and a recycled id would
     # otherwise read as already-fired.
@@ -421,6 +481,34 @@ def _live_state(unit_stem: str, when: str) -> dict:
     service = _systemctl("show", f"{unit_stem}.service", "-p", "ExecMainStartTimestamp")
     fired = service.returncode == 0 and bool(service.stdout.split("=", 1)[-1].strip())
     return {"next_run": None, "fired": fired}
+
+
+def unit_exit_detail(unit: str) -> str:
+    """A short human reason ``unit`` failed: its exit status and systemd result.
+
+    Read from systemd's retained record of the failed unit (kept in the ``failed``
+    state until reset), so the escalation can name the exit code even for an argparse
+    error that exited before any Python handler ran. Best-effort — never raises.
+    """
+    try:
+        result = _systemctl("show", unit, "-p", "ExecMainStatus", "-p", "Result")
+    except ScheduleError:
+        return "exit status unavailable"
+    if result.returncode != 0:
+        return "exit status unavailable"
+    fields: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            fields[key.strip()] = value.strip()
+    parts = []
+    status = fields.get("ExecMainStatus", "")
+    if status:
+        parts.append(f"exit status {status}")
+    outcome = fields.get("Result", "")
+    if outcome and outcome != "success":
+        parts.append(f"result: {outcome}")
+    return ", ".join(parts) or "exit status unavailable"
 
 
 def cancel(ident: str) -> Schedule | None:
