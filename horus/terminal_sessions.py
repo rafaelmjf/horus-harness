@@ -70,6 +70,7 @@ def run_attached(
     model: str | None = None,
     effort: str | None = None,
     prompt: str = "",
+    proxied: bool = False,
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
     """Run an attended agent in this TTY, returning after the agent exits."""
@@ -81,6 +82,7 @@ def run_attached(
         model=model,
         effort=effort,
         prompt=prompt,
+        proxied=proxied,
     )
     root = Path(project_dir).resolve()
     if prepared is None:
@@ -128,6 +130,7 @@ def launch_tmux(
     attach: bool = True,
     cols: int | None = None,
     rows: int | None = None,
+    proxied: bool = False,
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
     """Create a unique detached tmux session, then optionally attach this TTY."""
@@ -151,6 +154,7 @@ def launch_tmux(
         model=model,
         effort=effort,
         prompt=prompt,
+        proxied=proxied,
     )
     if prepared is None:
         return launch.LaunchResult(False, agent, root, account=account, error=error)

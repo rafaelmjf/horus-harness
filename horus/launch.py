@@ -100,8 +100,10 @@ def prepare_interactive(
         effort=effort,
         proxied=proxied,
     )
-    # Never enter an attended session under a mapped alias whose login differs.
-    if account and getattr(adapter, "config_dirs", {}).get(account) and hasattr(adapter, "verify_account"):
+    # Never enter an attended session under a mapped alias whose login differs — EXCEPT
+    # a proxied launch, whose auth is the proxy's subscription token, not the account's
+    # own login (so the account's login is irrelevant; this is "works regardless of account").
+    if account and not proxied and getattr(adapter, "config_dirs", {}).get(account) and hasattr(adapter, "verify_account"):
         check = adapter.verify_account(account)
         if not check.ok:
             return None, (

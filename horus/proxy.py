@@ -52,7 +52,19 @@ def default_state() -> dict:
         # ANTHROPIC_DEFAULT_*_MODEL so a proxied launch on a bare `--model` alias
         # resolves to a model the proxy actually serves (a bare alias 502s otherwise).
         "model_map": {},
+        # every model id the proxy served at enable time — the launch picker shows the
+        # GPT ones alongside the native Claude aliases when the toggle is on.
+        "models": [],
     }
+
+
+def gpt_launch_models(state: dict | None = None) -> list[str]:
+    """The GPT chat models to offer in the launch picker (from what the proxy served
+    at enable). Excludes image/review endpoints — only pickable text models."""
+    state = state or load_state()
+    served = state.get("models")
+    served = served if isinstance(served, list) else []
+    return [m for m in served if isinstance(m, str) and m.startswith("gpt-") and "image" not in m]
 
 
 def load_state() -> dict:
@@ -276,6 +288,7 @@ def enable(state: dict | None = None) -> tuple[bool, str]:
     if not ok:
         return False, "Proxy service started but is not serving /v1/models yet — enable aborted."
     state["model_map"] = _pick_model_map(models)
+    state["models"] = models
     state["enabled"] = True
     save_state(state)
     return True, (
