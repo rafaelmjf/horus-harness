@@ -604,3 +604,56 @@ def test_usage_meter_lines_unknown_window_is_a_dim_dash_not_a_zero_bar():
     assert weekly[0] == "class:usage-ok" and "█" in weekly[1]
     # A wholly-missing snapshot is two dashes.
     assert all(style == "class:muted" and text.endswith("--") for style, text in terminal_tui._usage_meter_lines(None))
+
+
+# Projects grid navigation (item 2) — down/up = row, left/right = column.
+
+def _gt(sel, count, projects, cols, direction):
+    from horus import terminal_tui
+    return terminal_tui._grid_nav_target(sel, count, projects, cols, direction)
+
+
+def test_grid_nav_two_columns_down_moves_a_row_not_sideways():
+    # 4 projects in 2 cols: [0 1 / 2 3]. Down from 0 → 2 (row below), NOT 1 (sideways).
+    assert _gt(0, 4, 4, 2, "down") == 2
+    assert _gt(2, 4, 4, 2, "up") == 0
+    # Right/left move a column.
+    assert _gt(0, 4, 4, 2, "right") == 1
+    assert _gt(1, 4, 4, 2, "left") == 0
+    # Left with no column to the left → None (caller does Back).
+    assert _gt(0, 4, 4, 2, "left") is None
+    # Right at the rightmost column stays put.
+    assert _gt(1, 4, 4, 2, "right") == 1
+
+
+def test_grid_nav_falls_into_and_back_out_of_the_single_column_tail():
+    # 3 projects (cols=2) then 2 tail items: grid rows [0 1 / 2], tail 3,4.
+    # Down off the last grid row drops into the tail (first tail item).
+    assert _gt(2, 5, 3, 2, "down") == 3      # from project 2 → tail item 3
+    assert _gt(1, 5, 3, 2, "down") == 3      # last project row col1 → tail
+    # Up from the first tail item climbs back into the grid (last project).
+    assert _gt(3, 5, 3, 2, "up") == 2
+    # Within the tail, up/down is linear and left is Back.
+    assert _gt(3, 5, 3, 2, "down") == 4
+    assert _gt(4, 5, 3, 2, "up") == 3
+    assert _gt(3, 5, 3, 2, "left") is None
+
+
+def test_grid_nav_single_column_is_linear_with_left_as_back():
+    # cols=1 (narrow/mobile or any non-projects list): down/up ±1, right no-op, left Back.
+    assert _gt(0, 3, 3, 1, "down") == 1
+    assert _gt(2, 3, 3, 1, "down") == 2      # clamps at the end
+    assert _gt(1, 3, 3, 1, "up") == 0
+    assert _gt(1, 3, 3, 1, "right") == 1     # no-op
+    assert _gt(1, 3, 3, 1, "left") is None   # Back
+
+
+def test_project_columns_narrow_vs_wide(tmp_path, monkeypatch):
+    from horus import terminal_tui
+    ui = _new_ui(tmp_path, monkeypatch)
+    ui.screen = "projects"
+    assert ui._project_columns(80) == 1     # narrow → single list (mobile)
+    assert ui._project_columns(120) == 2    # desktop → two columns
+    assert ui._project_columns(240) == 3    # ultra-wide → three, fluid
+    ui.screen = "sessions"
+    assert ui._project_columns(240) == 1    # non-projects list is always single-column
