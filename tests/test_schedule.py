@@ -594,6 +594,45 @@ def test_remove_listen_service_is_false_when_none_installed(units, tmp_path):
     assert schedule.remove_listen_service() is False
 
 
+def test_install_listen_service_bakes_an_absolute_execstart(units, tmp_path, monkeypatch):
+    """systemd resolves a bare ExecStart name against its own PATH (system bins),
+    NOT Environment=PATH — so a bare `horus` fails 203/EXEC in ~/.local/bin. The
+    unit must carry an ABSOLUTE path (regression for the v0.0.62 crash-loop)."""
+    monkeypatch.setattr(schedule.shutil, "which", lambda name: "/home/rafa/.local/bin/horus")
+    schedule.install_listen_service(command=("horus", "notify", "listen"), cwd=Path("/repo"))
+    execstart = next(
+        line for line in (schedule.unit_dir() / f"{schedule.LISTEN_UNIT}.service").read_text().splitlines()
+        if line.startswith("ExecStart=")
+    )
+    assert execstart == "ExecStart=/home/rafa/.local/bin/horus notify listen"
+    assert "ExecStart=horus " not in execstart  # never the bare name
+
+
+def test_absolute_exec_falls_back_when_unresolved(monkeypatch):
+    monkeypatch.setattr(schedule.shutil, "which", lambda name: None)
+    assert schedule._absolute_exec(("horus", "notify", "listen")) == ("horus", "notify", "listen")
+
+
+def test_restart_listen_service_restarts_when_installed(units, tmp_path, monkeypatch):
+    monkeypatch.setattr(schedule.shutil, "which", lambda name: "/abs/horus")
+    schedule.install_listen_service(command=("horus", "notify", "listen"), cwd=Path("/repo"))
+    units.clear()
+    assert schedule.restart_listen_service() is True
+    assert any(call and call[0] == "restart" for call in units)
+
+
+def test_restart_listen_service_is_false_when_none_installed(units, tmp_path):
+    assert schedule.restart_listen_service() is False
+
+
+def test_cli_notify_listen_restart(units, tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(schedule.shutil, "which", lambda name: "/abs/horus")
+    schedule.install_listen_service(command=("horus", "notify", "listen"), cwd=Path("/repo"))
+    ns = argparse.Namespace(path=None, service=False, stop=False, restart=True, for_=None)
+    assert cli.cmd_notify_listen(ns) == 0
+    assert "Restarted the persistent listen service" in capsys.readouterr().out
+
+
 # --- CLI wiring: release + listen service ------------------------------------
 
 

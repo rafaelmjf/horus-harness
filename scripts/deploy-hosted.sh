@@ -60,6 +60,18 @@ fi
 echo "[deploy-hosted] restarting $SERVICE ..."
 sudo systemctl restart "$SERVICE"
 
+# The persistent notify-listen steering channel (`horus notify listen --service`,
+# a `--user` unit) runs the pinned ~/.local/bin/horus too, so the upgrade above
+# leaves it on the OLD code until restarted. Restart it if it's installed — no-op
+# and never fatal otherwise (it may not run on this machine).
+LISTEN_UNIT="horus-notify-listen.service"
+if systemctl --user list-unit-files "$LISTEN_UNIT" >/dev/null 2>&1 \
+   && [ -f "$HOME/.config/systemd/user/$LISTEN_UNIT" ]; then
+  echo "[deploy-hosted] restarting $LISTEN_UNIT (adopt upgraded CLI) ..."
+  systemctl --user restart "$LISTEN_UNIT" || \
+    echo "[deploy-hosted] note: could not restart $LISTEN_UNIT (non-fatal)" >&2
+fi
+
 # Give it a moment to bind, then verify: /health public (200), / gated (403).
 sleep 2
 health="$(curl -s --max-time 3 "http://127.0.0.1:${PORT}/health" || true)"
