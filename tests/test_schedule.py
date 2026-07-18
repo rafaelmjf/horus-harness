@@ -759,3 +759,28 @@ def test_cli_warmup_keep_status_lists_services(units, tmp_path, capsys, monkeypa
     assert cli.cmd_warmup(_warmup_ns(status=True)) == 0
     out = capsys.readouterr().out
     assert "claude-personal: active" in out and "claude-work: installed (not running)" in out
+
+
+# --- proxy service: a Docker-backed persistent unit -----------------------------
+
+def test_install_proxy_service_writes_docker_unit_with_absolute_execstart(units, tmp_path, monkeypatch):
+    monkeypatch.setattr(schedule.shutil, "which", lambda name: f"/usr/bin/{name}")
+    cmd = ("docker", "run", "--rm", "--name", "horus-cliproxy", "-p", "127.0.0.1:8317:8317",
+           "eceasy/cli-proxy-api:latest", "/CLIProxyAPI/CLIProxyAPI")
+    schedule.install_proxy_service(command=cmd)
+    text = (schedule.unit_dir() / f"{schedule.PROXY_UNIT}.service").read_text()
+    execstart = next(l for l in text.splitlines() if l.startswith("ExecStart="))
+    assert execstart.startswith("ExecStart=/usr/bin/docker run")   # absolute (203/EXEC lesson)
+    assert "Restart=always" in text
+    assert f"ExecStartPre=-/usr/bin/docker rm -f {schedule.PROXY_UNIT}" in text  # clears a stale container
+    # bug #3: stop must force-remove the --rm container systemd's stop can leave alive
+    assert f"ExecStopPost=-/usr/bin/docker rm -f {schedule.PROXY_UNIT}" in text
+    assert any(call and call[0] == "enable" for call in units)
+
+
+def test_remove_proxy_service_tears_it_down(units, tmp_path, monkeypatch):
+    monkeypatch.setattr(schedule.shutil, "which", lambda name: f"/usr/bin/{name}")
+    schedule.install_proxy_service(command=("docker", "run", "eceasy/cli-proxy-api:latest"))
+    assert schedule.remove_proxy_service() is True
+    assert not (schedule.unit_dir() / f"{schedule.PROXY_UNIT}.service").exists()
+    assert schedule.remove_proxy_service() is False

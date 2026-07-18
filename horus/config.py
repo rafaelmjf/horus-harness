@@ -676,6 +676,44 @@ def write_statusline_pointer(config_dir_path: str | Path) -> bool:
         return False
 
 
+# The proxy integration (vision-branch-x4) NEVER writes these into a settings.json —
+# a global rewrite poisons already-running sessions, so proxy env is injected per-launch
+# (see horus/proxy.py). `clear_proxy_env` remains only to strip env that a pre-B build
+# wrote, so disabling/upgrading cleans up. There is deliberately no writer counterpart.
+PROXY_ENV_KEYS = (
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
+    "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
+)
+
+
+def clear_proxy_env(config_dir_path: str | Path) -> bool:
+    """Remove exactly the ``PROXY_ENV_KEYS`` from an account's ``settings.json`` `env`
+    block, leaving every other env var and setting intact. Migration cleanup for env a
+    pre-B build wrote; B injects proxy env at launch and never writes settings.json. A
+    no-op (none present) returns False. Never raises."""
+    settings_path = Path(config_dir_path) / "settings.json"
+    try:
+        if not settings_path.exists():
+            return False
+        loaded = json.loads(settings_path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            return False
+        env = loaded.get("env")
+        if not isinstance(env, dict) or not any(k in env for k in PROXY_ENV_KEYS):
+            return False
+        for k in PROXY_ENV_KEYS:
+            env.pop(k, None)
+        if env:
+            loaded["env"] = env
+        else:
+            loaded.pop("env", None)  # drop an emptied block rather than leave `{}`
+        settings_path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def isolate_account(agent: str, alias: str) -> tuple[bool, str]:
     """Give ``alias`` its own isolated config dir by default: copy the current login
     into ``~/.horus/accounts/<agent>-<alias>`` and map it there, so two accounts never

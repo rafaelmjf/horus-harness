@@ -76,6 +76,7 @@ def prepare_interactive(
     effort: str | None = None,
     prompt: str = "",
     session_id: str | None = None,
+    proxied: bool = False,
 ) -> tuple[PreparedInteractive | None, str | None]:
     """Validate and build an attended launch without choosing its terminal host."""
     root = Path(project_dir).resolve()
@@ -97,6 +98,7 @@ def prepare_interactive(
         posture=permission_posture,
         model=model,
         effort=effort,
+        proxied=proxied,
     )
     # Never enter an attended session under a mapped alias whose login differs.
     if account and getattr(adapter, "config_dirs", {}).get(account) and hasattr(adapter, "verify_account"):
