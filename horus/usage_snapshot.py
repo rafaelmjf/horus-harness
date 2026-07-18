@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
@@ -424,3 +425,87 @@ def read_cache_only(agent: str, account: str | None = None) -> UsageSnapshot | N
     """
     cached = _load_cache(_cache_path(agent, account), ttl=None, now=time.time())
     return cached.snapshot if cached is not None else None
+
+
+# --------------------------------------------------------------------------- #
+# All-accounts roll-up — the fleet capacity glance the steering channel needs.
+#
+# The single-target reads above answer "this run's window"; this answers "every
+# account's window" for `horus usage all` (and the phone's `usage` verb), so the
+# owner can see, from anywhere, which account still has headroom.
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class AccountUsage:
+    agent: str                 # "claude" | "codex"
+    account: str               # alias, or "default"
+    snapshot: UsageSnapshot | None
+
+
+def all_account_targets() -> list[tuple[str, str | None]]:
+    """Every ``(agent, account_alias)`` to read: each configured alias per agent,
+    or that agent's default login (``None``) when it has no configured aliases."""
+    targets: list[tuple[str, str | None]] = []
+    for agent, loader in (
+        ("claude", config.load_account_config_dirs),
+        ("codex", config.load_account_codex_homes),
+    ):
+        aliases = sorted(loader())
+        if aliases:
+            targets += [(agent, alias) for alias in aliases]
+        else:
+            targets.append((agent, None))
+    return targets
+
+
+def all_accounts_usage(
+    *,
+    read_only: bool = False,
+    ttl: float = CACHE_TTL,
+    timeout: float = FETCH_TIMEOUT,
+    now: float | None = None,
+) -> list[AccountUsage]:
+    """Freshest usage for every configured account (both windows).
+
+    ``read_only=True`` serves only what's on disk (never touches the network);
+    the default does one live read per target through :func:`cached_usage`. Each
+    snapshot has reset-past windows blanked so a stale percent never misleads.
+    Best-effort, like every read here — an unreadable target renders as ``None``.
+    """
+    now = time.time() if now is None else now
+    rows: list[AccountUsage] = []
+    for agent, account in all_account_targets():
+        if read_only:
+            snap = read_cache_only(agent, account)
+        else:
+            snap = cached_usage(agent, account, ttl=ttl, timeout=timeout, now=now)
+        if snap is not None:
+            snap = snap.without_expired_windows(now=now)
+        rows.append(AccountUsage(agent=agent, account=account or "default", snapshot=snap))
+    return rows
+
+
+def _usage_cell(percent: float | None, reset: str | None) -> str:
+    if percent is None:
+        return "—"
+    return f"{percent:.0f}%" + (f" (resets {reset})" if reset else "")
+
+
+def render_all_accounts(rows: list[AccountUsage]) -> str:
+    """Compact per-account capacity table for a CLI glance / a phone screen."""
+    lines = ["Usage — all accounts (5h · weekly):"]
+    if not rows:
+        return lines[0] + "\n  (no accounts configured)"
+    width = max(len(f"{r.agent}/{r.account}") for r in rows)
+    for r in rows:
+        label = f"{r.agent}/{r.account}".ljust(width)
+        if r.snapshot is None:
+            lines.append(f"  {label}  unknown")
+            continue
+        s = r.snapshot
+        lines.append(
+            f"  {label}  5h {_usage_cell(s.percent, s.resets_at)}"
+            f" · weekly {_usage_cell(s.weekly_percent, s.weekly_resets_at)}"
+        )
+    return "\n".join(lines)
