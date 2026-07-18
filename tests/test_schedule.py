@@ -31,8 +31,18 @@ def units(tmp_path, monkeypatch):
         stdout = ""
         stderr = ""
 
+    class _Active:
+        returncode = 0
+        stdout = "active"
+        stderr = ""
+
     def _fake(*args, **kwargs):
         calls.append(args)
+        # Self-verify polls `is-active` after every `enable --now`; report the
+        # freshly-installed unit as up so existing install tests stay fast and only
+        # the dedicated self-verify tests exercise the polling/failure path.
+        if args and args[0] == "is-active":
+            return _Active()
         return _Ok()
 
     monkeypatch.setattr(schedule, "_systemctl", _fake)
@@ -654,6 +664,60 @@ def test_install_listen_service_bakes_an_absolute_execstart(units, tmp_path, mon
 def test_absolute_exec_falls_back_when_unresolved(monkeypatch):
     monkeypatch.setattr(schedule.shutil, "which", lambda name: None)
     assert schedule._absolute_exec(("horus", "notify", "listen")) == ("horus", "notify", "listen")
+
+
+def test_install_listen_service_rolls_back_on_a_crash_loop(units, tmp_path, monkeypatch):
+    """`enable --now` returning 0 is not proof of life: a unit that immediately
+    203/EXECs still reports success there (#322). Self-verify must catch it and
+    leave NO unit behind rather than reporting a dead service installed."""
+
+    class _Failed:
+        returncode = 0
+        stdout = "failed"
+        stderr = ""
+
+    class _Ok:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def _fake(*args, **kwargs):
+        units.append(args)
+        return _Failed() if args and args[0] == "is-active" else _Ok()
+
+    monkeypatch.setattr(schedule, "_systemctl", _fake)
+    monkeypatch.setattr(
+        schedule, "_journal_tail", lambda unit, lines=20: "Main process exited, code=exited, status=203/EXEC"
+    )
+    with pytest.raises(schedule.ScheduleError, match="203/EXEC"):
+        schedule.install_listen_service(command=("horus", "notify", "listen"), cwd=Path("/repo"))
+    assert not (schedule.unit_dir() / f"{schedule.LISTEN_UNIT}.service").exists()
+    assert any(call and call[0] == "disable" for call in units)
+
+
+def test_await_active_times_out_when_stuck_activating(units, tmp_path, monkeypatch):
+    """A unit that never leaves 'activating' (rather than failing outright) must
+    still time out — the bounded window is the safety net, not just `failed`."""
+
+    class _Activating:
+        returncode = 0
+        stdout = "activating"
+        stderr = ""
+
+    monkeypatch.setattr(schedule, "_systemctl", lambda *a, **k: _Activating())
+    monkeypatch.setattr(schedule, "_journal_tail", lambda unit, lines=20: "still starting up")
+    with pytest.raises(schedule.ScheduleError, match="did not reach 'active'"):
+        schedule._await_active("some.service", timeout=0.05, interval=0.01)
+
+
+def test_await_active_returns_once_active(units, tmp_path, monkeypatch):
+    class _Active:
+        returncode = 0
+        stdout = "active"
+        stderr = ""
+
+    monkeypatch.setattr(schedule, "_systemctl", lambda *a, **k: _Active())
+    schedule._await_active("some.service", timeout=0.05, interval=0.01)  # does not raise
 
 
 def test_restart_listen_service_restarts_when_installed(units, tmp_path, monkeypatch):
