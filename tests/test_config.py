@@ -175,16 +175,16 @@ def test_set_workflow_policy_preserves_access_block(tmp_path, monkeypatch):
 
 def test_launch_defaults_default_to_default_posture(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
-    assert config.load_launch_defaults() == {"posture": "default"}
+    assert config.load_launch_defaults() == {"posture": "default", "window": "takeover"}
 
 
 def test_set_launch_default_posture_round_trips(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     assert config.set_launch_default_posture("full-auto") == "full-auto"
-    assert config.load_launch_defaults() == {"posture": "full-auto"}
+    assert config.load_launch_defaults() == {"posture": "full-auto", "window": "takeover"}
 
     assert config.set_launch_default_posture("read-only") == "read-only"
-    assert config.load_launch_defaults() == {"posture": "read-only"}
+    assert config.load_launch_defaults() == {"posture": "read-only", "window": "takeover"}
 
 
 def test_set_launch_default_posture_rejects_unknown_value(tmp_path, monkeypatch):
@@ -195,21 +195,46 @@ def test_set_launch_default_posture_rejects_unknown_value(tmp_path, monkeypatch)
     except ValueError:
         raised = True
     assert raised
-    assert config.load_launch_defaults() == {"posture": "default"}  # unchanged
+    assert config.load_launch_defaults() == {"posture": "default", "window": "takeover"}  # unchanged
 
 
 def test_launch_defaults_tolerates_malformed_stored_value(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     config.config_dir().mkdir(parents=True, exist_ok=True)
     config.config_path().write_text('[launch]\nposture = "not-a-real-posture"\n', encoding="utf-8")
-    assert config.load_launch_defaults() == {"posture": "default"}
+    assert config.load_launch_defaults() == {"posture": "default", "window": "takeover"}
 
 
 def test_set_launch_default_posture_preserves_access_block(tmp_path, monkeypatch):
     config = _home_cfg(tmp_path, monkeypatch)
     config.set_launch_default_posture("auto-edit")
     assert config.load_dashboard_access() is not None
-    assert config.load_launch_defaults() == {"posture": "auto-edit"}
+    assert config.load_launch_defaults() == {"posture": "auto-edit", "window": "takeover"}
+
+
+def test_set_launch_default_window_round_trips_and_preserves_posture(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.set_launch_default_posture("plan")
+    assert config.set_launch_default_window("new-window") == "new-window"
+    # The window write must not clobber the sibling posture key (shared [launch] table).
+    assert config.load_launch_defaults() == {"posture": "plan", "window": "new-window"}
+    # And a later posture write must preserve the window choice.
+    config.set_launch_default_posture("read-only")
+    assert config.load_launch_defaults() == {"posture": "read-only", "window": "new-window"}
+
+
+def test_set_launch_default_window_rejects_unknown_value(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    with pytest.raises(ValueError):
+        config.set_launch_default_window("floating")
+    assert config.load_launch_defaults()["window"] == "takeover"  # unchanged
+
+
+def test_launch_defaults_tolerate_malformed_window_value(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.config_dir().mkdir(parents=True, exist_ok=True)
+    config.config_path().write_text('[launch]\nwindow = "hologram"\n', encoding="utf-8")
+    assert config.load_launch_defaults()["window"] == "takeover"
 
 
 def test_launch_defaults_coexist_with_projects_and_workflow(tmp_path, monkeypatch):
@@ -222,13 +247,13 @@ def test_launch_defaults_coexist_with_projects_and_workflow(tmp_path, monkeypatc
 
     assert config._as_key(proj) in config.load_projects()
     assert config.load_workflow_policy()["commit"] == "manual"
-    assert config.load_launch_defaults() == {"posture": "plan"}
+    assert config.load_launch_defaults() == {"posture": "plan", "window": "takeover"}
 
     # Registering another project afterward must not disturb the launch default.
     other = tmp_path / "p2"
     other.mkdir()
     config.register_project(other)
-    assert config.load_launch_defaults() == {"posture": "plan"}
+    assert config.load_launch_defaults() == {"posture": "plan", "window": "takeover"}
 
 
 def test_continuity_defaults_to_handoff_and_persists_choices(tmp_path, monkeypatch):

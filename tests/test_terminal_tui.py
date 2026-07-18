@@ -565,3 +565,19 @@ def test_mission_and_settings_back_returns_to_projects(tmp_path, monkeypatch):
         ui._show(screen)
         ui.back()
         assert ui.screen == "projects"
+
+
+def _footer(ui) -> str:
+    return "".join(text for _style, text in ui._footer_text())
+
+
+def test_top_level_footers_advertise_the_mission_and_settings_keys(tmp_path, monkeypatch):
+    """The `m` (Mission Control) and `t` (Settings) global keys were reachable but
+    invisible — every top-level footer must name them (regression for the missing
+    footnotes reported after the m/t panes shipped in #328)."""
+    ui = _new_ui(tmp_path, monkeypatch)
+    for screen in ("projects", "accounts", "project"):
+        ui.screen = screen
+        footer = _footer(ui)
+        assert "m mission" in footer, f"{screen} footer missing the mission key: {footer!r}"
+        assert "t settings" in footer, f"{screen} footer missing the settings key: {footer!r}"

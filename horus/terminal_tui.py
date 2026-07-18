@@ -127,6 +127,13 @@ _CONTINUITY_LABELS: dict[str, str] = {
     "manual": "Manual only — keep warnings until an explicit checkpoint",
 }
 
+# How a TUI-launched session opens (`config.LAUNCH_WINDOW_CHOICES`). `new-window`
+# is desktop-only and falls back to takeover on mobile/SSH.
+_WINDOW_LABELS: dict[str, str] = {
+    "takeover": "Take over this terminal — Ctrl-b d back to the TUI (default; phone-friendly)",
+    "new-window": "New window on desktop — opens beside the TUI; takeover on mobile/SSH",
+}
+
 # Session mode: a working posture loaded as a skill at launch (`launch.LAUNCH_MODES`).
 _SESSION_MODE_LABELS: dict[str, str] = {
     "standard": "Standard — no posture skill (today's behavior)",
@@ -494,6 +501,17 @@ class TerminalUI:
             )
             self.status = f"Continuity granularity set to {granularity}."
             self.application.invalidate()
+        elif self.screen == "settings" and kind == "window":
+            window = str(value)
+            config.set_launch_default_window(window)
+            self._refresh_items()
+            self.selected = (
+                len(config.LAUNCH_POSTURE_CHOICES)
+                + len(config.CONTINUITY_GRANULARITY_CHOICES)
+                + config.LAUNCH_WINDOW_CHOICES.index(window)
+            )
+            self.status = f"Sessions now launch: {window}."
+            self.application.invalidate()
         elif self.screen == "toggles":
             self._activate_toggles(kind, value)
         elif self.screen == "fleet_review" and kind == "curator":
@@ -777,6 +795,7 @@ class TerminalUI:
             self.items.extend(
                 ("continuity", choice) for choice in config.CONTINUITY_GRANULARITY_CHOICES
             )
+            self.items.extend(("window", choice) for choice in config.LAUNCH_WINDOW_CHOICES)
             self.selected = config.LAUNCH_POSTURE_CHOICES.index(posture)
         elif self.screen == "fleet_review":
             self.items = []
@@ -1104,6 +1123,14 @@ class TerminalUI:
                 active = "current" if granularity == current else "      "
                 lines.append((style, f"\n {marker} [{active}] {granularity}\n"))
                 lines.append(("class:muted", f"     {_CONTINUITY_LABELS.get(granularity, '')}\n"))
+            elif kind == "window":
+                if index == len(config.LAUNCH_POSTURE_CHOICES) + len(config.CONTINUITY_GRANULARITY_CHOICES):
+                    lines.append(("class:section", "\n  Session window\n"))
+                window = str(value)
+                current = config.load_launch_defaults()["window"]
+                active = "current" if window == current else "      "
+                lines.append((style, f"\n {marker} [{active}] {window}\n"))
+                lines.append(("class:muted", f"     {_WINDOW_LABELS.get(window, '')}\n"))
         return lines
 
     def _wide_home_text(self, width: int) -> StyleAndTextTuples:
@@ -1737,15 +1764,15 @@ class TerminalUI:
             return [("class:footer", text)]
         if self.screen in {"projects", "accounts"}:
             text = (
-                " ↑↓ · Enter · f fleet · u refresh · q"
+                " ↑↓ · f fleet · u refresh · m mission · t settings · q"
                 if narrow
-                else " ↑↓/swipe · Enter · f fleet · u refresh · Esc · s sessions · d defaults · q quit"
+                else " ↑↓/swipe · Enter · f fleet · u refresh · Esc · s sessions · d defaults · m mission · t settings · q quit"
             )
             return [("class:footer", text)]
         text = (
-            " ↑↓ scroll · Enter · s sessions · d defaults · q"
+            " ↑↓ scroll · s sessions · m mission · t settings · q"
             if narrow
-            else " ↑↓/swipe scroll   Enter open   Esc back   s sessions   d defaults   q quit"
+            else " ↑↓/swipe scroll   Enter open   Esc back   s sessions   d defaults   m mission   t settings   q quit"
         )
         return [("class:footer", text)]
 
@@ -1791,26 +1818,44 @@ def run() -> int:
         if result == "interrupt":
             return 130
         if isinstance(result, _Launch):
-            target = terminal_sessions.default_target()
+            defaults = config.load_launch_defaults()
             prompt = _launch_prompt(result)
-            launched = _launch(
-                target=target,
-                agent=result.agent,
-                root=result.project,
-                account=result.account,
-                prompt=prompt,
-                posture=config.load_launch_defaults()["posture"],
-                model=result.model,
-                effort=result.effort,
-                # Toggle on → every TUI Claude launch runs through the proxy (any
-                # account); per-launch env injection, never a settings.json rewrite.
-                proxied=(result.agent == "claude" and proxy.load_state().get("enabled", False)),
-            )
-            status = (
-                f"Session {launched.session_id[:8]} returned to Horus."
-                if launched.ok
-                else f"Launch failed: {launched.error}"
-            )
+            # Toggle on → every TUI Claude launch runs through the proxy (any
+            # account); per-launch env injection, never a settings.json rewrite.
+            proxied = result.agent == "claude" and proxy.load_state().get("enabled", False)
+            # `new-window` opens the session beside the TUI on a real desktop;
+            # it resolves to takeover on mobile/SSH so a phone never gets a
+            # broken window (terminal_sessions.resolve_window_launch).
+            new_window = terminal_sessions.resolve_window_launch(defaults["window"])
+            if new_window:
+                launched = terminal_sessions.launch_window(
+                    agent=result.agent,
+                    project_dir=result.project,
+                    account=result.account,
+                    prompt=prompt,
+                    posture=defaults["posture"],
+                    model=result.model,
+                    effort=result.effort,
+                    proxied=proxied,
+                )
+            else:
+                launched = _launch(
+                    target=terminal_sessions.default_target(),
+                    agent=result.agent,
+                    root=result.project,
+                    account=result.account,
+                    prompt=prompt,
+                    posture=defaults["posture"],
+                    model=result.model,
+                    effort=result.effort,
+                    proxied=proxied,
+                )
+            if not launched.ok:
+                status = f"Launch failed: {launched.error}"
+            elif new_window:
+                status = f"Session {launched.session_id[:8]} opened in a new window."
+            else:
+                status = f"Session {launched.session_id[:8]} returned to Horus."
         elif isinstance(result, _EditCard):
             status = _edit_card(result.project, result.card, review=result.review)
         elif isinstance(result, _Attach):

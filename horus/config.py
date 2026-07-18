@@ -52,9 +52,17 @@ WORKFLOW_CHOICES: dict[str, tuple[str, ...]] = {
 # import cycle — dashboard.py's own posture picker already does the same.
 # ---------------------------------------------------------------------------
 
-LAUNCH_DEFAULTS: dict[str, str] = {"posture": "default"}
+LAUNCH_DEFAULTS: dict[str, str] = {"posture": "default", "window": "takeover"}
 
 LAUNCH_POSTURE_CHOICES: tuple[str, ...] = ("plan", "read-only", "default", "auto-edit", "full-auto")
+
+# How a TUI-launched session opens. ``takeover`` (the migration-safe default,
+# byte-identical to today) hosts the session in the current terminal — you
+# ``Ctrl-b d`` back to the TUI. ``new-window`` opens the session in its own
+# terminal window on a real desktop, leaving the TUI live beside it; on mobile /
+# SSH / no-display it falls back to ``takeover`` (see terminal_sessions.
+# resolve_window_launch) so a phone never gets a broken new-window attempt.
+LAUNCH_WINDOW_CHOICES: tuple[str, ...] = ("takeover", "new-window")
 
 # Narrative continuity is intentionally independent from delivery safety.  Git
 # commits/branches/PRs and the commit+push checkpoint remain mandatory in every
@@ -351,7 +359,8 @@ def set_workflow_policy(
 
 def load_launch_defaults() -> dict[str, str]:
     """Return the persisted TUI launch defaults, falling back to
-    :data:`LAUNCH_DEFAULTS` for anything missing or invalid. Keys: ``posture``.
+    :data:`LAUNCH_DEFAULTS` for anything missing or invalid. Keys: ``posture``,
+    ``window``.
     """
     path = config_path()
     if not path.exists():
@@ -363,10 +372,13 @@ def load_launch_defaults() -> dict[str, str]:
     raw = data.get("launch") or {}
     if not isinstance(raw, dict):
         return dict(LAUNCH_DEFAULTS)
-    value = raw.get("posture", LAUNCH_DEFAULTS["posture"])
-    if not isinstance(value, str) or value not in LAUNCH_POSTURE_CHOICES:
-        value = LAUNCH_DEFAULTS["posture"]
-    return {"posture": value}
+    posture = raw.get("posture", LAUNCH_DEFAULTS["posture"])
+    if not isinstance(posture, str) or posture not in LAUNCH_POSTURE_CHOICES:
+        posture = LAUNCH_DEFAULTS["posture"]
+    window = raw.get("window", LAUNCH_DEFAULTS["window"])
+    if not isinstance(window, str) or window not in LAUNCH_WINDOW_CHOICES:
+        window = LAUNCH_DEFAULTS["window"]
+    return {"posture": posture, "window": window}
 
 
 def set_launch_default_posture(posture: str) -> str:
@@ -377,8 +389,25 @@ def set_launch_default_posture(posture: str) -> str:
     if posture not in LAUNCH_POSTURE_CHOICES:
         allowed = ", ".join(LAUNCH_POSTURE_CHOICES)
         raise ValueError(f"Invalid launch posture {posture!r}. Allowed: {allowed}")
-    _write_config(load_projects(), load_github_owners(), load_workspace_root(), launch={"posture": posture})
+    # Merge, never replace — `_write_config` writes the whole [launch] table, so
+    # passing posture alone would drop the sibling `window` key.
+    launch = load_launch_defaults()
+    launch["posture"] = posture
+    _write_config(load_projects(), load_github_owners(), load_workspace_root(), launch=launch)
     return posture
+
+
+def set_launch_default_window(window: str) -> str:
+    """Persist how a TUI-launched session opens (``takeover`` | ``new-window``).
+    Raises ``ValueError`` outside :data:`LAUNCH_WINDOW_CHOICES`.
+    """
+    if window not in LAUNCH_WINDOW_CHOICES:
+        allowed = ", ".join(LAUNCH_WINDOW_CHOICES)
+        raise ValueError(f"Invalid launch window mode {window!r}. Allowed: {allowed}")
+    launch = load_launch_defaults()
+    launch["window"] = window
+    _write_config(load_projects(), load_github_owners(), load_workspace_root(), launch=launch)
+    return window
 
 
 def load_continuity_defaults() -> dict[str, str]:

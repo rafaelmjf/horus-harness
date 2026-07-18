@@ -1407,7 +1407,7 @@ def test_terminal_tui_defaults_screen_selection_persists_and_back_returns_home(t
     assert ui.selected == target
     ui.activate()
 
-    assert config.load_launch_defaults() == {"posture": "auto-edit"}
+    assert config.load_launch_defaults() == {"posture": "auto-edit", "window": "takeover"}
     assert "auto-edit" in ui.status
     assert ui.screen == "settings"  # stays put so the new selection is visible
 
@@ -1416,6 +1416,25 @@ def test_terminal_tui_defaults_screen_selection_persists_and_back_returns_home(t
 
     ui.back()
     assert ui.screen == "projects"
+
+
+def test_terminal_tui_defaults_screen_sets_the_session_window_mode(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    ui = terminal_tui.TerminalUI()
+    ui._show("settings")
+
+    # The window rows sit after posture + continuity in the Defaults list.
+    base = len(config.LAUNCH_POSTURE_CHOICES) + len(config.CONTINUITY_GRANULARITY_CHOICES)
+    target = base + config.LAUNCH_WINDOW_CHOICES.index("new-window")
+    ui.move(target - ui.selected)
+    assert ui.items[ui.selected] == ("window", "new-window")
+    ui.activate()
+
+    assert config.load_launch_defaults()["window"] == "new-window"
+    assert ui.selected == target  # selection tracks the just-set window mode
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
+    assert "Session window" in rendered
+    assert "[current] new-window" in rendered
 
 
 def test_terminal_tui_defaults_screen_reopens_with_persisted_selection(tmp_path, monkeypatch):
@@ -2057,3 +2076,31 @@ def test_edit_card_no_change_reports_no_changes(tmp_path, monkeypatch):
     monkeypatch.setattr(terminal_tui, "_run_editor", lambda path: None)
     status = terminal_tui._edit_card(root, card, review=False)
     assert status == "No changes to review-me."
+
+
+# resolve_window_launch — the platform-aware new-window/takeover decision (the
+# tui-launch-session-new-window-default card).
+
+def test_resolve_window_launch_takeover_is_always_false(monkeypatch):
+    monkeypatch.setattr(terminal_sessions.launcher, "has_display", lambda: True)
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    assert terminal_sessions.resolve_window_launch("takeover") is False
+
+
+def test_resolve_window_launch_new_window_on_desktop(monkeypatch):
+    monkeypatch.setattr(terminal_sessions.launcher, "has_display", lambda: True)
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    assert terminal_sessions.resolve_window_launch("new-window") is True
+
+
+def test_resolve_window_launch_falls_back_over_ssh(monkeypatch):
+    # Mobile path: Termius SSH into `horus tui` — no local display the phone sees.
+    monkeypatch.setattr(terminal_sessions.launcher, "has_display", lambda: True)
+    monkeypatch.setenv("SSH_CONNECTION", "10.0.0.2 5000 10.0.0.1 22")
+    assert terminal_sessions.resolve_window_launch("new-window") is False
+
+
+def test_resolve_window_launch_falls_back_without_display(monkeypatch):
+    monkeypatch.setattr(terminal_sessions.launcher, "has_display", lambda: False)
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    assert terminal_sessions.resolve_window_launch("new-window") is False

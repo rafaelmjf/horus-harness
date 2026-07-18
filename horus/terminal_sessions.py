@@ -52,6 +52,21 @@ def default_target() -> str:
     return CURRENT
 
 
+def resolve_window_launch(preference: str) -> bool:
+    """Whether a TUI launch should open its own terminal window (True) or take
+    over the current TTY (False), given the owner's ``window`` launch default.
+
+    Platform-aware: ``new-window`` only pops a real window when a desktop session
+    exists AND we are not driving the TUI over SSH. The mobile path (Termius SSH
+    into ``horus tui``) has no local display the phone can see, so it falls back to
+    ``takeover`` — the reliable attach/detach flow the Rules pin as the phone path.
+    ``takeover`` (the default) always stays in this terminal.
+    """
+    if preference != "new-window":
+        return False
+    return launcher.has_display() and not os.environ.get("SSH_CONNECTION")
+
+
 def is_attachable(record: registry.SessionRecord) -> bool:
     """Whether Horus has a persistent host it can safely reattach."""
     return record.launch_target == TMUX and bool(record.target_ref)
@@ -308,10 +323,15 @@ def launch_window(
     model: str | None = None,
     effort: str | None = None,
     prompt: str = "",
+    proxied: bool = False,
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
-    """Open a web-requested native window, backed by tmux when supported."""
+    """Open a session in its own native terminal window, backed by tmux when
+    supported. Used by web-requested windows and by a ``new-window`` TUI launch."""
     if default_target() != TMUX:
+        # No tmux host to back the window: fall back to a plain interactive spawn.
+        # (This branch cannot carry the proxy env; a no-tmux desktop is the rare
+        # case and the proxy toggle is off by default.)
         return launch.launch_interactive(
             agent=agent,
             project_dir=project_dir,
@@ -332,6 +352,7 @@ def launch_window(
         effort=effort,
         prompt=prompt,
         attach=False,
+        proxied=proxied,
         reg=reg,
     )
     if not result.ok or not result.session_id or not result.target_ref:
