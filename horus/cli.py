@@ -2181,6 +2181,53 @@ def cmd_vscode_task(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_vscode_open(args: argparse.Namespace) -> int:
+    """Open VS Code on a project with the seeded Horus tasks ready, then point at
+    the one keystroke that starts the session in the integrated terminal.
+
+    Contract (tui/vscode card, 2026-07-18): the session runs DIRECT in VS Code's
+    own integrated terminal — not wrapped in a Horus-managed tmux session. You are
+    sitting at the editor, so the tmux phone-attach value doesn't apply; this
+    matches the terminal-persistence rule that nested/native shells keep their
+    direct host. Never a fake attach. VS Code has no CLI primitive to run a command
+    in the integrated terminal on open (only a folderOpen auto-task, which would
+    hijack every plain folder-open), so this readies the tasks and names the one
+    keystroke rather than force-starting the agent.
+    """
+    if getattr(args, "project", None):
+        resolved = capabilities.resolve_project_path(args.project, config.load_projects())
+        root = Path(resolved).resolve() if resolved else Path(args.project).resolve()
+        if not root.is_dir():
+            print(f"No registered project or directory named {args.project!r} (see `horus fleet`).")
+            return 1
+    else:
+        root = Path(args.path).resolve()
+    if not (root / HORUS_DIR).is_dir():
+        print(f"No {HORUS_DIR}/ in {root} (run `horus init` first) — the session seeds from it.")
+        return 1
+
+    # Make sure the seeded tasks exist so the keybinding / Run Task works on open.
+    action = vscode.write_tasks(root)
+    print(f"[{action.status}] {action.message}")
+    if action.status == "kept":
+        print("\nYour .vscode/tasks.json is user-owned and was left untouched; add this to its")
+        print("'tasks' array to get the Horus tasks:\n")
+        print(vscode.TASKS_JSON)
+
+    # Open VS Code on the folder (direct host; no tmux). `code` absent → clear fallback.
+    try:
+        launcher.open_vscode(root)
+        print(f"\nOpened {root.name} in VS Code.")
+    except OSError as exc:
+        print(f"\nCould not launch VS Code: {exc}")
+        print(f"Open the folder yourself (File > Open Folder, or `code {root}`).")
+
+    print("\nStart the session in the integrated terminal — it runs DIRECT in VS Code's own")
+    print('terminal (not a tmux viewer): press Ctrl+Shift+B for "Horus: resume Claude session",')
+    print("or Terminal > Run Task for the fresh / Codex variants.")
+    return 0
+
+
 def cmd_forget(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     if config.unregister_project(root):
@@ -4761,6 +4808,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_vscode.add_argument("--path", default=".", help="project root (default: cwd)")
     p_vscode.set_defaults(func=cmd_vscode_task)
+
+    p_vscode_open = sub.add_parser(
+        "vscode-open",
+        help="open a project in VS Code with the seeded Horus tasks ready — press Ctrl+Shift+B to start the session in the integrated terminal",
+    )
+    p_vscode_open.add_argument("project", nargs="?", help="registered project name or path (default: cwd via --path)")
+    p_vscode_open.add_argument("--path", default=".", help="project root when no project is named (default: cwd)")
+    p_vscode_open.set_defaults(func=cmd_vscode_open)
 
     p_resume = sub.add_parser("resume", help="print the minimum-context fresh-session handoff for this project")
     p_resume.add_argument("--path", default=".", help="project root (default: cwd)")
