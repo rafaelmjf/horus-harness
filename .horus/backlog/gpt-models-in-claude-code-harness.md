@@ -8,41 +8,56 @@ tier: opus
 type: feature
 parallel: safe
 created_by: owner
-surface: horus/adapters.py + horus/launcher.py (claude adapter model/env wiring), horus/datums.py (tier→provider mapping), horus/config.py (per-account provider creds)
+branch: vision-branch-x4-model-harness-plane
+surface: (spike — no code) CLIProxyAPI + Codex-subscription OAuth + Claude Code; go/no-go feeds horus/adapters/claude.py build_env wiring at stage 1
 ---
 
-# gpt-models-in-claude-code-harness — run GPT models inside the Claude Code CLI (spike)
+# gpt-models-in-claude-code-harness — run GPT (via the Codex sub) inside Claude Code (spike)
 
-**Why (owner, 2026-07-18):** the owner saw that GPT/OpenAI models can be driven *inside
-the Claude Code CLI harness* and reportedly work well there. If a Claude Code worker can
-run a GPT model, a single launch/adapter path could dispatch either vendor's model —
-directly enabling `vendor-neutral-delegation-tiers` (a neutral tier could resolve to a
-GPT model on the Claude Code substrate, not only via a separate Codex worker).
+**Stage 0 of [[vision-branch-x4-model-harness-plane]].** `phase: explore` — a **spike first**,
+not a committed feature. Validate the mechanism before any launcher/adapter wiring.
 
-`phase: explore` — this is a **spike first**, not a committed feature. Validate the
-mechanism before wiring it into the launcher/tiers.
+**Why (owner, 2026-07-18):** Claude Code is currently the best harness; GPT models reportedly
+run well inside it. If a Claude Code worker can run GPT, Horus's single launch/adapter path can
+dispatch either vendor's model on the best harness — directly enabling
+`vendor-neutral-delegation-tiers`. The owner wants this driven by the **Codex subscription
+already configured**, not a new per-token API key.
+
+## The mechanism (from the scan — verify live, do not trust the summary)
+
+Claude Code's official support (`ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_MODEL`,
+opt-in `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`) is **client-side pointing only** — a server
+that speaks the Anthropic Messages API must sit at that base URL. So GPT-in-Claude-Code always
+needs a translator. To use the **subscription** (not an API key), that translator must also hold
+the **Codex OAuth** — which is exactly **CLIProxyAPI** ("OpenAI Codex (GPT models) via OAuth
+login"); LiteLLM and claude-code-proxy are API-key-only and cannot ride a subscription. So the
+simplest path that meets the owner's constraint is: **CLIProxyAPI ← Codex OAuth, Claude Code →
+`ANTHROPIC_BASE_URL` = CLIProxyAPI.**
 
 ## Spike questions (answer before building)
 
-- **How** does Claude Code invoke a GPT model? (Env vars / base-url override / a gateway
-  / `--model` alias? Capture the exact, current, documented mechanism — verify live, do
-  not trust a blog post.) Which GPT models, and does tool-use/agentic-loop parity hold
-  inside the Claude Code harness?
-- **Auth:** where do OpenAI credentials live, and does per-account isolation
-  (`CLAUDE_CONFIG_DIR`) cleanly carry them without cross-account bleed?
-- **Cost/usage:** how is usage metered/visible (the `[notify]`/`usage record` path is
-  Anthropic-rate-limit-shaped) — is there any signal, or is it unmeterable here?
-- **Fit:** does this actually beat launching a Codex worker for the same GPT capability?
+- **Parity:** does a GPT model driven through CLIProxyAPI inside Claude Code hold **tool-use /
+  agentic-loop parity** (edits, bash, multi-step) — not just single-turn chat? Run a real
+  session; capture evidence.
+- **Subscription bridge:** does the Codex-OAuth path work and stay **stable** across a session
+  (token refresh, no mid-run drop)? Treated as **fair use**, not a ToS gray zone (owner,
+  2026-07-18: Codex-employee posts support this pattern) — do not pre-gate; just record how it
+  behaves.
+- **Usage visibility:** Horus usage is Anthropic-rate-limit-shaped. Is GPT-via-gateway usage
+  visible anywhere (CLIProxyAPI's own metering? the Codex window?), or unmeterable in our path?
+- **Fit:** does GPT-in-Claude-Code actually beat just launching a Codex worker for the same GPT
+  capability? (The value is *GPT model + Claude Code harness quality*.)
 
 ## Acceptance (spike)
 
-- A dated spike receipt in `.horus/research/` with the verified launch mechanism, an
-  actually-run GPT-in-Claude-Code session transcript/evidence, the auth + usage story,
-  and a go/no-go on wiring it into the adapter + tiers.
-- If go: a follow-up implementation card (adapter model wiring + tier mapping); if no-go:
-  record why and close.
+- A dated receipt in `.horus/research/` with: the verified launch mechanism, an actually-run
+  GPT-in-Claude-Code session transcript/evidence, the subscription-bridge + usage story, and a
+  **go/no-go** on wiring stage 1.
+- If go → stage 1 card (adapter `build_env` env injection + the **optional Control-pane toggle**
+  with **guided setup**, per the branch's design principles); if no-go → record why + drop.
 
 ## Non-goals
 
-- No launcher/tier changes until the spike says go.
-- Not a general multi-provider gateway; scoped to "GPT model via the Claude Code CLI."
+- No launcher/adapter/tier changes until the spike says go.
+- Not a general multi-provider gateway owned by Horus; scoped to "GPT via the Codex sub, inside
+  Claude Code." Horus points at CLIProxyAPI — it never owns/vendors it (branch principle 4).
