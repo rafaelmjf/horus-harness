@@ -121,6 +121,52 @@ def test_cli_vscode_task_prints_snippet_for_foreign_file(tmp_path, monkeypatch, 
     assert path.read_text(encoding="utf-8") == "{}"
 
 
+def test_cli_vscode_open_requires_horus_dir(tmp_path, capsys):
+    rc = main(["vscode-open", "--path", str(tmp_path)])
+    assert rc == 1
+    assert "horus init" in capsys.readouterr().out
+
+
+def test_cli_vscode_open_opens_folder_readies_tasks_and_names_the_keystroke(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    from horus import initialize, launcher
+    initialize.init_project(tmp_path, assume_yes=True)
+    opened = {}
+    monkeypatch.setattr(launcher, "open_vscode", lambda d: opened.setdefault("dir", d) or 123)
+    capsys.readouterr()
+
+    rc = main(["vscode-open", "--path", str(tmp_path)])
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert opened["dir"] == tmp_path.resolve()  # VS Code opened on the project
+    assert vscode.tasks_path(tmp_path).exists()  # seeded tasks are ready
+    assert "Ctrl+Shift+B" in out  # names the one keystroke to start
+    assert "DIRECT" in out and "not a tmux viewer" in out  # documents the chosen contract
+
+
+def test_cli_vscode_open_degrades_when_code_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    from horus import initialize, launcher
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    def _missing(_dir):
+        raise OSError("VS Code CLI `code` not found on PATH")
+
+    monkeypatch.setattr(launcher, "open_vscode", _missing)
+    capsys.readouterr()
+
+    rc = main(["vscode-open", "--path", str(tmp_path)])
+
+    out = capsys.readouterr().out
+    assert rc == 0  # graceful: never a crash
+    assert "Could not launch VS Code" in out
+    assert "Open the folder yourself" in out
+    assert vscode.tasks_path(tmp_path).exists()  # tasks still readied
+
+
 def test_offboard_removes_own_tasks_but_keeps_edited(tmp_path, monkeypatch):
     from horus import offboard
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
