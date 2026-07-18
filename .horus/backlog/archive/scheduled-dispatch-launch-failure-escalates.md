@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-18
 vision_facet: "Autonomous dispatch"
@@ -10,6 +10,8 @@ parallel: safe
 created_by: owner
 branch: vision-branch-x3-scheduling-and-autonomous-execution
 surface: horus/schedule.py (systemd unit generation), horus/notify.py (a launch-failure event), horus/cli.py (notify hook entrypoint)
+shipped_pr: 315
+shipped_sha: 712544207b636c46df0ab6506f256f4117cca286
 ---
 
 # scheduled-dispatch-launch-failure-escalates — don't die silently in the journal
