@@ -613,9 +613,11 @@ def test_process_retrospective_skill_registered_and_projected():
 
 def test_inline_batch_session_skill_registered_and_batches():
     s = next(x for x in skills.SKILLS if x.name == "inline-batch-session")
-    assert s.version == 1
-    # posture: per-card delivery-safety rungs kept, canonical continuity deferred to close
-    assert "delivery-safety" in s.content
-    assert "do NOT do per card" in s.content or "Batch to the boundary" in s.content
-    assert "handoff" in s.content
+    assert s.version == 2
+    # posture: per-card delivery safety kept, ALL continuity held to a hard boundary
+    assert "delivery safety" in s.content
+    assert "hard boundary" in s.content
+    # a version release is named as a boundary, and finishing/merging is explicitly NOT one
+    assert "version release" in s.content
+    assert "NOT a boundary" in s.content and "manufacture a boundary" in s.content
     assert "## v2 six-lane projects (fallback)" in s.content

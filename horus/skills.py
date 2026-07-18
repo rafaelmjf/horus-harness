@@ -2336,57 +2336,83 @@ _INLINE_BATCH_SESSION_SKILL = """\
 name: inline-batch-session
 description: >-
   The working posture for an INLINE-BATCH session: implement and ship several
-  self-contained backlog cards in a row in one warm session, and HOLD the canonical
-  continuity write until the session boundary. Loaded automatically when a session is
-  launched in `inline-batch` mode (it does not depend on the model remembering a rule).
-  Use/keep following it whenever you are shipping multiple cards inline without dispatch.
+  self-contained backlog cards in a row in one warm session, and HOLD every Horus
+  continuity write (PRD edits, card status/archive, session notes, `close`) until a HARD
+  boundary actually arrives — never on merely finishing the cards. Loaded automatically
+  when a session is launched in `inline-batch` mode (it does not depend on the model
+  remembering a rule). Keep following it whenever you ship multiple cards inline.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Inline-batch session
 
-You are in **inline-batch** mode. You will implement and ship several self-contained
-backlog cards in a row in THIS one warm session (inline, no dispatch), and you **hold the
-continuity ceremony until the end**. This posture is loaded at launch so it holds across
-every account and model — not left to memory.
+You are in **inline-batch** mode: implement and ship several self-contained backlog cards
+in a row in THIS one warm session (inline, no dispatch), and **hold all Horus continuity
+ceremony until a hard boundary actually arrives**. This posture is loaded at launch so it
+holds across every account and model — not left to memory.
 
-Why this mode exists: dispatching each card to a fresh worker re-pays a large cold-start
-context-reload cost every time, and closing continuity after every card just churns prose
-the next card rewrites. One warm session amortizes the codebase context across cards, and
-one consolidation at the end captures them all. (Measured:
+Why: dispatching each card to a fresh worker re-pays a large cold-start context-reload cost
+every time, and consolidating continuity between cards just churns prose the next card — or
+the eventual release — rewrites. One warm session amortizes the codebase context; one
+consolidation at the boundary captures them all. (Measured:
 `research/2026-07-17-delegation-cost-finding.md`.)
 
-## Every card — the delivery-safety rungs (never skip, regardless of mode)
+## Every card — delivery safety (never deferred, never skipped)
 
-- Work on a branch → open a PR → **reproduce the required gate on the EXACT commit**
-  (a required CI check green on that SHA), plus **one live probe** of the changed surface.
-- Commit and push; after merge, `horus backlog ship <card> --pr N --sha SHA`.
-- These are non-negotiable and unchanged by the batching below — safety lives in the gate,
-  not in the continuity write.
+- Branch → PR → **reproduce the required gate on the EXACT commit** (a required CI check
+  green on that SHA) + **one live probe** of the changed surface → commit, push, merge.
+- A merged PR is the durable delivery; git + the PR are the receipt, so it needs no
+  continuity write to be safe. Safety lives in the gate, not in the prose.
+- New work you spec mid-session gets a card FILE (it is the spec, and it travels in the
+  PR) — but do not flip its `status:` or archive it yet (see below).
 
-## Batch to the boundary — do NOT do per card
+## Hold ALL continuity until a hard boundary
 
-- Do **not** run a full canonical continuity close after each card. Defer the `PRD.md`
-  frontmatter / Shipped / Rules write and any line-cap trim to **ONE** consolidation pass at
-  the session boundary (end, pause, or an agent/account/machine change), covering all cards.
-- This is the `handoff` granularity made explicit and loaded: pushed git/PR/archived-card
-  state is the durable receipt between cards, and the "delivery commits pending" line from
-  `horus close --check` is a reminder, not a demand to close now.
-- The PRD line-cap (~250) is its own deliberate hygiene pass — never folded into a per-card
-  close.
+Defer every one of these — none is needed until a boundary actually arrives:
 
-## At the session boundary (once)
+- `PRD.md` frontmatter / Shipped / Rules edits, and the ~250-line trim.
+- `horus backlog ship` / card archiving and `status:` changes. (Solo inline needs no
+  `claim` either — claiming only guards against parallel agents contending for a card.)
+- Local `sessions/` notes and any `horus close`.
 
-- Run the `horus-consolidate` skill and fold the whole batch in: refresh frontmatter, move
-  every shipped card to `## Shipped` (one line each), record any newly load-bearing Rule,
-  then `horus close --commit --push`. One pass; do not chase warnings to zero.
+Between cards the entire state is pushed git + open/merged PRs. `horus close --check`'s
+"delivery commits pending" line is a reminder, not a demand to close.
+
+## What IS a hard boundary — and what is NOT
+
+Consolidate ONLY when one of these actually happens:
+
+- The owner **ends or pauses** the session.
+- An **agent / account / machine handoff**.
+- A **version release** of what you shipped — the natural consolidation point (below).
+- A **dispatch** whose receiving agent needs the durable continuity to act. If the brief +
+  base SHA already carry everything, the dispatch is not a boundary for continuity.
+
+**NOT a boundary — never trigger the consolidation on these alone:** finishing the batch,
+merging the last PR, writing a wrap-up message, or being asked a follow-up while more
+queued work (e.g. a pending release) remains. **Do not manufacture a boundary:** if the
+owner is still engaged and work is queued, keep continuity uncommitted and keep going.
+
+## Align the consolidation with a release when one is near
+
+If the cards you shipped are headed for a version release, fold the continuity into the
+SAME pass as the release closure — write the final "released in vX" Shipped lines once.
+Writing provisional "merged, not yet released" prose now and rewriting it at release is the
+exact double-ceremony this mode exists to avoid.
+
+## At the boundary (once)
+
+Run the `horus-consolidate` skill and fold the whole batch in: refresh frontmatter, ship
+every card (`horus backlog ship <card> --pr N --sha SHA`, which archives it), move each to
+`## Shipped` (one line), record any newly load-bearing Rule, trim to the line cap, then
+`horus close --commit --push`. One pass; do not chase warnings to zero.
 
 ## v2 six-lane projects (fallback)
 
-Identical posture; the single end-of-session consolidation updates `roadmap.md` /
-`features.md` / `decisions.md` instead of `PRD.md`, following that project's closure rules.
-The per-card delivery-safety rungs and the defer-continuity-to-the-boundary rule are unchanged.
+Identical posture; the single boundary consolidation updates `roadmap.md` / `features.md` /
+`decisions.md` instead of `PRD.md`, following that project's closure rules. The per-card
+delivery-safety rungs and the hold-continuity-to-a-hard-boundary rule are unchanged.
 """
 
 
@@ -2407,7 +2433,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("scope-cards", 2, _SCOPE_CARDS_SKILL),
     Skill("pathfinder", 4, _PATHFINDER_SKILL),
     Skill("cockpit-autonomous-dispatch-contract", 1, _COCKPIT_DISPATCH_SKILL),
-    Skill("inline-batch-session", 1, _INLINE_BATCH_SESSION_SKILL),
+    Skill("inline-batch-session", 2, _INLINE_BATCH_SESSION_SKILL),
 )
 
 
