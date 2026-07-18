@@ -323,3 +323,40 @@ def test_backlog_fields_survive_other_config_writes(tmp_path, monkeypatch):
 
     assert config.load_backlog_fields() == ["tier", "vision_facet"]
     assert config.load_dashboard_access() is not None
+
+
+# --- shipped status-line pointer (horus-statusline-default) --------------------
+
+
+def test_write_statusline_pointer_creates_and_is_idempotent(tmp_path):
+    import json
+    cfg = tmp_path / "acct"
+    assert config.write_statusline_pointer(cfg) is True   # created
+    data = json.loads((cfg / "settings.json").read_text())
+    assert data["statusLine"] == {"type": "command", "command": "horus statusline"}
+    assert config.write_statusline_pointer(cfg) is False  # already set -> no-op
+
+
+def test_write_statusline_pointer_preserves_other_settings(tmp_path):
+    import json
+    cfg = tmp_path / "acct"
+    cfg.mkdir()
+    (cfg / "settings.json").write_text(json.dumps({"env": {"FOO": "bar"}, "model": "opus"}))
+    assert config.write_statusline_pointer(cfg) is True
+    data = json.loads((cfg / "settings.json").read_text())
+    assert data["env"] == {"FOO": "bar"} and data["model"] == "opus"   # preserved
+    assert data["statusLine"]["command"] == "horus statusline"
+
+
+def test_isolate_account_writes_the_statusline_pointer(tmp_path, monkeypatch):
+    import json
+    _home(tmp_path, monkeypatch)
+    # a claude login in the ambient dir to isolate
+    ambient = tmp_path / "home" / ".claude"
+    ambient.mkdir(parents=True)
+    (ambient / ".credentials.json").write_text("{}")
+    ok, _msg = config.isolate_account("claude", "work")
+    assert ok
+    dest = config.default_account_dir("claude", "work")
+    data = json.loads((dest / "settings.json").read_text())
+    assert data["statusLine"]["command"] == "horus statusline"

@@ -10,6 +10,7 @@ TOML escaping and work on Windows.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -646,6 +647,35 @@ def _ambient_account_dir(agent: str) -> Path:
     return Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
 
 
+# The portable, shipped status line: point each Claude account's settings.json at
+# `horus statusline` (the `horus` console script is the only guaranteed spelling).
+STATUSLINE_POINTER = {"type": "command", "command": "horus statusline"}
+
+
+def write_statusline_pointer(config_dir_path: str | Path) -> bool:
+    """Merge the ``statusLine`` pointer into an account's ``settings.json``.
+
+    The SINGLE writer of the shipped status-line pointer (account-settings-sync,
+    when it lands, subsumes this — do not add a second). Idempotent and
+    non-destructive: it only sets the ``statusLine`` key, preserving every other
+    setting; a no-op returns False. Best-effort — never raises."""
+    settings_path = Path(config_dir_path) / "settings.json"
+    try:
+        data: dict = {}
+        if settings_path.exists():
+            loaded = json.loads(settings_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = loaded
+        if data.get("statusLine") == STATUSLINE_POINTER:
+            return False
+        data["statusLine"] = dict(STATUSLINE_POINTER)
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def isolate_account(agent: str, alias: str) -> tuple[bool, str]:
     """Give ``alias`` its own isolated config dir by default: copy the current login
     into ``~/.horus/accounts/<agent>-<alias>`` and map it there, so two accounts never
@@ -667,6 +697,8 @@ def isolate_account(agent: str, alias: str) -> tuple[bool, str]:
     if source.resolve() == dest.resolve():
         # The login already physically lives in the canonical dir — just map it.
         record(alias, str(dest))
+        if agent == "claude":
+            write_statusline_pointer(dest)
         return True, f"mapped {agent} account {alias!r} to its existing dir {dest}"
     if not (source / files[0]).exists():
         return False, f"no {agent} login found at {source} to isolate — log in first, then retry"
@@ -678,6 +710,10 @@ def isolate_account(agent: str, alias: str) -> tuple[bool, str]:
             shutil.copy2(src, dest / name)
             copied.append(name)
     record(alias, str(dest))
+    # Ship the portable status line by default: a freshly isolated Claude account
+    # gets the `horus statusline` pointer, no hand-editing on any OS.
+    if agent == "claude":
+        write_statusline_pointer(dest)
     return True, f"isolated {agent} account {alias!r}: copied {', '.join(copied)} from {source} to {dest}"
 
 
