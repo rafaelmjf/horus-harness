@@ -791,3 +791,84 @@ def keepwarm_active_accounts() -> dict[str, bool]:
         alias = path.stem[len(KEEPWARM_PREFIX):]
         result[alias] = keepwarm_service_active(alias)
     return result
+
+
+# --------------------------------------------------------------------------- #
+# CLIProxyAPI service (vision-branch-x4 stage 1) — a long-running Docker proxy.
+#
+# Same persistent systemd --user posture as the listener, but the ExecStart runs a
+# `docker run` (Horus owns no runtime — it orchestrates an external proxy). One unit
+# per machine. `ExecStartPre` force-removes a stale same-named container so a crash
+# without cleanup never blocks the restart.
+# --------------------------------------------------------------------------- #
+
+PROXY_UNIT = "horus-cliproxy"
+
+
+def _proxy_service_unit(*, command: tuple[str, ...], docker: str) -> str:
+    return "\n".join([
+        "[Unit]",
+        "Description=Horus CLIProxyAPI — local model/harness proxy (optional integration)",
+        "",
+        "[Service]",
+        "Type=simple",
+        f"Environment=PATH={_escape(os.environ.get('PATH', ''))}",
+        "Environment=PYTHONUNBUFFERED=1",
+        # Clear a stale same-named container left by an unclean stop (leading `-` =
+        # ignore failure when none exists), so the restart never fails "name in use".
+        f"ExecStartPre=-{docker} rm -f {PROXY_UNIT}",
+        "ExecStart=" + " ".join(_quote(part) for part in command),
+        "Restart=always",
+        "RestartSec=5",
+        "",
+        "[Install]",
+        "WantedBy=default.target",
+        "",
+    ])
+
+
+def proxy_service_installed() -> bool:
+    return (unit_dir() / f"{PROXY_UNIT}.service").exists()
+
+
+def proxy_service_active() -> bool:
+    if not proxy_service_installed():
+        return False
+    try:
+        state = _systemctl("is-active", f"{PROXY_UNIT}.service")
+    except ScheduleError:
+        return False
+    return state.stdout.strip() in _LISTEN_LIVE_STATES
+
+
+def install_proxy_service(*, command: tuple[str, ...]) -> None:
+    """Write and enable the proxy service. ``command`` is the full ``docker run …``
+    argv; its executable is resolved to an absolute path (the #322 203/EXEC lesson).
+    Raises ``ScheduleError`` on unavailable systemd or a failed start."""
+    ready = availability()
+    if not ready.ok:
+        raise ScheduleError(ready.reason)
+    resolved = _absolute_exec(command)
+    docker = resolved[0]
+    directory = unit_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{PROXY_UNIT}.service").write_text(
+        _proxy_service_unit(command=resolved, docker=docker), encoding="utf-8"
+    )
+    _systemctl("daemon-reload")
+    enable = _systemctl("enable", "--now", f"{PROXY_UNIT}.service")
+    if enable.returncode != 0:
+        raise ScheduleError(f"could not start the proxy service: {_stderr(enable)}")
+
+
+def remove_proxy_service() -> bool:
+    """Stop and remove the proxy service. ``False`` when none is installed."""
+    if not proxy_service_installed():
+        return False
+    _systemctl("disable", "--now", f"{PROXY_UNIT}.service")
+    try:
+        (unit_dir() / f"{PROXY_UNIT}.service").unlink()
+    except OSError:
+        pass
+    _systemctl("daemon-reload")
+    return True

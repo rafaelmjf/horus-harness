@@ -360,3 +360,45 @@ def test_isolate_account_writes_the_statusline_pointer(tmp_path, monkeypatch):
     dest = config.default_account_dir("claude", "work")
     data = json.loads((dest / "settings.json").read_text())
     assert data["statusLine"]["command"] == "horus statusline"
+
+
+# --- proxy env writer/clearer (vision-branch-x4) --------------------------------
+
+def test_write_proxy_env_merges_and_preserves_other_env(tmp_path):
+    import json
+    d = tmp_path / "acct"
+    d.mkdir()
+    (d / "settings.json").write_text(
+        json.dumps({"statusLine": {"command": "x"}, "env": {"FOO": "bar"}}), encoding="utf-8")
+    env = {"ANTHROPIC_BASE_URL": "http://127.0.0.1:8317", "ANTHROPIC_AUTH_TOKEN": "sk-k",
+           "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1"}
+    assert config.write_proxy_env(d, env) is True
+    data = json.loads((d / "settings.json").read_text())
+    assert data["env"]["ANTHROPIC_BASE_URL"].endswith(":8317")
+    assert data["env"]["FOO"] == "bar"                 # untouched
+    assert data["statusLine"] == {"command": "x"}      # untouched
+    assert config.write_proxy_env(d, env) is False      # idempotent no-op
+
+
+def test_clear_proxy_env_removes_only_proxy_keys(tmp_path):
+    import json
+    d = tmp_path / "acct"
+    d.mkdir()
+    (d / "settings.json").write_text(json.dumps({"env": {
+        "FOO": "bar", "ANTHROPIC_BASE_URL": "u", "ANTHROPIC_AUTH_TOKEN": "t",
+        "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1"}}), encoding="utf-8")
+    assert config.clear_proxy_env(d) is True
+    data = json.loads((d / "settings.json").read_text())
+    assert data["env"] == {"FOO": "bar"}               # only proxy keys removed
+    assert config.clear_proxy_env(d) is False           # nothing left to clear
+
+
+def test_clear_proxy_env_drops_an_emptied_env_block(tmp_path):
+    import json
+    d = tmp_path / "acct"
+    d.mkdir()
+    (d / "settings.json").write_text(json.dumps({"model": "opus", "env": {
+        "ANTHROPIC_BASE_URL": "u", "ANTHROPIC_AUTH_TOKEN": "t"}}), encoding="utf-8")
+    assert config.clear_proxy_env(d) is True
+    data = json.loads((d / "settings.json").read_text())
+    assert "env" not in data and data["model"] == "opus"   # empty env removed, rest kept

@@ -676,6 +676,69 @@ def write_statusline_pointer(config_dir_path: str | Path) -> bool:
         return False
 
 
+# The proxy integration (vision-branch-x4) writes exactly these keys into a Claude
+# account's settings.json `env` block, and removes exactly these on disable — so the
+# rewire is fully reversible and never touches the user's other env entries.
+PROXY_ENV_KEYS = (
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
+    "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
+)
+
+
+def write_proxy_env(config_dir_path: str | Path, env: dict[str, str]) -> bool:
+    """Merge the proxy `env` keys into an account's ``settings.json`` `env` block.
+
+    Reversible counterpart is :func:`clear_proxy_env`. Idempotent and
+    non-destructive: only the ``PROXY_ENV_KEYS`` are set, every other setting and
+    env var is preserved; a no-op returns False. Best-effort — never raises."""
+    settings_path = Path(config_dir_path) / "settings.json"
+    try:
+        data: dict = {}
+        if settings_path.exists():
+            loaded = json.loads(settings_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = loaded
+        current = data.get("env")
+        current = dict(current) if isinstance(current, dict) else {}
+        desired = {k: env[k] for k in PROXY_ENV_KEYS if k in env}
+        if all(current.get(k) == v for k, v in desired.items()):
+            return False
+        current.update(desired)
+        data["env"] = current
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def clear_proxy_env(config_dir_path: str | Path) -> bool:
+    """Remove exactly the ``PROXY_ENV_KEYS`` from an account's ``settings.json`` `env`
+    block, leaving every other env var and setting intact — the reverse of
+    :func:`write_proxy_env`. A no-op (none present) returns False. Never raises."""
+    settings_path = Path(config_dir_path) / "settings.json"
+    try:
+        if not settings_path.exists():
+            return False
+        loaded = json.loads(settings_path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            return False
+        env = loaded.get("env")
+        if not isinstance(env, dict) or not any(k in env for k in PROXY_ENV_KEYS):
+            return False
+        for k in PROXY_ENV_KEYS:
+            env.pop(k, None)
+        if env:
+            loaded["env"] = env
+        else:
+            loaded.pop("env", None)  # drop an emptied block rather than leave `{}`
+        settings_path.write_text(json.dumps(loaded, indent=2) + "\n", encoding="utf-8")
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def isolate_account(agent: str, alias: str) -> tuple[bool, str]:
     """Give ``alias`` its own isolated config dir by default: copy the current login
     into ``~/.horus/accounts/<agent>-<alias>`` and map it there, so two accounts never

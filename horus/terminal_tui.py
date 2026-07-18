@@ -49,6 +49,7 @@ from horus import (
     notify,
     notify_listen,
     projection_sync,
+    proxy,
     registry,
     remote_start,
     routines,
@@ -211,6 +212,7 @@ class TerminalUI:
         self.control_sink = "none"
         self.control_envelopes: list[tuple[str, str]] = []
         self.control_activity: activity.Activity | None = None
+        self.control_proxy: proxy.ProxyStatus | None = None
         self.selected_session: registry.SessionRecord | None = None
         self.items: list[tuple[str, object]] = []
         self.selected = 0
@@ -600,6 +602,10 @@ class TerminalUI:
             (env.name, f"expires {env.expires}") for env in envelope.load_all()
         ]
         self.control_activity = activity.collect(limit=8)
+        try:
+            self.control_proxy = proxy.status()
+        except Exception:  # noqa: BLE001 - a proxy probe failure never breaks the pane
+            self.control_proxy = None
 
     def _activate_toggles(self, kind: str, value: object) -> None:
         """Enter on a Settings-pane (`t`) item: toggle a machine feature / fire a quick
@@ -649,6 +655,17 @@ class TerminalUI:
                 inspect="this is a test; no action needed",
             )
             self.status = notify.escalate(esc, force=True).describe()
+        elif kind == "ctl_proxy":
+            st = self.control_proxy
+            if st is not None and st.enabled:
+                _, self.status = proxy.disable()
+            elif st is not None and st.ready_to_enable:
+                self.status = "Enabling proxy (starting service + verifying)…"
+                self.application.invalidate()
+                _, self.status = proxy.enable()
+            else:
+                self.status = ("Proxy not set up — run `horus proxy login codex` (and `claude`) "
+                               "in a terminal, then toggle here.")
         self._refresh_items()
         self.selected = min(self.selected, max(0, len(self.items) - 1))
         self.application.invalidate()
@@ -667,6 +684,7 @@ class TerminalUI:
                 items.append(("ctl_listener_restart", None))
             items.extend(("ctl_keepwarm", alias) for alias in sorted(self.control_keepwarm))
             items.append(("ctl_notify_test", None))
+            items.append(("ctl_proxy", None))
             self.items = items
             return
         if self.screen == "projects":
@@ -1553,6 +1571,21 @@ class TerminalUI:
                 frags.append(("class:muted", "       re-warms the 5h window after each reset\n"))
             elif kind == "ctl_notify_test":
                 frags.append((style, f"\n {marker}     ⇢ send a test escalation (sink: {self.control_sink})\n"))
+            elif kind == "ctl_proxy":
+                st = self.control_proxy
+                box = "x" if (st and st.enabled) else " "
+                frags.append((style, f"\n {marker} [{box}] GPT via proxy (CLIProxyAPI)\n"))
+                if st is None:
+                    detail = "status unavailable"
+                elif st.enabled:
+                    detail = f"ON — Claude + GPT in /model ({st.model_count} models)"
+                elif st.ready_to_enable:
+                    detail = f"ready ({', '.join(st.providers)} logged in) — Enter to enable"
+                elif not st.docker:
+                    detail = "needs Docker installed"
+                else:
+                    detail = "run `horus proxy login codex` (and `claude`) first"
+                frags.append(("class:muted", f"       {detail}\n"))
         return frags
 
     def _capabilities_body_text(self) -> StyleAndTextTuples:

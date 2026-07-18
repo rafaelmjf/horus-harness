@@ -52,6 +52,7 @@ from horus import (
     notify_listen,
     offboard,
     overhead,
+    proxy,
     registry,
     reinstall,
     remote_start,
@@ -1917,6 +1918,57 @@ def _cmd_warmup_keep(args: argparse.Namespace) -> int:
     result = keepwarm.keep_warm(account)
     print(f"stopped ({result.stopped}); {result.warmed}/{result.cycles} cycle(s) warmed.")
     return 0
+
+
+def cmd_proxy(args: argparse.Namespace) -> int:
+    """Manage the optional CLIProxyAPI integration (run GPT models inside Claude Code).
+
+    `status` reports readiness; `login <provider>` runs the provider OAuth into the
+    proxy; `enable`/`disable` wire (verified) / unwire Claude Code's settings.json env
+    globally and start/stop the proxy service. Off by default; enabling is guided and
+    refuses to wire Claude Code to a proxy that is not up and serving."""
+    state = proxy.load_state()
+    cmd = getattr(args, "proxy_cmd", None)
+
+    if cmd == "status":
+        st = proxy.status(state)
+        print(f"proxy integration: {'ENABLED' if st.enabled else 'disabled'}")
+        print(f"  docker:   {'yes' if st.docker else 'NO — install Docker (the proxy is a container)'}")
+        print(f"  logins:   {', '.join(st.providers) if st.providers else 'none — run `horus proxy login codex`/`claude`'}")
+        print(f"  service:  {'active' if st.service_active else 'stopped'}")
+        print(f"  serving:  {f'yes ({st.model_count} models)' if st.reachable else 'no'}")
+        if not st.enabled and st.ready_to_enable:
+            print("  → ready: `horus proxy enable`")
+        elif not st.ready_to_enable:
+            print("  → not ready: install Docker and log a provider in first")
+        return 0
+
+    if cmd == "login":
+        provider = args.provider
+        proxy.ensure_config_file(state)
+        print(f"Logging {provider} into the proxy — follow the URL/code it prints; "
+              f"authorize with your {provider} account.")
+        try:
+            rc = subprocess.run(proxy.login_command(state, provider)).returncode  # inherit stdio
+        except OSError as exc:
+            print(f"Could not run the login: {exc}")
+            return 1
+        if rc == 0:
+            print(f"{provider} logged in. Now `horus proxy enable` (or add the other provider first).")
+        return rc
+
+    if cmd == "enable":
+        ok, msg = proxy.enable(state)
+        print(msg)
+        return 0 if ok else 1
+
+    if cmd == "disable":
+        ok, msg = proxy.disable(state)
+        print(msg)
+        return 0 if ok else 1
+
+    print("Usage: horus proxy {status|login <provider>|enable|disable}")
+    return 2
 
 
 def _spawn_watcher(session_id: str, cwd: Path) -> None:
@@ -4927,6 +4979,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_warmup.add_argument("--restart", action="store_true", help="restart --account's keep-warm service (adopt an upgraded CLI)")
     p_warmup.add_argument("--status", action="store_true", help="list installed keep-warm services and whether each is active")
     p_warmup.set_defaults(func=cmd_warmup)
+
+    p_proxy = sub.add_parser(
+        "proxy",
+        help="optional: run GPT (and other) models inside Claude Code via a local proxy",
+        description=(
+            "Manage the optional CLIProxyAPI integration (vision-branch-x4). When enabled, "
+            "Claude Code's model picker shows Claude AND the proxy's GPT models, all served "
+            "through a local Docker proxy riding your subscription OAuth; disabling removes "
+            "the wiring so Claude Code goes straight to Anthropic again. Off by default; "
+            "enabling is guided and refuses to wire Claude Code to a proxy that is not serving."
+        ),
+    )
+    proxy_sub = p_proxy.add_subparsers(dest="proxy_cmd", required=True)
+    proxy_sub.add_parser("status", help="show docker/login/service/serving readiness")
+    p_proxy_login = proxy_sub.add_parser("login", help="log a provider's subscription into the proxy (OAuth)")
+    p_proxy_login.add_argument("provider", choices=sorted(proxy.LOGIN_FLAG), help="which subscription to log in")
+    proxy_sub.add_parser("enable", help="start the proxy + wire Claude Code (verified) to use it")
+    proxy_sub.add_parser("disable", help="unwire Claude Code and stop the proxy (native Claude restored)")
+    p_proxy.set_defaults(func=cmd_proxy)
 
     p_ask = sub.add_parser(
         "ask",
