@@ -2759,6 +2759,24 @@ def cmd_usage_record(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_usage_all(args: argparse.Namespace) -> int:
+    """Compact capacity glance across every configured account (both windows).
+
+    The fleet-wide read the steering channel's ``usage`` verb surfaces, so the
+    owner can see from the phone which account still has headroom. Always exit 0:
+    a read-out, not a gate. ``--cached`` never touches the network."""
+    rows = usage_snapshot.all_accounts_usage(read_only=getattr(args, "cached", False))
+    if getattr(args, "stdout", False):
+        print(json.dumps([
+            {"agent": r.agent, "account": r.account,
+             "snapshot": (r.snapshot._asdict() if r.snapshot is not None else None)}
+            for r in rows
+        ], indent=2))
+        return 0
+    print(usage_snapshot.render_all_accounts(rows))
+    return 0
+
+
 def cmd_usage_check(args: argparse.Namespace) -> int:
     if getattr(args, "account", None):
         return _usage_check_account(args)
@@ -4689,6 +4707,23 @@ def build_parser() -> argparse.ArgumentParser:
              "never fall back to the ambient account)",
     )
     p_usage_check.set_defaults(func=cmd_usage_check)
+
+    p_usage_all = usage_sub.add_parser(
+        "all",
+        help="capacity across EVERY configured account (both windows) — the fleet glance",
+        description=(
+            "A compact per-account capacity table across every configured Claude and Codex "
+            "account (5h + weekly windows), so you can see from anywhere which account still "
+            "has headroom. Read-out only, always exits 0. This is what the `usage` verb of "
+            "`horus notify listen` surfaces to the phone."
+        ),
+    )
+    p_usage_all.add_argument(
+        "--cached", action="store_true",
+        help="serve only what's on disk; never touch the network",
+    )
+    p_usage_all.add_argument("--stdout", action="store_true", help="emit JSON instead of a table")
+    p_usage_all.set_defaults(func=cmd_usage_all)
 
     p_usage_record = usage_sub.add_parser(
         "record",

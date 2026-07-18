@@ -203,3 +203,57 @@ def test_claude_reader_uses_account_credentials_dir(tmp_path, monkeypatch):
     snap = usage_snapshot._read_claude("work", timeout=5.0)
     assert snap.percent == 90.0
     assert seen["cred_path"] == tmp_path / "wcfg" / ".credentials.json"
+
+
+# --- all-accounts roll-up (fleet capacity glance / phone `usage` verb) --------
+
+
+def test_all_account_targets_lists_configured_aliases_or_default(monkeypatch):
+    from horus import config
+    monkeypatch.setattr(config, "load_account_config_dirs", lambda: {"work": "/x/w", "personal": "/x/p"})
+    monkeypatch.setattr(config, "load_account_codex_homes", lambda: {})
+    targets = usage_snapshot.all_account_targets()
+    # every configured Claude alias (sorted), plus the Codex default when none set
+    assert ("claude", "personal") in targets and ("claude", "work") in targets
+    assert ("codex", None) in targets
+
+
+def test_all_accounts_usage_reads_each_target_and_blanks_expired(monkeypatch):
+    from horus import config
+    monkeypatch.setattr(config, "load_account_config_dirs", lambda: {"work": "/x/w"})
+    monkeypatch.setattr(config, "load_account_codex_homes", lambda: {"main": "/x/c"})
+    reads: list[tuple[str, str | None]] = []
+
+    def fake_cached(agent, account=None, **k):
+        reads.append((agent, account))
+        return UsageSnapshot(42.0, None, 10.0, None)
+
+    monkeypatch.setattr(usage_snapshot, "cached_usage", fake_cached)
+    rows = usage_snapshot.all_accounts_usage(now=1000.0)
+    assert {(r.agent, r.account) for r in rows} == {("claude", "work"), ("codex", "main")}
+    assert ("claude", "work") in reads and ("codex", "main") in reads
+    assert all(r.snapshot is not None for r in rows)
+
+
+def test_all_accounts_usage_read_only_never_hits_network(monkeypatch):
+    from horus import config
+    monkeypatch.setattr(config, "load_account_config_dirs", lambda: {"work": "/x/w"})
+    monkeypatch.setattr(config, "load_account_codex_homes", lambda: {})
+
+    def _boom(*a, **k):
+        raise AssertionError("read_only must not do a live/cached network read")
+
+    monkeypatch.setattr(usage_snapshot, "cached_usage", _boom)
+    monkeypatch.setattr(usage_snapshot, "read_cache_only", lambda agent, account=None: UsageSnapshot(5.0, None))
+    rows = usage_snapshot.all_accounts_usage(read_only=True)
+    assert [(r.agent, r.account) for r in rows] == [("claude", "work"), ("codex", "default")]
+
+
+def test_render_all_accounts_shows_percents_and_unknown():
+    rows = [
+        usage_snapshot.AccountUsage("claude", "work", UsageSnapshot(30.0, "9pm", 12.0, "Mon")),
+        usage_snapshot.AccountUsage("codex", "default", None),
+    ]
+    out = usage_snapshot.render_all_accounts(rows)
+    assert "claude/work" in out and "30%" in out and "weekly 12%" in out
+    assert "codex/default  unknown" in out

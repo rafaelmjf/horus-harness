@@ -72,7 +72,7 @@ COMMANDS: dict[str, Command] = {
     "sessions": Command(("sessions",), "sessions — live/recent runs"),
     "schedule": Command(("schedule", "list"), "schedule — scheduled dispatches"),
     "backlog": Command(("backlog", "list"), "backlog — open cards"),
-    "usage": Command(("usage", "check"), "usage — capacity"),
+    "usage": Command(("usage", "all"), "usage — capacity across all accounts"),
     "warmup": Command(
         ("warmup",), "warmup — start the 5h window on each Claude account", mutating=True,
     ),
