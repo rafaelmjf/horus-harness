@@ -417,6 +417,49 @@ def test_cli_passes_the_run_surface_through_untouched(units, tmp_path):
     assert list(command[4:]) == passed
 
 
+def test_cli_schedules_a_supervise_verbatim(units, tmp_path):
+    """The autonomous loop arms its INDEPENDENT supervisor with `-- supervise <id>`.
+    That must schedule `horus supervise <id>`, NOT `horus run supervise <id>` (which
+    would fire a worker with prompt 'supervise' — the #338-era blocking defect)."""
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        ["schedule", "run", "--at", "+10m", "--", "supervise", "abc123"]
+    )
+    assert cli.cmd_schedule_at(args) == 0
+    command = schedule.load_all()[0].command
+    assert command[1:] == ("-m", "horus", "supervise", "abc123")
+    assert "run" not in command  # never `horus run supervise …`
+
+
+def test_cli_schedules_warmup_verbatim(units, tmp_path):
+    """The documented `schedule run … -- warmup` must schedule `horus warmup`."""
+    parser = cli.build_parser()
+    args = parser.parse_args(["schedule", "run", "--at", "+1h", "--", "warmup"])
+    assert cli.cmd_schedule_at(args) == 0
+    assert schedule.load_all()[0].command[1:] == ("-m", "horus", "warmup")
+
+
+def test_cli_still_prepends_run_for_a_prompt(units, tmp_path):
+    """A leading token that is NOT a horus subcommand is a `run` prompt — the primary
+    form stays backward-compatible even with the live command set present."""
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        ["schedule", "run", "--at", "+2h", "--", "do the thing", "--unattended", "--card", "c"]
+    )
+    assert cli.cmd_schedule_at(args) == 0
+    command = schedule.load_all()[0].command
+    assert command[1:4] == ("-m", "horus", "run")
+    assert list(command[4:]) == ["do the thing", "--unattended", "--card", "c"]
+
+
+def test_cli_describes_a_scheduled_subcommand(units, tmp_path):
+    """A subcommand dispatch labels itself by its command + args, not a card."""
+    parser = cli.build_parser()
+    args = parser.parse_args(["schedule", "run", "--at", "+10m", "--", "supervise", "abc123"])
+    cli.cmd_schedule_at(args)
+    assert schedule.load_all()[0].description == "supervise abc123"
+
+
 def test_cli_describes_a_dispatch_by_its_card(units, tmp_path):
     cli.cmd_schedule_at(_args(run_args=["--", "p", "--card", "my-card"]))
     assert schedule.load_all()[0].description == "card my-card"

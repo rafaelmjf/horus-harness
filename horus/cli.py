@@ -1277,16 +1277,28 @@ def cmd_schedule_at(args: argparse.Namespace) -> int:
     if run_args and run_args[0] == "--":
         run_args = run_args[1:]
     if not run_args:
-        print("Refusing to schedule: nothing to run — pass the `horus run` arguments after `--`.")
+        print("Refusing to schedule: nothing to run — pass a `horus` subcommand after `--`.")
         print('  horus schedule run --at "+2h" -- "<prompt>" --unattended --envelope trip --card <card>')
+        print('  horus schedule run --at "+10m" -- supervise <session-id>')
         return 2
 
+    # A scheduled dispatch may target ANY horus subcommand, not only `run`: the
+    # autonomous loop arms a `supervise <id>` (and away-mode arms `warmup`) this way.
+    # If the first token names a real top-level command, schedule it verbatim;
+    # otherwise it is a `run` prompt and we prepend `run` (the primary form). The
+    # command set comes from the live parser (`_horus_commands`) so it never drifts.
     # `sys.executable -m horus` rather than a bare `horus`: a systemd unit starts with
     # a minimal PATH, and this is the spelling that cannot miss (companion.py does the
     # same). The run surface is passed straight through — this scheduler re-implements
     # none of it.
-    command = (sys.executable, "-m", "horus", "run", *run_args)
-    description = args.describe or _describe_run(run_args)
+    known_commands = getattr(args, "_horus_commands", frozenset())
+    if run_args[0] in known_commands:
+        command = (sys.executable, "-m", "horus", *run_args)
+        default_desc = " ".join(t for t in run_args if not t.startswith("-"))[:60] or run_args[0]
+    else:
+        command = (sys.executable, "-m", "horus", "run", *run_args)
+        default_desc = _describe_run(run_args)
+    description = args.describe or default_desc
     try:
         created = schedule.create(
             when=when, command=command, description=description,
@@ -4121,14 +4133,17 @@ def build_parser() -> argparse.ArgumentParser:
         "schedule",
         help="schedule a `horus run` to fire later on THIS machine (never cloud)",
         description=(
-            "Registers a one-shot systemd --user timer that runs `horus run` at a chosen "
-            "time on this machine. Everything after `--` is passed to `horus run` "
-            "untouched — this scheduler re-implements none of the run surface, which is "
-            "the whole point: scheduling itself is commoditized, while isolated-account "
-            "routing, delivery receipts/datums, and the attachable + worktree-isolated "
-            "posture are not.\n\n"
+            "Registers a one-shot systemd --user timer that runs a `horus` command at a "
+            "chosen time on this machine. Everything after `--` is passed through untouched: "
+            "a bare prompt (+ run flags) schedules `horus run`, while a leading subcommand — "
+            "`supervise <id>`, `warmup`, … — is scheduled verbatim (the autonomous loop arms "
+            "its independent supervisor this way). This scheduler re-implements none of the "
+            "run surface, which is the whole point: scheduling itself is commoditized, while "
+            "isolated-account routing, delivery receipts/datums, and the attachable + "
+            "worktree-isolated posture are not.\n\n"
             "  horus schedule run --at '+2h' -- 'do the thing' \\\n"
-            "      --unattended --envelope trip --card my-card --account personal\n\n"
+            "      --unattended --envelope trip --card my-card --account personal\n"
+            "  horus schedule run --at '+10m' -- supervise <session-id>\n\n"
             "Units are written to ~/.config/systemd/user, so a pending dispatch survives a "
             "reboot, and Persistent=true fires a slot missed while the machine was "
             "suspended. Needs linger (`loginctl enable-linger $USER`) to fire with nobody "
@@ -4160,7 +4175,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_sched_at.add_argument(
         "run_args", nargs=argparse.REMAINDER,
-        help="everything after `--` is passed to `horus run` verbatim",
+        help="everything after `--` is a `horus` command: a bare prompt (+ run flags) "
+             "schedules `horus run`; a leading subcommand (supervise, warmup, …) is "
+             "scheduled verbatim",
     )
     p_sched_at.set_defaults(func=cmd_schedule_at)
 
@@ -5345,6 +5362,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="do not error if the produced walk/manifest is empty (same default as --allow-empty-source)",
     )
     p_verify_inventory.set_defaults(func=cmd_verify_inventory)
+
+    # All top-level subparsers are registered now, so `sub.choices` is complete.
+    # Hand the schedule-run handler the live command set: it uses it to tell a
+    # leading subcommand (`-- supervise <id>`) from a `run` prompt, no hardcoded list.
+    p_sched_at.set_defaults(_horus_commands=frozenset(sub.choices))
 
     return parser
 
