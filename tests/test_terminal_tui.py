@@ -745,3 +745,41 @@ def test_tui_priority_picker_esc_returns_without_writing(tmp_path, monkeypatch):
     assert ui.screen == "backlog"
     assert ui.priority_card is None
     assert card.path.read_text() == before  # nothing written on cancel
+
+
+# Mission Control: revoked/expired envelopes must not read as live readiness.
+
+class _StubEnv:
+    def __init__(self, name, expires, revoked=False, expired=False):
+        self.name = name
+        self.expires = expires
+        self.revoked = revoked
+        self._expired = expired
+
+    def is_expired(self, *, today):
+        return self._expired
+
+
+def test_mission_marks_revoked_and_expired_envelopes_not_live(tmp_path, monkeypatch):
+    ui = _machine_ui(tmp_path, monkeypatch, envelopes=[
+        _StubEnv("live-one", "2099-01-01"),
+        _StubEnv("dead-one", "2099-01-01", revoked=True),
+        _StubEnv("old-one", "2020-01-01", expired=True),
+    ])
+    ui._show("mission")
+    body = _plain(ui._body_text())
+    # The live one is shown as a standing authorization with a revoke hint.
+    assert "envelope live-one · expires 2099-01-01 · revoke:" in body
+    # The revoked/expired ones are marked, never rendered as live readiness.
+    assert "dead-one · REVOKED — not a live authorization" in body
+    assert "old-one · EXPIRED 2020-01-01 — not a live authorization" in body
+
+
+def test_mission_all_dead_envelopes_reads_as_no_live_envelope(tmp_path, monkeypatch):
+    ui = _machine_ui(tmp_path, monkeypatch, envelopes=[
+        _StubEnv("dead-one", "2099-01-01", revoked=True),
+    ])
+    ui._show("mission")
+    body = _plain(ui._body_text())
+    assert "no live dispatch envelope" in body
+    assert "dead-one · REVOKED" in body  # still visible, just not counted live

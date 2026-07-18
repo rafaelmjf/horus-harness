@@ -219,7 +219,7 @@ class TerminalUI:
         self.control_keepwarm: dict[str, bool] = {}
         self.control_linger: bool | None = None
         self.control_sink = "none"
-        self.control_envelopes: list[tuple[str, str]] = []
+        self.control_envelopes: list[tuple[str, str, str]] = []  # (name, expires, state)
         self.control_activity: activity.Activity | None = None
         self.control_proxy: proxy.ProxyStatus | None = None
         self.selected_session: registry.SessionRecord | None = None
@@ -696,9 +696,16 @@ class TerminalUI:
             self.control_sink = notify.load_notify_config().sink
         except Exception:  # noqa: BLE001 - a bad config degrades to 'none', never a crash
             self.control_sink = "none"
-        self.control_envelopes = [
-            (env.name, f"expires {env.expires}") for env in envelope.load_all()
-        ]
+        today = datetime.now().date()
+        self.control_envelopes = []
+        for env in envelope.load_all():
+            if env.revoked:
+                state = "revoked"
+            elif env.is_expired(today=today):
+                state = "expired"
+            else:
+                state = "live"
+            self.control_envelopes.append((env.name, env.expires, state))
         self.control_activity = activity.collect(limit=8)
         try:
             self.control_proxy = proxy.status()
@@ -1662,12 +1669,19 @@ class TerminalUI:
                           "     linger: OFF — away services die at logout · `loginctl enable-linger`\n"))
         else:
             frags.append(("class:muted", "     linger: unknown\n"))
-        if self.control_envelopes:
-            for name, detail in self.control_envelopes:
+        live_envelopes = [e for e in self.control_envelopes if e[2] == "live"]
+        if live_envelopes:
+            for name, expires, _state in live_envelopes:
                 frags.append(("class:muted",
-                              f"     envelope {name} · {detail} · revoke: `horus envelope revoke {name}`\n"))
+                              f"     envelope {name} · expires {expires} · revoke: `horus envelope revoke {name}`\n"))
         else:
-            frags.append(("class:muted", "     no standing dispatch envelope\n"))
+            frags.append(("class:muted", "     no live dispatch envelope\n"))
+        # Revoked/expired envelopes are NOT authorizations — mark them so the pane
+        # never reads a dead envelope as standing readiness.
+        for name, expires, state in self.control_envelopes:
+            if state != "live":
+                tag = "REVOKED" if state == "revoked" else f"EXPIRED {expires}"
+                frags.append(("class:warning", f"     envelope {name} · {tag} — not a live authorization\n"))
 
         act = self.control_activity
         frags.append(("class:section", "\n  Armed dispatches\n"))
