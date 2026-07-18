@@ -184,6 +184,39 @@ def test_refuses_an_unstated_card_tier():
     assert refusal.bound == "tier-allow-list"
 
 
+def test_create_stores_neutral_tier_from_a_model_named_input():
+    """A model-named --tier is accepted and normalized to its capability point;
+    the stored ceiling is vendor-neutral labels only."""
+    env = _make(tiers=("sonnet", "opus"))
+    assert env.tiers == ("medium", "high")
+
+
+def test_create_refuses_an_unknown_tier():
+    with pytest.raises(envelope.EnvelopeError, match="not a recognized tier"):
+        _make(tiers=("turbo",))
+
+
+def test_tier_matches_across_vendor_neutral_equivalence():
+    """A card tagged `tier: sonnet` matches an envelope authorizing `medium`."""
+    env = _make(tiers=("medium",))
+    assert envelope.validate(env, _req(tier="sonnet"), usage_remaining=80, now=NOW) is None
+    # ...and a card at a different point is still refused.
+    refusal = envelope.validate(env, _req(tier="opus"), usage_remaining=80, now=NOW)
+    assert refusal.bound == "tier-allow-list"
+
+
+def test_validate_normalizes_a_legacy_model_named_stored_tier():
+    """A pre-existing envelope stored with a model-named tier still matches once
+    the card tier normalizes to the same neutral point."""
+    legacy = envelope.Envelope(
+        name="legacy", created=TODAY.isoformat(), expires="2026-07-28",
+        cards=("card-a",), branch="", accounts=("claude-personal",), tiers=("sonnet",),
+        efforts=(), usage_floor=30, max_attempts_per_card=2, max_dispatches_per_day=3,
+        merge_authority=False,
+    )
+    assert envelope.validate(legacy, _req(tier="medium"), usage_remaining=80, now=NOW) is None
+
+
 def test_effort_allow_list_is_optional_but_binds_when_set():
     assert envelope.validate(_make(), _req(effort="high"), usage_remaining=80, now=NOW) is None
     env = envelope.create(

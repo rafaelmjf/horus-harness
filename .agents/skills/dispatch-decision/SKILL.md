@@ -14,7 +14,7 @@ description: >-
   single repo use `execution-decision` instead.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Dispatch decision (cockpit / multi-project, sessions substrate)
 
@@ -77,11 +77,17 @@ to the owner's eyeball.
 ## Emit (advisory — you apply it, nothing here auto-runs)
 
 `mode` (`inline-here` | `dispatched-worker` | `dispatched-plan`) + `account`
-(which isolated alias, or "hold — usage") + `tier` (a concrete model from the
-data) + `verification depth` (observe-CI | observe-CI+probe | owner-eyeball).
-Show the calibration + usage/reset evidence that drove it. For either dispatched
-mode, present the full consent envelope from the rubric and stop for explicit owner
-approval. Any changed model/account/effort/scope or additional attempt requires a new
+(which isolated alias, or "hold — usage") +
+`tier` (a vendor-neutral capability point — `low|medium|high|frontier` —
+resolved to a concrete provider+model only in the consent envelope, from the
+neutral-tier map + the target account's live capacity,
+never defaulted from the label) + `verification depth` (observe-CI |
+observe-CI+probe | owner-eyeball). Show the calibration + usage/reset evidence that
+drove it. The account and the provider are the SAME decision here: a `medium` card
+can run on Claude (Sonnet) or the equivalent Codex model — pick the one whose
+isolated account has capacity, don't let the old vendor-named label choose. For
+either dispatched mode, present the full consent envelope from the rubric and
+stop for explicit owner approval. Any changed model/account/effort/scope or additional attempt requires a new
 approval; provider errors never authorize fallback. Selecting the account, spawning
 the worker, and observing CI are all YOUR actions — this skill recommends; `horus`
 never auto-routes a dispatch (the hard boundary: `research/omnigent.md`).

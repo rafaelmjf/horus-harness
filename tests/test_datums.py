@@ -331,6 +331,76 @@ def test_rollup_excludes_death_and_void_from_quality_rate_but_keeps_them_visible
     assert "2/3 clean · 1 died · 1 void" in rendered
 
 
+# --- vendor-neutral delegation tiers -----------------------------------------
+
+
+def test_normalize_tier_passthrough_alias_and_unknown():
+    # Neutral values pass through unchanged.
+    for t in datums.NEUTRAL_TIERS:
+        assert datums.normalize_tier(t) == t
+    # Model-named values (bare family and versioned) resolve to their point.
+    assert datums.normalize_tier("sonnet") == "medium"
+    assert datums.normalize_tier("sonnet-5") == "medium"
+    assert datums.normalize_tier("opus") == "high"
+    assert datums.normalize_tier("haiku") == "low"
+    assert datums.normalize_tier("fable-5") == "frontier"
+    assert datums.normalize_tier("gpt-5.6-sol") == "frontier"
+    # A model at two points (Terra at medium+high) takes its highest.
+    assert datums.normalize_tier("gpt-5.6-terra") == "high"
+    # Case-insensitive; empty/unknown/None reject as None.
+    assert datums.normalize_tier("SONNET") == "medium"
+    assert datums.normalize_tier("") is None
+    assert datums.normalize_tier(None) is None
+    assert datums.normalize_tier("turbo") is None
+
+
+def test_model_tier_map_derives_from_equivalence_no_drift():
+    """The alias map is derived from the rendered equivalence table — every model
+    shown in the table resolves back to a tier at least as high as where it
+    appears, so the two can never silently disagree."""
+    rank = {t: i for i, t in enumerate(datums.NEUTRAL_TIERS)}
+    for tier, peers in datums.TIER_EQUIVALENCE.items():
+        for peer in peers:
+            assert rank[datums.normalize_tier(peer.model)] >= rank[tier]
+
+
+def test_tier_equivalence_render_shows_prior_vs_measured():
+    measured = [datums.Datum(session_id="s", model="sonnet-5", outcome="clean", launched_at="1")]
+    rollups = datums.build_model_rollup(measured, {
+        "sonnet-5": {}, "opus-4.8": {}, "fable-5": {}, "haiku-4.5": {},
+        "gpt-5.6-sol": {}, "gpt-5.6-terra": {}, "gpt-5.6-luna": {},
+    })
+    lines = datums.render_tier_equivalence(rollups)
+    text = "\n".join(lines)
+    # Frontier renders first (highest capability on top), all four tiers present.
+    assert lines[1].split()[0] == "frontier"
+    for tier in datums.NEUTRAL_TIERS:
+        assert tier in text
+    # Both providers named per point; the measured model shows measured evidence,
+    # an unmeasured mapped model shows prior.
+    assert "claude=sonnet-5 (measured 1/1 clean)" in text
+    assert "codex=gpt-5.6-sol @high (prior)" in text
+    # Display only — no routing verb.
+    assert "route" not in text.lower() and "pick" not in text.lower()
+
+
+def test_tier_equivalence_to_dict_is_machine_readable():
+    rollups = datums.build_model_rollup([], {"sonnet-5": {}})
+    data = datums.tier_equivalence_to_dict(rollups)
+    tiers = {row["tier"] for row in data}
+    assert tiers == set(datums.NEUTRAL_TIERS)
+    frontier = next(row for row in data if row["tier"] == "frontier")
+    providers = {p["provider"] for p in frontier["peers"]}
+    assert providers == {"claude", "codex"}
+    assert all(p["evidence"] in {"prior", "measured"} for row in data for p in row["peers"])
+
+
+def test_rollup_dict_carries_neutral_tiers():
+    data = datums.rollup_to_dict(datums.build_model_rollup([], {}))
+    assert "neutral_tiers" in data
+    assert {row["tier"] for row in data["neutral_tiers"]} == set(datums.NEUTRAL_TIERS)
+
+
 def test_rollup_render_is_data_only(tmp_path):
     store = _store(tmp_path)
     text = datums.render_model_rollup(datums.build_model_rollup(store.all(), datums.load_priors(tmp_path / "p.toml")))
