@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-18
 vision_facet: "Dashboard / cockpit"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/vscode.py (existing vscode-task integration), horus/launcher.py (terminal open), new `horus vscode-open`/flag; interaction with the managed-tmux target
+shipped_pr: 333
+shipped_sha: b721156ab8ce20ac1ef8e823e13a36999a38e9ab
 ---
 
 # vscode-terminal-launch-command — open a session in the VS Code terminal + project folder

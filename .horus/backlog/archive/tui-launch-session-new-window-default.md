@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: low
 created: 2026-07-18
 vision_facet: "Dashboard / cockpit"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/config.py (launch defaults), horus/terminal_tui.py (launch target), horus/terminal_sessions.py (tmux target/window), the `d` Defaults pane
+shipped_pr: 332
+shipped_sha: aeaf7367f501a5b64a08acbbbe3e00c504b58cae
 ---
 
 # tui-launch-session-new-window-default — Defaults option: launch sessions in a new window
