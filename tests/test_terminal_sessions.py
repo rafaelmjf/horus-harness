@@ -1613,8 +1613,9 @@ def test_terminal_tui_account_usage_uses_one_line_per_window(tmp_path, monkeypat
     }
 
     rendered = "".join(fragment[1] for fragment in ui._account_summary_text())
-    assert "Claude personal\n    5h --\n" in rendered
-    assert "weekly 83%, resets 2026-07-17 09:59" in rendered
+    # Meters now: an unknown 5h window is a dim dash; weekly renders a colored bar.
+    assert "Claude personal\n    5h     --\n" in rendered
+    assert "weekly ███████░  83% ↻ 2026-07-17 09:59" in rendered
     assert "personal · 5h" not in rendered
 
 

@@ -139,3 +139,22 @@ def test_cmd_statusline_install_writes_pointers(monkeypatch, capsys, tmp_path):
     assert "set statusLine for work" in capsys.readouterr().out
     data = json.loads((tmp_path / "w" / "settings.json").read_text())
     assert data["statusLine"]["command"] == "horus statusline"
+
+
+def test_usage_bar_rounds_up_and_never_empty_for_nonzero():
+    assert statusline.usage_bar(0, width=8) == "░" * 8
+    assert statusline.usage_bar(100, width=8) == "█" * 8
+    # 1% rounds up to one filled block, never an empty bar.
+    assert statusline.usage_bar(1, width=8).startswith("█")
+    assert statusline.usage_bar(50, width=8) == "█" * 4 + "░" * 4
+    # Clamps negatives.
+    assert statusline.usage_bar(-5, width=8) == "░" * 8
+
+
+def test_usage_level_bands():
+    assert statusline.usage_level(0) == "ok"
+    assert statusline.usage_level(49) == "ok"
+    assert statusline.usage_level(50) == "warn"
+    assert statusline.usage_level(79) == "warn"
+    assert statusline.usage_level(80) == "high"
+    assert statusline.usage_level(100) == "high"

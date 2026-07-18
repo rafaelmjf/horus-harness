@@ -581,3 +581,26 @@ def test_top_level_footers_advertise_the_mission_and_settings_keys(tmp_path, mon
         footer = _footer(ui)
         assert "m mission" in footer, f"{screen} footer missing the mission key: {footer!r}"
         assert "t settings" in footer, f"{screen} footer missing the settings key: {footer!r}"
+
+
+# Home-view usage meters (item 1) — reuse the status bar's bar + capacity band.
+
+def test_usage_meter_lines_color_by_capacity_band():
+    from horus import terminal_tui, usage_snapshot
+    snap = usage_snapshot.UsageSnapshot(
+        percent=23.0, resets_at="22:40", weekly_percent=92.0, weekly_resets_at="Jul 23"
+    )
+    five, weekly = terminal_tui._usage_meter_lines(snap)
+    assert five[0] == "class:usage-ok" and "23%" in five[1] and "█" in five[1]
+    assert weekly[0] == "class:usage-high" and "92%" in weekly[1]
+    assert "↻ 22:40" in five[1]  # carries the reset
+
+
+def test_usage_meter_lines_unknown_window_is_a_dim_dash_not_a_zero_bar():
+    from horus import terminal_tui, usage_snapshot
+    snap = usage_snapshot.UsageSnapshot(percent=None, resets_at=None, weekly_percent=40.0, weekly_resets_at=None)
+    five, weekly = terminal_tui._usage_meter_lines(snap)
+    assert five == ("class:muted", "5h     --")  # unknown → dash, never a misleading bar
+    assert weekly[0] == "class:usage-ok" and "█" in weekly[1]
+    # A wholly-missing snapshot is two dashes.
+    assert all(style == "class:muted" and text.endswith("--") for style, text in terminal_tui._usage_meter_lines(None))
