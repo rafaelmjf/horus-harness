@@ -29,10 +29,15 @@ Bounds are read at fire time, so ``revoke`` grounds all pending scheduled work
 immediately — the owner's kill switch. Live attached sessions are untouched:
 this gates launch, not running processes.
 
-**Tiers are an allow-list, not an ordered ceiling.** Today's cards carry
-``tier: opus|sonnet``; the vendor-neutral tier vocabulary (low/medium/high/
-frontier) lands separately. An allow-list bounds exactly as hard as a ceiling
-without this module owning a total order that another card is about to redefine.
+**Tiers are a vendor-neutral allow-list, not an ordered ceiling.** The canonical
+vocabulary is ``low | medium | high | frontier`` (see ``datums.NEUTRAL_TIERS``):
+a tier names a capability point, never a vendor. ``create`` stores neutral labels
+only — a model-named ``--tier`` (``sonnet``) is accepted and normalized to its
+neutral point (``medium``), an unknown label is refused. ``validate`` normalizes
+both the card's ``tier:`` and the stored allow-list before comparing, so a card
+tagged ``tier: sonnet`` matches an envelope authorizing ``medium`` (and a legacy
+envelope stored with model-named tiers still matches). An allow-list bounds
+exactly as hard as a ceiling without this module owning a total order.
 """
 
 from __future__ import annotations
@@ -43,6 +48,8 @@ import tomllib
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
+
+from horus import datums
 
 from horus import config
 
@@ -288,6 +295,21 @@ def create(
     accounts = tuple(resolved)
     if not tiers:
         raise EnvelopeError("an envelope must allow at least one --tier")
+    # Store the vendor-neutral tier only: a model-named `--tier` (`sonnet`) is
+    # accepted and normalized to its capability point (`medium`); an unknown
+    # label is refused now rather than silently never matching at fire time.
+    neutral_tiers: list[str] = []
+    for raw in tiers:
+        neutral = datums.normalize_tier(raw)
+        if neutral is None:
+            raise EnvelopeError(
+                f"--tier {raw!r} is not a recognized tier; use one of "
+                f"{', '.join(datums.NEUTRAL_TIERS)} (model-named tiers like 'sonnet' are accepted "
+                "and normalized)"
+            )
+        if neutral not in neutral_tiers:
+            neutral_tiers.append(neutral)
+    tiers = tuple(neutral_tiers)
     if not 0 <= usage_floor <= 100:
         raise EnvelopeError(f"--usage-floor {usage_floor} must be between 0 and 100 (% remaining)")
     if max_attempts_per_card < 1:
@@ -430,7 +452,13 @@ def validate(
             "`<agent>-<alias>`, because one alias is a different rate-limit pool "
             "under each agent",
         )
-    if request.tier not in env.tiers:
+    # Compare on the vendor-neutral capability point, not the literal label, so a
+    # card `tier: sonnet` matches an envelope authorizing `medium` and a legacy
+    # envelope stored with model-named tiers still matches. An unstated or
+    # unrecognized card tier normalizes to None and never matches.
+    request_tier = datums.normalize_tier(request.tier)
+    allowed_tiers = {datums.normalize_tier(t) for t in env.tiers}
+    if request_tier is None or request_tier not in allowed_tiers:
         return Refusal(
             "tier-allow-list",
             f"card tier {request.tier or '(unstated)'!r} is not allowed by envelope {env.name!r}; "

@@ -13,7 +13,7 @@ description: >-
   dispatch use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Execution decision (in-project, subagents substrate)
 
@@ -62,13 +62,16 @@ surface still defaults to the owner's eyeball.
 
 ## Emit (advisory — you apply it, nothing here auto-runs)
 
-`mode` (`inline` | `subagent-plan`) + `tier` (a concrete model from the data) +
-`verification depth` (observe-only | observe+probe | owner-eyeball, with the
-gate command named). For `subagent-plan`, include the exact agent/model/effort/
-account/usage+reset/task/attempts/dividend-or-owner-override/gate consent envelope,
-mark it awaiting explicit owner approval, and ask again on any fallback or extra
-attempt. Spawning the subagent, selecting the model, and running the gate are all
-YOUR actions — this skill recommends, it does not route.
+`mode` (`inline` | `subagent-plan`) + `tier` (a vendor-neutral capability point —
+`low|medium|high|frontier` — resolved to a concrete provider+model only at the
+consent envelope, from the neutral-tier map + live capacity,
+never defaulted from the label) + `verification depth`
+(observe-only | observe+probe | owner-eyeball,
+with the gate command named). For `subagent-plan`, include the exact agent/model/
+effort/account/usage+reset/task/attempts/dividend-or-owner-override/gate consent
+envelope, mark it awaiting explicit owner approval, and ask again on any
+fallback or extra attempt. Spawning the subagent, selecting the model, and running
+the gate are all YOUR actions — this skill recommends, it does not route.
 
 ## v2 six-lane projects (fallback)
 

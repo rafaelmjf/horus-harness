@@ -139,6 +139,88 @@ def canonical_model_name(alias: str | None, *, resolved: str | None = None) -> s
 
 
 # ---------------------------------------------------------------------------
+# Vendor-neutral delegation tiers (`vendor-neutral-delegation-tiers` card).
+#
+# A card/envelope ``tier:`` names a CAPABILITY POINT, never a vendor. Historic
+# values named Claude models (``sonnet``/``opus``), which silently defaulted
+# delegation to Claude — a Codex/GPT worker at the same capability point was
+# never even a candidate. The canonical vocabulary is now
+# ``low | medium | high | frontier``; legacy model-named values alias in, so no
+# card-migration wave is needed. The provider choice is made at DISPATCH time
+# from available capacity + owner choice — never from the label.
+#
+# The per-provider equivalence (which model, at which effort) is an OWNER PRIOR
+# (the card's 2026-07-17 table) until measured evidence matures. It is display/
+# advisory only and is NEVER consulted to auto-pick or auto-route a model — that
+# hard boundary is unchanged (see PRIORS_SEED / render_model_rollup docstrings).
+# ---------------------------------------------------------------------------
+
+NEUTRAL_TIERS: tuple[str, ...] = ("low", "medium", "high", "frontier")
+
+
+@dataclass(frozen=True)
+class TierPeer:
+    """One provider's model at a neutral tier's capability point (owner prior).
+
+    ``effort`` is the effort level that rides WITH the tier for that model, so a
+    tier names a capability *point*, not a bare model id (e.g. ``low`` = Luna on
+    ``high`` effort). ``None`` leaves the effort to the launcher's default."""
+
+    provider: str            # "claude" | "codex"
+    model: str               # canonical model name — joins the datum/prior roster
+    effort: str | None = None
+
+
+# Owner-prior equivalence table, keyed by neutral tier. A model may legitimately
+# appear at more than one point (Terra at medium and high, by effort); the
+# alias map below resolves such a model to its HIGHEST point so a card tagged
+# with that model isn't under-authorized.
+TIER_EQUIVALENCE: dict[str, tuple[TierPeer, ...]] = {
+    "frontier": (TierPeer("claude", "fable-5"), TierPeer("codex", "gpt-5.6-sol", "high")),
+    "high": (TierPeer("claude", "opus-4.8"), TierPeer("codex", "gpt-5.6-terra", "high")),
+    "medium": (TierPeer("claude", "sonnet-5"), TierPeer("codex", "gpt-5.6-terra", "medium")),
+    "low": (TierPeer("claude", "haiku-4.5"), TierPeer("codex", "gpt-5.6-luna", "high")),
+}
+
+
+def _build_model_tier_map() -> dict[str, str]:
+    """Reverse the equivalence table to ``canonical model -> neutral tier``.
+
+    Single source of truth: derived from :data:`TIER_EQUIVALENCE` so the alias
+    map can never drift from the rendered mapping. A model at two points takes
+    its highest (``frontier`` > ``high`` > ``medium`` > ``low``)."""
+    rank = {tier: i for i, tier in enumerate(NEUTRAL_TIERS)}
+    out: dict[str, str] = {}
+    for tier, peers in TIER_EQUIVALENCE.items():
+        for peer in peers:
+            if peer.model not in out or rank[tier] > rank[out[peer.model]]:
+                out[peer.model] = tier
+    return out
+
+
+_MODEL_TO_TIER: dict[str, str] = _build_model_tier_map()
+
+
+def normalize_tier(value: str | None) -> str | None:
+    """Map a card/envelope ``tier:`` value to its vendor-neutral tier.
+
+    A neutral value (``low|medium|high|frontier``) passes through. A model-named
+    value (``sonnet``, ``opus-4.8``, ``gpt-5.6-sol``, …) resolves through its
+    canonical model name to the capability point it names. Returns ``None`` for
+    an empty or unrecognized value: the vocabulary is a CLOSED set, so an
+    unknown tier is a typo to reject, not a new tier to invent."""
+    if value is None:
+        return None
+    v = value.strip().casefold()
+    if not v:
+        return None
+    if v in NEUTRAL_TIERS:
+        return v
+    canonical = canonical_model_name(v) or v
+    return _MODEL_TO_TIER.get(canonical) or _MODEL_TO_TIER.get(v)
+
+
+# ---------------------------------------------------------------------------
 # The datum row
 # ---------------------------------------------------------------------------
 
@@ -1346,6 +1428,60 @@ def render_lifecycle_notes(rollups: list[ModelRollup]) -> list[str]:
     return ["Lifecycle:", *(f"  {r.model}: {r.lifecycle}" for r in flagged)]
 
 
+def _tier_peer_evidence(peer: TierPeer, by_model: dict[str, ModelRollup]) -> str:
+    """One provider's cell in the neutral-tier map: ``provider=model[@effort]
+    (evidence)`` where evidence is the model's measured clean-count when it has
+    quality datums, else ``prior`` (owner-mapped, not yet measured locally)."""
+    r = by_model.get(peer.model)
+    if r and r.quality_datums:
+        evidence = f"measured {r.clean_count}/{r.quality_datums} clean"
+    else:
+        evidence = "prior"
+    model_label = peer.model + (f" @{peer.effort}" if peer.effort else "")
+    return f"{peer.provider}={model_label} ({evidence})"
+
+
+def render_tier_equivalence(rollups: list[ModelRollup]) -> list[str]:
+    """Vendor-neutral tier -> per-provider model equivalence (owner prior),
+    each annotated with its measured evidence from the roll-up.
+
+    DISPLAY ONLY, like the roll-up: a card/envelope ``tier:`` names one of these
+    capability points, and the provider is chosen at dispatch from capacity +
+    owner choice — never from the label, never auto-routed here. Frontier on top
+    (highest capability first)."""
+    by_model = {r.model: r for r in rollups}
+    lines = [
+        "Vendor-neutral tiers (capability point -> provider model; owner prior + measured evidence):"
+    ]
+    for tier in reversed(NEUTRAL_TIERS):
+        peers = TIER_EQUIVALENCE.get(tier, ())
+        cells = " · ".join(_tier_peer_evidence(p, by_model) for p in peers) or "(no models mapped)"
+        lines.append(f"  {tier:<8} {cells}")
+    return lines
+
+
+def tier_equivalence_to_dict(rollups: list[ModelRollup]) -> list[dict]:
+    """Machine-readable neutral-tier map (for ``--stdout``/agent consumers)."""
+    by_model = {r.model: r for r in rollups}
+    out: list[dict] = []
+    for tier in reversed(NEUTRAL_TIERS):
+        peers = []
+        for peer in TIER_EQUIVALENCE.get(tier, ()):
+            r = by_model.get(peer.model)
+            peers.append(
+                {
+                    "provider": peer.provider,
+                    "model": peer.model,
+                    "effort": peer.effort,
+                    "evidence": "measured" if (r and r.quality_datums) else "prior",
+                    "clean_datums": r.clean_count if r else 0,
+                    "quality_datums": r.quality_datums if r else 0,
+                }
+            )
+        out.append({"tier": tier, "peers": peers})
+    return out
+
+
 def render_model_rollup(rollups: list[ModelRollup], *, verbose: bool = False) -> str:
     """Human-readable text of the roll-up. Data only — describes what was measured
     and what the owner flagged; never names a model to pick. Concise by default
@@ -1356,6 +1492,8 @@ def render_model_rollup(rollups: list[ModelRollup], *, verbose: bool = False) ->
         "",
     ]
     lines.extend(render_tier_table(rollups, verbose=verbose))
+    lines.append("")
+    lines.extend(render_tier_equivalence(rollups))
     lifecycle = render_lifecycle_notes(rollups)
     if lifecycle:
         lines.append("")
@@ -1379,6 +1517,7 @@ def rollup_to_dict(rollups: list[ModelRollup]) -> dict:
             "Advisory: the agent judges the pick; this names no model to use."
         ),
         "models": [asdict(r) for r in rollups],
+        "neutral_tiers": tier_equivalence_to_dict(rollups),
     }
 
 
@@ -1457,6 +1596,8 @@ def render_delegation_matrix(
         lines.append("")
         lines.extend(f"  {line}" for line in notes)
     lines.append("")
+    lines.extend(render_tier_equivalence(rollups))
+    lines.append("")
     lines.append("Shape -> tier role (delegation-rubric Step 3/4):")
     for row in shape_tiers:
         lines.append(f"  {row['shape']:<12} -> {row['tier_role']}")
@@ -1489,6 +1630,7 @@ def delegation_matrix_to_dict(
             "Advisory: the agent applies this; it never auto-picks or auto-routes a model."
         ),
         "tiers": [asdict(r) for r in rollups],
+        "neutral_tiers": tier_equivalence_to_dict(rollups),
         "roles": shape_tiers,
         "verification_dial": verification_dial,
     }

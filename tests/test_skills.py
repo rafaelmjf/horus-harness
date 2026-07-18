@@ -252,7 +252,7 @@ def test_delegation_rubric_keeps_older_capable_models_in_roster():
 
 def test_delegation_rubric_proves_dividend_before_model_selection():
     rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
-    assert rubric.version == 8
+    assert rubric.version == 9
     assert rubric.content.index("prove delegation has a dividend") < rubric.content.index(
         "Read the calibration data"
     )
@@ -268,6 +268,25 @@ def test_delegation_rubric_proves_dividend_before_model_selection():
     assert "today:" not in rubric.content
     for pinned_model in ("sonnet-5", "opus-4.8", "haiku-4.5", "gpt-5.6"):
         assert pinned_model not in rubric.content
+
+
+def test_delegation_skills_frame_tiers_as_vendor_neutral():
+    """`vendor-neutral-delegation-tiers`: the tier names a capability point, and
+    the provider is chosen within it at the consent envelope — never defaulted
+    from the label."""
+    rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
+    # The rubric points at the new neutral-tier map and forbids letting the
+    # label pick the vendor.
+    assert "vendor-neutral tier" in rubric.content
+    assert "low | medium | high | frontier" in rubric.content or "low|medium|high|frontier" in rubric.content
+    assert "capacity + owner choice" in rubric.content
+    # Both consumers emit a vendor-neutral tier resolved to a provider only in
+    # the consent envelope.
+    for name in ("execution-decision", "dispatch-decision"):
+        skill = next(s for s in skills.SKILLS if s.name == name)
+        assert "vendor-neutral capability point" in skill.content, name
+        assert "low|medium|high|frontier" in skill.content, name
+        assert "never defaulted from the label" in skill.content, name
 
 
 def test_delegation_rubric_distinguishes_calibration_key_from_provider_selector():
@@ -321,7 +340,7 @@ def test_both_consumer_skills_import_the_shared_rubric():
 
 def test_execution_decision_skill_is_in_project_subagents():
     skill = next(s for s in skills.SKILLS if s.name == "execution-decision")
-    assert skill.version == 3
+    assert skill.version == 4
     # Its mode vocabulary + the in-project verification specialization.
     assert "`inline`" in skill.content and "`subagent-plan`" in skill.content
     assert "RUNS the gate at the phase boundary" in skill.content
@@ -334,7 +353,7 @@ def test_execution_decision_skill_is_in_project_subagents():
 
 def test_dispatch_decision_skill_is_cockpit_multiproject():
     skill = next(s for s in skills.SKILLS if s.name == "dispatch-decision")
-    assert skill.version == 3
+    assert skill.version == 4
     # Its mode vocabulary, account routing, and the overseer verification note.
     assert "`inline-here`" in skill.content
     assert "`dispatched-worker`" in skill.content

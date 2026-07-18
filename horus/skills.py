@@ -830,7 +830,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -886,6 +886,14 @@ names no model to pick. Per model it reports:
 - **`strength` / `caution` / `guard`** (owner priors, free text) — `caution` and
   `guard` are HARD constraints on how the model may be used.
 
+It also prints a **vendor-neutral tier map** below the ladder: each capability
+point — `low | medium | high | frontier` — with the model EACH provider fields
+there (Claude and Codex/GPT), the effort that rides with it, and whether that
+model is `measured` (has local datums) or still a `prior`. A card/envelope
+`tier:` names one of these points, never a vendor. This is the map you pick a
+provider *within* — the tier is the capability requirement; the provider is a
+separate choice made at Step 6 from capacity + owner choice.
+
 Counts are not task-shape evidence by themselves. Read recent matching outcomes and
 their notes, and keep measured datums distinct from explicit owner observations. If a
 native usage signal is incomplete, stale, or temporarily lifted, an owner-provided
@@ -927,6 +935,12 @@ this skill:
   design / ambiguity / the verify gate → the live design tier; most scoped
   implementation → the live scoped-implementation tier; mechanical verifiable
   sweeps → the live mechanical tier, never as the judgment gate.
+- **Name the tier as a capability point, not a vendor.** Step 4 emits a
+  vendor-neutral tier (`low|medium|high|frontier`); the neutral-tier map from
+  Step 1 shows which provider models sit there. Do NOT let the label pick the
+  vendor — a card tagged `medium` is not a "Sonnet card", it is a scoped-impl
+  card that Sonnet *or* the equivalent Codex model can take. Which provider
+  actually runs is decided at Step 6 from live capacity + owner choice.
 
 ## Step 4 — Shape → mode + tier
 
@@ -974,7 +988,12 @@ claim, whoever wrote it.
 
 Before any implementation worker is launched, present one exact consent envelope:
 
-- agent and concrete model (not only a tier), effort, and account alias;
+- agent and concrete model (not only a tier), effort, and account alias. This is
+  where the neutral tier from Step 4 resolves to ONE provider+model: present the
+  candidates the neutral-tier map lists at that point (Claude and Codex), gated
+  by each account's live `horus usage check`, and let the owner pick. Never
+  default to the Claude candidate because the tier label used to be a Claude
+  name — capacity + owner choice decides, not the label;
 - current usage and reset evidence for that account, including source and freshness;
 - bounded task, maximum attempts, expected dispatch dividend or owner-directed
   capacity/context override, and the deterministic verification gate.
@@ -1105,7 +1124,7 @@ description: >-
   dispatch use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Execution decision (in-project, subagents substrate)
 
@@ -1154,13 +1173,16 @@ surface still defaults to the owner's eyeball.
 
 ## Emit (advisory — you apply it, nothing here auto-runs)
 
-`mode` (`inline` | `subagent-plan`) + `tier` (a concrete model from the data) +
-`verification depth` (observe-only | observe+probe | owner-eyeball, with the
-gate command named). For `subagent-plan`, include the exact agent/model/effort/
-account/usage+reset/task/attempts/dividend-or-owner-override/gate consent envelope,
-mark it awaiting explicit owner approval, and ask again on any fallback or extra
-attempt. Spawning the subagent, selecting the model, and running the gate are all
-YOUR actions — this skill recommends, it does not route.
+`mode` (`inline` | `subagent-plan`) + `tier` (a vendor-neutral capability point —
+`low|medium|high|frontier` — resolved to a concrete provider+model only at the
+consent envelope, from the neutral-tier map + live capacity,
+never defaulted from the label) + `verification depth`
+(observe-only | observe+probe | owner-eyeball,
+with the gate command named). For `subagent-plan`, include the exact agent/model/
+effort/account/usage+reset/task/attempts/dividend-or-owner-override/gate consent
+envelope, mark it awaiting explicit owner approval, and ask again on any
+fallback or extra attempt. Spawning the subagent, selecting the model, and running
+the gate are all YOUR actions — this skill recommends, it does not route.
 
 ## v2 six-lane projects (fallback)
 
@@ -1188,7 +1210,7 @@ description: >-
   single repo use `execution-decision` instead.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Dispatch decision (cockpit / multi-project, sessions substrate)
 
@@ -1251,11 +1273,17 @@ to the owner's eyeball.
 ## Emit (advisory — you apply it, nothing here auto-runs)
 
 `mode` (`inline-here` | `dispatched-worker` | `dispatched-plan`) + `account`
-(which isolated alias, or "hold — usage") + `tier` (a concrete model from the
-data) + `verification depth` (observe-CI | observe-CI+probe | owner-eyeball).
-Show the calibration + usage/reset evidence that drove it. For either dispatched
-mode, present the full consent envelope from the rubric and stop for explicit owner
-approval. Any changed model/account/effort/scope or additional attempt requires a new
+(which isolated alias, or "hold — usage") +
+`tier` (a vendor-neutral capability point — `low|medium|high|frontier` —
+resolved to a concrete provider+model only in the consent envelope, from the
+neutral-tier map + the target account's live capacity,
+never defaulted from the label) + `verification depth` (observe-CI |
+observe-CI+probe | owner-eyeball). Show the calibration + usage/reset evidence that
+drove it. The account and the provider are the SAME decision here: a `medium` card
+can run on Claude (Sonnet) or the equivalent Codex model — pick the one whose
+isolated account has capacity, don't let the old vendor-named label choose. For
+either dispatched mode, present the full consent envelope from the rubric and
+stop for explicit owner approval. Any changed model/account/effort/scope or additional attempt requires a new
 approval; provider errors never authorize fallback. Selecting the account, spawning
 the worker, and observing CI are all YOUR actions — this skill recommends; `horus`
 never auto-routes a dispatch (the hard boundary: `research/omnigent.md`).
@@ -2367,9 +2395,9 @@ SKILLS: tuple[Skill, ...] = (
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 4, _INFER_SKILL),
     Skill("horus-execution", 13, _EXECUTION_SKILL),
-    Skill("delegation-rubric", 8, _DELEGATION_RUBRIC_SKILL),
-    Skill("execution-decision", 3, _EXECUTION_DECISION_SKILL),
-    Skill("dispatch-decision", 3, _DISPATCH_DECISION_SKILL),
+    Skill("delegation-rubric", 9, _DELEGATION_RUBRIC_SKILL),
+    Skill("execution-decision", 4, _EXECUTION_DECISION_SKILL),
+    Skill("dispatch-decision", 4, _DISPATCH_DECISION_SKILL),
     Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
     Skill("product-audit", 2, _PRODUCT_AUDIT_SKILL),
     Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),

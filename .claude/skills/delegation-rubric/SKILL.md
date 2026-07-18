@@ -12,7 +12,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -68,6 +68,14 @@ names no model to pick. Per model it reports:
 - **`strength` / `caution` / `guard`** (owner priors, free text) — `caution` and
   `guard` are HARD constraints on how the model may be used.
 
+It also prints a **vendor-neutral tier map** below the ladder: each capability
+point — `low | medium | high | frontier` — with the model EACH provider fields
+there (Claude and Codex/GPT), the effort that rides with it, and whether that
+model is `measured` (has local datums) or still a `prior`. A card/envelope
+`tier:` names one of these points, never a vendor. This is the map you pick a
+provider *within* — the tier is the capability requirement; the provider is a
+separate choice made at Step 6 from capacity + owner choice.
+
 Counts are not task-shape evidence by themselves. Read recent matching outcomes and
 their notes, and keep measured datums distinct from explicit owner observations. If a
 native usage signal is incomplete, stale, or temporarily lifted, an owner-provided
@@ -109,6 +117,12 @@ this skill:
   design / ambiguity / the verify gate → the live design tier; most scoped
   implementation → the live scoped-implementation tier; mechanical verifiable
   sweeps → the live mechanical tier, never as the judgment gate.
+- **Name the tier as a capability point, not a vendor.** Step 4 emits a
+  vendor-neutral tier (`low|medium|high|frontier`); the neutral-tier map from
+  Step 1 shows which provider models sit there. Do NOT let the label pick the
+  vendor — a card tagged `medium` is not a "Sonnet card", it is a scoped-impl
+  card that Sonnet *or* the equivalent Codex model can take. Which provider
+  actually runs is decided at Step 6 from live capacity + owner choice.
 
 ## Step 4 — Shape → mode + tier
 
@@ -156,7 +170,12 @@ claim, whoever wrote it.
 
 Before any implementation worker is launched, present one exact consent envelope:
 
-- agent and concrete model (not only a tier), effort, and account alias;
+- agent and concrete model (not only a tier), effort, and account alias. This is
+  where the neutral tier from Step 4 resolves to ONE provider+model: present the
+  candidates the neutral-tier map lists at that point (Claude and Codex), gated
+  by each account's live `horus usage check`, and let the owner pick. Never
+  default to the Claude candidate because the tier label used to be a Claude
+  name — capacity + owner choice decides, not the label;
 - current usage and reset evidence for that account, including source and freshness;
 - bounded task, maximum attempts, expected dispatch dividend or owner-directed
   capacity/context override, and the deterministic verification gate.
