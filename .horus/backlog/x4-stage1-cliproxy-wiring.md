@@ -23,6 +23,11 @@ live-proven, but it has design bugs that broke a running session, so it was held
 the v0.0.64 release. **Resume from a fresh session; the account that built it hit its usage
 limit mid-fix.**
 
+> ⛑️ **If enabling the proxy breaks a live session again, see the committed runbook
+> [`.horus/proxy-session-rescue.md`](../proxy-session-rescue.md)** — copy-paste recovery
+> (revive the running session, or restore native Claude) that needs nothing from the
+> session that broke.
+
 ## Where the code is (do not rebuild from scratch)
 
 All stage-1 code lives on the pushed branch **`wip/x4-cliproxy-stage1`** — not on main:
