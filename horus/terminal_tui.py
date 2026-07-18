@@ -200,8 +200,9 @@ class TerminalUI:
         self.fleet_review_error = ""
         self.projection_records: list[tuple[Path, dict]] = []
         self._load_projection_sync()
-        # Machine Control pane (`c`) — cached state, refreshed on show/after an action
-        # so systemctl/loginctl reads never run inside the per-render body paint.
+        # Mission Control (`m`) + Settings (`t`) panes — shared cached machine state,
+        # refreshed on show/after an action so systemctl/loginctl reads never run inside
+        # the per-render body paint.
         self.control_sched_ok = False
         self.control_listener_active = False
         self.control_listener_installed = False
@@ -294,9 +295,13 @@ class TerminalUI:
         def _defaults(event) -> None:
             self._show("settings")
 
-        @keys.add("c")
-        def _control(event) -> None:
-            self._show("control")
+        @keys.add("m")
+        def _mission(event) -> None:
+            self._show("mission")
+
+        @keys.add("t")
+        def _machine_settings(event) -> None:
+            self._show("toggles")
 
         @keys.add("u")
         def _refresh_usage(event) -> None:
@@ -487,8 +492,8 @@ class TerminalUI:
             )
             self.status = f"Continuity granularity set to {granularity}."
             self.application.invalidate()
-        elif self.screen == "control":
-            self._activate_control(kind, value)
+        elif self.screen == "toggles":
+            self._activate_toggles(kind, value)
         elif self.screen == "fleet_review" and kind == "curator":
             if isinstance(value, Path):
                 self.project = value
@@ -556,7 +561,7 @@ class TerminalUI:
             self._show("session")
         elif self.screen == "settings":
             self._show("projects")
-        elif self.screen == "control":
+        elif self.screen in ("mission", "toggles"):
             self._show("projects")
         elif self.screen == "fleet_review":
             self._show("projects")
@@ -571,8 +576,9 @@ class TerminalUI:
         self.application.invalidate()
 
     def _load_control(self) -> None:
-        """Read machine-Control state once (systemctl/loginctl/config), into cached
-        attributes the body paint renders from — never re-read per render."""
+        """Read machine state once (systemctl/loginctl/config/activity) into cached
+        attributes — shared by BOTH the Mission Control (`m`) and Settings (`t`) panes,
+        so the body paint never re-reads it per render."""
         self.control_sched_ok = schedule.availability().ok
         if self.control_sched_ok:
             self.control_listener_installed = schedule.listen_service_installed()
@@ -595,9 +601,9 @@ class TerminalUI:
         ]
         self.control_activity = activity.collect(limit=8)
 
-    def _activate_control(self, kind: str, value: object) -> None:
-        """Enter on a Control-pane item: toggle a service / fire a quick action via
-        the existing CLI primitives (never a reimplemented systemd/notify path)."""
+    def _activate_toggles(self, kind: str, value: object) -> None:
+        """Enter on a Settings-pane (`t`) item: toggle a machine feature / fire a quick
+        action via the existing CLI primitives (never a reimplemented systemd/notify path)."""
         if not self.control_sched_ok and kind in {"ctl_listener", "ctl_listener_restart", "ctl_keepwarm"}:
             self.status = "Scheduling unavailable here — systemd --user timers are needed."
         elif kind == "ctl_listener":
@@ -639,7 +645,7 @@ class TerminalUI:
             esc = notify.Escalation(
                 event=notify.SUPERVISE_GATE,
                 project="horus",
-                summary="test escalation from the TUI Control pane",
+                summary="test escalation from the TUI Settings pane",
                 inspect="this is a test; no action needed",
             )
             self.status = notify.escalate(esc, force=True).describe()
@@ -648,7 +654,13 @@ class TerminalUI:
         self.application.invalidate()
 
     def _refresh_items(self) -> None:
-        if self.screen == "control":
+        if self.screen == "mission":
+            # Mission Control is read-mostly observability (armed + recent + readiness);
+            # no toggles live here, so it carries no selectable items.
+            self._load_control()
+            self.items = []
+            return
+        if self.screen == "toggles":
             self._load_control()
             items: list[tuple[str, object]] = [("ctl_listener", None)]
             if self.control_listener_active:
@@ -820,7 +832,8 @@ class TerminalUI:
             "session": "HORUS · Session",
             "confirm": "HORUS · Close session?",
             "settings": "HORUS · Defaults",
-            "control": "HORUS · Control",
+            "mission": "HORUS · Mission Control",
+            "toggles": "HORUS · Settings",
             "fleet_review": "HORUS · Fleet Review",
             "projection_sync": "HORUS · Projection Sync",
         }[self.screen]
@@ -832,8 +845,10 @@ class TerminalUI:
             return self._card_body_text()
         if self.screen == "receipt":
             return self._receipt_body_text()
-        if self.screen == "control":
-            return self._control_body_text()
+        if self.screen == "mission":
+            return self._mission_body_text()
+        if self.screen == "toggles":
+            return self._settings_body_text()
         if self.screen == "capabilities":
             return self._capabilities_body_text()
         if self.screen == "skills":
@@ -1467,17 +1482,57 @@ class TerminalUI:
             fragments.append(("class:muted", f"     {project.local.summary}\n"))
         return fragments
 
-    def _control_body_text(self) -> StyleAndTextTuples:
-        """Machine controls (toggles the pane triggers) + read-only machine facts and
-        the autonomous-activity bands. Everything renders from cached state loaded by
-        `_load_control`; the toggle items carry the selection markers."""
+    def _mission_body_text(self) -> StyleAndTextTuples:
+        """Mission Control (`m`): read-mostly observability of the autonomous loop —
+        execution readiness + what will run (armed) + what ran (recent, with glyphs).
+        Renders from cached `_load_control` state; no toggles live here."""
+        frags: StyleAndTextTuples = [("class:section", "\n  Execution readiness\n")]
+        if not self.control_sched_ok:
+            frags.append(("class:warning",
+                          "     scheduler: unavailable here (needs systemd --user timers)\n"))
+        else:
+            frags.append(("class:muted", "     scheduler: available\n"))
+        if self.control_linger is True:
+            frags.append(("class:muted", "     linger: on — services survive logout\n"))
+        elif self.control_linger is False:
+            frags.append(("class:warning",
+                          "     linger: OFF — away services die at logout · `loginctl enable-linger`\n"))
+        else:
+            frags.append(("class:muted", "     linger: unknown\n"))
+        if self.control_envelopes:
+            for name, detail in self.control_envelopes:
+                frags.append(("class:muted",
+                              f"     envelope {name} · {detail} · revoke: `horus envelope revoke {name}`\n"))
+        else:
+            frags.append(("class:muted", "     no standing dispatch envelope\n"))
+
+        act = self.control_activity
+        frags.append(("class:section", "\n  Armed dispatches\n"))
+        if act is not None and act.armed:
+            for item in act.armed:
+                state = "halted" if item.halted else ("fired" if item.fired else "pending")
+                frags.append(("class:muted",
+                              f"     {activity.ARMED} {item.id}  {state}  {item.when}  {item.description}\n"))
+        else:
+            frags.append(("class:muted", "     (none)\n"))
+        frags.append(("class:section", "\n  Recent runs\n"))
+        if act is not None and act.ran:
+            for r in act.ran:
+                frags.append(("class:muted", f"     {r.glyph} {r.card or '(card?)'}  {r.account}  {r.status}\n"))
+        else:
+            frags.append(("class:muted", "     (none dispatched under an envelope yet)\n"))
+        return frags
+
+    def _settings_body_text(self) -> StyleAndTextTuples:
+        """Settings (`t`): machine feature toggles — on/off switches the pane triggers via
+        existing primitives. Every on/off feature (keep-warm, listener, notify sink, and
+        future hermes/proxy integrations) lives here; the items carry the selection markers."""
         frags: StyleAndTextTuples = []
         if not self.control_sched_ok:
             frags.append(("class:warning",
                           "\n  Scheduling unavailable here (needs systemd --user timers) — "
-                          "toggles are inert; facts still show.\n"))
-
-        frags.append(("class:section", "\n  Machine services\n"))
+                          "service toggles are inert.\n"))
+        frags.append(("class:section", "\n  Machine feature toggles\n"))
         for index, (kind, value) in enumerate(self.items):
             selected = index == self.selected
             marker = ">" if selected else " "
@@ -1494,41 +1549,10 @@ class TerminalUI:
                 frags.append((style, f"\n {marker}     ↻ restart listener (adopt an upgraded CLI)\n"))
             elif kind == "ctl_keepwarm" and isinstance(value, str):
                 box = "x" if self.control_keepwarm.get(value) else " "
-                frags.append((style, f"\n {marker} [{box}] Keep-warm · {value}\n"))
+                frags.append((style, f"\n {marker} [{box}] Keep-warm · {value}  (Tokenmaxxing)\n"))
                 frags.append(("class:muted", "       re-warms the 5h window after each reset\n"))
             elif kind == "ctl_notify_test":
                 frags.append((style, f"\n {marker}     ⇢ send a test escalation (sink: {self.control_sink})\n"))
-
-        frags.append(("class:section", "\n  Machine facts\n"))
-        if self.control_linger is True:
-            frags.append(("class:muted", "     linger: on — services survive logout\n"))
-        elif self.control_linger is False:
-            frags.append(("class:warning",
-                          "     linger: OFF — away services die at logout · `loginctl enable-linger`\n"))
-        else:
-            frags.append(("class:muted", "     linger: unknown\n"))
-        frags.append(("class:muted", f"     notify sink: {self.control_sink}\n"))
-        if self.control_envelopes:
-            for name, detail in self.control_envelopes:
-                frags.append(("class:muted", f"     envelope {name} · {detail} · revoke: `horus envelope revoke {name}`\n"))
-        else:
-            frags.append(("class:muted", "     no standing dispatch envelope\n"))
-
-        act = self.control_activity
-        if act is not None:
-            frags.append(("class:section", "\n  Armed dispatches\n"))
-            if act.armed:
-                for item in act.armed:
-                    state = "halted" if item.halted else ("fired" if item.fired else "pending")
-                    frags.append(("class:muted", f"     {activity.ARMED} {item.id}  {state}  {item.when}  {item.description}\n"))
-            else:
-                frags.append(("class:muted", "     (none)\n"))
-            frags.append(("class:section", "\n  Recent runs\n"))
-            if act.ran:
-                for r in act.ran:
-                    frags.append(("class:muted", f"     {r.glyph} {r.card or '(card?)'}  {r.account}  {r.status}\n"))
-            else:
-                frags.append(("class:muted", "     (none dispatched under an envelope yet)\n"))
         return frags
 
     def _capabilities_body_text(self) -> StyleAndTextTuples:
@@ -1617,12 +1641,15 @@ class TerminalUI:
                 else " ↑↓ select   Enter save   Esc back   q quit"
             )
             return [("class:footer", text)]
-        if self.screen == "control":
+        if self.screen == "toggles":
             text = (
                 " ↑↓ · Enter toggle · Esc back"
                 if narrow
-                else " ↑↓ select   Enter toggle service / run action   Esc back   q quit"
+                else " ↑↓ select   Enter toggle feature / run action   Esc back   q quit"
             )
+            return [("class:footer", text)]
+        if self.screen == "mission":
+            text = " ↑↓ read · Esc back" if narrow else " ↑↓/swipe read   Esc back   q quit"
             return [("class:footer", text)]
         if self.screen == "backlog":
             text = (
