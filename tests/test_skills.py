@@ -457,6 +457,54 @@ def test_missing_or_stale_and_findings(tmp_path):
     assert all(f.level == "ok" for f in skills.skill_findings(tmp_path))
 
 
+def test_skill_states_reports_each_status(tmp_path):
+    skills.install_skills(tmp_path)  # all claude skills current
+    first, second = skills.SKILLS[0], skills.SKILLS[1]
+    # Downgrade one, unversion another, remove a third.
+    skills.skill_path(first, tmp_path).write_text(
+        "<!-- horus-skill-version: 0 -->\n", encoding="utf-8"
+    )
+    skills.skill_path(second, tmp_path).write_text("no marker here\n", encoding="utf-8")
+    third = skills.SKILLS[2]
+    skills.skill_path(third, tmp_path).unlink()
+
+    states = {s.name: s for s in skills.skill_states(tmp_path)}
+    assert states[first.name].status == skills.SKILL_OUTDATED
+    assert states[first.name].installed_version == 0
+    assert states[first.name].bundled_version == first.version
+    assert states[second.name].status == skills.SKILL_UNVERSIONED
+    assert states[second.name].installed_version is None
+    assert states[third.name].status == skills.SKILL_MISSING
+    # Everything else installed at the bundled version.
+    installed = [s for s in states.values() if s.status == skills.SKILL_INSTALLED]
+    assert installed and all(s.installed_version == s.bundled_version for s in installed)
+
+
+def test_skill_states_are_target_specific_and_carry_refresh_command(tmp_path):
+    skills.install_skills(tmp_path, targets=("codex",))
+    states = skills.skill_states(tmp_path, targets=("claude", "codex"))
+    claude = [s for s in states if s.target == "claude"]
+    codex = [s for s in states if s.target == "codex"]
+    assert all(s.status == skills.SKILL_MISSING for s in claude)
+    assert all(s.status == skills.SKILL_INSTALLED for s in codex)
+    assert claude[0].refresh_command == "horus upgrade-project --apply --target claude"
+    assert codex[0].refresh_command == "horus upgrade-project --apply --target codex"
+
+
+def test_skill_findings_match_skill_states(tmp_path):
+    skills.install_skills(tmp_path)
+    skills.skill_path(skills.SKILLS[0], tmp_path).write_text(
+        "<!-- horus-skill-version: 0 -->\n", encoding="utf-8"
+    )
+    states = skills.skill_states(tmp_path)
+    findings = skills.skill_findings(tmp_path)
+    # One finding per state, and the ok/warn levels agree with the structured status.
+    assert len(findings) == len(states)
+    for state, finding in zip(states, findings):
+        expected = "ok" if state.status == skills.SKILL_INSTALLED else "warn"
+        assert finding.level == expected
+
+
 def test_missing_or_stale_is_target_specific(tmp_path):
     skills.install_skills(tmp_path, targets=("codex",))
     assert skills.missing_or_stale(tmp_path, target="codex") == []
