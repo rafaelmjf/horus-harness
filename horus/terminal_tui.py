@@ -995,10 +995,15 @@ class TerminalUI:
             elif self.capabilities_error:
                 lines.append(("class:muted", f"\n  Capabilities unavailable: {self.capabilities_error}\n"))
         recommended_model = self._recommended_model_for_launch() if self.screen == "models" else None
+        under_branch = False  # backlog: are we rendering an expanded branch's children?
         for index, (kind, value) in enumerate(self.items):
             selected = index == self.selected
             marker = ">" if selected else " "
             style = "class:selected" if selected else "class:item"
+            if kind == "branch":
+                under_branch = True
+            elif kind == "facet":
+                under_branch = False
             if selected:
                 lines.append(("[SetCursorPosition]", ""))
             if kind == "project":
@@ -1098,16 +1103,27 @@ class TerminalUI:
                 card = value
                 status = " · claimed" if card.status == "claimed" else ""
                 suffix = _card_field_suffix(card, self.backlog_fields)
-                lines.append((style, f"\n {marker} [{card.type}{status}] {card.title}{suffix}\n"))
+                # A card under an expanded branch gets a tree connector + indent so
+                # its membership is visible; the last child closes with └─.
+                if under_branch:
+                    last = index + 1 >= len(self.items) or self.items[index + 1][0] != "card"
+                    connector = "   └─ " if last else "   ├─ "
+                else:
+                    connector = " "
+                lines.append((style, f"\n{connector}{marker} "))
+                lines.append(_priority_dot(card.priority))
+                lines.append((style, f"[{card.type}{status}] {card.title}{suffix}\n"))
                 # The classic priority sub-line, unless priority was picked as an
                 # inline field — then it's already on the row above.
                 if card.priority and "priority" not in self.backlog_fields:
-                    lines.append(("class:muted", f"     priority {card.priority}\n"))
+                    indent = "        " if under_branch else "     "
+                    lines.append(("class:muted", f"{indent}priority {card.priority}\n"))
             elif kind == "branch":
                 group = value
                 expanded = (self.project, group.branch) in self.expanded_branches
-                caret = "v" if expanded else ">"
-                lines.append((style, f"\n {marker} {caret} {group.title} ({len(group.children)})\n"))
+                caret = "▾" if expanded else "▸"
+                header_style = "class:selected" if selected else "class:branch"
+                lines.append((header_style, f"\n {marker} {caret} {group.title} ({len(group.children)})\n"))
                 if group.convergence:
                     lines.append(("class:muted", f"     converges: {group.convergence}\n"))
                 elif not group.resolved:
@@ -1839,6 +1855,11 @@ _STYLE = Style.from_dict(
         "usage-ok": "#3fb950",
         "usage-warn": "#e3b341",
         "usage-high": "#f85149",
+        # Backlog visual guidance: branch umbrellas + priority dots.
+        "branch": "bold #6cb6ff",
+        "prio-high": "#f85149",
+        "prio-medium": "#e3b341",
+        "prio-low": "#8c98a5",
     }
 )
 
@@ -2049,6 +2070,22 @@ def _projection_curator_prompt(records: list[tuple[Path, dict]]) -> str:
 
 
 _PRIORITY_RANK = {"now": 0, "next": 1, "high": 2, "medium": 3, "low": 4, "later": 5, "deferred": 6}
+
+
+_PRIORITY_STYLE = {
+    "now": "class:prio-high", "high": "class:prio-high", "urgent": "class:prio-high",
+    "medium": "class:prio-medium", "med": "class:prio-medium",
+    "low": "class:prio-low", "later": "class:prio-low", "deferred": "class:prio-low",
+}
+
+
+def _priority_dot(priority: str | None) -> tuple[str, str]:
+    """A colored ``●`` for a card's priority so the backlog scans at a glance —
+    red high, yellow medium, dim low. A card with no priority gets no dot, keeping
+    unprioritized rows clean and closest to the classic view."""
+    if not priority:
+        return ("", "")
+    return (_PRIORITY_STYLE.get(priority.strip().lower(), "class:muted"), "● ")
 
 
 def _card_field_suffix(card: backlog.Card, fields: list[str]) -> str:

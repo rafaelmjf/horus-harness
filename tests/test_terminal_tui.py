@@ -657,3 +657,36 @@ def test_project_columns_narrow_vs_wide(tmp_path, monkeypatch):
     assert ui._project_columns(240) == 3    # ultra-wide → three, fluid
     ui.screen = "sessions"
     assert ui._project_columns(240) == 1    # non-projects list is always single-column
+
+
+# Backlog visual guidance (item 3) — branch membership + priority dots.
+
+def test_backlog_expanded_branch_children_get_tree_connectors_and_priority_dots(tmp_path, monkeypatch):
+    from horus import terminal_tui
+    ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
+    # Expand the branch.
+    branch_index = next(i for i, (k, _v) in enumerate(ui.items) if k == "branch")
+    ui.selected = branch_index
+    ui.activate()
+
+    frags = ui._body_text()
+    rendered = "".join(text for _style, text in frags)
+    # The child card is nested under the branch with a tree connector...
+    assert "└─" in rendered or "├─" in rendered
+    assert "Child one" in rendered
+    # ...and its priority renders as a colored dot fragment.
+    assert any(style == "class:prio-high" and "●" in text for style, text in frags)
+    # The branch header caret + accent style is present.
+    assert any(style == "class:branch" and "▾" in text for style, text in frags) or \
+           any(style == "class:selected" and "▾" in text for style, text in frags)
+
+
+def test_priority_dot_colors_by_band_and_omits_when_absent():
+    from horus import terminal_tui
+    assert terminal_tui._priority_dot("high") == ("class:prio-high", "● ")
+    assert terminal_tui._priority_dot("Medium") == ("class:prio-medium", "● ")
+    assert terminal_tui._priority_dot("low") == ("class:prio-low", "● ")
+    assert terminal_tui._priority_dot("") == ("", "")
+    assert terminal_tui._priority_dot(None) == ("", "")
+    # Unknown priority word still gets a (muted) dot rather than crashing.
+    assert terminal_tui._priority_dot("someday")[1] == "● "
