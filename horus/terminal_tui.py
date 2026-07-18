@@ -707,7 +707,14 @@ class TerminalUI:
             self.items = [("account", account) for account in self.accounts]
         elif self.screen == "models":
             agent = self.pending_account.agent if self.pending_account else ""
-            self.items = [("model", None)] + [("model", model) for model in _agent_models(agent)]
+            models = list(_agent_models(agent))
+            # Toggle on → a Claude launch is proxied, so offer the proxy's GPT models
+            # next to the native Claude aliases (both are served through the one proxy).
+            # load_state() is a cheap file read (no network), reliable whether or not the
+            # Control pane has been visited this session.
+            if agent == "claude" and proxy.load_state().get("enabled"):
+                models += proxy.gpt_launch_models()
+            self.items = [("model", None)] + [("model", model) for model in models]
         elif self.screen == "effort":
             self.items = [("effort", None)] + [("effort", level) for level in adapters.EFFORT_LEVELS]
         elif self.screen == "session_mode":
@@ -1795,6 +1802,9 @@ def run() -> int:
                 posture=config.load_launch_defaults()["posture"],
                 model=result.model,
                 effort=result.effort,
+                # Toggle on → every TUI Claude launch runs through the proxy (any
+                # account); per-launch env injection, never a settings.json rewrite.
+                proxied=(result.agent == "claude" and proxy.load_state().get("enabled", False)),
             )
             status = (
                 f"Session {launched.session_id[:8]} returned to Horus."
@@ -2315,6 +2325,7 @@ def _launch(
     posture: str = "default",
     model: str | None = None,
     effort: str | None = None,
+    proxied: bool = False,
 ):
     kwargs = {
         "agent": agent,
@@ -2324,6 +2335,7 @@ def _launch(
         "posture": posture,
         "model": model,
         "effort": effort,
+        "proxied": proxied,
     }
     if target == terminal_sessions.TMUX:
         return terminal_sessions.launch_tmux(**kwargs)

@@ -126,6 +126,15 @@ def test_enable_never_writes_settings_json_and_records_the_map(isolated, monkeyp
     assert not (acct / "settings.json").exists()  # enable writes NO settings.json (the B guarantee)
     st = proxy.load_state()
     assert st["enabled"] is True and st["model_map"]["opus"] == "claude-opus-4-8"
+    assert st["models"] == ["claude-opus-4-8", "gpt-5.5"]   # served list stored for the picker
+
+
+def test_gpt_launch_models_filters_to_pickable_gpt_text_models(isolated):
+    st = proxy.load_state()
+    st["models"] = ["claude-opus-4-8", "gpt-5.5", "gpt-5.6-sol", "gpt-image-1.5", "claude-sonnet-5"]
+    proxy.save_state(st)
+    # Only GPT text models — Claude aliases are shown natively; image endpoints aren't pickable.
+    assert proxy.gpt_launch_models() == ["gpt-5.5", "gpt-5.6-sol"]
 
 
 def test_disable_stops_service_removes_container_and_clears_legacy(isolated, monkeypatch):
