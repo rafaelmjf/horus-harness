@@ -60,6 +60,7 @@ from horus import (
     runlog,
     schedule,
     skills,
+    statusline,
     supervise,
     templates,
     terminal_app,
@@ -1674,6 +1675,66 @@ def cmd_notify_listen(args: argparse.Namespace) -> int:
     code, message = notify_listen.run_listen(duration=duration, repo=repo)
     print(message)
     return code
+
+
+def cmd_statusline(args: argparse.Namespace) -> int:
+    """Render the Claude Code status line from the pushed stdin payload, and record
+    its usage reading in-process.
+
+    With ``--install``, instead writes the ``statusLine`` pointer into each isolated
+    Claude account's settings.json (all, or one ``--account``) so the shipped default
+    applies without hand-editing. Otherwise runs INSIDE the owner's statusline, so it
+    must never corrupt the display: any bad/absent input prints nothing and exits 0."""
+    import getpass
+    import socket
+
+    if getattr(args, "install", False):
+        dirs = config.load_account_config_dirs()
+        target = getattr(args, "account", None)
+        if target:
+            if target not in dirs:
+                print(f"No isolated Claude account {target!r} (see `horus account`).")
+                return 1
+            dirs = {target: dirs[target]}
+        if not dirs:
+            print("No isolated Claude accounts to install into (see `horus account --isolate`).")
+            return 0
+        for alias, cfg_dir in sorted(dirs.items()):
+            wrote = config.write_statusline_pointer(cfg_dir)
+            print(f"  {'✓ set' if wrote else '· already set'} statusLine for {alias} ({cfg_dir})")
+        return 0
+
+    try:
+        payload = json.loads(sys.stdin.read())
+    except (json.JSONDecodeError, ValueError, OSError):
+        return 0
+
+    # Record the pushed rate_limits so `horus usage` reads it from cache without
+    # touching the rate-limited OAuth endpoint (same path as `horus usage record`).
+    try:
+        snapshot = usage_snapshot.snapshot_from_claude_statusline(payload)
+        if snapshot is not None:
+            account = _account_for_ambient_config_dir("claude")
+            usage_snapshot.record_snapshot("claude", account, snapshot)
+    except Exception:  # noqa: BLE001 - recording must never affect the display
+        pass
+
+    try:
+        user = getpass.getuser()
+    except Exception:  # noqa: BLE001
+        user = ""
+    try:
+        host = socket.gethostname().split(".")[0]
+    except Exception:  # noqa: BLE001
+        host = ""
+
+    try:
+        text = statusline.render(payload, user=user, host=host)
+    except Exception:  # noqa: BLE001 - a render bug must never corrupt the status line
+        return 0
+    if text:
+        print(text)
+    return 0
 
 
 _ASK_TIMEOUT_DEFAULT = 3600.0  # 1h: long enough for an away owner to answer from the phone
@@ -4746,6 +4807,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_ask.add_argument("--session", default=None, help="session id to attribute (default: $HORUS_SESSION_ID)")
     p_ask.add_argument("--project", default=None, help="project name to show (default: cwd name)")
     p_ask.set_defaults(func=cmd_ask)
+
+    p_statusline = sub.add_parser(
+        "statusline",
+        help="render the Claude Code status line (point settings.json statusLine at this)",
+        description=(
+            "The shipped, portable status-line renderer. Reads Claude Code's pushed JSON "
+            "payload on stdin and prints three rows (user@host:cwd | model / ctx·5h·7d meters "
+            "/ branch | PR), and records the pushed rate_limits into the usage cache in-process. "
+            "Point each account's settings.json at it — no jq, no GNU date, no bash:\n\n"
+            "  \"statusLine\": { \"type\": \"command\", \"command\": \"horus statusline\" }\n\n"
+            "Never corrupts the display: bad/absent input prints nothing and exits 0."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_statusline.add_argument(
+        "--install", action="store_true",
+        help="write the statusLine pointer into isolated Claude accounts' settings.json",
+    )
+    p_statusline.add_argument(
+        "--account", default=None, help="with --install: only this account alias (default: all)",
+    )
+    p_statusline.set_defaults(func=cmd_statusline)
 
     p_usage = sub.add_parser("usage", help="inspect native app usage signals")
     usage_sub = p_usage.add_subparsers(dest="usage_cmd", required=True)
