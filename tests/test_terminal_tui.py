@@ -456,3 +456,93 @@ def test_launch_prompt_has_no_preamble_for_standard_mode():
     prompt = terminal_tui._launch_prompt(launch)
     assert "inline-batch-session" not in prompt
     assert prompt == ""  # fresh + standard = today's empty prompt
+
+
+# --- Machine Control pane (`c`) -------------------------------------------------
+
+def _control_ui(tmp_path, monkeypatch, *, listener=False, keepwarm=None, linger=True, sink="telegram"):
+    """A UI on the Control screen with every machine-state read stubbed."""
+    from horus import terminal_tui, schedule, activity
+    ui = _new_ui(tmp_path, monkeypatch)
+    keepwarm = keepwarm or {"personal": False, "work": False}
+    monkeypatch.setattr(terminal_tui.schedule, "availability", lambda: schedule.Availability(True, "ok"))
+    monkeypatch.setattr(terminal_tui.schedule, "listen_service_installed", lambda: listener)
+    monkeypatch.setattr(terminal_tui.schedule, "listen_service_active", lambda: listener)
+    monkeypatch.setattr(terminal_tui.schedule, "linger_enabled", lambda: linger)
+    monkeypatch.setattr(terminal_tui.schedule, "keepwarm_service_active", lambda alias: keepwarm.get(alias, False))
+    monkeypatch.setattr(terminal_tui.warmup, "claude_accounts", lambda: sorted(keepwarm))
+    monkeypatch.setattr(terminal_tui.notify, "load_notify_config", lambda: type("C", (), {"sink": sink})())
+    monkeypatch.setattr(terminal_tui.envelope, "load_all", lambda: [])
+    monkeypatch.setattr(terminal_tui.activity, "collect", lambda limit=8: activity.Activity(armed=[], ran=[]))
+    return ui
+
+
+def _plain(frags) -> str:
+    return "".join(text for _style, text in frags)
+
+
+def test_control_pane_lists_listener_and_per_account_keepwarm(tmp_path, monkeypatch):
+    ui = _control_ui(tmp_path, monkeypatch, keepwarm={"personal": True, "work": False})
+    ui._show("control")
+    kinds = [k for k, _v in ui.items]
+    assert kinds.count("ctl_keepwarm") == 2
+    assert "ctl_listener" in kinds and "ctl_notify_test" in kinds
+    body = _plain(ui._body_text())
+    assert "[x] Keep-warm · personal" in body   # active account is checked
+    assert "[ ] Keep-warm · work" in body
+    assert "notify sink: telegram" in body
+    assert "linger: on" in body
+
+
+def test_control_pane_shows_restart_only_when_listener_active(tmp_path, monkeypatch):
+    ui = _control_ui(tmp_path, monkeypatch, listener=False)
+    ui._show("control")
+    assert "ctl_listener_restart" not in [k for k, _v in ui.items]
+    # Bring the listener up and re-load: the restart action appears.
+    monkeypatch.setattr(terminal_tui.schedule, "listen_service_active", lambda: True)
+    ui._show("control")
+    assert "ctl_listener_restart" in [k for k, _v in ui.items]
+
+
+def test_control_toggle_keepwarm_installs_via_the_primitive(tmp_path, monkeypatch):
+    ui = _control_ui(tmp_path, monkeypatch, keepwarm={"personal": False, "work": False})
+    ui._show("control")
+    calls = []
+    monkeypatch.setattr(terminal_tui.schedule, "install_keepwarm_service",
+                        lambda **kw: calls.append(kw))
+    idx = next(i for i, (k, v) in enumerate(ui.items) if k == "ctl_keepwarm" and v == "personal")
+    ui.selected = idx
+    ui.activate()
+    assert calls and calls[0]["account"] == "personal"
+    assert calls[0]["command"] == ("horus", "warmup", "--keep", "--account", "personal")
+    assert "Keep-warm on for personal" in ui.status
+
+
+def test_control_toggle_listener_off_stops_the_service(tmp_path, monkeypatch):
+    ui = _control_ui(tmp_path, monkeypatch, listener=True)
+    ui._show("control")
+    stopped = []
+    monkeypatch.setattr(terminal_tui.schedule, "remove_listen_service", lambda: stopped.append(True))
+    ui.selected = next(i for i, (k, _v) in enumerate(ui.items) if k == "ctl_listener")
+    ui.activate()
+    assert stopped and "listener stopped" in ui.status.lower()
+
+
+def test_control_notify_test_uses_escalate_force(tmp_path, monkeypatch):
+    ui = _control_ui(tmp_path, monkeypatch)
+    ui._show("control")
+    seen = {}
+    def _fake_escalate(esc, *, force=False, **kw):
+        seen["force"] = force
+        return type("R", (), {"describe": lambda self: "delivered via telegram"})()
+    monkeypatch.setattr(terminal_tui.notify, "escalate", _fake_escalate)
+    ui.selected = next(i for i, (k, _v) in enumerate(ui.items) if k == "ctl_notify_test")
+    ui.activate()
+    assert seen["force"] is True and "delivered" in ui.status
+
+
+def test_control_back_returns_to_projects(tmp_path, monkeypatch):
+    ui = _control_ui(tmp_path, monkeypatch)
+    ui._show("control")
+    ui.back()
+    assert ui.screen == "projects"

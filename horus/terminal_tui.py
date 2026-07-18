@@ -29,6 +29,7 @@ from prompt_toolkit.output import Output
 from prompt_toolkit.styles import Style
 
 from horus import (
+    activity,
     adapters,
     backlog,
     backlog_migrate,
@@ -39,18 +40,23 @@ from horus import (
     codex_usage,
     config,
     datums,
+    envelope,
     fleet_review,
     frontmatter,
     github_catalog,
     launch,
     machine_requirements,
+    notify,
+    notify_listen,
     projection_sync,
     registry,
     remote_start,
     routines,
+    schedule,
     skills,
     terminal_sessions,
     usage_snapshot,
+    warmup,
 )
 
 
@@ -194,6 +200,16 @@ class TerminalUI:
         self.fleet_review_error = ""
         self.projection_records: list[tuple[Path, dict]] = []
         self._load_projection_sync()
+        # Machine Control pane (`c`) — cached state, refreshed on show/after an action
+        # so systemctl/loginctl reads never run inside the per-render body paint.
+        self.control_sched_ok = False
+        self.control_listener_active = False
+        self.control_listener_installed = False
+        self.control_keepwarm: dict[str, bool] = {}
+        self.control_linger: bool | None = None
+        self.control_sink = "none"
+        self.control_envelopes: list[tuple[str, str]] = []
+        self.control_activity: activity.Activity | None = None
         self.selected_session: registry.SessionRecord | None = None
         self.items: list[tuple[str, object]] = []
         self.selected = 0
@@ -277,6 +293,10 @@ class TerminalUI:
         @keys.add("d")
         def _defaults(event) -> None:
             self._show("settings")
+
+        @keys.add("c")
+        def _control(event) -> None:
+            self._show("control")
 
         @keys.add("u")
         def _refresh_usage(event) -> None:
@@ -467,6 +487,8 @@ class TerminalUI:
             )
             self.status = f"Continuity granularity set to {granularity}."
             self.application.invalidate()
+        elif self.screen == "control":
+            self._activate_control(kind, value)
         elif self.screen == "fleet_review" and kind == "curator":
             if isinstance(value, Path):
                 self.project = value
@@ -534,6 +556,8 @@ class TerminalUI:
             self._show("session")
         elif self.screen == "settings":
             self._show("projects")
+        elif self.screen == "control":
+            self._show("projects")
         elif self.screen == "fleet_review":
             self._show("projects")
         elif self.screen == "projection_sync":
@@ -546,7 +570,93 @@ class TerminalUI:
         self._refresh_items()
         self.application.invalidate()
 
+    def _load_control(self) -> None:
+        """Read machine-Control state once (systemctl/loginctl/config), into cached
+        attributes the body paint renders from — never re-read per render."""
+        self.control_sched_ok = schedule.availability().ok
+        if self.control_sched_ok:
+            self.control_listener_installed = schedule.listen_service_installed()
+            self.control_listener_active = schedule.listen_service_active()
+            self.control_linger = schedule.linger_enabled()
+            self.control_keepwarm = {
+                alias: schedule.keepwarm_service_active(alias) for alias in warmup.claude_accounts()
+            }
+        else:
+            self.control_listener_installed = False
+            self.control_listener_active = False
+            self.control_linger = None
+            self.control_keepwarm = {}
+        try:
+            self.control_sink = notify.load_notify_config().sink
+        except Exception:  # noqa: BLE001 - a bad config degrades to 'none', never a crash
+            self.control_sink = "none"
+        self.control_envelopes = [
+            (env.name, f"expires {env.expires}") for env in envelope.load_all()
+        ]
+        self.control_activity = activity.collect(limit=8)
+
+    def _activate_control(self, kind: str, value: object) -> None:
+        """Enter on a Control-pane item: toggle a service / fire a quick action via
+        the existing CLI primitives (never a reimplemented systemd/notify path)."""
+        if not self.control_sched_ok and kind in {"ctl_listener", "ctl_listener_restart", "ctl_keepwarm"}:
+            self.status = "Scheduling unavailable here — systemd --user timers are needed."
+        elif kind == "ctl_listener":
+            try:
+                if self.control_listener_active:
+                    schedule.remove_listen_service()
+                    self.status = "Steering listener stopped."
+                else:
+                    invalid = notify_listen.validate_config()
+                    if invalid is not None:
+                        self.status = invalid[1]
+                    else:
+                        schedule.install_listen_service(
+                            command=("horus", "notify", "listen"), cwd=Path.cwd())
+                        self.status = "Steering listener started (persistent service)."
+            except schedule.ScheduleError as exc:
+                self.status = f"Listener: {exc}"
+        elif kind == "ctl_listener_restart":
+            try:
+                schedule.restart_listen_service()
+                self.status = "Steering listener restarted (adopts the current CLI)."
+            except schedule.ScheduleError as exc:
+                self.status = f"Listener restart: {exc}"
+        elif kind == "ctl_keepwarm" and isinstance(value, str):
+            try:
+                if self.control_keepwarm.get(value):
+                    schedule.remove_keepwarm_service(value)
+                    self.status = f"Keep-warm off for {value}."
+                else:
+                    schedule.install_keepwarm_service(
+                        account=value,
+                        command=("horus", "warmup", "--keep", "--account", value),
+                        cwd=Path.cwd(),
+                    )
+                    self.status = f"Keep-warm on for {value} (re-warms after each 5h reset)."
+            except schedule.ScheduleError as exc:
+                self.status = f"Keep-warm: {exc}"
+        elif kind == "ctl_notify_test":
+            esc = notify.Escalation(
+                event=notify.SUPERVISE_GATE,
+                project="horus",
+                summary="test escalation from the TUI Control pane",
+                inspect="this is a test; no action needed",
+            )
+            self.status = notify.escalate(esc, force=True).describe()
+        self._refresh_items()
+        self.selected = min(self.selected, max(0, len(self.items) - 1))
+        self.application.invalidate()
+
     def _refresh_items(self) -> None:
+        if self.screen == "control":
+            self._load_control()
+            items: list[tuple[str, object]] = [("ctl_listener", None)]
+            if self.control_listener_active:
+                items.append(("ctl_listener_restart", None))
+            items.extend(("ctl_keepwarm", alias) for alias in sorted(self.control_keepwarm))
+            items.append(("ctl_notify_test", None))
+            self.items = items
+            return
         if self.screen == "projects":
             self.items = [("project", project) for project in self.projects]
             self.items.extend(("remote_project", project) for project in self.remote_projects)
@@ -710,6 +820,7 @@ class TerminalUI:
             "session": "HORUS · Session",
             "confirm": "HORUS · Close session?",
             "settings": "HORUS · Defaults",
+            "control": "HORUS · Control",
             "fleet_review": "HORUS · Fleet Review",
             "projection_sync": "HORUS · Projection Sync",
         }[self.screen]
@@ -721,6 +832,8 @@ class TerminalUI:
             return self._card_body_text()
         if self.screen == "receipt":
             return self._receipt_body_text()
+        if self.screen == "control":
+            return self._control_body_text()
         if self.screen == "capabilities":
             return self._capabilities_body_text()
         if self.screen == "skills":
@@ -1354,6 +1467,70 @@ class TerminalUI:
             fragments.append(("class:muted", f"     {project.local.summary}\n"))
         return fragments
 
+    def _control_body_text(self) -> StyleAndTextTuples:
+        """Machine controls (toggles the pane triggers) + read-only machine facts and
+        the autonomous-activity bands. Everything renders from cached state loaded by
+        `_load_control`; the toggle items carry the selection markers."""
+        frags: StyleAndTextTuples = []
+        if not self.control_sched_ok:
+            frags.append(("class:warning",
+                          "\n  Scheduling unavailable here (needs systemd --user timers) — "
+                          "toggles are inert; facts still show.\n"))
+
+        frags.append(("class:section", "\n  Machine services\n"))
+        for index, (kind, value) in enumerate(self.items):
+            selected = index == self.selected
+            marker = ">" if selected else " "
+            style = "class:selected" if selected else "class:item"
+            if selected:
+                frags.append(("[SetCursorPosition]", ""))
+            if kind == "ctl_listener":
+                box = "x" if self.control_listener_active else " "
+                frags.append((style, f"\n {marker} [{box}] Steering listener\n"))
+                state = ("active" if self.control_listener_active
+                         else ("installed (not running)" if self.control_listener_installed else "off"))
+                frags.append(("class:muted", f"       inbound Telegram steering · {state}\n"))
+            elif kind == "ctl_listener_restart":
+                frags.append((style, f"\n {marker}     ↻ restart listener (adopt an upgraded CLI)\n"))
+            elif kind == "ctl_keepwarm" and isinstance(value, str):
+                box = "x" if self.control_keepwarm.get(value) else " "
+                frags.append((style, f"\n {marker} [{box}] Keep-warm · {value}\n"))
+                frags.append(("class:muted", "       re-warms the 5h window after each reset\n"))
+            elif kind == "ctl_notify_test":
+                frags.append((style, f"\n {marker}     ⇢ send a test escalation (sink: {self.control_sink})\n"))
+
+        frags.append(("class:section", "\n  Machine facts\n"))
+        if self.control_linger is True:
+            frags.append(("class:muted", "     linger: on — services survive logout\n"))
+        elif self.control_linger is False:
+            frags.append(("class:warning",
+                          "     linger: OFF — away services die at logout · `loginctl enable-linger`\n"))
+        else:
+            frags.append(("class:muted", "     linger: unknown\n"))
+        frags.append(("class:muted", f"     notify sink: {self.control_sink}\n"))
+        if self.control_envelopes:
+            for name, detail in self.control_envelopes:
+                frags.append(("class:muted", f"     envelope {name} · {detail} · revoke: `horus envelope revoke {name}`\n"))
+        else:
+            frags.append(("class:muted", "     no standing dispatch envelope\n"))
+
+        act = self.control_activity
+        if act is not None:
+            frags.append(("class:section", "\n  Armed dispatches\n"))
+            if act.armed:
+                for item in act.armed:
+                    state = "halted" if item.halted else ("fired" if item.fired else "pending")
+                    frags.append(("class:muted", f"     {activity.ARMED} {item.id}  {state}  {item.when}  {item.description}\n"))
+            else:
+                frags.append(("class:muted", "     (none)\n"))
+            frags.append(("class:section", "\n  Recent runs\n"))
+            if act.ran:
+                for r in act.ran:
+                    frags.append(("class:muted", f"     {r.glyph} {r.card or '(card?)'}  {r.account}  {r.status}\n"))
+            else:
+                frags.append(("class:muted", "     (none dispatched under an envelope yet)\n"))
+        return frags
+
     def _capabilities_body_text(self) -> StyleAndTextTuples:
         if self.capabilities_error:
             return [("class:muted", f"\n  Capabilities unavailable: {self.capabilities_error}\n")]
@@ -1438,6 +1615,13 @@ class TerminalUI:
                 " ↑↓ select · Enter save · Esc back"
                 if narrow
                 else " ↑↓ select   Enter save   Esc back   q quit"
+            )
+            return [("class:footer", text)]
+        if self.screen == "control":
+            text = (
+                " ↑↓ · Enter toggle · Esc back"
+                if narrow
+                else " ↑↓ select   Enter toggle service / run action   Esc back   q quit"
             )
             return [("class:footer", text)]
         if self.screen == "backlog":
