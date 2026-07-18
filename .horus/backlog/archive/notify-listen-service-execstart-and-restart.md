@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-18
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: bug
 parallel: safe
 created_by: agent
 surface: horus/schedule.py (_absolute_exec + restart_listen_service + unbuffered unit), horus/cli.py (`notify listen --restart`), scripts/deploy-hosted.sh
+shipped_pr: 322
+shipped_sha: 1b2ed2d0c8a8c5c7ad61605a0d163d7f09e068da
 ---
 
 # notify-listen --service: absolute ExecStart + restart-on-upgrade
