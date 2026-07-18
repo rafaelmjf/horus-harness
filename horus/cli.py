@@ -42,6 +42,7 @@ from horus import (
     initialize,
     input_bridge,
     integration,
+    keepwarm,
     launcher,
     machine_requirements,
     mergewatch,
@@ -1796,7 +1797,15 @@ def cmd_warmup(args: argparse.Namespace) -> int:
     """Open one cheap turn per Claude account to start its 5h usage window.
 
     Claude only starts counting a window from the first turn; this primes it on
-    demand. Best-effort per account; exit 0 unless every targeted account failed."""
+    demand. Best-effort per account; exit 0 unless every targeted account failed.
+
+    The ``--keep`` family instead runs/installs the standing keep-warm loop, which
+    re-warms one account just after each 5h reset (see ``horus.keepwarm``) — the
+    "Tokenmaxxing" toggle for a day of ad-hoc later work without scheduling."""
+    keep_mode = any(getattr(args, flag, False) for flag in ("keep", "service", "stop", "restart", "status"))
+    if keep_mode:
+        return _cmd_warmup_keep(args)
+
     accounts = [args.account] if getattr(args, "account", None) else None
     model = None if getattr(args, "model", "") == "" else args.model
     results = warmup.warmup(accounts, model=model or warmup.DEFAULT_MODEL)
@@ -1808,6 +1817,72 @@ def cmd_warmup(args: argparse.Namespace) -> int:
     ok = sum(1 for r in results if r.ok)
     print(f"warmup: {ok}/{len(results)} account(s) warmed.")
     return 0 if ok else 1
+
+
+def _cmd_warmup_keep(args: argparse.Namespace) -> int:
+    """The ``horus warmup --keep`` family: run/install/stop/restart/status the
+    per-account keep-warm loop. Every mutating mode targets ONE Claude account
+    (the loop keeps a single 5h window open); ``--status`` needs none."""
+    if getattr(args, "status", False):
+        active = schedule.keepwarm_active_accounts()
+        if not active:
+            print("No keep-warm services installed.")
+            return 0
+        for alias, running in sorted(active.items()):
+            print(f"  {'●' if running else '○'} {alias}: {'active' if running else 'installed (not running)'}")
+        return 0
+
+    account = getattr(args, "account", None)
+    if not account:
+        print("keep-warm targets one account — pass --account <alias>.")
+        return 2
+    known = warmup.claude_accounts()
+    if account not in known:
+        available = ", ".join(known) or "(none configured — see `horus account`)"
+        print(f"No isolated Claude account {account!r}. Available: {available}")
+        return 1
+
+    if getattr(args, "stop", False):
+        try:
+            removed = schedule.remove_keepwarm_service(account)
+        except schedule.ScheduleError as exc:
+            print(f"Could not stop the keep-warm service: {exc}")
+            return 1
+        print(f"Stopped and removed the keep-warm service for {account}."
+              if removed else f"No keep-warm service installed for {account}.")
+        return 0 if removed else 1
+
+    if getattr(args, "restart", False):
+        try:
+            restarted = schedule.restart_keepwarm_service(account)
+        except schedule.ScheduleError as exc:
+            print(f"Could not restart the keep-warm service: {exc}")
+            return 1
+        print(f"Restarted the keep-warm service for {account} (now on the current pinned CLI)."
+              if restarted else f"No keep-warm service installed for {account}.")
+        return 0 if restarted else 1
+
+    if getattr(args, "service", False):
+        command: tuple[str, ...] = ("horus", "warmup", "--keep", "--account", account)
+        try:
+            schedule.install_keepwarm_service(account=account, command=command, cwd=Path.cwd())
+        except schedule.ScheduleError as exc:
+            print(f"Could not install the keep-warm service: {exc}")
+            return 2
+        print(f"Installed keep-warm service {schedule.keepwarm_unit(account)}.service for "
+              f"{account} (re-warms just after each 5h reset). Stop it with "
+              f"`horus warmup --keep --stop --account {account}`.")
+        if schedule.linger_enabled() is False:
+            print("Note: linger is OFF — the service dies at logout. Enable it with "
+                  "`loginctl enable-linger`.")
+        return 0
+
+    # Foreground loop (also the body the --service unit runs).
+    print(f"horus warmup --keep: keeping {account}'s 5h window warm (re-warms after each "
+          "reset, until interrupted). Ctrl-C to stop.")
+    result = keepwarm.keep_warm(account)
+    print(f"stopped ({result.stopped}); {result.warmed}/{result.cycles} cycle(s) warmed.")
+    return 0
 
 
 def _spawn_watcher(session_id: str, cwd: Path) -> None:
@@ -4800,6 +4875,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--model", default=warmup.DEFAULT_MODEL,
         help=f"model for the warmup turn (default: {warmup.DEFAULT_MODEL}; the cheapest that starts the window)",
     )
+    p_warmup.add_argument(
+        "--keep", action="store_true",
+        help="run the standing keep-warm loop for --account (re-warms after each 5h reset)",
+    )
+    p_warmup.add_argument(
+        "--service", action="store_true",
+        help="with --keep: install the loop as a persistent per-account systemd --user service",
+    )
+    p_warmup.add_argument("--stop", action="store_true", help="stop and remove --account's keep-warm service")
+    p_warmup.add_argument("--restart", action="store_true", help="restart --account's keep-warm service (adopt an upgraded CLI)")
+    p_warmup.add_argument("--status", action="store_true", help="list installed keep-warm services and whether each is active")
     p_warmup.set_defaults(func=cmd_warmup)
 
     p_ask = sub.add_parser(
