@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-18
 vision_facet: "Accounts & isolation"
@@ -8,6 +8,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/usage_snapshot.py (all-accounts roll-up + renderer), horus/cli.py (`horus usage all`), horus/notify_listen.py (usage verb)
+shipped_pr: 319
+shipped_sha: e855aa315fc86e6fa444dba03df80e3640c1db70
 ---
 
 # usage — capacity across all accounts from Telegram

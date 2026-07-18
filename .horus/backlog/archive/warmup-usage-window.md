@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-18
 vision_facet: "Accounts & isolation"
@@ -8,6 +8,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/warmup.py (new), horus/cli.py (`horus warmup`), horus/notify_listen.py (grammar verb)
+shipped_pr: 318
+shipped_sha: aa4a5cf7c4848303eb36aa43ca11c114b6d4efd9
 ---
 
 # warmup — start the 5h usage window on demand

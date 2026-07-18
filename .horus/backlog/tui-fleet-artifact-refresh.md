@@ -1,6 +1,6 @@
 ---
 status: open
-priority: medium
+priority: low
 tier: sonnet
 created: 2026-07-16
 vision_facet: "Dashboard / cockpit"

@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-17
 vision_facet: "Accounts & isolation"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: new horus/statusline.py (portable renderer) + `horus statusline` CLI; account provisioning writes settings.json statusLine pointer; overlaps account-settings-sync
+shipped_pr: 321
+shipped_sha: c552e3fea461cc3441883b3f36fbd8c2090ef552
 ---
 
 # horus-statusline-default — ship the status line, don't hand-configure it per machine

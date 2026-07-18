@@ -3,6 +3,7 @@ status: open
 priority: low
 created: 2026-07-17
 type: bug
+vision_facet: "Introspection & self-improvement"
 parallel: safe
 surface: horus/skills.py (skill_findings, missing_or_stale, _skill_nudge in cli.py), launch/resume preflight, fleet/status projections
 ---

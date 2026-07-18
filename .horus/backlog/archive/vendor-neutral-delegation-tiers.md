@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-17
 vision_facet: "Delegation calibration"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/datums.py (tier vocabulary + alias normalization), horus/capabilities.py, delegation-rubric/dispatch-decision/execution-decision skills, backlog card frontmatter (tier:), standing-dispatch-envelope tier-ceiling field
+shipped_pr: 316
+shipped_sha: 9d5fdafd300b517caf3344eeb69571bfcaaf4a3c
 ---
 
 # vendor-neutral-delegation-tiers — tiers name capability, never a vendor

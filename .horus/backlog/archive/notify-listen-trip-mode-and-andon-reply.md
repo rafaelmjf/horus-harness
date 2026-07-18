@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-18
 vision_facet: "Autonomous dispatch"
@@ -10,6 +10,8 @@ parallel: safe
 created_by: owner
 branch: vision-branch-x3-scheduling-and-autonomous-execution
 surface: horus/schedule.py (release/re-arm + a persistent listen unit), horus/notify_listen.py (grammar + service loop), horus/cli.py (`horus notify listen --service`, `horus schedule release`)
+shipped_pr: 317
+shipped_sha: 47ab52ebec0c1b94b0c05446f27002503c370ebf
 ---
 
 # notify-listen — trip-mode service + andon-reply (release) completion
