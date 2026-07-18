@@ -33,6 +33,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Callable
 
+from horus import input_bridge
 from horus.notify import NotifyConfig, load_notify_config
 
 # A phone screen + Telegram's 4096-char message cap. Truncate command output to fit.
@@ -96,8 +97,25 @@ def _help_text(prefix: str = "") -> str:
     lines.append("horus steering — commands:")
     lines += [f"  {name} {'<arg>' if c.takes_arg else ''}".rstrip() + f"  · {c.help.split('—',1)[-1].strip()}"
               for name, c in COMMANDS.items()]
+    lines.append("  answer <id> <reply|#n> — answer an input request (tap a button, or type)")
     lines.append("  help — this list")
     return "\n".join(lines)
+
+
+def _parse_answer(arg: str) -> tuple[str | None, str]:
+    """Split an ``answer`` argument into ``(target_id_or_None, payload)``.
+
+    A leading token that resolves to an open request id is the target; otherwise
+    the whole argument is the payload for the single open request (so both
+    ``answer <id> yes`` and a bare ``answer yes`` / a ``#n`` button tap work)."""
+    parts = arg.split(maxsplit=1)
+    if not parts:
+        return None, ""
+    first = parts[0]
+    rest = parts[1] if len(parts) > 1 else ""
+    if not first.startswith("#") and input_bridge.resolve(first) is not None:
+        return first, rest
+    return None, arg
 
 
 @dataclass(frozen=True)
@@ -142,6 +160,14 @@ def dispatch(
     arg = tokens[1].strip() if len(tokens) > 1 else ""
     if verb in ("help", "start"):
         return _help_text()
+    if verb == "answer":
+        # Special: writes a response file for a blocked `horus ask`, rather than
+        # shelling out to a horus subcommand like every other verb.
+        if not arg:
+            return "usage: answer <id> <reply|#n>  (or tap a button)"
+        target, payload = _parse_answer(arg)
+        _ok, message = input_bridge.record_answer(target, payload)
+        return message
     cmd = COMMANDS.get(verb)
     if cmd is None:
         return _help_text(f"unknown command: {verb!r}")
@@ -223,6 +249,54 @@ def _post(cfg: NotifyConfig, method: str, payload: dict) -> None:
         resp.read()
 
 
+def format_request(req: "input_bridge.InputRequest") -> tuple[str, dict | None]:
+    """The Telegram text + inline keyboard for one pending input request.
+
+    Each option becomes a tap button whose callback encodes ``answer <id> #<i>``
+    (the same grammar a typed reply uses), so a tap and a type share one path."""
+    lines = [f"❓ {req.project or 'horus'} needs input:", req.question]
+    if req.session_id:
+        sid = req.session_id[:12]
+        lines.append(f"session {sid} — attach: horus tail {sid}")
+    if req.free_text:
+        lines.append("…or type: answer <reply>")
+    keyboard: dict | None = None
+    if req.options:
+        keyboard = {"inline_keyboard": [[
+            {"text": opt, "callback_data": f"answer {req.id} #{i}"}
+            for i, opt in enumerate(req.options)
+        ]]}
+    return "\n".join(lines), keyboard
+
+
+def _push_message(cfg: NotifyConfig, text: str, reply_markup: dict | None) -> None:
+    payload: dict = {"chat_id": cfg.chat_id, "text": text, "disable_web_page_preview": True}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    _post(cfg, "sendMessage", payload)
+
+
+def emit_pending_requests(
+    cfg: NotifyConfig,
+    *,
+    push: Callable[[NotifyConfig, str, dict | None], None] = _push_message,
+) -> int:
+    """Push every not-yet-pushed input request to the owner. Best-effort: a failed
+    push is left un-marked so the next cycle retries. Returns the count pushed."""
+    sent = 0
+    for req in input_bridge.list_pending():
+        if req.pushed:
+            continue
+        text, keyboard = format_request(req)
+        try:
+            push(cfg, text, keyboard)
+        except Exception:  # noqa: BLE001 - best-effort; retry next cycle (not marked)
+            continue
+        input_bridge.mark_pushed(req.id)
+        sent += 1
+    return sent
+
+
 def _reply(cfg: NotifyConfig, reply: Reply) -> None:
     if reply.answer_callback_id:
         try:
@@ -247,11 +321,12 @@ def listen(
     now: Callable[[], float] = time.monotonic,
     get_updates: Callable[[NotifyConfig, int], list[dict]] = _get_updates,
     send: Callable[[NotifyConfig, Reply], None] = _reply,
+    push: Callable[[NotifyConfig, str, dict | None], None] = _push_message,
     max_iterations: int | None = None,
 ) -> ListenResult:
     """Long-poll and dispatch until ``duration`` elapses or interrupted. Best-effort:
     a transport error is counted and the loop continues. ``max_iterations`` bounds the
-    loop in tests."""
+    loop in tests. Each cycle also pushes any pending input requests (the D bridge)."""
     deadline = (now() + duration) if duration else None
     offset = 0
     result = ListenResult()
@@ -264,6 +339,10 @@ def listen(
             result.stopped = "max iterations"
             break
         iterations += 1
+        try:
+            emit_pending_requests(cfg, push=push)
+        except Exception:  # noqa: BLE001 - a push failure never stops the poll loop
+            pass
         try:
             updates = get_updates(cfg, offset)
         except Exception as exc:  # noqa: BLE001 - best-effort poll

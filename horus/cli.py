@@ -40,6 +40,7 @@ from horus import (
     gitstate,
     github_catalog,
     initialize,
+    input_bridge,
     integration,
     launcher,
     machine_requirements,
@@ -1673,6 +1674,51 @@ def cmd_notify_listen(args: argparse.Namespace) -> int:
     code, message = notify_listen.run_listen(duration=duration, repo=repo)
     print(message)
     return code
+
+
+_ASK_TIMEOUT_DEFAULT = 3600.0  # 1h: long enough for an away owner to answer from the phone
+
+
+def cmd_ask(args: argparse.Namespace) -> int:
+    """Ask the owner a bounded question and block until answered (or timeout).
+
+    The session-side half of the remote input bridge: writes an input request the
+    `horus notify listen` loop pushes to the phone, then blocks polling for the
+    answer. Prints the answer to stdout. Exit 0 = answered; 3 = timed out (prints
+    the ``--default`` recommended option when given, so the caller can take the
+    safe path, checkpoint, and continue later)."""
+    try:
+        timeout = _parse_listen_duration(getattr(args, "timeout", None)) or _ASK_TIMEOUT_DEFAULT
+    except ValueError:
+        print(f"invalid --timeout: {args.timeout!r} (use e.g. 1h, 30m, 90s)")
+        return 2
+    options = list(getattr(args, "option", None) or [])
+    if not options and not args.free_text:
+        print("ask needs at least one --option or --free-text")
+        return 2
+    if args.default and args.default not in options:
+        print(f"--default {args.default!r} must be one of the --option values")
+        return 2
+    req = input_bridge.write_request(
+        args.question, options,
+        free_text=args.free_text, default=args.default,
+        session_id=getattr(args, "session", None) or os.environ.get("HORUS_SESSION_ID"),
+        project=getattr(args, "project", None) or Path.cwd().name,
+    )
+    print(f"(awaiting owner input — request {req.id[:8]}; steer from the phone or `horus tail`)",
+          file=sys.stderr)
+    resp = input_bridge.await_response(req.id, timeout=timeout)
+    if resp is None:
+        input_bridge.cleanup(req.id)
+        if args.default:
+            print(args.default)
+            print(f"(timed out after {int(timeout)}s — took default {args.default!r})", file=sys.stderr)
+        else:
+            print(f"(timed out after {int(timeout)}s with no answer)", file=sys.stderr)
+        return 3
+    print(resp.answer)
+    input_bridge.cleanup(req.id)
+    return 0
 
 
 def cmd_warmup(args: argparse.Namespace) -> int:
@@ -4680,6 +4726,26 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"model for the warmup turn (default: {warmup.DEFAULT_MODEL}; the cheapest that starts the window)",
     )
     p_warmup.set_defaults(func=cmd_warmup)
+
+    p_ask = sub.add_parser(
+        "ask",
+        help="ask the owner a bounded question and block until answered from the phone",
+        description=(
+            "The session-side half of the remote input bridge. Writes an input request the "
+            "`horus notify listen` loop pushes to Telegram with tap-option buttons, then blocks "
+            "polling for the answer and prints it to stdout. For away/unattended sessions that "
+            "hit a decision the owner must make. Deterministic, no LLM. Exit 0 = answered; "
+            "3 = timed out (prints --default when given)."
+        ),
+    )
+    p_ask.add_argument("question", help="the question to put to the owner")
+    p_ask.add_argument("--option", action="append", metavar="OPT", help="a tap-able answer (repeatable)")
+    p_ask.add_argument("--free-text", action="store_true", help="allow a typed free-text reply")
+    p_ask.add_argument("--default", metavar="OPT", help="recommended option to fall back to on timeout")
+    p_ask.add_argument("--timeout", default=None, help="how long to wait (e.g. 1h, 30m; default 1h)")
+    p_ask.add_argument("--session", default=None, help="session id to attribute (default: $HORUS_SESSION_ID)")
+    p_ask.add_argument("--project", default=None, help="project name to show (default: cwd name)")
+    p_ask.set_defaults(func=cmd_ask)
 
     p_usage = sub.add_parser("usage", help="inspect native app usage signals")
     usage_sub = p_usage.add_subparsers(dest="usage_cmd", required=True)
