@@ -122,6 +122,15 @@ class ClaudeAdapter(AgentAdapter):
             env["HORUS_RUN_SESSION_ID"] = spec.run_session_id
         if spec.worker:
             env["HORUS_RUN_WORKER"] = "1"
+        # Proxied launch (vision-branch-x4): inject the CLIProxyAPI env into THIS
+        # session's process env only — never a shared settings.json — so GPT (and
+        # Claude-via-proxy) models resolve here without touching any other session.
+        # Lazy import: proxy -> config/schedule, kept off the adapter import path.
+        if spec.proxied:
+            from horus import proxy
+            state = proxy.load_state()
+            if state.get("enabled"):
+                env.update(proxy.proxy_env(state))
         return env
 
     def validate_model(self, model: str | None) -> str | None:

@@ -48,6 +48,10 @@ def default_state() -> dict:
         "api_key": "",
         "auth_dir": str(Path.home() / ".cli-proxy-api"),
         "config_path": str(config.config_dir() / "cliproxy" / "config.yaml"),
+        # alias -> concrete served model id, discovered at enable time. Injected as
+        # ANTHROPIC_DEFAULT_*_MODEL so a proxied launch on a bare `--model` alias
+        # resolves to a model the proxy actually serves (a bare alias 502s otherwise).
+        "model_map": {},
     }
 
 
@@ -111,13 +115,51 @@ def ensure_config_file(state: dict) -> Path:
     return path
 
 
+# Claude Code alias tiers → the env var that pins each to a concrete served id.
+_ALIAS_ENV = {
+    "opus": "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "sonnet": "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "haiku": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+}
+
+
 def proxy_env(state: dict) -> dict[str, str]:
-    """The exact env Claude Code needs to reach the proxy and surface its models."""
-    return {
+    """The exact env a launch needs to reach the proxy and resolve its models.
+
+    Injected into a proxied session's process env at LAUNCH time (see
+    ``ClaudeAdapter.build_env``) — deliberately NOT written into a shared
+    ``settings.json``, because a running session hot-applies that and cannot unset it,
+    so a global rewrite poisons live sessions. Includes the alias→concrete-id mapping
+    (discovered at enable) so a bare ``--model opus/sonnet/haiku`` resolves to a model
+    the proxy serves instead of 502'ing ``unknown provider``."""
+    env = {
         "ANTHROPIC_BASE_URL": f"http://127.0.0.1:{int(state['port'])}",
         "ANTHROPIC_AUTH_TOKEN": ensure_api_key(state),
         "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
     }
+    model_map = state.get("model_map")
+    model_map = model_map if isinstance(model_map, dict) else {}
+    for alias, var in _ALIAS_ENV.items():
+        concrete = model_map.get(alias)
+        if concrete:
+            env[var] = concrete
+    return env
+
+
+def _pick_model_map(model_ids: list[str]) -> dict[str, str]:
+    """Pick a concrete served id per Claude alias tier from ``/v1/models``.
+
+    Deterministic (no clock/random): the highest-sorting ``claude-*`` id whose name
+    carries the tier word, so ``opus`` maps to a real served opus. Empty when the
+    proxy serves no Claude models (GPT-only) — the launch then relies on concrete ids
+    plus gateway discovery."""
+    claude = sorted((m for m in model_ids if m.startswith("claude-")), reverse=True)
+    out: dict[str, str] = {}
+    for alias in _ALIAS_ENV:
+        match = next((m for m in claude if alias in m), None)
+        if match:
+            out[alias] = match
+    return out
 
 
 def docker_run_command(state: dict) -> tuple[str, ...]:
@@ -214,8 +256,10 @@ def _claude_config_dirs() -> list[Path]:
 
 def enable(state: dict | None = None) -> tuple[bool, str]:
     """Guided, verified enable: refuse unless Docker is present and a provider is
-    logged in; start the service; wait until it is actually serving; only THEN write
-    the env into every Claude settings.json. Never wires Claude Code to a dead proxy."""
+    logged in; start the proxy service; wait until it is actually serving; record the
+    served alias→id map. Does NOT touch any ``settings.json`` — the proxy env is
+    injected per-launch (:func:`proxy_env` via ``ClaudeAdapter.build_env``), so
+    enabling can never poison an already-running session (the bug that motivated B)."""
     state = state or load_state()
     if not docker_available():
         return False, "Docker is not installed — the proxy runs as a Docker container."
@@ -228,33 +272,56 @@ def enable(state: dict | None = None) -> tuple[bool, str]:
             schedule.install_proxy_service(command=docker_run_command(state))
     except schedule.ScheduleError as exc:
         return False, f"Could not start the proxy service: {exc}"
-    if not _wait_reachable(state):
-        return False, "Proxy service started but is not serving /v1/models yet — not wiring Claude Code."
-    env = proxy_env(state)
-    wrote = sum(1 for d in _claude_config_dirs() if config.write_proxy_env(d, env))
+    ok, models = _await_models(state)
+    if not ok:
+        return False, "Proxy service started but is not serving /v1/models yet — enable aborted."
+    state["model_map"] = _pick_model_map(models)
     state["enabled"] = True
     save_state(state)
-    return True, f"GPT-via-proxy ON — wired {wrote} Claude settings.json; models available in `/model`."
+    return True, (
+        f"GPT-via-proxy ON — proxy serving {len(models)} models. Launch a proxied session "
+        "(`horus run --proxied`, or a proxied launch) to use them; running sessions are untouched."
+    )
 
 
 def disable(state: dict | None = None) -> tuple[bool, str]:
-    """Reverse of :func:`enable`: remove the env from every Claude settings.json
-    (native Claude restored) and stop the proxy service. Best-effort + idempotent."""
+    """Reverse of :func:`enable`: stop the proxy service and remove its container, and
+    record disabled. Also best-effort strips any *legacy* proxy env a pre-B build wrote
+    into a Claude ``settings.json`` (migration cleanup only — B itself never writes it).
+    Idempotent; never raises."""
     state = state or load_state()
-    cleared = sum(1 for d in _claude_config_dirs() if config.clear_proxy_env(d))
     try:
         schedule.remove_proxy_service()
     except schedule.ScheduleError:
         pass
+    _remove_container(state)
+    cleared = sum(1 for d in _claude_config_dirs() if config.clear_proxy_env(d))
     state["enabled"] = False
     save_state(state)
-    return True, f"GPT-via-proxy OFF — cleared {cleared} Claude settings.json; proxy out of the path."
+    suffix = f" (cleaned {cleared} legacy settings.json)" if cleared else ""
+    return True, f"GPT-via-proxy OFF — proxy stopped and out of the path{suffix}."
 
 
-def _wait_reachable(state: dict, *, tries: int = 15) -> bool:
+def _remove_container(state: dict) -> None:
+    """Best-effort ``docker rm -f`` of the proxy container. ``systemctl stop`` kills the
+    ``docker run`` client but the daemon can keep a ``--rm`` container alive (a
+    docker+systemd gotcha) — this guarantees teardown. Never raises."""
+    if not docker_available():
+        return
+    try:
+        subprocess.run(
+            ["docker", "rm", "-f", CONTAINER_NAME],
+            capture_output=True, timeout=15, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _await_models(state: dict, *, tries: int = 15) -> tuple[bool, list[str]]:
     import time
     for _ in range(tries):
-        if reachable(state)[0]:
-            return True
+        ok, models = reachable(state)
+        if ok:
+            return True, models
         time.sleep(1)
-    return False
+    return False, []

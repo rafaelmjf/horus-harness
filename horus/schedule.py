@@ -818,6 +818,9 @@ def _proxy_service_unit(*, command: tuple[str, ...], docker: str) -> str:
         # ignore failure when none exists), so the restart never fails "name in use".
         f"ExecStartPre=-{docker} rm -f {PROXY_UNIT}",
         "ExecStart=" + " ".join(_quote(part) for part in command),
+        # `systemctl stop` kills the `docker run` client but the daemon can keep the
+        # --rm container alive; force-remove it on stop so teardown is real.
+        f"ExecStopPost=-{docker} rm -f {PROXY_UNIT}",
         "Restart=always",
         "RestartSec=5",
         "",

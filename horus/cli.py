@@ -1234,6 +1234,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         resume=args.resume, dispatch_base_sha=dispatch_base_sha, dispatch_pending=dispatch_pending,
         delivery_expected=getattr(args, "expect_delivery", False),
         watch=getattr(args, "watch", False),
+        proxied=bool(getattr(args, "proxied", False)),
     )
     # Record the attempt at authorization, not at success: a worker that dies or
     # bounces has still spent an attempt, which is exactly what the bound protects.
@@ -1924,9 +1925,10 @@ def cmd_proxy(args: argparse.Namespace) -> int:
     """Manage the optional CLIProxyAPI integration (run GPT models inside Claude Code).
 
     `status` reports readiness; `login <provider>` runs the provider OAuth into the
-    proxy; `enable`/`disable` wire (verified) / unwire Claude Code's settings.json env
-    globally and start/stop the proxy service. Off by default; enabling is guided and
-    refuses to wire Claude Code to a proxy that is not up and serving."""
+    proxy; `enable`/`disable` start/stop the (verified) proxy service. Enabling never
+    rewrites any settings.json — a proxied session gets the proxy env injected at
+    launch (`horus run --proxied` / a proxied launch), so it cannot poison a running
+    session. Off by default; enabling is guided and refuses a proxy that is not up."""
     state = proxy.load_state()
     cmd = getattr(args, "proxy_cmd", None)
 
@@ -4599,6 +4601,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.add_argument("--account", default=None, help="account alias to run under (uses its isolated config dir)")
     p_run.add_argument("--model", default=None, help="model alias (e.g. haiku, sonnet, opus)")
+    p_run.add_argument(
+        "--proxied", action="store_true",
+        help="route this launch through the CLIProxyAPI proxy (GPT + Claude-via-proxy; requires `horus proxy enable`)",
+    )
     p_run.add_argument(
         "--effort",
         default=None,

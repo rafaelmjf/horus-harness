@@ -676,9 +676,10 @@ def write_statusline_pointer(config_dir_path: str | Path) -> bool:
         return False
 
 
-# The proxy integration (vision-branch-x4) writes exactly these keys into a Claude
-# account's settings.json `env` block, and removes exactly these on disable — so the
-# rewire is fully reversible and never touches the user's other env entries.
+# The proxy integration (vision-branch-x4) NEVER writes these into a settings.json —
+# a global rewrite poisons already-running sessions, so proxy env is injected per-launch
+# (see horus/proxy.py). `clear_proxy_env` remains only to strip env that a pre-B build
+# wrote, so disabling/upgrading cleans up. There is deliberately no writer counterpart.
 PROXY_ENV_KEYS = (
     "ANTHROPIC_BASE_URL",
     "ANTHROPIC_AUTH_TOKEN",
@@ -686,37 +687,11 @@ PROXY_ENV_KEYS = (
 )
 
 
-def write_proxy_env(config_dir_path: str | Path, env: dict[str, str]) -> bool:
-    """Merge the proxy `env` keys into an account's ``settings.json`` `env` block.
-
-    Reversible counterpart is :func:`clear_proxy_env`. Idempotent and
-    non-destructive: only the ``PROXY_ENV_KEYS`` are set, every other setting and
-    env var is preserved; a no-op returns False. Best-effort — never raises."""
-    settings_path = Path(config_dir_path) / "settings.json"
-    try:
-        data: dict = {}
-        if settings_path.exists():
-            loaded = json.loads(settings_path.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                data = loaded
-        current = data.get("env")
-        current = dict(current) if isinstance(current, dict) else {}
-        desired = {k: env[k] for k in PROXY_ENV_KEYS if k in env}
-        if all(current.get(k) == v for k, v in desired.items()):
-            return False
-        current.update(desired)
-        data["env"] = current
-        settings_path.parent.mkdir(parents=True, exist_ok=True)
-        settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-        return True
-    except (OSError, ValueError):
-        return False
-
-
 def clear_proxy_env(config_dir_path: str | Path) -> bool:
     """Remove exactly the ``PROXY_ENV_KEYS`` from an account's ``settings.json`` `env`
-    block, leaving every other env var and setting intact — the reverse of
-    :func:`write_proxy_env`. A no-op (none present) returns False. Never raises."""
+    block, leaving every other env var and setting intact. Migration cleanup for env a
+    pre-B build wrote; B injects proxy env at launch and never writes settings.json. A
+    no-op (none present) returns False. Never raises."""
     settings_path = Path(config_dir_path) / "settings.json"
     try:
         if not settings_path.exists():

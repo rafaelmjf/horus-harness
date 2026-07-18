@@ -773,6 +773,8 @@ def test_install_proxy_service_writes_docker_unit_with_absolute_execstart(units,
     assert execstart.startswith("ExecStart=/usr/bin/docker run")   # absolute (203/EXEC lesson)
     assert "Restart=always" in text
     assert f"ExecStartPre=-/usr/bin/docker rm -f {schedule.PROXY_UNIT}" in text  # clears a stale container
+    # bug #3: stop must force-remove the --rm container systemd's stop can leave alive
+    assert f"ExecStopPost=-/usr/bin/docker rm -f {schedule.PROXY_UNIT}" in text
     assert any(call and call[0] == "enable" for call in units)
 
 

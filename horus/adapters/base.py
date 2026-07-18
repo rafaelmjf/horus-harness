@@ -72,6 +72,7 @@ class SpawnSpec:
     extra_args: tuple[str, ...] = ()
     worker: bool = False                # unattended worker run (--worker); exported to hooks
     run_session_id: str | None = None   # Horus run id, exported so hooks have a stable key
+    proxied: bool = False               # route this launch through the CLIProxyAPI proxy (vision-branch-x4)
 
 
 @dataclass(frozen=True)

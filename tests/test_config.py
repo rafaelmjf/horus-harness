@@ -362,23 +362,10 @@ def test_isolate_account_writes_the_statusline_pointer(tmp_path, monkeypatch):
     assert data["statusLine"]["command"] == "horus statusline"
 
 
-# --- proxy env writer/clearer (vision-branch-x4) --------------------------------
-
-def test_write_proxy_env_merges_and_preserves_other_env(tmp_path):
-    import json
-    d = tmp_path / "acct"
-    d.mkdir()
-    (d / "settings.json").write_text(
-        json.dumps({"statusLine": {"command": "x"}, "env": {"FOO": "bar"}}), encoding="utf-8")
-    env = {"ANTHROPIC_BASE_URL": "http://127.0.0.1:8317", "ANTHROPIC_AUTH_TOKEN": "sk-k",
-           "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1"}
-    assert config.write_proxy_env(d, env) is True
-    data = json.loads((d / "settings.json").read_text())
-    assert data["env"]["ANTHROPIC_BASE_URL"].endswith(":8317")
-    assert data["env"]["FOO"] == "bar"                 # untouched
-    assert data["statusLine"] == {"command": "x"}      # untouched
-    assert config.write_proxy_env(d, env) is False      # idempotent no-op
-
+# --- proxy env clearer (vision-branch-x4; migration cleanup only) ----------------
+# There is deliberately no write_proxy_env: B injects proxy env at launch, never into
+# a shared settings.json (that poisons running sessions). clear_proxy_env stays to
+# strip env a pre-B build wrote.
 
 def test_clear_proxy_env_removes_only_proxy_keys(tmp_path):
     import json

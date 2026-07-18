@@ -1578,7 +1578,7 @@ class TerminalUI:
                 if st is None:
                     detail = "status unavailable"
                 elif st.enabled:
-                    detail = f"ON — Claude + GPT in /model ({st.model_count} models)"
+                    detail = f"ON — proxied launches get Claude + GPT ({st.model_count} models)"
                 elif st.ready_to_enable:
                     detail = f"ready ({', '.join(st.providers)} logged in) — Enter to enable"
                 elif not st.docker:

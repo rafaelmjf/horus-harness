@@ -28,6 +28,7 @@ class RunRequest:
     dispatch_pending: int
     delivery_expected: bool = False
     watch: bool = False
+    proxied: bool = False
 
     def payload(self) -> dict:
         row = asdict(self)
@@ -56,6 +57,8 @@ class RunRequest:
             raise ValueError("runner run request has invalid delivery expectation")
         if not isinstance(payload.get("watch", False), bool):
             raise ValueError("runner run request has invalid watch flag")
+        if not isinstance(payload.get("proxied", False), bool):
+            raise ValueError("runner run request has invalid proxied flag")
         root = Path(project)
         if not root.is_dir():
             raise ValueError("runner project directory is missing")
@@ -66,6 +69,7 @@ class RunRequest:
             dispatch_base_sha=payload.get("dispatch_base_sha"),
             dispatch_pending=payload["dispatch_pending"],
             delivery_expected=payload.get("delivery_expected", False), watch=payload.get("watch", False),
+            proxied=payload.get("proxied", False),
         )
 
 
@@ -91,6 +95,7 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
         effort=request.effort,
         worker=request.worker,
         run_session_id=request.session_id,
+        proxied=request.proxied,
     )
     reg = registry.Registry.default()
     record = reg.get(request.session_id)
