@@ -48,6 +48,7 @@ from horus import (
     registry,
     remote_start,
     routines,
+    skills,
     terminal_sessions,
     usage_snapshot,
 )
@@ -188,6 +189,7 @@ class TerminalUI:
         self.project_requirements: machine_requirements.Report | None = None
         self.capabilities_record: dict | None = None
         self.capabilities_error = ""
+        self.project_skill_states: list[skills.SkillState] = []
         self.fleet_review_record: fleet_review.FleetReview | None = None
         self.fleet_review_error = ""
         self.projection_records: list[tuple[Path, dict]] = []
@@ -370,6 +372,7 @@ class TerminalUI:
             self._load_project_focus()
             self._load_project_requirements()
             self._load_project_capabilities()
+            self._load_project_skills()
             self._show("project")
         elif self.screen == "projects" and kind == "fleet_review":
             self._load_fleet_review()
@@ -391,6 +394,8 @@ class TerminalUI:
             self._show("backlog")
         elif self.screen == "project" and kind == "capabilities":
             self._show("capabilities")
+        elif self.screen == "project" and kind == "skills":
+            self._show("skills")
         elif self.screen == "project" and kind == "receipts":
             self._show("receipts")
         elif self.screen == "backlog" and kind == "branch":
@@ -513,6 +518,8 @@ class TerminalUI:
             self._show("backlog")
         elif self.screen == "capabilities":
             self._show("project")
+        elif self.screen == "skills":
+            self._show("project")
         elif self.screen == "receipts":
             self._show("project")
         elif self.screen == "receipt":
@@ -553,6 +560,7 @@ class TerminalUI:
                 ("mode", "fresh"),
                 ("backlog", None),
                 ("capabilities", None),
+                ("skills", None),
                 ("receipts", None),
             ]
         elif self.screen == "accounts":
@@ -595,6 +603,8 @@ class TerminalUI:
                 for record in records
                 if isinstance(record, dict) and isinstance(record.get("text"), str)
             ]
+        elif self.screen == "skills":
+            self.items = [("skill", state) for state in self.project_skill_states]
         elif self.screen == "card":
             self.items = [("card_resume", self.card)] if self.card is not None else []
         elif self.screen == "sessions":
@@ -692,6 +702,7 @@ class TerminalUI:
             "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
             "backlog_fields": "HORUS · Backlog card fields",
             "capabilities": f"HORUS · {self.project.name if self.project else 'Project'} capabilities",
+            "skills": f"HORUS · {self.project.name if self.project else 'Project'} skills",
             "card": "HORUS · Backlog card",
             "receipts": f"HORUS · {self.project.name if self.project else 'Project'} receipts",
             "receipt": "HORUS · Receipt",
@@ -712,6 +723,8 @@ class TerminalUI:
             return self._receipt_body_text()
         if self.screen == "capabilities":
             return self._capabilities_body_text()
+        if self.screen == "skills":
+            return self._skills_body_text()
         if self.screen == "fleet_review":
             return self._fleet_review_body_text()
         if self.screen == "projection_sync":
@@ -832,6 +845,9 @@ class TerminalUI:
                 lines.append((style, f"\n {marker} Capabilities\n"))
                 detail = self.capabilities_error or f"{count} shipped capabilities"
                 lines.append(("class:muted", f"     {detail}\n"))
+            elif kind == "skills":
+                lines.append((style, f"\n {marker} Skills\n"))
+                lines.append(("class:muted", f"     {_skill_summary(self.project_skill_states)}\n"))
             elif kind == "receipts":
                 count = len(self.project_receipts.get(self.project, []))
                 lines.append((style, f"\n {marker} Receipts\n"))
@@ -1181,6 +1197,22 @@ class TerminalUI:
         except (OSError, ValueError) as exc:
             self.capabilities_error = str(exc)
 
+    def _load_project_skills(self) -> None:
+        """Retain the canonical per-agent skill install states for the project frame.
+
+        Read-only projection of ``skills.skill_states`` (the same detection behind
+        ``skill_findings`` / the nudge) for both agents — no new scanning here.
+        """
+        self.project_skill_states = []
+        if self.project is None:
+            return
+        try:
+            self.project_skill_states = skills.skill_states(
+                self.project, targets=("claude", "codex")
+            )
+        except OSError:
+            return
+
     def _load_project_focus(self) -> None:
         """Retain the canonical PRD-first focus record for the project frame."""
         self.project_focus = {}
@@ -1348,6 +1380,33 @@ class TerminalUI:
                 fragments.append(("class:muted", f"     commands: {', '.join(map(str, commands))}\n"))
         return fragments
 
+    def _skills_body_text(self) -> StyleAndTextTuples:
+        fragments: StyleAndTextTuples = [
+            (
+                "class:muted",
+                "\n  Bundled skills per agent — read-only projection of "
+                "skills.skill_findings; never auto-written.\n",
+            ),
+        ]
+        if not self.items:
+            fragments.append(("class:muted", "\n  No bundled skills detected.\n"))
+            return fragments
+        current_target: str | None = None
+        for index, (_kind, state) in enumerate(self.items):
+            if state.target != current_target:
+                current_target = state.target
+                fragments.append(("class:section", f"\n  {current_target.title()}\n"))
+            selected = index == self.selected
+            marker = ">" if selected else " "
+            style = "class:selected" if selected else "class:item"
+            if selected:
+                fragments.append(("[SetCursorPosition]", ""))
+            label, detail = _skill_state_label(state)
+            fragments.append((style, f"\n {marker} {state.name}  —  {label}\n"))
+            if detail:
+                fragments.append(("class:muted", f"     {detail}\n"))
+        return fragments
+
     def _status_text(self) -> StyleAndTextTuples:
         if self.status:
             return [("class:status", f" {self.status}")]
@@ -1403,6 +1462,13 @@ class TerminalUI:
             return [("class:footer", text)]
         if self.screen == "capabilities":
             text = " ↑↓ scroll · Esc back" if narrow else " ↑↓/swipe scroll   Esc back   q quit"
+            return [("class:footer", text)]
+        if self.screen == "skills":
+            text = (
+                " ↑↓ scroll · Esc back"
+                if narrow
+                else " ↑↓/swipe scroll   read-only   Esc back   q quit"
+            )
             return [("class:footer", text)]
         if self.screen == "fleet_review":
             text = (
@@ -1559,6 +1625,44 @@ def _projection_counts(records: list[tuple[Path, dict]]) -> tuple[int, int]:
         for _project, state in records
     )
     return stale, unknown
+
+
+def _skill_state_label(state: skills.SkillState) -> tuple[str, str]:
+    """Presentation label + optional detail for one skill state (no detection here).
+
+    Maps the canonical ``skills.SKILL_*`` status to the card's four rows:
+    installed (vX) / outdated (vX→vY) / available, not installed / unversioned.
+    """
+    if state.status == skills.SKILL_INSTALLED:
+        return f"installed (v{state.installed_version})", ""
+    if state.status == skills.SKILL_OUTDATED:
+        return (
+            f"outdated (v{state.installed_version} → v{state.bundled_version})",
+            f"refresh: {state.refresh_command}",
+        )
+    if state.status == skills.SKILL_MISSING:
+        return "available, not installed", f"install: {state.refresh_command}"
+    # SKILL_UNVERSIONED — customized/unmarked; shown as such, never flagged to overwrite.
+    return "unversioned / customized", "left as-is — never auto-flagged for overwrite"
+
+
+def _skill_summary(states: list[skills.SkillState]) -> str:
+    """One-line roll-up of skill states for the project menu row."""
+    if not states:
+        return "no bundled skills detected"
+    outdated = sum(s.status == skills.SKILL_OUTDATED for s in states)
+    missing = sum(s.status == skills.SKILL_MISSING for s in states)
+    unversioned = sum(s.status == skills.SKILL_UNVERSIONED for s in states)
+    parts: list[str] = []
+    if outdated:
+        parts.append(f"{outdated} outdated")
+    if missing:
+        parts.append(f"{missing} not installed")
+    if unversioned:
+        parts.append(f"{unversioned} unversioned")
+    if not parts:
+        return "all bundled skills installed · claude/codex"
+    return " · ".join(parts) + " · claude/codex"
 
 
 def _projection_surface_text(value: object) -> str:

@@ -380,6 +380,61 @@ def test_receipts_screen_lists_newest_first_and_opens_read_only(tmp_path, monkey
     assert ui.screen == "receipts"
 
 
+def _project_with_skill_drift(tmp_path, monkeypatch) -> tuple[terminal_tui.TerminalUI, object]:
+    """A UI on the skills screen of a project where claude skills are installed with
+    one outdated + one unversioned, and codex skills are entirely missing."""
+    from horus import skills
+
+    _isolated_home(tmp_path, monkeypatch)
+    root = tmp_path / "demo"
+    (root / ".horus").mkdir(parents=True)
+    skills.install_skills(root)  # all claude skills current
+    skills.skill_path(skills.SKILLS[0], root).write_text(
+        "<!-- horus-skill-version: 0 -->\n", encoding="utf-8"
+    )
+    skills.skill_path(skills.SKILLS[1], root).write_text("no marker\n", encoding="utf-8")
+    monkeypatch.setattr(terminal_tui.config, "load_projects", lambda: [str(root)])
+    inp = create_pipe_input()
+    ui = terminal_tui.TerminalUI(input=inp, output=DummyOutput())
+    ui.project = root
+    ui._load_project_skills()
+    return ui, root
+
+
+def test_project_screen_offers_skills_entry(tmp_path, monkeypatch):
+    ui, _root = _project_with_skill_drift(tmp_path, monkeypatch)
+    ui._show("project")
+
+    assert ("skills", None) in ui.items
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "Skills" in rendered
+    assert "outdated" in rendered  # roll-up reflects the drifted claude skill
+
+
+def test_skills_screen_groups_by_agent_and_shows_per_agent_states(tmp_path, monkeypatch):
+    from horus import skills
+
+    ui, _root = _project_with_skill_drift(tmp_path, monkeypatch)
+    ui._show("skills")
+
+    # One row per bundled skill, for both agents, straight from skill_states.
+    assert len(ui.items) == len(skills.SKILLS) * 2
+    assert {state.target for _kind, state in ui.items} == {"claude", "codex"}
+
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "Claude" in rendered and "Codex" in rendered
+    assert "outdated (v0 → v" in rendered  # downgraded claude skill
+    assert "unversioned / customized" in rendered  # unmarked claude skill
+    assert "available, not installed" in rendered  # every codex skill
+    assert "installed (v" in rendered
+    # Read-only projection: never proposes an overwrite of the customized file.
+    assert "never auto-flagged for overwrite" in rendered
+    assert "horus upgrade-project --apply --target codex" in rendered
+
+    ui.back()
+    assert ui.screen == "project"
+
+
 def test_launch_prompt_prepends_inline_batch_skill_preamble():
     from pathlib import Path
     from horus import terminal_tui

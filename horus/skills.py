@@ -48,6 +48,36 @@ class SkillAction(NamedTuple):
     message: str
 
 
+# Per-agent install states of a bundled skill. These four are the canonical
+# statuses both `skill_findings` (doctor/nudge prose) and the read-only TUI skills
+# viewer speak — one detection path, so the viewer renders these directly instead
+# of re-parsing the prose findings (Terminal-TUI-stays-thin).
+SKILL_INSTALLED = "installed"  # present at the bundled version
+SKILL_OUTDATED = "outdated"  # present at an older version
+SKILL_MISSING = "missing"  # bundled but not installed
+SKILL_UNVERSIONED = "unversioned"  # present without a version marker (customized)
+
+
+class SkillState(NamedTuple):
+    """Structured install state of one bundled skill for one agent target.
+
+    The single detection projection behind both ``skill_findings`` and the TUI
+    skills viewer — no new scanning; it reuses ``skill_path`` / ``installed_version``
+    / ``SKILLS`` exactly as the doctor findings do.
+    """
+
+    target: str  # "claude" | "codex"
+    name: str
+    bundled_version: int
+    installed_version: int | None  # None when missing or unversioned
+    status: str  # one of the SKILL_* constants above
+
+    @property
+    def refresh_command(self) -> str:
+        """The one canonical refresh command for this target (never auto-run)."""
+        return f"horus upgrade-project --apply --target {self.target}"
+
+
 # --------------------------------------------------------------------------- #
 # Bundled skill content
 # --------------------------------------------------------------------------- #
@@ -2431,20 +2461,42 @@ def missing_or_stale(project_root: Path, *, target: str = "claude") -> list[Skil
     return out
 
 
-def skill_findings(project_root: Path, *, targets: tuple[str, ...] = ("claude",)) -> list[Finding]:
-    """Doctor findings for project-scope skills."""
-    findings: list[Finding] = []
+def skill_states(project_root: Path, *, targets: tuple[str, ...] = ("claude",)) -> list[SkillState]:
+    """Structured per-(agent, skill) install state for project-scope skills.
+
+    The single detection pass; ``skill_findings`` formats these into doctor/nudge
+    prose and the TUI skills viewer renders them directly. No new scanning — it
+    reuses ``skill_path`` / ``installed_version`` / ``SKILLS``.
+    """
+    states: list[SkillState] = []
     for target in targets:
         for skill in SKILLS:
             path = skill_path(skill, project_root, target=target)
             if not path.exists():
-                findings.append(Finding("warn", f"{target} skill '{skill.name}' not installed (run `horus upgrade-project --apply --target {target}`)"))
+                states.append(SkillState(target, skill.name, skill.version, None, SKILL_MISSING))
                 continue
             current = installed_version(path.read_text(encoding="utf-8"))
             if current is None:
-                findings.append(Finding("warn", f"{target} skill '{skill.name}' present without a version marker (inspect, then use `horus skill install --target {target} --force` if it is safe to overwrite)"))
+                status = SKILL_UNVERSIONED
             elif current < skill.version:
-                findings.append(Finding("warn", f"{target} skill '{skill.name}' outdated (v{current} < v{skill.version}); run `horus upgrade-project --apply --target {target}`"))
+                status = SKILL_OUTDATED
             else:
-                findings.append(Finding("ok", f"{target} skill '{skill.name}' installed (v{current})"))
+                status = SKILL_INSTALLED
+            states.append(SkillState(target, skill.name, skill.version, current, status))
+    return states
+
+
+def skill_findings(project_root: Path, *, targets: tuple[str, ...] = ("claude",)) -> list[Finding]:
+    """Doctor findings for project-scope skills — prose over ``skill_states``."""
+    findings: list[Finding] = []
+    for state in skill_states(project_root, targets=targets):
+        name, target = state.name, state.target
+        if state.status == SKILL_MISSING:
+            findings.append(Finding("warn", f"{target} skill '{name}' not installed (run `{state.refresh_command}`)"))
+        elif state.status == SKILL_UNVERSIONED:
+            findings.append(Finding("warn", f"{target} skill '{name}' present without a version marker (inspect, then use `horus skill install --target {target} --force` if it is safe to overwrite)"))
+        elif state.status == SKILL_OUTDATED:
+            findings.append(Finding("warn", f"{target} skill '{name}' outdated (v{state.installed_version} < v{state.bundled_version}); run `{state.refresh_command}`"))
+        else:
+            findings.append(Finding("ok", f"{target} skill '{name}' installed (v{state.installed_version})"))
     return findings
