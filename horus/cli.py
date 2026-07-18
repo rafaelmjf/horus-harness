@@ -17,6 +17,7 @@ from pathlib import Path
 
 from horus import (
     __version__,
+    activity,
     adapters,
     backend,
     backlog,
@@ -1356,6 +1357,39 @@ def cmd_schedule_list(args: argparse.Namespace) -> int:
         print("\nFired one-shots stay listed until removed: `horus schedule cancel <id>`.")
     if any(s.halted for s in schedules):
         print("Halted dispatches were disarmed by a supervisor escalation and will not fire.")
+    return 0
+
+
+def cmd_schedule_status(args: argparse.Namespace) -> int:
+    """One read-out of autonomous-dispatch activity: ARMED dispatches (the future)
+    plus recently dispatched cards with outcome glyphs (the past). Joins schedule +
+    envelope ledger + datums, read-only — the same view the Control pane, the phone,
+    and the dashboard render without re-parsing."""
+    act = activity.collect(limit=getattr(args, "limit", 10))
+    if getattr(args, "stdout", False):
+        print(json.dumps(
+            {"armed": [asdict(s) for s in act.armed], "ran": [asdict(r) for r in act.ran]},
+            indent=2,
+        ))
+        return 0
+    if not act.armed and not act.ran:
+        print("No autonomous-dispatch activity (nothing armed, nothing dispatched yet).")
+        return 0
+    print("ARMED")
+    if act.armed:
+        for item in act.armed:
+            state = "halted" if item.halted else ("fired" if item.fired else "pending")
+            print(f"  {activity.ARMED} {item.id:<10} {state:<8} {item.when:<21} {item.description}")
+            if item.halted and item.halt_reason:
+                print(f"    └─ {item.halt_reason}")
+    else:
+        print("  (none)")
+    print("RECENT")
+    if act.ran:
+        for r in act.ran:
+            print(f"  {r.glyph} {(r.card or '(card?)'):<28} {r.account:<16} {r.status}")
+    else:
+        print("  (none dispatched under an envelope yet)")
     return 0
 
 
@@ -4032,6 +4066,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_sched_list = schedule_sub.add_parser("list", help="list scheduled dispatches on this machine")
     p_sched_list.add_argument("--stdout", action="store_true", help="emit JSON instead of a table")
     p_sched_list.set_defaults(func=cmd_schedule_list)
+
+    p_sched_status = schedule_sub.add_parser(
+        "status", help="armed dispatches + recently dispatched cards with outcome glyphs")
+    p_sched_status.add_argument("--limit", type=int, default=10, help="recent dispatched cards to show (default 10)")
+    p_sched_status.add_argument("--stdout", action="store_true", help="emit JSON instead of a table")
+    p_sched_status.set_defaults(func=cmd_schedule_status)
 
     p_sched_cancel = schedule_sub.add_parser("cancel", help="disarm and delete a scheduled dispatch")
     p_sched_cancel.add_argument("id", help="schedule id or unique prefix (see `horus schedule list`)")

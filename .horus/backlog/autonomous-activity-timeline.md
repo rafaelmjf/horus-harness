@@ -1,5 +1,5 @@
 ---
-status: open
+status: claimed
 priority: medium
 created: 2026-07-18
 vision_facet: "Autonomous dispatch"
