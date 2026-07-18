@@ -79,9 +79,11 @@ hold — separate from the mechanism working:
   be *reined in*; proxied-into-Claude-Code was molasses. Cause unknown: either something
   is fundamentally wrong with the config for running through the proxy inside Claude
   Code, or the whole approach is simply not as beneficial as its online promoters claim.
-- **Wasted capacity.** ~20% of Codex usage was consumed for almost no delivery beyond
-  the planning cards on this branch — which will themselves be revised in a fresh
-  session before any are actioned.
+- **Wasted capacity — weekly, not 5h.** ~20% of Codex **weekly** capacity was consumed
+  for almost no delivery beyond the planning cards on this branch. This was not a dent
+  in a 5h window that refills in hours — it was a fifth of the whole week's budget, which
+  is huge and a first-order reason to keep this off until it proves worth it. Those cards
+  will themselves be revised in a fresh session before any are actioned.
 - **Statusline leaked into a clean session.** After the trial, even a clean
   Opus/Claude-Code session showed a broken statusline (only the context window, reading
   ~43% at session start — implausible). This suggests the proxy toggle has side effects
