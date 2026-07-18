@@ -40,12 +40,29 @@ _BAR_FILLED = "█"
 _BAR_EMPTY = "░"
 
 
-def _pct_color(pct: int) -> str:
+def usage_bar(pct: int, width: int = BAR_WIDTH) -> str:
+    """A ``██░░`` block bar for a 0–100 percent; rounds up so a non-zero reading
+    never renders as an empty bar. Shared by the status line and the TUI cockpit
+    so both read the same."""
+    pct = max(0, pct)
+    filled = min(width, (pct * width + 99) // 100)
+    return _BAR_FILLED * filled + _BAR_EMPTY * (width - filled)
+
+
+def usage_level(pct: int) -> str:
+    """Coarse capacity band for coloring: ``high`` ≥80, ``warn`` ≥50, else ``ok``."""
     if pct >= 80:
-        return "\033[01;31m"   # red
+        return "high"
     if pct >= 50:
-        return "\033[01;33m"   # yellow
-    return "\033[01;32m"       # green
+        return "warn"
+    return "ok"
+
+
+_LEVEL_ANSI = {"high": "\033[01;31m", "warn": "\033[01;33m", "ok": "\033[01;32m"}  # red / yellow / green
+
+
+def _pct_color(pct: int) -> str:
+    return _LEVEL_ANSI[usage_level(pct)]
 
 
 def _as_pct(value: object) -> int | None:
@@ -81,8 +98,7 @@ def _meter(label: str, pct: int, reset: str | None) -> str:
     """``label ███░░░░░ 42% ↻ 18:19`` — bar rounds up so a non-zero reading never
     renders as an empty bar."""
     pct = max(0, pct)
-    filled = min(BAR_WIDTH, (pct * BAR_WIDTH + 99) // 100)
-    bar = _BAR_FILLED * filled + _BAR_EMPTY * (BAR_WIDTH - filled)
+    bar = usage_bar(pct)
     out = f"{_DIM}{label} {_pct_color(pct)}{bar} {pct:3d}%{_RESET}"
     if reset:
         out += f" {_DIM}↻ {reset}{_RESET}"

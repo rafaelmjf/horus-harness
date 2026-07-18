@@ -55,6 +55,7 @@ from horus import (
     routines,
     schedule,
     skills,
+    statusline,
     terminal_sessions,
     usage_snapshot,
     warmup,
@@ -1027,8 +1028,8 @@ class TerminalUI:
             elif kind == "account":
                 account = value
                 lines.append((style, f"\n {marker} {account.agent.title()} {account.alias}\n"))
-                for usage_line in _usage_lines(self.account_usage.get((account.agent, account.alias))):
-                    lines.append(("class:muted", f"     {usage_line}\n"))
+                for meter_style, meter_text in _usage_meter_lines(self.account_usage.get((account.agent, account.alias))):
+                    lines.append((meter_style, f"     {meter_text}\n"))
             elif kind == "model":
                 if value is None:
                     lines.append((style, f"\n {marker} Default\n"))
@@ -1138,10 +1139,10 @@ class TerminalUI:
         fragments: StyleAndTextTuples = [("class:section", "\n Accounts\n")]
         account_blocks = []
         for account in self.accounts:
-            usage = _usage_lines(self.account_usage.get((account.agent, account.alias)))
+            usage = _usage_meter_lines(self.account_usage.get((account.agent, account.alias)))
             account_blocks.append(
                 [("class:account", f" {account.agent.title()} {account.alias}")]
-                + [("class:muted", f" {line}") for line in usage]
+                + [(meter_style, f" {meter_text}") for meter_style, meter_text in usage]
             )
         if account_blocks:
             account_columns = min(3, max(1, width // 40), len(account_blocks))
@@ -1263,10 +1264,9 @@ class TerminalUI:
         lines: StyleAndTextTuples = [("class:section", "\n Accounts\n")]
         for account in self.accounts:
             usage = self.account_usage.get((account.agent, account.alias))
-            summary = _usage_lines(usage)
             lines.append(("class:account", f"  {account.agent.title()} {account.alias}\n"))
-            for detail in summary:
-                lines.append(("class:muted", f"    {detail}\n"))
+            for meter_style, meter_text in _usage_meter_lines(usage):
+                lines.append((meter_style, f"    {meter_text}\n"))
         lines.append(("", "\n Projects\n"))
         return lines
 
@@ -1792,6 +1792,10 @@ _STYLE = Style.from_dict(
         "card-title": "bold #ffffff",
         "status": "#9fc4d7 bg:#17202a",
         "footer": "#aeb8c2 bg:#20242b",
+        # Usage meters — same green/yellow/red capacity bands as the status bar.
+        "usage-ok": "#3fb950",
+        "usage-warn": "#e3b341",
+        "usage-high": "#f85149",
     }
 )
 
@@ -2121,21 +2125,31 @@ def _account_usage(accounts: list[LaunchAccount]) -> dict[tuple[str, str], usage
     }
 
 
-def _percent(value: float | None) -> str:
-    return "--" if value is None else f"{value:.0f}%"
+def _int_pct(value: float | None) -> int | None:
+    """Floor a numeric percent to an int; None for missing/non-numeric."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
 
 
-def _usage_lines(snapshot: usage_snapshot.UsageSnapshot | None) -> list[str]:
+def _usage_meter_lines(snapshot: usage_snapshot.UsageSnapshot | None) -> StyleAndTextTuples:
+    """Home-view usage as colored ``label ██░░ NN% ↻ reset`` meter lines, reusing
+    the status bar's own bar + capacity level (`statusline.usage_bar`/`usage_level`)
+    so the cockpit and the status line read the same. An unknown window is a dim
+    dash — never a misleading zero bar."""
+    def meter(label: str, percent: float | None, resets_at: str | None) -> tuple[str, str]:
+        pct = _int_pct(percent)
+        if pct is None:
+            return ("class:muted", f"{label:<6} --")
+        reset = f" ↻ {resets_at}" if resets_at else ""
+        # Pad the label so the 5h and weekly bars start at the same column.
+        return (f"class:usage-{statusline.usage_level(pct)}", f"{label:<6} {statusline.usage_bar(pct)} {pct:3d}%{reset}")
+
     if snapshot is None:
-        return ["5h --", "weekly --"]
-
-    def window(label: str, percent: float | None, resets_at: str | None) -> str:
-        text = f"{label} {_percent(percent)}"
-        return f"{text}, resets {resets_at}" if resets_at else text
-
+        return [("class:muted", "5h --"), ("class:muted", "weekly --")]
     return [
-        window("5h", snapshot.percent, snapshot.resets_at),
-        window("weekly", snapshot.weekly_percent, snapshot.weekly_resets_at),
+        meter("5h", snapshot.percent, snapshot.resets_at),
+        meter("weekly", snapshot.weekly_percent, snapshot.weekly_resets_at),
     ]
 
 
