@@ -70,6 +70,12 @@ def test_dispatch_cancel_runs_schedule_cancel():
     assert calls == [["schedule", "cancel", "fb46465b"]]
 
 
+def test_dispatch_release_runs_schedule_release():
+    run, calls = _recording_runner()
+    notify_listen.dispatch("release fb46465b", runner=run)
+    assert calls == [["schedule", "release", "fb46465b"]]
+
+
 def test_dispatch_supervise_appends_repo_path():
     run, calls = _recording_runner()
     notify_listen.dispatch("supervise 16fba944", repo="/home/rafa/projects/horus-harness", runner=run)

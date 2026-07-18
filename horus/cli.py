@@ -1372,6 +1372,32 @@ def cmd_schedule_cancel(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_schedule_release(args: argparse.Namespace) -> int:
+    """Andon inverse: re-arm a halted dispatch once its base is fixed."""
+    ready = schedule.availability()
+    if not ready.ok:
+        print(f"Nothing to release: {ready.reason}.")
+        return 2
+    try:
+        released = schedule.release(args.id)
+    except schedule.ScheduleError as exc:
+        print(f"Could not release: {exc}")
+        return 1
+    if released is None:
+        # Distinguish "no match" from "matched but not halted" for a useful message:
+        # only an andon-halted dispatch is releasable (a cancelled one has no units
+        # left; a fired/pending one has nothing to re-arm).
+        matches = [s for s in schedule.load_all() if s.id == args.id or s.id.startswith(args.id)]
+        if len(matches) == 1 and not matches[0].halted:
+            state = "fired" if matches[0].fired else "pending"
+            print(f"{matches[0].id} is {state}, not halted — only an andon-halted dispatch can be released.")
+        else:
+            print(f"No single halted schedule matches {args.id!r} (see `horus schedule list`).")
+        return 1
+    print(f"Released {released.id}: {released.description} (re-armed, due {released.when}).")
+    return 0
+
+
 def cmd_envelope_create(args: argparse.Namespace) -> int:
     """Create a bounded standing envelope. Bad bounds refuse at create rather than
     silently never matching at fire time."""
@@ -1598,13 +1624,51 @@ def cmd_notify_listen(args: argparse.Namespace) -> int:
 
     The inbound half of the notify channel — deterministic, owner-chat-locked, no LLM.
     Maps a bounded command grammar 1:1 onto existing ``horus`` commands; see
-    ``horus.notify_listen`` for the surface and security invariants."""
+    ``horus.notify_listen`` for the surface and security invariants.
+
+    ``--service`` installs a persistent systemd --user unit so the channel survives
+    a terminal close (and, under linger, a reboot) — the trip-mode posture. ``--stop``
+    tears it down. A second listener is refused (getUpdates is single-consumer)."""
+    repo = str(Path(args.path).resolve()) if getattr(args, "path", None) else None
+
+    if getattr(args, "stop", False):
+        try:
+            removed = schedule.remove_listen_service()
+        except schedule.ScheduleError as exc:
+            print(f"Could not stop the listen service: {exc}")
+            return 1
+        print("Stopped and removed the persistent listen service."
+              if removed else "No persistent listen service is installed.")
+        return 0 if removed else 1
+
+    if getattr(args, "service", False):
+        invalid = notify_listen.validate_config()
+        if invalid is not None:
+            code, message = invalid
+            print(message)
+            return code
+        cwd = Path(repo) if repo else Path.cwd()
+        command: tuple[str, ...] = ("horus", "notify", "listen")
+        if repo:
+            command += ("--path", repo)
+        try:
+            schedule.install_listen_service(command=command, cwd=cwd)
+        except schedule.ScheduleError as exc:
+            print(f"Could not install the listen service: {exc}")
+            return 2
+        print(f"Installed persistent listen service {schedule.LISTEN_UNIT}.service "
+              f"(polling as owner chat, restarts on exit). Stop it with "
+              f"`horus notify listen --stop`.")
+        if schedule.linger_enabled() is False:
+            print("Note: linger is OFF — the service dies at logout. Enable it for a "
+                  "trip with `loginctl enable-linger`.")
+        return 0
+
     try:
         duration = _parse_listen_duration(getattr(args, "for_", None))
     except ValueError:
         print(f"invalid --for duration: {args.for_!r} (use e.g. 8h, 30m, 90s)")
         return 2
-    repo = str(Path(args.path).resolve()) if getattr(args, "path", None) else None
     code, message = notify_listen.run_listen(duration=duration, repo=repo)
     print(message)
     return code
@@ -3744,6 +3808,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_sched_cancel.add_argument("id", help="schedule id or unique prefix (see `horus schedule list`)")
     p_sched_cancel.set_defaults(func=cmd_schedule_cancel)
 
+    p_sched_release = schedule_sub.add_parser(
+        "release", help="re-arm an andon-halted dispatch once its base is fixed (inverse of a supervisor halt)")
+    p_sched_release.add_argument("id", help="halted schedule id or unique prefix (see `horus schedule list`)")
+    p_sched_release.set_defaults(func=cmd_schedule_release)
+
     p_envelope = sub.add_parser(
         "envelope",
         help="manage standing dispatch envelopes (bounded pre-authorization for unattended runs)",
@@ -3938,6 +4007,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_notify_listen.add_argument(
         "--path", default=None,
         help="repo a `supervise <session>` re-fire runs in (default: the session's own project)",
+    )
+    p_notify_listen.add_argument(
+        "--service", action="store_true",
+        help="install a persistent systemd --user unit that keeps the listener running "
+             "across a terminal close / reboot (trip mode); refuses a second listener",
+    )
+    p_notify_listen.add_argument(
+        "--stop", action="store_true",
+        help="stop and remove the persistent --service listener",
     )
     p_notify_listen.set_defaults(func=cmd_notify_listen)
 

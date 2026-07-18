@@ -243,20 +243,22 @@ def _scheduled_card(command: tuple[str, ...]) -> str | None:
     return None
 
 
-def halt_dependents(root: Path, failed_card: str, reason: str) -> list[str]:
+def halt_dependents(root: Path, failed_card: str, reason: str) -> list[tuple[str, str]]:
     """Disarm every SCHEDULED, not-yet-fired dispatch whose card transitively
-    depends on ``failed_card``. Returns the halted card names."""
+    depends on ``failed_card``. Returns ``(card, schedule_id)`` pairs for each one
+    halted — the id lets the escalation offer a one-tap ``release`` once the base
+    is fixed (see :func:`_escalate`)."""
     if not failed_card:
         return []
     dependents = _transitive_dependents(failed_card, _card_deps(root))
-    halted: list[str] = []
+    halted: list[tuple[str, str]] = []
     for sched in schedule.load_all():
         if sched.fired or sched.halted:
             continue
         card = _scheduled_card(sched.command)
         if card and card in dependents:
             if schedule.halt(sched.id, f"blocked: depends on failed card {failed_card} ({reason})"):
-                halted.append(card)
+                halted.append((card, sched.id))
     return halted
 
 
@@ -265,12 +267,24 @@ def halt_dependents(root: Path, failed_card: str, reason: str) -> list[str]:
 # --------------------------------------------------------------------------- #
 
 
-def _escalate(ctx: SupervisionContext, summary: str) -> notify.EscalationResult:
+# Cap on Release buttons so a wide fan-out of halted dependents can't blow out the
+# one-row inline keyboard on a phone; the rest re-arm via `release <id>` typed to the bot.
+_MAX_RELEASE_BUTTONS = 3
+
+
+def _escalate(
+    ctx: SupervisionContext, summary: str,
+    *, halted: tuple[tuple[str, str], ...] = (),
+) -> notify.EscalationResult:
     # Bounded action buttons for the inbound `horus notify listen` dispatcher: a red-gate
     # push is actionable with one tap. Each callback_data is a command the grammar maps.
     actions: tuple[tuple[str, str], ...] = (("Sessions", "sessions"), ("Schedule", "schedule"))
     if ctx.session_id:
         actions += (("Re-supervise", f"supervise {ctx.session_id[:8]}"),)
+    # Andon-reply: one Release button per halted dependent (capped), so the owner
+    # re-arms it from the phone once the base is fixed — `release <id>` in the grammar.
+    for card, sched_id in halted[:_MAX_RELEASE_BUTTONS]:
+        actions += ((f"Release {card}", f"release {sched_id}"),)
     return notify.escalate(notify.Escalation(
         event=notify.SUPERVISE_GATE,
         project=ctx.root.name,
@@ -285,10 +299,12 @@ def _escalate(ctx: SupervisionContext, summary: str) -> notify.EscalationResult:
 
 
 def _escalate_and_halt(ctx: SupervisionContext, summary: str) -> SuperviseOutcome:
-    result = _escalate(ctx, summary)
+    # Halt FIRST so the escalation can carry a Release button per halted dependent.
     halted = halt_dependents(ctx.root, ctx.card or "", summary) if ctx.card else []
+    result = _escalate(ctx, summary, halted=tuple(halted))
     return SuperviseOutcome(
-        verdict="escalated", reason=summary, escalation=result, halted=tuple(halted),
+        verdict="escalated", reason=summary, escalation=result,
+        halted=tuple(card for card, _ in halted),
     )
 
 

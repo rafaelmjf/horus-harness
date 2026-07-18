@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from horus import cli, schedule
+from horus import cli, notify_listen, schedule
 
 NOW = datetime(2026, 7, 17, 15, 0).astimezone()
 
@@ -509,3 +509,121 @@ def test_cancel_clears_the_halt_marker(units, tmp_path):
 def test_halt_is_none_for_an_unknown_id(units, tmp_path):
     _create(tmp_path)
     assert schedule.halt("nonexistent", "reason") is None
+
+
+# --- andon inverse: release re-arms a halted dispatch ------------------------
+
+
+def test_release_rearms_a_halted_dispatch(units, tmp_path):
+    created = _create(tmp_path)
+    schedule.halt(created.id, "blocked: depends on failed card foo")
+    assert (schedule.unit_dir() / f"horus-sched-{created.id}.halt").exists()
+    released = schedule.release(created.id)
+    assert released is not None and released.halted is False and released.halt_reason is None
+    # the marker is cleared and the timer re-enabled (inverse of halt's disable)
+    assert not (schedule.unit_dir() / f"horus-sched-{created.id}.halt").exists()
+    assert any(call and call[0] == "enable" for call in units)
+
+
+def test_release_refuses_a_dispatch_that_is_not_halted(units, tmp_path):
+    created = _create(tmp_path)  # pending, never halted
+    assert schedule.release(created.id) is None
+
+
+def test_release_is_none_for_an_unknown_id(units, tmp_path):
+    _create(tmp_path)
+    assert schedule.release("nonexistent") is None
+
+
+def test_release_round_trips_visible_in_load_all(units, tmp_path):
+    created = _create(tmp_path)
+    schedule.halt(created.id, "blocked")
+    assert [s for s in schedule.load_all() if s.id == created.id][0].halted
+    schedule.release(created.id)
+    listed = [s for s in schedule.load_all() if s.id == created.id][0]
+    assert listed.halted is False  # pending again
+
+
+# --- persistent steering listener (trip-mode service) ------------------------
+
+
+def test_install_listen_service_writes_and_enables_a_unit(units, tmp_path):
+    schedule.install_listen_service(
+        command=("horus", "notify", "listen"), cwd=Path("/repo"),
+    )
+    unit = schedule.unit_dir() / f"{schedule.LISTEN_UNIT}.service"
+    assert unit.exists()
+    text = unit.read_text()
+    assert "Restart=always" in text and "notify" in text
+    assert any(call and call[0] == "enable" for call in units)
+
+
+def test_install_listen_service_refuses_a_second_listener(units, tmp_path, monkeypatch):
+    schedule.install_listen_service(command=("horus", "notify", "listen"), cwd=Path("/repo"))
+    # Simulate the first one being active so the second install is refused by name.
+    monkeypatch.setattr(schedule, "listen_service_active", lambda: True)
+    with pytest.raises(schedule.ScheduleError, match="already running"):
+        schedule.install_listen_service(command=("horus", "notify", "listen"), cwd=Path("/repo"))
+
+
+@pytest.mark.parametrize("state,live", [
+    ("active", True), ("activating", True), ("reloading", True),
+    ("inactive", False), ("failed", False), ("", False),
+])
+def test_listen_service_active_treats_startup_as_live(units, tmp_path, monkeypatch, state, live):
+    """A Type=simple unit sits in 'activating' right after enable --now; a second
+    install racing that window must still be refused (observed live 2026-07-18)."""
+    schedule.install_listen_service(command=("horus", "notify", "listen"), cwd=Path("/repo"))
+
+    class _State:
+        returncode = 0
+        stdout = state
+        stderr = ""
+
+    monkeypatch.setattr(schedule, "_systemctl", lambda *a, **k: _State())
+    assert schedule.listen_service_active() is live
+
+
+def test_remove_listen_service_tears_it_down(units, tmp_path):
+    schedule.install_listen_service(command=("horus", "notify", "listen"), cwd=Path("/repo"))
+    assert schedule.remove_listen_service() is True
+    assert not (schedule.unit_dir() / f"{schedule.LISTEN_UNIT}.service").exists()
+
+
+def test_remove_listen_service_is_false_when_none_installed(units, tmp_path):
+    assert schedule.remove_listen_service() is False
+
+
+# --- CLI wiring: release + listen service ------------------------------------
+
+
+def test_cli_release_rearms_a_halted_dispatch(units, tmp_path, capsys):
+    created = _create(tmp_path)
+    schedule.halt(created.id, "blocked")
+    assert cli.cmd_schedule_release(argparse.Namespace(id=created.id)) == 0
+    assert "Released" in capsys.readouterr().out
+    assert not (schedule.unit_dir() / f"horus-sched-{created.id}.halt").exists()
+
+
+def test_cli_release_refuses_a_pending_dispatch_with_a_clear_reason(units, tmp_path, capsys):
+    created = _create(tmp_path)  # pending, not halted
+    assert cli.cmd_schedule_release(argparse.Namespace(id=created.id)) == 1
+    assert "not halted" in capsys.readouterr().out
+
+
+def test_cli_notify_listen_service_installs_then_stops(units, tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(notify_listen, "validate_config", lambda: None)
+    monkeypatch.setattr(schedule, "linger_enabled", lambda: True)
+    ns = argparse.Namespace(path=None, service=True, stop=False, for_=None)
+    assert cli.cmd_notify_listen(ns) == 0
+    assert "Installed persistent listen service" in capsys.readouterr().out
+    stop = argparse.Namespace(path=None, service=False, stop=True, for_=None)
+    assert cli.cmd_notify_listen(stop) == 0
+    assert "Stopped and removed" in capsys.readouterr().out
+
+
+def test_cli_notify_listen_service_refused_on_bad_config(units, tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(notify_listen, "validate_config", lambda: (2, "telegram sink needs both token and chat_id in [notify]."))
+    ns = argparse.Namespace(path=None, service=True, stop=False, for_=None)
+    assert cli.cmd_notify_listen(ns) == 2
+    assert "token and chat_id" in capsys.readouterr().out

@@ -77,6 +77,10 @@ COMMANDS: dict[str, Command] = {
         ("schedule", "cancel"), "cancel <id> — stop a pending dispatch",
         takes_arg=True, mutating=True,
     ),
+    "release": Command(
+        ("schedule", "release"), "release <id> — re-arm an andon-halted dispatch",
+        takes_arg=True, mutating=True,
+    ),
     "supervise": Command(
         ("supervise",), "supervise <session> — re-run the acceptance gate",
         takes_arg=True, mutating=True, wants_repo=True,
@@ -278,8 +282,11 @@ def listen(
     return result
 
 
-def run_listen(*, duration: float | None, repo: str | None) -> tuple[int, str]:
-    """CLI entry: validate config, then listen. Returns (exit_code, message)."""
+def validate_config() -> tuple[int, str] | None:
+    """``None`` when the telegram sink is usable for listening, else the
+    ``(exit_code, message)`` a CLI should print and return. Shared by the
+    foreground listen and the persistent ``--service`` install so a dead unit is
+    never installed against a misconfigured sink."""
     cfg = load_notify_config()
     if cfg.sink != "telegram":
         return 2, (
@@ -288,6 +295,15 @@ def run_listen(*, duration: float | None, repo: str | None) -> tuple[int, str]:
         )
     if not cfg.token or not cfg.chat_id:
         return 2, "telegram sink needs both token and chat_id in [notify]."
+    return None
+
+
+def run_listen(*, duration: float | None, repo: str | None) -> tuple[int, str]:
+    """CLI entry: validate config, then listen. Returns (exit_code, message)."""
+    invalid = validate_config()
+    if invalid is not None:
+        return invalid
+    cfg = load_notify_config()
     window = f"for {int(duration)}s" if duration else "until interrupted"
     print(f"horus notify listen: polling as owner chat {cfg.chat_id} ({window}). Ctrl-C to stop.")
     try:
