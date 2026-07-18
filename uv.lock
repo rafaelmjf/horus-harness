@@ -13,7 +13,7 @@ wheels = [
 
 [[package]]
 name = "horus-harness"
-version = "0.0.64"
+version = "0.0.65"
 source = { editable = "." }
 dependencies = [
     { name = "prompt-toolkit" },
