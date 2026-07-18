@@ -179,6 +179,7 @@ class TerminalUI:
         self.project_trees = {project: _project_tree(project) for project in self.projects}
         self.project_receipts = {project: _receipts(project) for project in self.projects}
         self.expanded_branches: set[tuple[Path, str]] = set()
+        self.priority_card: backlog.Card | None = None  # card whose priority the picker edits
         self.receipt: backlog_tree.Receipt | None = None
         self.receipt_scroll = 0
         self.project_pending = {
@@ -347,6 +348,16 @@ class TerminalUI:
         def _review_card(event) -> None:
             self._exit_edit(review=True)
 
+        @keys.add("p")
+        def _priority(event) -> None:
+            # Quick reprioritize from the backlog without opening the editor — open
+            # the priority picker for the selected card.
+            if self.screen == "backlog" and self.items:
+                kind, value = self.items[self.selected]
+                if kind == "card":
+                    self.priority_card = value  # type: ignore[assignment]
+                    self._show("card_priority")
+
         @keys.add("q")
         def _quit(event) -> None:
             event.app.exit(result="quit")
@@ -428,6 +439,13 @@ class TerminalUI:
         elif target != self.selected:
             self.move(target - self.selected)
 
+    def _reload_project_backlog(self, project: Path) -> None:
+        """Re-read one project's cards, tree, and metrics after an in-place card
+        edit (e.g. a priority change) so the backlog re-renders immediately."""
+        self.project_cards[project] = _open_cards(project)
+        self.project_metrics[project] = _backlog_metrics(project, self.project_cards[project])
+        self.project_trees[project] = _project_tree(project)
+
     def scroll(self, amount: int) -> None:
         if self.screen == "card":
             lines = self._card_lines()
@@ -504,6 +522,21 @@ class TerminalUI:
             self.card = value  # type: ignore[assignment]
             self.card_scroll = 4
             self._show("card")
+        elif self.screen == "card_priority" and kind == "priority_choice":
+            choice = str(value)
+            card = self.priority_card
+            message = ""
+            if card is not None:
+                try:
+                    backlog.set_priority(card.path, choice)
+                    if self.project is not None:
+                        self._reload_project_backlog(self.project)
+                    message = f"{card.name}: priority set to {choice}."
+                except (ValueError, OSError) as exc:
+                    message = f"Could not set priority: {exc}"
+            self.priority_card = None
+            self._show("backlog")  # clears status, so set the outcome after
+            self.status = message
         elif self.screen == "card" and kind == "card_resume":
             self.pending_mode = "resume"
             self.pending_card = self.card
@@ -606,6 +639,9 @@ class TerminalUI:
         elif self.screen == "backlog":
             self._show("project")
         elif self.screen == "backlog_fields":
+            self._show("backlog")
+        elif self.screen == "card_priority":
+            self.priority_card = None
             self._show("backlog")
         elif self.screen == "capabilities":
             self._show("project")
@@ -801,6 +837,11 @@ class TerminalUI:
                     items.append(("facet", group))
                     items.extend(("card", card) for card in group.children)
                 self.items = items
+        elif self.screen == "card_priority":
+            self.items = [("priority_choice", p) for p in backlog.PRIORITY_CHOICES]
+            current = self.priority_card.priority if self.priority_card else ""
+            if current in backlog.PRIORITY_CHOICES:
+                self.selected = backlog.PRIORITY_CHOICES.index(current)
         elif self.screen == "backlog_fields":
             choices = _card_field_choices(self.project_cards.get(self.project, []), self.backlog_fields)
             self.items = [("backlog_field", key) for key in choices]
@@ -911,6 +952,7 @@ class TerminalUI:
             "session_mode": "HORUS · Session mode",
             "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
             "backlog_fields": "HORUS · Backlog card fields",
+            "card_priority": f"HORUS · Priority: {self.priority_card.name if self.priority_card else 'card'}",
             "capabilities": f"HORUS · {self.project.name if self.project else 'Project'} capabilities",
             "skills": f"HORUS · {self.project.name if self.project else 'Project'} skills",
             "card": "HORUS · Backlog card",
@@ -1136,6 +1178,16 @@ class TerminalUI:
                 receipt = value
                 lines.append((style, f"\n {marker} {receipt.title}\n"))
                 lines.append(("class:muted", f"     {receipt.date or 'undated'} · {receipt.path.name}\n"))
+            elif kind == "priority_choice":
+                if index == 0:
+                    title = self.priority_card.title if self.priority_card else ""
+                    lines.append(("class:section", f"\n  Set priority — {title}\n"))
+                choice = str(value)
+                current = self.priority_card.priority if self.priority_card else ""
+                active = "current" if choice == current else "      "
+                lines.append((style, f"\n {marker} "))
+                lines.append(_priority_dot(choice))
+                lines.append((style, f"[{active}] {choice}\n"))
             elif kind == "backlog_field":
                 if index == 0:
                     lines.append(("class:section", "\n  Shown inline after each card title\n"))
@@ -1779,9 +1831,16 @@ class TerminalUI:
             return [("class:footer", text)]
         if self.screen == "backlog":
             text = (
-                " ↑↓ · Enter open/expand · f fields · Esc"
+                " ↑↓ · Enter open/expand · p priority · f fields · Esc"
                 if narrow
-                else " ↑↓/swipe scroll   Enter open card / expand branch   f fields   Esc back   q quit"
+                else " ↑↓/swipe scroll   Enter open / expand   p priority   f fields   Esc back   q quit"
+            )
+            return [("class:footer", text)]
+        if self.screen == "card_priority":
+            text = (
+                " ↑↓ · Enter set · Esc back"
+                if narrow
+                else " ↑↓ select   Enter set priority   Esc back   q quit"
             )
             return [("class:footer", text)]
         if self.screen == "receipts":

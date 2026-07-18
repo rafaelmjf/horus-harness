@@ -313,6 +313,20 @@ def _set_status(path: Path, new_status: str) -> None:
     _set_front_matter(path, {_STATUS_KEY: new_status})
 
 
+PRIORITY_CHOICES: tuple[str, ...] = ("high", "medium", "low")
+
+
+def set_priority(path: Path, priority: str) -> None:
+    """Set a card's ``priority`` frontmatter in place — the quick backlog
+    reprioritize, no editor. Reuses the same frontmatter-fence editor ``ship`` and
+    status use; only the ``priority:`` line changes (inserted if absent). Raises
+    ``ValueError`` for a value outside :data:`PRIORITY_CHOICES`."""
+    if priority not in PRIORITY_CHOICES:
+        allowed = ", ".join(PRIORITY_CHOICES)
+        raise ValueError(f"invalid priority {priority!r}; allowed: {allowed}")
+    _set_front_matter(Path(path), {"priority": priority})
+
+
 @contextlib.contextmanager
 def _claim_lock(root: Path):
     """Serialize the load-check-write critical section across processes.
