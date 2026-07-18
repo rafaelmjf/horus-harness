@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-18
 vision_facet: "Introspection & self-improvement"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/skills.py (installed vs available/version findings — already exists), horus/terminal_tui.py (new skills screen), horus/dashboard.py (optional parity)
+shipped_pr: 314
+shipped_sha: 7d151e67756755a2df07deff4cb8bb34b57fd175
 ---
 
 # global-skill-viewer-tui — see installed vs available skills, per agent
