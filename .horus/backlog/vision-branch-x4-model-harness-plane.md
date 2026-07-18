@@ -1,6 +1,6 @@
 ---
 status: open
-priority: medium
+priority: low
 created: 2026-07-18
 tier: frontier
 type: feature
@@ -9,6 +9,14 @@ phase: explore
 created_by: owner
 surface: .horus/backlog/ divergence umbrella; model + harness + profile + provider-credential route plane
 ---
+
+> **ON HOLD / deprioritized (2026-07-18).** The first sustained live use went poorly
+> (see "First sustained live use" below): host freeze, painfully slow interaction, ~20%
+> Codex capacity burned for little delivery, and statusline breakage that leaked into a
+> clean non-proxied session. The GPT-in-Claude-Code harness-switch saga is postponed
+> until it can be re-tested in a **less risky context** and shown to be worth it at all.
+> The one carved-out active thread is [[x4-pi-harness-via-proxy]] (a different harness,
+> also via the proxy). Everything else here waits.
 
 # vision-branch-x4 — model × harness × credential execution-route plane
 
@@ -55,6 +63,37 @@ runtime or become the execution orchestrator, drop/rescope it.
 - Landscape scan: `research/2026-07-18-multi-model-harness-scan.md`
 - Stage-0 spike: `research/2026-07-18-x4-stage0-gpt-in-claude-code-spike.md`
 - First live session: [[2026-07-18-claudex-first-session-findings]]
+
+## First sustained live use — owner verdict (2026-07-18)
+
+The first real GPT-through-Claude-Code session (GPT 5.6 "sol") was, on the owner's
+lived experience, a net-negative trial. This is the evidence that puts the branch on
+hold — separate from the mechanism working:
+
+- **Host safety.** Sol emitted a command that crashed the workstation; the owner had to
+  drop to tty3 and restart the GUI to recover. This is what spawned the whole X5
+  safe-execution-boundaries branch. Evidence: [[2026-07-18-agent-host-freeze-incident]].
+- **Painfully slow.** Everything dragged — plans took forever to generate, and ordinary
+  commands ran minutes longer than they should. The opposite of the owner's experience
+  running GPT inside Codex, where the models feel like "an F1 car speeding" that has to
+  be *reined in*; proxied-into-Claude-Code was molasses. Cause unknown: either something
+  is fundamentally wrong with the config for running through the proxy inside Claude
+  Code, or the whole approach is simply not as beneficial as its online promoters claim.
+- **Wasted capacity.** ~20% of Codex usage was consumed for almost no delivery beyond
+  the planning cards on this branch — which will themselves be revised in a fresh
+  session before any are actioned.
+- **Statusline leaked into a clean session.** After the trial, even a clean
+  Opus/Claude-Code session showed a broken statusline (only the context window, reading
+  ~43% at session start — implausible). This suggests the proxy toggle has side effects
+  that persist beyond the proxied session. Expectation: untoggling the proxy in the TUI
+  reverts it; if it does not, the owner will restore the statusline next session, and
+  this is grounds to revert the proxy implementation (v0.0.65) entirely.
+
+**Decision.** Postpone and deprioritize the GPT-in-Claude-Code harness switch. It needs
+much more testing in a low-risk context before there is any decision on whether it is
+worth it. The owner will disable the proxy toggle and watch; a persistent slowdown or
+statusline breakage is grounds to revert v0.0.65. The only work that proceeds now is
+[[x4-pi-harness-via-proxy]].
 
 ## Ordered stages and children
 
