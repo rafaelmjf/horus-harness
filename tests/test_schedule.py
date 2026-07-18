@@ -182,6 +182,60 @@ def test_a_rejected_unit_leaves_nothing_behind(monkeypatch, tmp_path):
     assert not list((tmp_path / "u").glob("*.service"))
 
 
+# --- guard: every systemd unit writer must emit an absolute ExecStart --------
+#
+# Companion to #322's 203/EXEC fix: a bare `ExecStart=horus …` resolves against
+# systemd's own compiled-in PATH, not the unit's `Environment=PATH`, and only fails
+# in production. This enumerates every current unit-writer by construction (the
+# completeness check below fails loudly if a new one is added without being wired
+# in here) rather than relying on someone remembering to add a per-writer test.
+
+_UNIT_WRITERS = {
+    "_service_unit": lambda command: schedule._service_unit(
+        description="d", command=command, cwd=Path("/repo"),
+    ),
+    "_notify_unit": lambda command: schedule._notify_unit(
+        description="d", command=command, cwd=Path("/repo"),
+    ),
+    "_listen_service_unit": lambda command: schedule._listen_service_unit(
+        command=command, cwd=Path("/repo"),
+    ),
+    "_keepwarm_service_unit": lambda command: schedule._keepwarm_service_unit(
+        account="claude-work", command=command, cwd=Path("/repo"),
+    ),
+    "_proxy_service_unit": lambda command: schedule._proxy_service_unit(
+        command=command, docker="/usr/bin/docker",
+    ),
+}
+
+
+def test_every_unit_writer_is_enumerated_by_the_execstart_guard():
+    """A new `_..._unit` writer that isn't added to `_UNIT_WRITERS` above would
+    silently escape this guard — fail loudly instead so it gets wired in."""
+    import inspect
+
+    all_writers = {
+        name for name, obj in vars(schedule).items()
+        if name.startswith("_") and name.endswith("_unit") and inspect.isfunction(obj)
+        and name != "_timer_unit"  # a .timer unit has no [Service]/ExecStart= at all
+    }
+    assert all_writers == set(_UNIT_WRITERS), (
+        "a systemd unit writer was added or removed without updating _UNIT_WRITERS "
+        "in tests/test_schedule.py — wire it into the absolute-ExecStart guard"
+    )
+
+
+@pytest.mark.parametrize("name,build", _UNIT_WRITERS.items())
+def test_unit_writer_never_emits_a_bare_execstart(name, build):
+    """Given an absolute command (what every install path is responsible for
+    producing via `_absolute_exec`/`sys.executable`), every writer's `ExecStart=`
+    must start with an absolute path — never a bare name systemd resolves itself."""
+    text = build(("/abs/path/horus", "notify", "listen"))
+    execstart = next(l for l in text.splitlines() if l.startswith("ExecStart="))
+    exec_target = execstart.split("=", 1)[1].split(" ", 1)[0]
+    assert exec_target.startswith("/"), f"{name} emitted a non-absolute ExecStart: {execstart!r}"
+
+
 # --- pre-launch death escalates, not dies in the journal ---------------------
 
 
