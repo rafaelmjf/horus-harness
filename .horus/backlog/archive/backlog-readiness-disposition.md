@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 readiness: ready
 autonomy: eligible
@@ -12,6 +12,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/backlog.py (readiness/autonomy/last_refined parse), horus/backlog_tree.py, horus/cli.py (backlog list/migration), horus/terminal_tui.py (backlog pane), horus/routines.py (consolidate read-out counts), scheduler candidate gates
+shipped_pr: 366
+shipped_sha: e9015c7199a89b71b8408f128ad8c6b1b83ca17b
 ---
 
 # backlog-readiness-disposition — machine-readable readiness and autonomy
