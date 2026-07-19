@@ -91,6 +91,26 @@ def _find_envelope_for_session(session_id: str) -> tuple[str | None, str | None,
     return None, None, False
 
 
+def _context_from_record(
+    rec: registry.SessionRecord, path: str | Path | None
+) -> SupervisionContext:
+    """Build the full context from a resolved worker session record — pinned base,
+    delivery expectation, and the authorizing envelope's merge authority."""
+    env_name, card, merge_authority = _find_envelope_for_session(rec.session_id)
+    pr_ref = str(rec.delivery_pr_number) if rec.delivery_pr_number else rec.delivery_head_sha
+    return SupervisionContext(
+        root=Path(path) if path else Path(rec.project),
+        pr_ref=pr_ref,
+        head_sha=rec.delivery_head_sha,
+        base_ref=rec.dispatch_base_sha,
+        card=card,
+        delivery_expected=bool(rec.delivery_expected),
+        merge_authority=merge_authority,
+        session_id=rec.session_id,
+        envelope_name=env_name,
+    )
+
+
 def resolve_context(target: str, *, path: str | Path | None = None) -> SupervisionContext | None:
     """Resolve a session id/prefix (preferred) or a PR ref into a context.
 
@@ -102,20 +122,7 @@ def resolve_context(target: str, *, path: str | Path | None = None) -> Supervisi
     records = reg.all()
     matches = [r for r in records if r.session_id == target or r.session_id.startswith(target)]
     if len(matches) == 1:
-        rec = matches[0]
-        env_name, card, merge_authority = _find_envelope_for_session(rec.session_id)
-        pr_ref = str(rec.delivery_pr_number) if rec.delivery_pr_number else rec.delivery_head_sha
-        return SupervisionContext(
-            root=Path(path) if path else Path(rec.project),
-            pr_ref=pr_ref,
-            head_sha=rec.delivery_head_sha,
-            base_ref=rec.dispatch_base_sha,
-            card=card,
-            delivery_expected=bool(rec.delivery_expected),
-            merge_authority=merge_authority,
-            session_id=rec.session_id,
-            envelope_name=env_name,
-        )
+        return _context_from_record(matches[0], path)
     if matches:
         return None  # ambiguous prefix — caller escalates rather than guessing
     # Not a session id: treat as a PR ref, verify-only (no base, no authority).
@@ -124,6 +131,71 @@ def resolve_context(target: str, *, path: str | Path | None = None) -> Supervisi
         pr_ref=target, head_sha=None, base_ref=None, card=None,
         delivery_expected=False, merge_authority=False,
     )
+
+
+def _latest_session_for_card(card: str) -> str | None:
+    """The session id of the most-recent envelope-ledger dispatch of ``card``, or None.
+
+    The ledger is the durable record of what was dispatched (``{ts, card, session_id}``);
+    picking the newest ts deterministically resolves a card that was retried, and keeps
+    the authorizing envelope in reach so merge authority survives (never a guess)."""
+    best: tuple[str, str] | None = None  # (ts, session_id)
+    for env in envelope.load_all():
+        for row in envelope.read_ledger(env.name):
+            if (row.get("card") or None) == card and row.get("session_id"):
+                ts = row.get("ts", "")
+                if best is None or ts > best[0]:
+                    best = (ts, row["session_id"])
+    return best[1] if best else None
+
+
+def _latest_record_for_branch(branch: str) -> registry.SessionRecord | None:
+    """The most-recent worker session record whose delivery landed on ``branch``."""
+    matches = [r for r in registry.Registry.default().all() if r.delivery_branch == branch]
+    if not matches:
+        return None
+    return max(matches, key=lambda r: r.updated_at or r.last_activity_at or "")
+
+
+def resolve_deferred(
+    *, card: str | None = None, branch: str | None = None, path: str | Path | None = None
+) -> SupervisionContext | None:
+    """Resolve a DEFERRED target — a card or branch selector — to the worker session it
+    names, at the time the supervisor actually runs.
+
+    This breaks the worker→supervise chicken-and-egg: the supervisor can be scheduled
+    before the worker's session id exists, then bind to the real session (with its
+    pinned base + envelope merge authority) at fire time. Returns None when nothing
+    matches, so the caller escalates rather than guessing — never merges the wrong thing.
+    """
+    rec: registry.SessionRecord | None = None
+    reg = registry.Registry.default()
+    if card:
+        session_id = _latest_session_for_card(card)
+        if session_id:
+            rec = next((r for r in reg.all() if r.session_id == session_id), None)
+    elif branch:
+        rec = _latest_record_for_branch(branch)
+    if rec is None:
+        return None
+    return _context_from_record(rec, path)
+
+
+def escalate_unresolved(
+    *, card: str | None = None, branch: str | None = None, path: str | Path | None = None
+) -> SuperviseOutcome:
+    """A deferred target that resolved to nothing escalates (andon) and merges nothing.
+
+    A scheduled supervisor whose worker never produced a session must not fail silently:
+    it pushes an escalation (halting the card's dependents when the card is known) so the
+    away-mode owner learns the worker never delivered."""
+    selector = f"card {card}" if card else f"branch {branch}"
+    ctx = SupervisionContext(
+        root=Path(path) if path else Path.cwd(),
+        pr_ref=None, head_sha=None, base_ref=None, card=card,
+        delivery_expected=False, merge_authority=False,
+    )
+    return _escalate_and_halt(ctx, f"no worker session found for {selector} — nothing to supervise")
 
 
 # --------------------------------------------------------------------------- #

@@ -1688,11 +1688,37 @@ def cmd_supervise(args: argparse.Namespace) -> int:
     merge authority), reproduces the acceptance gate itself, then accepts or escalates —
     never trusting the worker's own 'done'. Exit 0 = accepted/verified/no-op; 1 = escalated.
     """
-    ctx = supervise.resolve_context(args.target, path=getattr(args, "path", None))
-    if ctx is None:
-        print(f"Refusing to supervise: {args.target!r} matches more than one session — "
-              "give the full id (see `horus sessions`).")
+    path = getattr(args, "path", None)
+    target = getattr(args, "target", None)
+    card = getattr(args, "card", None)
+    branch = getattr(args, "branch", None)
+    selectors = [s for s in (target, card, branch) if s]
+    if len(selectors) != 1:
+        print("Refusing to supervise: give exactly one of a session/PR target, "
+              "--card <name>, or --branch <branch>.")
         return 2
+
+    if target is not None:
+        ctx = supervise.resolve_context(target, path=path)
+        if ctx is None:
+            print(f"Refusing to supervise: {target!r} matches more than one session — "
+                  "give the full id (see `horus sessions`).")
+            return 2
+    else:
+        # A DEFERRED target resolves at fire time: a scheduled supervisor binds to the
+        # worker's real session (pinned base + envelope authority) that its card/branch
+        # names, so worker AND supervisor can both be armed before either runs. No match
+        # escalates (andon) — it never merges the wrong thing.
+        ctx = supervise.resolve_deferred(card=card, branch=branch, path=path)
+        if ctx is None:
+            outcome = supervise.escalate_unresolved(card=card, branch=branch, path=path)
+            print(f"supervise: {outcome.verdict} — {outcome.reason}")
+            if outcome.escalation is not None:
+                print(f"  escalation: {outcome.escalation.describe()}")
+            if outcome.halted:
+                print(f"  andon: halted {len(outcome.halted)} dependent scheduled dispatch(es): "
+                      f"{', '.join(outcome.halted)}")
+            return outcome.exit_code
     outcome = supervise.supervise(ctx, probe=getattr(args, "probe", None))
     print(f"supervise: {outcome.verdict} — {outcome.reason}")
     if outcome.escalation is not None:
@@ -4400,7 +4426,22 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p_supervise.add_argument("target", help="a worker session id/prefix (preferred) or a PR number/URL")
+    p_supervise.add_argument(
+        "target", nargs="?", default=None,
+        help="a worker session id/prefix (preferred) or a PR number/URL. Omit and pass "
+             "--card/--branch for a DEFERRED target that resolves at fire time (so a "
+             "supervisor can be scheduled before its worker's session id exists).",
+    )
+    p_supervise.add_argument(
+        "--card", default=None, metavar="NAME",
+        help="deferred target: supervise the most-recent worker session dispatched for "
+             "this card (resolved at fire time from the envelope ledger + registry)",
+    )
+    p_supervise.add_argument(
+        "--branch", default=None, metavar="BRANCH",
+        help="deferred target: supervise the most-recent worker session whose delivery "
+             "landed on this branch (resolved at fire time from the registry)",
+    )
     p_supervise.add_argument(
         "--path", default=None,
         help="project dir to verify in (default: the session's own project from the registry)",
