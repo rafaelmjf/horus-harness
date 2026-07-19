@@ -79,7 +79,12 @@ def test_shared_block_carries_config_dir_isolation_rule():
 
 def test_shared_block_carries_resume_confirmation_rule():
     block = templates.shared_block("CLAUDE.md")
-    assert "orientation handoff, never authorization to execute" in block
-    assert "asks permission before editing" in block
-    assert "never ordered as a next step" in block
-    assert "separate confirmation is required" in block
+    assert "orientation handoff" in block
+    # Consent lives in the launch permission posture, not in authored prose that a
+    # model can reinterpret or that can contradict the handoff it wraps.
+    assert "Do not author consent instructions into it" in block
+    assert "launch permission posture" in block
+    assert "never chained as a next step" in block
+    # ...and the retired granularity axis is gone from the shared block.
+    assert "continuity_granularity" not in block
+    assert "`delivery` performs" not in block

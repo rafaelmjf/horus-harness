@@ -19,44 +19,13 @@ from pathlib import Path
 
 from horus import adapters, launcher, registry
 
-# Launch "session modes": a posture the session adopts, made reliable by loading a bundled
-# skill at launch (cross-account, cross-model, via git projection) rather than trusting the
-# model to remember a rule. `standard` is today's behavior. See
-# `.claude/skills/<mode-skill>` and card `launch-mode-process-skill`.
-LAUNCH_MODE_COPY: dict[str, tuple[str, str]] = {
-    "standard": (
-        "Standard",
-        "One defined delivery with the full branch, PR, gate, and merge lifecycle.",
-    ),
-    "inline-batch": (
-        "Inline Batch",
-        "Multiple cards or related findings in one warm, recoverable campaign.",
-    ),
-    "all-gas-no-breaks": (
-        "All Gas No Breaks",
-        "Minimal orchestration: work directly and load process skills only when required.",
-    ),
-}
-LAUNCH_MODES: tuple[str, ...] = tuple(LAUNCH_MODE_COPY)
-_MODE_SKILL: dict[str, str] = {
-    "inline-batch": "inline-batch-session",
-    "all-gas-no-breaks": "all-gas-no-breaks-session",
-}
-
-
-def mode_preamble(session_mode: str | None) -> str:
-    """The prompt preamble that loads a mode's skill, or "" for standard/none.
-
-    Prepended to the launch prompt so the session's first act is to invoke the skill —
-    the reliable, cross-account/model way to make the posture hold without PRD prose."""
-    skill = _MODE_SKILL.get((session_mode or "").strip())
-    if not skill:
-        return ""
-    return (
-        f"[session mode: {session_mode}] Before anything else this session, invoke the "
-        f"`{skill}` skill and follow it throughout — it defines how you batch work and "
-        f"continuity for this session.\n\n"
-    )
+# A launch has exactly one axis: WHAT CONTEXT IS LOADED (`fresh` / `resume` / a card).
+# There is deliberately no second "session mode" axis describing how much process the
+# model should perform — that was prose the model could reinterpret, it cost a turn at
+# launch to deliver, and it could contradict the authored handoff it wrapped. What the
+# session may actually DO is the permission posture (`config.LAUNCH_POSTURE_CHOICES`),
+# which the native CLIs enforce themselves. Removed 2026-07-19; see the
+# `review-session-control-calibration` verdict.
 
 
 @dataclass

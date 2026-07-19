@@ -101,7 +101,6 @@ def _project_projection(root: Path, *, installed: str, do_fetch: bool) -> dict[s
             )
         },
         "continuity": {
-            "granularity": closure.continuity_granularity(root),
             "pending": len(pending),
             "deliveries": [
                 {"sha": sha, "subject": subject} for sha, subject in pending
@@ -250,8 +249,7 @@ def render_text(digest: dict[str, Any]) -> str:
         parallel = continuity.get("parallel", [])
         state = "WARN" if pending or parallel else "OK"
         lines.append(
-            f"CONTINUITY {project['name']} [{state}] mode={continuity['granularity']} "
-            f"pending={pending}"
+            f"CONTINUITY {project['name']} [{state}] pending={pending}"
         )
         for signal in parallel:
             lines.append(

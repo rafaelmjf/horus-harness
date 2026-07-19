@@ -506,54 +506,116 @@ def test_skills_screen_groups_by_agent_and_shows_per_agent_states(tmp_path, monk
     assert ui.screen == "project"
 
 
-def test_launch_prompt_prepends_inline_batch_skill_preamble():
+def test_fresh_launch_prompt_is_genuinely_empty():
+    """Fresh means fresh: nothing injected, so the owner types into an empty session.
+    No mode preamble spends a turn announcing a posture before work can start."""
     from pathlib import Path
     from horus import terminal_tui
     launch = terminal_tui._Launch(
-        Path("/repo"), "claude", "fresh", None,
-        None, None, None, None, "inline-batch",
+        Path("/repo"), "claude", "fresh", None, None, None, None, None, "default",
     )
-    prompt = terminal_tui._launch_prompt(launch)
-    assert "inline-batch-session" in prompt
+    assert terminal_tui._launch_prompt(launch) == ""
 
 
-def test_launch_prompt_has_no_preamble_for_standard_mode():
-    from pathlib import Path
+def test_launch_prompt_loads_only_the_chosen_context(tmp_path):
+    """The one launch axis is WHAT CONTEXT is loaded — resume loads the authored
+    handoff, fresh loads nothing. Neither carries a session-mode preamble."""
     from horus import terminal_tui
-    launch = terminal_tui._Launch(
-        Path("/repo"), "claude", "fresh", None,
-        None, None, None, None, "standard",
+
+    (tmp_path / ".horus").mkdir()
+    (tmp_path / ".horus" / "PRD.md").write_text(
+        "---\ncurrent_focus: ship it\nnext_prompt: Pick up the parser work.\n---\n\n# P\n",
+        encoding="utf-8",
     )
-    prompt = terminal_tui._launch_prompt(launch)
-    assert "inline-batch-session" not in prompt
-    assert prompt == ""  # fresh + standard = today's empty prompt
+
+    resume = terminal_tui._launch_prompt(
+        terminal_tui._Launch(tmp_path, "claude", "resume", None, None, None, None, None, "default")
+    )
+    assert "Pick up the parser work." in resume
+    assert "session mode" not in resume.lower()
+
+    fresh = terminal_tui._launch_prompt(
+        terminal_tui._Launch(tmp_path, "claude", "fresh", None, None, None, None, None, "default")
+    )
+    assert fresh == ""
 
 
-def test_launch_prompt_prepends_all_gas_no_breaks_skill_preamble():
-    from pathlib import Path
+def test_launch_form_is_compact_until_a_row_is_expanded(tmp_path, monkeypatch):
+    """Compact review form: one row per setting showing only its selected value, with
+    Launch focused by default so the common case costs a single keypress."""
     from horus import terminal_tui
-    launch = terminal_tui._Launch(
-        Path("/repo"), "codex", "fresh", None,
-        None, None, None, None, "all-gas-no-breaks",
-    )
-    prompt = terminal_tui._launch_prompt(launch)
-    assert "all-gas-no-breaks-session" in prompt
+    ui = _new_ui(tmp_path, monkeypatch)
+    ui.pending_account = terminal_tui.LaunchAccount("claude", "personal", None)
+    ui.pending_mode = "fresh"
+    ui._show("launch_form")
 
+    kinds = [kind for kind, _v in ui.items]
+    assert kinds == ["launch_row", "launch_row", "launch_row", "save_defaults", "launch"]
+    assert ui.items[ui.selected][0] == "launch"
 
-def test_session_mode_screen_renders_spaced_summaries():
-    from horus import launch, terminal_tui
-    ui = terminal_tui.TerminalUI()
-    ui.screen = "session_mode"
-    ui.items = [("session_mode", mode) for mode in launch.LAUNCH_MODES]
     rendered = "".join(text for _style, text in ui._body_text())
+    assert "Model" in rendered and "Effort" in rendered and "Permission" in rendered
+    assert "Launch" in rendered and "Save as defaults" in rendered
+    # Help stays hidden while compact.
+    assert "bypass permissions" not in rendered
 
-    for label, summary in launch.LAUNCH_MODE_COPY.values():
-        assert label in rendered
-        assert summary in rendered
-    first_summary = launch.LAUNCH_MODE_COPY["standard"][1]
-    second_summary = launch.LAUNCH_MODE_COPY["inline-batch"][1]
-    assert f"{first_summary}\n\n" in rendered
-    assert f"{second_summary}\n\n" in rendered
+    ui.launch_expanded = "posture"
+    ui._refresh_items()
+    rendered = "".join(text for _style, text in ui._body_text())
+    # ...and appears on demand when the row is entered.
+    assert "bypass permissions" in rendered
+    assert "(o)" in rendered  # radio marker on the selected alternative
+
+
+def test_launch_form_preselects_the_saved_agent_profile(tmp_path, monkeypatch):
+    from horus import config, terminal_tui
+    ui = _new_ui(tmp_path, monkeypatch)
+    config.save_launch_profile("claude", {"model": "opus", "effort": "high", "posture": "auto-edit"})
+
+    ui.pending_mode = "fresh"
+    ui.project = tmp_path
+    ui._show("accounts")
+    ui.items = [("account", terminal_tui.LaunchAccount("claude", "personal", None))]
+    ui.selected = 0
+    ui.activate()
+
+    assert ui.screen == "launch_form"
+    assert (ui.pending_model, ui.pending_effort, ui.pending_posture) == ("opus", "high", "auto-edit")
+
+
+def test_launch_form_save_as_defaults_persists_only_on_request(tmp_path, monkeypatch):
+    from horus import config, terminal_tui
+    ui = _new_ui(tmp_path, monkeypatch)
+    ui.pending_account = terminal_tui.LaunchAccount("codex", "personal", None)
+    ui.pending_mode = "fresh"
+    ui._show("launch_form")
+
+    # An occasional override alone never rewrites the profile...
+    ui._handle_launch_form("model", "gpt-5.6-sol")
+    ui._handle_launch_form("effort", "high")
+    assert config.load_launch_profile("codex") == {}
+
+    # ...only pressing Save as defaults does.
+    ui._handle_launch_form("save_defaults", None)
+    saved = config.load_launch_profile("codex")
+    assert saved["model"] == "gpt-5.6-sol" and saved["effort"] == "high"
+
+
+def test_launch_form_back_collapses_a_row_before_leaving(tmp_path, monkeypatch):
+    from horus import terminal_tui
+    ui = _new_ui(tmp_path, monkeypatch)
+    ui.pending_account = terminal_tui.LaunchAccount("claude", "personal", None)
+    ui.pending_mode = "fresh"
+    ui._show("launch_form")
+
+    ui._handle_launch_form("launch_row", "model")
+    assert ui.launch_expanded == "model"
+
+    ui.back()
+    assert ui.launch_expanded is None and ui.screen == "launch_form"
+
+    ui.back()
+    assert ui.screen == "accounts"
 
 
 # --- Mission Control (`m`) + Settings (`t`) panes -------------------------------

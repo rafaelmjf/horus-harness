@@ -1330,31 +1330,15 @@ def test_terminal_tui_defaults_screen_lists_full_posture_vocabulary(tmp_path, mo
     ui = terminal_tui.TerminalUI()
     ui._show("settings")
     assert [value for kind, value in ui.items if kind == "posture"] == list(config.LAUNCH_POSTURE_CHOICES)
-    assert [value for kind, value in ui.items if kind == "continuity"] == list(
-        config.CONTINUITY_GRANULARITY_CHOICES
-    )
     assert ui.selected == config.LAUNCH_POSTURE_CHOICES.index("default")  # backward-compat default
 
     rendered = "".join(fragment[1] for fragment in ui._body_text())
     assert "full-auto" in rendered
     assert "bypass permissions" in rendered  # full-auto must read unambiguously as dangerous
-    assert "Continuity checkpoint" in rendered
-    assert "handoff" in rendered and "recommended" in rendered
-
-
-def test_terminal_tui_defaults_persists_continuity_granularity(tmp_path, monkeypatch):
-    _home(tmp_path, monkeypatch)
-    ui = terminal_tui.TerminalUI()
-    ui._show("settings")
-    target = len(config.LAUNCH_POSTURE_CHOICES) + config.CONTINUITY_GRANULARITY_CHOICES.index("manual")
-    ui.move(target - ui.selected)
-    ui.activate()
-
-    assert config.load_continuity_defaults() == {"granularity": "manual"}
-    assert ui.selected == target
-    assert "manual" in ui.status
-    rendered = "".join(fragment[1] for fragment in ui._body_text())
-    assert "[current] manual" in rendered
+    # The continuity-granularity axis was retired (2026-07-19); Settings keeps only
+    # environmental, machine-level preferences.
+    assert "Continuity checkpoint" not in rendered
+    assert not [kind for kind, _v in ui.items if kind == "continuity"]
 
 
 def test_terminal_tui_warns_when_project_has_pending_continuity(tmp_path, monkeypatch):
@@ -1423,9 +1407,8 @@ def test_terminal_tui_defaults_screen_sets_the_session_window_mode(tmp_path, mon
     ui = terminal_tui.TerminalUI()
     ui._show("settings")
 
-    # The window rows sit after posture + continuity in the Defaults list.
-    base = len(config.LAUNCH_POSTURE_CHOICES) + len(config.CONTINUITY_GRANULARITY_CHOICES)
-    target = base + config.LAUNCH_WINDOW_CHOICES.index("new-window")
+    # The window rows sit directly after posture in the Defaults list.
+    target = len(config.LAUNCH_POSTURE_CHOICES) + config.LAUNCH_WINDOW_CHOICES.index("new-window")
     ui.move(target - ui.selected)
     assert ui.items[ui.selected] == ("window", "new-window")
     ui.activate()
@@ -1710,19 +1693,19 @@ def test_terminal_tui_resume_returns_ambient_personal_launch(tmp_path, monkeypat
             ui = terminal_tui.TerminalUI(input=pipe_input, output=DummyOutput())
             task = asyncio.create_task(ui.application.run_async())
             await asyncio.sleep(0.02)
-            # project -> mode -> account -> model (default) -> effort (default)
-            #   -> session_mode (standard, the default first item)
-            pipe_input.send_bytes(b"\r\r\r\r\r\r")
+            # project -> mode -> account -> launch form (Launch is focused
+            # by default, so accepting every default is one more keypress)
+            pipe_input.send_bytes(b"\r\r\r\r")
             return await asyncio.wait_for(task, timeout=1)
 
     result = asyncio.run(drive())
     assert isinstance(result, terminal_tui._Launch)
     assert result.project == root and result.mode == "resume"
     assert result.agent == "claude" and result.account is None and result.card is None
-    # Back-compat: accepting every default launches exactly as before —
-    # the agent's own default model, no explicit reasoning effort, standard mode.
+    # With no saved profile, accepting every default launches on the agent's own
+    # default model and effort, at the configured default permission posture.
     assert result.model is None and result.effort is None
-    assert result.session_mode == "standard"
+    assert result.posture == "default"
 
 
 def test_terminal_tui_model_and_effort_thread_into_the_launch(tmp_path, monkeypatch):
@@ -1744,23 +1727,33 @@ def test_terminal_tui_model_and_effort_thread_into_the_launch(tmp_path, monkeypa
             await asyncio.sleep(0.02)
             pipe_input.send_bytes(b"\r")  # account: ambient personal
             await asyncio.sleep(0.02)
-            assert ui.screen == "models"
-            ui.selected = [value for _kind, value in ui.items].index("sonnet")
+            assert ui.screen == "launch_form"
+            # Expand the Model row, pick sonnet; the row collapses back.
+            ui.selected = [v for _k, v in ui.items].index("model")
             pipe_input.send_bytes(b"\r")
             await asyncio.sleep(0.02)
-            assert ui.screen == "effort"
-            ui.selected = [value for _kind, value in ui.items].index("xhigh")
+            ui.selected = [
+                i for i, (k, v) in enumerate(ui.items) if k == "model" and v == "sonnet"
+            ][0]
             pipe_input.send_bytes(b"\r")
             await asyncio.sleep(0.02)
-            assert ui.screen == "session_mode"
-            ui.selected = [value for _kind, value in ui.items].index("inline-batch")
+            assert ui.launch_expanded is None
+            # Same for Effort.
+            ui.selected = [v for _k, v in ui.items].index("effort")
+            pipe_input.send_bytes(b"\r")
+            await asyncio.sleep(0.02)
+            ui.selected = [
+                i for i, (k, v) in enumerate(ui.items) if k == "effort" and v == "xhigh"
+            ][0]
+            pipe_input.send_bytes(b"\r")
+            await asyncio.sleep(0.02)
+            ui.selected = [i for i, (k, _v) in enumerate(ui.items) if k == "launch"][0]
             pipe_input.send_bytes(b"\r")
             return await asyncio.wait_for(task, timeout=1)
 
     result = asyncio.run(drive())
     assert isinstance(result, terminal_tui._Launch)
     assert result.model == "sonnet" and result.effort == "xhigh"
-    assert result.session_mode == "inline-batch"
 
 
 def test_terminal_tui_models_screen_scoped_to_the_selected_account_agent(tmp_path, monkeypatch):
@@ -1768,23 +1761,25 @@ def test_terminal_tui_models_screen_scoped_to_the_selected_account_agent(tmp_pat
     ui = terminal_tui.TerminalUI()
 
     ui.pending_account = terminal_tui.LaunchAccount("claude", "personal", None)
-    ui._show("models")
-    claude_models = [value for _kind, value in ui.items]
+    claude_models = [None] + ui._launch_model_choices()
     assert claude_models == [None, "opus", "sonnet", "haiku", "fable"]
 
     ui.pending_account = terminal_tui.LaunchAccount("codex", "personal", None)
-    ui._show("models")
-    codex_models = [value for _kind, value in ui.items]
+    codex_models = [None] + ui._launch_model_choices()
     assert codex_models == [None, "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"]
     # A codex account never offers a claude model and vice-versa.
     assert not set(codex_models[1:]) & set(claude_models[1:])
 
 
-def test_terminal_tui_effort_screen_offers_the_full_vocabulary(tmp_path, monkeypatch):
+def test_terminal_tui_effort_row_offers_the_full_vocabulary(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     ui = terminal_tui.TerminalUI()
-    ui._show("effort")
-    assert [value for _kind, value in ui.items] == [None, "low", "medium", "high", "xhigh", "max"]
+    ui.pending_account = terminal_tui.LaunchAccount("claude", "personal", None)
+    ui._show("launch_form")
+    ui.launch_expanded = "effort"
+    ui._refresh_items()
+    efforts = [value for kind, value in ui.items if kind == "effort"]
+    assert efforts == [None, "low", "medium", "high", "xhigh", "max"]
 
 
 def test_terminal_tui_recommended_tag_present_for_tiered_resume_or_card_absent_for_fresh(tmp_path, monkeypatch):
@@ -1805,7 +1800,9 @@ def test_terminal_tui_recommended_tag_present_for_tiered_resume_or_card_absent_f
     # Card-launch (resume): the tier's model is tagged recommended.
     ui.pending_mode = "resume"
     ui.pending_card = card
-    ui._show("models")
+    ui._show("launch_form")
+    ui.launch_expanded = "model"
+    ui._refresh_items()
     rendered = "".join(text for _style, text in ui._body_text())
     assert "sonnet (recommended)" in rendered
     assert "opus (recommended)" not in rendered
@@ -1813,13 +1810,17 @@ def test_terminal_tui_recommended_tag_present_for_tiered_resume_or_card_absent_f
     # Plain resume (no explicit card): falls back to the project's top open
     # card as the "next action" proxy — still recommended.
     ui.pending_card = None
-    ui._show("models")
+    ui._show("launch_form")
+    ui.launch_expanded = "model"
+    ui._refresh_items()
     rendered = "".join(text for _style, text in ui._body_text())
     assert "sonnet (recommended)" in rendered
 
     # Fresh launch: never recommends, even though a tiered card exists.
     ui.pending_mode = "fresh"
-    ui._show("models")
+    ui._show("launch_form")
+    ui.launch_expanded = "model"
+    ui._refresh_items()
     rendered = "".join(text for _style, text in ui._body_text())
     assert "(recommended)" not in rendered
 

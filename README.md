@@ -89,14 +89,22 @@ so returning to the first project restores the account rail and narrow phone ter
 never print raw arrow-key escape sequences. Termius already translates touch gestures
 into conventional Up/Down bytes, so Horus preserves the normal mapping on phone and
 desktop. `HORUS_TUI_INVERT_SCROLL=1` is an opt-in escape hatch for clients that report
-the opposite direction. Press `d` for Defaults: besides launch permissions, it controls
-continuity granularity. `handoff` (the default) batches canonical PRD/card/session-note
-updates until an agent/account/machine change, dispatch, pause, release, or session end;
-`delivery` checkpoints every PR; `manual` waits for an explicit checkpoint. Git delivery
-evidence and commit/push/test safeguards remain active in every mode, while resume and
-the TUI warn about product commits pending consolidation. A project can commit
-`continuity_granularity` in PRD/project frontmatter to override the user default on every
-machine and in required CI.
+the opposite direction. Press `d` for Defaults: the machine-level launch permission posture and how a session
+window opens. Continuity has no granularity setting to configure — one universal rule
+applies everywhere: git branches, commits, pushed refs, and PRs preserve every delivery,
+and canonical PRD/card/session-note prose is consolidated once at a real boundary (a
+pause, session end, agent/account/machine handoff, release, or a dispatch needing durable
+context). Resume and the TUI still warn about product commits pending consolidation.
+
+Selecting an account opens one consolidated launch form — model, reasoning effort, and
+permission posture together, with `Launch` focused by default so the common case is a
+single keypress. Each row shows only its current value; entering a row expands its
+alternatives and their help. `Save as defaults` remembers the selection for that agent
+(so `claude opus high` and `codex sol high` come up preselected), while an occasional
+override applies to one launch only. There is deliberately no "session mode" choice: a
+launch decides only what context loads — nothing (fresh), the authored handoff (resume),
+or one card's scope — and what the session may do is the permission posture, enforced by
+the agent CLI itself.
 
 Terminal launches from both the web app and terminal app
 automatically use a unique managed tmux session on Linux, macOS, and WSL whenever tmux

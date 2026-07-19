@@ -471,7 +471,7 @@ def test_distill_history_skill_v3_targets_archive():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 13
+    assert execution.version == 14
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -665,36 +665,12 @@ def test_process_retrospective_skill_registered_and_projected():
         assert Path(f"{root}/process-retrospective/SKILL.md").read_text(encoding="utf-8") == skill.content
 
 
-def test_inline_batch_session_skill_registered_and_batches():
-    s = next(x for x in skills.SKILLS if x.name == "inline-batch-session")
-    assert s.version == 3
-    # posture: per-card delivery safety kept, ALL continuity held to a hard boundary
-    assert "delivery safety" in s.content
-    assert "hard boundary" in s.content
-    # a version release is named as a boundary, and finishing/merging is explicitly NOT one
-    assert "version release" in s.content
-    assert "NOT a boundary" in s.content and "manufacture a boundary" in s.content
-    assert "Classify the unit" in s.content
-    assert "Backlog card" in s.content and "Ad-hoc finding" in s.content
-    assert "one-card/one-PR" in s.content
-    assert "no per-finding PR" in s.content
-    assert "batch branch" in s.content
-    assert "ask the owner if" in s.content
-    assert "## v2 six-lane projects (fallback)" in s.content
-
-
-def test_all_gas_no_breaks_skill_is_direct_but_closes_continuity():
-    s = next(x for x in skills.SKILLS if x.name == "all-gas-no-breaks-session")
-    assert s.version == 1
-    assert "minimal-orchestration" in s.content
-    assert "do not stop for a preflight summary" in s.content
-    assert "Do not load Horus decision" in s.content
-    assert "Delegation remains owner-invoked" in s.content
-    assert "## Hard boundaries still consolidate" in s.content
-    assert "release" in s.content and "session closure" in s.content
-    assert "horus-consolidate" in s.content
-    assert "## v2 six-lane projects (fallback)" in s.content
+def test_session_mode_skills_are_gone():
+    """The mode axis was deleted (2026-07-19): no mode skill is registered, and no
+    stale projection is left behind for an agent to auto-discover and follow."""
+    names = {s.name for s in skills.SKILLS}
+    assert "inline-batch-session" not in names
+    assert "all-gas-no-breaks-session" not in names
     for root in (".claude/skills", ".agents/skills"):
-        assert Path(f"{root}/all-gas-no-breaks-session/SKILL.md").read_text(
-            encoding="utf-8"
-        ) == s.content
+        for mode in ("inline-batch-session", "all-gas-no-breaks-session"):
+            assert not Path(f"{root}/{mode}").exists()
