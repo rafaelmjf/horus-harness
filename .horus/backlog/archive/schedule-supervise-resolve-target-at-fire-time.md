@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-19
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: agent
 surface: horus/supervise.py (target resolution) + horus/schedule.py / horus/cli.py (a scheduled worker+supervisor pairing)
+shipped_pr: 346
+shipped_sha: 64b509f
 ---
 
 # schedule-supervise-resolve-target-at-fire-time — break the worker→supervise chicken-and-egg

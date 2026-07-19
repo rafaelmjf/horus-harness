@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-19
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: agent
 surface: horus/notify.py (a batch-complete event) + horus/schedule.py (batch/group tagging + last-one-out detection)
+shipped_pr: 347
+shipped_sha: 1d9a2f2
 ---
 
 # notify-schedule-batch-complete — a real "the schedule finished" signal, not a timer guess

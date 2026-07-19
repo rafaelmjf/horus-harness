@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-19
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: bug
 parallel: safe
 created_by: agent
 surface: horus/cli.py (horus run arg validation) + horus/schedule.py (schedule run arm-time check) — refuse/repair a codex delivery dispatch armed with a network-off sandbox posture
+shipped_pr: 344
+shipped_sha: 14e8665
 ---
 
 # codex-delivery-dispatch-needs-full-auto — a delivery dispatch that structurally can't deliver must be refused at arm time

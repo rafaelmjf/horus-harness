@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-19
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/notify.py (Escalation rendering) + horus/batch.py (batch message) + horus/cli.py (schedule status --brief, sessions --running) + horus/notify_listen.py (verb mapping)
+shipped_pr: 348
+shipped_sha: 817fe02
 ---
 
 # telegram-output-minimal-legible — the phone push + button replies are minimal, not log dumps

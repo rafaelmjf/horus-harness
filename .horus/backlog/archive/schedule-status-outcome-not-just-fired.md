@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-19
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/schedule.py (fired-entry → session/receipt link) + horus/terminal_tui.py (Mission Control) + horus/cli.py (schedule status/list)
+shipped_pr: 345
+shipped_sha: 5e00811
 ---
 
 # schedule-status-outcome-not-just-fired — Mission Control shows the outcome, not just "fired"
