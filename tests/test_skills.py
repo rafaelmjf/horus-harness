@@ -440,7 +440,7 @@ def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
 
 def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
-    assert consolidate.version == 12
+    assert consolidate.version == 13
     assert "PRD.md" in consolidate.content
     assert "no lane-routing/overlap warnings" in consolidate.content
     assert "~250-line cap" in consolidate.content
@@ -453,6 +453,11 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     assert "Convergence read-out" in consolidate.content
     assert "vision_facet" in consolidate.content
     assert "phase: explore" in consolidate.content
+    # v13: authored resume handoffs orient, summarize, and ask before execution;
+    # releases are proposals requiring their own confirmation.
+    assert "resume-consent contract" in consolidate.content
+    assert "ask permission before editing" in consolidate.content
+    assert "separate explicit release confirmation" in consolidate.content
     # sessions/ and temp/ handoff notes stay unchanged in v3.
     assert "temp/" in consolidate.content
 

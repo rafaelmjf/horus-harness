@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry, routines, templates
+from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry, routines, skills, templates
 from horus.registry import Registry, SessionRecord
 from horus.upgrade import UpgradeAction
 
@@ -642,7 +642,8 @@ def test_resume_prompt_prefers_written_then_falls_back(tmp_path, monkeypatch):
     data = dashboard.load_project(str(tmp_path))
     resumed = dashboard._resume_prompt_text(data)
     assert "Paste me into Claude to resume." in resumed
-    assert "Continue with this authored handoff:" in resumed
+    assert "Proposed authored handoff (context only — do not execute yet):" in resumed
+    assert "ask permission to proceed" in resumed
     idx = dashboard.render_index([data])
     assert "Resume prompt" in idx and "horusCopy(this)" in idx and "Paste me into Claude" in idx
 
@@ -3027,8 +3028,11 @@ def test_render_project_shows_codex_projection_behind_badge(tmp_path, monkeypatc
     ):
         install(proj)
     skill_md = proj / ".agents" / "skills" / "horus-consolidate" / "SKILL.md"
+    version = next(s.version for s in skills.SKILLS if s.name == "horus-consolidate")
     skill_md.write_text(
-        skill_md.read_text(encoding="utf-8").replace("horus-skill-version: 12", "horus-skill-version: 1"),
+        skill_md.read_text(encoding="utf-8").replace(
+            f"horus-skill-version: {version}", "horus-skill-version: 1"
+        ),
         encoding="utf-8",
     )
 

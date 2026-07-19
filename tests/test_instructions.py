@@ -71,6 +71,15 @@ def test_normalize_ignores_trailing_whitespace_and_crlf():
 
 def test_shared_block_carries_config_dir_isolation_rule():
     block = templates.shared_block("CLAUDE.md")
-    assert "One live agent process per account config dir" in block
+    assert "Accounts get isolated config dirs; same-dir concurrency is advised, not blocked" in block
     assert "CLAUDE_CONFIG_DIR" in block and "CODEX_HOME" in block
-    assert "never run two workers on one account" in block
+    assert "launch shares a config dir, then proceeds" in block
+    assert "shared rate-limit budget" in block
+
+
+def test_shared_block_carries_resume_confirmation_rule():
+    block = templates.shared_block("CLAUDE.md")
+    assert "orientation handoff, never authorization to execute" in block
+    assert "asks permission before editing" in block
+    assert "never ordered as a next step" in block
+    assert "separate confirmation is required" in block

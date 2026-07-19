@@ -102,7 +102,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 12 -->
+<!-- horus-skill-version: 13 -->
 
 # Consolidate Horus continuity
 
@@ -186,8 +186,14 @@ them is stale or empty.
    - Add any newly load-bearing invariant to `## Rules`, concise and
      current-state only (not a dated log — git history and optional recovery
      notes carry rationale when needed).
-   - Refresh the frontmatter handoff fields and bump `last_updated`. Apply
-     `execution-decision`'s need-first rubric for `execution_recommendation`:
+   - Refresh the frontmatter handoff fields and bump `last_updated`. Apply the
+     resume-consent contract when authoring `next_prompt`: it may authorize
+     fetch/branch verification and minimum-context reads, then MUST tell the fresh
+     session to summarize the proposed actions and ask permission before editing,
+     testing, dispatching, merging, releasing, or deploying. A release may be
+     suggested with concrete reasons but never ordered or chained as "then release";
+     require separate explicit release confirmation. Apply `execution-decision`'s
+     need-first rubric for `execution_recommendation`:
      `"continue-as-is — <why>"`
      for small/ambiguous/exploratory/debugging work, `"plan-execution — <why>"`
      for high-volume low-ambiguity work with a clear gate (create/update
@@ -288,8 +294,11 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      the conversation, not the files.
    - **Update the dashboard contract** (the checklist above): refresh `current_focus`,
      `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
-     `last_updated` on touched lanes. Author the next step for a *cold* reader — name
-     it, point at `.horus/`.
+     `last_updated` on touched lanes. Author the proposed next step for a *cold*
+     reader — name it, point at `.horus/`, then require it to summarize its
+     understanding and ask permission before execution. A release is only a reasoned
+     suggestion and always waits for separate explicit confirmation; never write
+     "then release" as an instruction.
    - **Recommend the execution mode for the NEXT.** Apply `execution-decision`'s
      need-first rubric: set `execution_recommendation:
      "continue-as-is — <why>"` for small, ambiguous/exploratory, debugging, or
@@ -2534,7 +2543,7 @@ delivery-safety rungs and the hold-continuity-to-a-hard-boundary rule are unchan
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 12, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 13, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 4, _INFER_SKILL),
     Skill("horus-execution", 13, _EXECUTION_SKILL),

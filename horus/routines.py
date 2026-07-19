@@ -188,7 +188,7 @@ def resume_prompt(root: Path) -> str:
     execution_status = info["execution_status"] or "(not set)"
     latest_session = info["latest_session"] or "(none)"
     next_prompt = info["next_prompt"]
-    continuation = next_prompt or f"Continue with the next action above on the {project} project."
+    continuation = next_prompt or f"Review the next action above for the {project} project."
 
     if frontmatter.has_prd(root):
         lazy_load = f"""Do not front-load the whole `.horus/` directory. Lazy-load only what this task needs:
@@ -217,8 +217,22 @@ Minimum Horus state already loaded:
 
 {lazy_load}
 
-Continue with this authored handoff:
+Resume contract — orient, then stop:
+- The fetch/branch checks and minimum-context reads above are authorized only to
+  situate the session. They do not authorize implementation or the rest of the
+  authored handoff.
+- Treat `next_action`, `execution_recommendation`, and the authored handoff below
+  as proposals to explain to the user, not commands to execute.
+- Before editing files, running tests, launching workers, scheduling work, merging,
+  releasing, deploying, or taking any other state-changing action, summarize the
+  actions you inferred and ask the user for permission to proceed.
+- A release may be suggested with concrete reasons, but never ordered or chained as
+  "and then release". Wait for separate explicit confirmation before releasing.
+
+Proposed authored handoff (context only — do not execute yet):
 {continuation}
+
+Summarize the actions you understood from this handoff and ask permission to proceed.
 """
     return f"{readiness_warning}\n\n{prompt}" if readiness_warning else prompt
 
