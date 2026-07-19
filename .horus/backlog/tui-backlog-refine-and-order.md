@@ -9,7 +9,7 @@ tier: high
 type: feature
 parallel: safe
 created_by: owner
-surface: new backlog-refine step (pathfinder-adjacent skill or new last step), horus/backlog.py (order field + writer), horus/backlog_tree.py, horus/terminal_tui.py (trigger from the backlog pane), horus/cli.py
+surface: horus/backlog.py (readiness/order fields + writer), horus/backlog_tree.py, horus/terminal_tui.py (thin trigger from the backlog pane), horus/cli.py
 ---
 
 # tui-backlog-refine-and-order — groom + order the backlog into a schedulable plan
@@ -17,18 +17,17 @@ surface: new backlog-refine step (pathfinder-adjacent skill or new last step), h
 **Why (owner, 2026-07-18):** when the backlog grows large, the owner wants to trigger a
 refinement pass *from the TUI* that goes through the backlog, refines each card, and
 produces a **meaningful execution order** so the scheduler can run cards in that order.
-Today nothing does this: `horus backlog` has only list/migrate/claim/ship/review (no
-refine, no order), and pathfinder's last step (`scope-cards`) *populates cards from a
-chosen direction* — it does not refine + order an existing backlog. So this is a **new
-capability** (the owner's items 5–6), not an invoke of an existing step. Confirmed
-2026-07-18.
+The attended LLM contract now exists in the standalone `backlog-refine` skill:
+picture first, pending decisions through a structured picker, and final readiness.
+What remains missing is the thin TUI/CLI launch surface plus machine-readable
+readiness and ordering consumers. `horus backlog` still has only
+list/migrate/claim/ship/review and no refine/order action.
 
 ## Two halves (may be one command or two)
 
-1. **Refine** — go through open cards and sharpen each toward self-sufficiency (context
-   / concrete how / acceptance / non-goals), the way `scope-cards` makes a fresh session
-   able to pick a card up cold. Reuse `scope-cards`'s card-quality bar; the difference is
-   the *input* is the existing backlog, not a chosen branch.
+1. **Launch refinement** — invoke the bundled `backlog-refine` skill in an attended
+   agent session. The skill owns the interaction and execution-ready contract; the TUI
+   owns only launch/resume affordances and rendering the resulting state.
 2. **Order** — produce an explicit execution order across the refined cards (respecting
    `depends-on`, `branch` grouping, priority, and parallel/surface collision stamps) so
    the scheduler can consume it. **DECIDED (owner, 2026-07-19 polish session): sparse
@@ -44,11 +43,9 @@ capability** (the owner's items 5–6), not an invoke of an existing step. Confi
 
 ## How (to design in-card)
 
-- The refine pass is LLM-backed (it grooms prose), so it belongs in a **skill** (a new
-  pathfinder last step, or a standalone `backlog-refine` skill) invoked from the TUI —
-  the TUI opens one of the agent CLIs behind it, consistent with how launches work. The
-  TUI trigger is thin; the skill does the grooming. Advisory + owner-gated like the other
-  pathfinder steps: it proposes card edits + an order, the owner approves.
+- The TUI opens one of the agent CLIs with `backlog-refine`, consistent with other
+  launches. It does not duplicate the product picture, readiness judgment, picker
+  contract, or owner gates in Python.
 - The ordering output must be **deterministic and machine-readable** so
   [[tui-toggle-card-into-scheduler]] and the scheduler can consume it without re-running
   an LLM.
@@ -82,14 +79,9 @@ Pulled forward from the items 5–7 TUI list (2026-07-18). Decoupled from the fi
 autonomous-scheduler test, which runs on hand-picked cards and does NOT depend on this
 step. Pairs with [[tui-toggle-card-into-scheduler]].
 
-**The ordering artifact has a second producer (skills-review session, 2026-07-19):**
-`scope-cards` is instructed to "inherit the branch order" from the owner-approved
-`roadmap-branches` roadmap, but with no durable field the approved order evaporates at
-write time — cards land filename-sorted and an owner decision is silently lost. So
-whatever this card chooses (an `order:` frontmatter field + writer, or another durable
-artifact) must be writable by BOTH producers — the refine pass here and `scope-cards`
-at scoping time — and consumable by the scheduler/[[tui-toggle-card-into-scheduler]]
-without an LLM in the loop. Decide once, here; `scope-cards` (which now owns the
-dispatchable-card contract, v3) then adopts the same field rather than inventing a
-rival. Deliberately NOT built ahead of this card: a field with no consumer is ceremony
-(the boundary rule), so the decision and the first consumer should land together.
+**Ordering ownership after the calibration (2026-07-19):** `scope-cards` preserves a
+branch's proposed order only as shaping context. `backlog-refine` owns the approved
+execution order and will write sparse `order:` values once this card supplies the
+machine-readable field and consumers. The scheduler consumes that durable state without
+an LLM in its loop. The field and first consumer still land together; a parser-only
+field would be ceremony.
