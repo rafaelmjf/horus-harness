@@ -22,7 +22,7 @@ description: >-
   token envelope before any web work. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -77,8 +77,9 @@ similar words, and they take different-size tools:
 - **Backlog polish** — the direction holds; existing cards need grooming toward
   the dispatchable-card contract (in `scope-cards`) and an execution order. That
   is the backlog-refine pass (carded: `tui-backlog-refine-and-order`; until it
-  ships, `scope-cards` standalone grooms individual thin cards). Running the
-  five-step chain for a grooming need is ceremony — route it out and say so.
+  ships, `scope-cards`' "Grooming an existing backlog" mode covers the pass).
+  Running the five-step chain for a grooming need is ceremony — route it out and
+  say so.
 
 Both tools hold cards to the same contract; only the entry question differs.
 

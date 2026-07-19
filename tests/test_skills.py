@@ -98,7 +98,9 @@ def test_cockpit_dispatch_contract_skill_registered_and_sequences():
 
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    assert pf.version == 5
+    assert pf.version == 6
+    # v6: the triage route-out names scope-cards' grooming mode explicitly.
+    assert "Grooming an existing backlog" in pf.content
     # v5 (calibration 2026-07-19): the owner's mental model includes the inward
     # audit — product-audit where the project has one, shipped-vs-used elsewhere
     # (product-audit is Horus-specific; pathfinder must run on any project).
@@ -190,7 +192,17 @@ def test_roadmap_branches_skill_registered_divergence_tree():
 
 def test_scope_cards_skill_registered_self_sufficient():
     sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
-    assert sc.version == 3
+    assert sc.version == 4
+    # v4 (first live grooming run, 2026-07-19): standalone grooming mode is a
+    # specified input shape, not an improvised one.
+    assert "Grooming an existing backlog" in sc.content
+    assert "never batch judgment calls" in sc.content
+    # Contract exceptions the live backlog proved: explore cards may substitute
+    # a branch: stamp for vision_facet; umbrellas carry a convergence criterion.
+    assert "may\nsubstitute a `branch:" in sc.content or "may substitute a `branch:" in sc.content
+    assert "Convergence criterion" in sc.content
+    # Probe retrofits are scoped to new/armed/edited cards, never blanket.
+    assert "Probe-retrofit policy" in sc.content
     # The one bar: a fresh agent + PRD + card can start correctly.
     assert "self-sufficiency test" in sc.content
     assert "fresh agent" in sc.content
