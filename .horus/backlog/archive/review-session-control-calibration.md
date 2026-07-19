@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: shaping
 readiness_reason: "Fresh-context no-change/revise/reconsider review remains an attended owner decision."
@@ -12,6 +12,8 @@ type: chore
 parallel: safe
 created_by: owner
 surface: .horus/backlog/review-session-control-calibration.md, horus/launch.py, horus/routines.py, horus/skills.py, horus/terminal_tui.py, .agents/skills/*, .claude/skills/*
+shipped_pr: 368
+shipped_sha: 91cc118
 ---
 
 # review-session-control-calibration — independently review the controls learned in the first Codex session
