@@ -14,7 +14,7 @@ description: >-
   the owner approves per item; only approved items are written.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # scope-cards — from a chosen branch to a fresh-agent-ready backlog
 
@@ -38,6 +38,24 @@ non-goals already argued. **If an item arrives thin, do not silently invent the
 missing depth** — flag it and resolve it with the owner (or send it back through
 `roadmap-branches`) before drafting its card.
 
+## Grooming an existing backlog (standalone mode)
+
+The other input shape: no branch, just an existing backlog whose direction holds
+(pathfinder's Step 0 triage routes polish needs here). The bar is the same
+contract below; the pass differs in shape:
+
+1. **Deterministic field audit first** — script the frontmatter/heading checks
+   (surface, parallel, tier vocabulary, facet, acceptance markers) across all
+   open cards before judging anything; facts, then judgment.
+2. **Sort findings into by-design vs defect** using the project's own rules
+   (e.g. explore cards legitimately lacking a facet — see the contract's
+   exceptions) before proposing an edit; an audit heuristic firing is not
+   itself a finding.
+3. **Batch mechanical fixes into ONE owner approval** (vocabulary renames,
+   missing stamps with obvious values); **never batch judgment calls** —
+   acceptance rewrites, demotes/defers, staleness verdicts stay per-item.
+4. The per-item owner gate and never-silently-invent rule are unchanged.
+
 ## The dispatchable-card contract (single authority — consumers reference, never restate)
 
 This section IS the contract for what a backlog card carries. The cockpit
@@ -48,9 +66,11 @@ once and propagates — do not fork partial copies into consumer skills.
 Frontmatter: `status: open`, `priority`, `tier` (the closed vendor-neutral set —
 `low | medium | high | frontier`; model-named values are legacy aliases the
 tooling normalizes, never coin new ones), `vision_facet` (matched to a
-`## Vision` table facet), `phase` (`converge` default; `explore` for divergent
-bets), `created`, `created_by`, and the two collision stamps the dispatch
-machinery reasons with:
+`## Vision` table facet — **required for `converge` cards; `explore` cards may
+substitute a `branch: <umbrella>` stamp** until the direction earns a facet or
+dies, per the Vision's breathing rule), `phase` (`converge` default; `explore`
+for divergent bets), `created`, `created_by`, and the two collision stamps the
+dispatch machinery reasons with:
 
 - `surface: <comma-separated globs>` — the code areas the card touches
   (e.g. `surface: horus/dashboard.py, horus/pty_*`). Without it the collision
@@ -73,7 +93,12 @@ Body:
   must be invented at verify time forces that invention on an unattended session
   with no owner present; name it now. `phase: explore` cards instead carry an
   exit line: the cheap PoC and the explicit verdict it must end in (adopt /
-  promote / drop — dying cheap is a valid success).
+  promote / drop — dying cheap is a valid success). `vision-branch-*` umbrella
+  cards carry a `## Convergence criterion` instead of acceptance — they are
+  judged as a unit, never dispatched. **Probe-retrofit policy:** only NEW cards
+  owe a probe at scoping time; an existing card gets its probe named when it is
+  armed for dispatch (the ready-gate checks) or next substantively edited —
+  blanket-retrofitting probes onto cards nobody will dispatch is ceremony.
 - **Non-goals** — what this card deliberately does not do.
 - **Source** — the receipt path + branch name.
 
