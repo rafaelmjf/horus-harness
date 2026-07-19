@@ -77,3 +77,42 @@ duplicate. Then run `backlog-refine` before promoting any delivery card to Ready
 - No narrow warning-only fix before the full lifecycle is understood.
 - No silent mass rewrite, auto-stash, force push, or bypass of repository policy.
 - No assumption that skills are the only managed artifact that can drift.
+
+## Field evidence — v0.0.73 made the fleet's prose stale (2026-07-19)
+
+The drift this card describes stopped being hypothetical. v0.0.73 (#368) deleted
+`continuity_granularity` from the code and rewrote the shared managed block, but only
+this repo's block was updated. Every other project still teaches the retired setting:
+
+```
+agentic-cv-builder: granularity=1     agentic-ttrpg: granularity=1
+agentic-gym-coach: granularity=1      fabric-metadata-driven-medallion: granularity=1
+agentic-pbi-utils: granularity=1      fabric-utils: granularity=1
+agentic-travel-guide: granularity=1   horus-agent: granularity=1
+```
+
+(grep for `continuity_granularity` in each `CLAUDE.md`; the consent sentence from #358
+is absent because those blocks predate it — they are stale at *different* versions,
+which is itself a requirement: refresh cannot assume one common baseline.)
+
+Impact is moderate, not urgent: behavior is correct everywhere because it lives in
+code. The cost is an agent reading a paragraph about a knob it cannot find — the exact
+prose-teaching-what-the-code-does-not-do failure #368 removed here.
+
+**Selection is the hard part, not propagation.** `horus upgrade-project` does the write;
+deciding *where* is the design question this card owns. Two traps found while surveying:
+
+1. **Worktrees masquerade as projects.** Four `~/projects/horus-harness-wt-*` directories
+   report the same staleness, but `git worktree list` shows they are worktrees of THIS
+   repo parked on old branches (`feat-tui-backlog-field-picker`,
+   `worker/campaign-supervision-launch{,-v2}`, `worker/provider-model-selector-contract`).
+   Refreshing them would commit managed-block changes onto stale worker branches. Any
+   sweep over a projects directory must exclude worktrees — check `.git` being a file
+   whose `gitdir:` points into another repo, not a directory.
+2. **Dormant projects should be skipped, not refreshed.** A project on hold does not
+   benefit from a block update; that is churn against a repo nobody is touching. This
+   needs to compose with `fleet-curation`'s lifecycle state rather than ignore it.
+
+Also note the scale: `horus skill map` reports **126 stale skill installs** across the
+fleet at v0.0.73, spanning several versions — so the refresh plan must be idempotent and
+resumable, never one big transactional sweep.
