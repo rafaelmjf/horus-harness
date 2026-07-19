@@ -770,6 +770,41 @@ plus a terse why. This is the *current* state, not a log — drop superseded dec
 """
 
 
+def ci_workflow_yaml(*, has_lfs: bool, has_test_target: bool) -> str:
+    """A minimal, opt-in CI gate for `horus init --ci`: a deterministic signal a
+    freshly onboarded repo can reproduce (`horus doctor project`, plus `git lfs
+    fsck` and a `make test` step when this repo's own state shows they apply).
+    Generic by design — no per-language build matrices; a repo with no detected
+    build step still gets a green doctor-only gate."""
+    steps = [
+        "      - uses: actions/checkout@v4\n"
+        + ("        with:\n          lfs: true\n" if has_lfs else ""),
+        "      - name: Install horus-harness\n        run: pip install horus-harness\n",
+        "      - name: horus doctor project\n        run: horus doctor project --path .\n",
+    ]
+    if has_lfs:
+        steps.append("      - name: git lfs fsck\n        run: git lfs fsck\n")
+    if has_test_target:
+        steps.append("      - name: make test\n        run: make test\n")
+    steps_block = "\n".join(steps)
+    return f"""name: horus-gate
+
+# Minimal, opt-in CI gate scaffolded by `horus init --ci`: a deterministic signal to
+# reproduce instead of trusting a prose "tests pass" report. This repo owns the file
+# from here — edit or remove it freely.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+{steps_block}"""
+
+
 def session_summary(
     *,
     title: str,

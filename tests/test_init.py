@@ -179,6 +179,78 @@ def test_init_no_hooks_skips_hook_files(tmp_path, monkeypatch):
     assert not (tmp_path / ".codex" / "hooks.json").exists()
 
 
+def test_init_ci_scaffolds_gate_with_lfs_step(tmp_path, monkeypatch):
+    """A repo that already tracks LFS objects (.gitattributes declares an lfs
+    filter) gets a generated gate that includes the `git lfs fsck` step."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    (tmp_path / ".gitattributes").write_text(
+        "*.psd filter=lfs diff=lfs merge=lfs -text\n", encoding="utf-8"
+    )
+
+    actions = initialize.init_project(tmp_path, assume_yes=True, ci=True)
+
+    workflow = tmp_path / ".github" / "workflows" / "horus-gate.yml"
+    assert workflow.is_file()
+    text = workflow.read_text(encoding="utf-8")
+    assert "horus doctor project" in text
+    assert "git lfs fsck" in text
+    assert "lfs: true" in text
+    assert any(a.status == "created" and "horus-gate.yml" in a.message for a in actions)
+
+
+def test_init_ci_scaffolds_doctor_only_gate_for_plain_repo(tmp_path, monkeypatch):
+    """A plain docs/vault repo with no LFS and no Makefile test target still gets
+    a gate — doctor-only, but green (no lfs/build steps fabricated)."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    initialize.init_project(tmp_path, assume_yes=True, ci=True)
+
+    workflow = tmp_path / ".github" / "workflows" / "horus-gate.yml"
+    assert workflow.is_file()
+    text = workflow.read_text(encoding="utf-8")
+    assert "horus doctor project" in text
+    assert "git lfs fsck" not in text
+    assert "make test" not in text
+
+
+def test_init_ci_detects_makefile_test_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    (tmp_path / "Makefile").write_text("test:\n\tpytest -q\n", encoding="utf-8")
+
+    initialize.init_project(tmp_path, assume_yes=True, ci=True)
+
+    text = (tmp_path / ".github" / "workflows" / "horus-gate.yml").read_text(encoding="utf-8")
+    assert "make test" in text
+
+
+def test_init_without_ci_flag_skips_workflow(tmp_path, monkeypatch):
+    """Opt-in only: a repo that doesn't ask for --ci is left without the workflow
+    file — existing repos and repos that opt out are untouched."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    initialize.init_project(tmp_path, assume_yes=True)
+
+    assert not (tmp_path / ".github" / "workflows" / "horus-gate.yml").exists()
+
+
+def test_init_ci_never_clobbers_existing_workflow(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    existing = "name: hand-written\n"
+    (workflows / "horus-gate.yml").write_text(existing, encoding="utf-8")
+
+    actions = initialize.init_project(tmp_path, assume_yes=True, ci=True)
+
+    assert (workflows / "horus-gate.yml").read_text(encoding="utf-8") == existing
+    assert any(a.status == "exists" and "horus-gate.yml" in a.message for a in actions)
+
+
 def test_init_is_idempotent(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
