@@ -127,7 +127,82 @@ Owner-requested close-out card from the 2026-07-19 Codex session; delivered evid
 
 ## Reviews
 
-- Pending the requested independent fresh-context review.
+### Independent fresh-context review — 2026-07-19 (Claude, All Gas session)
+
+**Verdict: `revise`.** The four v0.0.70 decisions are individually well-attributed and the
+delivery-safety floor survived, but the shipped controls have two concrete gaps: an internal
+contradiction inside the All Gas resume prompt, and session modes existing only on the TUI
+surface. Both are bounded. The addendum's continuity-axis simplification is corroborated by
+the code, but is larger than the smallest coherent change and should follow separately.
+
+Surfaces inspected: `horus/launch.py`, `horus/routines.py` (diff of #358 and #360),
+`horus/skills.py`, `horus/terminal_tui.py`, `horus/closure.py`, `horus/config.py`,
+`horus/cli.py`, `horus/dashboard.py`, `horus/terminal_app.py`, both `.claude/skills/` and
+`.agents/skills/` projections, and `CLAUDE.md` / `AGENTS.md` / `horus/templates.py`.
+`uv run python -m pytest` over the six touched test modules: **188 passed**, so every finding
+below is a scope/coverage gap on a green tree, not a broken behavior.
+
+**1. Attribution is correct for issues 1–3, thinner for issue 4.** Each of the first three
+names the specific under-specified text rather than blaming model preference — the imperative
+`next_prompt` with no stop boundary, `execution-decision`'s over-broad trigger metadata,
+inline batch's failure to classify the unit. Issue 4 ("a direct mode was missing") rests on a
+single Codex session and is a posture judgment rather than a contract defect; the card's own
+non-goals already preserve that, so this is a note, not an objection.
+
+**2. Mode meanings are distinct inside the TUI, but modes do not exist outside it.**
+`launch.mode_preamble` and `stop_before_execution=False` are referenced **only** from
+`horus/terminal_tui.py:2596,2602`. `grep session_mode` returns nothing in `horus/dashboard.py`,
+`horus/cli.py`, `horus/terminal_app.py`, or `horus/launcher.py`; those surfaces all call
+`routines.resume_prompt(root)` at its `stop_before_execution=True` default
+(`terminal_app.py:99`, `dashboard.py:1564,4151`, `cli.py:705,737,2250`). This contradicts
+`launch.py`'s own module docstring, which claims "exactly one launch path … regardless of
+whether the trigger was a terminal command or a click," and it means a dashboard or
+`horus open --mode resume` launch silently gets Standard's contract with no way to express a
+mode. It also cuts against the Dashboard/cockpit facet DoD (launch/resume any project from
+web or phone).
+
+**3. The consent boundary and the All Gas exception genuinely conflict — smallest bounded
+fix.** In All Gas, `routines.py` frames the authored handoff as "Authored handoff:" and closes
+"Proceed directly with the in-scope work." But the managed block (`CLAUDE.md:31-34`,
+`AGENTS.md:32-34`, `horus/templates.py:42-44`) instructs every consolidation to *author*
+`next_prompt` text that itself says "ask permission before editing, testing, dispatching,
+merging, releasing, or deploying" — and the current `PRD.md` `next_prompt` does exactly that.
+So an All Gas resume delivers a wrapper saying proceed around a payload saying stop. Observed
+live: this session was launched All Gas, read that contradiction, and deferred to the payload,
+stopping for permission — the mode's stated purpose was nullified by continuity prose it does
+not control. The bounded fix is to make the two authorship rules aware of each other: either
+the All Gas wrapper explicitly supersedes an embedded ask-permission clause, or the managed
+block stops baking the consent sentence into `next_prompt` and leaves consent to the wrapper
+that knows the mode. Recommend the latter — one authority for consent, chosen at launch.
+
+**4. Delegation is owner-invoked in every consumer, with one wording snag.**
+`execution-decision`'s frontmatter (`horus/skills.py:1124-1136`) is unambiguous, and
+`horus-consolidate` disclaims the trigger at two points (`:199`, `:307`, mirrored in both
+projections). The exception is `horus/skills.py:619`: "Before creating `execution.md` or a
+worker handoff, apply `execution-decision` and its shared rubric" — an unqualified imperative
+of exactly the shape that caused issue 1. Entering `horus-execution` is itself owner-invoked
+so the practical risk is low, but the sentence should be conditioned for consistency.
+
+**5. Hard-boundary continuity and delivery safety survived.** Both mode skills retain branch/PR
+policy, exact-commit gates, live probes, and hard-boundary consolidation; the two projections
+are byte-identical (`diff` clean for both skills). Separately, the addendum's claim that
+`continuity_granularity` is a colliding third axis is **confirmed in code**: it is live at
+`config.py:71`, `closure.py:84-99,341,369`, `resume_preflight.py:104`, `cli.py:2867,3430`, and
+the TUI settings pane — and *neither* mode skill consults it, while both restate the
+hold-to-hard-boundary rule unconditionally. The axis is real, redundant, and safe to remove on
+the evidence; but it is a wider change than findings 2 and 3, so it should be its own card
+rather than part of the minimal revision.
+
+**Proposed follow-ups, smallest first (not implemented, pending owner approval):**
+
+1. Resolve the All Gas consent contradiction (finding 3) — one authority for consent.
+2. Plumb `session_mode` through the non-TUI launch surfaces, or explicitly scope modes to the
+   TUI and correct `launch.py`'s docstring (finding 2).
+3. Condition the `horus-execution` delegation sentence (finding 4).
+4. Separate card: remove the `continuity_granularity` axis per the addendum (finding 5).
+
+The TUI launch-form collapse proposed in the addendum is orthogonal to this verdict and needs
+no finding here; it is a UX consolidation the owner can authorize independently.
 
 ### Follow-up session context — 2026-07-19
 
