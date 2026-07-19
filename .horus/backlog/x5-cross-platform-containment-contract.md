@@ -1,6 +1,8 @@
 ---
 status: open
 priority: medium
+readiness: deferred
+readiness_reason: "Deferred with the X5 branch pending the owner preserve/narrow/split/drop review."
 created: 2026-07-18
 last_refined: 2026-07-19
 tier: high

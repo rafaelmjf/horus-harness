@@ -1,6 +1,8 @@
 ---
 status: open
 priority: high
+readiness: gated
+readiness_reason: "Wait for the owner review of the deferred X5 containment branch."
 created: 2026-07-18
 last_refined: 2026-07-19
 tier: frontier
@@ -9,7 +11,7 @@ parallel: safe
 phase: explore
 created_by: owner
 branch: vision-branch-x4-model-harness-plane
-depends-on: x5-linux-agent-cgroup-containment
+depends-on: vision-branch-x5-safe-execution-boundaries
 surface: run the PI coding-agent harness through Horus via the CLIProxyAPI proxy
 ---
 

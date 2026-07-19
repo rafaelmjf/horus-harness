@@ -1,6 +1,8 @@
 ---
 status: open
 priority: high
+readiness: gated
+readiness_reason: "Wait for the weekly account reset, then run as an attended evidence-gathering drill."
 created: 2026-07-19
 last_refined: 2026-07-19
 vision_facet: "Autonomous dispatch"

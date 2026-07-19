@@ -1,6 +1,8 @@
 ---
 status: open
 priority: high
+readiness: shaping
+readiness_reason: "Fresh-context no-change/revise/reconsider review remains an attended owner decision."
 created: 2026-07-19
 last_refined: 2026-07-19
 vision_facet: "Introspection & self-improvement"

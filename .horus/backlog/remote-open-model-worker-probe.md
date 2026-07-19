@@ -1,6 +1,8 @@
 ---
 status: open
 priority: medium
+readiness: shaping
+readiness_reason: "Needs an attended owner envelope and bounded probe design before any remote-model execution."
 tier: medium
 created: 2026-07-16
 last_refined: 2026-07-19

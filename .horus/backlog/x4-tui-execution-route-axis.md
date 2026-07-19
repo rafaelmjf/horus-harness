@@ -1,7 +1,8 @@
 ---
 status: open
 priority: medium
-deferred: "X4 branch on hold (2026-07-18 verdict)"
+readiness: deferred
+readiness_reason: "X4 branch remains on hold under the 2026-07-18 owner verdict."
 created: 2026-07-18
 last_refined: 2026-07-19
 tier: medium

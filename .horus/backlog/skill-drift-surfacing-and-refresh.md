@@ -1,22 +1,37 @@
 ---
 status: open
 priority: low
+readiness: shaping
+readiness_reason: "Dedicated owner brainstorm must unify detect, preview, refresh, git integration, and remote verification before implementation."
 created: 2026-07-17
 last_refined: 2026-07-19
 tier: medium
-type: bug
+type: feature
 vision_facet: "Introspection & self-improvement"
 parallel: safe
-surface: horus/skills.py (skill_findings, missing_or_stale, _skill_nudge in cli.py), launch/resume preflight, fleet/status projections
+surface: horus-managed project artifacts, upgrade/skill detection, fleet refresh planning, git workflow integration, remote verification
 ---
 
-# Skill drift across installed projects — surfacing and refresh
+# Unified Horus artifact refresh — detect, preview, integrate, verify
 
-When the CLI ships new or updated bundled skills, already-onboarded projects keep
-stale copies (and miss newly added skills) silently. The detection primitives exist —
-`skills.skill_findings` reports missing / outdated / unversioned-marker skills, and
-`missing_or_stale` feeds the `_skill_nudge` tip trailer — but they do not propagate to
-where anyone acts:
+Reinstalling or upgrading the Horus CLI does not refresh what Horus previously wrote
+inside initialized projects. Bundled skills are the observed failure, but the product
+problem is broader: managed instructions, hooks, workflow dependencies, and other
+project artifacts can all lag the installed CLI. Detection, update, git integration,
+and remote verification currently feel like separate partial operations.
+
+The dedicated shaping session must design one owner-visible lifecycle:
+
+1. **Detect** every Horus-managed artifact that is missing, stale, customized, or
+   ineligible for automatic replacement.
+2. **Preview** the exact per-project diff and repository workflow before writing.
+3. **Refresh** only approved managed assets without overwriting unversioned/customized
+   content silently.
+4. **Integrate** through the target project's normal branch/commit/push/PR policy.
+5. **Remote-verify** that the delivered default branch contains the new artifacts and
+   the local checkout is clean and synchronized.
+
+Existing evidence includes:
 
 - The nudge is a passive one-line `tip:` after routine commands that lists every
   bundled skill name without distinguishing "not installed" from "outdated"; it reads
@@ -26,9 +41,8 @@ where anyone acts:
 - There is no fleet-wide view: after a CLI upgrade, nothing tells the owner which of
   the N registered projects are behind. Only a per-project `horus doctor` shows it,
   and nothing prompts running doctor after an upgrade.
-- Two refresh paths are advertised in different findings (`horus upgrade-project
-  --apply --target X` vs `horus skill install --target X`); which is canonical is
-  unclear.
+- Two refresh paths are advertised (`horus upgrade-project --apply --target X` and
+  `horus skill install --target X`) without one end-to-end contract.
 
 **Evidence (2026-07-17, horus-agent):** a session was launched in `inline-batch` mode
 (the launch-mode skill shipped in PR #307 / v0.0.60) but `inline-batch-session` was not
@@ -38,23 +52,28 @@ manual `horus skill install --target claude` then created 9 missing skills and u
 dispatch-decision v3) — none of which had surfaced as an actionable warning in the
 normal resume/consolidate/close flow.
 
-## Acceptance (draft — to be refined)
+The related [[tui-fleet-artifact-refresh]] card already carries a detailed candidate
+fleet workflow. It remains Gated on this shaping verdict so the session can decide
+whether that card is the implementation, a child, or should be merged here.
 
-- After a CLI upgrade, skill drift in registered projects is visible from one place
-  (fleet/status/doctor summary or an upgrade-time report), not only via per-project
-  doctor runs nobody is prompted to make.
-- Launching a session in a mode that depends on a skill warns (or refuses) when that
-  skill is missing or stale in the target project.
-- One canonical, sanctioned refresh command; the two current suggestions are
-  reconciled.
-- Customized or unversioned skill files are never silently overwritten (preserve the
-  current `--force` semantics).
+## Shaping questions
 
-## Boundaries
+- Which artifacts are genuinely Horus-managed and how is customization distinguished
+  from stale generated content?
+- Is there one canonical refresh service with skill-only/project/all projections, or
+  separate commands sharing one plan/apply/integrate core?
+- Which safety states must skip a project versus pause for an attended decision?
+- How should launch-time warnings relate to fleet-wide refresh without becoming noise?
+- Does the existing TUI fleet card remain the delivery card after this brainstorm?
 
-- Owner sized this medium/low as a bug; scope and refine in a dedicated horus-harness
-  session before implementation — this card records the gap, not the design.
-- Detection logic already exists; prefer routing/surfacing existing findings over new
-  scanning machinery.
-- No auto-refresh without an explicit owner-visible step; skills live in project repos
-  and changes must go through each project's normal commit flow.
+## Exit
+
+End the dedicated owner session with one bounded architecture and a disposition for
+[[tui-fleet-artifact-refresh]]: merge, rescope as the implementation card, or retire as
+duplicate. Then run `backlog-refine` before promoting any delivery card to Ready.
+
+## Non-goals while Shaping
+
+- No narrow warning-only fix before the full lifecycle is understood.
+- No silent mass rewrite, auto-stash, force push, or bypass of repository policy.
+- No assumption that skills are the only managed artifact that can drift.

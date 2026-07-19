@@ -1,7 +1,8 @@
 ---
 status: open
 priority: medium
-deferred: "awaiting an onboarded content project that demonstrates the needed override"
+readiness: deferred
+readiness_reason: "Await an onboarded content project that demonstrates a concrete override need."
 tier: medium
 created: 2026-07-15
 last_refined: 2026-07-19
