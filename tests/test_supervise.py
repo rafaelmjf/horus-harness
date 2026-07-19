@@ -16,11 +16,12 @@ injected so nothing here touches the network, git, or systemd:
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import pytest
 
-from horus import notify, supervise
+from horus import cli, notify, supervise
 
 
 def _ctx(**kw) -> supervise.SupervisionContext:
@@ -237,3 +238,143 @@ def test_resolve_context_treats_a_non_session_as_a_verify_only_pr(monkeypatch):
 class _EmptyReg:
     def all(self):
         return []
+
+
+# --------------------------------------------------------------------------- #
+# Deferred targets — resolve a card/branch to its worker session at fire time
+# --------------------------------------------------------------------------- #
+
+
+def _rec(session_id, **kw):
+    base = dict(session_id=session_id, agent="claude", project="/repo")
+    base.update(kw)
+    return supervise.registry.SessionRecord(**base)
+
+
+class _Reg:
+    def __init__(self, records):
+        self._records = records
+
+    def all(self):
+        return self._records
+
+
+class _Env:
+    def __init__(self, name, merge_authority=False):
+        self.name = name
+        self.merge_authority = merge_authority
+
+
+def _stub_registry(monkeypatch, records):
+    monkeypatch.setattr(supervise.registry.Registry, "default", classmethod(lambda cls: _Reg(records)))
+
+
+def _stub_envelopes(monkeypatch, envs, ledgers):
+    monkeypatch.setattr(supervise.envelope, "load_all", lambda: envs)
+    monkeypatch.setattr(supervise.envelope, "read_ledger", lambda name: ledgers.get(name, []))
+
+
+def test_resolve_deferred_by_card_binds_the_newest_dispatch_keeping_base_and_authority(monkeypatch):
+    """A `--card` target resolves at fire time to the newest worker session dispatched
+    for that card — with its pinned base + PR + the envelope's merge authority, so a
+    supervisor scheduled before the worker existed can still merge under authority."""
+    rec = _rec("sessAAA", dispatch_base_sha="base1", delivery_head_sha="head1",
+               delivery_pr_number=99, delivery_expected=True)
+    _stub_registry(monkeypatch, [_rec("noise"), rec])
+    _stub_envelopes(monkeypatch, [_Env("away", merge_authority=True)], {"away": [
+        {"ts": "2026-07-19T01:00:00+00:00", "card": "my-card", "session_id": "old-sess"},
+        {"ts": "2026-07-19T01:30:00+00:00", "card": "my-card", "session_id": "sessAAA"},
+    ]})
+    ctx = supervise.resolve_deferred(card="my-card", path="/repo")
+    assert ctx is not None
+    assert ctx.session_id == "sessAAA"      # newest ledger row for the card
+    assert ctx.base_ref == "base1"          # pinned dispatch base survives
+    assert ctx.pr_ref == "99"
+    assert ctx.merge_authority is True       # envelope authority survives the deferral
+    assert ctx.card == "my-card"
+
+
+def test_resolve_deferred_by_card_with_no_dispatch_returns_none(monkeypatch):
+    _stub_registry(monkeypatch, [])
+    _stub_envelopes(monkeypatch, [_Env("away")], {"away": []})
+    assert supervise.resolve_deferred(card="ghost", path="/repo") is None
+
+
+def test_resolve_deferred_by_branch_picks_the_newest_record(monkeypatch):
+    old = _rec("s-old", delivery_branch="auto/x", updated_at="2026-07-19T01:00:00+00:00",
+               dispatch_base_sha="b0", delivery_head_sha="h0")
+    new = _rec("s-new", delivery_branch="auto/x", updated_at="2026-07-19T02:00:00+00:00",
+               dispatch_base_sha="b1", delivery_head_sha="h1", delivery_pr_number=7)
+    _stub_registry(monkeypatch, [old, new])
+    _stub_envelopes(monkeypatch, [], {})
+    ctx = supervise.resolve_deferred(branch="auto/x", path="/repo")
+    assert ctx is not None
+    assert ctx.session_id == "s-new" and ctx.pr_ref == "7" and ctx.base_ref == "b1"
+
+
+def test_resolve_deferred_by_branch_with_no_match_returns_none(monkeypatch):
+    _stub_registry(monkeypatch, [_rec("s", delivery_branch="auto/other")])
+    _stub_envelopes(monkeypatch, [], {})
+    assert supervise.resolve_deferred(branch="auto/missing", path="/repo") is None
+
+
+def test_escalate_unresolved_escalates_and_halts_never_merges(_no_real_effects):
+    """A deferred target that resolves to nothing must escalate (andon), not fail
+    silently — and it merges nothing (there is nothing to merge)."""
+    outcome = supervise.escalate_unresolved(card="my-card", path="/repo")
+    assert outcome.verdict == "escalated"
+    assert outcome.exit_code == 1
+    assert outcome.halted == ("dep-card",)          # halted the card's dependents
+    assert _no_real_effects["merges"] == []          # nothing merged
+    assert any("no worker session found" in s for s in _no_real_effects["escalations"])
+
+
+# --- cmd_supervise wiring for deferred targets --------------------------------
+
+
+def _supervise_ns(**kw):
+    base = dict(target=None, card=None, branch=None, path=None, probe=None)
+    base.update(kw)
+    return argparse.Namespace(**base)
+
+
+def test_cmd_supervise_refuses_more_than_one_selector(capsys):
+    assert cli.cmd_supervise(_supervise_ns(target="sess1", card="c")) == 2
+    assert "exactly one" in capsys.readouterr().out
+
+
+def test_cmd_supervise_refuses_no_selector(capsys):
+    assert cli.cmd_supervise(_supervise_ns()) == 2
+    assert "exactly one" in capsys.readouterr().out
+
+
+def test_cmd_supervise_deferred_resolves_then_supervises(monkeypatch):
+    ctx = _ctx()
+    seen = {}
+
+    def _resolve(**kw):
+        seen["kw"] = kw
+        return ctx
+
+    def _supervise(c, probe=None):
+        seen["ctx"] = c
+        return supervise.SuperviseOutcome(verdict="verified", reason="ok")
+
+    monkeypatch.setattr(cli.supervise, "resolve_deferred", _resolve)
+    monkeypatch.setattr(cli.supervise, "supervise", _supervise)
+    assert cli.cmd_supervise(_supervise_ns(card="my-card")) == 0
+    assert seen["kw"]["card"] == "my-card" and seen["ctx"] is ctx
+
+
+def test_cmd_supervise_deferred_no_match_escalates(monkeypatch, capsys):
+    called = {}
+
+    def _escalate(**kw):
+        called["kw"] = kw
+        return supervise.SuperviseOutcome(verdict="escalated", reason="no worker session found for card c")
+
+    monkeypatch.setattr(cli.supervise, "resolve_deferred", lambda **kw: None)
+    monkeypatch.setattr(cli.supervise, "escalate_unresolved", _escalate)
+    assert cli.cmd_supervise(_supervise_ns(card="c")) == 1  # escalated → non-zero
+    assert called["kw"]["card"] == "c"
+    assert "escalated" in capsys.readouterr().out
