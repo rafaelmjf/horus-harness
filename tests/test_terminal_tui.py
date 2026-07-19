@@ -5,6 +5,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import DummyOutput
 
 from horus import config, github_catalog, remote_start, terminal_tui
+from horus.cli import main
 
 
 def _isolated_home(tmp_path, monkeypatch):
@@ -65,7 +66,77 @@ def test_backlog_rows_are_unchanged_when_no_fields_are_configured(tmp_path, monk
 
     assert "[feature] My card\n" in rendered  # nothing appended after the title
     assert "     priority now\n" in rendered  # the classic sub-line survives
-    assert " · " not in rendered
+    assert "[feature] My card ·" not in rendered
+
+
+def test_backlog_screen_reports_all_six_readiness_queues(tmp_path, monkeypatch):
+    ui, root = _project_with_cards(tmp_path, monkeypatch)
+    hdir = root / ".horus" / "backlog"
+    (hdir / "full.md").write_text(
+        "---\nstatus: open\npriority: now\ntype: feature\n"
+        "readiness: ready\nautonomy: eligible\n---\n# My card\n",
+        encoding="utf-8",
+    )
+    (hdir / "blocked.md").write_text(
+        "---\nstatus: open\ntype: task\nreadiness: gated\n"
+        'readiness_reason: "await upstream"\n---\n# Blocked card\n',
+        encoding="utf-8",
+    )
+    ui._reload_project_backlog(root)
+    ui._show("backlog")
+
+    rendered = "".join(text for _style, text in ui._body_text())
+
+    assert "Ready—Autonomous eligible 1 · Ready—Attended 0" in rendered
+    assert "Shaping 0 · Gated 1 · Deferred 0 · Unclassified 1" in rendered
+    assert "Ready—Autonomous eligible\n" in rendered
+    assert "Gated\n" in rendered
+    assert "await upstream\n" in rendered
+
+
+def test_readiness_transition_updates_cli_tui_and_scheduler_gate(
+    tmp_path, monkeypatch, capsys,
+):
+    ui, root = _project_with_cards(tmp_path, monkeypatch)
+    card_path = root / ".horus" / "backlog" / "full.md"
+    (root / ".horus" / "backlog" / "sparse.md").unlink()
+
+    def write_state(*, readiness, autonomy="", reason=""):
+        lines = ["---", "status: open", "priority: now", "type: feature"]
+        lines.append(f"readiness: {readiness}")
+        if autonomy:
+            lines.append(f"autonomy: {autonomy}")
+        if reason:
+            lines.append(f'readiness_reason: "{reason}"')
+        lines.extend(["---", "# My card", ""])
+        card_path.write_text("\n".join(lines), encoding="utf-8")
+        ui._reload_project_backlog(root)
+        ui._show("backlog")
+        card = terminal_tui.backlog.find_card(root, "full")
+        assert card is not None
+        return card
+
+    card = write_state(readiness="shaping", reason="needs owner scope")
+    assert not terminal_tui.backlog.is_autonomous_candidate(card)
+    assert "needs owner scope" in terminal_tui.backlog.autonomy_block_reason(card)
+    assert main(["backlog", "list", "--path", str(root)]) == 0
+    assert "Shaping (1)" in capsys.readouterr().out
+    assert "Shaping\n" in "".join(text for _style, text in ui._body_text())
+
+    card = write_state(readiness="ready", autonomy="attended")
+    assert not terminal_tui.backlog.is_autonomous_candidate(card)
+    assert "owner presence" in terminal_tui.backlog.autonomy_block_reason(card)
+    assert main(["backlog", "list", "--path", str(root)]) == 0
+    assert "Ready—Attended (1)" in capsys.readouterr().out
+    assert "Ready—Attended\n" in "".join(text for _style, text in ui._body_text())
+
+    card = write_state(readiness="ready", autonomy="eligible")
+    assert terminal_tui.backlog.is_autonomous_candidate(card)
+    assert terminal_tui.backlog.autonomy_block_reason(card) == ""
+    assert main(["backlog", "list", "--path", str(root)]) == 0
+    assert "Ready—Autonomous eligible (1)" in capsys.readouterr().out
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "Ready—Autonomous eligible\n" in rendered
 
 
 def test_backlog_rows_render_configured_fields_inline_in_pick_order(tmp_path, monkeypatch):

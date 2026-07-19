@@ -513,6 +513,13 @@ def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
 
     findings.extend(backlog.hygiene_findings(root))
 
+    groups = backlog.readiness_groups(backlog.load_active_cards(root))
+    findings.append(Finding(
+        "ok",
+        "backlog readiness: "
+        + " · ".join(f"{group.label} ({len(group.cards)})" for group in groups),
+    ))
+
     # 6. Phase-aware convergence read-out (advisory): where the backlog sits against
     # the Vision facets. Its "ok" lines are a report and always print; only off-vision
     # or unknown-facet cards raise a warn.

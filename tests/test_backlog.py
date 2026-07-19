@@ -8,7 +8,20 @@ import pytest
 from horus import backlog
 
 
-def _mk_card(root: Path, name: str, *, status="open", parallel="", surface="", type="", body="Card body.\n"):
+def _mk_card(
+    root: Path,
+    name: str,
+    *,
+    status="open",
+    parallel="",
+    surface="",
+    type="",
+    readiness="",
+    readiness_reason="",
+    autonomy="",
+    last_refined="",
+    body="Card body.\n",
+):
     hdir = root / ".horus" / "backlog"
     hdir.mkdir(parents=True, exist_ok=True)
     lines = ["---", f"status: {status}", "priority: later", "tier: sonnet", "created: 2026-07-11"]
@@ -18,19 +31,38 @@ def _mk_card(root: Path, name: str, *, status="open", parallel="", surface="", t
         lines.append(f"surface: {surface}")
     if type:
         lines.append(f"type: {type}")
+    if readiness:
+        lines.append(f"readiness: {readiness}")
+    if readiness_reason:
+        lines.append(f'readiness_reason: "{readiness_reason}"')
+    if autonomy:
+        lines.append(f"autonomy: {autonomy}")
+    if last_refined:
+        lines.append(f"last_refined: {last_refined}")
     lines.append("---")
     text = "\n".join(lines) + f"\n# {name.replace('-', ' ').title()}\n\n{body}"
     (hdir / f"{name}.md").write_text(text, encoding="utf-8")
 
 
 def test_load_cards_reads_new_optional_fields(tmp_path):
-    _mk_card(tmp_path, "a", parallel="exclusive", surface="horus/dashboard.py, horus/pty_*")
+    _mk_card(
+        tmp_path,
+        "a",
+        parallel="exclusive",
+        surface="horus/dashboard.py, horus/pty_*",
+        readiness="ready",
+        autonomy="eligible",
+        last_refined="2026-07-19",
+    )
     cards = backlog.load_cards(tmp_path)
     assert len(cards) == 1
     c = cards[0]
     assert c.name == "a"
     assert c.parallel == "exclusive"
     assert c.surface == ("horus/dashboard.py", "horus/pty_*")
+    assert c.readiness == "ready"
+    assert c.autonomy == "eligible"
+    assert c.last_refined == "2026-07-19"
 
 
 def test_load_cards_records_raw_frontmatter_fields(tmp_path):
@@ -57,6 +89,8 @@ def test_load_cards_back_compat_no_new_fields(tmp_path):
     cards = backlog.load_cards(tmp_path)
     assert cards[0].parallel == ""
     assert cards[0].surface == ()
+    assert cards[0].readiness == ""
+    assert backlog.readiness_queue(cards[0]) == backlog.QUEUE_UNCLASSIFIED
 
 
 def test_load_cards_reads_vision_facet_and_phase(tmp_path):
@@ -318,13 +352,91 @@ def test_hygiene_ignores_done_markers_inside_reviews_section(tmp_path):
         "reviewed",
         body="Body.\n\n## Reviews\n\n### 2026-07-14 — rafa (manual)\n\nDONE looks wrong here.\n- [x] I checked the repro\n",
     )
-    assert backlog.hygiene_findings(tmp_path) == []
+    findings = backlog.hygiene_findings(tmp_path)
+    assert not any("lingering done" in finding.message for finding in findings)
 
 
 def test_hygiene_still_flags_done_markers_outside_reviews_section(tmp_path):
     _mk_card(tmp_path, "drifted", body="- [x] DONE: shipped it\n\n## Reviews\n\n### 2026-07-14 — rafa (manual)\nVerdict: ok\n")
     findings = backlog.hygiene_findings(tmp_path)
     assert any("lingering done" in f.message for f in findings)
+
+
+def test_readiness_groups_render_all_six_queues_in_canonical_order(tmp_path):
+    _mk_card(tmp_path, "eligible-high", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "eligible-low", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "attended", readiness="ready", autonomy="attended")
+    _mk_card(tmp_path, "shaping", readiness="shaping", readiness_reason="needs scope")
+    _mk_card(tmp_path, "gated", readiness="gated", readiness_reason="wait for API")
+    _mk_card(tmp_path, "deferred", readiness="deferred", readiness_reason="owner review")
+    _mk_card(tmp_path, "legacy")
+
+    groups = backlog.readiness_groups(backlog.load_active_cards(tmp_path))
+
+    assert [group.key for group in groups] == list(backlog.READINESS_QUEUE_ORDER)
+    assert [len(group.cards) for group in groups] == [2, 1, 1, 1, 1, 1]
+    assert [card.name for card in groups[0].cards] == ["eligible-high", "eligible-low"]
+
+
+def test_scheduler_candidate_gate_accepts_only_ready_eligible(tmp_path):
+    _mk_card(tmp_path, "eligible", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "attended", readiness="ready", autonomy="attended")
+    _mk_card(tmp_path, "shaping", readiness="shaping", readiness_reason="needs scope")
+    _mk_card(tmp_path, "gated", readiness="gated", readiness_reason="wait for API")
+    _mk_card(tmp_path, "deferred", readiness="deferred", readiness_reason="owner review")
+    _mk_card(tmp_path, "legacy")
+    cards = {card.name: card for card in backlog.load_active_cards(tmp_path)}
+
+    assert backlog.is_autonomous_candidate(cards["eligible"])
+    assert backlog.autonomy_block_reason(cards["eligible"]) == ""
+    for name in ("attended", "shaping", "gated", "deferred", "legacy"):
+        assert not backlog.is_autonomous_candidate(cards[name])
+        assert backlog.autonomy_block_reason(cards[name])
+    assert "owner presence" in backlog.autonomy_block_reason(cards["attended"])
+    assert "wait for API" in backlog.autonomy_block_reason(cards["gated"])
+    assert "backlog-refine" in backlog.autonomy_block_reason(cards["legacy"])
+
+
+def test_readiness_validation_warns_without_inference(tmp_path):
+    _mk_card(tmp_path, "ready-missing-autonomy", readiness="ready")
+    _mk_card(tmp_path, "shaping-missing-reason", readiness="shaping")
+    _mk_card(
+        tmp_path,
+        "gated-with-autonomy",
+        readiness="gated",
+        readiness_reason="blocked",
+        autonomy="eligible",
+    )
+    _mk_card(tmp_path, "invalid", readiness="eventually")
+    cards = {card.name: card for card in backlog.load_active_cards(tmp_path)}
+
+    findings = {name: backlog.readiness_findings(card) for name, card in cards.items()}
+    assert any("missing autonomy" in item.message for item in findings["ready-missing-autonomy"])
+    assert any("without readiness_reason" in item.message for item in findings["shaping-missing-reason"])
+    assert any("autonomy belongs only" in item.message for item in findings["gated-with-autonomy"])
+    assert any("invalid readiness" in item.message for item in findings["invalid"])
+    assert all(backlog.readiness_queue(card) == backlog.QUEUE_UNCLASSIFIED for card in (
+        cards["ready-missing-autonomy"], cards["invalid"],
+    ))
+
+
+def test_card_writers_preserve_readiness_fields(tmp_path):
+    _mk_card(
+        tmp_path,
+        "preserved",
+        readiness="ready",
+        autonomy="eligible",
+        last_refined="2026-07-19",
+    )
+    path = backlog.backlog_dir(tmp_path) / "preserved.md"
+
+    backlog.set_priority(path, "high")
+    backlog.claim(tmp_path, "preserved")
+
+    card = backlog.find_card(tmp_path, "preserved")
+    assert (card.readiness, card.autonomy, card.last_refined) == (
+        "ready", "eligible", "2026-07-19",
+    )
 
 
 # --- one-act acceptance: `horus datum close --card` (2026-07-14 frozen schema) --

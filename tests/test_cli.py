@@ -2458,6 +2458,37 @@ def test_backlog_list_shows_parallel_safety_metadata(tmp_path, monkeypatch, caps
     assert "surface: unverified" in out
 
 
+def test_backlog_list_reports_all_six_readiness_queues(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    cards = (
+        ("eligible", {"readiness": "ready", "autonomy": "eligible"}),
+        ("attended", {"readiness": "ready", "autonomy": "attended"}),
+        ("shaping", {"readiness": "shaping", "readiness_reason": "needs-scope"}),
+        ("gated", {"readiness": "gated", "readiness_reason": "wait-for-api"}),
+        ("deferred", {"readiness": "deferred", "readiness_reason": "owner-review"}),
+        ("legacy", {}),
+    )
+    for name, fields in cards:
+        _write_backlog_card(tmp_path, name, status="open", priority="medium", **fields)
+
+    assert main(["backlog", "list", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+
+    for label in (
+        "Ready—Autonomous eligible (1)",
+        "Ready—Attended (1)",
+        "Shaping (1)",
+        "Gated (1)",
+        "Deferred (1)",
+        "Unclassified (1)",
+    ):
+        assert label in out
+    assert "reason: wait-for-api" in out
+    assert "Unclassified cards stay unscheduled" in out
+    assert "never rewrites cards" in out
+
+
 def test_backlog_claim_back_compat_no_new_fields(tmp_path, monkeypatch, capsys):
     """A card without parallel/surface — the pre-existing card shape — still claims."""
     _home(tmp_path, monkeypatch)
