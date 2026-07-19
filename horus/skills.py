@@ -598,7 +598,7 @@ description: >-
   or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 13 -->
+<!-- horus-skill-version: 14 -->
 
 # Horus execution supervision
 
@@ -616,10 +616,12 @@ plan without turning `.horus/` into a transcript or a second issue tracker.
 
 ## Confirm delegation already earned its cost
 
-Before creating `execution.md` or a worker handoff, apply `execution-decision` and
-its shared rubric. Define the bounded unit and require a concrete dividend that
-exceeds the fixed brief/review/gate/merge/closure tax. Do not enter this workflow
-merely because work spans projects or phases, or to collect a model datum.
+Before creating `execution.md` or a worker handoff, apply the delegation rubric below.
+Load the `execution-decision` skill itself only if the owner asked how or whether to
+delegate — being inside this workflow is not on its own a reason to load it. Define the
+bounded unit and require a concrete dividend that exceeds the fixed
+brief/review/gate/merge/closure tax. Do not enter this workflow merely because work
+spans projects or phases, or to collect a model datum.
 
 | Situation | Approach |
 |---|---|
@@ -2539,7 +2541,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 14, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 4, _INFER_SKILL),
-    Skill("horus-execution", 13, _EXECUTION_SKILL),
+    Skill("horus-execution", 14, _EXECUTION_SKILL),
     Skill("delegation-rubric", 9, _DELEGATION_RUBRIC_SKILL),
     Skill("execution-decision", 5, _EXECUTION_DECISION_SKILL),
     Skill("dispatch-decision", 4, _DISPATCH_DECISION_SKILL),
