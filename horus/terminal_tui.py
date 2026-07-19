@@ -1690,6 +1690,11 @@ class TerminalUI:
                 state = "halted" if item.halted else ("fired" if item.fired else "pending")
                 frags.append(("class:muted",
                               f"     {activity.ARMED} {item.id}  {state}  {item.when}  {item.description}\n"))
+                # A fired timer shows what the worker DID, not just that it ran.
+                outcome = act.outcomes.get(item.id)
+                if outcome is not None:
+                    frags.append(("class:muted",
+                                  f"        └─ {outcome.glyph} {activity.outcome_summary(outcome)}\n"))
         else:
             frags.append(("class:muted", "     (none)\n"))
         frags.append(("class:section", "\n  Recent runs\n"))
