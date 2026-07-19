@@ -126,3 +126,47 @@ Owner-requested close-out card from the 2026-07-19 Codex session; delivered evid
 ## Reviews
 
 - Pending the requested independent fresh-context review.
+
+### Follow-up session context — 2026-07-19
+
+The next owner/Codex session revisited the same control surface while testing the shipped
+desktop new-window launch. No implementation followed; the owner agreed that the later
+fresh-context review should consider these decisions together with the first session:
+
+- **Remove continuity as a separate configurable axis.** The global
+  `handoff | delivery | manual` setting collides with launch modes: Inline Batch inherently
+  requires handoff-style batching, while All Gas restates the same hard-boundary rule even
+  though its distinct purpose is directness and suppression of optional process. The intended
+  simplification is one universal invariant: git/PR evidence preserves deliveries between
+  boundaries, and canonical continuity is consolidated once at a real pause, session end,
+  agent/account/machine handoff, release, or dispatch boundary that needs durable context.
+  Remove the TUI setting, user configuration, project-frontmatter override, and conditional
+  hook/PR-gate behavior rather than adding per-session override machinery.
+- **Keep the three launch modes focused on working posture.** Standard is one bounded delivery
+  with normal repo-guided execution and applicable workflows; Inline Batch is several related
+  cards/findings in one warm recoverable campaign; All Gas works directly from minimum context
+  and avoids automatic planning, delegation, grooming, curation, audits, manufactured cards,
+  execution plans, retrospectives, and session notes unless explicitly requested. All modes
+  retain branch/PR/exact-gate/live-probe safety and the universal hard-boundary consolidation.
+- **Collapse the post-account TUI launch flow into one review form.** After the owner selects
+  fresh/resume/card and an account, show model, reasoning effort, session mode, and permission
+  posture together with Launch focused by default. Persist an explicit per-agent profile only
+  when the owner selects `Save as defaults`; occasional overrides apply to one launch. Keep
+  window behavior in Settings because it is an environmental desktop/mobile preference.
+- **Show help on demand, not permanently.** The compact review form shows only selected values
+  with radio markers. Entering a row expands its alternatives and their concise descriptions;
+  selecting or collapsing returns to the compact form. Mode help must define "guided workflow,"
+  enumerate Inline Batch hard boundaries, and name the optional ceremony All Gas suppresses.
+- **Use official model names with manually maintained purpose copy.** Do not expose Horus aliases,
+  scrape provider docs at launch, or promise automatic discovery that the native CLIs do not
+  provide. Claude family selectors may continue to target the provider's latest family member,
+  while Horus updates displayed standard names and short provider-grounded intended-use text
+  deliberately when model releases change. An unavailable remembered model falls back visibly
+  to the agent default.
+- **Keep scheduled work separate.** Autonomous scheduled workers do not use this attended TUI
+  form or its Standard mode; their one-card behavior remains owned by the dispatch envelope and
+  supervisor contract.
+
+The independent review should therefore evaluate both the already-shipped v0.0.70 controls and
+this proposed simplification. A `revise` verdict should identify the smallest coherent change;
+this addendum is context, not authorization to implement it.
