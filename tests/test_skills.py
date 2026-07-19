@@ -78,7 +78,7 @@ def test_market_scan_skill_registered_and_outward():
 
 def test_cockpit_dispatch_contract_skill_registered_and_sequences():
     ct = next(s for s in skills.SKILLS if s.name == "cockpit-autonomous-dispatch-contract")
-    assert ct.version == 1
+    assert ct.version == 2
     # A thin sequencer: composes the decision skills, never re-implements them.
     assert "dispatch-decision" in ct.content
     assert "scope-cards" in ct.content and "pathfinder" in ct.content
@@ -177,7 +177,7 @@ def test_roadmap_branches_skill_registered_divergence_tree():
 
 def test_scope_cards_skill_registered_self_sufficient():
     sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
-    assert sc.version == 2
+    assert sc.version == 3
     # The one bar: a fresh agent + PRD + card can start correctly.
     assert "self-sufficiency test" in sc.content
     assert "fresh agent" in sc.content
@@ -193,6 +193,29 @@ def test_scope_cards_skill_registered_self_sufficient():
     # Per-item owner gate before anything is written.
     assert "approve, amend, or drop each item individually" in sc.content
     assert "## v2 six-lane projects (fallback)" in sc.content
+
+
+def test_dispatchable_card_contract_single_authority():
+    """The card contract lives ONCE, in scope-cards; consumers reference it.
+
+    Calibration 2026-07-19: the cockpit ready-gate demanded `surface`/`parallel`
+    stamps while scope-cards' template never emitted them — the remediation path
+    could not produce what the gate required. Guard the contract's home and the
+    producer/consumer alignment so partial copies cannot silently drift again.
+    """
+    sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
+    ct = next(s for s in skills.SKILLS if s.name == "cockpit-autonomous-dispatch-contract")
+    # The authority section lives in scope-cards and emits the collision stamps
+    # the dispatch machinery reasons with (backlog.py warns without `surface`).
+    assert "dispatchable-card contract" in sc.content
+    assert "surface:" in sc.content and "parallel: safe | exclusive" in sc.content
+    # Acceptance is supervisor-grade: deterministic gate + a named live probe.
+    assert "live probe" in sc.content
+    # Tier vocabulary is the closed vendor-neutral set (v0.0.62), not model names.
+    assert "low | medium | high | frontier" in sc.content
+    # The consumer references the authority instead of keeping a rival checklist.
+    assert "dispatchable-card contract in `scope-cards`" in ct.content
+    assert "single authority" in ct.content
 
 
 def test_pathfinder_step_skills_projected_to_both_agents():
