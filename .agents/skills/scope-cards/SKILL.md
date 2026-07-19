@@ -8,13 +8,15 @@ description: >-
   conversation. Step 4 of the pathfinder flow, also standalone ("scope this
   card", "populate cards for this direction"). Owns the dispatchable-card
   contract — the single authority for what a backlog card must carry, referenced
-  (never restated) by the cockpit ready-gate and any grooming pass. Also drafts
-  the branch's implied Vision facet edits and the demote/defer/retire diffs for
-  existing cards the branch pushed back on. Advisory: presents every draft first;
-  the owner approves per item; only approved items are written.
+  (never restated) by the cockpit ready-gate. Also use standalone when the
+  direction holds but the existing backlog needs grooming, refinement, readiness
+  review, or disposition. Draft the branch's implied Vision facet edits and the
+  demote/defer/retire diffs for existing cards the branch pushed back on.
+  Advisory: present every decision-bearing draft first; the owner approves per
+  item; only approved items are written.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # scope-cards — from a chosen branch to a fresh-agent-ready backlog
 
@@ -41,20 +43,42 @@ missing depth** — flag it and resolve it with the owner (or send it back throu
 ## Grooming an existing backlog (standalone mode)
 
 The other input shape: no branch, just an existing backlog whose direction holds
-(pathfinder's Step 0 triage routes polish needs here). The bar is the same
-contract below; the pass differs in shape:
+(pathfinder's Step 0 triage routes polish needs here). Read the CONTENT of every
+open card, including explore children and `vision-branch-*` umbrellas; a
+frontmatter-only lint pass is not backlog refinement. Use this sequence:
 
-1. **Deterministic field audit first** — script the frontmatter/heading checks
-   (surface, parallel, tier vocabulary, facet, acceptance markers) across all
-   open cards before judging anything; facts, then judgment.
-2. **Sort findings into by-design vs defect** using the project's own rules
-   (e.g. explore cards legitimately lacking a facet — see the contract's
-   exceptions) before proposing an edit; an audit heuristic firing is not
+1. **Show the picture before asking decisions.** Summarize what each Vision facet
+   and active branch is trying to achieve, then split the backlog honestly into:
+   Ready (`status: open` + no `deferred:` + dependencies met), Deferred (waiting
+   deliberately on the named trigger), and Gated (missing a decision, dependency,
+   evidence, or contract element). Keep priority as importance-when-active; never
+   use it to disguise waiting work.
+2. **Judge first; audit second.** Read why/how/acceptance/reviews and use LLM
+   judgment to decide whether each card is still valuable, correctly scoped,
+   phase-appropriate, and self-sufficient. Then run deterministic
+   frontmatter/heading checks (surface, parallel, tier vocabulary, facet/branch,
+   acceptance markers) to catch omissions and support the judgment. Sort every
+   hit into by-design vs defect using project rules; a heuristic firing is not
    itself a finding.
-3. **Batch mechanical fixes into ONE owner approval** (vocabulary renames,
-   missing stamps with obvious values); **never batch judgment calls** —
-   acceptance rewrites, demotes/defers, staleness verdicts stay per-item.
-4. The per-item owner gate and never-silently-invent rule are unchanged.
+3. **Apply the bar for the card's job.** A converge card advances a named facet
+   and eventually owes supervisor-grade acceptance; an explore card owes a cheap
+   PoC plus an adopt/promote/drop verdict; an umbrella owes a current thesis,
+   ordered children, and a convergence criterion, not worker acceptance. Keep all
+   three in the pass instead of excluding non-dispatchable cards from curation.
+4. **Escalate only pending decisions.** Do not interrogate the owner about clean
+   cards or questions the evidence already settles. For each real judgment call,
+   show a compact preview: card + branch/facet goal, current disposition, your
+   recommendation and why, and the exact proposed diff. Offer concrete choices
+   plus a free-text alternative; get a separate verdict before writing it.
+   Batch only mechanical fixes with obvious values into one approval.
+5. **Write disposition as durable state.** `deferred: "<reason and un-deferral
+   trigger>"` means deliberately waiting; remove it when that trigger is met or
+   the owner reactivates the work. Set `last_refined: YYYY-MM-DD` only after the
+   card's content was reviewed in this pass, including clean/no-change cards —
+   never from a field audit alone. Record owner demote/defer/retire/rescope
+   verdicts in the card's `## Reviews` as well as its frontmatter/body diff.
+
+The per-item owner gate and never-silently-invent rule remain unchanged.
 
 ## The dispatchable-card contract (single authority — consumers reference, never restate)
 
