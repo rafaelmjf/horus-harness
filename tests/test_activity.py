@@ -109,3 +109,92 @@ def test_cli_schedule_status_json(monkeypatch, capsys):
     assert cli.cmd_schedule_status(argparse.Namespace(limit=10, stdout=True)) == 0
     out = capsys.readouterr().out
     assert '"card": "newer"' in out and '"glyph"' in out
+
+
+# --- a FIRED dispatch reports its OUTCOME, not just "fired" --------------------
+
+def _sched(id_: str, *, card: str | None, fired: bool) -> schedule.Schedule:
+    command = ("python", "-m", "horus", "run", "p", "--card", card) if card else ("python", "-m", "horus", "warmup")
+    return schedule.Schedule(id=id_, description="d", when="2026-07-19 01:29:00", command=command, fired=fired)
+
+
+def _link(monkeypatch, *, schedules, ledger, store):
+    monkeypatch.setattr(activity.schedule, "availability", lambda: schedule.Availability(True, "ok"))
+    monkeypatch.setattr(activity.schedule, "load_all", lambda: schedules)
+    monkeypatch.setattr(activity.envelope, "load_all", lambda: [type("E", (), {"name": "away"})()])
+    monkeypatch.setattr(activity.envelope, "read_ledger", lambda name: ledger)
+
+
+def test_fired_outcomes_links_a_fired_dispatch_to_its_delivery(monkeypatch):
+    """A fired schedule for card X links to the newest recorded dispatch of X, with the
+    branch/PR/CI from its datum — durable receipts, never a self-report."""
+    schedules = [_sched("aaa", card="my-card", fired=True)]
+    ledger = [{"ts": "2026-07-19T01:30:00+00:00", "card": "my-card", "account": "claude-work", "session_id": "s1"}]
+    store = _Store({"s1": _datum(
+        "s1", delivery_status="delivery-ready", delivery_branch="away/my-card",
+        delivery_pr_number=342, ci="pass",
+    )})
+    _link(monkeypatch, schedules=schedules, ledger=ledger, store=store)
+    out = activity.fired_outcomes(schedules, store=store)
+    assert "aaa" in out
+    assert out["aaa"].glyph == activity.OK
+    summary = activity.outcome_summary(out["aaa"])
+    assert "PR #342" in summary and "CI pass" in summary
+
+
+def test_fired_outcomes_skips_pending_and_cardless_schedules(monkeypatch):
+    """A pending (not-yet-fired) timer and a cardless one (warmup/supervise) carry no
+    delivery outcome to link — they stay absent, not a guessed ✓."""
+    schedules = [
+        _sched("pend", card="my-card", fired=False),   # not fired yet
+        _sched("warm", card=None, fired=True),          # cardless
+    ]
+    ledger = [{"ts": "2026-07-19T01:30:00+00:00", "card": "my-card", "account": "x", "session_id": "s1"}]
+    store = _Store({"s1": _datum("s1", delivery_status="delivery-ready")})
+    _link(monkeypatch, schedules=schedules, ledger=ledger, store=store)
+    assert activity.fired_outcomes(schedules, store=store) == {}
+
+
+def test_outcome_summary_falls_back_to_branch_then_status():
+    delivered = activity.RanItem("t", "c", "a", "s", activity.OK, "delivered", branch="away/c")
+    assert activity.outcome_summary(delivered) == "delivered · branch away/c"
+    blocked = activity.RanItem("t", "c", "a", "s", activity.FAIL, "delivery blocked")
+    assert activity.outcome_summary(blocked) == "delivery blocked"
+
+
+def test_collect_attaches_outcomes_to_fired_armed(monkeypatch):
+    """collect() links each fired armed dispatch to its outcome so one read serves the
+    CLI, TUI, and phone."""
+    schedules = [_sched("aaa", card="my-card", fired=True)]
+    ledger = [{"ts": "2026-07-19T01:30:00+00:00", "card": "my-card", "account": "claude-work", "session_id": "s1"}]
+    store = _Store({"s1": _datum("s1", delivery_status="blocked")})
+    _link(monkeypatch, schedules=schedules, ledger=ledger, store=store)
+    act = activity.collect(limit=10, store=store)
+    assert act.outcomes["aaa"].glyph == activity.FAIL
+    assert "delivery blocked" in activity.outcome_summary(act.outcomes["aaa"])
+
+
+def test_cli_schedule_status_renders_outcome_under_a_fired_entry(monkeypatch, capsys):
+    fired = _sched("aaa", card="my-card", fired=True)
+    outcome = activity.RanItem("t", "my-card", "claude-work", "s1", activity.OK, "delivered",
+                               pr_number=342, ci="pass", branch="away/my-card")
+    monkeypatch.setattr(activity, "collect", lambda limit=10: activity.Activity(
+        armed=[fired], ran=[], outcomes={"aaa": outcome},
+    ))
+    assert cli.cmd_schedule_status(argparse.Namespace(limit=10, stdout=False)) == 0
+    out = capsys.readouterr().out
+    assert "fired" in out
+    assert "PR #342" in out and "CI pass" in out  # the outcome, not just "fired"
+
+
+def test_cli_schedule_list_shows_outcome_for_fired_entries(monkeypatch, capsys):
+    """The phone `schedule` verb runs `schedule list` — it too shows the outcome, not
+    just `fired`, for an away-mode owner reading it on their phone."""
+    fired = _sched("aaa", card="my-card", fired=True)
+    outcome = activity.RanItem("t", "my-card", "claude-work", "s1", activity.FAIL, "delivery blocked")
+    monkeypatch.setattr(cli.schedule, "availability", lambda: schedule.Availability(True, "ok"))
+    monkeypatch.setattr(cli.schedule, "load_all", lambda: [fired])
+    monkeypatch.setattr(cli.activity, "fired_outcomes", lambda schedules: {"aaa": outcome})
+    assert cli.cmd_schedule_list(argparse.Namespace(stdout=False)) == 0
+    out = capsys.readouterr().out
+    assert "fired" in out and "delivery blocked" in out

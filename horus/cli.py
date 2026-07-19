@@ -1448,10 +1448,16 @@ def cmd_schedule_list(args: argparse.Namespace) -> int:
     if not schedules:
         print("No scheduled dispatches. Create one with `horus schedule --at`.")
         return 0
+    # A fired one-shot reports its dispatch OUTCOME (exit/delivery/PR/CI from durable
+    # receipts), not just that the timer ran — the phone `schedule` verb reads this.
+    outcomes = activity.fired_outcomes(schedules)
     print(f"{'ID':<10} {'STATE':<8} {'FIRES':<21} DESCRIPTION")
     for item in schedules:
         state = "halted" if item.halted else ("fired" if item.fired else "pending")
         print(f"{item.id:<10} {state:<8} {item.when:<21} {item.description}")
+        outcome = outcomes.get(item.id)
+        if outcome is not None:
+            print(f"{'':<10} └─ {outcome.glyph} {activity.outcome_summary(outcome)}")
         if item.halted and item.halt_reason:
             print(f"{'':<10} └─ {item.halt_reason}")
     if any(s.fired for s in schedules):
@@ -1469,7 +1475,11 @@ def cmd_schedule_status(args: argparse.Namespace) -> int:
     act = activity.collect(limit=getattr(args, "limit", 10))
     if getattr(args, "stdout", False):
         print(json.dumps(
-            {"armed": [asdict(s) for s in act.armed], "ran": [asdict(r) for r in act.ran]},
+            {
+                "armed": [asdict(s) for s in act.armed],
+                "ran": [asdict(r) for r in act.ran],
+                "outcomes": {sid: asdict(r) for sid, r in act.outcomes.items()},
+            },
             indent=2,
         ))
         return 0
@@ -1481,6 +1491,10 @@ def cmd_schedule_status(args: argparse.Namespace) -> int:
         for item in act.armed:
             state = "halted" if item.halted else ("fired" if item.fired else "pending")
             print(f"  {activity.ARMED} {item.id:<10} {state:<8} {item.when:<21} {item.description}")
+            outcome = act.outcomes.get(item.id)
+            if outcome is not None:
+                # A fired timer reports what the worker DID, not just that it ran.
+                print(f"    └─ {outcome.glyph} {activity.outcome_summary(outcome)}")
             if item.halted and item.halt_reason:
                 print(f"    └─ {item.halt_reason}")
     else:
