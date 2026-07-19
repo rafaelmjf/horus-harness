@@ -102,7 +102,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 13 -->
+<!-- horus-skill-version: 14 -->
 
 # Consolidate Horus continuity
 
@@ -192,17 +192,19 @@ them is stale or empty.
      session to summarize the proposed actions and ask permission before editing,
      testing, dispatching, merging, releasing, or deploying. A release may be
      suggested with concrete reasons but never ordered or chained as "then release";
-     require separate explicit release confirmation. Apply `execution-decision`'s
-     need-first rubric for `execution_recommendation`:
+     require separate explicit release confirmation. Default
+     `execution_recommendation` to:
      `"continue-as-is — <why>"`
-     for small/ambiguous/exploratory/debugging work, `"plan-execution — <why>"`
-     for high-volume low-ambiguity work with a clear gate (create/update
-     `execution.md` before implementation starts). The `<why>` must name the
-     concrete context, parallelism, or price dividend and show that it exceeds
-     the fixed supervisor tax. Cross-project scope, multiple phases, and
-     calibration goals are not dividends by themselves. Do not sell supervisor
-     review as the safeguard (reproduce the gate / bound checkpoints /
-     safety-in-code are the durable ones).
+     with the direct reason the next work stays inline. **Setting this field is
+     not a trigger for `execution-decision`.** Invoke that skill only when the
+     owner explicitly asks whether or how to delegate the next task. If invoked,
+     apply its need-first rubric and use `"plan-execution — <why>"` only for work
+     whose concrete context, parallelism, or price dividend exceeds the fixed
+     supervisor tax (then create/update `execution.md` before implementation).
+     Cross-project scope, multiple phases, and calibration goals are not
+     dividends by themselves. Do not sell supervisor review as the safeguard
+     (reproduce the gate / bound checkpoints / safety-in-code are the durable
+     ones).
    - When a `temp/` worker handoff note exists, treat it as evidence, not
      truth: review the diff/tests yourself, then fold the accepted facts into
      `PRD.md` and update `execution.md` if a phase completed.
@@ -299,14 +301,14 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      understanding and ask permission before execution. A release is only a reasoned
      suggestion and always waits for separate explicit confirmation; never write
      "then release" as an instruction.
-   - **Recommend the execution mode for the NEXT.** Apply `execution-decision`'s
-     need-first rubric: set `execution_recommendation:
-     "continue-as-is — <why>"` for small, ambiguous/exploratory, debugging, or
-     mostly-continuity work; set `"plan-execution — <why>"` for high-volume,
-     low-ambiguity work with a clear gate (and create/update `execution.md` before
-     implementation starts). The `<why>` must name the concrete dividend on this
-     runtime — context avoided, useful parallelism, or lower-tier savings — and show
-     that it exceeds the fixed supervisor tax. Cross-project scope, multiple phases,
+   - **Recommend the execution mode for the NEXT.** Default
+     `execution_recommendation` to `"continue-as-is — <why>"` and name the direct
+     reason the next work stays inline. Setting this field is not a trigger for
+     `execution-decision`; invoke that skill only when the owner explicitly asks
+     whether or how to delegate the next task. If invoked, use
+     `"plan-execution — <why>"` only when a concrete context, parallelism, or
+     lower-tier dividend exceeds the fixed supervisor tax (and create/update
+     `execution.md` before implementation). Cross-project scope, multiple phases,
      and calibration goals are not dividends by themselves. Do not sell supervisor
      review as the safeguard (reproduce the gate / bound checkpoints / safety-in-code
      are the durable ones).
@@ -1123,17 +1125,18 @@ name: execution-decision
 description: >-
   Decide HOW to execute an in-project task on the Claude/Codex subagents
   substrate: recommend `inline` vs `subagent-plan`, a model tier, and a
-  verification depth. Use this at the planning boundary of a feature or fix
-  inside one repo — when `execution_recommendation` needs setting, when weighing
-  whether to spawn an implementation subagent/worker, or before writing an
-  `execution.md` phase plan. It reads live calibration data (`horus capabilities
-  --models`) through the shared delegation rubric so the recommendation reflects
-  the current datums. Advisory: it EMITS a recommendation you apply — it never
-  auto-selects a model or auto-spawns a worker. For cross-project cockpit
-  dispatch use `dispatch-decision` instead.
+  verification depth. Owner-invoked only: use this ONLY when the owner explicitly
+  asks whether or how to delegate, hand work to a worker/subagent, or prepare a
+  delegated execution plan. Do not trigger it for ordinary feature/fix planning,
+  merely because `execution_recommendation` needs setting, or because the agent
+  wonders whether delegation might help; stay inline without loading it. It reads
+  live calibration data (`horus capabilities --models`) through the shared
+  delegation rubric. Advisory: it EMITS a recommendation you apply — it never
+  auto-selects a model or auto-spawns a worker. For cross-project cockpit dispatch
+  use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Execution decision (in-project, subagents substrate)
 
@@ -1143,6 +1146,15 @@ work. This skill is the thin in-project consumer of the shared rubric — it add
 the in-project mode vocabulary and one substrate note, nothing else. It pairs
 with `horus-execution`, which supervises the plan once you've decided to
 delegate.
+
+## Invocation boundary
+
+An ordinary request to build, fix, review, or plan work authorizes inline work; it
+does not authorize delegation and does not trigger this skill. Do not load this
+skill merely to populate `execution_recommendation`, at every planning boundary,
+or to validate an obvious inline choice. Load it only after the owner explicitly
+asks whether/how to delegate, requests a worker/subagent, or requests a delegated
+execution plan.
 
 ## Load the shared rubric first
 
@@ -2461,15 +2473,16 @@ _INLINE_BATCH_SESSION_SKILL = """\
 ---
 name: inline-batch-session
 description: >-
-  The working posture for an INLINE-BATCH session: implement and ship several
-  self-contained backlog cards in a row in one warm session, and HOLD every Horus
-  continuity write (PRD edits, card status/archive, session notes, `close`) until a HARD
-  boundary actually arrives — never on merely finishing the cards. Loaded automatically
-  when a session is launched in `inline-batch` mode (it does not depend on the model
-  remembering a rule). Keep following it whenever you ship multiple cards inline.
+  The working posture for an INLINE-BATCH session: ship each self-contained backlog
+  card through its own PR, while accumulating small related ad-hoc findings from
+  audits, calibration, maintenance, or review as green pushed checkpoints on one
+  batch branch — no manufactured card or PR per finding. HOLD every Horus continuity
+  write (PRD edits, card status/archive, session notes, `close`) until a HARD boundary
+  actually arrives. Loaded automatically when a session is launched in `inline-batch`
+  mode. Keep following it throughout the warm session.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Inline-batch session
 
@@ -2484,14 +2497,42 @@ the eventual release — rewrites. One warm session amortizes the codebase conte
 consolidation at the boundary captures them all. (Measured:
 `research/2026-07-17-delegation-cost-finding.md`.)
 
-## Every card — delivery safety (never deferred, never skipped)
+## Classify the unit before choosing delivery ceremony
+
+- **Backlog card:** work already represented by a card in `.horus/backlog/`, or
+  genuinely new independently schedulable work the owner approves as a card. It gets
+  the one-card/one-PR delivery path below.
+- **Ad-hoc finding:** a small related correction discovered while auditing,
+  calibrating, grooming, reviewing, maintaining, or implementing nearby work. It does
+  not get a manufactured card or standalone PR; keep it on the active batch branch.
+- **Promote a finding to a card** only when it is deferred, materially expands the
+  batch, needs independent acceptance or owner prioritization, or should become
+  dispatchable later. This is a product judgment, not a line-count threshold.
+
+## Every backlog card — delivery safety (never deferred, never skipped)
 
 - Branch → PR → **reproduce the required gate on the EXACT commit** (a required CI check
   green on that SHA) + **one live probe** of the changed surface → commit, push, merge.
 - A merged PR is the durable delivery; git + the PR are the receipt, so it needs no
   continuity write to be safe. Safety lives in the gate, not in the prose.
-- New work you spec mid-session gets a card FILE (it is the spec, and it travels in the
-  PR) — but do not flip its `status:` or archive it yet (see below).
+- Independently schedulable new work you spec mid-session gets a card FILE (it is the
+  spec, and it travels in the PR) — but do not flip its `status:` or archive it yet
+  (see below). An incidental finding does not become a card merely because it was
+  discovered mid-session.
+
+## Ad-hoc findings — one batch branch, no per-finding PR
+
+- Keep related findings on one batch branch so the same generator, projection, or test
+  files can be revised repeatedly without PR churn.
+- Give each finding a proportional deterministic gate plus a live probe of the changed
+  surface, then make a named commit and push it as a durable green checkpoint.
+- Do not open or merge a PR for each finding. Continue the audit or calibration while
+  the owner remains engaged and the batch remains coherent.
+- At a natural integration point, summarize the accumulated batch and ask the owner if
+  it is ready to land. Only after confirmation, open one PR, observe required CI on the
+  exact commit plus a live probe, and merge.
+- A pause or handoff does not force a half-ready PR: the pushed batch branch is the
+  durable state. Name it in the handoff if continuity cannot otherwise resume it.
 
 ## Hold ALL continuity until a hard boundary
 
@@ -2502,8 +2543,9 @@ Defer every one of these — none is needed until a boundary actually arrives:
   `claim` either — claiming only guards against parallel agents contending for a card.)
 - Local `sessions/` notes and any `horus close`.
 
-Between cards the entire state is pushed git + open/merged PRs. `horus close --check`'s
-"delivery commits pending" line is a reminder, not a demand to close.
+Between units the entire state is pushed git: open/merged PRs for cards, and the shared
+batch branch for ad-hoc findings. `horus close --check`'s "delivery commits pending" line
+is a reminder, not a demand to close.
 
 ## What IS a hard boundary — and what is NOT
 
@@ -2537,18 +2579,19 @@ every card (`horus backlog ship <card> --pr N --sha SHA`, which archives it), mo
 ## v2 six-lane projects (fallback)
 
 Identical posture; the single boundary consolidation updates `roadmap.md` / `features.md` /
-`decisions.md` instead of `PRD.md`, following that project's closure rules. The per-card
-delivery-safety rungs and the hold-continuity-to-a-hard-boundary rule are unchanged.
+`decisions.md` instead of `PRD.md`, following that project's closure rules. The backlog-card
+delivery rungs, ad-hoc batch-branch path, and hold-continuity-to-a-hard-boundary rule are
+unchanged.
 """
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 13, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 14, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 4, _INFER_SKILL),
     Skill("horus-execution", 13, _EXECUTION_SKILL),
     Skill("delegation-rubric", 9, _DELEGATION_RUBRIC_SKILL),
-    Skill("execution-decision", 4, _EXECUTION_DECISION_SKILL),
+    Skill("execution-decision", 5, _EXECUTION_DECISION_SKILL),
     Skill("dispatch-decision", 4, _DISPATCH_DECISION_SKILL),
     Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
     Skill("product-audit", 2, _PRODUCT_AUDIT_SKILL),
@@ -2559,7 +2602,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("scope-cards", 5, _SCOPE_CARDS_SKILL),
     Skill("pathfinder", 6, _PATHFINDER_SKILL),
     Skill("cockpit-autonomous-dispatch-contract", 2, _COCKPIT_DISPATCH_SKILL),
-    Skill("inline-batch-session", 2, _INLINE_BATCH_SESSION_SKILL),
+    Skill("inline-batch-session", 3, _INLINE_BATCH_SESSION_SKILL),
 )
 
 

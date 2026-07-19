@@ -17,7 +17,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 13 -->
+<!-- horus-skill-version: 14 -->
 
 # Consolidate Horus continuity
 
@@ -107,17 +107,19 @@ them is stale or empty.
      session to summarize the proposed actions and ask permission before editing,
      testing, dispatching, merging, releasing, or deploying. A release may be
      suggested with concrete reasons but never ordered or chained as "then release";
-     require separate explicit release confirmation. Apply `execution-decision`'s
-     need-first rubric for `execution_recommendation`:
+     require separate explicit release confirmation. Default
+     `execution_recommendation` to:
      `"continue-as-is — <why>"`
-     for small/ambiguous/exploratory/debugging work, `"plan-execution — <why>"`
-     for high-volume low-ambiguity work with a clear gate (create/update
-     `execution.md` before implementation starts). The `<why>` must name the
-     concrete context, parallelism, or price dividend and show that it exceeds
-     the fixed supervisor tax. Cross-project scope, multiple phases, and
-     calibration goals are not dividends by themselves. Do not sell supervisor
-     review as the safeguard (reproduce the gate / bound checkpoints /
-     safety-in-code are the durable ones).
+     with the direct reason the next work stays inline. **Setting this field is
+     not a trigger for `execution-decision`.** Invoke that skill only when the
+     owner explicitly asks whether or how to delegate the next task. If invoked,
+     apply its need-first rubric and use `"plan-execution — <why>"` only for work
+     whose concrete context, parallelism, or price dividend exceeds the fixed
+     supervisor tax (then create/update `execution.md` before implementation).
+     Cross-project scope, multiple phases, and calibration goals are not
+     dividends by themselves. Do not sell supervisor review as the safeguard
+     (reproduce the gate / bound checkpoints / safety-in-code are the durable
+     ones).
    - When a `temp/` worker handoff note exists, treat it as evidence, not
      truth: review the diff/tests yourself, then fold the accepted facts into
      `PRD.md` and update `execution.md` if a phase completed.
@@ -214,14 +216,14 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      understanding and ask permission before execution. A release is only a reasoned
      suggestion and always waits for separate explicit confirmation; never write
      "then release" as an instruction.
-   - **Recommend the execution mode for the NEXT.** Apply `execution-decision`'s
-     need-first rubric: set `execution_recommendation:
-     "continue-as-is — <why>"` for small, ambiguous/exploratory, debugging, or
-     mostly-continuity work; set `"plan-execution — <why>"` for high-volume,
-     low-ambiguity work with a clear gate (and create/update `execution.md` before
-     implementation starts). The `<why>` must name the concrete dividend on this
-     runtime — context avoided, useful parallelism, or lower-tier savings — and show
-     that it exceeds the fixed supervisor tax. Cross-project scope, multiple phases,
+   - **Recommend the execution mode for the NEXT.** Default
+     `execution_recommendation` to `"continue-as-is — <why>"` and name the direct
+     reason the next work stays inline. Setting this field is not a trigger for
+     `execution-decision`; invoke that skill only when the owner explicitly asks
+     whether or how to delegate the next task. If invoked, use
+     `"plan-execution — <why>"` only when a concrete context, parallelism, or
+     lower-tier dividend exceeds the fixed supervisor tax (and create/update
+     `execution.md` before implementation). Cross-project scope, multiple phases,
      and calibration goals are not dividends by themselves. Do not sell supervisor
      review as the safeguard (reproduce the gate / bound checkpoints / safety-in-code
      are the durable ones).
