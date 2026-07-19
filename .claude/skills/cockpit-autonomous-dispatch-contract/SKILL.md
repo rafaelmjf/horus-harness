@@ -18,7 +18,7 @@ description: >-
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -48,11 +48,15 @@ The owner selects, or the skill *proposes* a ranking by `priority` then age. Nev
 auto-pick.
 
 ### 3. Ready-gate (is the card dispatch-ready?)
-Judge scope with the self-sufficiency test: a `converge` card with a `vision_facet`,
-one testable acceptance line, and `surface`/`parallel` stamps. If thin, STOP and route
-through `pathfinder` → `roadmap-branches` → `scope-cards` to make it self-sufficient
-first — a fresh unattended worker gets only the card, so the card must carry the whole
-brief. `phase: explore` cards are not dispatch candidates.
+Judge the card against **the dispatchable-card contract in `scope-cards`** — that
+section is the single authority; do not maintain a rival checklist here. In short: a
+`converge` card, self-sufficient why/how, supervisor-grade acceptance (deterministic
+gate + named live probe), `vision_facet`, and the `surface`/`parallel` collision
+stamps. If thin, STOP and route it back through the contract — `scope-cards`
+standalone when only the card needs depth, the full `pathfinder` chain when the
+direction itself is unclear — because a fresh unattended worker gets only the card,
+so the card must carry the whole brief. `phase: explore` cards are not dispatch
+candidates.
 
 ### 4. Decide
 Invoke **`dispatch-decision`** for the recommendation: `inline-here` vs

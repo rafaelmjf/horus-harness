@@ -6,13 +6,15 @@ description: >-
   acceptance, and non-goals — so a fresh agent session can pick any card up and
   start with the same understanding, needing nothing from the originating
   conversation. Step 4 of the pathfinder flow, also standalone ("scope this
-  card", "populate cards for this direction"). Also drafts the branch's implied
-  Vision facet edits and the demote/defer/retire diffs for existing cards the
-  branch pushed back on. Advisory: presents every draft first; the owner approves
-  per item; only approved items are written.
+  card", "populate cards for this direction"). Owns the dispatchable-card
+  contract — the single authority for what a backlog card must carry, referenced
+  (never restated) by the cockpit ready-gate and any grooming pass. Also drafts
+  the branch's implied Vision facet edits and the demote/defer/retire diffs for
+  existing cards the branch pushed back on. Advisory: presents every draft first;
+  the owner approves per item; only approved items are written.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # scope-cards — from a chosen branch to a fresh-agent-ready backlog
 
@@ -22,6 +24,12 @@ You are transcribing an approved direction into cards that pass one bar:
 > card, can start the work correctly — same understanding, no access to the
 > conversation that produced it.**
 
+The curated backlog is the interface between interactive curation (owner + LLM,
+here) and autonomous execution (the away-mode worker/supervisor loop, which only
+CONSUMES cards — it never curates). A card that will ever be dispatched unattended
+must therefore carry not just enough to *start* but enough to be *finished and
+independently verified* — that is what the contract below encodes.
+
 ## Input
 
 One chosen branch from a `roadmap-branches` receipt (or an owner-approved
@@ -30,19 +38,42 @@ non-goals already argued. **If an item arrives thin, do not silently invent the
 missing depth** — flag it and resolve it with the owner (or send it back through
 `roadmap-branches`) before drafting its card.
 
-## Card draft template
+## The dispatchable-card contract (single authority — consumers reference, never restate)
 
-Frontmatter: `status: open`, `priority`, `tier`, `vision_facet` (matched to a
+This section IS the contract for what a backlog card carries. The cockpit
+dispatch contract's ready-gate judges candidates against it; a backlog grooming
+pass refines existing cards toward it. When the contract changes, it changes here
+once and propagates — do not fork partial copies into consumer skills.
+
+Frontmatter: `status: open`, `priority`, `tier` (the closed vendor-neutral set —
+`low | medium | high | frontier`; model-named values are legacy aliases the
+tooling normalizes, never coin new ones), `vision_facet` (matched to a
 `## Vision` table facet), `phase` (`converge` default; `explore` for divergent
-bets), `created`. Body:
+bets), `created`, `created_by`, and the two collision stamps the dispatch
+machinery reasons with:
+
+- `surface: <comma-separated globs>` — the code areas the card touches
+  (e.g. `surface: horus/dashboard.py, horus/pty_*`). Without it the collision
+  check cannot clear concurrent work — it warns instead of reasoning — so a card
+  born without `surface` is born un-dispatchable. Scoping time is when the owner
+  is present to answer "what does this touch"; capture the best-effort answer now
+  rather than leaving it for a dispatch gate with no human in the room.
+- `parallel: safe | exclusive` — whether the card tolerates in-flight siblings.
+
+Body:
 
 - **Why** — the context paragraph carrying the branch's reasoning, INCLUDING the
   market-position line ("exists but misses X / we have Y but miss Z"), so the card
   survives without the receipt.
 - **How** — the concrete protocol or first step, specific enough to begin from.
-- **Acceptance** — one testable line. `phase: explore` cards instead carry an exit
-  line: the cheap PoC and the explicit verdict it must end in (adopt / promote /
-  drop — dying cheap is a valid success).
+- **Acceptance** — written FOR THE SUPERVISOR, who never trusts a worker
+  self-report: the deterministic gate (the test/CI check that must go green on
+  the exact SHA) PLUS one **live probe** of the changed surface — the command to
+  run or the surface to poke, and what correct looks like. A card whose probe
+  must be invented at verify time forces that invention on an unattended session
+  with no owner present; name it now. `phase: explore` cards instead carry an
+  exit line: the cheap PoC and the explicit verdict it must end in (adopt /
+  promote / drop — dying cheap is a valid success).
 - **Non-goals** — what this card deliberately does not do.
 - **Source** — the receipt path + branch name.
 
