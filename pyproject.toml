@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "horus-harness"
-version = "0.0.72"
+version = "0.0.73"
 description = "Project continuity layer for coding-agent CLIs (Claude Code, Codex): repo-local memory, backlog, and closure rituals any agent can pick up"
 readme = "README.md"
 requires-python = ">=3.12"
