@@ -23,6 +23,7 @@ from horus import (
     backlog,
     backlog_migrate,
     backlog_tree,
+    batch,
     brainstorm,
     capabilities,
     claude_usage,
@@ -1278,6 +1279,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         delivery_expected=getattr(args, "expect_delivery", False),
         watch=getattr(args, "watch", False),
         proxied=bool(getattr(args, "proxied", False)),
+        batch=getattr(args, "batch", None),
     )
     # Record the attempt at authorization, not at success: a worker that dies or
     # bounces has still spent an attempt, which is exactly what the bound protects.
@@ -1736,6 +1738,29 @@ def cmd_notify_show(args: argparse.Namespace) -> int:
     if cfg.sink == "none":
         print("\nNo sink configured — escalations stay pull-based (horus sessions/close).")
         print(f"Configure [notify] in {config.config_path()} to enable a push channel.")
+    return 0
+
+
+def cmd_notify_batch_check(args: argparse.Namespace) -> int:
+    """Emit the one `schedule-batch-complete` signal if the batch is done (or, with
+    --deadline, report it partial). Idempotent — safe to call from every worker's
+    completion and from a backstop timer without double-sending."""
+    root = Path(args.path).resolve()
+    rep = batch.report(args.batch)
+    if not rep.members:
+        print(f"No dispatches tagged --batch {args.batch!r} (nothing to check).")
+        return 0
+    result = batch.emit_if_complete(
+        args.batch, root, deadline=getattr(args, "deadline", False)
+    )
+    if result is None:
+        if not getattr(args, "deadline", False) and not rep.all_done:
+            print(f"batch {args.batch}: {rep.finished_count}/{len(rep.members)} legs finished — "
+                  "not complete yet, no signal sent.")
+        else:
+            print(f"batch {args.batch}: completion already signalled — no duplicate sent.")
+        return 0
+    print(f"batch {args.batch}: {result.describe()}")
     return 0
 
 
@@ -4484,6 +4509,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--path", default=".", help="project whose name labels the test message (default: cwd)"
     )
     p_notify_test.set_defaults(func=cmd_notify_test)
+    p_notify_batch = notify_sub.add_parser(
+        "batch-check",
+        help="emit the one `schedule-batch-complete` signal if every leg of a --batch is done",
+        description=(
+            "Compute a scheduled batch's completion from durable state (members from the "
+            "units tagged `--batch <id>`, per-leg outcome from the ledger→datum join) and, "
+            "when all legs are terminal, emit ONE aggregate `schedule-batch-complete` push — "
+            "exactly once (an atomic sentinel guards races/retries). The last worker's own "
+            "completion normally triggers this; run it with --deadline as the backstop for a "
+            "leg that never terminates (it then emits a partial/timed-out summary)."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_notify_batch.add_argument("--batch", required=True, metavar="ID", help="the batch id to check")
+    p_notify_batch.add_argument(
+        "--deadline", action="store_true",
+        help="backstop mode: emit even with unfinished legs, reporting them as timed-out",
+    )
+    p_notify_batch.add_argument(
+        "--path", default=".", help="project whose name labels the message (default: cwd)"
+    )
+    p_notify_batch.set_defaults(func=cmd_notify_batch_check)
     p_notify_escalate = notify_sub.add_parser(
         "escalate",
         help="machine-local: push one escalation now (used by a scheduled dispatch's OnFailure= unit)",
@@ -4840,6 +4887,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument(
         "--expect-delivery", action="store_true",
         help="explicitly expect a reviewable git/PR delivery; never inferred from prompt text",
+    )
+    p_run.add_argument(
+        "--batch", default=None, metavar="ID",
+        help="tag this dispatch as part of an away-mode batch: when the LAST run sharing "
+             "this id terminates, one aggregate `schedule-batch-complete` push fires "
+             "(deadline backstop: `horus notify batch-check --batch <id> --deadline`)",
     )
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
     p_run.add_argument(
