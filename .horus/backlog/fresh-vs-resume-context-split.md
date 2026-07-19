@@ -4,7 +4,7 @@ priority: low
 created: 2026-07-19
 vision_facet: "Continuity core"
 phase: explore
-tier: sonnet
+tier: medium
 type: bug
 parallel: safe
 created_by: owner

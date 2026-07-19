@@ -1,7 +1,7 @@
 ---
 status: open
 priority: low
-tier: sonnet
+tier: medium
 created: 2026-07-16
 vision_facet: "Dashboard / cockpit"
 created_by: owner

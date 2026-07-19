@@ -1,7 +1,7 @@
 ---
 status: open
 priority: medium
-tier: sonnet
+tier: medium
 created: 2026-07-15
 vision_facet: "Continuity core"
 type: feature

@@ -3,7 +3,7 @@ status: open
 priority: low
 created: 2026-07-17
 vision_facet: "Accounts & isolation"
-tier: sonnet
+tier: medium
 type: feature
 parallel: safe
 surface: new horus subcommand (settings sync across ~/.horus/accounts/<agent>-<alias> dirs); doctor drift check

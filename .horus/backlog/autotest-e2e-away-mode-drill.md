@@ -4,7 +4,7 @@ priority: high
 created: 2026-07-19
 vision_facet: "Autonomous dispatch"
 phase: converge
-tier: sonnet
+tier: medium
 type: chore
 parallel: safe
 created_by: agent

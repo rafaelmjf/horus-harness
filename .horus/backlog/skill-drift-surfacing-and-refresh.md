@@ -2,6 +2,7 @@
 status: open
 priority: low
 created: 2026-07-17
+tier: medium
 type: bug
 vision_facet: "Introspection & self-improvement"
 parallel: safe
