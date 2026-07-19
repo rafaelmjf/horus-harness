@@ -93,7 +93,9 @@ agentic-travel-guide: granularity=1   horus-agent: granularity=1
 
 (grep for `continuity_granularity` in each `CLAUDE.md`; the consent sentence from #358
 is absent because those blocks predate it — they are stale at *different* versions,
-which is itself a requirement: refresh cannot assume one common baseline.)
+which is itself a requirement: refresh cannot assume one common baseline.
+2026-07-20: fabric-metadata-driven-medallion and pbi-ecosystem refreshed by hand —
+see the field-evidence section below; the other six remain stale.)
 
 Impact is moderate, not urgent: behavior is correct everywhere because it lives in
 code. The cost is an agent reading a paragraph about a knob it cannot find — the exact
@@ -116,3 +118,31 @@ deciding *where* is the design question this card owns. Two traps found while su
 Also note the scale: `horus skill map` reports **126 stale skill installs** across the
 fleet at v0.0.73, spanning several versions — so the refresh plan must be idempotent and
 resumable, never one big transactional sweep.
+
+## Field evidence — two hand refreshes at 0.0.73 (2026-07-20)
+
+Owner-directed refreshes of `fabric-metadata-driven-medallion` (PR #24) and
+`pbi-ecosystem` (PR #2), done by hand as branch → `upgrade-project --apply` →
+PR → merge. Observations for the design session:
+
+- **One command sufficed.** `upgrade-project --apply` covered blocks, all skill
+  projections, and hooks in one pass; the separately-advertised `skill install`
+  path was never needed. The "two paths, no contract" concern may reduce to a
+  documentation fix.
+- **Dry-run → apply → dry-run-zero is a clean idempotence receipt.** The
+  post-apply report showing zero pending items is exactly the deterministic
+  "refresh complete" signal the lifecycle's Verify step wants.
+- **No per-skill selection exists.** fabric — a deliberately minimal-ceremony
+  production BI project (the X6 tier-1 probe) — received all nine PO-ritual
+  skills because refresh is all-bundled-or-`--no-skills`. Hand-pruning would
+  create "customized/missing" drift noise on the next refresh. Selection
+  granularity is per-project AND per-skill-class, not just which projects.
+- **The Integrate gap is real and observed.** pbi-ecosystem carried a stranded
+  *uncommitted* projection refresh (v5–v9 era) for days — the tool wrote, but
+  nothing drove commit/branch/PR, leaving the tree dirty and the delivery
+  invisible. Regenerating with the current CLI cleanly superseded it, but the
+  lifecycle must own integration, not assume the human finishes it.
+- **Remote-verify was manual.** Both repos have no CI checks (direct-merge
+  fallback per git policy); "delivered main contains the artifacts" was a
+  hand-run grep + version probe. The Verify step cannot assume required checks
+  exist in consumer projects.

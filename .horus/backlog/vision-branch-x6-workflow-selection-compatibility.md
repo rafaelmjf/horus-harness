@@ -2,9 +2,9 @@
 status: open
 priority: low
 created: 2026-07-19
-last_refined: 2026-07-19
+last_refined: 2026-07-20
 readiness: shaping
-readiness_reason: "Raw owner vision branch; run the calibrated scope-cards pass before choosing research or child work."
+readiness_reason: "Shaped 2026-07-20 (boundary inventory + three child drafts); children need backlog-refine before any is Ready."
 phase: explore
 tier: high
 type: research
@@ -75,18 +75,46 @@ workflow policy, then choose one disposition:
 The branch converges only after current alternatives are re-examined and at least one
 real Horus project exercises the chosen compatibility hypothesis.
 
-## Next shaping action
+## Exists vs gaps (shaped 2026-07-20)
 
-Use the recalibrated `scope-cards` skill against this raw branch. It should propose
-high-level, owner-reviewable child drafts without inventing a selector design or making
-them execution-ready. Any market refresh or compatibility probe begins only after that
-separate attended review.
+The scope-cards pass ran the inward analysis inline; findings in
+`.horus/research/2026-07-20-x6-boundary-inventory.md`. **Exists:** a
+workflow-agnostic substrate (no imports from backlog/continuity/closure;
+`launch.py` takes a bare prompt string); a small machine-read continuity
+contract already funneled through named chokepoints (`resolve_focus`, the
+`backlog` parser, `closure`), splitting into a session tier and a dispatch
+tier; `supervise`'s card-stamping as the one deliberate substrate→workflow
+coupling; and a live tier-1 exemplar (fabric runs production on frontmatter
+alone, no cards). **Gaps:** the contract is implicit, not declared; the
+outward alternatives evidence is stale (2026-07-16, explicitly not
+inheritable); probe evidence from real non-SWE use is only starting; the
+workflow-swap question (can a foreign bundle's artifacts coexist with the
+contract?) is untested.
+
+## Proposed children, in order
+
+1. `x6-continuity-contract-declaration` — name the contract and its two tiers.
+2. `x6-workflow-alternatives-refresh` — shallow outward re-scan, judged on
+   contract compatibility; gated on a separate attended owner review before
+   any web work.
+3. `x6-fabric-contract-probe` — live now (refresh delivered 2026-07-20);
+   observational contract-sufficiency evidence from production BI use.
+4. *Later draft, not pre-invented:* a workflow-swap experiment (install a
+   foreign bundle in a disposable repo or pbi-ecosystem, test artifact
+   conflict/coexistence) — shaped only after 2's findings exist.
+
+The framing the children inherit: Horus's workflow is an outer loop
+(direction/resume/dispatch), superpowers-class bundles are inner loops (SWE
+execution practice); conflict lives only in the shared plan/spec/backlog
+artifact zone. Pathfinder-class rituals are confirmed optional policy, not
+core.
 
 ## Non-goals for this raw branch
 
 - No market scan or competitor teardown yet.
 - No installation or execution of a third-party workflow.
 - No workflow selector, profile schema, TUI control, or compatibility adapter yet.
-- No assumption that Horus's workflow is inferior, superior, or technically separable.
-- No child cards until the corrected scoping flow is invoked and the owner approves
-  its proposals.
+- No assumption that Horus's workflow is inferior, superior, or technically separable
+  beyond what the boundary inventory evidenced.
+- ~~No child cards until the corrected scoping flow is invoked and the owner approves
+  its proposals.~~ Done 2026-07-20; the three children above are owner-approved drafts.
