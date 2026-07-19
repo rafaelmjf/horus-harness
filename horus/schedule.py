@@ -32,6 +32,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -322,6 +323,50 @@ def create(
 
 def _stderr(result: subprocess.CompletedProcess) -> str:
     return (result.stderr or result.stdout or "").strip() or "no detail given"
+
+
+# `enable --now`'s returncode alone is not proof of life: a unit that immediately
+# crash-loops (203/EXEC and similar) still returns 0 (observed live 2026-07-18, #322,
+# `horus notify listen --service` crash-looping unnoticed). Every persistent-service
+# installer polls this after `enable --now` so a dead unit can never be reported
+# installed.
+_ACTIVE_TIMEOUT = 10.0
+_ACTIVE_POLL_INTERVAL = 0.5
+
+
+def _journal_tail(unit: str, lines: int = 20) -> str:
+    """Best-effort last few journal lines for ``unit``, for the failure message."""
+    try:
+        result = subprocess.run(
+            ["journalctl", "--user", "-u", unit, "-n", str(lines), "--no-pager"],
+            capture_output=True, text=True, timeout=10.0,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"(could not read journal: {exc})"
+    return (result.stdout or result.stderr or "").strip() or "(no journal output)"
+
+
+def _await_active(
+    unit: str, *, timeout: float = _ACTIVE_TIMEOUT, interval: float = _ACTIVE_POLL_INTERVAL,
+) -> None:
+    """Poll ``systemctl is-active <unit>`` until it reports ``active``.
+
+    Raises ``ScheduleError`` carrying the journal tail on timeout or ``failed`` —
+    the caller is expected to roll the half-installed unit back on this error, so a
+    failed install never leaves a dead unit armed."""
+    deadline = time.monotonic() + timeout
+    state = ""
+    while time.monotonic() < deadline:
+        state = _systemctl("is-active", unit).stdout.strip()
+        if state == "active":
+            return
+        if state == "failed":
+            break
+        time.sleep(interval)
+    raise ScheduleError(
+        f"{unit} did not reach 'active' (last state: {state or 'unknown'}); "
+        f"journal tail:\n{_journal_tail(unit)}"
+    )
 
 
 def _remove_units(ident: str) -> None:
@@ -656,6 +701,13 @@ def install_listen_service(*, command: tuple[str, ...], cwd: Path) -> None:
     enable = _systemctl("enable", "--now", f"{LISTEN_UNIT}.service")
     if enable.returncode != 0:
         raise ScheduleError(f"could not start the listen service: {_stderr(enable)}")
+    try:
+        _await_active(f"{LISTEN_UNIT}.service")
+    except ScheduleError:
+        # A returncode-0 enable that never reaches `active` (e.g. a 203/EXEC
+        # crash-loop) must leave nothing behind — roll the half-installed unit back.
+        remove_listen_service()
+        raise
 
 
 def restart_listen_service() -> bool:
