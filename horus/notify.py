@@ -103,6 +103,13 @@ class Escalation:
     sha: str | None = None
     pr: int | None = None
     inspect: str | None = None
+    # Optional multi-line detail (e.g. per-leg batch outcomes), rendered once in the
+    # body under the header. Kept off `summary` so it never double-prints.
+    details: tuple[str, ...] = ()
+    # Explicit ✓/⚠ override: True ⇒ ✓, False ⇒ ⚠. None ⇒ decide from the event (a
+    # success/batch rollup is ✓, everything else ⚠). Lets a batch that finished
+    # INCOMPLETE read ⚠ even though its event is a "complete" rollup.
+    ok: bool | None = None
     # Optional inline-keyboard actions for the telegram sink: (label, callback_data)
     # pairs the inbound `horus notify listen` dispatcher understands. Empty ⇒ no
     # keyboard (every other sink ignores these).
@@ -112,8 +119,15 @@ class Escalation:
         return f"[horus] {self.project}: {self.summary}"
 
     def body(self) -> str:
-        mark = "✓" if self.event in {SUCCESS, SCHEDULE_BATCH_COMPLETE} else "⚠"
-        lines = [f"{mark} {self.summary}", f"project: {self.project}"]
+        # One compact block: a single header line (project folded in, so the sink
+        # needs no separate subject), then the detail lines, then only the context
+        # fields that are set. `summary` stays one line so nothing prints twice.
+        if self.ok is not None:
+            mark = "✓" if self.ok else "⚠"
+        else:
+            mark = "✓" if self.event in {SUCCESS, SCHEDULE_BATCH_COMPLETE} else "⚠"
+        lines = [f"{mark} {self.project} · {self.summary}"]
+        lines.extend(f"  {d}" for d in self.details)
         if self.card:
             lines.append(f"card: {self.card}")
         if self.session_id:
@@ -234,7 +248,9 @@ def _send_telegram(cfg: NotifyConfig, esc: Escalation) -> None:
     if not cfg.token or not cfg.chat_id:
         raise ValueError("telegram sink needs both token and chat_id in [notify]")
     url = f"https://api.telegram.org/bot{cfg.token}/sendMessage"
-    payload = {"chat_id": cfg.chat_id, "text": esc.text(), "disable_web_page_preview": True}
+    # `body()` already folds the project into its header, so telegram sends it alone —
+    # sending `text()` (subject + body) would print the summary twice on a phone.
+    payload = {"chat_id": cfg.chat_id, "text": esc.body(), "disable_web_page_preview": True}
     if esc.actions:
         # One row of bounded action buttons; each callback_data is a command string the
         # inbound `horus notify listen` dispatcher maps 1:1 onto a deterministic command.

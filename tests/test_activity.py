@@ -187,6 +187,34 @@ def test_cli_schedule_status_renders_outcome_under_a_fired_entry(monkeypatch, ca
     assert "PR #342" in out and "CI pass" in out  # the outcome, not just "fired"
 
 
+def test_cli_schedule_status_brief_shows_only_pending_and_running(monkeypatch, capsys):
+    """The phone `schedule` tap: only what is scheduled (pending) or running now —
+    completed history is dropped."""
+    pending = _sched("pend0001", card="c-pending", fired=False)
+    running = _sched("run00001", card="c-running", fired=True)
+    done = _sched("done0001", card="c-done", fired=True)
+    act = activity.Activity(
+        armed=[pending, running, done],
+        ran=[],
+        outcomes={
+            "run00001": activity.RanItem("t", "c-running", "a", "s", activity.ARMED, "running"),
+            "done0001": activity.RanItem("t", "c-done", "a", "s", activity.OK, "delivered"),
+        },
+    )
+    monkeypatch.setattr(activity, "collect", lambda limit=10: act)
+    assert cli.cmd_schedule_status(argparse.Namespace(limit=10, stdout=False, brief=True)) == 0
+    out = capsys.readouterr().out
+    assert "pend0001" in out and "armed" in out       # scheduled
+    assert "run00001" in out and "running" in out      # in-flight
+    assert "done0001" not in out                        # completed history dropped
+
+
+def test_cli_schedule_status_brief_empty(monkeypatch, capsys):
+    monkeypatch.setattr(activity, "collect", lambda limit=10: activity.Activity(armed=[], ran=[]))
+    assert cli.cmd_schedule_status(argparse.Namespace(limit=10, stdout=False, brief=True)) == 0
+    assert "Nothing scheduled or running." in capsys.readouterr().out
+
+
 def test_cli_schedule_list_shows_outcome_for_fired_entries(monkeypatch, capsys):
     """The phone `schedule` verb runs `schedule list` — it too shows the outcome, not
     just `fired`, for an away-mode owner reading it on their phone."""

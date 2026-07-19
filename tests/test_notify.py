@@ -171,6 +171,22 @@ def test_telegram_sink_success(monkeypatch):
     assert "boom" in seen["payload"]["text"]
 
 
+def test_telegram_sends_body_only_no_subject_duplication(monkeypatch):
+    """A phone message must not print the summary twice. Telegram sends body() (which
+    folds the project into its header), never subject()+body()."""
+    seen = {}
+    monkeypatch.setattr(notify, "_post_json", lambda u, p: (seen.setdefault("p", p), (200, '{"ok":true}'))[1])
+    cfg = notify.NotifyConfig(sink="telegram", token="T:K", chat_id="42")
+    esc = _esc(summary="batch b done (2/2)", details=("✓ a: delivered · PR #1", "✗ b: blocked"))
+    assert notify.escalate(esc, cfg=cfg).delivered
+    text = seen["p"]["text"]
+    assert text == esc.body()                 # body only — not subject + body
+    assert text.count("batch b done (2/2)") == 1  # summary appears exactly once
+    assert "horus-harness · batch b done" in text  # project folded into the header
+    assert "[horus] horus-harness:" not in text    # no separate subject line
+    assert "✓ a: delivered · PR #1" in text and "✗ b: blocked" in text  # details render once
+
+
 def test_telegram_sink_non_ok_status_is_an_error(monkeypatch):
     monkeypatch.setattr(notify, "_post_json", lambda u, p: (403, '{"ok":false}'))
     cfg = notify.NotifyConfig(sink="telegram", token="T:K", chat_id="42")

@@ -34,8 +34,8 @@ def _recording_runner():
 def test_dispatch_read_command_runs_mapped_argv():
     run, calls = _recording_runner()
     out = notify_listen.dispatch("sessions", runner=run)
-    assert calls == [["sessions"]]
-    assert out == "ran: sessions"
+    assert calls == [["sessions", "--running"]]
+    assert out == "ran: sessions --running"
 
 
 def test_dispatch_unknown_command_returns_help_not_error():
@@ -112,9 +112,9 @@ def test_handle_update_owner_message_dispatches():
     run, calls = _recording_runner()
     update = {"update_id": 1, "message": {"chat": {"id": 8605049070}, "text": "sessions"}}
     reply = notify_listen.handle_update(update, _cfg(), runner=run)
-    assert reply is not None and reply.text == "ran: sessions"
+    assert reply is not None and reply.text == "ran: sessions --running"
     assert reply.answer_callback_id is None
-    assert calls == [["sessions"]]
+    assert calls == [["sessions", "--running"]]
 
 
 def test_handle_update_callback_dispatches_and_carries_ack_id():
