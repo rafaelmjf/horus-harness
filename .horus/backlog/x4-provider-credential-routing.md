@@ -1,7 +1,9 @@
 ---
 status: open
 priority: medium
+deferred: "X4 branch on hold (2026-07-18 verdict)"
 created: 2026-07-18
+last_refined: 2026-07-19
 tier: high
 type: feature
 parallel: unsafe

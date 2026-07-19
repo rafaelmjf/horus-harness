@@ -2,6 +2,7 @@
 status: open
 priority: medium
 created: 2026-07-18
+last_refined: 2026-07-19
 vision_facet: "Autonomous dispatch"
 phase: converge
 tier: medium
@@ -41,6 +42,11 @@ input bridge ([[input-bridge-remote-ask]]) and the future hermes relay.
   id needed; cross-topic replies never bind to the wrong project.
 - One `notify listen` loop still serves all topics (getUpdates single-consumer).
 - DM mode still works when no group is configured (back-compatible).
+- Probe (added 2026-07-19 refine pass): `horus notify test` from a repo registered
+  to a topic lands in that project's topic, not the DM; with open input-requests in
+  topics A and B, a reply typed in topic A binds only to A's request. Reply-binding
+  needs an owner tap → dispatch under **verify+escalate** (no auto-merge); the owner
+  probes reply-binding at release.
 
 ## Non-goals
 

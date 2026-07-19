@@ -1,7 +1,9 @@
 ---
 status: open
 priority: low
+deferred: "parked — scope after the X3 kit ships and a real roster need appears"
 created: 2026-07-17
+last_refined: 2026-07-19
 vision_facet: "Delegation calibration"
 phase: explore
 tier: medium

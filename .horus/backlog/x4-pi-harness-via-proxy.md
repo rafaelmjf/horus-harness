@@ -2,12 +2,14 @@
 status: open
 priority: high
 created: 2026-07-18
+last_refined: 2026-07-19
 tier: frontier
 type: feature
 parallel: safe
 phase: explore
 created_by: owner
 branch: vision-branch-x4-model-harness-plane
+depends-on: x5-linux-agent-cgroup-containment
 surface: run the PI coding-agent harness through Horus via the CLIProxyAPI proxy
 ---
 

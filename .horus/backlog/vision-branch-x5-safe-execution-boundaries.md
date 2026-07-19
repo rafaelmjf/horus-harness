@@ -2,6 +2,7 @@
 status: open
 priority: high
 created: 2026-07-18
+last_refined: 2026-07-19
 tier: frontier
 type: feature
 parallel: safe
