@@ -642,7 +642,8 @@ def test_resume_prompt_prefers_written_then_falls_back(tmp_path, monkeypatch):
     data = dashboard.load_project(str(tmp_path))
     resumed = dashboard._resume_prompt_text(data)
     assert "Paste me into Claude to resume." in resumed
-    assert "Continue with this authored handoff:" in resumed
+    assert "Proposed authored handoff (context only — do not execute yet):" in resumed
+    assert "ask permission to proceed" in resumed
     idx = dashboard.render_index([data])
     assert "Resume prompt" in idx and "horusCopy(this)" in idx and "Paste me into Claude" in idx
 

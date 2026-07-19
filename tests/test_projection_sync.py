@@ -3,7 +3,7 @@ sync, each compared only to the installed CLI, never to each other."""
 
 from pathlib import Path
 
-from horus import initialize, native_hooks, projection_sync, templates
+from horus import initialize, native_hooks, projection_sync, skills, templates
 
 _ALL_HOOK_INSTALLERS = (
     native_hooks.install_claude_usage_hook,
@@ -49,8 +49,11 @@ def test_fresh_project_is_in_sync(tmp_path, monkeypatch):
 def test_codex_skill_behind_marks_codex_only(tmp_path, monkeypatch):
     proj = _fully_synced_project(tmp_path, monkeypatch)
     skill_md = proj / ".agents" / "skills" / "horus-consolidate" / "SKILL.md"
+    version = next(s.version for s in skills.SKILLS if s.name == "horus-consolidate")
     skill_md.write_text(
-        skill_md.read_text(encoding="utf-8").replace("horus-skill-version: 12", "horus-skill-version: 1"),
+        skill_md.read_text(encoding="utf-8").replace(
+            f"horus-skill-version: {version}", "horus-skill-version: 1"
+        ),
         encoding="utf-8",
     )
 

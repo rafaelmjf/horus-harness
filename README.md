@@ -65,6 +65,11 @@ horus reconcile instructions      # deterministic AGENTS.md <-> CLAUDE.md manage
 horus forget <path> | horus prune # manage the dashboard's project registry
 ```
 
+Resume prompts are orientation handoffs, not execution authorization. They may fetch,
+verify the branch, and read the minimum continuity context, then the fresh session must
+summarize the proposed work and ask permission before making changes. Releases are
+suggested with reasons and always require separate explicit confirmation.
+
 ## Terminal application
 
 `horus app --terminal` (or `horus tui`) is the terminal-native peer of the web

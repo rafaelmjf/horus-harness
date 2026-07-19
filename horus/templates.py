@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 11
+BLOCK_VERSION = 12
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -39,6 +39,11 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
 - Frontmatter carries `current_focus` / `next_action` / `next_prompt` /
   `execution_recommendation` / `last_updated`, read PRD-first by the dashboard,
   `horus resume`, and the merge freshness gate.
+- A `next_prompt` is an orientation handoff, never authorization to execute. Author it
+  so a fresh session may fetch/verify/read the minimum context, then summarize the
+  actions it inferred and asks permission before editing, testing, dispatching,
+  merging, releasing, or deploying. A release may be suggested with concrete reasons,
+  but never ordered as a next step; say that separate confirmation is required.
 - Review optional local recovery notes in `.horus/sessions/` when they exist and
   contain context that is not yet durable elsewhere.
 - Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
@@ -125,12 +130,14 @@ Working discipline (every session, whether or not the work is delegated):
   per-task usage percentage, auto-route from cost, poll continuously, or add a second
   model call solely for accounting. Record the execution-mode choice only in an
   existing durable handoff/card, never in a new continuity artifact made just for it.
-- **One live agent process per account config dir.** Give every account its own
-  isolated `CLAUDE_CONFIG_DIR` (Claude) / `CODEX_HOME` (Codex) — never an ambient
-  shared default. Two agent CLIs pointed at one config dir race on its JSON state and
-  corrupt it, so both can die on startup; never run two workers on one account
-  concurrently. `horus run` refuses a second live process on a dir already in use
-  (`--force` overrides; the launching session sharing its own dir only warns).
+- **Accounts get isolated config dirs; same-dir concurrency is advised, not blocked.**
+  Give every account its own isolated `CLAUDE_CONFIG_DIR` (Claude) / `CODEX_HOME`
+  (Codex) so distinct accounts never share credentials/state. Two agent CLIs
+  *cold-starting simultaneously* on one dir can race on its JSON (observed once,
+  2026-07-16, pre-isolation); settled sessions coexist safely, as Claude Code and Codex
+  natively allow. So `horus run` prints an advisory note naming the live peer when a
+  launch shares a config dir, then proceeds — it no longer refuses (relaxed 2026-07-18).
+  The real cost to weigh is the shared rate-limit budget, not corruption.
 
 Version floor (check before writing `.horus/`):
 
@@ -234,7 +241,7 @@ def prd_md(project_name: str, date: str) -> str:
 status: active
 current_focus: "Blank Horus scaffold; no project truth has been inferred yet."
 next_action: "Wait for the first concrete use case; infer only when existing docs already carry useful project truth."
-next_prompt: "Resume {project_name}. Read .horus/PRD.md, then ground the first real backlog item in repository or owner evidence."
+next_prompt: "Resume {project_name}. Read .horus/PRD.md and ground the first real backlog candidate in repository or owner evidence; summarize what you found and ask permission before writing or implementing it."
 execution_recommendation: "continue-as-is"
 horus_min_version: {MIN_CLI_VERSION}
 last_updated: {date}
@@ -853,8 +860,10 @@ them — keep each current at every close:
 2. project.md `current_focus` (frontmatter): refresh the one-line "where things are now".
 3. roadmap.md, the two agent-authored fields + the checkboxes:
    - `next_action`: the single best next step, one imperative line.
-   - `next_prompt`: a paste-into-a-fresh-session prompt to resume it (cold reader: name
-     the step + point at .horus/).
+   - `next_prompt`: a paste-into-a-fresh-session orientation prompt (cold reader: name
+     the proposed step + point at .horus/), ending with a request for permission before
+     execution. It may suggest a release with reasons, but must never order or chain one;
+     require separate explicit release confirmation.
    - `execution_recommendation`: judge the NEXT on volume × ambiguity — `continue-as-is`
      for small/ambiguous/exploratory/debugging work, `plan-execution` for high-volume,
      low-ambiguity work with a clear gate. State what delegation buys on this runtime
@@ -1046,6 +1055,9 @@ Never invent status, dates, or versions; when intent is unclear, leave it and fl
    preserves the card under `backlog/archive/`. Delete only stale legacy/inline done items.
 2. Freshness: refresh the frontmatter handoff fields (current_focus / next_action /
    next_prompt / execution_recommendation / last_updated) to reflect this session.
+   `next_prompt` restores context, then tells the fresh session to summarize the
+   proposed actions and ask permission before execution. It may recommend a release
+   with reasons, but never order one; release waits for separate explicit confirmation.
 3. Backlog hygiene: de-duplicate backlog titles; move work that shipped to the
    Shipped section as a single line; append newly found bugs to the Backlog.
 4. Distill sessions: fold durable content from sessions/*.md into PRD.md, then

@@ -7,7 +7,7 @@
 > restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 10 -->
+<!-- horus-block-version: 12 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -28,6 +28,11 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
 - Frontmatter carries `current_focus` / `next_action` / `next_prompt` /
   `execution_recommendation` / `last_updated`, read PRD-first by the dashboard,
   `horus resume`, and the merge freshness gate.
+- A `next_prompt` is an orientation handoff, never authorization to execute. Author it
+  so a fresh session may fetch/verify/read the minimum context, then summarize the
+  actions it inferred and asks permission before editing, testing, dispatching,
+  merging, releasing, or deploying. A release may be suggested with concrete reasons,
+  but never ordered as a next step; say that separate confirmation is required.
 - Review optional local recovery notes in `.horus/sessions/` when they exist and
   contain context that is not yet durable elsewhere.
 - Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
