@@ -400,6 +400,7 @@ def _session_note(root, name="2026-07-10-120000-test.md"):
 
 
 def _work_commit(root, fname, content, msg):
+    (root / fname).parent.mkdir(parents=True, exist_ok=True)
     (root / fname).write_text(content, encoding="utf-8")
     _run(root, "add", "-A")
     _run(root, "commit", "-m", msg)
@@ -689,3 +690,88 @@ def test_parallel_delivery_findings_are_info_not_warn(tmp_path, monkeypatch):
     assert findings[0].level == "info"
     assert "PR #117" in findings[0].message
     assert findings[0].level not in ("warn", "fail")
+
+
+# --- direct-push boundary (closure's no-PR exemption, made enforceable) ---------
+
+def _clone_with_origin(tmp_path, monkeypatch):
+    """One clone of a bare origin, with origin/HEAD set so default_branch resolves."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "--bare", str(origin)], check=True, capture_output=True)
+    work = tmp_path / "work"
+    subprocess.run(["git", "clone", str(origin), str(work)], check=True, capture_output=True)
+    _run(work, "config", "user.email", "t@example.com")
+    _run(work, "config", "user.name", "Tester")
+    initialize.init_project(work, assume_yes=True)
+    _run(work, "add", "-A")
+    _run(work, "commit", "-m", "init")
+    _run(work, "push", "origin", "HEAD")
+    _run(work, "remote", "set-head", "origin", "--auto")
+    return work
+
+
+def test_continuity_only_push_to_default_branch_is_allowed(tmp_path, monkeypatch):
+    work = _clone_with_origin(tmp_path, monkeypatch)
+    _work_commit(work, ".horus/PRD.md", "closed\n", "Update Horus continuity (closure)")
+
+    assert closure.direct_push_violations(work) == []
+
+
+def test_source_on_the_default_branch_is_refused(tmp_path, monkeypatch):
+    """The failure this closes: a hand-rolled `git add -A && git push` on the default
+    branch carrying source past the required checks."""
+    work = _clone_with_origin(tmp_path, monkeypatch)
+    _work_commit(work, ".horus/PRD.md", "closed\n", "closure")
+    _work_commit(work, "feature.py", "SHIPPED = True\n", "sneaky source")
+
+    assert closure.direct_push_violations(work) == ["feature.py"]
+
+
+def test_a_feature_branch_is_never_guarded(tmp_path, monkeypatch):
+    """Only the default branch is exempt-by-convention, so only it needs the guard;
+    a normal feature-branch push must never be wedged by this."""
+    work = _clone_with_origin(tmp_path, monkeypatch)
+    _run(work, "checkout", "-b", "feat/thing")
+    _work_commit(work, "feature.py", "SHIPPED = True\n", "work")
+
+    assert closure.direct_push_violations(work) == []
+
+
+def test_projections_are_source_output_in_the_harness_repo(tmp_path, monkeypatch):
+    """In a repo that GENERATES the projections, they must travel with their source
+    through a PR — otherwise a projection lands on the default branch out of sync
+    with `horus/skills.py`, which is exactly what a direct push skips checking."""
+    work = _clone_with_origin(tmp_path, monkeypatch)
+    (work / "horus").mkdir(exist_ok=True)
+    (work / "horus" / "skills.py").write_text("SKILLS = ()\n", encoding="utf-8")
+    _run(work, "add", "-A")
+    _run(work, "commit", "-m", "add generator")
+    _run(work, "push", "origin", "HEAD")
+    _work_commit(work, ".claude/skills/x/SKILL.md", "v2\n", "projection only")
+
+    assert closure.direct_push_violations(work) == [".claude/skills/x/SKILL.md"]
+
+
+def test_projections_are_vendored_continuity_in_a_consumer_project(tmp_path, monkeypatch):
+    """A consumer project has no in-repo generator, so its projections are ordinary
+    vendored continuity and may close directly."""
+    work = _clone_with_origin(tmp_path, monkeypatch)
+    _work_commit(work, ".claude/skills/x/SKILL.md", "v2\n", "projection only")
+
+    assert not (work / "horus" / "skills.py").exists()
+    assert closure.direct_push_violations(work) == []
+
+
+def test_commit_continuity_refuses_to_push_past_the_boundary(tmp_path, monkeypatch):
+    work = _clone_with_origin(tmp_path, monkeypatch)
+    _work_commit(work, "feature.py", "SHIPPED = True\n", "unpushed source on main")
+    (work / ".horus" / "PRD.md").write_text("closed\n", encoding="utf-8")
+
+    did, detail = closure.commit_continuity(work, "close", push=True)
+
+    # The closure commit itself still lands; only the push is refused.
+    assert did and "push refused" in detail and "feature.py" in detail
+    # The closure commit landed locally but nothing reached the remote.
+    assert closure.direct_push_violations(work) == ["feature.py"]

@@ -2771,7 +2771,38 @@ def _close_merge_hook(root: Path) -> int:
     tool = hook_input.get("tool_name") or hook_input.get("toolName") or ""
     tool_input = hook_input.get("tool_input") or hook_input.get("toolInput") or {}
     command = str(tool_input.get("command", "")) if isinstance(tool_input, dict) else ""
-    if tool not in native_hooks.SHELL_TOOL_NAMES or not _is_gh_pr_merge_command(command):
+    if tool not in native_hooks.SHELL_TOOL_NAMES:
+        return 0
+
+    # Same chokepoint, a different question. The merge gate below asks "is continuity
+    # fresh enough to merge?"; this asks "may this content reach the default branch at
+    # all without the required checks?". Closure's no-PR path is an exemption for
+    # continuity only, and it must be a property of the system rather than a habit of
+    # whoever is typing — a hand-rolled `git add -A && git push` on the default branch
+    # would otherwise carry source to main untested.
+    if _is_git_push_command(command):
+        try:
+            blocked = closure.direct_push_violations(root)
+        except Exception:
+            return 0  # never wedge a push on a checker error
+        if blocked:
+            sample = ", ".join(blocked[:5])
+            suffix = f" (+{len(blocked) - 5} more)" if len(blocked) > 5 else ""
+            print(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": (
+                        "Direct pushes to the default branch are reserved for continuity "
+                        "(.horus/, AGENTS.md, CLAUDE.md), which no required check reads as "
+                        f"product. This push also carries: {sample}{suffix}. Put that work on "
+                        "a branch and land it via PR so the required checks run on it."
+                    ),
+                }
+            }))
+        return 0
+
+    if not _is_gh_pr_merge_command(command):
         return 0  # not a merge — let it through
 
     try:
@@ -2796,6 +2827,58 @@ def _close_merge_hook(root: Path) -> int:
         }
     }))
     return 0
+
+
+def _shell_command_tokens(command: str) -> list[list[str]]:
+    """Split a shell string into the token list of each command position.
+
+    Shared by the `git push` and `gh pr merge` recognizers so both apply the same
+    discipline: quoted prompt prose stays one token and is never mistaken for a
+    command, while compound `cd repo && <cmd>` still resolves. Malformed shell safely
+    yields [] — CI remains the hard gate, this is fast local feedback.
+    """
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        tokens = list(lexer)
+    except ValueError:
+        return []
+
+    commands: list[list[str]] = []
+    current: list[str] = []
+    for token in tokens:
+        if token and all(char in ";&|\n" for char in token):
+            if current:
+                commands.append(current)
+            current = []
+            continue
+        current.append(token)
+    if current:
+        commands.append(current)
+    # Drop leading VAR=value assignments so `FOO=1 git push` still resolves.
+    cleaned = []
+    for words in commands:
+        i = 0
+        while i < len(words) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[i]):
+            i += 1
+        if words[i:]:
+            cleaned.append(words[i:])
+    return cleaned
+
+
+def _is_git_push_command(command: str) -> bool:
+    """True when any command position is a `git push`.
+
+    Deliberately ignores the refspec: `git push`, `git push origin main`, and
+    `git push -u origin HEAD` all reach the same guard, which decides from the actual
+    branch and diff rather than from how the push was spelled.
+    """
+    for words in _shell_command_tokens(command):
+        if words[0].casefold() in {"git", "git.exe"} and "push" in words[1:2]:
+            return True
+    return False
 
 
 def _is_gh_pr_merge_command(command: str) -> bool:

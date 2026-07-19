@@ -2858,3 +2858,67 @@ def test_datum_close_remove_worktree_keeps_unmerged(tmp_path, monkeypatch, capsy
     out = capsys.readouterr().out
     assert "Kept worktree" in out
     assert worktree_dir.exists()
+
+
+# --- direct-push boundary at the same PreToolUse chokepoint ---------------------
+
+def _push_hook_run(monkeypatch, capsys, *, command, violations, tool="Bash"):
+    monkeypatch.setattr(cli, "_read_hook_stdin",
+                        lambda: {"tool_name": tool, "tool_input": {"command": command}})
+    monkeypatch.setattr(cli.closure, "direct_push_violations", lambda root: violations)
+    monkeypatch.setattr(cli.closure, "freshness_gate", lambda root: [Finding("ok", "fresh")])
+    rc = cli._close_merge_hook(Path("."))
+    return rc, capsys.readouterr().out
+
+
+def test_push_hook_blocks_source_reaching_the_default_branch(monkeypatch, capsys):
+    rc, out = _push_hook_run(
+        monkeypatch, capsys, command="git push", violations=["horus/cli.py"],
+    )
+    assert rc == 0
+    hso = json.loads(out)["hookSpecificOutput"]
+    assert hso["permissionDecision"] == "deny"
+    assert "horus/cli.py" in hso["permissionDecisionReason"]
+    assert "via PR" in hso["permissionDecisionReason"]
+
+
+def test_push_hook_allows_a_continuity_only_push(monkeypatch, capsys):
+    rc, out = _push_hook_run(monkeypatch, capsys, command="git push origin main", violations=[])
+    assert rc == 0
+    assert out == ""  # silent allow — closure's no-PR path is the normal case
+
+
+def test_push_hook_recognizes_push_after_a_shell_operator(monkeypatch, capsys):
+    rc, out = _push_hook_run(
+        monkeypatch, capsys,
+        command="cd repo && git push -u origin HEAD",
+        violations=["feature.py"],
+    )
+    assert json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_push_hook_ignores_the_spelling_inside_quoted_prose(monkeypatch, capsys):
+    # A prompt that merely mentions the command is one token, never a push.
+    rc, out = _push_hook_run(
+        monkeypatch, capsys,
+        command="horus run --prompt 'remember to git push when done'",
+        violations=["feature.py"],
+    )
+    assert rc == 0 and out == ""
+
+
+def test_push_hook_never_wedges_on_a_checker_error(monkeypatch, capsys):
+    def boom(root):
+        raise RuntimeError("git exploded")
+    monkeypatch.setattr(cli, "_read_hook_stdin",
+                        lambda: {"tool_name": "Bash", "tool_input": {"command": "git push"}})
+    monkeypatch.setattr(cli.closure, "direct_push_violations", boom)
+    assert cli._close_merge_hook(Path(".")) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_git_push_recognizer_does_not_fire_on_other_git_verbs(monkeypatch, capsys):
+    for command in ("git status", "git pushd", "gitpush", "git log --oneline"):
+        assert not cli._is_git_push_command(command), command
+    assert cli._is_git_push_command("git push")
+    assert cli._is_git_push_command("FOO=1 git push origin main")
