@@ -50,9 +50,14 @@ SUPERVISE_GATE = "supervise-gate"     # a headless supervisor hit a red required
 # journal where nobody is looking — the exact pre-launch death this channel escalates.
 DISPATCH_LAUNCH_FAILED = "dispatch-launch-failed"
 SUCCESS = "success"                   # a clean accept (opt-in only)
+# One aggregate "all legs of this scheduled batch finished" rollup, fired once when
+# the last dispatch in a `--batch` group terminates (see horus/batch.py). Enabled by
+# default — it is the single away-mode "go look now" signal the owner asked for, not a
+# per-run nag.
+SCHEDULE_BATCH_COMPLETE = "schedule-batch-complete"
 
 DEFAULT_EVENTS: frozenset[str] = frozenset(
-    {DELIVERY_FAILED, USAGE_BAND, SUPERVISE_GATE, DISPATCH_LAUNCH_FAILED}
+    {DELIVERY_FAILED, USAGE_BAND, SUPERVISE_GATE, DISPATCH_LAUNCH_FAILED, SCHEDULE_BATCH_COMPLETE}
 )
 KNOWN_EVENTS: frozenset[str] = DEFAULT_EVENTS | {SUCCESS}
 
@@ -107,7 +112,7 @@ class Escalation:
         return f"[horus] {self.project}: {self.summary}"
 
     def body(self) -> str:
-        mark = "✓" if self.event == SUCCESS else "⚠"
+        mark = "✓" if self.event in {SUCCESS, SCHEDULE_BATCH_COMPLETE} else "⚠"
         lines = [f"{mark} {self.summary}", f"project: {self.project}"]
         if self.card:
             lines.append(f"card: {self.card}")

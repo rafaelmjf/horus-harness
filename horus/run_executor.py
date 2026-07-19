@@ -29,6 +29,9 @@ class RunRequest:
     delivery_expected: bool = False
     watch: bool = False
     proxied: bool = False
+    # An away-mode batch id: when the last worker sharing it terminates, one aggregate
+    # `schedule-batch-complete` signal fires (see horus/batch.py). None = not batched.
+    batch: str | None = None
 
     def payload(self) -> dict:
         row = asdict(self)
@@ -48,7 +51,7 @@ class RunRequest:
             raise ValueError("runner run request is missing required fields")
         if posture not in {value.value for value in adapters.PermissionPosture}:
             raise ValueError("runner run request has invalid posture")
-        for name in ("account", "model", "effort", "resume", "dispatch_base_sha"):
+        for name in ("account", "model", "effort", "resume", "dispatch_base_sha", "batch"):
             if payload.get(name) is not None and not isinstance(payload[name], str):
                 raise ValueError(f"runner run request has invalid {name}")
         if not isinstance(payload.get("worker"), bool) or not isinstance(payload.get("dispatch_pending"), int):
@@ -69,7 +72,7 @@ class RunRequest:
             dispatch_base_sha=payload.get("dispatch_base_sha"),
             dispatch_pending=payload["dispatch_pending"],
             delivery_expected=payload.get("delivery_expected", False), watch=payload.get("watch", False),
-            proxied=payload.get("proxied", False),
+            proxied=payload.get("proxied", False), batch=payload.get("batch"),
         )
 
 
@@ -245,6 +248,17 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
             emit(f"  [notify] {result.describe()}")
         elif result is not None and result.delivered:
             emit(f"  [notify] {result.describe()}")
+        # Last-one-out: if this worker is the final leg of its batch to terminate, one
+        # aggregate batch-complete signal fires now (idempotent; best-effort, never
+        # fails the run). Import lazily so a plain `horus run` avoids the schedule read.
+        if request.batch:
+            try:
+                from horus import batch as _batch
+                batch_result = _batch.emit_if_complete(request.batch, request.project)
+                if batch_result is not None:
+                    emit(f"  [notify] batch {request.batch}: {batch_result.describe()}")
+            except Exception:  # noqa: BLE001 — a rollup signal must never break completion
+                pass
     emit(f"\n{status} — session {request.session_id} (account {request.account or '-'})")
     return 0 if status == "exited" else 1
 
