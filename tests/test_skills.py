@@ -697,3 +697,20 @@ def test_inline_batch_session_skill_registered_and_batches():
     assert "batch branch" in s.content
     assert "ask the owner if" in s.content
     assert "## v2 six-lane projects (fallback)" in s.content
+
+
+def test_all_gas_no_breaks_skill_is_direct_but_closes_continuity():
+    s = next(x for x in skills.SKILLS if x.name == "all-gas-no-breaks-session")
+    assert s.version == 1
+    assert "minimal-orchestration" in s.content
+    assert "do not stop for a preflight summary" in s.content
+    assert "Do not load Horus decision" in s.content
+    assert "Delegation remains owner-invoked" in s.content
+    assert "## Hard boundaries still consolidate" in s.content
+    assert "release" in s.content and "session closure" in s.content
+    assert "horus-consolidate" in s.content
+    assert "## v2 six-lane projects (fallback)" in s.content
+    for root in (".claude/skills", ".agents/skills"):
+        assert Path(f"{root}/all-gas-no-breaks-session/SKILL.md").read_text(
+            encoding="utf-8"
+        ) == s.content

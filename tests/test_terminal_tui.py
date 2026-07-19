@@ -458,6 +458,33 @@ def test_launch_prompt_has_no_preamble_for_standard_mode():
     assert prompt == ""  # fresh + standard = today's empty prompt
 
 
+def test_launch_prompt_prepends_all_gas_no_breaks_skill_preamble():
+    from pathlib import Path
+    from horus import terminal_tui
+    launch = terminal_tui._Launch(
+        Path("/repo"), "codex", "fresh", None,
+        None, None, None, None, "all-gas-no-breaks",
+    )
+    prompt = terminal_tui._launch_prompt(launch)
+    assert "all-gas-no-breaks-session" in prompt
+
+
+def test_session_mode_screen_renders_spaced_summaries():
+    from horus import launch, terminal_tui
+    ui = terminal_tui.TerminalUI()
+    ui.screen = "session_mode"
+    ui.items = [("session_mode", mode) for mode in launch.LAUNCH_MODES]
+    rendered = "".join(text for _style, text in ui._body_text())
+
+    for label, summary in launch.LAUNCH_MODE_COPY.values():
+        assert label in rendered
+        assert summary in rendered
+    first_summary = launch.LAUNCH_MODE_COPY["standard"][1]
+    second_summary = launch.LAUNCH_MODE_COPY["inline-batch"][1]
+    assert f"{first_summary}\n\n" in rendered
+    assert f"{second_summary}\n\n" in rendered
+
+
 # --- Mission Control (`m`) + Settings (`t`) panes -------------------------------
 
 def _machine_ui(tmp_path, monkeypatch, *, listener=False, keepwarm=None, linger=True,

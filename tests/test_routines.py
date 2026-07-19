@@ -443,6 +443,19 @@ def test_resume_prompt_does_not_authorize_an_authored_release(tmp_path):
     assert prompt.rstrip().endswith("ask permission to proceed.")
 
 
+def test_direct_resume_prompt_proceeds_but_keeps_hard_boundaries(tmp_path):
+    _mk_fresh_v3(tmp_path)
+
+    prompt = routines.resume_prompt(tmp_path, stop_before_execution=False)
+
+    assert "Direct resume contract — orient, then proceed:" in prompt
+    assert "Do not pause for a preflight summary" in prompt
+    assert "A release remains a separately confirmed hard boundary" in prompt
+    assert "session closes or hands off" in prompt
+    assert "Proposed authored handoff (context only" not in prompt
+    assert prompt.rstrip().endswith("Proceed directly with the in-scope work.")
+
+
 def test_resume_prompt_prepends_missing_machine_requirements(tmp_path):
     _mk_fresh_v3(tmp_path)
     (tmp_path / ".horus" / "requirements.md").write_text(

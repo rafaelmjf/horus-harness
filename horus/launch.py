@@ -23,8 +23,25 @@ from horus import adapters, launcher, registry
 # skill at launch (cross-account, cross-model, via git projection) rather than trusting the
 # model to remember a rule. `standard` is today's behavior. See
 # `.claude/skills/<mode-skill>` and card `launch-mode-process-skill`.
-LAUNCH_MODES: tuple[str, ...] = ("standard", "inline-batch")
-_MODE_SKILL: dict[str, str] = {"inline-batch": "inline-batch-session"}
+LAUNCH_MODE_COPY: dict[str, tuple[str, str]] = {
+    "standard": (
+        "Standard",
+        "One defined delivery with the full branch, PR, gate, and merge lifecycle.",
+    ),
+    "inline-batch": (
+        "Inline Batch",
+        "Multiple cards or related findings in one warm, recoverable campaign.",
+    ),
+    "all-gas-no-breaks": (
+        "All Gas No Breaks",
+        "Minimal orchestration: work directly and load process skills only when required.",
+    ),
+}
+LAUNCH_MODES: tuple[str, ...] = tuple(LAUNCH_MODE_COPY)
+_MODE_SKILL: dict[str, str] = {
+    "inline-batch": "inline-batch-session",
+    "all-gas-no-breaks": "all-gas-no-breaks-session",
+}
 
 
 def mode_preamble(session_mode: str | None) -> str:

@@ -135,13 +135,6 @@ _WINDOW_LABELS: dict[str, str] = {
     "new-window": "New window on desktop — opens beside the TUI; takeover on mobile/SSH",
 }
 
-# Session mode: a working posture loaded as a skill at launch (`launch.LAUNCH_MODES`).
-_SESSION_MODE_LABELS: dict[str, str] = {
-    "standard": "Standard — no posture skill (today's behavior)",
-    "inline-batch": "Inline-batch — ship several cards in a row, continuity at close",
-}
-
-
 class _BodyControl(FormattedTextControl):
     def __init__(self, text, on_scroll, *, invert_mouse_scroll: bool) -> None:
         super().__init__(text, focusable=True)
@@ -1143,8 +1136,9 @@ class TerminalUI:
                 else:
                     lines.append((style, f"\n {marker} {value}\n"))
             elif kind == "session_mode":
-                label = _SESSION_MODE_LABELS.get(str(value), str(value))
-                head, _, detail = label.partition(" — ")
+                head, detail = launch.LAUNCH_MODE_COPY.get(
+                    str(value), (str(value), "")
+                )
                 lines.append((style, f"\n {marker} {head}\n"))
                 if detail:
                     lines.append(("class:muted", f"     {detail}\n"))
@@ -2552,9 +2546,11 @@ def _run_campaign_prompt(projects: list[Path]) -> tuple[Path, str] | None:
     return cockpit, prompt
 
 
-def _card_prompt(root: Path, card: backlog.Card) -> str:
+def _card_prompt(
+    root: Path, card: backlog.Card, *, stop_before_execution: bool = True
+) -> str:
     return (
-        f"{routines.resume_prompt(root)}\n\n"
+        f"{routines.resume_prompt(root, stop_before_execution=stop_before_execution)}\n\n"
         f"Work on this backlog card first: {card.title}. Read the full card at "
         f"`.horus/backlog/{card.path.name}` before changing code, and treat it as the "
         "first item for this session."
@@ -2568,9 +2564,20 @@ def _launch_prompt(result: _Launch) -> str:
     if result.prompt_override is not None:
         prompt = result.prompt_override
     elif result.card is not None:
-        prompt = _card_prompt(result.project, result.card)
+        prompt = _card_prompt(
+            result.project,
+            result.card,
+            stop_before_execution=result.session_mode != "all-gas-no-breaks",
+        )
     else:
-        prompt = routines.resume_prompt(result.project) if result.mode == "resume" else ""
+        prompt = (
+            routines.resume_prompt(
+                result.project,
+                stop_before_execution=result.session_mode != "all-gas-no-breaks",
+            )
+            if result.mode == "resume"
+            else ""
+        )
     return launch.mode_preamble(result.session_mode) + prompt
 
 
