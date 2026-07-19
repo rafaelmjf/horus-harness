@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: low
 tier: sonnet
 created: 2026-07-15
@@ -7,6 +7,8 @@ vision_facet: "Distribution"
 type: feature
 parallel: safe
 surface: horus/initialize.py, horus/templates.py, horus/doctor_machine.py
+shipped_pr: 349
+shipped_sha: ed6e33b
 ---
 
 # horus init optionally scaffolds a minimal project CI gate

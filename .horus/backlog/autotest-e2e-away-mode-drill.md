@@ -70,3 +70,16 @@ runnable once its two `depends-on` gaps land.
   owner-run drill. Keep it out of the pytest suite.
 - Not a new scheduler/orchestrator — compose existing `horus schedule`/`run`/
   `supervise`/`ask`/`notify` primitives only.
+
+## Reviews
+
+- 2026-07-19 — **Both `depends-on` gaps landed (v0.0.68):**
+  `schedule-supervise-resolve-target-at-fire-time` (#346, deferred `supervise --card`)
+  and `notify-schedule-batch-complete` (#347). This card is now RUNNABLE. A real
+  single-leg partial ran the same day (`init-scaffolds-project-ci` → claude-personal,
+  batch `real-drill-1`): armed worker + deferred supervisor, session-closed style,
+  real PR #349, one real batch-complete Telegram — proving the mechanics end-to-end.
+  What remains for the FULL drill: 3-account legs + the 2 Telegram block/unblock bridge
+  taps + autonomous supervise **+merge** (envelope `--allow-merge` + probe). Deferred
+  until the **weekly window resets** (claude/work was at 92% weekly) so the multi-account
+  run has capacity.
