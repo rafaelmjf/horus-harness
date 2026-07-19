@@ -2,6 +2,7 @@
 status: open
 priority: low
 created: 2026-07-18
+last_refined: 2026-07-19
 vision_facet: "Introspection & self-improvement"
 phase: converge
 tier: medium

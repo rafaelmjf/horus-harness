@@ -1,8 +1,10 @@
 ---
 status: open
 priority: medium
+deferred: "awaiting an onboarded content project that demonstrates the needed override"
 tier: medium
 created: 2026-07-15
+last_refined: 2026-07-19
 vision_facet: "Continuity core"
 type: feature
 parallel: safe

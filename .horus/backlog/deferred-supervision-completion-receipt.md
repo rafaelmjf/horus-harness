@@ -1,8 +1,10 @@
 ---
 status: open
 priority: low
+deferred: "await evidence from a real campaign on the detached primitive (2026-07-16 review)"
 tier: medium
 created: 2026-07-15
+last_refined: 2026-07-19
 vision_facet: "Delegation calibration"
 type: feature
 parallel: unsafe

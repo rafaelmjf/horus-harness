@@ -1,8 +1,10 @@
 ---
 status: open
 priority: low
+deferred: "decide at first external distribution"
 tier: medium
 created: 2026-07-16
+last_refined: 2026-07-19
 vision_facet: "Distribution"
 type: ops
 parallel: safe

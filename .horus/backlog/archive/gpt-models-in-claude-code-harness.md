@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 priority: medium
 created: 2026-07-18
+last_refined: 2026-07-19
 vision_facet: "Delegation calibration"
 phase: explore
 tier: high
@@ -61,3 +62,14 @@ simplest path that meets the owner's constraint is: **CLIProxyAPI ← Codex OAut
 - No launcher/adapter/tier changes until the spike says go.
 - Not a general multi-provider gateway owned by Horus; scoped to "GPT via the Codex sub, inside
   Claude Code." Horus points at CLIProxyAPI — it never owns/vendors it (branch principle 4).
+
+## Reviews
+
+- 2026-07-19 — **Closed complete (refine pass, owner-approved).** Acceptance met:
+  mechanism verified live, receipts `research/2026-07-18-multi-model-harness-scan.md`
+  + `research/2026-07-18-x4-stage0-gpt-in-claude-code-spike.md`, verdict **GO** →
+  stage 1 shipped v0.0.65 (mode B, per-launch env injection). The subsequent
+  net-negative live trial put the X4 *branch* on hold, but does not reopen this
+  spike: its question — can GPT run inside Claude Code on the Codex subscription? —
+  was answered yes. Successor cards (stage 1.1 set) carry the remaining work under
+  the branch hold. status → done, archived.

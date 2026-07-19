@@ -1,7 +1,9 @@
 ---
 status: open
 priority: medium
+deferred: "remaining usage-ripeness flag blocked on a per-card usage signal Horus does not capture yet"
 created: 2026-07-16
+last_refined: 2026-07-19
 vision_facet: "PO lifecycle"
 tier: medium
 type: feature

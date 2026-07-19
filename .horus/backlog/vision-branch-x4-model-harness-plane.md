@@ -1,7 +1,9 @@
 ---
 status: open
 priority: low
+deferred: "branch ON HOLD after net-negative live trial (2026-07-18); resumes on owner re-test in a low-risk context"
 created: 2026-07-18
+last_refined: 2026-07-19
 tier: frontier
 type: feature
 parallel: safe

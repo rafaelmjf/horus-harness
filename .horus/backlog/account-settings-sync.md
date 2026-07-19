@@ -2,6 +2,7 @@
 status: open
 priority: low
 created: 2026-07-17
+last_refined: 2026-07-19
 vision_facet: "Accounts & isolation"
 tier: medium
 type: feature
@@ -38,6 +39,18 @@ account's settings, and stays machine-local.
   diff + explicit apply, consistent with the repo's controls-climb-a-ladder rule
   (instruction → deterministic signal → hard gate); this is at most a deterministic
   signal + an explicit apply.
+
+## Acceptance (drafted 2026-07-19 refine pass — owner spot-check)
+
+- One canonical settings block (statusline command, hooks, shared preferences) is
+  declared once per machine and synced into every isolated account config dir
+  (`~/.horus/accounts/<agent>-<alias>`) — never hand-copied per account.
+- `horus doctor` reports drift when an account dir diverges from the canonical
+  block; a sync command restores it without touching account-specific state
+  (credentials, session history).
+- Gate: full suite green on the exact SHA. Probe: break the statusline line in one
+  account dir → doctor names the drifted dir; run the sync → a session launched on
+  that account renders the statusline again.
 
 ## Notes
 

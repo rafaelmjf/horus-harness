@@ -3,6 +3,7 @@ status: open
 priority: medium
 tier: medium
 created: 2026-07-16
+last_refined: 2026-07-19
 vision_facet: "Delegation calibration"
 type: feature
 parallel: safe
