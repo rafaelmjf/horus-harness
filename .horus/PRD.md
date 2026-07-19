@@ -46,12 +46,7 @@ Prioritized open work. Features and bugs share one menu; jump order is allowed. 
 
 ### Open by readiness — see `.horus/backlog/`
 
-Thirty-four active cards, curated 2026-07-19 under one machine-readable taxonomy. **Ready—Autonomous eligible (1):** `verify-guidance-long-running-services`. **Ready—Attended (1):** `telegram-group-project-topics`. **Shaping (4):** `skill-drift-surfacing-and-refresh`, `warm-supervised-worker-poc`, `remote-open-model-worker-probe`, X6 workflow compatibility. **Gated (7):** TUI refine/order, reset-gated away-mode drill, X3 close-out, scheduler toggle, fleet artifact refresh, account settings sync, X4 Pi proxy. **Deferred (21):** the full X5 branch (7), held X4 branch except Pi (5), and nine evidence/distribution/watch items; every reason and reactivation trigger lives in-card. Missing readiness is Unclassified and never scheduler-eligible.
-
-**Deliberately left unbuilt by #368, not yet carded** — both were named in the review verdict and consciously deferred rather than half-wired:
-
-- **Hard merge/release gate.** Posture is today's only enforced lever, and it does not stop `gh pr merge` at `auto-edit`/`full-auto`. This is the piece that would actually prevent a fast literal model from turning a brainstorm into a merged PR — the original motivating failure. Likely shape: a `PreToolUse` hook matching merge/release commands, requiring an explicit owner token.
-- **Dispatch receipt seam.** The managed block now states the contract (workers record delivery facts — SHA, PR, what the gate emitted — never a verdict; the supervisor independently reproduces the deterministic signal and owns canonical continuity), but no machinery enforces it. Owner's framing: the implementing session already holds the context, so it writes the receipt cheaply; the supervisor must not re-derive context to close. Touches the envelope/supervise subsystem.
+Thirty-six active cards, curated 2026-07-19 under one machine-readable taxonomy. **Ready—Autonomous eligible (1):** `verify-guidance-long-running-services`. **Ready—Attended (1):** `telegram-group-project-topics`. **Shaping (6):** `merge-release-owner-gate`, `dispatch-receipt-seam`, `skill-drift-surfacing-and-refresh`, `warm-supervised-worker-poc`, `remote-open-model-worker-probe`, X6 workflow compatibility. **Gated (7):** TUI refine/order, reset-gated away-mode drill, X3 close-out, scheduler toggle, fleet artifact refresh, account settings sync, X4 Pi proxy. **Deferred (21):** the full X5 branch (7), held X4 branch except Pi (5), and nine evidence/distribution/watch items; every reason and reactivation trigger lives in-card. Missing readiness is Unclassified and never scheduler-eligible.
 
 ## Shipped
 
