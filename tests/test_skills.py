@@ -428,7 +428,7 @@ def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
 
 def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
-    assert consolidate.version == 14
+    assert consolidate.version == 15
     assert "PRD.md" in consolidate.content
     assert "no lane-routing/overlap warnings" in consolidate.content
     assert "~250-line cap" in consolidate.content
@@ -441,11 +441,16 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     assert "Convergence read-out" in consolidate.content
     assert "vision_facet" in consolidate.content
     assert "phase: explore" in consolidate.content
-    # v13: authored resume handoffs orient, summarize, and ask before execution;
-    # releases are proposals requiring their own confirmation.
-    assert "resume-consent contract" in consolidate.content
-    assert "ask permission before editing" in consolidate.content
-    assert "separate explicit release confirmation" in consolidate.content
+    # v15: next_prompt is orientation only. Consent belongs to the launch permission
+    # posture, so a consolidation must not bake a consent paragraph into the handoff
+    # (it would contradict a session launched to work directly). Releases stay their
+    # own decision, never chained off a handoff.
+    assert "Do NOT write consent" in consolidate.content
+    assert "set by its launch permission" in consolidate.content
+    assert "never chained as \"then" in consolidate.content
+    assert "its own decision, taken with the owner" in consolidate.content
+    assert "ask permission before editing" not in consolidate.content
+    assert "resume-consent contract" not in consolidate.content
     assert "Setting this field is not a trigger" in consolidate.content
     assert "owner explicitly asks whether or how to delegate" in consolidate.content
     # sessions/ and temp/ handoff notes stay unchanged in v3.
