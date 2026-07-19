@@ -2,7 +2,7 @@
 status: open
 priority: medium
 created: 2026-07-17
-tier: opus
+tier: high
 type: feature
 parallel: safe
 phase: converge

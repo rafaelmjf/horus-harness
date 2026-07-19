@@ -4,7 +4,7 @@ priority: high
 created: 2026-07-18
 vision_facet: "PO lifecycle"
 phase: explore
-tier: opus
+tier: high
 type: feature
 parallel: safe
 created_by: owner
@@ -30,10 +30,16 @@ capability** (the owner's items 5–6), not an invoke of an existing step. Confi
    the *input* is the existing backlog, not a chosen branch.
 2. **Order** — produce an explicit execution order across the refined cards (respecting
    `depends-on`, `branch` grouping, priority, and parallel/surface collision stamps) so
-   the scheduler can consume it. Cards are **filename-sorted today with no order field**,
-   so ordering needs either an explicit `order:` frontmatter field (+ a writer + a
-   backlog_tree/consumer that honors it) or another durable ordering artifact. Decide
-   in-card; prefer the smallest machine-readable thing the scheduler can read.
+   the scheduler can consume it. **DECIDED (owner, 2026-07-19 polish session): sparse
+   `order:` integers in card frontmatter** (gaps of 10 — insert at 15 without
+   renumbering), chosen over a single ordered manifest (dangling names, hot-file
+   conflicts, breaks card self-sufficiency) and over priority-as-order (buckets are not
+   a sequence). Semantics: consumer sort key is `(order missing?, order, priority-rank,
+   filename)` — unordered cards form the unsequenced pool AFTER ordered ones, so
+   existing cards keep today's behavior with zero migration. `backlog.py` parses the
+   field; list/tree honor the sort; `doctor` warns (not errors) on duplicate values.
+   Both producers write the same field: this refine pass across the whole backlog, and
+   `scope-cards` stamping an owner-approved branch order at transcription time.
 
 ## How (to design in-card)
 
@@ -48,15 +54,20 @@ capability** (the owner's items 5–6), not an invoke of an existing step. Confi
 - Batch mode (owner's item 6): refine all cards in a row until cancelled or a meaningful
   execution order is reached — a resumable pass, not a single blocking call.
 
-## Acceptance (draft — refine before actioning)
+## Acceptance (firmed 2026-07-19 — order design decided above)
 
 - From the backlog pane, one action triggers a refine+order pass; it never silently
   rewrites cards — every change is owner-approved (pathfinder-style).
-- The result is a durable, machine-readable execution order the scheduler can read
-  without an LLM in the loop.
-- Ordering respects depends-on / branch / priority / parallel-collision stamps.
-- Existing cards without the new order field keep their current (filename-sorted)
-  behavior — no forced migration.
+- Approved order lands as sparse `order:` ints; `backlog.py` parses the field and
+  list/tree render the sequence via the sort key `(order missing?, order,
+  priority-rank, filename)` — no LLM in the consumer loop.
+- The proposed ordering respects depends-on / branch / priority / parallel-collision
+  stamps, and says so per card when a constraint forced a position.
+- Cards without `order:` keep today's behavior (unsequenced pool after ordered ones)
+  — no forced migration; `horus doctor` warns on duplicate order values.
+- Gate: full suite green on the exact SHA. Probe: in a repo with 3+ stamped cards,
+  `horus backlog list` shows them in `order:` sequence ahead of unstamped cards;
+  remove one stamp and the card drops to the pool.
 
 ## Non-goals
 

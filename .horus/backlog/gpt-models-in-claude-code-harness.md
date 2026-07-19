@@ -4,7 +4,7 @@ priority: medium
 created: 2026-07-18
 vision_facet: "Delegation calibration"
 phase: explore
-tier: opus
+tier: high
 type: feature
 parallel: safe
 created_by: owner

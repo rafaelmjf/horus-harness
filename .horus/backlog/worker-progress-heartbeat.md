@@ -1,7 +1,7 @@
 ---
 status: open
 priority: low
-tier: sonnet
+tier: medium
 created: 2026-07-15
 vision_facet: "Delegation calibration"
 type: feature

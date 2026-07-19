@@ -4,7 +4,7 @@ priority: high
 created: 2026-07-18
 vision_facet: "Autonomous dispatch"
 phase: explore
-tier: opus
+tier: high
 type: feature
 parallel: safe
 created_by: owner
@@ -32,22 +32,31 @@ writing `horus schedule run …` / `horus envelope create` each time.
 - **Next-window timing:** schedule each armed card for the next window where its chosen
   account has capacity, reading the reset timers (`horus usage`/warmup anchors) rather
   than a fixed clock. Multiple armed cards space out across windows in the execution
-  order from [[tui-backlog-refine-and-order]].
+  order from [[tui-backlog-refine-and-order]] — **decided 2026-07-19: sparse `order:`
+  frontmatter ints; among armed cards the scheduler follows that sequence** (sort key
+  `(order missing?, order, priority-rank, filename)`), so this card consumes the field,
+  never invents its own ordering.
 - **Model selection:** pick the tier/model from the card's `tier` + live calibration
   (`capabilities --models`), owner-gated — never auto-routed silently.
 - Mission Control (`m`) already shows armed dispatches + envelope readiness (envelope
   state truthfulness fixed 2026-07-18) — arming a card should surface there.
 
-## Acceptance (draft — refine before actioning)
+## Acceptance (firmed 2026-07-19 — consumes the decided `order:` field)
 
 - Toggling a ready card on/off arms/disarms it for autonomous execution, visible in
   Mission Control's Armed dispatches.
 - An armed card runs only under a live owner-approved envelope; with no live envelope,
   arming is inert and says so (never a silent unauthorized run).
-- Scheduling honors the next-available-window timing (reset-timer aware) and the ordered
-  backlog; the model/tier is owner-visible, never silently auto-routed.
+- Scheduling honors the next-available-window timing (reset-timer aware); multiple
+  armed cards fire in `order:` sequence (sort key from
+  [[tui-backlog-refine-and-order]]); the model/tier is owner-visible, never silently
+  auto-routed.
 - Disarming before the window removes the pending dispatch (andon/`schedule release`
   semantics reused, not reinvented).
+- Gate: full suite green on the exact SHA. Probe: with a live envelope, arm a card
+  from the backlog pane → `horus schedule status` shows it with slot + account and
+  Mission Control lists it armed; disarm → both surfaces drop it; revoke the envelope
+  and arming a card reports inert-with-reason instead of scheduling.
 
 ## Non-goals
 

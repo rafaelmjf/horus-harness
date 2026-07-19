@@ -3,7 +3,7 @@ status: open
 priority: medium
 created: 2026-07-16
 vision_facet: "PO lifecycle"
-tier: sonnet
+tier: medium
 type: feature
 parallel: safe
 surface: PRD.md (Vision divergence framing), backlog card frontmatter (phase marker), horus-consolidate skill (phase-aware read-out)

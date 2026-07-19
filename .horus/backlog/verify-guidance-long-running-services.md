@@ -4,7 +4,7 @@ priority: low
 created: 2026-07-18
 vision_facet: "Introspection & self-improvement"
 phase: converge
-tier: sonnet
+tier: medium
 type: feature
 parallel: safe
 created_by: agent
