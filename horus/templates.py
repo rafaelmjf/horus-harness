@@ -1062,9 +1062,11 @@ Never invent status, dates, or versions; when intent is unclear, leave it and fl
    preserves the card under `backlog/archive/`. Delete only stale legacy/inline done items.
 2. Freshness: refresh the frontmatter handoff fields (current_focus / next_action /
    next_prompt / execution_recommendation / last_updated) to reflect this session.
-   `next_prompt` restores context, then tells the fresh session to summarize the
-   proposed actions and ask permission before execution. It may recommend a release
-   with reasons, but never order one; release waits for separate explicit confirmation.
+   `next_prompt` restores context and nothing more: it is the previous session's
+   account of where the work stood, not a queue of commands and not a place to write
+   consent instructions (what a session may do is its launch permission posture). It
+   may recommend a release with reasons, but never chain one; a release is its own
+   decision, taken with the owner, after continuity is current.
 3. Backlog hygiene: de-duplicate backlog titles; move work that shipped to the
    Shipped section as a single line; append newly found bugs to the Backlog.
 4. Distill sessions: fold durable content from sessions/*.md into PRD.md, then

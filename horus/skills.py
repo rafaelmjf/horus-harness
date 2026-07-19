@@ -102,7 +102,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 14 -->
+<!-- horus-skill-version: 15 -->
 
 # Consolidate Horus continuity
 
@@ -186,13 +186,15 @@ them is stale or empty.
    - Add any newly load-bearing invariant to `## Rules`, concise and
      current-state only (not a dated log — git history and optional recovery
      notes carry rationale when needed).
-   - Refresh the frontmatter handoff fields and bump `last_updated`. Apply the
-     resume-consent contract when authoring `next_prompt`: it may authorize
-     fetch/branch verification and minimum-context reads, then MUST tell the fresh
-     session to summarize the proposed actions and ask permission before editing,
-     testing, dispatching, merging, releasing, or deploying. A release may be
-     suggested with concrete reasons but never ordered or chained as "then release";
-     require separate explicit release confirmation. Default
+   - Refresh the frontmatter handoff fields and bump `last_updated`. Author
+     `next_prompt` as orientation and nothing more: where the work stood, and the
+     minimum context a fresh session should read before acting. Do NOT write consent
+     instructions into it — what a session may do is set by its launch permission
+     posture, which the agent CLI enforces; a consent paragraph here is prose the
+     model can reinterpret, and it contradicts a session launched to work directly.
+     A release may be suggested with concrete reasons but never chained as "then
+     release": it is its own decision, taken with the owner, after continuity is
+     current. Default
      `execution_recommendation` to:
      `"continue-as-is — <why>"`
      with the direct reason the next work stays inline. **Setting this field is
@@ -297,10 +299,11 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
    - **Update the dashboard contract** (the checklist above): refresh `current_focus`,
      `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
      `last_updated` on touched lanes. Author the proposed next step for a *cold*
-     reader — name it, point at `.horus/`, then require it to summarize its
-     understanding and ask permission before execution. A release is only a reasoned
-     suggestion and always waits for separate explicit confirmation; never write
-     "then release" as an instruction.
+     reader — name it and point at `.horus/`. Keep it orientation only; do not write
+     consent instructions into it, because what a session may do is set by its launch
+     permission posture, not by prose. A release is only a reasoned suggestion and is
+     always its own decision with the owner; never write "then release" as an
+     instruction.
    - **Recommend the execution mode for the NEXT.** Default
      `execution_recommendation` to `"continue-as-is — <why>"` and name the direct
      reason the next work stays inline. Setting this field is not a trigger for
@@ -2538,7 +2541,7 @@ notify, and the owner-gated-at-every-step boundary are identical.
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 14, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 15, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 4, _INFER_SKILL),
     Skill("horus-execution", 14, _EXECUTION_SKILL),
