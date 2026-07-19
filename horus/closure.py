@@ -45,6 +45,20 @@ PROJECTED_ARTIFACT_PATHS = [
 # + projected agent artifacts).
 _CONTINUITY_PATHSPEC = [".horus", "AGENTS.md", "CLAUDE.md", *PROJECTED_ARTIFACT_PATHS]
 
+# What may reach the default branch on a DIRECT push (closure's no-PR path).
+# Always safe: durable state and the instruction blocks — no CI check reads them as
+# product, so skipping required checks costs nothing.
+_DIRECT_PUSH_ALWAYS = (".horus", "AGENTS.md", "CLAUDE.md")
+
+# The generator whose presence means projected artifacts are BUILD OUTPUT in this
+# repo rather than vendored files. In a consumer project the projections have no
+# in-repo source, so they are ordinary continuity; in the harness itself they are
+# derived from `horus/skills.py` and must travel WITH their source through a PR, or
+# a projection lands on the default branch out of sync with the code that generates
+# it — exactly what the freshness check and projection-sync test exist to catch, and
+# exactly what a direct push skips.
+_PROJECTION_GENERATOR = "horus/skills.py"
+
 _PRODUCT_LOG_EXCLUDES = (
     ":(exclude).horus",
     ":(exclude)AGENTS.md",
@@ -627,6 +641,57 @@ def _seal_checkpoint_at_head(root: Path) -> bool:
     return True
 
 
+def default_branch(root: Path) -> str:
+    """The remote's default branch name, or "" when it cannot be determined.
+
+    Read from `origin/HEAD`; a repo whose remote HEAD is unset returns "" and every
+    caller must then treat the branch as NOT the default (fail open — a guard that
+    misfires on a feature branch is worse than one that misses)."""
+    ref = _git(root, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
+    if not ref:
+        return ""
+    return ref.rsplit("/", 1)[-1].strip()
+
+
+def direct_push_violations(root: Path) -> list[str]:
+    """Paths in the unpushed commits that may NOT reach the default branch directly.
+
+    Closure deliberately does not go through a PR: `horus close --commit --push`
+    writes only continuity, so skipping the required checks costs nothing — no CI
+    check reads `.horus/` or the instruction blocks as product. That exemption is
+    only sound while the pushed content really is continuity, and until now it was
+    enforced by whoever was typing: a hand-rolled `git add -A && git push` on the
+    default branch would carry source to main untested.
+
+    Returns the offending paths (empty list = safe to push directly). Only meaningful
+    on the default branch; returns [] everywhere else, and [] when anything cannot be
+    determined, so this never wedges a normal feature-branch push.
+    """
+    if not is_git_repo(root):
+        return []
+    branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    default = default_branch(root)
+    if not branch or not default or branch != default:
+        return []
+    changed = _git(root, "diff", "--name-only", f"origin/{default}...HEAD")
+    if not changed:
+        return []
+
+    allowed = list(_DIRECT_PUSH_ALWAYS)
+    if not (root / _PROJECTION_GENERATOR).exists():
+        # Consumer project: projections are vendored artifacts with no in-repo source.
+        allowed += PROJECTED_ARTIFACT_PATHS
+
+    violations = []
+    for line in changed.splitlines():
+        path = line.strip().replace("\\", "/")
+        if not path:
+            continue
+        if not any(path == a or path.startswith(f"{a}/") for a in allowed):
+            violations.append(path)
+    return sorted(set(violations))
+
+
 def commit_continuity(root: Path, message: str | None = None, *, push: bool = False) -> tuple[bool, str]:
     """Stage and commit the continuity files. Returns (did_commit, detail).
 
@@ -671,6 +736,17 @@ def commit_continuity(root: Path, message: str | None = None, *, push: bool = Fa
             + ", ".join(residual)
         )
     if push:
+        # The closure commit itself is pathspec-bounded, but an EARLIER unpushed commit
+        # on this branch may not be — refuse rather than carry it past required checks.
+        blocked = direct_push_violations(root)
+        if blocked:
+            sample = ", ".join(blocked[:3])
+            suffix = f" (+{len(blocked) - 3} more)" if len(blocked) > 3 else ""
+            return True, (
+                detail + f"; push refused — non-continuity paths would reach the default "
+                f"branch without required checks: {sample}{suffix}. Move them to a branch "
+                "and open a PR."
+            )
         branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
         pushed = _git(root, "push", "origin", branch or "HEAD")
         detail += "; pushed" if pushed is not None else "; push failed"
