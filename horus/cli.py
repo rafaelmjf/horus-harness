@@ -887,6 +887,35 @@ def _resolve_run_posture(explicit: str | None, worker: str | None) -> str:
     return "default"
 
 
+def _codex_delivery_posture_error(
+    *, agent: str, posture: str, expect_delivery: bool, has_worktree: bool
+) -> str | None:
+    """Error string if a codex dispatch demands a git/PR delivery it structurally
+    cannot perform, else ``None``.
+
+    Codex's non-``full-auto`` postures (default / auto-edit / read-only / plan) run in
+    a workspace-write sandbox with network and socket access OFF, and a worktree's real
+    git dir lives in the parent repo *outside* that writable root — so `git fetch/push`
+    and `gh pr` cannot run. Only ``--posture full-auto`` bypasses codex's sandbox (and
+    approvals). A dispatch that hits this fails silently with no PR hours later
+    (observed `away-batch-3`, 2026-07-19); refuse the contradiction at validation time
+    instead of arming a worker that cannot deliver. Claude's worker posture already
+    bypasses its sandbox, so this only ever fires for codex."""
+    if agent != "codex":
+        return None
+    if posture == adapters.PermissionPosture.FULL_AUTO.value:
+        return None
+    if not (expect_delivery or has_worktree):
+        return None
+    signal = "--expect-delivery" if expect_delivery else "--worktree"
+    return (
+        f"this codex dispatch expects a git/PR delivery ({signal}) but is armed with the "
+        f"{posture!r} posture, whose workspace-write sandbox has network/socket access OFF — "
+        "it cannot git push or open a PR. Pass --posture full-auto (bypasses codex's sandbox "
+        "and approvals) for a codex delivery dispatch."
+    )
+
+
 def _resolved_config_dir(agent: str, account: str | None) -> Path | None:
     """The CLAUDE_CONFIG_DIR / CODEX_HOME an ``agent`` run under ``account`` will use.
 
@@ -1185,6 +1214,20 @@ def cmd_run(args: argparse.Namespace) -> int:
     if refusal is not None:
         return refusal
 
+    # A codex delivery dispatch armed with a network-off sandbox posture cannot push
+    # or open a PR — refuse before any worktree/worker exists rather than let it fail
+    # silently (away-batch-3, 2026-07-19). Runs after the unattended defaults so the
+    # auto worktree is already resolved.
+    delivery_error = _codex_delivery_posture_error(
+        agent=args.agent,
+        posture=_resolve_run_posture(getattr(args, "posture", None), getattr(args, "worker", None)),
+        expect_delivery=bool(getattr(args, "expect_delivery", False)),
+        has_worktree=bool(getattr(args, "worktree", None)),
+    )
+    if delivery_error is not None:
+        print(f"Refusing to run: {delivery_error}")
+        return 2
+
     dispatch_base_sha: str | None = None
     dispatch_pending = 0
     if getattr(args, "worker", None):
@@ -1292,6 +1335,14 @@ def cmd_schedule_at(args: argparse.Namespace) -> int:
     # same). The run surface is passed straight through — this scheduler re-implements
     # none of it.
     known_commands = getattr(args, "_horus_commands", frozenset())
+    # The scheduled argv is the exact `horus run` the timer will execute, so catch a
+    # mis-armed codex delivery dispatch now, at arm time — not hours later in the
+    # journal when it fails to deliver (away-batch-3, 2026-07-19). cmd_run's own guard
+    # still backstops it at fire time.
+    delivery_error = _scheduled_run_delivery_error(run_args, known_commands)
+    if delivery_error is not None:
+        print(f"Refusing to schedule: {delivery_error}")
+        return 2
     if run_args[0] in known_commands:
         command = (sys.executable, "-m", "horus", *run_args)
         default_desc = " ".join(t for t in run_args if not t.startswith("-"))[:60] or run_args[0]
@@ -1324,6 +1375,42 @@ def cmd_schedule_at(args: argparse.Namespace) -> int:
         print("\n  [note] could not confirm linger; without it, user timers stop at logout "
               "(`loginctl show-user $USER -p Linger`).")
     return 0
+
+
+def _scheduled_run_delivery_error(run_args: list[str], commands: frozenset) -> str | None:
+    """Arm-time mirror of the codex delivery-posture guard for `horus schedule run`.
+
+    The scheduled argv is the exact `horus run` command the timer will execute, so we
+    re-parse it through the same parser, apply the same unattended defaulting that
+    ``cmd_run`` does, then reuse the shared guard — catching a mis-armed codex delivery
+    dispatch when it is SCHEDULED, not hours later in the journal. Only `run`
+    dispatches carry a posture/delivery contract; a bare subcommand (supervise/warmup/…)
+    has none, and a parse error here is left for the fire-time guard to report."""
+    argv = list(run_args)
+    if argv and argv[0] in commands and argv[0] != "run":
+        return None
+    if argv and argv[0] == "run":
+        argv = argv[1:]
+    try:
+        parsed = build_parser().parse_args(["run", *argv])
+    except SystemExit:
+        return None
+    agent = parsed.agent or getattr(parsed, "worker", None) or "claude"
+    worker = getattr(parsed, "worker", None)
+    worktree_val = getattr(parsed, "worktree", None)
+    # Mirror _apply_unattended_defaults: an unattended run gets worker=agent and an
+    # auto/<card> worktree when none is given (kept in sync with that function).
+    if getattr(parsed, "unattended", False):
+        worker = worker or agent
+        if not worktree_val and getattr(parsed, "card", None):
+            worktree_val = f"auto/{parsed.card}"
+    posture = _resolve_run_posture(getattr(parsed, "posture", None), worker)
+    return _codex_delivery_posture_error(
+        agent=agent,
+        posture=posture,
+        expect_delivery=bool(getattr(parsed, "expect_delivery", False)),
+        has_worktree=bool(worktree_val),
+    )
 
 
 def _run_arg_value(run_args: list[str], flag: str) -> str | None:
