@@ -1,7 +1,8 @@
 ---
 status: open
 priority: low
-deferred: "watch — upstream Codex window contract unsettled (see 2026-07-19 review)"
+readiness: deferred
+readiness_reason: "Watch until the upstream Codex window contract settles; see the 2026-07-19 review."
 tier: medium
 created: 2026-07-16
 last_refined: 2026-07-19

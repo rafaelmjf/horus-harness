@@ -1,7 +1,8 @@
 ---
 status: open
 priority: low
-deferred: "await evidence from a real campaign on the detached primitive (2026-07-16 review)"
+readiness: deferred
+readiness_reason: "Await evidence from a real campaign on the detached primitive; see the 2026-07-16 review."
 tier: medium
 created: 2026-07-15
 last_refined: 2026-07-19

@@ -1,7 +1,8 @@
 ---
 status: open
 priority: low
-deferred: "await stall-frequency evidence + native CLI progress signals (2026-07-16 review)"
+readiness: deferred
+readiness_reason: "Await stall-frequency evidence and native CLI progress signals; see the 2026-07-16 review."
 tier: medium
 created: 2026-07-15
 last_refined: 2026-07-19

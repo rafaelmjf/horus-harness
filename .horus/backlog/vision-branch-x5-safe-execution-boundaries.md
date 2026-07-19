@@ -1,6 +1,8 @@
 ---
 status: open
 priority: high
+readiness: deferred
+readiness_reason: "Defer the whole X5 branch until an owner branch review decides preserve, narrow, split, or drop."
 created: 2026-07-18
 last_refined: 2026-07-19
 tier: frontier
@@ -84,3 +86,10 @@ host integration that makes Horus useful.
 - Every UI/CLI surface reports the actual boundary and limits, not an aspirational label.
 - Cross-platform differences are named and tested; no false equivalence.
 - The owner can evaluate model/harness quality independently of host-safety failures.
+
+## Reviews
+
+- 2026-07-19 — **Defer whole branch (owner):** do not assume containment calibration
+  is currently needed. Hold the umbrella and all six children until a dedicated branch
+  review decides preserve, narrow, split, or drop. Do not change the resource-policy
+  dependency structure before that verdict.

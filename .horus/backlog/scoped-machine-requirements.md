@@ -1,7 +1,8 @@
 ---
 status: open
 priority: medium
-deferred: "awaiting real project declarations from fleet onboarding"
+readiness: deferred
+readiness_reason: "Await real project requirement declarations from fleet onboarding."
 tier: medium
 created: 2026-07-15
 last_refined: 2026-07-19

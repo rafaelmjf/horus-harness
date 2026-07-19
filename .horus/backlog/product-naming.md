@@ -1,7 +1,8 @@
 ---
 status: open
 priority: low
-deferred: "decide at first external distribution"
+readiness: deferred
+readiness_reason: "Reopen at the first external distribution decision."
 tier: medium
 created: 2026-07-16
 last_refined: 2026-07-19

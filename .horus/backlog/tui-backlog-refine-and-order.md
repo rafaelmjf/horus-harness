@@ -1,6 +1,8 @@
 ---
 status: open
 priority: high
+readiness: gated
+readiness_reason: "Land backlog-readiness-disposition tooling first; then this becomes Ready—Attended."
 created: 2026-07-18
 last_refined: 2026-07-19
 vision_facet: "PO lifecycle"
@@ -9,6 +11,7 @@ tier: high
 type: feature
 parallel: safe
 created_by: owner
+depends-on: backlog-readiness-disposition
 surface: horus/backlog.py (readiness/order fields + writer), horus/backlog_tree.py, horus/terminal_tui.py (thin trigger from the backlog pane), horus/cli.py
 ---
 

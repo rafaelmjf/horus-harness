@@ -1,7 +1,8 @@
 ---
 status: open
 priority: medium
-deferred: "remaining usage-ripeness flag blocked on a per-card usage signal Horus does not capture yet"
+readiness: deferred
+readiness_reason: "Resume when Horus has a real per-card usage signal for the remaining usage-ripeness flag."
 created: 2026-07-16
 last_refined: 2026-07-19
 vision_facet: "PO lifecycle"
@@ -9,7 +10,7 @@ tier: medium
 type: feature
 parallel: safe
 surface: PRD.md (Vision divergence framing), backlog card frontmatter (phase marker), horus-consolidate skill (phase-aware read-out)
-depends-on: roadmap-convergence (supplies the convergence-side machinery)
+depends-on: roadmap-convergence
 ---
 
 # explore-converge-lifecycle — a roadmap that breathes (divergence → convergence)

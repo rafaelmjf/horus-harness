@@ -2,6 +2,7 @@
 status: open
 priority: low
 created: 2026-07-19
+last_refined: 2026-07-19
 readiness: shaping
 readiness_reason: "Raw owner vision branch; run the calibrated scope-cards pass before choosing research or child work."
 phase: explore

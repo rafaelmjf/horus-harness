@@ -1,7 +1,8 @@
 ---
 status: open
 priority: low
-deferred: "observe-first hold across several session launches (owner, 2026-07-19)"
+readiness: deferred
+readiness_reason: "Observe several more session launches before reopening; owner hold from 2026-07-19."
 created: 2026-07-19
 last_refined: 2026-07-19
 vision_facet: "Continuity core"

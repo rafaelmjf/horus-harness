@@ -1,6 +1,8 @@
 ---
 status: open
 priority: medium
+readiness: shaping
+readiness_reason: "Needs an attended owner envelope and evidence run before an adopt, revise, or drop verdict."
 created: 2026-07-17
 last_refined: 2026-07-19
 tier: high

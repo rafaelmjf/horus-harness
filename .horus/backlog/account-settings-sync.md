@@ -1,6 +1,8 @@
 ---
 status: open
 priority: low
+readiness: gated
+readiness_reason: "Keep for the next-machine installation, whose real settings drift will provide shaping evidence."
 created: 2026-07-17
 last_refined: 2026-07-19
 vision_facet: "Accounts & isolation"
@@ -61,3 +63,9 @@ account's settings, and stays machine-local.
   the account-settings writer; the other consumes it. Do not build two writers. That card
   also answers this one's first open question by example: `statusLine` and `hooks` are the
   keys that actually drift, because they are the ones Horus itself has an opinion about.
+
+## Reviews
+
+- 2026-07-19 — **Keep, low priority, Gated (owner):** this becomes useful when Horus is
+  installed on additional machines. Do not retire it merely because the current machine
+  is configured; use the next real installation's drift as shaping evidence.

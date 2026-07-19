@@ -1,6 +1,8 @@
 ---
 status: open
 priority: medium
+readiness: gated
+readiness_reason: "Archive only after autotest-e2e-away-mode-drill passes and confirms the promoted branch end to end."
 created: 2026-07-17
 last_refined: 2026-07-19
 tier: high
@@ -9,6 +11,7 @@ parallel: safe
 phase: converge
 vision_facet: "Autonomous dispatch"
 created_by: owner
+depends-on: autotest-e2e-away-mode-drill
 surface: .horus/backlog/ (divergence umbrella); may inform a future PRD Vision facet; links five explore cards
 ---
 
@@ -53,7 +56,20 @@ orchestration daemon**; converging this branch means an explicit owner decision 
 it (a new facet, e.g. "PO execution loop"), with the boundary drawn tightly (single machine,
 one-shot, owner-consent-gated — not distributed worker control).
 
-## What already exists vs. the gaps (findings, 2026-07-17)
+## Current state (refreshed 2026-07-19)
+
+This branch was promoted into the **Autonomous dispatch** Vision facet and its away-mode
+kit shipped across v0.0.63–v0.0.68: standing envelopes, attachable worktree dispatch,
+local persistent scheduling, independent supervision, notification/escalation,
+dependency andon behavior, batch completion, and the cockpit contract all exist. The
+original gap map below is retained as provenance, not current backlog truth.
+
+The only closure gate is [[autotest-e2e-away-mode-drill]] after the weekly account
+reset. A passing end-to-end drill archives this umbrella. Any warm supervised-worker
+experiment remains a separate follow-on ([[warm-supervised-worker-poc]]) and does not
+hold X3 open.
+
+## Original exists-vs-gaps map (findings, 2026-07-17)
 
 Mapped from horus-harness source. Flow step → status → mechanism:
 
@@ -126,12 +142,13 @@ escalation halts all depends-on descendants) → 5. `parallel-session-continuity
 verify+escalate-only away loop; 4's unattended MERGE ships only if its live-probe
 design settles first.
 
-## Acceptance (for the branch, not the individual cards)
+## Closure acceptance (for the branch, not the individual cards)
 
-- The owner can read this one card and understand the whole direction, what already works,
-  what is missing, and which cards would close each gap.
-- A convergence decision is explicit: either promote to a Vision facet with a tightly-drawn
-  boundary, or drop the branch (and its cards) as a unit.
+- The reset-gated drill exercises a real scheduled worker and independently scheduled
+  supervisor under the promoted boundary, with exact-SHA CI plus the named live probe.
+- On a pass, archive this umbrella as converged and keep the Autonomous dispatch facet.
+- On a failure, record the observed gap as a bounded follow-up card and keep this umbrella
+  Gated until that gap is resolved and the drill is rerun.
 
 ## Notes
 
@@ -143,6 +160,10 @@ design settles first.
   conventions (naming, frontmatter, how a branch converges) in a future session.
 
 ## Reviews
+
+- 2026-07-19 — **Refresh then close (owner):** the branch is no longer an unpromoted
+  exploration and the kit gaps are shipped. Keep it only through the full reset-gated
+  drill; archive on pass. The warm-worker PoC is independent follow-on evidence.
 
 - 2026-07-17 — **Dispatch motivation clarified (owner + partial data):** measured
   dividend judgments for supervisor→sonnet dispatch are roughly split (+4/~0/-2 on

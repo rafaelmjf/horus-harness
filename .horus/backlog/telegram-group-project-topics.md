@@ -1,6 +1,8 @@
 ---
 status: open
 priority: medium
+readiness: ready
+autonomy: attended
 created: 2026-07-18
 last_refined: 2026-07-19
 vision_facet: "Autonomous dispatch"

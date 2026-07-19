@@ -1,7 +1,8 @@
 ---
 status: open
 priority: low
-deferred: "branch ON HOLD after net-negative live trial (2026-07-18); resumes on owner re-test in a low-risk context"
+readiness: deferred
+readiness_reason: "Branch on hold after the net-negative 2026-07-18 trial; reopen only for an owner-approved low-risk re-test."
 created: 2026-07-18
 last_refined: 2026-07-19
 tier: frontier

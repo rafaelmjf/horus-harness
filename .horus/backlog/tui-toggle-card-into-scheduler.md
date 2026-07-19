@@ -1,6 +1,8 @@
 ---
 status: open
 priority: high
+readiness: gated
+readiness_reason: "Depends on the full away-mode drill and the refinement/order surface; only Ready—Eligible cards may arm."
 created: 2026-07-18
 last_refined: 2026-07-19
 vision_facet: "Autonomous dispatch"
@@ -9,6 +11,7 @@ tier: high
 type: feature
 parallel: safe
 created_by: owner
+depends-on: autotest-e2e-away-mode-drill, tui-backlog-refine-and-order
 surface: horus/terminal_tui.py (backlog pane toggle), horus/schedule.py (arm from the ordered backlog), horus/envelope.py (bind), horus/warmup.py + usage windows (next-window timing), horus/datums.py (model selection)
 ---
 
@@ -24,7 +27,9 @@ writing `horus schedule run …` / `horus envelope create` each time.
 ## How (to design in-card)
 
 - A toggle on a backlog card (e.g. a key on the backlog pane) marks it armed/disarmed
-  for autonomous execution. Armed cards feed the scheduling machinery that already
+  for autonomous execution. The control is enabled only for
+  `readiness: ready` + `autonomy: eligible`; Ready—Attended and every non-Ready or
+  Unclassified card show their reason and cannot arm. Armed cards feed the scheduling machinery that already
   exists: standing **envelope** (bounds accounts/tier/attempts/merge-authority),
   `horus run --unattended --detach` (worker), `horus schedule run … -- supervise <id>`
   (independent verify/merge). The toggle is a thin front-end over that — it must NEVER
@@ -44,8 +49,9 @@ writing `horus schedule run …` / `horus envelope create` each time.
 
 ## Acceptance (firmed 2026-07-19 — consumes the decided `order:` field)
 
-- Toggling a ready card on/off arms/disarms it for autonomous execution, visible in
-  Mission Control's Armed dispatches.
+- Toggling a Ready—Eligible card on/off arms/disarms it for autonomous execution,
+  visible in Mission Control's Armed dispatches. Ready—Attended, Shaping, Gated,
+  Deferred, and Unclassified cards are refused with their durable reason.
 - An armed card runs only under a live owner-approved envelope; with no live envelope,
   arming is inert and says so (never a silent unauthorized run).
 - Scheduling honors the next-available-window timing (reset-timer aware); multiple
