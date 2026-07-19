@@ -98,7 +98,19 @@ def test_cockpit_dispatch_contract_skill_registered_and_sequences():
 
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    assert pf.version == 4
+    assert pf.version == 5
+    # v5 (calibration 2026-07-19): the owner's mental model includes the inward
+    # audit — product-audit where the project has one, shipped-vs-used elsewhere
+    # (product-audit is Horus-specific; pathfinder must run on any project).
+    assert "Inward audit" in pf.content
+    assert "product-audit" in pf.content
+    assert "shipped-vs-used" in pf.content
+    # Step 0 triages backlog-POLISH out to the grooming pass instead of running
+    # the five-step chain for a grooming need.
+    assert "is it a re-baseline at all?" in pf.content
+    assert "tui-backlog-refine-and-order" in pf.content
+    # Cards land against the single contract authority in scope-cards.
+    assert "dispatchable-card contract" in pf.content
     # Renamed from horus-kickstart: age-agnostic name, no old slug lingering.
     assert not any(s.name == "horus-kickstart" for s in skills.SKILLS)
     # v2: genuinely thin — sequences the factored step skills, no analysis inline.
@@ -135,7 +147,8 @@ def test_pathfinder_skill_registered_and_orchestrates():
     # v3: Step 0 confirms the intent interactively even when pre-declared in args.
     assert "Confirm interactively, even when the intent arrives pre-declared" in pf.content
     # v4: a reused receipt's envelope nod replaces the Step 2 gate; prior trees feed step 3.
-    assert "REPLACES Step 2" in pf.content
+    # Market-scan is Step 3 since v5 inserted the inward audit as Step 2.
+    assert "REPLACES Step 3" in pf.content
     assert "prior branch-tree" in pf.content
 
 

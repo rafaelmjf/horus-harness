@@ -3,21 +3,26 @@ name: pathfinder
 description: >-
   Owner-invoked, guided divergence→convergence re-baseline of a project's
   direction — the thin WORKFLOW that sequences individually-invocable steps: pin
-  the intent (deepen own-use vs broaden adoption vs both), pin a position brief
-  (`horus consolidate` read-out), scan the market (`market-scan`, which composes
-  `deep-research`), build the divergence tree of alternative roadmaps
-  (`roadmap-branches`), then populate the chosen branch into self-sufficient
-  cards (`scope-cards`). Works the SAME on a brand-new repo and a long-running
-  one (it scouts the route ahead and reports; it never builds the road). Use
-  when the owner says "pathfinder", "kickstart", "re-baseline", "where should
-  this project go next", "reset the roadmap", or "onboard this project onto
-  facets". Advisory and gated: every step hands the owner a proposal and each
+  the intent (deepen own-use vs broaden adoption vs both; triage backlog-POLISH
+  requests out to the grooming pass — the full chain is for direction changes),
+  pin a position brief (`horus consolidate` read-out), gather the inward
+  evidence (`product-audit` where the project has one, else shipped-vs-used with
+  the owner), scan the market (`market-scan`, which composes `deep-research`),
+  build the divergence tree of alternative roadmaps (`roadmap-branches`), then
+  populate the chosen branch into self-sufficient cards (`scope-cards`, whose
+  dispatchable-card contract every card must meet). Works the SAME on a
+  brand-new repo and a long-running one (it scouts the route ahead and reports;
+  it never builds the road). Use when the owner says "pathfinder", "kickstart",
+  "re-baseline", "where should this project go next", "reset the roadmap", or
+  "onboard this project onto facets"; interactive by design — the owner and the
+  LLM decide direction together, never unattended. Advisory and gated: every
+  step hands the owner a proposal and each
   step is also callable standalone — pathfinder adds only sequencing, gates, and
   the receipts handoff; nothing is ever written without approval. Confirm a
   token envelope before any web work. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -38,11 +43,12 @@ each one against reality separately.)
 
 | Step | Owner's question | Owned by |
 |---|---|---|
-| 0 | what is this re-baseline FOR? | pathfinder (intent gate) |
+| 0 | what is this re-baseline FOR — and is it a re-baseline at all? | pathfinder (intent + triage gate) |
 | 1 | where are we? | `horus consolidate` read-out → pinned brief |
-| 2 | where is the world? | `market-scan` (composes `deep-research`) |
-| 3 | which directions could we take? | `roadmap-branches` (the divergence tree) |
-| 4 | what exactly do we do on the chosen one? | `scope-cards` (self-sufficient drafts) |
+| 2 | what actually earned its keep? | inward audit: `product-audit` where the project has one, else shipped-vs-used with the owner |
+| 3 | where is the world? | `market-scan` (composes `deep-research`) |
+| 4 | which directions could we take? | `roadmap-branches` (the divergence tree) |
+| 5 | what exactly do we do on the chosen one? | `scope-cards` (drafts meeting its dispatchable-card contract) |
 
 **Receipts are the interfaces**: the market receipt and the branch-tree receipt
 live under `.horus/research/`, and the card drafts land as files — so the chain
@@ -62,6 +68,19 @@ standalone without the workflow.
   never a wholesale Vision replacement, so a re-run does not thrash continuity.
 
 ## Step 0 — pin the intent BEFORE anything (never assume it)
+
+**Triage first: is this a re-baseline at all?** Two owner needs arrive wearing
+similar words, and they take different-size tools:
+
+- **Re-baseline** — the *direction* is in question (drift, a pivot, a new
+  opportunity, onboarding onto facets). That is this chain.
+- **Backlog polish** — the direction holds; existing cards need grooming toward
+  the dispatchable-card contract (in `scope-cards`) and an execution order. That
+  is the backlog-refine pass (carded: `tui-backlog-refine-and-order`; until it
+  ships, `scope-cards` standalone grooms individual thin cards). Running the
+  five-step chain for a grooming need is ceremony — route it out and say so.
+
+Both tools hold cards to the same contract; only the entry question differs.
 
 A re-baseline has more than one legitimate goal, and the goal steers the whole
 run — the research frame AND the verdict criteria. Do NOT default to one silently:
@@ -86,15 +105,16 @@ context paragraphs. Also settle here whether the owner wants per-step gates
 
 ## Before you spend — confirm the token envelope
 
-Step 2 fans out web research. Before any web work, state: the intent (from Step
-0), the trigger (re-baseline | onboarding), the project in one line, the
-directions you already suspect, and the research depth — then get the owner's
-confirmation. A light comparative sweep usually beats a full adversarial report
-for a direction call. A fresh, still-valid receipt may be reused instead of a new
-scan — say so explicitly and get a nod; that nod already carries the owner's
-reaction to the evidence, so it REPLACES Step 2's STOP (do not re-gate reused
-evidence — calibration 2026-07-17). If the owner only wants the inward pass,
-skip the scan and let `roadmap-branches` mark its tree inward-only.
+Step 3 fans out web research (Steps 1–2 are no-spend). Before any web work,
+state: the intent (from Step 0), the trigger (re-baseline | onboarding), the
+project in one line, the directions you already suspect, and the research depth
+— then get the owner's confirmation. A light comparative sweep usually beats a
+full adversarial report for a direction call. A fresh, still-valid receipt
+may be reused instead of a new scan — say so explicitly and get a nod; that nod
+carries the owner's reaction to the evidence, so it REPLACES Step 3's STOP (do
+not re-gate reused evidence — calibration 2026-07-17). If the owner only wants
+the inward pass, skip the scan and let `roadmap-branches` mark its tree
+inward-only.
 
 ## The flow
 
@@ -105,10 +125,21 @@ skip the scan and let `roadmap-branches` mark its tree inward-only.
    OPEN facet coverage — a HARD CONSTRAINT passed into every later step so the
    research stays anchored to what the project already is and who it is for.
    STOP for the owner to confirm the brief (unless straight-through).
-2. **`market-scan`** with the intent + brief, under the confirmed envelope. Its
+2. **Inward audit (no spend).** Drift — pathfinder's own trigger — is an inward
+   symptom, so gather the inward evidence before looking outward. Where the
+   project has an inward-audit skill (`product-audit` on horus-harness), run it —
+   or reuse its receipt when one is fresh. Everywhere else the generic form is a
+   short shipped-vs-used pass WITH the owner: walk `## Shipped` (or the features
+   ledger) asking what was actually used since the last re-baseline and which
+   rituals became ceremony — pathfinder elicits, it does not analyze. Fold the
+   answers into the brief; they become `roadmap-branches`' push-back evidence and
+   any demote/defer/retire verdicts flow through the normal advisory paths. STOP
+   with the owner when the audit changes the brief (skip the stop when it
+   confirms it — say so and proceed).
+3. **`market-scan`** with the intent + brief, under the confirmed envelope. Its
    dated receipt is the outward evidence. STOP for the owner to react (already
    satisfied when the receipt was reused under the envelope nod — proceed).
-3. **`roadmap-branches`** consuming the brief + receipt (+ prior branch-tree
+4. **`roadmap-branches`** consuming the brief + receipt (+ prior branch-tree
    receipts when they exist) → the branch-tree
    receipt: per-facet position, market shells → verdict → risk, one branch per
    direction (each with a market-position line, a numbered roadmap, a convergence
@@ -116,10 +147,11 @@ skip the scan and let `roadmap-branches` mark its tree inward-only.
    push-back on existing cards, and a held-loosely recommendation. The
    **Onboarding fork** lives there: no facet table → propose the initial facet
    set and offer to stamp existing cards. STOP: the owner picks branch(es).
-4. **`scope-cards`** on the chosen branch → fully populated self-sufficient card
-   drafts + the branch's Vision facet diff + existing-card demote/defer/retire
-   diffs. The owner approves per item; only approved items are written.
-5. **Hand off.** Approved cards and edits are in place via the normal paths;
+5. **`scope-cards`** on the chosen branch → fully populated card drafts meeting
+   its dispatchable-card contract + the branch's Vision facet diff +
+   existing-card demote/defer/retire diffs. The owner approves per item; only
+   approved items are written.
+6. **Hand off.** Approved cards and edits are in place via the normal paths;
    anything the owner deferred stays unapplied — say so. Later, **convergence is
    a separate session**: usage evidence accumulates, the `horus consolidate`
    read-out trims the fat; re-run pathfinder only when a real re-baseline is

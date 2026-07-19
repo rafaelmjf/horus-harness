@@ -69,3 +69,15 @@ capability** (the owner's items 5–6), not an invoke of an existing step. Confi
 Pulled forward from the items 5–7 TUI list (2026-07-18). Decoupled from the first
 autonomous-scheduler test, which runs on hand-picked cards and does NOT depend on this
 step. Pairs with [[tui-toggle-card-into-scheduler]].
+
+**The ordering artifact has a second producer (skills-review session, 2026-07-19):**
+`scope-cards` is instructed to "inherit the branch order" from the owner-approved
+`roadmap-branches` roadmap, but with no durable field the approved order evaporates at
+write time — cards land filename-sorted and an owner decision is silently lost. So
+whatever this card chooses (an `order:` frontmatter field + writer, or another durable
+artifact) must be writable by BOTH producers — the refine pass here and `scope-cards`
+at scoping time — and consumable by the scheduler/[[tui-toggle-card-into-scheduler]]
+without an LLM in the loop. Decide once, here; `scope-cards` (which now owns the
+dispatchable-card contract, v3) then adopts the same field rather than inventing a
+rival. Deliberately NOT built ahead of this card: a field with no consumer is ceremony
+(the boundary rule), so the decision and the first consumer should land together.
