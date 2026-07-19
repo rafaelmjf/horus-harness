@@ -7,7 +7,7 @@ description: >-
   requests out to the grooming pass — the full chain is for direction changes),
   pin a position brief (`horus consolidate` read-out), gather the inward
   evidence (`product-audit` where the project has one, else shipped-vs-used with
-  the owner), scan the market (`market-scan`, which composes `deep-research`),
+  the owner), scan the market (`market-scan`, shallow by default),
   build the divergence tree of alternative roadmaps (`roadmap-branches`), then
   shape the chosen branch into high-level drafts (`scope-cards`) and refine the
   approved drafts into execution-ready cards (`backlog-refine`). Works the SAME on a
@@ -19,10 +19,11 @@ description: >-
   step hands the owner a proposal and each
   step is also callable standalone — pathfinder adds only sequencing, gates, and
   the receipts handoff; nothing is ever written without approval. Confirm a
-  token envelope before any web work. Not continuous monitoring.
+  scope before any web work; the market step is shallow by default and offers more
+  depth rather than assuming it. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -46,7 +47,7 @@ each one against reality separately.)
 | 0 | what is this re-baseline FOR — and is it a re-baseline at all? | pathfinder (intent + triage gate) |
 | 1 | where are we? | `horus consolidate` read-out → pinned brief |
 | 2 | what actually earned its keep? | inward audit: `product-audit` where the project has one, else shipped-vs-used with the owner |
-| 3 | where is the world? | `market-scan` (composes `deep-research`) |
+| 3 | where is the world? | `market-scan` (shallow sweep; deeper only if the owner asks) |
 | 4 | which directions could we take? | `roadmap-branches` (the divergence tree) |
 | 5 | what high-level work does the chosen branch imply? | `scope-cards` (aligned Shaping drafts) |
 | 6 | what is genuinely ready, waiting, or still undecided? | `backlog-refine` (interactive readiness + execution contract) |
@@ -106,11 +107,12 @@ and `backlog-refine` readiness decisions. Also settle here whether the owner wan
 
 ## Before you spend — confirm the token envelope
 
-Step 3 fans out web research (Steps 1–2 are no-spend). Before any web work,
-state: the intent (from Step 0), the trigger (re-baseline | onboarding), the
-project in one line, the directions you already suspect, and the research depth
-— then get the owner's confirmation. A light comparative sweep usually beats a
-full adversarial report for a direction call. A fresh, still-valid receipt
+Step 3 goes to the web (Steps 1–2 are no-spend). Before it, state: the intent
+(from Step 0), the trigger (re-baseline | onboarding), the project in one line,
+and the directions you already suspect. `market-scan` then runs a SHALLOW sweep of
+the top public results by default and asks the owner afterwards whether to go
+deeper — so a normal Step 3 needs no depth negotiation up front, and depth is
+never escalated without an explicit request. A fresh, still-valid receipt
 may be reused instead of a new scan — say so explicitly and get a nod; that nod
 carries the owner's reaction to the evidence, so it REPLACES Step 3's STOP (do
 not re-gate reused evidence — calibration 2026-07-17). If the owner only wants
@@ -167,8 +169,8 @@ inward-only.
   deterministic signals already exist; pathfinder is pure sequencing over them.
 - No analysis inside pathfinder itself — depth belongs to the step skills where
   it can be audited and calibrated one skill at a time.
-- No token estimate beyond stating the depth and getting confirmation — let
-  `market-scan`/`deep-research` own the actual fan-out.
+- No token estimate beyond stating the depth — `market-scan` owns the actual
+  fan-out, and it defaults to a shallow sweep before offering more depth.
 - No continuous monitoring (that always-on category is out of scope).
 
 ## v2 six-lane projects (fallback)

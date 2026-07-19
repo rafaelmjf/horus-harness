@@ -58,14 +58,19 @@ def test_delegation_decision_skills_registered():
 
 def test_market_scan_skill_registered_and_outward():
     market = next(s for s in skills.SKILLS if s.name == "market-scan")
-    assert market.version == 5
-    # outward twin of product-audit: composes deep-research, advisory, dated receipt.
-    assert "deep-research" in market.content
+    assert market.version == 6
+    # outward twin of product-audit: advisory, dated receipt.
+    # v6: no "deep-research" reference — the name collided with Claude's own deep
+    # research mode, and depth is now shallow-by-default with an explicit offer.
+    assert "deep-research" not in market.content
+    assert "SHALLOW sweep" in market.content
+    assert "ASK whether the owner wants" in market.content
+    assert "unless the owner explicitly asks for it by name" in market.content
     assert ".horus/research/" in market.content
     assert "JTBD" in market.content and "PR-FAQ" in market.content
     assert "never auto-write" in market.content and "never auto-create" in market.content
-    # token-envelope gate before any web spend.
-    assert "confirm the envelope" in market.content
+    # depth contract before any web spend.
+    assert "shallow by default" in market.content
     # v2: intent-framed verdict — build-vs-adopt for personal tooling, not only saturation.
     assert "build-vs-adopt" in market.content.lower()
     assert "deepen-own-use" in market.content and "broaden-adoption" in market.content
@@ -98,7 +103,7 @@ def test_cockpit_dispatch_contract_skill_registered_and_sequences():
 
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    assert pf.version == 7
+    assert pf.version == 8
     # v7: backlog polish routes directly to the final readiness owner.
     assert "Invoke `backlog-refine`" in pf.content
     # v5 (calibration 2026-07-19): the owner's mental model includes the inward
@@ -115,7 +120,7 @@ def test_pathfinder_skill_registered_and_orchestrates():
     # Renamed from horus-kickstart: age-agnostic name, no old slug lingering.
     assert not any(s.name == "horus-kickstart" for s in skills.SKILLS)
     # v2: genuinely thin — sequences the factored step skills, no analysis inline.
-    assert "market-scan" in pf.content and "deep-research" in pf.content
+    assert "market-scan" in pf.content and "deep-research" not in pf.content
     assert "roadmap-branches" in pf.content and "scope-cards" in pf.content
     assert pf.content.index("`scope-cards`") < pf.content.index("`backlog-refine`")
     assert "horus consolidate" in pf.content

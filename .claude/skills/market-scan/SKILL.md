@@ -7,13 +7,14 @@ description: >-
   this space taken", or when starting or redirecting a project. Frames the
   problem as a Jobs-To-Be-Done hypothesis, tears down 3-6 real competitors with
   fetched evidence, drafts a PR-FAQ-style vision paragraph, and caps market
-  sizing to one line. Composes the deep-research harness for the evidence pass
-  rather than reinventing search. Advisory only: it PROPOSES Vision text and
+  sizing to one line. Defaults to a SHALLOW sweep of the top public results and
+  then asks the owner whether to go deeper; it never escalates depth on its own.
+  Advisory only: it PROPOSES Vision text and
   candidate backlog cards in a dated receipt under `.horus/research/`; it never
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -45,14 +46,24 @@ the owner has not confirmed the intent THIS session (an intent pre-declared in
 args or a stored prompt is a proposal) — ASK before spending: present the three
 options plus a free-text alternative.
 
-## Before you spend — confirm the envelope
+## Depth: shallow by default, deeper only when the owner asks
 
-This skill fans out web research (it composes the `deep-research` harness), which
-is a real token spend. Before any web work, state: the intent (deepen-own-use |
+**The default pass is a shallow sweep** — search the top public results for the
+space, open only what the teardown grid actually needs, and cite the URLs. That is
+usually enough to decide a product direction, and it is cheap enough to just do.
+
+Before starting, state in one short block: the intent (deepen-own-use |
 broaden-adoption | both), the trigger (new-idea | pivot), the problem/space in one
-sentence, the competitors you already know, and the research depth — then get the
-owner's confirmation. Match depth to the question; a light comparative sweep
-usually beats a full adversarial report for a product decision.
+sentence, and the competitors you already know. Then run the shallow pass.
+
+**After the shallow pass, report what you found and ASK whether the owner wants
+more depth** — naming what a deeper pass would add (more competitors, primary
+sources, pricing/changelog verification) and what it would cost. Go deeper only on
+an explicit yes.
+
+Never escalate depth on your own initiative, and do not invoke any long-running or
+"deep research" mode unless the owner explicitly asks for it by name — a shallow
+sweep plus an honest offer is the contract.
 
 ## Bake in exactly the outward trio (+ one capped check)
 
@@ -61,8 +72,9 @@ usually beats a full adversarial report for a product decision.
    interviews, so frame this explicitly as a hypothesis to validate, not a
    finding.
 2. **Competitive teardown** — 3-6 named competitors in a grid: does-well / gap /
-   positioning / price, each row backed by a fetched URL. This is where
-   `deep-research`'s fetch+verify does the work — invoke it, do not rebuild it.
+   positioning / price, each row backed by a fetched URL. Search the top results,
+   open the pages a row actually depends on, and cite them; an uncited row is a
+   guess and must be labelled as one rather than filled in.
 3. **PR-FAQ vision paragraph** — a one-paragraph "if we build this, the headline
    is…" plus 3-5 hard FAQ questions (why now, why us, biggest risk). This feeds
    the PRD Vision almost verbatim.
@@ -97,7 +109,7 @@ Open questions / hard FAQ: [3-5]
 Market-size sanity: <one line>
 Candidate backlog items:
   - <candidate> — rationale, from which gap/assumption
-Sources: [URLs from deep-research]
+Sources: [every URL opened, one per line]
 ```
 
 ## Hand off — propose, the owner disposes
