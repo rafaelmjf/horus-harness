@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-18
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: agent
 surface: horus/schedule.py (install_listen_service self-verify + rollback; a shared _await_active helper), any future systemd-unit installer
+shipped_pr: 342
+shipped_sha: bb5de963e6b97815843cb8614527674a4d7ca4bf
 ---
 
 # service-installers-self-verify-active — safety in code, not in the probe

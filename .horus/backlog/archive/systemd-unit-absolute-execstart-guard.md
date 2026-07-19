@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: low
 created: 2026-07-18
 vision_facet: "Autonomous dispatch"
@@ -9,6 +9,8 @@ type: feature
 parallel: safe
 created_by: agent
 surface: tests/ (a guard over every Horus systemd-unit writer in horus/schedule.py)
+shipped_pr: 341
+shipped_sha: ba658b2be777961ebb8181fb81869f37c81efd2c
 ---
 
 # systemd-unit-absolute-execstart-guard — one test over all unit writers

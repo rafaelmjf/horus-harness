@@ -38,3 +38,11 @@ schema/UI churn until the provider behavior stabilizes.
 
 - 2026-07-16 — Deferred while upstream behavior is unsettled. The owner recognizes
   the current primary-window reading and does not need an urgent cosmetic correction.
+- 2026-07-19 — Dispatched in the `away-batch-3` drill (codex-personal). The worker
+  implemented a full 9-file neutral-label contract change, but (a) it never
+  delivered — the codex dispatch was armed with a network-off sandbox posture, see
+  `codex-delivery-dispatch-needs-full-auto` — and (b) it acted against this card's
+  own guidance (no evidence upstream stabilized; still reactive churn). **Not
+  adopted; card stays deferred.** Diff preserved out-of-band this session for the
+  record. This card was a poor pick for autonomous dispatch precisely because it is
+  a watch/deferred card, not a ready one.
