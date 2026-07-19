@@ -1,8 +1,8 @@
 """`.horus/backlog/` card-per-file backlog: parsing, claim, and ship provenance.
 
 Cards are self-contained Markdown files with simple frontmatter (`status`,
-`priority`, `tier`, `created`). This module adds two OPTIONAL fields read the
-same way:
+`priority`, `tier`, `created`). Two optional execution-safety fields are read
+the same way:
 
 - `parallel: safe | exclusive` — human-authored intent. `exclusive` means this
   card must not run concurrently with any other in-progress card.
@@ -26,6 +26,10 @@ claim-time check + display), not a scheduler — no daemon, no auto-routing.
   contents — reviews are for humans and agents to read, not a schema — and the
   lingering-done hygiene scan skips this section so a review saying
   "DONE looks wrong" or quoting a `[x]` checklist can't flag the card.
+- `readiness: ready | shaping | gated | deferred` is orthogonal to lifecycle
+  status. Non-Ready cards carry `readiness_reason`; Ready cards alone carry
+  `autonomy: eligible | attended`. Missing or malformed readiness is
+  Unclassified and never safe for autonomous scheduling.
 """
 
 from __future__ import annotations
@@ -61,6 +65,53 @@ DEFAULT_TYPE = "task"
 DEFAULT_PHASE = "converge"  # product work; explore cards opt in with `phase: explore`
 EXPLORE_PHASE = "explore"
 
+READINESS_READY = "ready"
+READINESS_SHAPING = "shaping"
+READINESS_GATED = "gated"
+READINESS_DEFERRED = "deferred"
+READINESS_CHOICES = (
+    READINESS_READY,
+    READINESS_SHAPING,
+    READINESS_GATED,
+    READINESS_DEFERRED,
+)
+AUTONOMY_ELIGIBLE = "eligible"
+AUTONOMY_ATTENDED = "attended"
+AUTONOMY_CHOICES = (AUTONOMY_ELIGIBLE, AUTONOMY_ATTENDED)
+
+QUEUE_READY_ELIGIBLE = "ready-eligible"
+QUEUE_READY_ATTENDED = "ready-attended"
+QUEUE_SHAPING = READINESS_SHAPING
+QUEUE_GATED = READINESS_GATED
+QUEUE_DEFERRED = READINESS_DEFERRED
+QUEUE_UNCLASSIFIED = "unclassified"
+READINESS_QUEUE_ORDER = (
+    QUEUE_READY_ELIGIBLE,
+    QUEUE_READY_ATTENDED,
+    QUEUE_SHAPING,
+    QUEUE_GATED,
+    QUEUE_DEFERRED,
+    QUEUE_UNCLASSIFIED,
+)
+READINESS_QUEUE_LABELS = {
+    QUEUE_READY_ELIGIBLE: "Ready—Autonomous eligible",
+    QUEUE_READY_ATTENDED: "Ready—Attended",
+    QUEUE_SHAPING: "Shaping",
+    QUEUE_GATED: "Gated",
+    QUEUE_DEFERRED: "Deferred",
+    QUEUE_UNCLASSIFIED: "Unclassified",
+}
+
+_PRIORITY_RANK = {
+    "now": 0,
+    "next": 1,
+    "high": 2,
+    "medium": 3,
+    "low": 4,
+    "later": 5,
+    "deferred": 6,
+}
+
 _LINGERING_DONE_RE = re.compile(
     r"^\s*(?:(?:[-*]|\d+\.)\s*)?(?:\[x\]\s*)?DONE\b\s*(?:$|:|[-—])",
     re.IGNORECASE,
@@ -81,6 +132,10 @@ class Card:
     type: str  # "bug" | "feature" | "chore" | "task" — defaults to "task" if unstated
     vision_facet: str  # the `## Vision` facet this card advances ("" if unstated)
     phase: str  # "explore" | "converge" — defaults to "converge" (product work)
+    readiness: str  # ready | shaping | gated | deferred; "" = Unclassified
+    readiness_reason: str  # required for every non-Ready readiness
+    autonomy: str  # eligible | attended, required only when readiness=ready
+    last_refined: str  # optional evidence stamp; never implies readiness
     shipped_pr: str
     shipped_sha: str
     shipped: str  # legacy free-text shipped note, used only to detect unflipped drift
@@ -145,6 +200,10 @@ def _card_from_path(path: Path) -> Card:
         type=fm.get("type", "").strip().lower() or DEFAULT_TYPE,
         vision_facet=str(fm.get("vision_facet", "")).strip().strip("'\"").strip(),
         phase=str(fm.get("phase", "")).strip().lower() or DEFAULT_PHASE,
+        readiness=str(fm.get("readiness", "")).strip().lower(),
+        readiness_reason=str(fm.get("readiness_reason", "")).strip().strip("'\"").strip(),
+        autonomy=str(fm.get("autonomy", "")).strip().lower(),
+        last_refined=str(fm.get("last_refined", "")).strip(),
         shipped_pr=fm.get("shipped_pr", "").strip(),
         shipped_sha=fm.get("shipped_sha", "").strip(),
         shipped=fm.get("shipped", "").strip(),
@@ -173,6 +232,123 @@ def find_card(root: Path, name: str) -> Card | None:
         if card.name == key:
             return card
     return None
+
+
+@dataclass(frozen=True)
+class ReadinessGroup:
+    key: str
+    label: str
+    cards: tuple[Card, ...]
+
+
+def readiness_queue(card: Card) -> str:
+    """Return the canonical six-queue key for ``card``.
+
+    A Ready card with missing/invalid autonomy is Unclassified rather than being
+    guessed into either Ready queue. Invalid readiness is likewise Unclassified.
+    """
+    if card.readiness == READINESS_READY:
+        if card.autonomy == AUTONOMY_ELIGIBLE:
+            return QUEUE_READY_ELIGIBLE
+        if card.autonomy == AUTONOMY_ATTENDED:
+            return QUEUE_READY_ATTENDED
+        return QUEUE_UNCLASSIFIED
+    if card.readiness in (READINESS_SHAPING, READINESS_GATED, READINESS_DEFERRED):
+        return card.readiness
+    return QUEUE_UNCLASSIFIED
+
+
+def readiness_label(card: Card) -> str:
+    return READINESS_QUEUE_LABELS[readiness_queue(card)]
+
+
+def readiness_sort_key(card: Card) -> tuple[int, int, str, str]:
+    queue = readiness_queue(card)
+    return (
+        READINESS_QUEUE_ORDER.index(queue),
+        _PRIORITY_RANK.get(card.priority, len(_PRIORITY_RANK)),
+        card.priority,
+        card.name,
+    )
+
+
+def readiness_groups(cards: list[Card] | tuple[Card, ...]) -> tuple[ReadinessGroup, ...]:
+    """All six queues, including empty ones, in canonical execution order."""
+    grouped: dict[str, list[Card]] = {key: [] for key in READINESS_QUEUE_ORDER}
+    for card in cards:
+        grouped[readiness_queue(card)].append(card)
+    return tuple(
+        ReadinessGroup(
+            key=key,
+            label=READINESS_QUEUE_LABELS[key],
+            cards=tuple(sorted(grouped[key], key=readiness_sort_key)),
+        )
+        for key in READINESS_QUEUE_ORDER
+    )
+
+
+def readiness_counts(cards: list[Card] | tuple[Card, ...]) -> dict[str, int]:
+    return {group.key: len(group.cards) for group in readiness_groups(cards)}
+
+
+def autonomy_block_reason(card: Card) -> str:
+    """Empty only for Ready—Eligible; otherwise an actionable refusal reason."""
+    queue = readiness_queue(card)
+    if queue == QUEUE_READY_ELIGIBLE:
+        return ""
+    if queue == QUEUE_UNCLASSIFIED:
+        if card.readiness == READINESS_READY:
+            return "Ready card has missing or invalid autonomy; run backlog-refine"
+        if card.readiness:
+            return f"invalid readiness '{card.readiness}'; run backlog-refine"
+        return "Unclassified card; run backlog-refine before autonomous scheduling"
+    if queue == QUEUE_READY_ATTENDED:
+        return "Ready—Attended requires owner presence"
+    reason = card.readiness_reason or "missing readiness_reason; run backlog-refine"
+    return f"{READINESS_QUEUE_LABELS[queue]} — {reason}"
+
+
+def is_autonomous_candidate(card: Card) -> bool:
+    return autonomy_block_reason(card) == ""
+
+
+def readiness_findings(card: Card) -> list[Finding]:
+    """Warnings for malformed readiness combinations; never infer a repair."""
+    findings: list[Finding] = []
+    if not card.readiness:
+        findings.append(Finding(
+            "warn",
+            f"backlog card '{card.name}' is Unclassified — run backlog-refine before scheduling",
+        ))
+        return findings
+    if card.readiness not in READINESS_CHOICES:
+        findings.append(Finding(
+            "warn",
+            f"backlog card '{card.name}' has invalid readiness '{card.readiness}' — "
+            f"expected {'|'.join(READINESS_CHOICES)}",
+        ))
+        return findings
+    if card.readiness == READINESS_READY:
+        if card.autonomy not in AUTONOMY_CHOICES:
+            shown = card.autonomy or "missing"
+            findings.append(Finding(
+                "warn",
+                f"backlog card '{card.name}' is Ready with {shown} autonomy — "
+                f"expected {'|'.join(AUTONOMY_CHOICES)}",
+            ))
+    else:
+        if not card.readiness_reason:
+            findings.append(Finding(
+                "warn",
+                f"backlog card '{card.name}' is {card.readiness} without readiness_reason",
+            ))
+        if card.autonomy:
+            findings.append(Finding(
+                "warn",
+                f"backlog card '{card.name}' is {card.readiness} but carries autonomy — "
+                "autonomy belongs only on Ready cards",
+            ))
+    return findings
 
 
 def _reviews_span(lines: list[str]) -> tuple[int, int] | None:
@@ -204,6 +380,7 @@ def hygiene_findings(root: Path) -> list[Finding]:
     """Report card lifecycle drift for consolidate and the recurring close gate."""
     findings: list[Finding] = []
     for card in load_cards(root):
+        findings.extend(readiness_findings(card))
         body = frontmatter.parse(card.path.read_text(encoding="utf-8")).body
         # Review entries are free text — a reviewer writing "DONE" or quoting a
         # checked item must not read as lifecycle drift of the card itself.

@@ -549,6 +549,27 @@ def test_consolidate_v3_clean_prd_has_no_warnings(tmp_path):
     assert any(f.level == "ok" for f in findings)
 
 
+def test_consolidate_v3_reports_canonical_readiness_counts(tmp_path):
+    hdir = _mk_prd_v3(tmp_path)
+    bdir = hdir / "backlog"
+    bdir.mkdir()
+    (bdir / "ready.md").write_text(
+        "---\nstatus: open\nreadiness: ready\nautonomy: eligible\n---\n# Ready\n",
+        encoding="utf-8",
+    )
+    (bdir / "gated.md").write_text(
+        "---\nstatus: open\nreadiness: gated\nreadiness_reason: wait\n---\n# Gated\n",
+        encoding="utf-8",
+    )
+
+    messages = [finding.message for finding in routines.consolidate_signals(tmp_path)]
+    readiness = next(message for message in messages if message.startswith("backlog readiness:"))
+
+    assert "Ready—Autonomous eligible (1)" in readiness
+    assert "Gated (1)" in readiness
+    assert "Unclassified (0)" in readiness
+
+
 def test_consolidate_v3_no_lane_routing_warnings(tmp_path):
     # A v3 project never gets six-lane warnings, even though this PRD would trip
     # plenty of v2 lane checks if it were mistakenly run through that path.
@@ -801,7 +822,7 @@ def test_convergence_exempts_explore_cards(tmp_path):
     _facet_card(hdir, "poc", phase="explore")  # no facet, but exploratory
     findings = routines.consolidate_signals(tmp_path)
     warns = [f.message for f in findings if f.level == "warn"]
-    assert not any("poc" in m for m in warns)
+    assert not any("poc" in m and "convergence" in m for m in warns)
     msgs = " ".join(f.message for f in findings)
     assert "exploratory" in msgs and "poc" in msgs
 

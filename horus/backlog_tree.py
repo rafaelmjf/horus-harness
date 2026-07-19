@@ -28,24 +28,15 @@ from pathlib import Path
 
 from horus import backlog, frontmatter
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 BRANCH_FIELD = "branch"
-
-# Same urgency ladder `horus/fleet_backlog.py` uses, duplicated locally (small
-# and private on both sides) rather than importing a sibling module's
-# underscore-prefixed helper across an unrelated projection boundary.
-_PRIORITY_RANK = {"now": 0, "next": 1, "high": 2, "medium": 3, "low": 4, "later": 5, "deferred": 6}
 
 _CONVERGED_WHEN_RE = re.compile(r"converged\s+when\s*:\s*(.+)", re.IGNORECASE)
 
 
-def _priority_sort_key(priority: str) -> tuple[int, str]:
-    return (_PRIORITY_RANK.get(priority, len(_PRIORITY_RANK)), priority)
-
-
 def _card_sort_key(card: backlog.Card) -> tuple:
-    return (_priority_sort_key(card.priority), card.name)
+    return backlog.readiness_sort_key(card)
 
 
 @dataclass(frozen=True)
@@ -67,6 +58,7 @@ class FacetGroup:
 class Tree:
     branches: tuple[BranchGroup, ...] = field(default_factory=tuple)
     facets: tuple[FacetGroup, ...] = field(default_factory=tuple)
+    readiness: tuple[backlog.ReadinessGroup, ...] = field(default_factory=tuple)
 
 
 def _body_text(path: Path) -> str:
@@ -148,7 +140,11 @@ def build_tree(root: Path) -> Tree:
         for facet, cards_ in sorted(by_facet.items(), key=lambda kv: (kv[0] == "", kv[0]))
     ]
 
-    return Tree(branches=tuple(branches), facets=tuple(facets))
+    return Tree(
+        branches=tuple(branches),
+        facets=tuple(facets),
+        readiness=backlog.readiness_groups(cards),
+    )
 
 
 def _card_to_dict(card: backlog.Card) -> dict:
@@ -159,12 +155,24 @@ def _card_to_dict(card: backlog.Card) -> dict:
         "priority": card.priority,
         "phase": card.phase,
         "tier": card.tier,
+        "readiness": card.readiness or "unclassified",
+        "readiness_queue": backlog.readiness_queue(card),
+        "readiness_reason": card.readiness_reason,
+        "autonomy": card.autonomy,
     }
 
 
 def to_dict(tree: Tree) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
+        "readiness": [
+            {
+                "key": group.key,
+                "label": group.label,
+                "count": len(group.cards),
+            }
+            for group in tree.readiness
+        ],
         "branches": [
             {
                 "branch": group.branch,
@@ -193,14 +201,24 @@ def render_json(tree: Tree) -> str:
 
 
 def _format_child(card: backlog.Card) -> str:
-    return f"    {card.name}  [{card.status}]  priority={card.priority or '-'} phase={card.phase} tier={card.tier or '-'}"
+    line = (
+        f"    {card.name}  [{card.status}]  priority={card.priority or '-'} "
+        f"phase={card.phase} tier={card.tier or '-'} readiness={backlog.readiness_label(card)}"
+    )
+    if card.readiness_reason:
+        line += f" reason={card.readiness_reason}"
+    return line
 
 
 def render_text(tree: Tree) -> str:
     """Human-readable indented tree: one section per branch umbrella, then one
     per facet — the phone-width TUI renders the same projection, just with
     collapse/expand instead of always-expanded text."""
-    lines: list[str] = []
+    if not any(group.cards for group in tree.readiness):
+        return "No open backlog cards.\n"
+    lines: list[str] = ["Readiness queues"]
+    lines.extend(f"  {group.label}: {len(group.cards)}" for group in tree.readiness)
+    lines.append("")
     for group in tree.branches:
         note = "" if group.resolved else " (no matching umbrella card)"
         lines.append(f"{group.title} ({len(group.children)} open){note}")
@@ -215,8 +233,6 @@ def render_text(tree: Tree) -> str:
         for card in group.children:
             lines.append(_format_child(card))
         lines.append("")
-    if not lines:
-        return "No open backlog cards.\n"
     return "\n".join(lines).rstrip("\n") + "\n"
 
 

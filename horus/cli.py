@@ -2591,14 +2591,29 @@ def cmd_backlog(args: argparse.Namespace) -> int:
             scope = f" with type={args.type}" if args.type else ""
             print(f"No cards in {HORUS_DIR}/{backlog.BACKLOG_DIR}/{scope}.")
             return 0
-        for c in cards:
-            parallel = c.parallel or "unstated"
-            surface = ", ".join(c.surface) if c.surface else "unverified"
-            print(f"{c.name}  [{c.status}]  priority={c.priority or '-'} tier={c.tier or '-'} type={c.type} parallel={parallel}")
-            print(f"    {c.title}")
-            print(f"    surface: {surface}")
-            if c.shipped_pr or c.shipped_sha:
-                print(f"    shipped: pr={c.shipped_pr or '-'} sha={c.shipped_sha or '-'}")
+        for group in backlog.readiness_groups(cards):
+            print(f"{group.label} ({len(group.cards)})")
+            for c in group.cards:
+                parallel = c.parallel or "unstated"
+                surface = ", ".join(c.surface) if c.surface else "unverified"
+                print(
+                    f"  {c.name}  [{c.status}]  priority={c.priority or '-'} "
+                    f"tier={c.tier or '-'} type={c.type} parallel={parallel}"
+                )
+                print(f"      {c.title}")
+                if c.readiness_reason:
+                    print(f"      reason: {c.readiness_reason}")
+                print(f"      surface: {surface}")
+                if c.shipped_pr or c.shipped_sha:
+                    print(f"      shipped: pr={c.shipped_pr or '-'} sha={c.shipped_sha or '-'}")
+        if any(
+            backlog.readiness_queue(card) == backlog.QUEUE_UNCLASSIFIED
+            for card in cards
+        ):
+            print(
+                "\nUnclassified cards stay unscheduled. Run the owner-gated "
+                "backlog-refine flow to propose classifications; this command never rewrites cards."
+            )
         return 0
 
     if args.backlog_cmd == "migrate":

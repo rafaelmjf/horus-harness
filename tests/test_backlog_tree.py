@@ -19,6 +19,9 @@ def _mk_card(
     phase="",
     branch="",
     vision_facet="",
+    readiness="ready",
+    readiness_reason="",
+    autonomy="eligible",
     body="",
     title="",
 ):
@@ -35,6 +38,12 @@ def _mk_card(
         lines.append(f"branch: {branch}")
     if vision_facet:
         lines.append(f'vision_facet: "{vision_facet}"')
+    if readiness:
+        lines.append(f"readiness: {readiness}")
+    if readiness_reason:
+        lines.append(f'readiness_reason: "{readiness_reason}"')
+    if autonomy:
+        lines.append(f"autonomy: {autonomy}")
     lines.append("created: 2026-07-17")
     lines.append("---")
     heading = title or name.replace("-", " ").title()
@@ -150,7 +159,9 @@ def test_render_json_carries_schema_and_child_fields(tmp_path):
     tree = backlog_tree.build_tree(tmp_path)
     data = json.loads(backlog_tree.render_json(tree))
 
-    assert data["schema_version"] == 1
+    assert data["schema_version"] == 2
+    assert [group["key"] for group in data["readiness"]] == list(backlog_tree.backlog.READINESS_QUEUE_ORDER)
+    assert data["readiness"][0]["count"] == 2
     branch = data["branches"][0]
     assert branch["branch"] == "umbrella-a"
     assert branch["count"] == 1
@@ -162,6 +173,10 @@ def test_render_json_carries_schema_and_child_fields(tmp_path):
         "priority": "high",
         "phase": "explore",
         "tier": "opus",
+        "readiness": "ready",
+        "readiness_queue": "ready-eligible",
+        "readiness_reason": "",
+        "autonomy": "eligible",
     }
 
 
@@ -181,6 +196,24 @@ def test_render_text_shows_branch_and_facet_sections(tmp_path):
 def test_render_text_no_cards_at_all(tmp_path):
     (tmp_path / ".horus" / "backlog").mkdir(parents=True)
     assert backlog_tree.render_text(backlog_tree.build_tree(tmp_path)) == "No open backlog cards.\n"
+
+
+def test_render_text_reports_all_readiness_queues_and_reason(tmp_path):
+    _mk_card(tmp_path, "eligible", readiness="ready", autonomy="eligible")
+    _mk_card(
+        tmp_path,
+        "blocked",
+        readiness="gated",
+        readiness_reason="await upstream",
+        autonomy="",
+    )
+
+    text = backlog_tree.render_text(backlog_tree.build_tree(tmp_path))
+
+    for label in backlog_tree.backlog.READINESS_QUEUE_LABELS.values():
+        assert label in text
+    assert "readiness=Gated" in text
+    assert "reason=await upstream" in text
 
 
 # ---------------------------------------------------------------------------

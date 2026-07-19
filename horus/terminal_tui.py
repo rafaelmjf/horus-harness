@@ -1004,6 +1004,23 @@ class TerminalUI:
         if self.screen == "projects" and self.application.output.get_size().columns >= 96:
             return self._wide_home_text(self.application.output.get_size().columns)
         lines: StyleAndTextTuples = []
+        if self.screen == "backlog":
+            counts = backlog.readiness_counts(self.project_cards.get(self.project, []))
+            lines.extend([
+                ("class:section", "\n  Readiness\n"),
+                (
+                    "class:muted",
+                    f"  Ready—Autonomous eligible {counts[backlog.QUEUE_READY_ELIGIBLE]} · "
+                    f"Ready—Attended {counts[backlog.QUEUE_READY_ATTENDED]}\n",
+                ),
+                (
+                    "class:muted",
+                    f"  Shaping {counts[backlog.QUEUE_SHAPING]} · "
+                    f"Gated {counts[backlog.QUEUE_GATED]} · "
+                    f"Deferred {counts[backlog.QUEUE_DEFERRED]} · "
+                    f"Unclassified {counts[backlog.QUEUE_UNCLASSIFIED]}\n",
+                ),
+            ])
         if self.screen == "projects":
             lines.extend(self._account_summary_text())
             lines.extend(self._remote_catalog_notes_text())
@@ -1100,7 +1117,16 @@ class TerminalUI:
             elif kind == "backlog":
                 card_count, bug_count = self.project_metrics.get(self.project, (0, 0))
                 lines.append((style, f"\n {marker} Backlog\n"))
-                lines.append(("class:muted", f"     {card_count} cards · {bug_count} bugs\n"))
+                cards = self.project_cards.get(self.project, [])
+                counts = backlog.readiness_counts(cards)
+                ready = counts[backlog.QUEUE_READY_ELIGIBLE] + counts[backlog.QUEUE_READY_ATTENDED]
+                lines.append((
+                    "class:muted",
+                    f"     {card_count} cards · {bug_count} bugs · {ready} ready · "
+                    f"{counts[backlog.QUEUE_SHAPING]} shaping · "
+                    f"{counts[backlog.QUEUE_GATED]} gated · "
+                    f"{counts[backlog.QUEUE_DEFERRED]} deferred\n",
+                ))
             elif kind == "capabilities":
                 project = (self.capabilities_record or {}).get("project", {})
                 records = project.get("capabilities", []) if isinstance(project, dict) else []
@@ -1156,10 +1182,13 @@ class TerminalUI:
                 lines.append((style, f"\n{connector}{marker} "))
                 lines.append(_priority_dot(card.priority))
                 lines.append((style, f"[{card.type}{status}] {card.title}{suffix}\n"))
+                indent = "        " if under_branch else "     "
+                lines.append(("class:muted", f"{indent}{backlog.readiness_label(card)}\n"))
+                if card.readiness_reason:
+                    lines.append(("class:muted", f"{indent}{card.readiness_reason}\n"))
                 # The classic priority sub-line, unless priority was picked as an
                 # inline field — then it's already on the row above.
                 if card.priority and "priority" not in self.backlog_fields:
-                    indent = "        " if under_branch else "     "
                     lines.append(("class:muted", f"{indent}priority {card.priority}\n"))
             elif kind == "branch":
                 group = value
@@ -2141,9 +2170,6 @@ def _projection_curator_prompt(records: list[tuple[Path, dict]]) -> str:
     )
 
 
-_PRIORITY_RANK = {"now": 0, "next": 1, "high": 2, "medium": 3, "low": 4, "later": 5, "deferred": 6}
-
-
 _PRIORITY_STYLE = {
     "now": "class:prio-high", "high": "class:prio-high", "urgent": "class:prio-high",
     "medium": "class:prio-medium", "med": "class:prio-medium",
@@ -2195,7 +2221,7 @@ def _open_cards(root: Path) -> list[backlog.Card]:
         cards = [card for card in backlog.load_cards(root) if card.status not in {"done", "shipped"}]
     except (OSError, ValueError):
         return []
-    return sorted(cards, key=lambda card: (_PRIORITY_RANK.get(card.priority, 99), card.title.casefold()))
+    return sorted(cards, key=backlog.readiness_sort_key)
 
 
 def _project_tree(root: Path) -> backlog_tree.Tree:
