@@ -69,6 +69,7 @@ def init_project(
     with_skills: bool = True,
     with_hooks: bool = True,
     skill_targets: tuple[str, ...] = ("claude", "codex"),
+    ci: bool = False,
 ) -> list[Action]:
     actions: list[Action] = []
     today = date.today().isoformat()
@@ -195,6 +196,9 @@ def init_project(
                 ha = install(project_root)
                 actions.append(Action(ha.status, ha.message))
 
+    if ci:
+        actions.append(_ensure_ci_workflow(project_root))
+
     if config.register_project(project_root):
         actions.append(Action("updated", "registered project in ~/.horus/config.toml"))
     else:
@@ -214,6 +218,52 @@ def _ensure_backlog_dir(hdir: Path) -> Action:
         return Action("exists", f"{HORUS_DIR}/{backlog.BACKLOG_DIR}/ tracked and blank")
     marker.write_text("", encoding="utf-8")
     return Action("created", f"created blank {HORUS_DIR}/{backlog.BACKLOG_DIR}/")
+
+
+CI_WORKFLOW_PATH = Path(".github/workflows/horus-gate.yml")
+
+
+def _repo_uses_lfs(project_root: Path) -> bool:
+    """Best-effort, scaffold-time-only detection: a `.gitattributes` declaring an
+    `lfs` filter is the standard signal a repo tracks Git LFS objects."""
+    gitattributes = project_root / ".gitattributes"
+    if not gitattributes.is_file():
+        return False
+    try:
+        text = gitattributes.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return "filter=lfs" in text
+
+
+def _repo_has_make_test(project_root: Path) -> bool:
+    """A `Makefile` with a `test` target is the one generic, language-agnostic
+    build/test signal this scaffold looks for (see card boundary: no per-language
+    archetypes). Absent that, the gate stays doctor-only and still goes green."""
+    makefile = project_root / "Makefile"
+    if not makefile.is_file():
+        return False
+    try:
+        text = makefile.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return any(line.startswith("test:") for line in text.splitlines())
+
+
+def _ensure_ci_workflow(project_root: Path) -> Action:
+    """`horus init --ci`: scaffold a minimal, opt-in CI gate the repo owns outright.
+    Never clobbers an existing workflow file at the same path; existing repos and
+    repos that don't pass --ci are untouched."""
+    path = project_root / CI_WORKFLOW_PATH
+    if path.exists():
+        return Action("exists", f"{CI_WORKFLOW_PATH} already present")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = templates.ci_workflow_yaml(
+        has_lfs=_repo_uses_lfs(project_root),
+        has_test_target=_repo_has_make_test(project_root),
+    )
+    path.write_text(content, encoding="utf-8")
+    return Action("created", f"created {CI_WORKFLOW_PATH}")
 
 
 def _ensure_gitignore(horus_dir_path: Path) -> Action:

@@ -125,6 +125,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         with_skills=not args.no_skills,
         with_hooks=not args.no_hooks,
         skill_targets=_skill_targets(args.skill_target),
+        ci=args.ci,
     )
     for a in actions:
         print(f"  [{a.status}] {a.message}")
@@ -4126,6 +4127,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("all", "claude", "codex"),
         default="all",
         help="which agent skill target to scaffold (default: all)",
+    )
+    p_init.add_argument(
+        "--ci",
+        action="store_true",
+        help="scaffold a minimal, opt-in CI gate (.github/workflows/horus-gate.yml): "
+        "horus doctor project, git lfs fsck when this repo uses LFS, and a `make test` "
+        "step when the repo declares one",
     )
     p_init.set_defaults(func=cmd_init)
 
