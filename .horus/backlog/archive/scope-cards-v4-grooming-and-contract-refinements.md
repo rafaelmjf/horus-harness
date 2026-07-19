@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-19
 last_refined: 2026-07-19
@@ -10,6 +10,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/skills.py (_SCOPE_CARDS_SKILL, _PATHFINDER_SKILL), tests/test_skills.py, .claude/skills + .agents/skills projections
+shipped_pr: 354
+shipped_sha: 3c2e4f97e4c950ca7de372ecbe4602e9b826ecc0
 ---
 
 # scope-cards-v4-grooming-and-contract-refinements — what the first live run taught
