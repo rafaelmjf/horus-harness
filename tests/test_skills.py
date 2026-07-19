@@ -192,11 +192,22 @@ def test_roadmap_branches_skill_registered_divergence_tree():
 
 def test_scope_cards_skill_registered_self_sufficient():
     sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
-    assert sc.version == 4
-    # v4 (first live grooming run, 2026-07-19): standalone grooming mode is a
-    # specified input shape, not an improvised one.
+    assert sc.version == 5
+    # v5 (full live refinement run, 2026-07-19): grooming starts from the
+    # backlog's product picture and card content, not a frontmatter lint report.
     assert "Grooming an existing backlog" in sc.content
-    assert "never batch judgment calls" in sc.content
+    assert "Read the CONTENT of every" in sc.content
+    assert "Show the picture before asking decisions" in sc.content
+    assert "Ready (`status: open`" in sc.content
+    assert "Judge first; audit second" in sc.content
+    assert "Escalate only pending decisions" in sc.content
+    assert "free-text alternative" in sc.content
+    assert "last_refined: YYYY-MM-DD" in sc.content
+    assert 'deferred: "<reason and un-deferral' in sc.content
+    # Phase-appropriate curation covers converge/explore/umbrella cards even
+    # though only the first kind is normally dispatchable.
+    assert "cheap\n   PoC plus an adopt/promote/drop verdict" in sc.content
+    assert "ordered children, and a convergence criterion" in sc.content
     # Contract exceptions the live backlog proved: explore cards may substitute
     # a branch: stamp for vision_facet; umbrellas carry a convergence criterion.
     assert "may\nsubstitute a `branch:" in sc.content or "may substitute a `branch:" in sc.content
