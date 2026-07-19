@@ -1969,175 +1969,237 @@ _SCOPE_CARDS_SKILL = """\
 ---
 name: scope-cards
 description: >-
-  Populate a chosen roadmap branch (or any approved direction) into fully
-  SELF-SUFFICIENT backlog card drafts — frontmatter plus context, concrete how,
-  acceptance, and non-goals — so a fresh agent session can pick any card up and
-  start with the same understanding, needing nothing from the originating
-  conversation. Step 4 of the pathfinder flow, also standalone ("scope this
-  card", "populate cards for this direction"). Owns the dispatchable-card
-  contract — the single authority for what a backlog card must carry, referenced
-  (never restated) by the cockpit ready-gate. Also use standalone when the
-  direction holds but the existing backlog needs grooming, refinement, readiness
-  review, or disposition. Draft the branch's implied Vision facet edits and the
-  demote/defer/retire diffs for existing cards the branch pushed back on.
-  Advisory: present every decision-bearing draft first; the owner approves per
-  item; only approved items are written.
+  Turn an owner-approved roadmap branch or equivalent direction into aligned,
+  high-level backlog drafts that preserve enough context for a later refinement
+  session. Use after `roadmap-branches`, or standalone when the owner says
+  "scope this direction", "draft cards for this branch", or "turn this vision
+  branch into cards". This is the SHAPING step, not final readiness: it never
+  makes cards dispatchable or grooms an existing backlog. Advisory and
+  owner-gated; only approved drafts and Vision/card diffs are written.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
-# scope-cards — from a chosen branch to a fresh-agent-ready backlog
+# scope-cards — from a chosen branch to aligned shaping drafts
 
 You are transcribing an approved direction into cards that pass one bar:
 
-> **The self-sufficiency test: a fresh agent session, given only `PRD.md` and this
-> card, can start the work correctly — same understanding, no access to the
-> conversation that produced it.**
+> **The shaping test: a fresh owner+agent refinement session, given only
+> `PRD.md`, the source receipt/vision branch, and this draft, understands why the
+> item exists, what outcome it seeks, its broad boundaries, and which decisions
+> remain — without the originating conversation.**
 
-The curated backlog is the interface between interactive curation (owner + LLM,
-here) and autonomous execution (the away-mode worker/supervisor loop, which only
-CONSUMES cards — it never curates). A card that will ever be dispatched unattended
-must therefore carry not just enough to *start* but enough to be *finished and
-independently verified* — that is what the contract below encodes.
+This skill shapes a branch; `backlog-refine` later decides readiness and owns the
+single execution-ready card contract. Do not collapse those jobs back together.
 
 ## Input
 
-One chosen branch from a `roadmap-branches` receipt (or an owner-approved
-direction of equivalent depth). Each item needs why / how / suspected weak points /
-non-goals already argued. **If an item arrives thin, do not silently invent the
-missing depth** — flag it and resolve it with the owner (or send it back through
-`roadmap-branches`) before drafting its card.
+One chosen branch from a `roadmap-branches` receipt, a raw `vision-branch-*` card,
+or an owner-approved direction of equivalent depth. Read the branch thesis,
+position/evidence, numbered roadmap, convergence criterion, Vision diffs, and
+push-back verdicts. If the direction itself is ambiguous, do not silently invent
+it: show the missing decision and resolve it with the owner or route it back to
+`roadmap-branches`.
 
-## Grooming an existing backlog (standalone mode)
+## Output — the shaping-draft contract
 
-The other input shape: no branch, just an existing backlog whose direction holds
-(pathfinder's Step 0 triage routes polish needs here). Read the CONTENT of every
-open card, including explore children and `vision-branch-*` umbrellas; a
-frontmatter-only lint pass is not backlog refinement. Use this sequence:
+Every proposed card carries:
 
-1. **Show the picture before asking decisions.** Summarize what each Vision facet
-   and active branch is trying to achieve, then split the backlog honestly into:
-   Ready (`status: open` + no `deferred:` + dependencies met), Deferred (waiting
-   deliberately on the named trigger), and Gated (missing a decision, dependency,
-   evidence, or contract element). Keep priority as importance-when-active; never
-   use it to disguise waiting work.
-2. **Judge first; audit second.** Read why/how/acceptance/reviews and use LLM
-   judgment to decide whether each card is still valuable, correctly scoped,
-   phase-appropriate, and self-sufficient. Then run deterministic
-   frontmatter/heading checks (surface, parallel, tier vocabulary, facet/branch,
-   acceptance markers) to catch omissions and support the judgment. Sort every
-   hit into by-design vs defect using project rules; a heuristic firing is not
-   itself a finding.
-3. **Apply the bar for the card's job.** A converge card advances a named facet
-   and eventually owes supervisor-grade acceptance; an explore card owes a cheap
-   PoC plus an adopt/promote/drop verdict; an umbrella owes a current thesis,
-   ordered children, and a convergence criterion, not worker acceptance. Keep all
-   three in the pass instead of excluding non-dispatchable cards from curation.
-4. **Escalate only pending decisions.** Do not interrogate the owner about clean
-   cards or questions the evidence already settles. For each real judgment call,
-   show a compact preview: card + branch/facet goal, current disposition, your
-   recommendation and why, and the exact proposed diff. Offer concrete choices
-   plus a free-text alternative; get a separate verdict before writing it.
-   Batch only mechanical fixes with obvious values into one approval.
-5. **Write disposition as durable state.** `deferred: "<reason and un-deferral
-   trigger>"` means deliberately waiting; remove it when that trigger is met or
-   the owner reactivates the work. Set `last_refined: YYYY-MM-DD` only after the
-   card's content was reviewed in this pass, including clean/no-change cards —
-   never from a field audit alone. Record owner demote/defer/retire/rescope
-   verdicts in the card's `## Reviews` as well as its frontmatter/body diff.
+- frontmatter sufficient to place it: `status: open`, `priority`, `created`,
+  `created_by`, `phase`, `type`, the named `vision_facet` or speculative
+  `branch`, and `readiness: shaping` with a concrete `readiness_reason` naming
+  the unresolved refinement work;
+- **Why** — the branch reasoning and market/own-use position, not a generic title;
+- **Intended outcome** — what would be different if the item proved worthwhile;
+- **Broad boundaries** — the likely shape plus explicit early non-goals, without
+  pretending the implementation protocol is decided;
+- **Open decisions** — questions `backlog-refine` must settle before Ready;
+- **Source** — receipt path/branch name or raw owner vision-branch card.
 
-The per-item owner gate and never-silently-invent rule remain unchanged.
-
-## The dispatchable-card contract (single authority — consumers reference, never restate)
-
-This section IS the contract for what a backlog card carries. The cockpit
-dispatch contract's ready-gate judges candidates against it; a backlog grooming
-pass refines existing cards toward it. When the contract changes, it changes here
-once and propagates — do not fork partial copies into consumer skills.
-
-Frontmatter: `status: open`, `priority`, `tier` (the closed vendor-neutral set —
-`low | medium | high | frontier`; model-named values are legacy aliases the
-tooling normalizes, never coin new ones), `vision_facet` (matched to a
-`## Vision` table facet — **required for `converge` cards; `explore` cards may
-substitute a `branch: <umbrella>` stamp** until the direction earns a facet or
-dies, per the Vision's breathing rule), `phase` (`converge` default; `explore`
-for divergent bets), `created`, `created_by`, and the two collision stamps the
-dispatch machinery reasons with:
-
-- `surface: <comma-separated globs>` — the code areas the card touches
-  (e.g. `surface: horus/dashboard.py, horus/pty_*`). Without it the collision
-  check cannot clear concurrent work — it warns instead of reasoning — so a card
-  born without `surface` is born un-dispatchable. Scoping time is when the owner
-  is present to answer "what does this touch"; capture the best-effort answer now
-  rather than leaving it for a dispatch gate with no human in the room.
-- `parallel: safe | exclusive` — whether the card tolerates in-flight siblings.
-
-Body:
-
-- **Why** — the context paragraph carrying the branch's reasoning, INCLUDING the
-  market-position line ("exists but misses X / we have Y but miss Z"), so the card
-  survives without the receipt.
-- **How** — the concrete protocol or first step, specific enough to begin from.
-- **Acceptance** — written FOR THE SUPERVISOR, who never trusts a worker
-  self-report: the deterministic gate (the test/CI check that must go green on
-  the exact SHA) PLUS one **live probe** of the changed surface — the command to
-  run or the surface to poke, and what correct looks like. A card whose probe
-  must be invented at verify time forces that invention on an unattended session
-  with no owner present; name it now. `phase: explore` cards instead carry an
-  exit line: the cheap PoC and the explicit verdict it must end in (adopt /
-  promote / drop — dying cheap is a valid success). `vision-branch-*` umbrella
-  cards carry a `## Convergence criterion` instead of acceptance — they are
-  judged as a unit, never dispatched. **Probe-retrofit policy:** only NEW cards
-  owe a probe at scoping time; an existing card gets its probe named when it is
-  armed for dispatch (the ready-gate checks) or next substantively edited —
-  blanket-retrofitting probes onto cards nobody will dispatch is ceremony.
-- **Non-goals** — what this card deliberately does not do.
-- **Source** — the receipt path + branch name.
+Do NOT invent final `tier`, `surface`, `parallel`, `autonomy`, dependency order,
+implementation steps, supervisor acceptance, or live probes. Preserve a field
+only when the source already decides it; otherwise leave it for `backlog-refine`.
+An umbrella remains a thin unit-level thesis with ordered proposed children and a
+convergence criterion; it is not an execution card.
 
 **Second-order items are never pre-invented:** when work depends on findings that
-do not exist yet (e.g. gap cards a verification probe will produce), scope the
-probe card and state "each finding becomes its own card" —
-do not fabricate the findings.
+do not exist yet, shape the evidence-gathering item and state that approved
+findings may become later drafts. Do not fabricate findings or their fixes.
 
-## Alongside the new cards, draft the branch's edits
+## Alongside the shaping drafts, propose the branch's edits
 
 - **Existing-card diffs** — the demote / defer / retire push-back the branch made,
   as explicit per-card proposals (field change or archival, with the reason).
 - **Vision facet diff** — exact replacement definition-of-done text per touched
   facet (add / rename / rescope / retire), never a wholesale table rewrite.
 - **Vision-branch umbrella** — when the direction spans multiple cards and should
-  be judged as a unit (every `explore` direction; any branch the owner may later
-  promote or drop whole), draft a thin `vision-branch-*` umbrella card (thesis,
-  exists-vs-gaps map, ordered children, convergence criterion) and stamp each
-  child `branch: <umbrella-name>`, per the PRD structure contract. Keep the
-  umbrella thin — agents-first, minimal overhead; never mirror child status
-  into it.
+  be judged as a unit, draft or refresh a thin `vision-branch-*` umbrella (thesis,
+  exists-vs-gaps map, proposed child order, convergence criterion) and stamp each
+  child `branch: <umbrella-name>`. Never mirror child status into the umbrella.
 
 ## Gate, then write
 
-Present ALL drafts — new cards, existing-card diffs, Vision edits — as concrete
-options plus a free-text alternative, and let the owner
-approve, amend, or drop each item individually. Only then write the approved items: new cards as files
-under `.horus/backlog/`, facet edits into `## Vision`, existing-card changes in
-place. Owner rejections and rescopes of EXISTING cards are written into that
-card's `## Reviews` at decision time — a verdict that lives only in a receipt or
-the conversation does not bind future planning runs (calibration 2026-07-17).
-Anything not approved stays unwritten; say so.
+Present all shaping drafts, existing-card diffs, and Vision edits as concrete
+options plus a free-text alternative. Let the owner approve, amend, or drop each
+item individually. Only then write approved items. Owner rejections and rescopes
+of existing cards land in that card's `## Reviews`; a verdict that lives only in
+conversation does not bind future planning. Anything unapproved stays unwritten.
 
 ## Deliberately omit
 
-- No implementation, no dispatch, no execution planning (`execution-decision` owns
-  the execute-vs-delegate call; `horus-execution` owns phase plans).
+- No backlog-wide grooming or Ready verdict — invoke `backlog-refine`.
+- No implementation, dispatch, or execution planning.
 - No new receipt — the branch receipt plus the written cards are the trace.
-- No priority invention: inherit the branch order; the owner sets priorities.
+- No detailed fields invented merely to make a shaping draft look complete.
 
 ## v2 six-lane projects (fallback)
 
-No card files — each approved item becomes a `roadmap.md` entry carrying the same
-depth inline (why / how / acceptance / non-goals, one compact block per item), and
-Vision edits go to `project.md` prose at the owner's discretion, following that
-project's six-lane closure rules. The self-sufficiency bar and the per-item owner
-gate are unchanged.
+No card files — each approved item becomes a high-level `roadmap.md` entry carrying
+the same shaping context inline, and Vision edits go to `project.md` prose at the
+owner's discretion. `backlog-refine` later deepens selected entries under the
+six-lane project's rules. The per-item owner gate is unchanged.
+"""
+
+
+_BACKLOG_REFINE_SKILL = """\
+---
+name: backlog-refine
+description: >-
+  Refine and disposition an existing backlog with the owner when cards need
+  readiness review, concrete execution contracts, ordering, or an honest current
+  picture. Use when the owner says "refine the backlog", "groom these cards",
+  "what is actually ready", "order the backlog", or after `scope-cards` has
+  produced shaping drafts. Manual and owner-gated; never runs autonomously and
+  never silently rewrites cards.
+---
+
+<!-- horus-skill-version: 1 -->
+
+# backlog-refine — picture first, decisions second, Ready last
+
+This skill owns the **single execution-ready card contract**. It turns existing
+cards — including `scope-cards` shaping drafts — into honest Ready, Shaping,
+Gated, or Deferred state. The TUI may launch this flow later; the LLM judgment and
+owner decisions remain here.
+
+## Hard boundary
+
+- Manual only. Never invoke from an autonomous worker or scheduler.
+- Advisory first. Present every decision-bearing change and obtain the owner's
+  verdict before writing it.
+- Read card bodies, Reviews, PRD Vision/Shipped/Rules, and relevant receipts. A
+  frontmatter lint is not refinement.
+- Use LLM judgment first and deterministic checks second. A missing field may be
+  by design; a clean schema does not make a weak card valuable.
+
+## 1. Present the backlog picture before any questions
+
+Start with the literal heading **“Here is our current picture”** and include:
+
+1. the product direction in 2–3 lines;
+2. every Vision facet and active `vision-branch-*` umbrella, each with a short
+   goal/description;
+3. item counts for each facet/branch split by readiness and priority;
+4. the proposed work queues: Ready—Autonomous eligible, Ready—Attended,
+   Shaping, Gated, Deferred, and Unclassified.
+
+Do not ask card questions before this picture. Read the content of every open card,
+including umbrellas and exploratory children, before classifying the portfolio.
+
+## 2. Judge, then ask only what remains undecided
+
+For each card, decide from the evidence whether it is still valuable, aligned,
+phase-appropriate, self-sufficient for its job, and correctly dispositioned. Skip
+clean cards and questions the evidence already answers. Batch only truly mechanical
+fixes whose values are unambiguous.
+
+For every pending owner decision, present one card at a time in this strict shape:
+
+```text
+Card <N>/<decision-card-count> — <slug>
+Problem: <why the current card cannot be finalized>
+Proposed direction: <LLM recommendation and evidence>
+Current state: <readiness/priority/dependencies and relevant branch/facet>
+Decision: <one sentence naming the choice>
+```
+
+Use the harness's native structured picker when available. Offer 2–3 mutually
+exclusive choices; put the recommended choice first and mark it **(Recommended)**.
+Every option description states its exact durable consequence: fields/body changed,
+dependency or trigger recorded, queue entered, and what later unblocks it. Preserve
+the picker's free-text Other option. When no structured picker exists, render the
+same choices as `1`–`3` plus `4. Type anything`, then wait for the answer.
+
+## 3. Readiness and autonomy contract
+
+`status` remains lifecycle state. Readiness is orthogonal:
+
+```yaml
+readiness: ready | shaping | gated | deferred
+readiness_reason: "required for shaping, gated, and deferred"
+autonomy: eligible | attended  # required only when readiness: ready
+```
+
+- **Ready** — decision-complete now; a fresh agent can implement and independently
+  verify it from PRD + card. `eligible` means it may be scheduled when an approved
+  envelope authorizes it, never that it must be. `attended` means owner presence is
+  required during execution or verification.
+- **Shaping** — active owner/LLM work remains: brainstorm, research, scoping,
+  refinement, review, or an exploratory evidence pass. The reason names that next
+  action and expected disposition.
+- **Gated** — a named dependency, event, or evidence source must arrive first. The
+  reason names it; use `depends-on` as well when the gate is another card.
+- **Deferred** — deliberately inactive until an explicit trigger or owner review.
+- Missing `readiness` is **Unclassified** for compatibility. Never infer Ready and
+  never schedule it; route it through this skill. Do not auto-rewrite a repository.
+
+`phase: explore | converge` and `priority` remain orthogonal. Priority means
+importance when active. A decision-complete exploration probe may be Ready; an
+umbrella is never a scheduler execution unit.
+
+## The execution-ready card contract (single authority)
+
+A Ready card carries `status`, `priority`, `tier` (`low | medium | high |
+frontier`), `vision_facet` or an explicit speculative `branch`, `phase`, `created`,
+`created_by`, `surface`, `parallel: safe | exclusive`, `readiness: ready`, and
+`autonomy`. It also carries:
+
+- **Why** — durable context and market/own-use position;
+- **How** — concrete protocol or first implementation steps;
+- **Acceptance** — deterministic gate on the exact SHA plus a named live probe and
+  expected result; an explore probe instead names the cheapest test and its explicit
+  adopt/promote/drop verdict;
+- **Non-goals** — bounded exclusions;
+- **Source** — receipt, vision branch, owner decision, or observed gap;
+- `depends-on` and sparse `order` when sequencing is decision-bearing.
+
+Second-order findings are never fabricated. Scope the evidence-gathering probe and
+state how later findings will be carded.
+
+## 4. Apply approved state
+
+Write only approved diffs. Record consequential owner demote/defer/retire/rescope
+verdicts under `## Reviews`. Set `last_refined: YYYY-MM-DD` only after the card body
+was actually reviewed, including an approved no-change verdict. Remove obsolete
+fields rather than carrying rival readiness models.
+
+When ordering is requested, respect `depends-on`, branch grouping, priority, and
+`surface`/`parallel` collisions. Propose sparse integer `order` values with gaps of
+10; explain whenever a constraint forced a position. Unordered cards stay in the
+unsequenced pool. Ordering is owner-approved planning, never auto-routing.
+
+End with the updated picture and the exact remaining pending decisions. Do not
+dispatch, schedule, implement, or invoke pathfinder unless the product direction
+itself became the unresolved question.
+
+## v2 six-lane projects (fallback)
+
+Read `project.md`, `roadmap.md`, `features.md`, `decisions.md`, and `history.md` in
+their existing lanes. Present the same picture and interactive decisions, then
+deepen approved roadmap entries inline. The readiness words remain an advisory
+classification when the legacy roadmap has no frontmatter; do not migrate the
+project or invent card files. Owner gating and the execution-ready content bar are
+unchanged.
 """
 
 
@@ -2153,8 +2215,8 @@ description: >-
   evidence (`product-audit` where the project has one, else shipped-vs-used with
   the owner), scan the market (`market-scan`, which composes `deep-research`),
   build the divergence tree of alternative roadmaps (`roadmap-branches`), then
-  populate the chosen branch into self-sufficient cards (`scope-cards`, whose
-  dispatchable-card contract every card must meet). Works the SAME on a
+  shape the chosen branch into high-level drafts (`scope-cards`) and refine the
+  approved drafts into execution-ready cards (`backlog-refine`). Works the SAME on a
   brand-new repo and a long-running one (it scouts the route ahead and reports;
   it never builds the road). Use when the owner says "pathfinder", "kickstart",
   "re-baseline", "where should this project go next", "reset the roadmap", or
@@ -2166,13 +2228,13 @@ description: >-
   token envelope before any web work. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
 You are running the project's **breathing loop** once, on demand: research →
-**divergence** (a tree of alternative roadmaps) → the owner picks → a scoped
-backlog → later **convergence** (the `horus consolidate` read-out trims the fat).
+**divergence** (a tree of alternative roadmaps) → the owner picks → shaping drafts
+→ refined backlog → later **convergence** (the `horus consolidate` read-out trims the fat).
 You are a pathfinder: you **scout the route ahead and report it** — you do not
 build the road. This runs the SAME whether the project is brand-new (no facet
 table yet — the onboarding fork inside `roadmap-branches`) or years old (a genuine
@@ -2192,7 +2254,8 @@ each one against reality separately.)
 | 2 | what actually earned its keep? | inward audit: `product-audit` where the project has one, else shipped-vs-used with the owner |
 | 3 | where is the world? | `market-scan` (composes `deep-research`) |
 | 4 | which directions could we take? | `roadmap-branches` (the divergence tree) |
-| 5 | what exactly do we do on the chosen one? | `scope-cards` (drafts meeting its dispatchable-card contract) |
+| 5 | what high-level work does the chosen branch imply? | `scope-cards` (aligned Shaping drafts) |
+| 6 | what is genuinely ready, waiting, or still undecided? | `backlog-refine` (interactive readiness + execution contract) |
 
 **Receipts are the interfaces**: the market receipt and the branch-tree receipt
 live under `.horus/research/`, and the card drafts land as files — so the chain
@@ -2218,14 +2281,13 @@ similar words, and they take different-size tools:
 
 - **Re-baseline** — the *direction* is in question (drift, a pivot, a new
   opportunity, onboarding onto facets). That is this chain.
-- **Backlog polish** — the direction holds; existing cards need grooming toward
-  the dispatchable-card contract (in `scope-cards`) and an execution order. That
-  is the backlog-refine pass (carded: `tui-backlog-refine-and-order`; until it
-  ships, `scope-cards`' "Grooming an existing backlog" mode covers the pass).
-  Running the five-step chain for a grooming need is ceremony — route it out and
-  say so.
+- **Backlog polish** — the direction holds; existing cards need readiness,
+  concrete execution contracts, disposition, or order. Invoke `backlog-refine`
+  standalone. Running the full chain for a grooming need is ceremony — route it
+  out and say so.
 
-Both tools hold cards to the same contract; only the entry question differs.
+`scope-cards` owns high-level branch shaping; `backlog-refine` alone owns final
+execution readiness. Do not merge the two contracts.
 
 A re-baseline has more than one legitimate goal, and the goal steers the whole
 run — the research frame AND the verdict criteria. Do NOT default to one silently:
@@ -2244,8 +2306,8 @@ the owner's pick before launching any machinery. (Calibration: the 2026-07-17
 convergence-test run treated a pre-pinned intent as settled and skipped the ask.)
 
 The pinned intent travels into every step: the envelope statement, the
-`market-scan` framing, the `roadmap-branches` theses, and the `scope-cards`
-context paragraphs. Also settle here whether the owner wants per-step gates
+`market-scan` framing, the `roadmap-branches` theses, the `scope-cards` context,
+and `backlog-refine` readiness decisions. Also settle here whether the owner wants per-step gates
 (default) or a pre-authorized straight-through run.
 
 ## Before you spend — confirm the token envelope
@@ -2292,11 +2354,14 @@ inward-only.
    push-back on existing cards, and a held-loosely recommendation. The
    **Onboarding fork** lives there: no facet table → propose the initial facet
    set and offer to stamp existing cards. STOP: the owner picks branch(es).
-5. **`scope-cards`** on the chosen branch → fully populated card drafts meeting
-   its dispatchable-card contract + the branch's Vision facet diff +
-   existing-card demote/defer/retire diffs. The owner approves per item; only
-   approved items are written.
-6. **Hand off.** Approved cards and edits are in place via the normal paths;
+5. **`scope-cards`** on the chosen branch → aligned high-level Shaping drafts +
+   the branch's Vision facet diff + existing-card push-back diffs. The owner
+   approves per item; only approved drafts are written.
+6. **`backlog-refine`** over the approved drafts and affected existing backlog →
+   picture-first interactive decisions, final readiness/autonomy, concrete
+   execution contracts, disposition, and owner-approved order. Only Ready cards
+   pass its single execution-ready contract.
+7. **Hand off.** Approved cards and edits are in place via the normal paths;
    anything the owner deferred stays unapplied — say so. Later, **convergence is
    a separate session**: usage evidence accumulates, the `horus consolidate`
    read-out trims the fat; re-run pathfinder only when a real re-baseline is
@@ -2316,8 +2381,9 @@ inward-only.
 
 No `.horus/PRD.md` — the same sequence over the six-lane files: the brief comes
 from `project.md`/`roadmap.md`/`features.md`, `roadmap-branches` states direction
-changes against `project.md`'s vision prose, and `scope-cards` writes approved
-items as `roadmap.md` entries, following that project's closure rules. The Step 0
+changes against `project.md`'s vision prose, `scope-cards` writes approved shaping
+entries, and `backlog-refine` deepens selected entries inline under that project's
+rules. The Step 0
 intent gate, the pinned brief, and the advisory gate-at-every-step boundary are
 unchanged.
 """
@@ -2336,7 +2402,7 @@ description: >-
   asked) and have a supervisor close it out or ping me", or says
   "autonomous dispatch", "run the away-mode loop", "schedule and supervise a card".
   A THIN sequencer over existing machinery — it composes `dispatch-decision`
-  (mode/account/tier/depth), `scope-cards`/`pathfinder`/`roadmap-branches`
+  (mode/account/tier/depth), `backlog-refine`/`scope-cards`/`pathfinder`/`roadmap-branches`
   (ready-gate), and the `horus envelope`/`schedule`/`run`/`supervise`/`notify`
   commands; it never re-implements them. Advisory and owner-gated at EVERY step:
   it proposes, the owner confirms each gate. It never selects a model, routes an
@@ -2344,7 +2410,7 @@ description: >-
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -2374,15 +2440,15 @@ The owner selects, or the skill *proposes* a ranking by `priority` then age. Nev
 auto-pick.
 
 ### 3. Ready-gate (is the card dispatch-ready?)
-Judge the card against **the dispatchable-card contract in `scope-cards`** — that
-section is the single authority; do not maintain a rival checklist here. In short: a
-`converge` card, self-sufficient why/how, supervisor-grade acceptance (deterministic
-gate + named live probe), `vision_facet`, and the `surface`/`parallel` collision
-stamps. If thin, STOP and route it back through the contract — `scope-cards`
-standalone when only the card needs depth, the full `pathfinder` chain when the
-direction itself is unclear — because a fresh unattended worker gets only the card,
-so the card must carry the whole brief. `phase: explore` cards are not dispatch
-candidates.
+Judge the card against **the execution-ready card contract in `backlog-refine`** —
+that section is the single authority; do not maintain a rival checklist here. A
+candidate must be `readiness: ready` and `autonomy: eligible`; missing readiness is
+Unclassified and never scheduler-eligible. `autonomy: attended`, Shaping, Gated,
+Deferred, and vision-branch umbrellas are not unattended candidates. If the
+direction holds but the card is thin or Unclassified, STOP and route it through
+`backlog-refine`. If the direction itself is unclear, use the full `pathfinder`
+chain (`roadmap-branches` → `scope-cards` → `backlog-refine`). A fresh unattended
+worker gets only the card, so the final contract must already be durable.
 
 ### 4. Decide
 Invoke **`dispatch-decision`** for the recommendation: `inline-here` vs
@@ -2462,9 +2528,9 @@ The contract is structure-agnostic — it dispatches into a *target* repo whatev
 repo's continuity shape. On a v2 six-lane target the only differences are in steps 1
 and 3: discovery reads the target's `roadmap.md` open action points instead of
 `backlog/` cards, and the ready-gate judges a roadmap item's scope (does it name a
-concrete surface + acceptance?) rather than a card's `vision_facet`/acceptance
-frontmatter — routing a thin one through `scope-cards`, which writes it back as a
-`roadmap.md` entry under that project's rules. Envelope, schedule, dispatch, supervise,
+concrete surface + acceptance?) rather than a card's readiness frontmatter —
+routing a thin one through `backlog-refine`, which deepens the `roadmap.md` entry
+under that project's rules. Envelope, schedule, dispatch, supervise,
 notify, and the owner-gated-at-every-step boundary are identical.
 """
 
@@ -2656,9 +2722,10 @@ SKILLS: tuple[Skill, ...] = (
     Skill("skill-audit", 1, _SKILL_AUDIT_SKILL),
     Skill("market-scan", 5, _MARKET_SCAN_SKILL),
     Skill("roadmap-branches", 3, _ROADMAP_BRANCHES_SKILL),
-    Skill("scope-cards", 5, _SCOPE_CARDS_SKILL),
-    Skill("pathfinder", 6, _PATHFINDER_SKILL),
-    Skill("cockpit-autonomous-dispatch-contract", 2, _COCKPIT_DISPATCH_SKILL),
+    Skill("scope-cards", 6, _SCOPE_CARDS_SKILL),
+    Skill("backlog-refine", 1, _BACKLOG_REFINE_SKILL),
+    Skill("pathfinder", 7, _PATHFINDER_SKILL),
+    Skill("cockpit-autonomous-dispatch-contract", 3, _COCKPIT_DISPATCH_SKILL),
     Skill("all-gas-no-breaks-session", 1, _ALL_GAS_NO_BREAKS_SESSION_SKILL),
     Skill("inline-batch-session", 3, _INLINE_BATCH_SESSION_SKILL),
 )

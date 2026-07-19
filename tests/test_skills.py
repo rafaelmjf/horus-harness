@@ -78,10 +78,10 @@ def test_market_scan_skill_registered_and_outward():
 
 def test_cockpit_dispatch_contract_skill_registered_and_sequences():
     ct = next(s for s in skills.SKILLS if s.name == "cockpit-autonomous-dispatch-contract")
-    assert ct.version == 2
+    assert ct.version == 3
     # A thin sequencer: composes the decision skills, never re-implements them.
     assert "dispatch-decision" in ct.content
-    assert "scope-cards" in ct.content and "pathfinder" in ct.content
+    assert "backlog-refine" in ct.content and "pathfinder" in ct.content
     # Wires the away-mode kit commands built this campaign.
     for cmd in ("horus envelope", "horus schedule", "horus supervise", "horus notify"):
         assert cmd in ct.content
@@ -98,9 +98,9 @@ def test_cockpit_dispatch_contract_skill_registered_and_sequences():
 
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    assert pf.version == 6
-    # v6: the triage route-out names scope-cards' grooming mode explicitly.
-    assert "Grooming an existing backlog" in pf.content
+    assert pf.version == 7
+    # v7: backlog polish routes directly to the final readiness owner.
+    assert "Invoke `backlog-refine`" in pf.content
     # v5 (calibration 2026-07-19): the owner's mental model includes the inward
     # audit — product-audit where the project has one, shipped-vs-used elsewhere
     # (product-audit is Horus-specific; pathfinder must run on any project).
@@ -110,14 +110,14 @@ def test_pathfinder_skill_registered_and_orchestrates():
     # Step 0 triages backlog-POLISH out to the grooming pass instead of running
     # the five-step chain for a grooming need.
     assert "is it a re-baseline at all?" in pf.content
-    assert "tui-backlog-refine-and-order" in pf.content
-    # Cards land against the single contract authority in scope-cards.
-    assert "dispatchable-card contract" in pf.content
+    assert "scope-cards" in pf.content and "backlog-refine" in pf.content
+    assert "execution readiness" in pf.content
     # Renamed from horus-kickstart: age-agnostic name, no old slug lingering.
     assert not any(s.name == "horus-kickstart" for s in skills.SKILLS)
     # v2: genuinely thin — sequences the factored step skills, no analysis inline.
     assert "market-scan" in pf.content and "deep-research" in pf.content
     assert "roadmap-branches" in pf.content and "scope-cards" in pf.content
+    assert pf.content.index("`scope-cards`") < pf.content.index("`backlog-refine`")
     assert "horus consolidate" in pf.content
     assert "No new CLI subcommand" in pf.content
     assert "No analysis inside pathfinder" in pf.content
@@ -190,72 +190,56 @@ def test_roadmap_branches_skill_registered_divergence_tree():
     assert "## v2 six-lane projects (fallback)" in rb.content
 
 
-def test_scope_cards_skill_registered_self_sufficient():
+def test_scope_cards_skill_registered_as_high_level_shaping():
     sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
-    assert sc.version == 5
-    # v5 (full live refinement run, 2026-07-19): grooming starts from the
-    # backlog's product picture and card content, not a frontmatter lint report.
-    assert "Grooming an existing backlog" in sc.content
-    assert "Read the CONTENT of every" in sc.content
-    assert "Show the picture before asking decisions" in sc.content
-    assert "Ready (`status: open`" in sc.content
-    assert "Judge first; audit second" in sc.content
-    assert "Escalate only pending decisions" in sc.content
-    assert "free-text alternative" in sc.content
-    assert "last_refined: YYYY-MM-DD" in sc.content
-    assert 'deferred: "<reason and un-deferral' in sc.content
-    # Phase-appropriate curation covers converge/explore/umbrella cards even
-    # though only the first kind is normally dispatchable.
-    assert "cheap\n   PoC plus an adopt/promote/drop verdict" in sc.content
-    assert "ordered children, and a convergence criterion" in sc.content
-    # Contract exceptions the live backlog proved: explore cards may substitute
-    # a branch: stamp for vision_facet; umbrellas carry a convergence criterion.
-    assert "may\nsubstitute a `branch:" in sc.content or "may substitute a `branch:" in sc.content
-    assert "Convergence criterion" in sc.content
-    # Probe retrofits are scoped to new/armed/edited cards, never blanket.
-    assert "Probe-retrofit policy" in sc.content
-    # The one bar: a fresh agent + PRD + card can start correctly.
-    assert "self-sufficiency test" in sc.content
-    assert "fresh agent" in sc.content
-    # Card template carries the full understanding.
-    assert "vision_facet" in sc.content and "phase" in sc.content
-    assert "Acceptance" in sc.content and "Non-goals" in sc.content
-    # Thin input is flagged, never silently padded; findings are never pre-invented.
+    assert sc.version == 6
+    assert "The shaping test" in sc.content
+    assert "readiness: shaping" in sc.content
+    assert "Intended outcome" in sc.content and "Open decisions" in sc.content
+    assert "raw `vision-branch-*` card" in sc.content
+    assert "`backlog-refine` later decides readiness" in sc.content
+    assert "Do NOT invent final `tier`" in sc.content
+    assert "live probes" in sc.content
     assert "do not silently invent" in sc.content
-    assert "do not fabricate the findings" in sc.content
-    # Also drafts the branch's Vision diff + existing-card push-back edits.
+    assert "Do not fabricate findings" in sc.content
     assert "Vision facet diff" in sc.content
     assert "demote / defer / retire" in sc.content
-    # Per-item owner gate before anything is written.
-    assert "approve, amend, or drop each item individually" in sc.content
+    assert "approve, amend, or drop each" in sc.content
     assert "## v2 six-lane projects (fallback)" in sc.content
 
 
-def test_dispatchable_card_contract_single_authority():
-    """The card contract lives ONCE, in scope-cards; consumers reference it.
+def test_backlog_refine_owns_interactive_flow_and_ready_contract():
+    refine = next(s for s in skills.SKILLS if s.name == "backlog-refine")
+    assert refine.version == 1
+    assert "Here is our current picture" in refine.content
+    assert "product direction in 2–3 lines" in refine.content
+    assert "Card <N>/<decision-card-count>" in refine.content
+    assert "(Recommended)" in refine.content
+    assert "free-text Other" in refine.content
+    assert "4. Type anything" in refine.content
+    assert "Judge, then ask only what remains undecided" in refine.content
+    assert "last_refined: YYYY-MM-DD" in refine.content
+    assert "readiness: ready | shaping | gated | deferred" in refine.content
+    assert "autonomy: eligible | attended" in refine.content
+    assert "Unclassified" in refine.content
 
-    Calibration 2026-07-19: the cockpit ready-gate demanded `surface`/`parallel`
-    stamps while scope-cards' template never emitted them — the remediation path
-    could not produce what the gate required. Guard the contract's home and the
-    producer/consumer alignment so partial copies cannot silently drift again.
-    """
+
+def test_execution_ready_card_contract_single_authority():
+    """Final readiness lives once in backlog-refine; consumers reference it."""
     sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
+    refine = next(s for s in skills.SKILLS if s.name == "backlog-refine")
     ct = next(s for s in skills.SKILLS if s.name == "cockpit-autonomous-dispatch-contract")
-    # The authority section lives in scope-cards and emits the collision stamps
-    # the dispatch machinery reasons with (backlog.py warns without `surface`).
-    assert "dispatchable-card contract" in sc.content
-    assert "surface:" in sc.content and "parallel: safe | exclusive" in sc.content
-    # Acceptance is supervisor-grade: deterministic gate + a named live probe.
-    assert "live probe" in sc.content
-    # Tier vocabulary is the closed vendor-neutral set (v0.0.62), not model names.
-    assert "low | medium | high | frontier" in sc.content
-    # The consumer references the authority instead of keeping a rival checklist.
-    assert "dispatchable-card contract in `scope-cards`" in ct.content
+    assert "execution-ready card contract (single authority)" in refine.content
+    assert "surface" in refine.content and "parallel: safe | exclusive" in refine.content
+    assert "live probe" in refine.content
+    assert "low | medium | high |\nfrontier" in refine.content
+    assert "execution-ready card contract in `backlog-refine`" in ct.content
     assert "single authority" in ct.content
+    assert "dispatchable-card contract" not in sc.content
 
 
 def test_pathfinder_step_skills_projected_to_both_agents():
-    for name in ("pathfinder", "roadmap-branches", "scope-cards"):
+    for name in ("pathfinder", "roadmap-branches", "scope-cards", "backlog-refine"):
         bundled = next(s for s in skills.SKILLS if s.name == name)
         for root in (".claude/skills", ".agents/skills"):
             assert Path(f"{root}/{name}/SKILL.md").read_text(encoding="utf-8") == bundled.content

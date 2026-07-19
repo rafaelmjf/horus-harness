@@ -9,8 +9,8 @@ description: >-
   evidence (`product-audit` where the project has one, else shipped-vs-used with
   the owner), scan the market (`market-scan`, which composes `deep-research`),
   build the divergence tree of alternative roadmaps (`roadmap-branches`), then
-  populate the chosen branch into self-sufficient cards (`scope-cards`, whose
-  dispatchable-card contract every card must meet). Works the SAME on a
+  shape the chosen branch into high-level drafts (`scope-cards`) and refine the
+  approved drafts into execution-ready cards (`backlog-refine`). Works the SAME on a
   brand-new repo and a long-running one (it scouts the route ahead and reports;
   it never builds the road). Use when the owner says "pathfinder", "kickstart",
   "re-baseline", "where should this project go next", "reset the roadmap", or
@@ -22,13 +22,13 @@ description: >-
   token envelope before any web work. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
 You are running the project's **breathing loop** once, on demand: research →
-**divergence** (a tree of alternative roadmaps) → the owner picks → a scoped
-backlog → later **convergence** (the `horus consolidate` read-out trims the fat).
+**divergence** (a tree of alternative roadmaps) → the owner picks → shaping drafts
+→ refined backlog → later **convergence** (the `horus consolidate` read-out trims the fat).
 You are a pathfinder: you **scout the route ahead and report it** — you do not
 build the road. This runs the SAME whether the project is brand-new (no facet
 table yet — the onboarding fork inside `roadmap-branches`) or years old (a genuine
@@ -48,7 +48,8 @@ each one against reality separately.)
 | 2 | what actually earned its keep? | inward audit: `product-audit` where the project has one, else shipped-vs-used with the owner |
 | 3 | where is the world? | `market-scan` (composes `deep-research`) |
 | 4 | which directions could we take? | `roadmap-branches` (the divergence tree) |
-| 5 | what exactly do we do on the chosen one? | `scope-cards` (drafts meeting its dispatchable-card contract) |
+| 5 | what high-level work does the chosen branch imply? | `scope-cards` (aligned Shaping drafts) |
+| 6 | what is genuinely ready, waiting, or still undecided? | `backlog-refine` (interactive readiness + execution contract) |
 
 **Receipts are the interfaces**: the market receipt and the branch-tree receipt
 live under `.horus/research/`, and the card drafts land as files — so the chain
@@ -74,14 +75,13 @@ similar words, and they take different-size tools:
 
 - **Re-baseline** — the *direction* is in question (drift, a pivot, a new
   opportunity, onboarding onto facets). That is this chain.
-- **Backlog polish** — the direction holds; existing cards need grooming toward
-  the dispatchable-card contract (in `scope-cards`) and an execution order. That
-  is the backlog-refine pass (carded: `tui-backlog-refine-and-order`; until it
-  ships, `scope-cards`' "Grooming an existing backlog" mode covers the pass).
-  Running the five-step chain for a grooming need is ceremony — route it out and
-  say so.
+- **Backlog polish** — the direction holds; existing cards need readiness,
+  concrete execution contracts, disposition, or order. Invoke `backlog-refine`
+  standalone. Running the full chain for a grooming need is ceremony — route it
+  out and say so.
 
-Both tools hold cards to the same contract; only the entry question differs.
+`scope-cards` owns high-level branch shaping; `backlog-refine` alone owns final
+execution readiness. Do not merge the two contracts.
 
 A re-baseline has more than one legitimate goal, and the goal steers the whole
 run — the research frame AND the verdict criteria. Do NOT default to one silently:
@@ -100,8 +100,8 @@ the owner's pick before launching any machinery. (Calibration: the 2026-07-17
 convergence-test run treated a pre-pinned intent as settled and skipped the ask.)
 
 The pinned intent travels into every step: the envelope statement, the
-`market-scan` framing, the `roadmap-branches` theses, and the `scope-cards`
-context paragraphs. Also settle here whether the owner wants per-step gates
+`market-scan` framing, the `roadmap-branches` theses, the `scope-cards` context,
+and `backlog-refine` readiness decisions. Also settle here whether the owner wants per-step gates
 (default) or a pre-authorized straight-through run.
 
 ## Before you spend — confirm the token envelope
@@ -148,11 +148,14 @@ inward-only.
    push-back on existing cards, and a held-loosely recommendation. The
    **Onboarding fork** lives there: no facet table → propose the initial facet
    set and offer to stamp existing cards. STOP: the owner picks branch(es).
-5. **`scope-cards`** on the chosen branch → fully populated card drafts meeting
-   its dispatchable-card contract + the branch's Vision facet diff +
-   existing-card demote/defer/retire diffs. The owner approves per item; only
-   approved items are written.
-6. **Hand off.** Approved cards and edits are in place via the normal paths;
+5. **`scope-cards`** on the chosen branch → aligned high-level Shaping drafts +
+   the branch's Vision facet diff + existing-card push-back diffs. The owner
+   approves per item; only approved drafts are written.
+6. **`backlog-refine`** over the approved drafts and affected existing backlog →
+   picture-first interactive decisions, final readiness/autonomy, concrete
+   execution contracts, disposition, and owner-approved order. Only Ready cards
+   pass its single execution-ready contract.
+7. **Hand off.** Approved cards and edits are in place via the normal paths;
    anything the owner deferred stays unapplied — say so. Later, **convergence is
    a separate session**: usage evidence accumulates, the `horus consolidate`
    read-out trims the fat; re-run pathfinder only when a real re-baseline is
@@ -172,7 +175,8 @@ inward-only.
 
 No `.horus/PRD.md` — the same sequence over the six-lane files: the brief comes
 from `project.md`/`roadmap.md`/`features.md`, `roadmap-branches` states direction
-changes against `project.md`'s vision prose, and `scope-cards` writes approved
-items as `roadmap.md` entries, following that project's closure rules. The Step 0
+changes against `project.md`'s vision prose, `scope-cards` writes approved shaping
+entries, and `backlog-refine` deepens selected entries inline under that project's
+rules. The Step 0
 intent gate, the pinned brief, and the advisory gate-at-every-step boundary are
 unchanged.

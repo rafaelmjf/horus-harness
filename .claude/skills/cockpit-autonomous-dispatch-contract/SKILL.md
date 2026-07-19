@@ -10,7 +10,7 @@ description: >-
   asked) and have a supervisor close it out or ping me", or says
   "autonomous dispatch", "run the away-mode loop", "schedule and supervise a card".
   A THIN sequencer over existing machinery — it composes `dispatch-decision`
-  (mode/account/tier/depth), `scope-cards`/`pathfinder`/`roadmap-branches`
+  (mode/account/tier/depth), `backlog-refine`/`scope-cards`/`pathfinder`/`roadmap-branches`
   (ready-gate), and the `horus envelope`/`schedule`/`run`/`supervise`/`notify`
   commands; it never re-implements them. Advisory and owner-gated at EVERY step:
   it proposes, the owner confirms each gate. It never selects a model, routes an
@@ -18,7 +18,7 @@ description: >-
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -48,15 +48,15 @@ The owner selects, or the skill *proposes* a ranking by `priority` then age. Nev
 auto-pick.
 
 ### 3. Ready-gate (is the card dispatch-ready?)
-Judge the card against **the dispatchable-card contract in `scope-cards`** — that
-section is the single authority; do not maintain a rival checklist here. In short: a
-`converge` card, self-sufficient why/how, supervisor-grade acceptance (deterministic
-gate + named live probe), `vision_facet`, and the `surface`/`parallel` collision
-stamps. If thin, STOP and route it back through the contract — `scope-cards`
-standalone when only the card needs depth, the full `pathfinder` chain when the
-direction itself is unclear — because a fresh unattended worker gets only the card,
-so the card must carry the whole brief. `phase: explore` cards are not dispatch
-candidates.
+Judge the card against **the execution-ready card contract in `backlog-refine`** —
+that section is the single authority; do not maintain a rival checklist here. A
+candidate must be `readiness: ready` and `autonomy: eligible`; missing readiness is
+Unclassified and never scheduler-eligible. `autonomy: attended`, Shaping, Gated,
+Deferred, and vision-branch umbrellas are not unattended candidates. If the
+direction holds but the card is thin or Unclassified, STOP and route it through
+`backlog-refine`. If the direction itself is unclear, use the full `pathfinder`
+chain (`roadmap-branches` → `scope-cards` → `backlog-refine`). A fresh unattended
+worker gets only the card, so the final contract must already be durable.
 
 ### 4. Decide
 Invoke **`dispatch-decision`** for the recommendation: `inline-here` vs
@@ -136,7 +136,7 @@ The contract is structure-agnostic — it dispatches into a *target* repo whatev
 repo's continuity shape. On a v2 six-lane target the only differences are in steps 1
 and 3: discovery reads the target's `roadmap.md` open action points instead of
 `backlog/` cards, and the ready-gate judges a roadmap item's scope (does it name a
-concrete surface + acceptance?) rather than a card's `vision_facet`/acceptance
-frontmatter — routing a thin one through `scope-cards`, which writes it back as a
-`roadmap.md` entry under that project's rules. Envelope, schedule, dispatch, supervise,
+concrete surface + acceptance?) rather than a card's readiness frontmatter —
+routing a thin one through `backlog-refine`, which deepens the `roadmap.md` entry
+under that project's rules. Envelope, schedule, dispatch, supervise,
 notify, and the owner-gated-at-every-step boundary are identical.
