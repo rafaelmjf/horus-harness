@@ -25,6 +25,7 @@ This module adds the real signal, daemon-free and reusing state that already exi
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -104,24 +105,44 @@ def _claim_once(batch_id: str) -> bool:
     return True
 
 
+def _project_name(root: Path) -> str:
+    """The real repo name, even when the worker ran in a `<repo>-wt-<slug>` worktree —
+    a worktree's `--git-common-dir` points at the MAIN repo's `.git`, whose parent is
+    the repo root. Falls back to the directory name if git can't be read."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--git-common-dir"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            common = Path(result.stdout.strip())
+            if not common.is_absolute():
+                common = (root / common)
+            return common.resolve().parent.name
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return root.name
+
+
+def _leg_line(m: BatchMember) -> str:
+    label = m.card or m.schedule_id
+    if not m.done or m.outcome is None:
+        return f"{activity.UNKNOWN} {label}: did not finish (timed out)"
+    status = m.outcome.status
+    if m.outcome.pr_number:
+        status += f" · PR #{m.outcome.pr_number}"
+    return f"{m.outcome.glyph} {label}: {status}"
+
+
 def _escalation(batch_id: str, root: Path, rep: BatchReport, *, deadline: bool) -> notify.Escalation:
-    legs: list[str] = []
-    for m in rep.members:
-        label = m.card or m.schedule_id
-        if m.done and m.outcome is not None:
-            legs.append(f"{m.outcome.glyph} {label}: {activity.outcome_summary(m.outcome)}")
-        else:
-            legs.append(f"{activity.UNKNOWN} {label}: did not finish (timed out)")
-    if deadline and not rep.all_done:
-        head = (f"schedule batch {batch_id} INCOMPLETE at deadline — "
-                f"{rep.finished_count}/{len(rep.members)} finished")
-    else:
-        head = f"schedule batch {batch_id} finished — {len(rep.members)} dispatch(es)"
+    total = len(rep.members)
+    state = "incomplete" if (deadline and not rep.all_done) else "done"
     return notify.Escalation(
         event=notify.SCHEDULE_BATCH_COMPLETE,
-        project=root.name,
-        summary=head + "\n" + "\n".join(legs),
-        inspect="horus schedule status  (open Mission Control for the outcomes)",
+        project=_project_name(root),
+        summary=f"batch {batch_id} {state} ({rep.finished_count}/{total})",
+        details=tuple(_leg_line(m) for m in rep.members),
+        ok=rep.all_done,   # a deadline-incomplete batch reads ⚠, not a false ✓
         actions=(("Schedule", "schedule"), ("Sessions", "sessions")),
     )
 

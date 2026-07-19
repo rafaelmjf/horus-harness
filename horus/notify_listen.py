@@ -70,8 +70,8 @@ class Command:
 # The whole steering surface. Read-mostly + two bounded mutations. Nothing here mints
 # authority or reaches the work plane.
 COMMANDS: dict[str, Command] = {
-    "sessions": Command(("sessions",), "sessions — live/recent runs"),
-    "schedule": Command(("schedule", "list"), "schedule — scheduled dispatches"),
+    "sessions": Command(("sessions", "--running"), "sessions — running now"),
+    "schedule": Command(("schedule", "status", "--brief"), "schedule — scheduled + running"),
     "backlog": Command(("backlog", "list"), "backlog — open cards"),
     "usage": Command(("usage", "all"), "usage — capacity across all accounts"),
     "warmup": Command(

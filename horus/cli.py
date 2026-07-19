@@ -788,6 +788,16 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     """
     reg = registry.Registry.default()
     reg.reconcile()  # correct records left "running" by a crashed/closed run
+    if getattr(args, "running", False):
+        # Minimal steering view (the phone `sessions` tap): only what is live now, one
+        # line each — not the full recent/failed log.
+        live = [r for r in reg.all() if r.status == "running"]
+        if not live:
+            print("No running sessions.")
+            return 0
+        for r in sorted(live, key=lambda r: r.updated_at, reverse=True):
+            print(f"  {r.agent:<7} {r.account or '-':<14} {Path(r.project).name:<24} {r.session_id}")
+        return 0
     if args.prune:
         removed = reg.prune()
         if args.json:
@@ -1484,6 +1494,26 @@ def cmd_schedule_status(args: argparse.Namespace) -> int:
             },
             indent=2,
         ))
+        return 0
+    if getattr(args, "brief", False):
+        # Minimal steering view (the phone `schedule` tap): only what is SCHEDULED
+        # (pending) or RUNNING now — completed history is dropped. "Running" = a fired
+        # timer whose worker has not reached a terminal datum yet.
+        live: list[tuple] = []
+        for item in act.armed:
+            if item.halted:
+                continue
+            if not item.fired:
+                live.append((item, "armed"))
+            else:
+                oc = act.outcomes.get(item.id)
+                if oc is not None and oc.glyph == activity.ARMED:
+                    live.append((item, "running"))
+        if not live:
+            print("Nothing scheduled or running.")
+            return 0
+        for item, tag in live:
+            print(f"  {activity.ARMED} {item.id:<10} {tag:<8} {item.when:<21} {item.description}")
         return 0
     if not act.armed and not act.ran:
         print("No autonomous-dispatch activity (nothing armed, nothing dispatched yet).")
@@ -4341,6 +4371,11 @@ def build_parser() -> argparse.ArgumentParser:
         "status", help="armed dispatches + recently dispatched cards with outcome glyphs")
     p_sched_status.add_argument("--limit", type=int, default=10, help="recent dispatched cards to show (default 10)")
     p_sched_status.add_argument("--stdout", action="store_true", help="emit JSON instead of a table")
+    p_sched_status.add_argument(
+        "--brief", action="store_true",
+        help="minimal view: only what is scheduled (pending) or running now, one line each "
+             "(what the phone `schedule` tap shows)",
+    )
     p_sched_status.set_defaults(func=cmd_schedule_status)
 
     p_sched_cancel = schedule_sub.add_parser("cancel", help="disarm and delete a scheduled dispatch")
@@ -4791,6 +4826,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_sessions = sub.add_parser("sessions", help="list tracked agent sessions (reconciles live state)")
     p_sessions.add_argument("--prune", action="store_true", help="drop finished/dead sessions instead of listing")
+    p_sessions.add_argument(
+        "--running", action="store_true",
+        help="minimal view: only sessions live right now, one line each "
+             "(what the phone `sessions` tap shows)",
+    )
     p_sessions.add_argument(
         "--all", action="store_true",
         help="show every tracked session, including long-stale ones (default: running + last 24h only)",

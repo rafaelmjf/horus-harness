@@ -2268,6 +2268,40 @@ def test_run_help_explains_codex_worker_full_auto_requirement(capsys):
     assert "bypasses approvals and sandbox" in out
 
 
+def test_sessions_running_lists_only_live(monkeypatch, capsys):
+    """The phone `sessions` tap: only sessions live right now, one line each — not the
+    full recent/failed log."""
+    recs = [
+        SessionRecord(session_id="live0001", agent="claude", project="/x/proj", account="work", status="running"),
+        SessionRecord(session_id="dead0001", agent="codex", project="/x/proj", account=None, status="exited"),
+    ]
+
+    class _Reg:
+        def reconcile(self):
+            pass
+
+        def all(self):
+            return recs
+
+    monkeypatch.setattr(registry.Registry, "default", classmethod(lambda cls: _Reg()))
+    assert main(["sessions", "--running"]) == 0
+    out = capsys.readouterr().out
+    assert "live0001" in out and "dead0001" not in out
+
+
+def test_sessions_running_empty(monkeypatch, capsys):
+    class _Reg:
+        def reconcile(self):
+            pass
+
+        def all(self):
+            return []
+
+    monkeypatch.setattr(registry.Registry, "default", classmethod(lambda cls: _Reg()))
+    assert main(["sessions", "--running"]) == 0
+    assert "No running sessions." in capsys.readouterr().out
+
+
 def test_codex_delivery_posture_error_matrix():
     """The shared guard: a codex dispatch that expects a git/PR delivery but is armed
     with a network-off sandbox posture is the ONLY refused combination (away-batch-3,

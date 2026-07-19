@@ -85,7 +85,12 @@ def test_emit_fires_exactly_once_when_the_last_leg_finishes(monkeypatch, tmp_pat
     r1 = batch.emit_if_complete("B", Path("/repo"), store=store)
     assert r1 is not None and len(sent) == 1
     assert sent[0].event == notify.SCHEDULE_BATCH_COMPLETE
-    assert "c1" in sent[0].summary and "c2" in sent[0].summary  # per-leg roll-up
+    assert sent[0].summary == "batch B done (2/2)"          # one concise line
+    detail = "\n".join(sent[0].details)
+    assert "c1" in detail and "c2" in detail                 # per-leg roll-up in details
+    assert "PR #1" in detail                                  # a delivered leg shows its PR
+    # The summary is single-line so telegram (body only) never double-prints it.
+    assert "\n" not in sent[0].summary
     # Idempotent: a re-fire / race / deadline overlap sends nothing more.
     assert batch.emit_if_complete("B", Path("/repo"), store=store) is None
     assert len(sent) == 1
@@ -109,7 +114,9 @@ def test_deadline_backstop_reports_a_hung_leg_as_timed_out(monkeypatch, tmp_path
     _stub(monkeypatch, schedules=scheds, ledger=ledger, tmp=tmp_path)
     r = batch.emit_if_complete("B", Path("/repo"), deadline=True, store=store)
     assert r is not None and len(sent) == 1
-    assert "INCOMPLETE" in sent[0].summary and "timed out" in sent[0].summary
+    assert sent[0].summary == "batch B incomplete (1/2)"
+    assert any("timed out" in d for d in sent[0].details)
+    assert sent[0].ok is False and sent[0].body().startswith("⚠")  # incomplete ⇒ ⚠, not a false ✓
 
 
 def test_no_members_no_signal(monkeypatch, tmp_path):
