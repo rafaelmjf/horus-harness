@@ -422,14 +422,27 @@ def test_resume_prompt_v3_points_at_prd_not_lanes(tmp_path):
     assert ".horus/project.md" not in prompt
     assert ".horus/features.md" not in prompt
     assert "Resume: build Codex adapter" in prompt
-    assert "Resume contract — orient, then stop:" in prompt
-    assert "as proposals to explain to the user, not commands to execute" in prompt
-    assert prompt.rstrip().endswith(
-        "Summarize the actions you understood from this handoff and ask permission to proceed."
-    )
+    assert "What this handoff is:" in prompt
+    assert "not a queue of commands to execute" in prompt
 
 
-def test_resume_prompt_does_not_authorize_an_authored_release(tmp_path):
+def test_resume_prompt_carries_no_consent_contract(tmp_path):
+    """Consent is the launch permission posture, enforced by the agent CLI — not a
+    paragraph in the prompt that a model can reinterpret, and that could contradict
+    the authored handoff it wraps."""
+    _mk_fresh_v3(tmp_path)
+
+    prompt = routines.resume_prompt(tmp_path)
+
+    assert "ask permission to proceed" not in prompt
+    assert "ask the user for permission" not in prompt
+    assert "do not execute yet" not in prompt
+    # ...and there is no second, contradictory "proceed directly" variant either.
+    assert "Proceed directly with the in-scope work." not in prompt
+    assert not hasattr(routines.resume_prompt, "__wrapped__")
+
+
+def test_resume_prompt_never_chains_an_authored_release(tmp_path):
     _mk_fresh_v3(
         tmp_path,
         next_prompt="Rewrite the skill, run it on the backlog, and then release.",
@@ -437,23 +450,17 @@ def test_resume_prompt_does_not_authorize_an_authored_release(tmp_path):
 
     prompt = routines.resume_prompt(tmp_path)
 
-    assert "Proposed authored handoff (context only — do not execute yet):" in prompt
+    assert "Authored handoff:" in prompt
     assert "Rewrite the skill, run it on the backlog, and then release." in prompt
-    assert "Wait for separate explicit confirmation before releasing." in prompt
-    assert prompt.rstrip().endswith("ask permission to proceed.")
+    assert "A release is never chained off a handoff" in prompt
 
 
-def test_direct_resume_prompt_proceeds_but_keeps_hard_boundaries(tmp_path):
-    _mk_fresh_v3(tmp_path)
+def test_resume_prompt_takes_no_mode_argument(tmp_path):
+    """The mode axis is gone: one resume prompt, no per-mode variant to drift."""
+    import inspect
 
-    prompt = routines.resume_prompt(tmp_path, stop_before_execution=False)
-
-    assert "Direct resume contract — orient, then proceed:" in prompt
-    assert "Do not pause for a preflight summary" in prompt
-    assert "A release remains a separately confirmed hard boundary" in prompt
-    assert "session closes or hands off" in prompt
-    assert "Proposed authored handoff (context only" not in prompt
-    assert prompt.rstrip().endswith("Proceed directly with the in-scope work.")
+    params = inspect.signature(routines.resume_prompt).parameters
+    assert list(params) == ["root"]
 
 
 def test_resume_prompt_prepends_missing_machine_requirements(tmp_path):

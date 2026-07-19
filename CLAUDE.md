@@ -28,11 +28,13 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
 - Frontmatter carries `current_focus` / `next_action` / `next_prompt` /
   `execution_recommendation` / `last_updated`, read PRD-first by the dashboard,
   `horus resume`, and the merge freshness gate.
-- A `next_prompt` is an orientation handoff, never authorization to execute. Author it
-  so a fresh session may fetch/verify/read the minimum context, then summarize the
-  actions it inferred and asks permission before editing, testing, dispatching,
-  merging, releasing, or deploying. A release may be suggested with concrete reasons,
-  but never ordered as a next step; say that separate confirmation is required.
+- A `next_prompt` is an orientation handoff: the previous session's account of where the
+  work stood, for a fresh session to read before acting. Author it so that session can
+  fetch/verify and read the minimum context. Do not author consent instructions into it —
+  what a session may do is set by its launch permission posture, which the agent CLI
+  enforces, not by prose the model can reinterpret. A release may be suggested with
+  concrete reasons, but never chained as a next step: it is its own decision, taken with
+  the owner, after continuity is current.
 - Review optional local recovery notes in `.horus/sessions/` when they exist and
   contain context that is not yet durable elsewhere.
 - Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
@@ -42,20 +44,19 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
   structure — read those lanes directly (each stays in its lane); migrating to
   `PRD.md` is a separate, opt-in step and does not happen automatically.
 
-Continuity is a checkpoint at context boundaries, not a transaction log for every
-card. The shared continuity setting (CLI/hooks/TUI, optionally overridden for every
-machine/CI by `continuity_granularity` in project frontmatter) controls narrative granularity:
+Continuity is a checkpoint at context boundaries, not a transaction log for every card.
+One universal rule, with no granularity setting to configure per machine, per project, or
+per session: git branches, commits, pushed refs, and PRs preserve every delivery between
+boundaries, and canonical `.horus/` prose is consolidated once at a real boundary — a
+pause, session end, agent/account/machine handoff, release, or a dispatch that needs
+durable context.
 
-- `handoff` (**default**) batches related deliveries in one uninterrupted session;
-  checkpoint before an agent/account/machine change, dispatch, pause, release, or end.
-- `delivery` performs the older strict checkpoint after every merged card/PR.
-- `manual` waits for an explicit checkpoint but keeps pending-state warnings visible.
-
-Delivery safety never changes with that setting: branches, commits, pushed refs, PRs,
-deterministic gates, and worker receipts remain durable. Before dispatch, pin the task
+Delivery safety is independent of that and never relaxes: branches, commits, pushed refs,
+PRs, deterministic gates, and worker receipts remain durable. Before dispatch, pin the task
 and base SHA in the brief; if Horus reports pending continuity, either checkpoint it or
-carry the relevant delta explicitly. Workers record delivery facts; the supervisor owns
-canonical continuity.
+carry the relevant delta explicitly. Workers record delivery facts — the SHA, the PR, what
+the gate actually emitted — never a verdict on their own work; the supervisor independently
+reproduces the deterministic signal and owns canonical continuity.
 
 At a continuity boundary, invoke the `horus-consolidate` skill and fold in the whole
 campaign's context:
@@ -83,6 +84,12 @@ campaign's context:
 
 Working discipline (every session, whether or not the work is delegated):
 
+- **A session's context is chosen at launch; its authority is the permission posture.**
+  A launch loads exactly one of: nothing (fresh — open and type), the authored handoff
+  (resume), or one card's scope. There is deliberately no session "mode" describing how
+  much process to perform: that was prose a model could reinterpret, it cost a turn at
+  launch to deliver, and it could contradict the handoff it wrapped. What a session may
+  actually do is the permission posture, enforced by the agent CLI itself.
 - **Reproduce the gate; never trust the report.** Before calling work done, observe a
   deterministic signal yourself: rerun the check locally, or watch a *required* CI
   check go green on the exact commit — plus one live probe of the changed surface.

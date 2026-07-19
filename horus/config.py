@@ -64,11 +64,12 @@ LAUNCH_POSTURE_CHOICES: tuple[str, ...] = ("plan", "read-only", "default", "auto
 # resolve_window_launch) so a phone never gets a broken new-window attempt.
 LAUNCH_WINDOW_CHOICES: tuple[str, ...] = ("takeover", "new-window")
 
-# Narrative continuity is intentionally independent from delivery safety.  Git
-# commits/branches/PRs and the commit+push checkpoint remain mandatory in every
-# mode; this setting controls only how often canonical `.horus/` prose is folded.
-CONTINUITY_DEFAULTS: dict[str, str] = {"granularity": "handoff"}
-CONTINUITY_GRANULARITY_CHOICES: tuple[str, ...] = ("handoff", "delivery", "manual")
+# Per-agent launch profile: the model / reasoning effort / permission posture the
+# consolidated launch form comes up preselected with, so the common case ("claude
+# opus high", "codex sol high") is one keypress and an unusual model stays a
+# per-launch override. Saved only when the owner explicitly picks `Save as defaults`
+# on the form — an occasional override never rewrites the profile.
+LAUNCH_PROFILE_KEYS: tuple[str, ...] = ("model", "effort", "posture")
 
 # ---------------------------------------------------------------------------
 # TUI backlog fields: which card frontmatter keys the TUI's backlog list renders
@@ -152,8 +153,11 @@ def _write_projects(projects: list[str]) -> None:
 # exposed dashboard down mid-session (2026-07-10) when `[access]` vanished on a
 # `register_project` write.
 _MANAGED_KEYS = frozenset({
-    "workspace_root", "projects", "github_owners", "ignored_repos", "workflow", "launch", "continuity",
-    "tui",
+    "workspace_root", "projects", "github_owners", "ignored_repos", "workflow", "launch",
+    "launch_profiles", "tui",
+    # Retired 2026-07-19. Still listed so a rewrite DROPS a pre-existing `[continuity]`
+    # table instead of round-tripping it forward as an unmanaged entry.
+    "continuity",
 })
 
 
@@ -165,6 +169,27 @@ def _toml_value(value: object) -> str:
     if isinstance(value, list):
         return "[" + ", ".join(_toml_value(v) for v in value) + "]"
     return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _load_table(name: str) -> dict[str, dict[str, str]]:
+    """One managed table-of-tables (e.g. ``[launch_profiles.claude]``) as plain
+    dicts, or {} when absent/malformed. Never raises — a hand-edited config must
+    degrade to defaults rather than break every launch."""
+    path = config_path()
+    if not path.exists():
+        return {}
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+    raw = data.get(name)
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        key: {k: v for k, v in val.items() if isinstance(v, str)}
+        for key, val in raw.items()
+        if isinstance(val, dict)
+    }
 
 
 def _unmanaged_entries() -> tuple[list[str], list[str]]:
@@ -199,7 +224,7 @@ def _write_config(
     workflow: dict[str, str] | None = None,
     ignored_repos: list[str] | None = None,
     launch: dict[str, str] | None = None,
-    continuity: dict[str, str] | None = None,
+    launch_profiles: dict[str, dict[str, str]] | None = None,
     tui: dict[str, list[str]] | None = None,
 ) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
@@ -213,8 +238,8 @@ def _write_config(
     # Preserve the current launch defaults when the caller doesn't supply them.
     if launch is None:
         launch = load_launch_defaults()
-    if continuity is None:
-        continuity = load_continuity_defaults()
+    if launch_profiles is None:
+        launch_profiles = _load_table("launch_profiles")
     # Preserve the current TUI preferences when the caller doesn't supply them.
     if tui is None:
         tui = load_tui_defaults()
@@ -236,8 +261,9 @@ def _write_config(
     lines += [f'{k} = "{v}"' for k, v in workflow.items()]
     lines += ["", "[launch]"]
     lines += [f'{k} = "{v}"' for k, v in launch.items()]
-    lines += ["", "[continuity]"]
-    lines += [f'{k} = "{v}"' for k, v in continuity.items()]
+    for agent, profile in sorted(launch_profiles.items()):
+        lines += ["", f"[launch_profiles.{agent}]"]
+        lines += [f'{k} = "{v}"' for k, v in sorted(profile.items())]
     lines += ["", "[tui]"]
     lines += [f"{k} = {_toml_value(v)}" for k, v in tui.items()]
     lines += extra_tables
@@ -410,38 +436,52 @@ def set_launch_default_window(window: str) -> str:
     return window
 
 
-def load_continuity_defaults() -> dict[str, str]:
-    """Return the local continuity policy used by CLI, hooks, and TUI.
+def load_launch_profile(agent: str) -> dict[str, str]:
+    """The saved launch profile for one agent, or {} when none was ever saved.
 
-    ``handoff`` is deliberately the compatibility fallback, including on a
-    clean CI runner or a second machine with no user config yet.
+    Keys are a subset of :data:`LAUNCH_PROFILE_KEYS`; a missing key means "no
+    saved preference", which the form resolves to the agent's own default rather
+    than guessing. An unavailable saved model must fall back visibly at launch —
+    this loader does not validate model names, which change with provider releases.
     """
-    path = config_path()
-    if not path.exists():
-        return dict(CONTINUITY_DEFAULTS)
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError):
-        return dict(CONTINUITY_DEFAULTS)
-    raw = data.get("continuity") or {}
+    key = agent.strip()
+    if not key:
+        return {}
+    raw = _load_table("launch_profiles").get(key)
     if not isinstance(raw, dict):
-        return dict(CONTINUITY_DEFAULTS)
-    value = raw.get("granularity", CONTINUITY_DEFAULTS["granularity"])
-    if not isinstance(value, str) or value not in CONTINUITY_GRANULARITY_CHOICES:
-        value = CONTINUITY_DEFAULTS["granularity"]
-    return {"granularity": value}
+        return {}
+    profile = {}
+    for field in LAUNCH_PROFILE_KEYS:
+        value = raw.get(field)
+        if isinstance(value, str) and value:
+            profile[field] = value
+    return profile
 
 
-def set_continuity_granularity(granularity: str) -> str:
-    """Persist narrative checkpoint granularity without changing safety gates."""
-    if granularity not in CONTINUITY_GRANULARITY_CHOICES:
-        allowed = ", ".join(CONTINUITY_GRANULARITY_CHOICES)
-        raise ValueError(f"Invalid continuity granularity {granularity!r}. Allowed: {allowed}")
+def save_launch_profile(agent: str, profile: dict[str, str]) -> dict[str, str]:
+    """Persist one agent's launch profile (owner pressed `Save as defaults`).
+
+    Only :data:`LAUNCH_PROFILE_KEYS` are stored, and a ``None``/empty value drops
+    the key so "agent default" round-trips as absence rather than a fake string.
+    """
+    key = agent.strip()
+    if not key:
+        raise ValueError("A launch profile needs an agent name.")
+    if profile.get("posture") and profile["posture"] not in LAUNCH_POSTURE_CHOICES:
+        allowed = ", ".join(LAUNCH_POSTURE_CHOICES)
+        raise ValueError(f"Invalid launch posture {profile['posture']!r}. Allowed: {allowed}")
+    cleaned = {
+        field: profile[field]
+        for field in LAUNCH_PROFILE_KEYS
+        if isinstance(profile.get(field), str) and profile[field]
+    }
+    profiles = _load_table("launch_profiles")
+    profiles[key] = cleaned
     _write_config(
         load_projects(), load_github_owners(), load_workspace_root(),
-        continuity={"granularity": granularity},
+        launch_profiles=profiles,
     )
-    return granularity
+    return cleaned
 
 
 def _clean_backlog_fields(raw: object) -> list[str]:

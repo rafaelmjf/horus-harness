@@ -256,33 +256,62 @@ def test_launch_defaults_coexist_with_projects_and_workflow(tmp_path, monkeypatc
     assert config.load_launch_defaults() == {"posture": "plan", "window": "takeover"}
 
 
-def test_continuity_defaults_to_handoff_and_persists_choices(tmp_path, monkeypatch):
+def test_launch_profile_absent_until_saved(tmp_path, monkeypatch):
     config = _home_cfg(tmp_path, monkeypatch)
-    assert config.load_continuity_defaults() == {"granularity": "handoff"}
+    # No saved preference is absence, not a guessed default — the form resolves a
+    # missing key to the agent's own default rather than inventing a model name.
+    assert config.load_launch_profile("claude") == {}
+    assert config.load_launch_profile("") == {}
 
-    for choice in config.CONTINUITY_GRANULARITY_CHOICES:
-        assert config.set_continuity_granularity(choice) == choice
-        assert config.load_continuity_defaults() == {"granularity": choice}
 
+def test_launch_profile_round_trips_per_agent(tmp_path, monkeypatch):
+    config = _home_cfg(tmp_path, monkeypatch)
+    config.save_launch_profile("claude", {"model": "opus", "effort": "high", "posture": "default"})
+    config.save_launch_profile("codex", {"model": "sol", "effort": "high"})
+
+    assert config.load_launch_profile("claude") == {
+        "model": "opus", "effort": "high", "posture": "default",
+    }
+    assert config.load_launch_profile("codex") == {"model": "sol", "effort": "high"}
+
+
+def test_launch_profile_rejects_an_invalid_posture(tmp_path, monkeypatch):
+    config = _home_cfg(tmp_path, monkeypatch)
     with pytest.raises(ValueError):
-        config.set_continuity_granularity("yolo")
+        config.save_launch_profile("claude", {"posture": "yolo"})
+    with pytest.raises(ValueError):
+        config.save_launch_profile("", {"model": "opus"})
 
 
-def test_continuity_setting_survives_other_config_writes(tmp_path, monkeypatch):
+def test_launch_profile_survives_other_config_writes(tmp_path, monkeypatch):
     config = _home_cfg(tmp_path, monkeypatch)
-    config.set_continuity_granularity("delivery")
+    config.save_launch_profile("claude", {"model": "opus", "effort": "high"})
     config.register_project(tmp_path / "project")
     config.set_launch_default_posture("auto-edit")
     config.set_workflow_policy(commit="manual")
 
-    assert config.load_continuity_defaults() == {"granularity": "delivery"}
+    assert config.load_launch_profile("claude") == {"model": "opus", "effort": "high"}
 
 
-def test_continuity_setting_tolerates_malformed_stored_value(tmp_path, monkeypatch):
+def test_launch_profile_tolerates_a_malformed_stored_table(tmp_path, monkeypatch):
     config = _home_cfg(tmp_path, monkeypatch)
     config.config_dir().mkdir(parents=True, exist_ok=True)
-    config.config_path().write_text('[continuity]\ngranularity = "sometimes"\n', encoding="utf-8")
-    assert config.load_continuity_defaults() == {"granularity": "handoff"}
+    config.config_path().write_text('launch_profiles = "nope"\n', encoding="utf-8")
+    assert config.load_launch_profile("claude") == {}
+
+
+def test_a_stale_continuity_table_is_dropped_not_carried_forward(tmp_path, monkeypatch):
+    """The granularity axis is retired; an older machine's `[continuity]` table must
+    not survive a config rewrite as an unmanaged entry."""
+    config = _home_cfg(tmp_path, monkeypatch)
+    config.config_dir().mkdir(parents=True, exist_ok=True)
+    config.config_path().write_text(
+        'projects = []\n\n[continuity]\ngranularity = "delivery"\n', encoding="utf-8"
+    )
+    config.set_launch_default_posture("auto-edit")
+
+    assert "[continuity]" not in config.config_path().read_text(encoding="utf-8")
+    assert not hasattr(config, "set_continuity_granularity")
 
 
 # --------------------------------------------------------------------------- #
@@ -344,7 +373,7 @@ def test_backlog_fields_survive_other_config_writes(tmp_path, monkeypatch):
     config.set_backlog_fields(["tier", "vision_facet"])
     config.register_project(tmp_path / "project")
     config.set_launch_default_posture("auto-edit")
-    config.set_continuity_granularity("delivery")
+    config.save_launch_profile("claude", {"model": "opus"})
 
     assert config.load_backlog_fields() == ["tier", "vision_facet"]
     assert config.load_dashboard_access() is not None

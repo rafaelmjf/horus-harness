@@ -79,35 +79,3 @@ def test_launch_interactive_reports_terminal_failure(tmp_path, monkeypatch):
     result = launch.launch_interactive(agent="fake", project_dir=tmp_path)
     assert not result.ok and "no console" in result.error
     assert Registry.default().all() == []
-
-
-# --- launch session modes (launch-mode-process-skill) ------------------------
-
-def test_mode_preamble_loads_the_inline_batch_skill():
-    from horus import launch
-    pre = launch.mode_preamble("inline-batch")
-    assert "inline-batch-session" in pre and "invoke" in pre.lower()
-
-
-def test_mode_preamble_loads_the_all_gas_no_breaks_skill():
-    pre = launch.mode_preamble("all-gas-no-breaks")
-    assert "all-gas-no-breaks-session" in pre and "invoke" in pre.lower()
-
-
-def test_mode_preamble_is_empty_for_standard_or_none():
-    from horus import launch
-    assert launch.mode_preamble("standard") == ""
-    assert launch.mode_preamble(None) == ""
-    assert launch.mode_preamble("") == ""
-
-
-def test_launch_modes_and_summary_copy_are_complete():
-    assert launch.LAUNCH_MODES == (
-        "standard",
-        "inline-batch",
-        "all-gas-no-breaks",
-    )
-    assert launch.LAUNCH_MODE_COPY["standard"][0] == "Standard"
-    assert launch.LAUNCH_MODE_COPY["inline-batch"][0] == "Inline Batch"
-    assert launch.LAUNCH_MODE_COPY["all-gas-no-breaks"][0] == "All Gas No Breaks"
-    assert all(summary for _label, summary in launch.LAUNCH_MODE_COPY.values())

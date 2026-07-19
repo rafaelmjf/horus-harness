@@ -81,26 +81,6 @@ def freshness_gate(root: Path) -> list[Finding]:
     return routines.freshness_signals(root) + backlog.hygiene_findings(root)
 
 
-def continuity_granularity(root: Path | None = None) -> str:
-    """The effective narrative-checkpoint policy.
-
-    A project may commit ``continuity_granularity`` in PRD/project frontmatter
-    when CI and every machine must share a stricter policy. Otherwise the TUI/
-    user-config default applies; a clean CI runner and a second machine get the
-    universal ``handoff`` fallback.
-    """
-    if root is not None:
-        hdir = root / ".horus"
-        for name in (frontmatter.PRD_FILE, "project.md"):
-            doc = frontmatter.parse_file(hdir / name)
-            if doc is None:
-                continue
-            value = doc.front_matter.get("continuity_granularity")
-            if isinstance(value, str) and value in config.CONTINUITY_GRANULARITY_CHOICES:
-                return value
-    return config.load_continuity_defaults()["granularity"]
-
-
 def _canonical_continuity_paths(root: Path) -> tuple[str, ...]:
     if frontmatter.has_prd(root):
         return (".horus/PRD.md",)
@@ -297,18 +277,16 @@ def boundary_freshness_gate(root: Path) -> list[Finding]:
     return freshness_gate(root) + pending_delivery_findings(root) + parallel_delivery_findings(root)
 
 
-def pr_diff_freshness(
-    root: Path,
-    base_ref: str,
-    *,
-    granularity: str | None = None,
-) -> list[Finding]:
-    """Apply the configured PR-boundary continuity policy.
+def pr_diff_freshness(root: Path, base_ref: str) -> list[Finding]:
+    """Report how this PR's diff stands against canonical continuity.
 
-    ``delivery`` requires canonical continuity in the diff. ``handoff`` and
-    ``manual`` accept the git commit itself as the durable delivery receipt and
-    let :func:`pending_delivery_commits` carry it to the next narrative
-    checkpoint. This is server-side and never mutates the checkout.
+    One universal rule (2026-07-19): the git commit itself is the durable delivery
+    receipt, and canonical `.horus/` prose is folded at the next real boundary —
+    a pause, session end, agent/account/machine handoff, release, or dispatch that
+    needs durable context. There is no per-project or per-machine granularity knob
+    that can turn this into a merge-blocking gate; delivery safety lives in the
+    branch/PR/CI evidence, not in prose freshness. Server-side; never mutates the
+    checkout.
     """
     changed_text = _git(root, "diff", "--name-only", f"{base_ref}...HEAD")
     if changed_text is None:
@@ -338,19 +316,10 @@ def pr_diff_freshness(
         label = ".horus/{project,roadmap,features}.md"
     updated = sorted(homes.intersection(changed))
     if not updated:
-        mode = granularity or continuity_granularity(root)
-        if mode != "delivery":
-            return [Finding(
-                "ok",
-                f"PR product/source changes are durable in git; canonical continuity is "
-                f"deferred to the next {mode} boundary",
-            )]
-        sample = ", ".join(work[:3])
-        suffix = f" (+{len(work) - 3} more)" if len(work) > 3 else ""
         return [Finding(
-            "fail",
-            f"PR changes product/source files ({sample}{suffix}) but does not update "
-            f"{label}; close continuity before merging",
+            "ok",
+            f"PR product/source changes are durable in git; canonical continuity "
+            f"({label}) is folded at the next real boundary",
         )]
     return [Finding(
         "ok",
@@ -359,18 +328,13 @@ def pr_diff_freshness(
 
 
 def pr_freshness_gate(root: Path, base_ref: str) -> list[Finding]:
-    """PR-boundary signals for the effective narrative granularity.
+    """PR-boundary continuity signals — informational, never a merge blocker.
 
-    Card archival is canonical continuity too: handoff/manual may batch a
-    delivered card until the real boundary, while delivery mode retains the
-    old per-PR hygiene requirement. Dashboard field validity remains checked in
-    every mode.
+    Card archival is canonical continuity too, so it batches to the next real
+    boundary along with the rest of the prose. Dashboard field validity is still
+    checked on every PR because a malformed field breaks a reader, not a ritual.
     """
-    mode = continuity_granularity(root)
-    findings = routines.freshness_signals(root)
-    if mode == "delivery":
-        findings.extend(backlog.hygiene_findings(root))
-    return findings + pr_diff_freshness(root, base_ref, granularity=mode)
+    return routines.freshness_signals(root) + pr_diff_freshness(root, base_ref)
 
 
 def _parse_frontmatter_date(value: object) -> date | None:

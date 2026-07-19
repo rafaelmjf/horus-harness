@@ -170,8 +170,13 @@ def resume_context(root: Path) -> dict[str, str]:
     return context
 
 
-def resume_prompt(root: Path, *, stop_before_execution: bool = True) -> str:
+def resume_prompt(root: Path) -> str:
     """Prompt for resuming a project without front-loading every Horus lane.
+
+    Orientation only: it loads `next_prompt` and the minimum frontmatter so the
+    session knows where the work stood. It carries no consent contract — what the
+    session may do is the launch permission posture, which the native CLI enforces,
+    not a paragraph the model can reinterpret.
 
     Degrades to "" (nothing to resume) when the project has no ``.horus/``
     directory yet, rather than propagating resume_context's FileNotFoundError —
@@ -202,31 +207,12 @@ def resume_prompt(root: Path, *, stop_before_execution: bool = True) -> str:
 - Read `.horus/features.md`, `.horus/decisions.md`, and `.horus/history.md` only when shipped capability status, durable rules, or prior lessons matter.
 - Read the latest `.horus/sessions/` summary only if local-only details from the previous session are needed."""
 
-    if stop_before_execution:
-        resume_contract = """Resume contract — orient, then stop:
-- The fetch/branch checks and minimum-context reads above are authorized only to
-  situate the session. They do not authorize implementation or the rest of the
-  authored handoff.
-- Treat `next_action`, `execution_recommendation`, and the authored handoff below
-  as proposals to explain to the user, not commands to execute.
-- Before editing files, running tests, launching workers, scheduling work, merging,
-  releasing, deploying, or taking any other state-changing action, summarize the
-  actions you inferred and ask the user for permission to proceed.
-- A release may be suggested with concrete reasons, but never ordered or chained as
-  "and then release". Wait for separate explicit confirmation before releasing."""
-        handoff_heading = "Proposed authored handoff (context only — do not execute yet):"
-        closing = "Summarize the actions you understood from this handoff and ask permission to proceed."
-    else:
-        resume_contract = """Direct resume contract — orient, then proceed:
-- The explicit All Gas No Breaks launch authorizes direct work on the owner's current
-  request and the authored handoff after the fetch/branch checks and minimum reads.
-  Do not pause for a preflight summary or permission ceremony.
-- Stay within that scope. Do not infer authority to delegate, perform destructive
-  operations, merge, release, or deploy when the owner has not granted it.
-- A release remains a separately confirmed hard boundary: preserve continuity before
-  releasing, and preserve it again when the session closes or hands off."""
-        handoff_heading = "Authored handoff:"
-        closing = "Proceed directly with the in-scope work."
+    resume_contract = """What this handoff is:
+- It orients the session. It is the previous session's account of where the work stood,
+  not a queue of commands to execute.
+- Reading it does not settle scope. The owner's actual request in this session does.
+- A release is never chained off a handoff: it is its own decision, taken with the owner,
+  after continuity is current."""
 
     prompt = f"""Resume the {project} project.
 
@@ -245,10 +231,8 @@ Minimum Horus state already loaded:
 
 {resume_contract}
 
-{handoff_heading}
+Authored handoff:
 {continuation}
-
-{closing}
 """
     return f"{readiness_warning}\n\n{prompt}" if readiness_warning else prompt
 

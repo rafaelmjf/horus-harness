@@ -2864,10 +2864,10 @@ def cmd_close(args: argparse.Namespace) -> int:
         )
         findings = freshness + closure.checkpoint_gate(root)
         healthy = _print_findings(findings)
-        if healthy and base_ref and closure.continuity_granularity(root) != "delivery":
+        if healthy and base_ref:
             print(
                 "\nDelivery accepted — git evidence is durable; canonical continuity may remain "
-                "pending until the next configured boundary."
+                "pending until the next real boundary."
             )
         elif healthy:
             print("\nFresh — canonical continuity and work are checkpointed.")
@@ -3424,14 +3424,9 @@ def _checkpoint_hook(root: Path, *, block: bool) -> int:
     or has unpushed commits. Silent + exit 0 when the checkpoint is clean or on any
     trouble — the hook signals only via stdout JSON and never a non-zero exit, so the
     `|| exit 0` guard can't mask a real decision."""
-    # Per-turn harvesting is the old high-granularity behavior.  Handoff (the
-    # default) and manual modes leave session notes untouched until an explicit
-    # boundary close, avoiding a post-commit hook edit after every delivery.
-    if closure.continuity_granularity(root) == "delivery":
-        try:
-            closure.harvest_checkpoint(root)
-        except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)
-            pass
+    # Per-turn harvesting was the old high-granularity behavior; it is gone with the
+    # granularity knob (2026-07-19). Session notes stay untouched until an explicit
+    # boundary close, so no post-commit hook edit follows every delivery.
     try:
         findings = closure.checkpoint_gate(root)
     except Exception:  # noqa: BLE001 (guard invariant: never let the hook error out)

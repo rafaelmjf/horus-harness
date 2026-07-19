@@ -33,49 +33,46 @@ def test_is_git_repo(tmp_path, monkeypatch):
     assert closure.is_git_repo(tmp_path)
 
 
-def test_pr_diff_freshness_delivery_mode_requires_prd_for_product_changes(tmp_path, monkeypatch):
-    _setup(tmp_path, monkeypatch)
-    base = subprocess.run(
-        ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-
-    (tmp_path / "feature.py").write_text("SHIPPED = True\n", encoding="utf-8")
-    _run(tmp_path, "add", "feature.py")
-    _run(tmp_path, "commit", "-m", "source only")
-    findings = closure.pr_diff_freshness(tmp_path, base, granularity="delivery")
-    assert findings[0].level == "fail"
-    assert "does not update .horus/PRD.md" in findings[0].message
-
-    prd = tmp_path / ".horus" / "PRD.md"
-    prd.write_text(prd.read_text(encoding="utf-8") + "\n<!-- closed -->\n", encoding="utf-8")
-    _run(tmp_path, "add", ".horus/PRD.md")
-    _run(tmp_path, "commit", "-m", "close continuity")
-    findings = closure.pr_diff_freshness(tmp_path, base, granularity="delivery")
-    assert findings[0].level == "ok"
-    assert "canonical continuity" in findings[0].message
-
-
-def test_pr_diff_freshness_handoff_default_defers_canonical_update(tmp_path, monkeypatch):
+def test_pr_diff_freshness_never_blocks_a_merge_on_prose(tmp_path, monkeypatch):
+    """One universal rule (2026-07-19): the commit is the durable delivery receipt and
+    canonical prose folds at the next real boundary. There is no granularity knob that
+    can turn a missing PRD update into a merge-blocking failure."""
     _setup(tmp_path, monkeypatch)
     base = subprocess.run(
         ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
         check=True, capture_output=True, text=True,
     ).stdout.strip()
-    (tmp_path / "feature.py").write_text("SHIPPED = True\n", encoding="utf-8")
-    _run(tmp_path, "add", "feature.py")
-    _run(tmp_path, "commit", "-m", "source only")
+    _work_commit(tmp_path, "feature.py", "SHIPPED = True\n", "source only")
 
     findings = closure.pr_diff_freshness(tmp_path, base)
 
     assert findings[0].level == "ok"
     assert "durable in git" in findings[0].message
-    assert "handoff boundary" in findings[0].message
+    assert "next real boundary" in findings[0].message
+    assert not any(finding.level == "fail" for finding in findings)
 
 
-def test_project_frontmatter_can_enforce_delivery_mode_in_ci(tmp_path, monkeypatch):
+def test_pr_diff_freshness_still_reports_included_continuity(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    base = subprocess.run(
+        ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    _work_commit(tmp_path, "feature.py", "SHIPPED = True\n", "source only")
+    prd = tmp_path / ".horus" / "PRD.md"
+    prd.write_text(prd.read_text(encoding="utf-8") + "\n<!-- closed -->\n", encoding="utf-8")
+    _run(tmp_path, "add", ".horus/PRD.md")
+    _run(tmp_path, "commit", "-m", "close continuity")
+
+    findings = closure.pr_diff_freshness(tmp_path, base)
+
+    assert findings[0].level == "ok"
+    assert "canonical continuity" in findings[0].message
+
+
+def test_project_frontmatter_can_no_longer_enforce_a_stricter_mode(tmp_path, monkeypatch):
+    """A committed `continuity_granularity` is inert — the axis is gone, so a stale
+    frontmatter key from an older project cannot resurrect a blocking gate."""
     _setup(tmp_path, monkeypatch)
     prd = tmp_path / ".horus" / "PRD.md"
     prd.write_text(
@@ -85,20 +82,19 @@ def test_project_frontmatter_can_enforce_delivery_mode_in_ci(tmp_path, monkeypat
         encoding="utf-8",
     )
     _run(tmp_path, "add", ".horus/PRD.md")
-    _run(tmp_path, "commit", "-m", "configure strict continuity")
+    _run(tmp_path, "commit", "-m", "stale strict continuity key")
     base = subprocess.run(
         ["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
         check=True, capture_output=True, text=True,
     ).stdout.strip()
     _work_commit(tmp_path, "feature.py", "SHIPPED = True\n", "source only")
 
-    assert closure.continuity_granularity(tmp_path) == "delivery"
+    assert not hasattr(closure, "continuity_granularity")
     findings = closure.pr_diff_freshness(tmp_path, base)
-    assert findings[0].level == "fail"
-    assert "does not update .horus/PRD.md" in findings[0].message
+    assert findings[0].level == "ok"
 
 
-def test_handoff_pr_defers_card_archival_but_delivery_mode_keeps_it_strict(tmp_path, monkeypatch):
+def test_pr_freshness_gate_batches_card_archival_to_the_boundary(tmp_path, monkeypatch):
     monkeypatch.setattr(closure.routines, "freshness_signals", lambda root: [])
     monkeypatch.setattr(
         closure.backlog,
@@ -106,18 +102,14 @@ def test_handoff_pr_defers_card_archival_but_delivery_mode_keeps_it_strict(tmp_p
         lambda root: [Finding("warn", "done card awaits archive")],
     )
     monkeypatch.setattr(
-        closure,
-        "pr_diff_freshness",
-        lambda root, base_ref, granularity=None: [Finding("ok", f"diff {granularity}")],
+        closure, "pr_diff_freshness", lambda root, base_ref: [Finding("ok", "diff ok")]
     )
 
-    monkeypatch.setattr(closure, "continuity_granularity", lambda root=None: "handoff")
-    handoff = closure.pr_freshness_gate(tmp_path, "origin/main")
-    assert [finding.message for finding in handoff] == ["diff handoff"]
+    findings = closure.pr_freshness_gate(tmp_path, "origin/main")
 
-    monkeypatch.setattr(closure, "continuity_granularity", lambda root=None: "delivery")
-    delivery = closure.pr_freshness_gate(tmp_path, "origin/main")
-    assert any("done card awaits archive" in finding.message for finding in delivery)
+    # Card archival is canonical continuity too, so it batches with the rest of the
+    # prose rather than nagging on every PR.
+    assert [finding.message for finding in findings] == ["diff ok"]
 
 
 def test_pending_delivery_commits_are_portable_git_history_signal(tmp_path, monkeypatch):

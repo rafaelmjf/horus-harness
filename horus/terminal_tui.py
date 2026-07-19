@@ -79,7 +79,7 @@ class _Launch:
     prompt_override: str | None = None
     model: str | None = None
     effort: str | None = None
-    session_mode: str | None = None
+    posture: str | None = None
 
 
 @dataclass(frozen=True)
@@ -122,10 +122,10 @@ _POSTURE_LABELS: dict[str, str] = {
     "full-auto": "Full-auto — bypass permissions (dangerous; unattended)",
 }
 
-_CONTINUITY_LABELS: dict[str, str] = {
-    "handoff": "Handoffs & pauses — batch related deliveries (recommended)",
-    "delivery": "Every delivery — update canonical continuity for each PR",
-    "manual": "Manual only — keep warnings until an explicit checkpoint",
+# Just the explanation half of _POSTURE_LABELS, for the launch form's expanded row
+# (which prints the posture name itself as the choice label).
+_POSTURE_HELP: dict[str, str] = {
+    key: label.split(" — ", 1)[1] for key, label in _POSTURE_LABELS.items()
 }
 
 # How a TUI-launched session opens (`config.LAUNCH_WINDOW_CHOICES`). `new-window`
@@ -190,7 +190,10 @@ class TerminalUI:
         self.pending_account: LaunchAccount | None = None
         self.pending_model: str | None = None
         self.pending_effort: str | None = None
-        self.pending_session_mode: str | None = None
+        self.pending_posture: str | None = None
+        # Which row of the consolidated launch form is expanded to show its
+        # alternatives, or None while the form is in its compact review state.
+        self.launch_expanded: str | None = None
         self.card: backlog.Card | None = None
         self.card_scroll = 0
         self.backlog_fields = config.load_backlog_fields()
@@ -542,34 +545,23 @@ class TerminalUI:
         elif self.screen == "accounts" and kind == "account":
             if isinstance(value, LaunchAccount):
                 self.pending_account = value
-                self.pending_model = None
-                self.pending_effort = None
-                self.pending_session_mode = None
-                self._show("models")
-        elif self.screen == "models" and kind == "model":
-            self.pending_model = value if value is None else str(value)
-            self._show("effort")
-        elif self.screen == "effort" and kind == "effort":
-            self.pending_effort = value if value is None else str(value)
-            self._show("session_mode")
-        elif self.screen == "session_mode" and kind == "session_mode":
-            self.pending_session_mode = value if value is None else str(value)
-            if self.pending_account is not None:
-                self._exit_launch(self.pending_account)
+                # Preselect this agent's saved profile so the common case is a single
+                # keypress on Launch; an unusual model stays a per-launch override.
+                profile = config.load_launch_profile(value.agent)
+                self.pending_model = profile.get("model")
+                self.pending_effort = profile.get("effort")
+                self.pending_posture = profile.get(
+                    "posture", config.load_launch_defaults()["posture"]
+                )
+                self.launch_expanded = None
+                self._show("launch_form")
+        elif self.screen == "launch_form":
+            self._handle_launch_form(kind, value)
         elif self.screen == "settings" and kind == "posture":
             posture = str(value)
             config.set_launch_default_posture(posture)
             self._refresh_items()
             self.status = f"Default launch posture set to {posture}."
-            self.application.invalidate()
-        elif self.screen == "settings" and kind == "continuity":
-            granularity = str(value)
-            config.set_continuity_granularity(granularity)
-            self._refresh_items()
-            self.selected = len(config.LAUNCH_POSTURE_CHOICES) + config.CONTINUITY_GRANULARITY_CHOICES.index(
-                granularity
-            )
-            self.status = f"Continuity granularity set to {granularity}."
             self.application.invalidate()
         elif self.screen == "settings" and kind == "window":
             window = str(value)
@@ -577,7 +569,6 @@ class TerminalUI:
             self._refresh_items()
             self.selected = (
                 len(config.LAUNCH_POSTURE_CHOICES)
-                + len(config.CONTINUITY_GRANULARITY_CHOICES)
                 + config.LAUNCH_WINDOW_CHOICES.index(window)
             )
             self.status = f"Sessions now launch: {window}."
@@ -623,12 +614,15 @@ class TerminalUI:
             self._show("projects")
         elif self.screen == "accounts":
             self._show(self.pending_origin or ("card" if self.pending_card is not None else "project"))
-        elif self.screen == "models":
-            self._show("accounts")
-        elif self.screen == "effort":
-            self._show("models")
-        elif self.screen == "session_mode":
-            self._show("effort")
+        elif self.screen == "launch_form":
+            # An expanded row collapses first, so Back never loses the whole form
+            # when the owner was only peeking at a row's alternatives.
+            if self.launch_expanded is not None:
+                self.launch_expanded = None
+                self._refresh_items()
+                self.application.invalidate()
+            else:
+                self._show("accounts")
         elif self.screen == "backlog":
             self._show("project")
         elif self.screen == "backlog_fields":
@@ -666,6 +660,16 @@ class TerminalUI:
         self.selected = 0
         self.status = ""
         self._refresh_items()
+        if screen == "launch_form":
+            # Posture always has a concrete value — unlike model/effort there is no
+            # "agent default" to defer to, so an unset one resolves to the configured
+            # launch default rather than rendering as absent.
+            if self.pending_posture is None:
+                self.pending_posture = config.load_launch_defaults()["posture"]
+                self._refresh_items()
+            # Launch is focused by default: the saved profile is already correct for
+            # the common case, so the whole form should cost one keypress.
+            self.selected = max(0, len(self.items) - 1)
         self.application.invalidate()
 
     def _load_control(self) -> None:
@@ -803,20 +807,8 @@ class TerminalUI:
             ]
         elif self.screen == "accounts":
             self.items = [("account", account) for account in self.accounts]
-        elif self.screen == "models":
-            agent = self.pending_account.agent if self.pending_account else ""
-            models = list(_agent_models(agent))
-            # Toggle on → a Claude launch is proxied, so offer the proxy's GPT models
-            # next to the native Claude aliases (both are served through the one proxy).
-            # load_state() is a cheap file read (no network), reliable whether or not the
-            # Control pane has been visited this session.
-            if agent == "claude" and proxy.load_state().get("enabled"):
-                models += proxy.gpt_launch_models()
-            self.items = [("model", None)] + [("model", model) for model in models]
-        elif self.screen == "effort":
-            self.items = [("effort", None)] + [("effort", level) for level in adapters.EFFORT_LEVELS]
-        elif self.screen == "session_mode":
-            self.items = [("session_mode", mode) for mode in launch.LAUNCH_MODES]
+        elif self.screen == "launch_form":
+            self.items = self._launch_form_items()
         elif self.screen == "receipts":
             self.items = [("receipt", receipt) for receipt in self.project_receipts.get(self.project, [])]
         elif self.screen == "receipt":
@@ -877,9 +869,6 @@ class TerminalUI:
         elif self.screen == "settings":
             posture = config.load_launch_defaults()["posture"]
             self.items = [("posture", choice) for choice in config.LAUNCH_POSTURE_CHOICES]
-            self.items.extend(
-                ("continuity", choice) for choice in config.CONTINUITY_GRANULARITY_CHOICES
-            )
             self.items.extend(("window", choice) for choice in config.LAUNCH_WINDOW_CHOICES)
             self.selected = config.LAUNCH_POSTURE_CHOICES.index(posture)
         elif self.screen == "fleet_review":
@@ -904,6 +893,79 @@ class TerminalUI:
             return
         self.application.exit(result=_EditCard(self.project, self.card, review))
 
+    def _launch_model_choices(self) -> list[str]:
+        agent = self.pending_account.agent if self.pending_account else ""
+        models = list(_agent_models(agent))
+        # Toggle on → a Claude launch is proxied, so offer the proxy's GPT models
+        # next to the native Claude aliases (both are served through the one proxy).
+        # load_state() is a cheap file read (no network), reliable whether or not the
+        # Control pane has been visited this session.
+        if agent == "claude" and proxy.load_state().get("enabled"):
+            models += proxy.gpt_launch_models()
+        return models
+
+    def _launch_form_items(self) -> list[tuple[str, object]]:
+        """Rows of the consolidated launch form, with the expanded row's choices
+        spliced in beneath it. Launch is last so it stays the resting position."""
+        rows: list[tuple[str, object]] = []
+        for row, choices in (
+            ("model", [None] + self._launch_model_choices()),
+            ("effort", [None] + list(adapters.EFFORT_LEVELS)),
+            ("posture", list(config.LAUNCH_POSTURE_CHOICES)),
+        ):
+            rows.append(("launch_row", row))
+            if self.launch_expanded == row:
+                rows.extend((row, choice) for choice in choices)
+        rows.append(("save_defaults", None))
+        rows.append(("launch", None))
+        return rows
+
+    def _handle_launch_form(self, kind: str, value: object) -> None:
+        """One consolidated review form: model / effort / posture, then Launch.
+
+        Compact by default — each row shows only its selected value. Entering a row
+        expands its alternatives; picking one collapses back. `Save as defaults`
+        persists the current selection as this agent's profile, so an occasional
+        override never rewrites it.
+        """
+        if kind == "launch_row":
+            # Enter on a compact row expands it; entering the open row collapses it.
+            row = str(value)
+            self.launch_expanded = None if self.launch_expanded == row else row
+            self._refresh_items()
+            return
+        if kind in ("model", "effort", "posture"):
+            selected = value if value is None else str(value)
+            if kind == "model":
+                self.pending_model = selected
+            elif kind == "effort":
+                self.pending_effort = selected
+            else:
+                self.pending_posture = selected
+            self.launch_expanded = None
+            self._refresh_items()
+            return
+        if kind == "save_defaults":
+            if self.pending_account is not None:
+                profile = {
+                    key: val
+                    for key, val in (
+                        ("model", self.pending_model),
+                        ("effort", self.pending_effort),
+                        ("posture", self.pending_posture),
+                    )
+                    if val
+                }
+                try:
+                    config.save_launch_profile(self.pending_account.agent, profile)
+                    self.status = f"Saved as {self.pending_account.agent} launch defaults."
+                except (ValueError, OSError) as exc:
+                    self.status = f"Could not save defaults: {exc}"
+                self.application.invalidate()
+            return
+        if kind == "launch" and self.pending_account is not None:
+            self._exit_launch(self.pending_account)
+
     def _exit_launch(self, account: LaunchAccount) -> None:
         if self.project is None or self.pending_mode is None:
             return
@@ -917,7 +979,7 @@ class TerminalUI:
                 self.pending_prompt,
                 self.pending_model,
                 self.pending_effort,
-                self.pending_session_mode,
+                self.pending_posture,
             )
         )
 
@@ -947,9 +1009,11 @@ class TerminalUI:
             "projects": "HORUS · Projects",
             "project": f"HORUS · {self.project.name if self.project else 'Project'}",
             "accounts": f"HORUS · {self.pending_mode.title() if self.pending_mode else 'Choose'} account",
-            "models": f"HORUS · {self.pending_account.agent.title() if self.pending_account else 'Choose'} model",
-            "effort": "HORUS · Effort",
-            "session_mode": "HORUS · Session mode",
+            "launch_form": (
+                f"HORUS · Launch {self.pending_account.agent.title()}"
+                if self.pending_account
+                else "HORUS · Launch"
+            ),
             "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
             "backlog_fields": "HORUS · Backlog card fields",
             "card_priority": f"HORUS · Priority: {self.priority_card.name if self.priority_card else 'card'}",
@@ -1053,7 +1117,9 @@ class TerminalUI:
                 lines.append(("class:muted", f"\n  {vision}\n"))
             elif self.capabilities_error:
                 lines.append(("class:muted", f"\n  Capabilities unavailable: {self.capabilities_error}\n"))
-        recommended_model = self._recommended_model_for_launch() if self.screen == "models" else None
+        recommended_model = (
+            self._recommended_model_for_launch() if self.screen == "launch_form" else None
+        )
         under_branch = False  # backlog: are we rendering an expanded branch's children?
         for index, (kind, value) in enumerate(self.items):
             selected = index == self.selected
@@ -1146,28 +1212,47 @@ class TerminalUI:
                 lines.append((style, f"\n {marker} {account.agent.title()} {account.alias}\n"))
                 for meter_style, meter_text in _usage_meter_lines(self.account_usage.get((account.agent, account.alias))):
                     lines.append((meter_style, f"     {meter_text}\n"))
-            elif kind == "model":
+            elif kind == "launch_row":
+                row = str(value)
+                current = {
+                    "model": self.pending_model,
+                    "effort": self.pending_effort,
+                    "posture": self.pending_posture,
+                }[row]
+                label = {"model": "Model", "effort": "Effort", "posture": "Permission"}[row]
+                shown = str(current) if current else "agent default"
+                caret = "v" if self.launch_expanded == row else ">"
+                lines.append((style, f"\n {marker} {label:<11}{shown}  {caret}\n"))
+            elif kind in ("model", "effort", "posture") and self.screen == "launch_form":
+                # An expanded row's alternatives: indented, radio-marked, with the
+                # one-line help that stays hidden while the form is compact. Scoped to
+                # the form so it never shadows Settings' own `posture` rows below.
+                current = {
+                    "model": self.pending_model,
+                    "effort": self.pending_effort,
+                    "posture": self.pending_posture,
+                }[kind]
+                radio = "(o)" if value == current else "( )"
                 if value is None:
-                    lines.append((style, f"\n {marker} Default\n"))
-                    lines.append(("class:muted", "     Agent's default model\n"))
+                    label = "Default"
+                    detail = f"Agent's default {'model' if kind == 'model' else 'reasoning effort'}"
                 else:
                     label = str(value)
-                    if value == recommended_model:
+                    detail = _POSTURE_HELP.get(label, "") if kind == "posture" else ""
+                    if kind == "model" and value == recommended_model:
                         label += " (recommended)"
-                    lines.append((style, f"\n {marker} {label}\n"))
-            elif kind == "effort":
-                if value is None:
-                    lines.append((style, f"\n {marker} Default\n"))
-                    lines.append(("class:muted", "     Agent's default reasoning effort\n"))
-                else:
-                    lines.append((style, f"\n {marker} {value}\n"))
-            elif kind == "session_mode":
-                head, detail = launch.LAUNCH_MODE_COPY.get(
-                    str(value), (str(value), "")
-                )
-                lines.append((style, f"\n {marker} {head}\n"))
+                lines.append((style, f"\n   {marker} {radio} {label}\n"))
                 if detail:
-                    lines.append(("class:muted", f"     {detail}\n"))
+                    lines.append(("class:muted", f"        {detail}\n"))
+            elif kind == "save_defaults":
+                agent = self.pending_account.agent if self.pending_account else "this agent"
+                lines.append((style, f"\n {marker} Save as defaults\n"))
+                lines.append((
+                    "class:muted",
+                    f"     Remember this selection for every {agent} launch\n",
+                ))
+            elif kind == "launch":
+                lines.append((style, f"\n {marker} Launch\n"))
             elif kind == "card":
                 card = value
                 status = " · claimed" if card.status == "claimed" else ""
@@ -1257,16 +1342,8 @@ class TerminalUI:
                 active = "current" if posture == current else "      "
                 lines.append((style, f"\n {marker} [{active}] {posture}\n"))
                 lines.append(("class:muted", f"     {_POSTURE_LABELS.get(posture, '')}\n"))
-            elif kind == "continuity":
-                if index == len(config.LAUNCH_POSTURE_CHOICES):
-                    lines.append(("class:section", "\n  Continuity checkpoint\n"))
-                granularity = str(value)
-                current = config.load_continuity_defaults()["granularity"]
-                active = "current" if granularity == current else "      "
-                lines.append((style, f"\n {marker} [{active}] {granularity}\n"))
-                lines.append(("class:muted", f"     {_CONTINUITY_LABELS.get(granularity, '')}\n"))
             elif kind == "window":
-                if index == len(config.LAUNCH_POSTURE_CHOICES) + len(config.CONTINUITY_GRANULARITY_CHOICES):
+                if index == len(config.LAUNCH_POSTURE_CHOICES):
                     lines.append(("class:section", "\n  Session window\n"))
                 window = str(value)
                 current = config.load_launch_defaults()["window"]
@@ -2572,11 +2649,9 @@ def _run_campaign_prompt(projects: list[Path]) -> tuple[Path, str] | None:
     return cockpit, prompt
 
 
-def _card_prompt(
-    root: Path, card: backlog.Card, *, stop_before_execution: bool = True
-) -> str:
+def _card_prompt(root: Path, card: backlog.Card) -> str:
     return (
-        f"{routines.resume_prompt(root, stop_before_execution=stop_before_execution)}\n\n"
+        f"{routines.resume_prompt(root)}\n\n"
         f"Work on this backlog card first: {card.title}. Read the full card at "
         f"`.horus/backlog/{card.path.name}` before changing code, and treat it as the "
         "first item for this session."
@@ -2584,27 +2659,18 @@ def _card_prompt(
 
 
 def _launch_prompt(result: _Launch) -> str:
-    """The initial prompt for a launched session, with the session-mode skill preamble
-    prepended (so an `inline-batch` launch loads its posture skill first). Kept module-level
-    and pure so the mode wiring is testable without driving the interactive app."""
+    """The initial prompt for a launched session — purely a question of WHAT CONTEXT
+    the launch loads.
+
+    A card launch loads that card's scope; a resume loads the authored handoff; a
+    fresh launch loads NOTHING and returns "" so the owner types into an empty
+    session. Nothing is prepended: there is no mode preamble to spend a turn on.
+    Kept module-level and pure so the wiring is testable without driving the app."""
     if result.prompt_override is not None:
-        prompt = result.prompt_override
-    elif result.card is not None:
-        prompt = _card_prompt(
-            result.project,
-            result.card,
-            stop_before_execution=result.session_mode != "all-gas-no-breaks",
-        )
-    else:
-        prompt = (
-            routines.resume_prompt(
-                result.project,
-                stop_before_execution=result.session_mode != "all-gas-no-breaks",
-            )
-            if result.mode == "resume"
-            else ""
-        )
-    return launch.mode_preamble(result.session_mode) + prompt
+        return result.prompt_override
+    if result.card is not None:
+        return _card_prompt(result.project, result.card)
+    return routines.resume_prompt(result.project) if result.mode == "resume" else ""
 
 
 def _launch(

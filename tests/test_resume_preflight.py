@@ -94,7 +94,6 @@ def test_gather_projects_all_required_signals_and_renders_freshness(tmp_path, mo
         "pending_delivery_commits",
         lambda root: [("a" * 40, "feat: pending delivery")],
     )
-    monkeypatch.setattr(resume_preflight.closure, "continuity_granularity", lambda root=None: "handoff")
     usage_calls = _patch_machine(
         monkeypatch,
         datums=[Datum(session_id="datum-open", model="sonnet-5", launched_at="2026-07-14T10:00:00+00:00")],
@@ -135,7 +134,7 @@ def test_gather_projects_all_required_signals_and_renders_freshness(tmp_path, mo
     assert "USAGE codex [STALE] 5h=97%" in rendered
     assert "USAGE claude [FRESH] 5h=42%" in rendered
     assert "HANDOFF demo | focus=Focus now | next=Do next" in rendered
-    assert "CONTINUITY demo [WARN] mode=handoff pending=1" in rendered
+    assert "CONTINUITY demo [WARN] pending=1" in rendered
     assert "DATUMS open=1 | datum-op:sonnet-5/pending" in rendered
     assert "SESSIONS running=2" in rendered
     assert "SESSIONS stale=0" in rendered
@@ -200,7 +199,7 @@ def test_render_surfaces_a_parallel_delivery_signal():
             "handoff": {"current_focus": "f", "next_action": "n", "next_prompt": "p",
                         "execution_recommendation": "continue-as-is"},
             "continuity": {
-                "granularity": "handoff", "pending": 0, "deliveries": [],
+                "pending": 0, "deliveries": [],
                 "parallel": [{"kind": "merged-pr", "ref": "42",
                               "detail": "PR #42 merged (abc12345) not yet in canonical continuity"}],
             },
@@ -210,4 +209,4 @@ def test_render_surfaces_a_parallel_delivery_signal():
     rendered = resume_preflight.render_text(digest)
     assert "PARALLEL demo [WARN] PR #42 merged" in rendered
     # a parallel signal alone flips CONTINUITY to WARN even with pending=0
-    assert "CONTINUITY demo [WARN] mode=handoff pending=0" in rendered
+    assert "CONTINUITY demo [WARN] pending=0" in rendered
