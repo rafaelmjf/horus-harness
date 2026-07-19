@@ -503,6 +503,67 @@ def test_cli_schedules_warmup_verbatim(units, tmp_path):
     assert schedule.load_all()[0].command[1:] == ("-m", "horus", "warmup")
 
 
+def test_cli_refuses_a_mis_armed_codex_delivery_dispatch(units, tmp_path):
+    """A codex dispatch that expects a git/PR delivery but is armed with codex's
+    network-off sandbox posture is refused at ARM time — not hours later in the
+    journal (away-batch-3, 2026-07-19). The same argv would run at fire time, so
+    catch the contradiction now, before anything is armed."""
+    parser = cli.build_parser()
+    args = parser.parse_args([
+        "schedule", "run", "--at", "+1h", "--",
+        "implement the card", "--unattended", "--envelope", "e", "--card", "c",
+        "--account", "codex-personal", "--agent", "codex", "--worker", "codex",
+        "--worktree", "away/c", "--expect-delivery",
+    ])
+    assert cli.cmd_schedule_at(args) == 2
+    assert schedule.load_all() == []  # nothing was armed
+
+
+def test_cli_arms_the_same_codex_dispatch_with_full_auto(units, tmp_path):
+    """The identical dispatch WITH --posture full-auto (which bypasses codex's sandbox)
+    arms normally — the guard refuses only the combination that cannot deliver."""
+    parser = cli.build_parser()
+    args = parser.parse_args([
+        "schedule", "run", "--at", "+1h", "--",
+        "implement the card", "--unattended", "--envelope", "e", "--card", "c",
+        "--account", "codex-personal", "--agent", "codex", "--worker", "codex",
+        "--worktree", "away/c", "--expect-delivery", "--posture", "full-auto",
+    ])
+    assert cli.cmd_schedule_at(args) == 0
+    assert len(schedule.load_all()) == 1
+
+
+def test_cli_arms_a_claude_delivery_dispatch_unaffected(units, tmp_path):
+    """Claude's worker posture already bypasses its sandbox, so a claude delivery
+    dispatch is never touched by the codex guard."""
+    parser = cli.build_parser()
+    args = parser.parse_args([
+        "schedule", "run", "--at", "+1h", "--",
+        "implement the card", "--unattended", "--envelope", "e", "--card", "c",
+        "--account", "claude-work", "--agent", "claude", "--worker", "claude",
+        "--worktree", "away/c", "--expect-delivery",
+    ])
+    assert cli.cmd_schedule_at(args) == 0
+    assert len(schedule.load_all()) == 1
+
+
+def test_scheduled_run_delivery_error_covers_implicit_and_bare_forms():
+    """The arm-time mirror handles the shapes schedule run actually sees: an
+    unattended codex dispatch with no explicit worktree still gets an auto/<card>
+    one; a bare subcommand carries no delivery contract."""
+    cmds = frozenset({"run", "supervise", "warmup"})
+    # unattended codex, no explicit --worktree/--worker → auto/<card> + worker=agent.
+    implicit = ["implement", "--unattended", "--envelope", "e", "--card", "c", "--agent", "codex"]
+    assert cli._scheduled_run_delivery_error(implicit, cmds) is not None
+    # a bare subcommand (supervise/warmup) has no posture/delivery contract.
+    assert cli._scheduled_run_delivery_error(["supervise", "abc123"], cmds) is None
+    assert cli._scheduled_run_delivery_error(["warmup"], cmds) is None
+    # an explicit `run` token is unwrapped before re-parsing.
+    explicit_run = ["run", "implement", "--unattended", "--envelope", "e", "--card", "c",
+                    "--agent", "codex", "--posture", "full-auto"]
+    assert cli._scheduled_run_delivery_error(explicit_run, cmds) is None
+
+
 def test_cli_still_prepends_run_for_a_prompt(units, tmp_path):
     """A leading token that is NOT a horus subcommand is a `run` prompt — the primary
     form stays backward-compatible even with the live command set present."""

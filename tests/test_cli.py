@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from horus import adapters, closure, config, github_catalog, launcher, mergewatch, registry, reinstall, remote_start, terminal_sessions, upgrade
+from horus import adapters, cli, closure, config, github_catalog, launcher, mergewatch, registry, reinstall, remote_start, terminal_sessions, upgrade
 from horus.cli import main
 from horus.instructions import check_drift
 from horus.registry import Registry, SessionRecord
@@ -2266,6 +2266,44 @@ def test_run_help_explains_codex_worker_full_auto_requirement(capsys):
     assert "fetch/push/PR" in out
     assert "local-server/browser verification require --posture full-auto" in out
     assert "bypasses approvals and sandbox" in out
+
+
+def test_codex_delivery_posture_error_matrix():
+    """The shared guard: a codex dispatch that expects a git/PR delivery but is armed
+    with a network-off sandbox posture is the ONLY refused combination (away-batch-3,
+    2026-07-19 — the codex worker implemented its card but could never push)."""
+    err = cli._codex_delivery_posture_error
+    # codex delivery under any sandboxed (non-full-auto) posture: refused, fix named.
+    for posture in ("auto-edit", "default", "read-only", "plan"):
+        msg = err(agent="codex", posture=posture, expect_delivery=True, has_worktree=True)
+        assert msg is not None and "--posture full-auto" in msg
+    # a worktree alone is still a delivery intent for codex (its .git is in the parent,
+    # outside the sandbox's writable root — no commit/push possible).
+    assert err(agent="codex", posture="auto-edit", expect_delivery=False, has_worktree=True) is not None
+    # full-auto bypasses codex's sandbox + approvals → accepted.
+    assert err(agent="codex", posture="full-auto", expect_delivery=True, has_worktree=True) is None
+    # codex with no delivery intent → accepted (a read/implement-only run is fine).
+    assert err(agent="codex", posture="auto-edit", expect_delivery=False, has_worktree=False) is None
+    # claude's worker posture already bypasses its sandbox → never our concern.
+    assert err(agent="claude", posture="auto-edit", expect_delivery=True, has_worktree=True) is None
+    # the message points at whichever delivery signal was set.
+    assert "--expect-delivery" in err(agent="codex", posture="auto-edit", expect_delivery=True, has_worktree=False)
+    assert "--worktree" in err(agent="codex", posture="auto-edit", expect_delivery=False, has_worktree=True)
+
+
+def test_run_refuses_codex_delivery_without_full_auto(tmp_path, monkeypatch, capsys):
+    """cmd_run fails fast — before any worktree or worker is created — on a codex
+    delivery dispatch armed with a network-off posture, naming the fix."""
+    _home(tmp_path, monkeypatch)
+    rc = main(["run", "hi", "--agent", "codex", "--worktree", "away/x",
+               "--expect-delivery", "--path", str(tmp_path)])
+    assert rc == 2
+    out = capsys.readouterr().out
+    assert "--posture full-auto" in out
+    assert "cannot git push" in out
+    # nothing was created: no worktree beside the repo, no session recorded.
+    assert not list(tmp_path.parent.glob(f"{tmp_path.name}-wt-*"))
+    assert Registry.default().all() == []
 
 
 def test_run_explicit_posture_beats_worker_preset(tmp_path, monkeypatch):
