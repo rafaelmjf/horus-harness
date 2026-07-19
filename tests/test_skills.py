@@ -399,7 +399,11 @@ def test_both_consumer_skills_import_the_shared_rubric():
 
 def test_execution_decision_skill_is_in_project_subagents():
     skill = next(s for s in skills.SKILLS if s.name == "execution-decision")
-    assert skill.version == 4
+    assert skill.version == 5
+    assert "Owner-invoked only" in skill.content
+    assert "owner explicitly" in skill.content
+    assert "does not trigger this skill" in skill.content
+    assert "merely to populate `execution_recommendation`" in skill.content
     # Its mode vocabulary + the in-project verification specialization.
     assert "`inline`" in skill.content and "`subagent-plan`" in skill.content
     assert "RUNS the gate at the phase boundary" in skill.content
@@ -440,7 +444,7 @@ def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
 
 def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
-    assert consolidate.version == 13
+    assert consolidate.version == 14
     assert "PRD.md" in consolidate.content
     assert "no lane-routing/overlap warnings" in consolidate.content
     assert "~250-line cap" in consolidate.content
@@ -458,6 +462,8 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     assert "resume-consent contract" in consolidate.content
     assert "ask permission before editing" in consolidate.content
     assert "separate explicit release confirmation" in consolidate.content
+    assert "Setting this field is not a trigger" in consolidate.content
+    assert "owner explicitly asks whether or how to delegate" in consolidate.content
     # sessions/ and temp/ handoff notes stay unchanged in v3.
     assert "temp/" in consolidate.content
 
@@ -677,11 +683,17 @@ def test_process_retrospective_skill_registered_and_projected():
 
 def test_inline_batch_session_skill_registered_and_batches():
     s = next(x for x in skills.SKILLS if x.name == "inline-batch-session")
-    assert s.version == 2
+    assert s.version == 3
     # posture: per-card delivery safety kept, ALL continuity held to a hard boundary
     assert "delivery safety" in s.content
     assert "hard boundary" in s.content
     # a version release is named as a boundary, and finishing/merging is explicitly NOT one
     assert "version release" in s.content
     assert "NOT a boundary" in s.content and "manufacture a boundary" in s.content
+    assert "Classify the unit" in s.content
+    assert "Backlog card" in s.content and "Ad-hoc finding" in s.content
+    assert "one-card/one-PR" in s.content
+    assert "no per-finding PR" in s.content
+    assert "batch branch" in s.content
+    assert "ask the owner if" in s.content
     assert "## v2 six-lane projects (fallback)" in s.content

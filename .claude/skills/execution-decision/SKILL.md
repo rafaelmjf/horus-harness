@@ -3,17 +3,18 @@ name: execution-decision
 description: >-
   Decide HOW to execute an in-project task on the Claude/Codex subagents
   substrate: recommend `inline` vs `subagent-plan`, a model tier, and a
-  verification depth. Use this at the planning boundary of a feature or fix
-  inside one repo — when `execution_recommendation` needs setting, when weighing
-  whether to spawn an implementation subagent/worker, or before writing an
-  `execution.md` phase plan. It reads live calibration data (`horus capabilities
-  --models`) through the shared delegation rubric so the recommendation reflects
-  the current datums. Advisory: it EMITS a recommendation you apply — it never
-  auto-selects a model or auto-spawns a worker. For cross-project cockpit
-  dispatch use `dispatch-decision` instead.
+  verification depth. Owner-invoked only: use this ONLY when the owner explicitly
+  asks whether or how to delegate, hand work to a worker/subagent, or prepare a
+  delegated execution plan. Do not trigger it for ordinary feature/fix planning,
+  merely because `execution_recommendation` needs setting, or because the agent
+  wonders whether delegation might help; stay inline without loading it. It reads
+  live calibration data (`horus capabilities --models`) through the shared
+  delegation rubric. Advisory: it EMITS a recommendation you apply — it never
+  auto-selects a model or auto-spawns a worker. For cross-project cockpit dispatch
+  use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Execution decision (in-project, subagents substrate)
 
@@ -23,6 +24,15 @@ work. This skill is the thin in-project consumer of the shared rubric — it add
 the in-project mode vocabulary and one substrate note, nothing else. It pairs
 with `horus-execution`, which supervises the plan once you've decided to
 delegate.
+
+## Invocation boundary
+
+An ordinary request to build, fix, review, or plan work authorizes inline work; it
+does not authorize delegation and does not trigger this skill. Do not load this
+skill merely to populate `execution_recommendation`, at every planning boundary,
+or to validate an obvious inline choice. Load it only after the owner explicitly
+asks whether/how to delegate, requests a worker/subagent, or requests a delegated
+execution plan.
 
 ## Load the shared rubric first
 
