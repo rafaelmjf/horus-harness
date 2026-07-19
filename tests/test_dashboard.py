@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry, routines, templates
+from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry, routines, skills, templates
 from horus.registry import Registry, SessionRecord
 from horus.upgrade import UpgradeAction
 
@@ -3028,8 +3028,11 @@ def test_render_project_shows_codex_projection_behind_badge(tmp_path, monkeypatc
     ):
         install(proj)
     skill_md = proj / ".agents" / "skills" / "horus-consolidate" / "SKILL.md"
+    version = next(s.version for s in skills.SKILLS if s.name == "horus-consolidate")
     skill_md.write_text(
-        skill_md.read_text(encoding="utf-8").replace("horus-skill-version: 12", "horus-skill-version: 1"),
+        skill_md.read_text(encoding="utf-8").replace(
+            f"horus-skill-version: {version}", "horus-skill-version: 1"
+        ),
         encoding="utf-8",
     )
 
