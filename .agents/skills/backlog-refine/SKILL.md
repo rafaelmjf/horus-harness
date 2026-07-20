@@ -9,7 +9,7 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
@@ -45,28 +45,45 @@ including umbrellas and exploratory children, before classifying the portfolio.
 ## 2. The pass — a per-card questionnaire, one card per screen
 
 After the picture, go through the backlog card by card as a serial
-questionnaire (owner-designed in the first live run, PR #355; re-specified
-2026-07-20 from the owner's sketch after two runs drifted). Each stop is ONE
-card rendered as one screen:
+questionnaire (owner-designed in the first live run, PR #355; two later runs
+drifted from it, so the screen is specified literally below). Each stop is
+ONE card rendered as one screen — this exact markdown shape, self-contained
+in this skill (no external mockup exists):
 
-- **Header:** `<N>/<M> — <card name>` (M = cards in this pass).
-- **The card digest, rendered as a panel BESIDE the options** — with the
-  native structured picker, put the digest in each option's preview so the
-  numbered list sits left and the card panel right; without a picker, render
-  the digest block first and the options under it:
+    **<N>/<M> — <card-name>**
 
-```text
-Problem:  <the problem background the card is trying to solve, 1-2 lines>
-Solution: <the card's proposed solution, 1 line>
-Verdict:  <the skill's analysis verdict + one-phrase reason>
-```
+    ```
+     Problem
 
-- **Options `1`–`3` + free text:** option 1 is the verdict turned into an
-  actionable choice, marked **(Recommended)**; 2–3 are the real alternatives;
-  every option description states its exact durable consequence — fields/body
-  changed, dependency or trigger recorded, queue entered, what later unblocks
-  it. The free-text Other is always present (`4. Type anything` in the text
-  rendering).
+       <the problem background the card is trying to solve, 1-2 lines>
+
+     Solution
+
+       <the card's proposed solution, 1 line>
+
+     Verdict
+
+       <the analysis verdict + one-phrase reason>
+    ```
+
+    1. <verdict as an actionable choice> (Recommended) — <exact consequence>
+    2. <alternative> — <exact consequence>
+    3. <alternative> — <exact consequence>
+    4. Type anything
+
+The card digest has ONE outer frame (the fenced block) and nothing else — no
+inner table, no borders between sections; the three labelled sections are
+separated by blank lines only (owner-confirmed render, 2026-07-20). With the
+native structured picker available, the message carries the header + framed
+digest and the picker carries options 1–3 — put the same spaced sections in
+each option's preview (the preview box itself is the outer frame there, so no
+fence inside) and SIZE the preview to fit its box: roughly a dozen short
+lines; trim digest wording rather than letting the UI truncate. The picker's
+own free-text Other replaces line 4. Option 1 is always the verdict turned
+into an actionable choice, marked **(Recommended)**; 2–3 are the real
+alternatives; every option states its exact durable consequence — fields/body
+changed, dependency or trigger recorded, queue entered, what later unblocks
+it.
 
 Verdict vocabulary: keep as-is · keep, note <observation> · mint Ready
 (eligible|attended) · move to <queue> (gate met / trigger satisfied) ·
