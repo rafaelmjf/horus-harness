@@ -14,7 +14,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -47,13 +47,17 @@ exists to surface.
 Write `.horus/research/<YYYY-MM-DD>-roadmap-branches-<slug>.md` with exactly these
 sections, then STOP for the owner to pick:
 
-1. **Where we are.** Narrative prose, per facet, each with a life-stage judgment —
-   converged (DoD met) / built-but-unproven / active frontier / steady-state — and
-   an honest one-line overall position at the end. Not bullets; a fresh reader must
-   understand the project's situation without the conversation.
+1. **Where we are.** When a fresh product-audit receipt exists, CITE its
+   standings table and add ONLY what the tree needs on top: the per-facet
+   life-stage judgment — converged (DoD met) / built-but-unproven / active
+   frontier / steady-state — and an honest one-line overall position. Do not
+   restate facet detail the audit already carries (owner calibration
+   2026-07-20: sections 1–2 read as a repeat of the audit). Only when no
+   audit receipt exists do you build the narrative from scratch.
 2. **Where the market is.** Distilled FROM the receipt (cite it): the landscape in
    shells, then ONE verdict, then the risks. **State each fact exactly once** — if
-   a point appears in two sections, delete one.
+   a point appears in two sections, delete one; if the scan receipt already
+   argues it, cite instead of restating.
 3. **The tree.** A small ASCII tree: root = the position in two lines, one child
    per branch (including the speculative ones), each with its facet target and a
    one-word posture tag (primary/secondary/filler/park is the *recommendation*,
@@ -73,16 +77,30 @@ sections, then STOP for the owner to pick:
      add / rename / retire / promote-proven-exploration against a NAMED existing
      facet, with draft definition-of-done text for adds/rescopes. Never a
      wholesale table rewrite.
-5. **Speculative branches (1-2).** Directions with NO current facet, derived from
-   position + market + intent: the gap it names, the idea, the cheapest PoC, why it
-   fits the intent, the risk. These are the "imaginary visions" — the tree is
-   incomplete without at least one. At least one candidate must RE-TEST the
-   Vision's out-of-scope list against fresh usage evidence — an out-of-scope line
-   is a hypothesis too. (Calibration: both 2026-07-17 runs missed the owner's
-   strongest live direction, scheduled autonomous dispatch, because it sat behind
-   an out-of-scope declaration neither run questioned.)
+5. **Speculative branches / wildcards (1-2, more when the owner asks).**
+   Directions with NO current facet, derived from position + market + intent:
+   the gap it names, the idea, the cheapest PoC, why it fits the intent, the
+   risk — and, as prominently as the promise, the EXPLICIT converge/drop
+   criterion ("converges if …; dropped if …", where dying cheap is a valid
+   success). These are the diverge half the owner explicitly wants visible
+   (calibration 2026-07-20: a proposal set without wildcards was flagged
+   incomplete). The tree is incomplete without at least one, and at least one
+   candidate must RE-TEST the Vision's out-of-scope list against fresh usage
+   evidence — an out-of-scope line is a hypothesis too. (Calibration: both
+   2026-07-17 runs missed the owner's strongest live direction, scheduled
+   autonomous dispatch, because it sat behind an out-of-scope declaration
+   neither run questioned.)
 6. **Recommendation, held loosely.** Primary / secondary / filler / park across the
    branches, one paragraph of reasoning. The owner reorders freely.
+
+Format rules (owner calibration 2026-07-20): no-context-reader prose;
+consolidated proper tables for enumerable material (the backlog-disposition
+section is a table with existing cards grouped by disposition, every card
+named — nothing inherited silently); in an interactive session paste the
+receipt content into the terminal; end with the owner pick gate PLUS a
+dive-deeper-into-one-named-topic-or-proceed offer. Owner metaphors and
+analogies are examples to test against, never canon to echo — reuse one only
+where the load genuinely fits, and say so if it stops fitting.
 
 ## Three disciplines that make the tree trustworthy
 

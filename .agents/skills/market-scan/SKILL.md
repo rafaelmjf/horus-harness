@@ -14,7 +14,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -111,6 +111,19 @@ Candidate backlog items:
   - <candidate> — rationale, from which gap/assumption
 Sources: [every URL opened, one per line]
 ```
+
+Format rules (owner calibration 2026-07-20): write for a reader with no
+project context; render the teardown as ONE consolidated table (a lane column
+when the scan spans several spaces); mark rows resting on roundup/aggregator
+articles as *(secondary)* and name what a deeper pass would verify. When the
+owner picked ONE intent but the other frame is cheap to derive from the same
+teardown, offer it — both verdicts from one teardown is the proven shape. In
+an interactive session, paste the receipt's formatted content into the
+terminal; the owner reviews it in the reply, not by opening the file.
+
+**End every scan with the follow-up offer:** dive deeper into ONE named topic
+from the receipt (a teardown row, the market-size line, a verdict cell) or
+proceed to the next step. Depth stays owner-pulled, never pushed.
 
 ## Hand off — propose, the owner disposes
 

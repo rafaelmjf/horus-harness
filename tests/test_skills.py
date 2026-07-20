@@ -58,7 +58,7 @@ def test_delegation_decision_skills_registered():
 
 def test_market_scan_skill_registered_and_outward():
     market = next(s for s in skills.SKILLS if s.name == "market-scan")
-    assert market.version == 6
+    assert market.version == 7
     # outward twin of product-audit: advisory, dated receipt.
     # v6: no "deep-research" reference — the name collided with Claude's own deep
     # research mode, and depth is now shallow-by-default with an explicit offer.
@@ -103,7 +103,7 @@ def test_cockpit_dispatch_contract_skill_registered_and_sequences():
 
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    assert pf.version == 8
+    assert pf.version == 9
     # v7: backlog polish routes directly to the final readiness owner.
     assert "Invoke `backlog-refine`" in pf.content
     # v5 (calibration 2026-07-19): the owner's mental model includes the inward
@@ -161,7 +161,7 @@ def test_pathfinder_skill_registered_and_orchestrates():
 
 def test_roadmap_branches_skill_registered_divergence_tree():
     rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
-    assert rb.version == 3
+    assert rb.version == 4
     # The deliverable is a TREE of alternative roadmaps, never one merged roadmap.
     assert "never collapse the tree into one merged roadmap" in rb.content
     # Speculative branches (directions with no facet yet) are part of the contract.
@@ -197,7 +197,7 @@ def test_roadmap_branches_skill_registered_divergence_tree():
 
 def test_scope_cards_skill_registered_as_high_level_shaping():
     sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
-    assert sc.version == 6
+    assert sc.version == 7
     assert "The shaping test" in sc.content
     assert "readiness: shaping" in sc.content
     assert "Intended outcome" in sc.content and "Open decisions" in sc.content
@@ -215,14 +215,15 @@ def test_scope_cards_skill_registered_as_high_level_shaping():
 
 def test_backlog_refine_owns_interactive_flow_and_ready_contract():
     refine = next(s for s in skills.SKILLS if s.name == "backlog-refine")
-    assert refine.version == 1
+    assert refine.version == 2
     assert "Here is our current picture" in refine.content
     assert "product direction in 2–3 lines" in refine.content
-    assert "Card <N>/<decision-card-count>" in refine.content
+    assert "card by card" in refine.content and "Verdict:" in refine.content
     assert "(Recommended)" in refine.content
     assert "free-text Other" in refine.content
     assert "4. Type anything" in refine.content
-    assert "Judge, then ask only what remains undecided" in refine.content
+    assert "one at a time, never batched" in refine.content
+    assert "problem background" in refine.content
     assert "last_refined: YYYY-MM-DD" in refine.content
     assert "readiness: ready | shaping | gated | deferred" in refine.content
     assert "autonomy: eligible | attended" in refine.content
@@ -631,10 +632,18 @@ def test_init_no_skills_opts_out(tmp_path, monkeypatch):
 def test_product_audit_skill_registered_and_projected():
     by_name = {skill.name: skill for skill in skills.SKILLS}
     skill = by_name["product-audit"]
-    # Evidence-first questions, native-overlap check, ceremony review, closed verdict set.
-    for marker in ("demote", "defer", "retire", "no-change", "last_product_audit", "telemetry"):
+    # v3 contract: inward alignment analysis + routed suggestions; decides nothing.
+    for marker in (
+        "decides nothing",
+        "Routed suggestions",
+        "no-context reader",
+        "last_product_audit",
+        "Anti-ceremony guard",
+        "ONE consolidated table",
+        "drift signal",
+    ):
         assert marker in skill.content
-    assert "never propose new features" in skill.content or "New features are out" in skill.content
+    assert "convergence step" in skill.content and "backlog-refine" in skill.content
     for root in (".claude/skills", ".agents/skills"):
         assert Path(f"{root}/product-audit/SKILL.md").read_text(encoding="utf-8") == skill.content
 

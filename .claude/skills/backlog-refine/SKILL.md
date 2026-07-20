@@ -9,7 +9,7 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
@@ -42,29 +42,44 @@ Start with the literal heading **“Here is our current picture”** and include
 Do not ask card questions before this picture. Read the content of every open card,
 including umbrellas and exploratory children, before classifying the portfolio.
 
-## 2. Judge, then ask only what remains undecided
+## 2. The card-by-card walkthrough (the pass itself)
 
-For each card, decide from the evidence whether it is still valuable, aligned,
-phase-appropriate, self-sufficient for its job, and correctly dispositioned. Skip
-clean cards and questions the evidence already answers. Batch only truly mechanical
-fixes whose values are unambiguous.
-
-For every pending owner decision, present one card at a time in this strict shape:
+After the picture, walk the ENTIRE backlog card by card — every open card,
+including umbrellas and explore children — rendered in the terminal as one
+readable, queue-grouped list where EACH card gets a compact digest of exactly
+three parts:
 
 ```text
-Card <N>/<decision-card-count> — <slug>
-Problem: <why the current card cannot be finalized>
-Proposed direction: <LLM recommendation and evidence>
-Current state: <readiness/priority/dependencies and relevant branch/facet>
-Decision: <one sentence naming the choice>
+N. `card-slug` — <problem background the card is trying to solve, 1-2 lines>
+   → <the card's proposed solution, 1 line>
+   → Verdict: <the skill's analysis verdict + one-phrase reason>
 ```
 
-Use the harness's native structured picker when available. Offer 2–3 mutually
-exclusive choices; put the recommended choice first and mark it **(Recommended)**.
-Every option description states its exact durable consequence: fields/body changed,
-dependency or trigger recorded, queue entered, and what later unblocks it. Preserve
-the picker's free-text Other option. When no structured picker exists, render the
-same choices as `1`–`3` plus `4. Type anything`, then wait for the answer.
+Verdict vocabulary: keep as-is · keep, note <observation> · mint Ready
+(eligible|attended) · move to <queue> (gate met / trigger satisfied) ·
+retire candidate · defer with trigger <named> · decision — <what the owner
+must choose>. The walkthrough IS the deliverable of the judging step: the
+owner reads the whole state of the backlog with your verdict on every card
+before being asked anything. (Owner-designed format, first run PR #355;
+re-specified 2026-07-20 after two runs drifted away from it.)
+
+## 2b. Then decisions — one at a time, never batched
+
+Only cards whose verdict is "decision" (plus any walkthrough verdict the
+owner contests) become owner decisions. Present them STRICTLY one at a time —
+one picker call per decision, never several decisions in one call (the
+twice-corrected failure mode). Each decision re-renders the card's compact
+digest (problem background → proposed solution → recommendation) and then
+offers 2–3 mutually exclusive choices; recommended choice first, marked
+**(Recommended)**; every option description states its exact durable
+consequence: fields/body changed, dependency or trigger recorded, queue
+entered, what later unblocks it. Preserve the picker's free-text Other. With
+no structured picker, render `1`–`3` plus `4. Type anything` and wait.
+
+Batch only truly mechanical fixes with unambiguous values (vocabulary
+renames, `last_refined` stamps, pointer notes) into ONE clearly-labelled
+approval at the end — never demotes, defers, retires, rescopes, acceptance
+rewrites, or mints.
 
 ## 3. Readiness and autonomy contract
 
