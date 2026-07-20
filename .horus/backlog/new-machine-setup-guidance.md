@@ -84,6 +84,27 @@ portable non-secret state is `[launch_profiles]` / `[workflow]` / `[tui]` in
 `config.toml` — roughly ten lines, i.e. a dotfile in a private repo, not a Horus
 feature.
 
+## Raw material — migration findings (2026-07-20, retiring the Desktop checkouts)
+
+Two assumptions in the migration tail were wrong on contact. Both are migration-only,
+so they bear on the "migration or from-zero?" open decision below.
+
+- **A clean `git status` does not make a checkout disposable.** All three Desktop
+  copies were clean with nothing unpushed — but `.horus/sessions/` notes and
+  `.claude/settings.local.json` are *gitignored*, so they are invisible to the check
+  that was being used to authorize deletion. The fabric copy held a large earned
+  permission allowlist plus three recovery notes its `projects/` twin did not have.
+  Any retire-a-checkout step must inspect `git status --porcelain --ignored=matching
+  -uall` and diff the machine-local content against the surviving copy first.
+- **Transcript history is per-config-dir, and moving a repo orphans it.** Claude Code
+  keys transcripts by cwd slug under *whichever config dir wrote them*: ambient runs
+  land in `~/.claude/projects/<slug>/`, isolated accounts in
+  `~/.horus/accounts/<agent>-<alias>/projects/<slug>/`. Moving a repo changes the
+  slug, so history does not follow; renaming the slug dir inside the ambient config
+  dir does not make it reachable from an isolated-account launch either. Owner
+  decision this run: leave the stale `Desktop-*` dirs alone (43 MB) rather than
+  rename or migrate them — stale history is not worth moving.
+
 ## Open decisions for backlog-refine
 
 - Which shape (skill / command / doctor findings / some pair) — decide **after**
