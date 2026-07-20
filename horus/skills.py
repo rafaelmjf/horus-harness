@@ -2148,7 +2148,7 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
@@ -2181,39 +2181,43 @@ Start with the literal heading **“Here is our current picture”** and include
 Do not ask card questions before this picture. Read the content of every open card,
 including umbrellas and exploratory children, before classifying the portfolio.
 
-## 2. The card-by-card walkthrough (the pass itself)
+## 2. The pass — a per-card questionnaire, one card per screen
 
-After the picture, walk the ENTIRE backlog card by card — every open card,
-including umbrellas and explore children — rendered in the terminal as one
-readable, queue-grouped list where EACH card gets a compact digest of exactly
-three parts:
+After the picture, go through the backlog card by card as a serial
+questionnaire (owner-designed in the first live run, PR #355; re-specified
+2026-07-20 from the owner's sketch after two runs drifted). Each stop is ONE
+card rendered as one screen:
+
+- **Header:** `<N>/<M> — <card name>` (M = cards in this pass).
+- **The card digest, rendered as a panel BESIDE the options** — with the
+  native structured picker, put the digest in each option's preview so the
+  numbered list sits left and the card panel right; without a picker, render
+  the digest block first and the options under it:
 
 ```text
-N. `card-slug` — <problem background the card is trying to solve, 1-2 lines>
-   → <the card's proposed solution, 1 line>
-   → Verdict: <the skill's analysis verdict + one-phrase reason>
+Problem:  <the problem background the card is trying to solve, 1-2 lines>
+Solution: <the card's proposed solution, 1 line>
+Verdict:  <the skill's analysis verdict + one-phrase reason>
 ```
+
+- **Options `1`–`3` + free text:** option 1 is the verdict turned into an
+  actionable choice, marked **(Recommended)**; 2–3 are the real alternatives;
+  every option description states its exact durable consequence — fields/body
+  changed, dependency or trigger recorded, queue entered, what later unblocks
+  it. The free-text Other is always present (`4. Type anything` in the text
+  rendering).
 
 Verdict vocabulary: keep as-is · keep, note <observation> · mint Ready
 (eligible|attended) · move to <queue> (gate met / trigger satisfied) ·
 retire candidate · defer with trigger <named> · decision — <what the owner
-must choose>. The walkthrough IS the deliverable of the judging step: the
-owner reads the whole state of the backlog with your verdict on every card
-before being asked anything. (Owner-designed format, first run PR #355;
-re-specified 2026-07-20 after two runs drifted away from it.)
+must choose>.
 
-## 2b. Then decisions — one at a time, never batched
-
-Only cards whose verdict is "decision" (plus any walkthrough verdict the
-owner contests) become owner decisions. Present them STRICTLY one at a time —
-one picker call per decision, never several decisions in one call (the
-twice-corrected failure mode). Each decision re-renders the card's compact
-digest (problem background → proposed solution → recommendation) and then
-offers 2–3 mutually exclusive choices; recommended choice first, marked
-**(Recommended)**; every option description states its exact durable
-consequence: fields/body changed, dependency or trigger recorded, queue
-entered, what later unblocks it. Preserve the picker's free-text Other. With
-no structured picker, render `1`–`3` plus `4. Type anything` and wait.
+Strictly one card per exchange — one at a time, never batched: never several
+cards in one picker call (the twice-corrected failure mode). Cards whose
+verdict is a clean "keep as-is" may be grouped into a short skip-summary
+between stops so the questionnaire only halts on cards with something to
+decide — and the owner can pull any skipped card back into the questionnaire
+by name.
 
 Batch only truly mechanical fixes with unambiguous values (vocabulary
 renames, `last_refined` stamps, pointer notes) into ONE clearly-labelled
@@ -2650,7 +2654,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("market-scan", 7, _MARKET_SCAN_SKILL),
     Skill("roadmap-branches", 4, _ROADMAP_BRANCHES_SKILL),
     Skill("scope-cards", 7, _SCOPE_CARDS_SKILL),
-    Skill("backlog-refine", 2, _BACKLOG_REFINE_SKILL),
+    Skill("backlog-refine", 3, _BACKLOG_REFINE_SKILL),
     Skill("pathfinder", 9, _PATHFINDER_SKILL),
     Skill("cockpit-autonomous-dispatch-contract", 3, _COCKPIT_DISPATCH_SKILL),
 )
