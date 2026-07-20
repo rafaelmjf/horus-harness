@@ -64,8 +64,46 @@ is one possible conclusion, not the premise); no new Windows-only runtime.
 - Whether this stays one exploratory card or splits into (a) the stale-install
   upgrade + compat inventory and (b) any parity work that inventory justifies.
 
+## Findings — Windows machine setup run, 2026-07-20 (owner-attended)
+
+The premise "the install is stale" was **false**: it was already 0.0.73, matching
+the repo. What was actually wrong was everything around it. Done and verified this
+session on the owner's Windows 11 box:
+
+- **Shadowed binary** — a `pip`-installed `horus-harness` 0.0.1 sat in
+  `Python312\Scripts` behind the uv shim. `doctor machine` caught it unprompted
+  with the right fix. Uninstalled.
+- **Accounts** — none existed (`account: null` on every session, auto-generated
+  aliases). Now `claude-personal` + `codex-personal` aliased and isolated from the
+  live logins, and `claude-work` provisioned + mapped (awaiting one login).
+- **Statusline** — was a hand-rolled PowerShell script, so `rate_limits` were never
+  recorded and usage was permanently empty **with no error**. Now `horus statusline`
+  in ambient `~/.claude` and both isolated accounts.
+- **Repos** — workspace consolidated to `C:\Users\Rafa\projects`; horus-harness,
+  fabric-metadata-driven-medallion, pbi-ecosystem cloned there and the `projects`
+  list repointed.
+
+**Native-Windows capability inventory** (probed, not inferred):
+
+- *Works native:* full CLI core, launch-in-new-window, the TUI (ships a `_WinPty`),
+  dashboard/app, tkinter mascot, hooks via Git Bash, statusline + usage recording,
+  account isolation, worktrees, `gh`, VS Code tasks, foreground `horus run`.
+- *Degrades:* `terminal_sessions.tmux_available()` is hard-`False` on `nt`, so no
+  persistent managed sessions, no cross-viewer attach; `--target tmux` and detached
+  workers fall back to the current TTY / a new window.
+- *Unavailable:* `horus schedule` (needs `systemd --user` timers) — so the whole
+  scheduled-dispatch + supervise loop is Linux-only here. `native-windows` as a
+  *remote* target stays a deliberate documented gap.
+- WSL2 (Ubuntu) **is installed** on this machine, so the tmux/scheduler path is
+  available without changing anything if the owner wants it.
+
+This answers the "which features degrade" half of the card. The remaining open
+question is the recommendation itself (native vs WSL vs app) — and the owner's
+usage so far is local-project work on this machine, not autonomous dispatch, which
+points at native-Windows-is-fine, but that is a judgment to confirm, not a finding.
+
 ## Source
 
 In-session, 2026-07-20 (owner-flagged as intended next focus). Grounding: the
 tmux-persistence rule (Linux/macOS/WSL only) and the three-OS Distribution facet
-in `.horus/PRD.md`.
+in `.horus/PRD.md`. Findings section from the attended setup run the same day.
