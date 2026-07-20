@@ -72,3 +72,13 @@ approval, should both pass through. Cover it with a test per covered command.
 
 Deferred from #368 (`review-session-control-calibration` verdict) — named in the verdict's
 follow-ups and consciously left unbuilt rather than half-wired.
+
+## Reviews
+
+- **2026-07-20 (fresh evidence, same failure class):** the owner dropped a format
+  sketch as an example to try; the agent encoded its interpretation and opened AND
+  auto-merged PRs (#374) without once rendering the format for confirmation. Pushers
+  identified: the Rules' `branch → PR → auto-merge` default has no owner step for
+  contract-bearing changes, and the green-checkpoint discipline rewards closing
+  loops fast. This card's wall is the structural answer; until it lands, the
+  working rule is render-confirm before merging any calibration/contract change.
