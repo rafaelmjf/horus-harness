@@ -10,7 +10,7 @@ description: >-
   owner-gated; only approved drafts and Vision/card diffs are written.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # scope-cards — from a chosen branch to aligned shaping drafts
 
@@ -72,10 +72,20 @@ findings may become later drafts. Do not fabricate findings or their fixes.
 ## Gate, then write
 
 Present all shaping drafts, existing-card diffs, and Vision edits as concrete
-options plus a free-text alternative. Let the owner approve, amend, or drop each
-item individually. Only then write approved items. Owner rejections and rescopes
-of existing cards land in that card's `## Reviews`; a verdict that lives only in
-conversation does not bind future planning. Anything unapproved stays unwritten.
+options plus a free-text alternative. Format the proposal set per the owner's
+2026-07-20 calibration: ONE consolidated table with an explicit
+**Existing / New** column per row (a diff to an existing card is never
+visually confusable with a new draft), `phase` visible per row, no-context
+prose, pasted into the terminal in an interactive session. The set MUST
+include **wildcards** — explicitly divergent `phase: explore` ideas beyond the
+branch's numbered items (agent-found ones welcome), each stating its
+converge/drop criterion as prominently as its promise; a proposal set with
+only convergent drafts is incomplete. End with a
+dive-deeper-into-one-item-or-proceed offer. Let the owner approve, amend, or drop each item individually. Only
+then write approved items. Owner rejections
+and rescopes of existing cards land in that card's `## Reviews`; a verdict
+that lives only in conversation does not bind future planning. Anything
+unapproved stays unwritten.
 
 ## Deliberately omit
 

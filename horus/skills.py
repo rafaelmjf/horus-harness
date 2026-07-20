@@ -1391,80 +1391,97 @@ _PRODUCT_AUDIT_SKILL = """\
 ---
 name: product-audit
 description: >-
-  Periodic evidence-first audit of the Horus product surface itself: which
-  surfaces the owner actually used since the last audit, what Claude Code /
-  Codex now cover natively, and which rituals became ceremony. Use when
-  `horus close` / `horus consolidate` print the product-audit staleness
-  advisory, or when the owner asks "audit the product", "what should we
-  retire", or "is this feature still earning its keep". Advisory only: every
-  verdict is demote / defer / retire / no-change — this audit can never
-  propose new features, add telemetry, or auto-archive anything. Verdicts land
-  in a dated one-page receipt under `.horus/audits/`.
+  Periodic evidence-first INWARD alignment analysis of the Horus product
+  itself: read the delivered code and features against the Vision facets and
+  active vision branches, and report where the product actually stands —
+  what drifted, what is on track, what is done. Use when `horus close` /
+  `horus consolidate` print the product-audit staleness advisory, or when the
+  owner asks "audit the product" or "where do we stand". Analysis and
+  suggestions ONLY — it decides nothing: facet/branch verdicts belong to the
+  convergence step (paired with a market-scan receipt), card proposals to
+  scope-cards, and every archive/improve/ready decision to backlog-refine.
+  The receipt lands dated under `.horus/audits/`.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
-# Product audit — prune, never grow
+# Product audit — the inward evidence step (analysis, never verdicts)
 
 You are auditing Horus itself, not a target project. The CLI supplied only the
-deterministic trigger (the staleness advisory); you supply the judgment.
+deterministic trigger (the staleness advisory); you supply the judgment. This
+audit is the INWARD half of the evidence base: its receipt pairs with a
+market-scan receipt to feed the owner's convergence decisions. It suggests; it
+never prunes, cards, or edits the Vision (contract corrected by the owner
+2026-07-20 — the v2 "prune, never grow" verdict machine decided too early).
 
 **Initial stamp:** if no receipt exists under `.horus/audits/` for the stamped
-audit (the stamp was set when the audit feature shipped, with no verdicts
-behind it), treat this run as the first real audit: widen every "since the
-last audit" question to the whole live surface instead of the stamp window.
+audit, treat this run as the first real audit: widen every "since the last
+audit" question to the whole live surface instead of the stamp window.
 
-## Questions (evidence, not recall)
+## Evidence (gather, not recall)
 
-1. **Usage.** Which Horus surfaces did the owner *demonstrably* use since the
-   last audit? Evidence means shell history the owner shows you, `.horus/`
-   artifacts, git history, and a short interview — plus grepping the
-   integration points for surfaces nothing references. The canonical
-   integration points to grep for `horus <cmd>` references: the managed
-   blocks (`CLAUDE.md`/`AGENTS.md`), hook templates (`horus/native_hooks.py`
-   and installed `.claude/settings.json`), the TUI (`horus/terminal_tui.py`),
-   the dashboard, bundled skills (`.claude/skills/` / `.agents/skills/`), and
-   `scripts/`. A registered command referenced only by its own implementation
-   counts as unreferenced. Do NOT build or propose command-usage telemetry;
-   the interview + integration-point grep is the current rung.
+1. **Usage.** Which surfaces did the owner *demonstrably* use since the last
+   audit? Evidence: `.horus/` artifacts, git history, machine-local state
+   (schedule ledger, envelopes, datums, notify config), a short owner
+   interview — plus grepping the integration points (managed blocks, hook
+   templates, TUI, dashboard, bundled skills, `scripts/`) for surfaces nothing
+   references. A command referenced only by its own implementation counts as
+   unreferenced — but programmatically-wired plumbing greps false-negative;
+   treat the grep as a signal, never a verdict. No usage telemetry, ever.
 2. **Native overlap.** What have Claude Code and Codex shipped natively since
-   the stamped version that overlaps a Horus surface? Check their changelogs /
-   release notes. A surface a host app now covers is a demote/retire candidate.
-3. **Ceremony.** Which rituals were skipped, rubber-stamped, or felt like
-   ceremony? A step everyone bypasses is evidence against the step, not the
-   people.
+   the stamp that overlaps a Horus surface? Check changelogs/release notes.
+3. **Ceremony.** Which rituals were skipped, rubber-stamped, or nagged? A step
+   everyone bypasses is evidence against the step, not the people.
 
-## Verdicts — the only four
+## The receipt — fixed spine, written for a no-context reader
 
-Per finding: **demote** (weaker rung: instruction instead of code),
-**defer** (revisit next audit, with the reason), **retire** (propose removal —
-the owner acts; nothing auto-archives), or **no-change**. New features are out
-of scope for this audit by construction.
+`.horus/audits/<YYYY-MM-DD>-product.md`. The structure is deliberately
+semi-deterministic: multiple non-deterministic runs must converge to the same
+core reading, so that a summary that "feels off" to the owner is itself a
+drift signal pointing at the inputs. Write every section for a reader with
+NO prior context — plain-language explanations first; insider terms and PR
+numbers only as supporting references. Sections, in order:
+
+1. **What this document is** — the decides-nothing contract, two lines.
+2. **The product, in plain terms** — the delivered thesis as it stands NOW
+   (not the Vision text restated), including structural findings the window
+   produced.
+3. **Facets — ONE consolidated table** (owner calibration 2026-07-20): facet |
+   in plain terms | standing (with evidence) | distance to done | drift? |
+   open/shipped card counts. One row per facet; do not split roster and
+   detail into separate structures.
+4. **Vision branches — same consolidated form** (branch | in plain terms |
+   standing | open question).
+5. **Per-facet detail** — DoD restated, what concretely stands, distance,
+   drift called out separately; depth matches the accepted 2026-07-20
+   receipt, not a bullet skim.
+6. **Triage** — three explicit buckets: done or almost done / on track /
+   drifted.
+7. **Ceremony observations.**
+8. **Routed suggestions table** — every suggestion names the step that
+   decides it (backlog-refine | convergence step | scope-cards | existing
+   card). Nothing is decided in this receipt.
+
+In an interactive session, paste the receipt's formatted content into the
+terminal — the owner reviews it in the reply, not by opening the file. End by
+offering: dive deeper into ONE named topic from the receipt, or proceed.
 
 ## Close the audit
 
-- Write the receipt: `.horus/audits/<YYYY-MM-DD>-product.md` — **one page,
-  never a transcript**: a verdict table (finding | verdict | one-line
-  evidence), with every defer carrying the reason the next audit needs to
-  re-open it. Committed, so it travels between machines; the receipt is what
-  makes defers recallable and the anti-ceremony guard checkable. (Owner
-  approved per-audit receipt files 2026-07-16, superseding the original
-  no-new-artifact rule.)
-- Update the PRD frontmatter stamp: `last_product_audit: <installed horus
-  version> <today YYYY-MM-DD>` (run `horus --version` for the version). The
-  stamp stays the cheap pointer; the receipt holds the verdicts.
-- Retire/demote proposals still land through the owner (backlog cards, PRD
-  Rules) — the receipt records the verdict, it does not act on it.
+- Update the PRD stamp `last_product_audit: <horus version> <YYYY-MM-DD>`
+  only after the owner accepts the receipt.
+- Suggestions land through their routed step — never act on them here.
 - **Anti-ceremony guard:** read the previous receipt; if it and this audit
-  are both all no-change, recommend the owner lengthen the audit interval
-  (e.g. 10 releases / 60 days) — note it in the receipt.
+  are both all-aligned with no suggestions, recommend lengthening the audit
+  interval — and note that the interval should weigh releases AND elapsed
+  days (releases alone nag during rapid iteration).
 
 ## v2 six-lane projects (fallback)
 
 The staleness advisory reads `PRD.md` frontmatter, so it never fires on a
-six-lane project. The audit itself still applies: ask the same three questions,
-use the same four verdicts, and record the stamp in `project.md` frontmatter so
-it carries over when the project migrates to the PRD structure.
+six-lane project. The analysis still applies: same evidence, same spine with
+`project.md` prose standing in for the facet table; record the stamp in
+`project.md` frontmatter so it carries over on migration.
 """
 
 
@@ -1715,7 +1732,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -1813,6 +1830,19 @@ Candidate backlog items:
 Sources: [every URL opened, one per line]
 ```
 
+Format rules (owner calibration 2026-07-20): write for a reader with no
+project context; render the teardown as ONE consolidated table (a lane column
+when the scan spans several spaces); mark rows resting on roundup/aggregator
+articles as *(secondary)* and name what a deeper pass would verify. When the
+owner picked ONE intent but the other frame is cheap to derive from the same
+teardown, offer it — both verdicts from one teardown is the proven shape. In
+an interactive session, paste the receipt's formatted content into the
+terminal; the owner reviews it in the reply, not by opening the file.
+
+**End every scan with the follow-up offer:** dive deeper into ONE named topic
+from the receipt (a teardown row, the market-size line, a verdict cell) or
+proceed to the next step. Depth stays owner-pulled, never pushed.
+
 ## Hand off — propose, the owner disposes
 
 - The **Vision draft** + **verdict** (prior-art or build-vs-adopt, per intent) are written to be distilled into
@@ -1863,7 +1893,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -1896,13 +1926,17 @@ exists to surface.
 Write `.horus/research/<YYYY-MM-DD>-roadmap-branches-<slug>.md` with exactly these
 sections, then STOP for the owner to pick:
 
-1. **Where we are.** Narrative prose, per facet, each with a life-stage judgment —
-   converged (DoD met) / built-but-unproven / active frontier / steady-state — and
-   an honest one-line overall position at the end. Not bullets; a fresh reader must
-   understand the project's situation without the conversation.
+1. **Where we are.** When a fresh product-audit receipt exists, CITE its
+   standings table and add ONLY what the tree needs on top: the per-facet
+   life-stage judgment — converged (DoD met) / built-but-unproven / active
+   frontier / steady-state — and an honest one-line overall position. Do not
+   restate facet detail the audit already carries (owner calibration
+   2026-07-20: sections 1–2 read as a repeat of the audit). Only when no
+   audit receipt exists do you build the narrative from scratch.
 2. **Where the market is.** Distilled FROM the receipt (cite it): the landscape in
    shells, then ONE verdict, then the risks. **State each fact exactly once** — if
-   a point appears in two sections, delete one.
+   a point appears in two sections, delete one; if the scan receipt already
+   argues it, cite instead of restating.
 3. **The tree.** A small ASCII tree: root = the position in two lines, one child
    per branch (including the speculative ones), each with its facet target and a
    one-word posture tag (primary/secondary/filler/park is the *recommendation*,
@@ -1922,16 +1956,30 @@ sections, then STOP for the owner to pick:
      add / rename / retire / promote-proven-exploration against a NAMED existing
      facet, with draft definition-of-done text for adds/rescopes. Never a
      wholesale table rewrite.
-5. **Speculative branches (1-2).** Directions with NO current facet, derived from
-   position + market + intent: the gap it names, the idea, the cheapest PoC, why it
-   fits the intent, the risk. These are the "imaginary visions" — the tree is
-   incomplete without at least one. At least one candidate must RE-TEST the
-   Vision's out-of-scope list against fresh usage evidence — an out-of-scope line
-   is a hypothesis too. (Calibration: both 2026-07-17 runs missed the owner's
-   strongest live direction, scheduled autonomous dispatch, because it sat behind
-   an out-of-scope declaration neither run questioned.)
+5. **Speculative branches / wildcards (1-2, more when the owner asks).**
+   Directions with NO current facet, derived from position + market + intent:
+   the gap it names, the idea, the cheapest PoC, why it fits the intent, the
+   risk — and, as prominently as the promise, the EXPLICIT converge/drop
+   criterion ("converges if …; dropped if …", where dying cheap is a valid
+   success). These are the diverge half the owner explicitly wants visible
+   (calibration 2026-07-20: a proposal set without wildcards was flagged
+   incomplete). The tree is incomplete without at least one, and at least one
+   candidate must RE-TEST the Vision's out-of-scope list against fresh usage
+   evidence — an out-of-scope line is a hypothesis too. (Calibration: both
+   2026-07-17 runs missed the owner's strongest live direction, scheduled
+   autonomous dispatch, because it sat behind an out-of-scope declaration
+   neither run questioned.)
 6. **Recommendation, held loosely.** Primary / secondary / filler / park across the
    branches, one paragraph of reasoning. The owner reorders freely.
+
+Format rules (owner calibration 2026-07-20): no-context-reader prose;
+consolidated proper tables for enumerable material (the backlog-disposition
+section is a table with existing cards grouped by disposition, every card
+named — nothing inherited silently); in an interactive session paste the
+receipt content into the terminal; end with the owner pick gate PLUS a
+dive-deeper-into-one-named-topic-or-proceed offer. Owner metaphors and
+analogies are examples to test against, never canon to echo — reuse one only
+where the load genuinely fits, and say so if it stops fitting.
 
 ## Three disciplines that make the tree trustworthy
 
@@ -1995,7 +2043,7 @@ description: >-
   owner-gated; only approved drafts and Vision/card diffs are written.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # scope-cards — from a chosen branch to aligned shaping drafts
 
@@ -2057,10 +2105,20 @@ findings may become later drafts. Do not fabricate findings or their fixes.
 ## Gate, then write
 
 Present all shaping drafts, existing-card diffs, and Vision edits as concrete
-options plus a free-text alternative. Let the owner approve, amend, or drop each
-item individually. Only then write approved items. Owner rejections and rescopes
-of existing cards land in that card's `## Reviews`; a verdict that lives only in
-conversation does not bind future planning. Anything unapproved stays unwritten.
+options plus a free-text alternative. Format the proposal set per the owner's
+2026-07-20 calibration: ONE consolidated table with an explicit
+**Existing / New** column per row (a diff to an existing card is never
+visually confusable with a new draft), `phase` visible per row, no-context
+prose, pasted into the terminal in an interactive session. The set MUST
+include **wildcards** — explicitly divergent `phase: explore` ideas beyond the
+branch's numbered items (agent-found ones welcome), each stating its
+converge/drop criterion as prominently as its promise; a proposal set with
+only convergent drafts is incomplete. End with a
+dive-deeper-into-one-item-or-proceed offer. Let the owner approve, amend, or drop each item individually. Only
+then write approved items. Owner rejections
+and rescopes of existing cards land in that card's `## Reviews`; a verdict
+that lives only in conversation does not bind future planning. Anything
+unapproved stays unwritten.
 
 ## Deliberately omit
 
@@ -2090,7 +2148,7 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
@@ -2123,29 +2181,44 @@ Start with the literal heading **“Here is our current picture”** and include
 Do not ask card questions before this picture. Read the content of every open card,
 including umbrellas and exploratory children, before classifying the portfolio.
 
-## 2. Judge, then ask only what remains undecided
+## 2. The card-by-card walkthrough (the pass itself)
 
-For each card, decide from the evidence whether it is still valuable, aligned,
-phase-appropriate, self-sufficient for its job, and correctly dispositioned. Skip
-clean cards and questions the evidence already answers. Batch only truly mechanical
-fixes whose values are unambiguous.
-
-For every pending owner decision, present one card at a time in this strict shape:
+After the picture, walk the ENTIRE backlog card by card — every open card,
+including umbrellas and explore children — rendered in the terminal as one
+readable, queue-grouped list where EACH card gets a compact digest of exactly
+three parts:
 
 ```text
-Card <N>/<decision-card-count> — <slug>
-Problem: <why the current card cannot be finalized>
-Proposed direction: <LLM recommendation and evidence>
-Current state: <readiness/priority/dependencies and relevant branch/facet>
-Decision: <one sentence naming the choice>
+N. `card-slug` — <problem background the card is trying to solve, 1-2 lines>
+   → <the card's proposed solution, 1 line>
+   → Verdict: <the skill's analysis verdict + one-phrase reason>
 ```
 
-Use the harness's native structured picker when available. Offer 2–3 mutually
-exclusive choices; put the recommended choice first and mark it **(Recommended)**.
-Every option description states its exact durable consequence: fields/body changed,
-dependency or trigger recorded, queue entered, and what later unblocks it. Preserve
-the picker's free-text Other option. When no structured picker exists, render the
-same choices as `1`–`3` plus `4. Type anything`, then wait for the answer.
+Verdict vocabulary: keep as-is · keep, note <observation> · mint Ready
+(eligible|attended) · move to <queue> (gate met / trigger satisfied) ·
+retire candidate · defer with trigger <named> · decision — <what the owner
+must choose>. The walkthrough IS the deliverable of the judging step: the
+owner reads the whole state of the backlog with your verdict on every card
+before being asked anything. (Owner-designed format, first run PR #355;
+re-specified 2026-07-20 after two runs drifted away from it.)
+
+## 2b. Then decisions — one at a time, never batched
+
+Only cards whose verdict is "decision" (plus any walkthrough verdict the
+owner contests) become owner decisions. Present them STRICTLY one at a time —
+one picker call per decision, never several decisions in one call (the
+twice-corrected failure mode). Each decision re-renders the card's compact
+digest (problem background → proposed solution → recommendation) and then
+offers 2–3 mutually exclusive choices; recommended choice first, marked
+**(Recommended)**; every option description states its exact durable
+consequence: fields/body changed, dependency or trigger recorded, queue
+entered, what later unblocks it. Preserve the picker's free-text Other. With
+no structured picker, render `1`–`3` plus `4. Type anything` and wait.
+
+Batch only truly mechanical fixes with unambiguous values (vocabulary
+renames, `last_refined` stamps, pointer notes) into ONE clearly-labelled
+approval at the end — never demotes, defers, retires, rescopes, acceptance
+rewrites, or mints.
 
 ## 3. Readiness and autonomy contract
 
@@ -2246,7 +2319,7 @@ description: >-
   depth rather than assuming it. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -2257,6 +2330,14 @@ You are a pathfinder: you **scout the route ahead and report it** — you do not
 build the road. This runs the SAME whether the project is brand-new (no facet
 table yet — the onboarding fork inside `roadmap-branches`) or years old (a genuine
 re-baseline); the name is deliberately age-agnostic.
+
+**Cross-step output convention (owner calibration, 2026-07-20):** every step's
+receipt keeps a fixed semi-deterministic spine, uses consolidated tables for
+enumerable material, is written for a reader with no project context, is
+pasted into the terminal in an interactive session, cites sibling receipts
+instead of restating them, and ends with a dive-deeper-into-one-named-topic-
+or-proceed offer. The stable structure is the owner's drift detector: a
+summary that feels off signals drift in the inputs that produced it.
 
 v2 is **genuinely thin**: every stage is its own skill or CLI signal, and
 pathfinder contributes NO analysis of its own — only the sequencing, the owner
@@ -2563,14 +2644,14 @@ SKILLS: tuple[Skill, ...] = (
     Skill("execution-decision", 5, _EXECUTION_DECISION_SKILL),
     Skill("dispatch-decision", 4, _DISPATCH_DECISION_SKILL),
     Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
-    Skill("product-audit", 2, _PRODUCT_AUDIT_SKILL),
+    Skill("product-audit", 3, _PRODUCT_AUDIT_SKILL),
     Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),
     Skill("skill-audit", 1, _SKILL_AUDIT_SKILL),
-    Skill("market-scan", 6, _MARKET_SCAN_SKILL),
-    Skill("roadmap-branches", 3, _ROADMAP_BRANCHES_SKILL),
-    Skill("scope-cards", 6, _SCOPE_CARDS_SKILL),
-    Skill("backlog-refine", 1, _BACKLOG_REFINE_SKILL),
-    Skill("pathfinder", 8, _PATHFINDER_SKILL),
+    Skill("market-scan", 7, _MARKET_SCAN_SKILL),
+    Skill("roadmap-branches", 4, _ROADMAP_BRANCHES_SKILL),
+    Skill("scope-cards", 7, _SCOPE_CARDS_SKILL),
+    Skill("backlog-refine", 2, _BACKLOG_REFINE_SKILL),
+    Skill("pathfinder", 9, _PATHFINDER_SKILL),
     Skill("cockpit-autonomous-dispatch-contract", 3, _COCKPIT_DISPATCH_SKILL),
 )
 

@@ -23,7 +23,7 @@ description: >-
   depth rather than assuming it. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -34,6 +34,14 @@ You are a pathfinder: you **scout the route ahead and report it** — you do not
 build the road. This runs the SAME whether the project is brand-new (no facet
 table yet — the onboarding fork inside `roadmap-branches`) or years old (a genuine
 re-baseline); the name is deliberately age-agnostic.
+
+**Cross-step output convention (owner calibration, 2026-07-20):** every step's
+receipt keeps a fixed semi-deterministic spine, uses consolidated tables for
+enumerable material, is written for a reader with no project context, is
+pasted into the terminal in an interactive session, cites sibling receipts
+instead of restating them, and ends with a dive-deeper-into-one-named-topic-
+or-proceed offer. The stable structure is the owner's drift detector: a
+summary that feels off signals drift in the inputs that produced it.
 
 v2 is **genuinely thin**: every stage is its own skill or CLI signal, and
 pathfinder contributes NO analysis of its own — only the sequencing, the owner
