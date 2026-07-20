@@ -118,3 +118,11 @@ core.
   beyond what the boundary inventory evidenced.
 - ~~No child cards until the corrected scoping flow is invoked and the owner approves
   its proposals.~~ Done 2026-07-20; the three children above are owner-approved drafts.
+
+## Reviews
+
+- **2026-07-20 (owner, roadmap-branches gate):** X6 was introduced primarily as a
+  test of the recalibrated scoping skills, not a path to pursue with priority right
+  now — the branch is "highly subjective". Children proceed low-priority /
+  opportunistically; the fabric probe rides the owner's normal production use either
+  way. Recorded here so future planning runs do not re-inflate the branch.

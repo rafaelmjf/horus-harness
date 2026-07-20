@@ -2,10 +2,10 @@
 status: open
 priority: medium
 readiness: deferred
-readiness_reason: "Await real project requirement declarations from fleet onboarding."
+readiness_reason: "Defer trigger (a real project requirement declaration) is now satisfied by fabric; whether it un-defers is the 2026-07-20 refinement pass's call."
 tier: medium
 created: 2026-07-15
-last_refined: 2026-07-19
+last_refined: 2026-07-20
 vision_facet: "Continuity core"
 type: feature
 parallel: safe
@@ -35,3 +35,13 @@ BI Desktop or Word are absent, so a global warning would misstate readiness.
 Implement only after onboarding provides real project declarations to test against.
 No migration is blocked because platform-specific limitations can remain PRD prose in
 the first pass.
+
+## Reviews
+
+- **2026-07-20 (owner, scope-cards gate):** scope widened — requirements also cover
+  per-project **skill and CLI-version needs**, not just OS tools: the owner's fabric
+  example ("this project requires certain skills and the horus CLI") is exactly this
+  card's job, and fabric's 0.0.73 refresh provides the first real declaration the
+  defer was waiting for (fabric needs `horus >= horus_min_version` plus specific
+  bundled skills present). The skill-presence probe should reuse `skills.py`
+  states, never a second checker. Un-defer decision belongs to backlog-refine.
