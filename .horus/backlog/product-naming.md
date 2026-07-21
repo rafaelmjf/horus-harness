@@ -2,10 +2,10 @@
 status: open
 priority: low
 readiness: deferred
-readiness_reason: "Reopen at the first external distribution decision."
+readiness_reason: "A strong front-runner emerged (horus-builder, 2026-07-21 — see Candidates/Reviews). The rename itself stays deferred until first external distribution (cost unchanged); the name is effectively pre-decided pending that + a PyPI-availability check + confirming the slight identity rebroadening it implies."
 tier: medium
 created: 2026-07-16
-last_refined: 2026-07-19
+last_refined: 2026-07-21
 vision_facet: "Distribution"
 type: ops
 parallel: safe
@@ -30,6 +30,18 @@ launch).
   opaque/ambiguous as a suffix and doesn't self-describe.
 - **horus-continuity** (audit discussion, 2026-07-16): honest and literal; less
   evocative.
+- **horus-builder** (owner, 2026-07-21): **leading candidate.** Reframes the identity as
+  "a toolbox gathering existing tools toward a purpose" — general in nature; already used
+  to build itself, other products, and professional data/analytics work. *Pros:* clearly
+  beats "harness" (no longer implies running the agent loop), approachable, general, and
+  the self-building story is memorable. *Cons to weigh:* (1) "builder" is common/generic
+  in software (crowded, low differentiation) and is functional rather than the *creative*
+  name earlier wanted; (2) it names the *construction* layer — which the agent CLIs
+  already do — while Horus's differentiator is the continuity/PO/memory/direction layer
+  *above* building, so it risks pointing one layer too low. Both cons soften if the
+  intended identity really is "general build toolbox (continuity as one tool)" rather than
+  "repo-local PO" — a small, deliberate **identity rebroadening** to confirm (and reflect
+  in the Vision tagline) when the name ships.
 
 ## Acceptance
 
@@ -45,3 +57,8 @@ launch).
 Verdict: defer-name-keep-role
 
 Owner (2026-07-16): the ROLE direction is settled — Horus is a repo-local product owner (Vision expanded this session). But keep the horus-harness package/repo name for now; renaming is mostly ceremony until first external distribution. Both listed candidates are REJECTED: horus-po (opaque suffix) and horus-continuity (under-describes a tool that also does discovery + roadmap grooming). Want a more CREATIVE name, not a literal one. Find/decide the official name when this card ships at first distribution; check PyPI availability then.
+
+### 2026-07-21 — Rafael Figueiredo (manual)
+Verdict: front-runner-identified
+
+Owner: **horus-builder** is the leading candidate — it fits the lived reality (a general toolbox used to build itself, other products, and data/analytics work) and clearly beats harness/po/continuity. The rename stays DEFERRED until first external distribution (cost unchanged); the name is effectively pre-decided pending that + a PyPI-availability check. Open flag to resolve at ship time, not silently: "builder" subtly rebroadens the identity from "repo-local PO" toward "general build toolbox" — confirm that reframe and update the Vision tagline then. Agent assessment: builder is functional (not the "creative" earlier wanted) and names the construction layer rather than the continuity differentiator — acceptable IF the toolbox identity is the one intended. Note vs the earlier "creative not literal" steer: the owner has effectively shifted toward clear-and-fitting over creative-but-opaque, which is a reasonable update given why po/continuity were rejected.
