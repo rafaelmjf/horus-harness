@@ -169,6 +169,20 @@ def test_interactive_command_carries_effort_flag():
     assert "--effort" not in ClaudeAdapter().interactive_command(_spec(), session_id="s1")
 
 
+def test_interactive_command_carries_remote_control_flag():
+    # Remote Control on the spec -> --remote-control at spawn, so the live
+    # interactive session is reachable from the native app with no manual step.
+    argv = ClaudeAdapter().interactive_command(_spec(remote_control=True), session_id="s1")
+    assert "--remote-control" in argv
+    # Off by default on the spec -> no flag (the launch layer decides the default).
+    assert "--remote-control" not in ClaudeAdapter().interactive_command(_spec(), session_id="s1")
+
+
+def test_claude_adapter_declares_remote_control_support():
+    # The launch layer gates the request on this capability; Claude has it today.
+    assert ClaudeAdapter.supports_remote_control is True
+
+
 def test_known_models_are_the_bare_family_aliases():
     # The TUI's per-account model picker reads this directly — never a list of
     # its own — so it must carry the CLI-executable bare aliases, not the

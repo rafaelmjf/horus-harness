@@ -19,7 +19,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from horus import adapters, terminal_sessions
+from horus import adapters, config, terminal_sessions
 from horus.pty_session import PtySession, spawn_pty
 
 # Cap the per-terminal scrollback kept for re-attach replay. Generous enough that a
@@ -106,6 +106,7 @@ class PtyHost:
         rows: int = 24,
         title: str | None = None,
         managed: bool = False,
+        remote_control: bool | None = None,
     ) -> str:
         """Spawn an interactive agent under a PTY; return the terminal id.
 
@@ -126,15 +127,18 @@ class PtyHost:
                 cols=cols,
                 rows=rows,
                 title=title,
+                remote_control=remote_control,
             )
 
         adapter = adapters.get_adapter(agent)
         if not hasattr(adapter, "interactive_command"):
             raise ValueError(f"{agent!r} does not support interactive sessions yet.")
         root = Path(project_dir)
+        want_rc = remote_control if remote_control is not None else config.load_remote_control_default()
         spec = adapters.SpawnSpec(
             prompt=prompt, project_dir=root, account=account,
             posture=adapters.PermissionPosture(posture), model=model,
+            remote_control=bool(want_rc) and getattr(adapter, "supports_remote_control", False),
         )
         if account and getattr(adapter, "config_dirs", {}).get(account) and hasattr(adapter, "verify_account"):
             check = adapter.verify_account(account)
@@ -180,6 +184,7 @@ class PtyHost:
         cols: int,
         rows: int,
         title: str | None,
+        remote_control: bool | None = None,
     ) -> str:
         result = terminal_sessions.launch_tmux(
             agent=agent,
@@ -191,6 +196,7 @@ class PtyHost:
             attach=False,
             cols=cols,
             rows=rows,
+            remote_control=remote_control,
         )
         if not result.ok or not result.session_id or not result.target_ref:
             raise ValueError(result.error or "failed to create managed tmux session")

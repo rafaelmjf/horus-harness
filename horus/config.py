@@ -82,7 +82,13 @@ LAUNCH_PROFILE_KEYS: tuple[str, ...] = ("model", "effort", "posture")
 # key, so the TUI picker offers what the cards in front of you actually have.
 # ---------------------------------------------------------------------------
 
-TUI_DEFAULTS: dict[str, list[str]] = {"backlog_fields": []}
+# Claude Code Remote Control is on by default for Horus-launched *interactive*
+# Claude sessions (the whole point is catching the ones you forgot to enable it
+# on, so they are phone-attachable). A global toggle flips this; a per-launch
+# override wins over it. Claude-only — other agents ignore the request.
+REMOTE_CONTROL_DEFAULT: bool = True
+
+TUI_DEFAULTS: dict[str, object] = {"backlog_fields": [], "remote_control_default": REMOTE_CONTROL_DEFAULT}
 
 # A frontmatter key as `horus.frontmatter` can parse one back: no whitespace, no
 # ':', nothing needing TOML escaping. Anything else can't name a real field, so it
@@ -225,7 +231,7 @@ def _write_config(
     ignored_repos: list[str] | None = None,
     launch: dict[str, str] | None = None,
     launch_profiles: dict[str, dict[str, str]] | None = None,
-    tui: dict[str, list[str]] | None = None,
+    tui: dict[str, object] | None = None,
 ) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
     root = workspace_root or load_workspace_root()
@@ -502,27 +508,49 @@ def _clean_backlog_fields(raw: object) -> list[str]:
     return cleaned
 
 
-def load_tui_defaults() -> dict[str, list[str]]:
+def load_tui_defaults() -> dict[str, object]:
     """Return the persisted user-level TUI preferences, falling back to
     :data:`TUI_DEFAULTS`. Keys: ``backlog_fields`` (card frontmatter keys the
-    backlog list renders inline after the title, in render order).
+    backlog list renders inline after the title, in render order) and
+    ``remote_control_default`` (whether interactive Claude launches enable Remote
+    Control at spawn — default on).
     """
+    defaults = {"backlog_fields": [], "remote_control_default": REMOTE_CONTROL_DEFAULT}
     path = config_path()
     if not path.exists():
-        return {"backlog_fields": []}
+        return defaults
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError):
-        return {"backlog_fields": []}
+        return defaults
     raw = data.get("tui") or {}
     if not isinstance(raw, dict):
-        return {"backlog_fields": []}
-    return {"backlog_fields": _clean_backlog_fields(raw.get("backlog_fields", []))}
+        return defaults
+    rc = raw.get("remote_control_default", REMOTE_CONTROL_DEFAULT)
+    return {
+        "backlog_fields": _clean_backlog_fields(raw.get("backlog_fields", [])),
+        "remote_control_default": bool(rc) if isinstance(rc, bool) else REMOTE_CONTROL_DEFAULT,
+    }
 
 
 def load_backlog_fields() -> list[str]:
     """The card frontmatter keys the TUI backlog list renders inline, in order."""
     return load_tui_defaults()["backlog_fields"]
+
+
+def load_remote_control_default() -> bool:
+    """Whether Horus-launched interactive Claude sessions enable Remote Control at
+    spawn (so they are reachable from the native app without a manual step)."""
+    return bool(load_tui_defaults()["remote_control_default"])
+
+
+def set_remote_control_default(enabled: bool) -> bool:
+    """Persist the global Remote-Control-on-launch default (preserving other
+    ``[tui]`` keys). Returns the stored value."""
+    current = load_tui_defaults()
+    current["remote_control_default"] = bool(enabled)
+    _write_config(load_projects(), load_github_owners(), load_workspace_root(), tui=current)
+    return bool(enabled)
 
 
 def set_backlog_fields(fields: list[str]) -> list[str]:
@@ -535,9 +563,11 @@ def set_backlog_fields(fields: list[str]) -> list[str]:
             raise ValueError(f"Invalid backlog field name {entry!r}.")
         if key not in cleaned:
             cleaned.append(key)
+    current = load_tui_defaults()
+    current["backlog_fields"] = cleaned
     _write_config(
         load_projects(), load_github_owners(), load_workspace_root(),
-        tui={"backlog_fields": cleaned},
+        tui=current,
     )
     return cleaned
 

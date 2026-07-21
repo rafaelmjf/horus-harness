@@ -323,7 +323,10 @@ def test_a_stale_continuity_table_is_dropped_not_carried_forward(tmp_path, monke
 def test_backlog_fields_default_to_empty(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     assert config.load_backlog_fields() == []
-    assert config.load_tui_defaults() == {"backlog_fields": []}
+    assert config.load_tui_defaults() == {
+        "backlog_fields": [],
+        "remote_control_default": True,
+    }
 
 
 def test_set_backlog_fields_round_trips_and_keeps_pick_order(tmp_path, monkeypatch):
@@ -334,6 +337,26 @@ def test_set_backlog_fields_round_trips_and_keeps_pick_order(tmp_path, monkeypat
     # Order is the owner's, not sorted: it's the render order on the card row.
     assert config.set_backlog_fields(["status", "tier"]) == ["status", "tier"]
     assert config.load_backlog_fields() == ["status", "tier"]
+
+
+def test_remote_control_default_is_on_and_round_trips(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    # Default on: forgotten sessions are still phone-attachable.
+    assert config.load_remote_control_default() is True
+    assert config.set_remote_control_default(False) is False
+    assert config.load_remote_control_default() is False
+    assert config.set_remote_control_default(True) is True
+    assert config.load_remote_control_default() is True
+
+
+def test_tui_keys_do_not_clobber_each_other(tmp_path, monkeypatch):
+    # The two [tui] keys share one table; writing one must preserve the other.
+    _home(tmp_path, monkeypatch)
+    config.set_remote_control_default(False)
+    config.set_backlog_fields(["tier"])
+    assert config.load_remote_control_default() is False  # not reset by the fields write
+    config.set_remote_control_default(True)
+    assert config.load_backlog_fields() == ["tier"]       # not reset by the toggle write
 
 
 def test_set_backlog_fields_dedupes_and_rejects_unusable_names(tmp_path, monkeypatch):

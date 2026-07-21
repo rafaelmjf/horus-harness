@@ -74,6 +74,7 @@ class LaunchBrief:
     posture: str = "default"
     model: str | None = None
     prompt: str = ""
+    remote_control: bool | None = None
     target: str = LOCAL
 
 
@@ -195,6 +196,7 @@ class LocalBackend:
             posture=brief.posture,
             model=brief.model,
             prompt=brief.prompt,
+            remote_control=brief.remote_control,
             reg=self._reg,
         )
         if not result.ok or not result.session_id:

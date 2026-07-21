@@ -693,6 +693,7 @@ class TerminalUI:
             self.control_sink = notify.load_notify_config().sink
         except Exception:  # noqa: BLE001 - a bad config degrades to 'none', never a crash
             self.control_sink = "none"
+        self.control_remote_control = config.load_remote_control_default()
         today = datetime.now().date()
         self.control_envelopes = []
         for env in envelope.load_all():
@@ -768,6 +769,14 @@ class TerminalUI:
             else:
                 self.status = ("Proxy not set up — run `horus proxy login codex` (and `claude`) "
                                "in a terminal, then toggle here.")
+        elif kind == "ctl_remote_control":
+            new = config.set_remote_control_default(not self.control_remote_control)
+            self.control_remote_control = new
+            self.status = (
+                "Remote Control on by default — new Horus-launched Claude sessions are "
+                "phone-attachable at spawn." if new else
+                "Remote Control off by default — enable per launch with `open --remote-control`."
+            )
         self._refresh_items()
         self.selected = min(self.selected, max(0, len(self.items) - 1))
         self.application.invalidate()
@@ -787,6 +796,7 @@ class TerminalUI:
             items.extend(("ctl_keepwarm", alias) for alias in sorted(self.control_keepwarm))
             items.append(("ctl_notify_test", None))
             items.append(("ctl_proxy", None))
+            items.append(("ctl_remote_control", None))
             self.items = items
             return
         if self.screen == "projects":
@@ -1849,6 +1859,13 @@ class TerminalUI:
                     detail = "needs Docker installed"
                 else:
                     detail = "run `horus proxy login codex` (and `claude`) first"
+                frags.append(("class:muted", f"       {detail}\n"))
+            elif kind == "ctl_remote_control":
+                box = "x" if self.control_remote_control else " "
+                frags.append((style, f"\n {marker} [{box}] Remote Control on launch (Claude)\n"))
+                detail = ("new Claude sessions are phone-attachable at spawn"
+                          if self.control_remote_control
+                          else "off — enable per launch with `open --remote-control`")
                 frags.append(("class:muted", f"       {detail}\n"))
         return frags
 

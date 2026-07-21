@@ -81,6 +81,7 @@ _PERMISSION_MODE: dict[PermissionPosture, str] = {
 class ClaudeAdapter(AgentAdapter):
     name = "claude"
     KNOWN_MODELS = _MODEL_FAMILIES
+    supports_remote_control = True
 
     def __init__(self, *, executable: str = "claude", config_dirs: dict[str, str] | None = None) -> None:
         """``config_dirs`` maps an account alias to its ``CLAUDE_CONFIG_DIR`` for
@@ -165,6 +166,11 @@ class ClaudeAdapter(AgentAdapter):
             argv += ["--effort", spec.effort]
         if spec.posture is not PermissionPosture.DEFAULT:
             argv += self.permission_flags(spec.posture)
+        if spec.remote_control:
+            # Reach this live interactive session from claude.ai/code or the mobile
+            # app without a manual in-session step. Best-effort: the flag never fails
+            # the spawn — if the account/plan can't use it, Claude just notifies.
+            argv.append("--remote-control")
         argv += list(spec.extra_args)
         if spec.prompt:
             argv.append(spec.prompt)  # positional initial prompt for the TUI
