@@ -43,9 +43,12 @@ still runs often. This card revisits *efficiency* — WITHOUT reviving frontload
 
 ## Candidate directions (open — sketches, not decisions)
 
-- **A capture-batching convention:** accumulate captures and land ONE PR at a natural
-  boundary instead of PR-per-card — behavioural, not a frontloaded mode. The dial already
-  surfaced this session.
+- **One session branch, merge at the boundary (leading):** push each capture to a
+  *single* session branch as you go — durable, never stranded — and merge that one branch
+  ONCE at the real boundary (session end / pause), not per card. This separates "don't
+  strand" (commit + push, incremental) from "don't over-ceremony" (merge, once) — the
+  tension that drove the eager per-card merging. The boundary is the session end, not each
+  capture moment. (This card's own final PR is meant to demonstrate it.)
 - **Un-block topic-jumps at the gate:** make Unclassified advisory (that IS
   `close-check-unclassified-cards-advisory`) so ceremony never strands a jump.
 - **Cadence as behaviour, not launch-mode:** any "do a lot in a row, checkpoint at the
@@ -66,6 +69,15 @@ still runs often. This card revisits *efficiency* — WITHOUT reviving frontload
 - `close-check-unclassified-cards-advisory` — the topic-jump block, filed from a
   pbi-ecosystem session.
 - This session (2026-07-21): 8 PRs / ~12 cards, all continuity, mobile-driven.
+- **Mid-session recurrence (2026-07-21), the sharpest datum:** even *after* this card was
+  written, the pattern repeated — a PR was batched (2 items) yet still **merged
+  immediately while the session had more work coming**. Owner caught it. The failure isn't
+  per-card-vs-batched PRs; it's treating every capture as a continuity *boundary* and
+  merging, when the boundary is the session end / pause (the CLAUDE.md rule already says
+  "consolidate once at a real boundary"). A written instruction — freshly carded, even —
+  did NOT hold the behaviour, which is direct evidence the control may need a stronger
+  rung than instruction (per the repo's instruction → deterministic-signal → hard-guard
+  ladder).
 
 ## Related
 

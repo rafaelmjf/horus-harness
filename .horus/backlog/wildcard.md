@@ -112,3 +112,8 @@ we get"; grounding decided same session). Related: `pathfinder`, `scope-cards`,
   artifacts (fresh or previous), not free-roaming — resolving the pure-wild-vs-grounded
   question toward grounded. Surfaced a likely prerequisite: a per-run artifact
   bundle/manifest so the previous run's evidence can be loaded coherently.
+- 2026-07-21 — **v0 skill drafted + calibrated** (owner): a dry-run grounded on the live
+  session produced the `backlog-librarian` card; the owner judged it good and adopted it. A
+  v0 `SKILL.md` draft now lives at `.claude/skills/wildcard/` (+ `.agents/` parity), NOT yet
+  bundled in `horus/skills.py` — the registry/version wiring + install verification is the
+  dedicated-session step this card drives.
