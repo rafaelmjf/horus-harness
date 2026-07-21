@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: low
 created: 2026-07-21
 created_by: owner
@@ -10,6 +10,8 @@ phase: explore
 type: feature
 vision_facet: "Dashboard / cockpit"
 depends-on: tui-backlog-grouped-list
+shipped_pr: 388
+shipped_sha: 18a7c11
 ---
 
 # tui-backlog-kanban-board — width-adaptive kanban lens over the backlog

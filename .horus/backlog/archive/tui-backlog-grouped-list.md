@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-21
 created_by: owner
@@ -10,6 +10,8 @@ order: 30
 phase: explore
 type: feature
 vision_facet: "Dashboard / cockpit"
+shipped_pr: 387
+shipped_sha: 543079d
 ---
 
 # tui-backlog-grouped-list — collapsible group-by sections in the TUI backlog list

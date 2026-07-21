@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-20
 created_by: owner
@@ -9,6 +9,8 @@ readiness_reason: "Which read-outs render (facet standings, branch tree, readine
 phase: converge
 type: feature
 vision_facet: "Dashboard / cockpit"
+shipped_pr: 389
+shipped_sha: f632bf4
 ---
 
 # tui-vision-backlog-read-out — the cockpit shows direction, not just cards
