@@ -66,6 +66,18 @@ Zero-blast-radius output makes it near-ideal food for the scheduled away-mode lo
 to review — exercising the dispatch infra with no merge risk. Fun *and* a safe exercise
 of the autonomous substrate.
 
+## Prior art / to explore
+
+- **`github.com/uditakhourii/adhd`** (owner-flagged, 2026-07-21) — a coding-agent skill
+  implementing divergence-then-convergence *by design*: spawn N **isolated** reasoning
+  branches under different cognitive frames (branches never see each other → no
+  anchoring), then a **separate critic** pass scores every idea, flags traps, clusters by
+  angle, and deepens the top-K survivors. Framed as "an architectural fix for premature
+  convergence in autoregressive reasoning." Directly relevant to wildcard's
+  divergence → one-card mechanism (generate under N frames, self-critique to one) and to
+  pathfinder's `roadmap-branches`. Explore whether to adopt the isolated-frames +
+  separate-critic structure (it maps cleanly onto the Workflow parallel/judge patterns).
+
 ## Non-goals
 
 - Not autonomous convergence — direction stays owner-gated, via `pathfinder`.
