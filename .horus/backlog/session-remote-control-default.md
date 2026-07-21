@@ -4,11 +4,15 @@ priority: high
 created: 2026-07-21
 created_by: owner
 last_refined: 2026-07-21
-readiness: shaping
-readiness_reason: "Intent and scope are clear and owner wants it next, but the exact enable mechanism (launch flag vs settings key vs in-session-only) is unverified and determines the implementation. Resolve that first, then promote to Ready."
+readiness: ready
+autonomy: attended
+order: 10
 phase: build
 type: feature
-vision_facet: "Distribution"
+tier: low
+parallel: safe
+surface: "Horus session-launch path (Claude adapter/launch) + global TUI toggle + per-launch override for remote-control-on-launch"
+vision_facet: "Dashboard / cockpit"
 ---
 
 # session-remote-control-default — launch Horus sessions with remote control enabled by default
@@ -52,6 +56,17 @@ from the native app without remembering to turn it on.
   whether Horus can flip it at spawn time or needs a different approach entirely, and
   it sets the pass/fail bar. Quick claude-code-guide check is the first task.
 
+## Acceptance
+
+- **Step 0 (owner-attended):** confirm the remote-control enable mechanism (launch
+  flag vs `settings.json` key vs in-session-only); the wiring follows from it.
+- With the global toggle on, Horus-launched Claude sessions are remote-control-enabled
+  at spawn (no manual in-session step), with a per-launch override; the launch path
+  reads the setting so forgotten sessions are covered.
+- Gate: full suite green on the exact SHA. Probe: launch a Claude session via Horus
+  with the toggle on → confirm it is attachable from the native app with no manual
+  enablement; toggle off / per-launch override → not auto-enabled.
+
 ## Non-goals
 
 - Not Codex. Not a fix for account-switch friction. Not the self-hosted chat
@@ -63,4 +78,11 @@ In-session discussion 2026-07-21 (owner-directed, "definitely, to be done next")
 Research receipt: `.horus/research/2026-07-21-mobile-agent-session-access.md`
 (suggested idea #1). Cross-links `native-app-account-launch-spike` (adjacent
 account/session-reach work) and `windows-native-horus-setup` (the machine this
-serves). Vision facet is a best guess — confirm in refine.
+serves).
+
+## Reviews
+
+- 2026-07-21 — **Minted Ready (attended)** (owner, refine pass): decision-complete and
+  the owner-driven #1 next build; the enable-mechanism unknown is an implementation
+  lookup folded into Acceptance step 0, not a design gap. Ordered first (`order: 10`).
+  Facet corrected `Distribution → Dashboard / cockpit` (phone-reach-of-sessions).

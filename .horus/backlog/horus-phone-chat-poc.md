@@ -26,6 +26,27 @@ survive even after vendors ship native mobile parity. The old Horus webapp faile
 Before committing to a meaningful architecture, prove the single riskiest unknown
 cheaply. The owner's call, and the right one: a well-scoped one-shot PoC first.
 
+## North star — the ideal this is a first step toward (NOT the PoC's scope)
+
+The guiding vision, even if not realizable soon (owner, 2026-07-21): **any session
+should be chattable or attachable from anywhere.** The desktop already has this via
+tmux + the TUI — each account's `claude`/`codex` runs as its own long-lived,
+already-authenticated local process, and attaching is **identity-free** (you switch
+*which process you view*, never re-authenticate), so multiple accounts/sessions add
+zero switching cost. The phone has no equivalent: no client holds N authenticated
+sessions at once, so every account change is a full 2-step login cycle.
+
+The ideal endpoint is to extend the tmux property to the phone: a layer that holds
+every account's sessions (enrolled once, persistent) so from a phone you can reach
+*any* session — Claude or Codex, any account — and switch between them the way
+`tmux attach -t` switches locally, with no per-switch login. Only a self-hosted layer
+(this direction) can provide that, because it owns the session/token layer the way
+tmux owns the local processes.
+
+This PoC is the smallest first probe toward that north star, not an attempt to build
+it. Keep the PoC scoped as below; this section records the destination so the
+direction is not lost.
+
 ## Intended outcome (owner intent: a rough thing to actually TRY)
 
 The point (owner, 2026-07-21) is **not** a pure technical de-risk — it is a rough but

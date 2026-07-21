@@ -4,7 +4,7 @@ priority: low
 readiness: ready
 autonomy: eligible
 created: 2026-07-18
-last_refined: 2026-07-19
+last_refined: 2026-07-21
 vision_facet: "Introspection & self-improvement"
 phase: converge
 tier: medium
@@ -45,3 +45,10 @@ model's memory.
 
 - No automated service-health framework — this is the deterministic self-verify
   card's job (`service-installers-self-verify-active`); this card is the guidance rung.
+
+## Reviews
+
+- 2026-07-21 — **Kept Ready (eligible); tagged prime e2e-drill food** (owner, refine
+  pass): a guidance one-liner — small, low-risk, tiny always-green PR — so it is a good
+  *real* leg for `autotest-e2e-away-mode-drill` (one of the 3 account legs) rather than a
+  throwaway fake card.

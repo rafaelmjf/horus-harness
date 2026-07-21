@@ -1,10 +1,10 @@
 ---
 status: open
 priority: high
-readiness: gated
-readiness_reason: "Wait for the weekly account reset, then run as an attended evidence-gathering drill."
+readiness: deferred
+readiness_reason: "Deferred until after 2026-07-29 (owner, 2026-07-21) — run then as the attended away-mode drill, when weekly account capacity supports the multi-account run. Leg roster in Reviews."
 created: 2026-07-19
-last_refined: 2026-07-19
+last_refined: 2026-07-21
 vision_facet: "Autonomous dispatch"
 phase: converge
 tier: medium
@@ -12,7 +12,6 @@ type: chore
 parallel: safe
 created_by: agent
 surface: a repeatable owner-run away-mode e2e DRILL (machine-local schedules + Telegram), not product code
-depends-on: schedule-supervise-resolve-target-at-fire-time, notify-schedule-batch-complete
 ---
 
 # autotest-e2e-away-mode-drill — the owner's fully-scheduled away-mode e2e test
@@ -86,3 +85,11 @@ runnable once its two `depends-on` gaps land.
   taps + autonomous supervise **+merge** (envelope `--allow-merge` + probe). Deferred
   until the **weekly window resets** (claude/work was at 92% weekly) so the multi-account
   run has capacity.
+- 2026-07-21 — **Deferred to after 2026-07-29** (owner, refine pass): re-gated from the
+  vague "weekly reset" to a specific date — run then as the attended away-mode drill when
+  capacity supports the multi-account run. **Leg roster started:**
+  `verify-guidance-long-running-services` is one confirmed real always-green leg (tagged
+  this pass); still need ~2 more small always-green legs — candidates to body-check when
+  arming: `audit-advisory-interval`, `backlog-default-list`. `codex-identity-guard` was
+  explicitly **excluded** (safety-critical, ships on its own merits). Satisfied
+  `depends-on` (both landed v0.0.68) removed from frontmatter.
