@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-21
 created_by: owner
@@ -13,6 +13,8 @@ tier: low
 parallel: safe
 surface: "Horus session-launch path (Claude adapter/launch) + global TUI toggle + per-launch override for remote-control-on-launch"
 vision_facet: "Dashboard / cockpit"
+shipped_pr: 386
+shipped_sha: 8129306
 ---
 
 # session-remote-control-default — launch Horus sessions with remote control enabled by default
