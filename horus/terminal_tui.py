@@ -211,6 +211,7 @@ class TerminalUI:
         self.launch_expanded: str | None = None
         self.card: backlog.Card | None = None
         self.card_scroll = 0
+        self.vision_scroll = 0  # scroll offset for the direction read-out view
         self.backlog_fields = config.load_backlog_fields()
         self.project_focus: dict[str, str] = {}
         self.project_requirements: machine_requirements.Report | None = None
@@ -508,7 +509,7 @@ class TerminalUI:
         every list screen routes through the 2D-aware grid nav so on the wide
         projects grid down/up move a row and left/right move a column, while a
         single-column list keeps linear up/down with left = Back."""
-        if self.screen in ("card", "receipt"):
+        if self.screen in ("card", "receipt", "vision"):
             if direction == "up":
                 self.scroll(-1)
             elif direction == "down":
@@ -547,6 +548,11 @@ class TerminalUI:
             self.receipt_scroll = max(0, min(len(lines) - 1, self.receipt_scroll + amount))
             self.application.invalidate()
             return
+        if self.screen == "vision":
+            lines = self._vision_lines()
+            self.vision_scroll = max(0, min(max(0, len(lines) - 1), self.vision_scroll + amount))
+            self.application.invalidate()
+            return
         self.move(amount)
 
     def activate(self) -> None:
@@ -578,6 +584,9 @@ class TerminalUI:
             self._show("accounts")
         elif self.screen == "project" and kind == "backlog":
             self._show("backlog")
+        elif self.screen == "project" and kind == "vision":
+            self.vision_scroll = 0
+            self._show("vision")
         elif self.screen == "project" and kind == "capabilities":
             self._show("capabilities")
         elif self.screen == "project" and kind == "skills":
@@ -718,6 +727,8 @@ class TerminalUI:
             else:
                 self._show("accounts")
         elif self.screen == "backlog":
+            self._show("project")
+        elif self.screen == "vision":
             self._show("project")
         elif self.screen == "backlog_fields":
             self._show("backlog")
@@ -914,6 +925,7 @@ class TerminalUI:
                 ("mode", "resume"),
                 ("mode", "fresh"),
                 ("backlog", None),
+                ("vision", None),
                 ("capabilities", None),
                 ("skills", None),
                 ("receipts", None),
@@ -926,6 +938,8 @@ class TerminalUI:
             self.items = [("receipt", receipt) for receipt in self.project_receipts.get(self.project, [])]
         elif self.screen == "receipt":
             self.items = []
+        elif self.screen == "vision":
+            self.items = []  # scroll-only read-out
         elif self.screen == "backlog":
             all_cards = self.project_cards.get(self.project, [])
             cards = backlog_tree.filter_cards(all_cards, self.backlog_filter)
@@ -1149,6 +1163,7 @@ class TerminalUI:
                 else "HORUS · Launch"
             ),
             "backlog": f"HORUS · {self.project.name if self.project else 'Project'} backlog",
+            "vision": f"HORUS · {self.project.name if self.project else 'Project'} direction",
             "backlog_fields": "HORUS · Backlog card fields",
             "card_priority": f"HORUS · Priority: {self.priority_card.name if self.priority_card else 'card'}",
             "capabilities": f"HORUS · {self.project.name if self.project else 'Project'} capabilities",
@@ -1171,6 +1186,8 @@ class TerminalUI:
     def _body_text(self) -> StyleAndTextTuples:
         if self.screen == "card":
             return self._card_body_text()
+        if self.screen == "vision":
+            return self._vision_body_text()
         if self.screen == "receipt":
             return self._receipt_body_text()
         if self.screen == "mission":
@@ -1327,6 +1344,9 @@ class TerminalUI:
                     f"{counts[backlog.QUEUE_GATED]} gated · "
                     f"{counts[backlog.QUEUE_DEFERRED]} deferred\n",
                 ))
+            elif kind == "vision":
+                lines.append((style, f"\n {marker} Direction\n"))
+                lines.append(("class:muted", "     facet standings · vision branches · readiness\n"))
             elif kind == "capabilities":
                 project = (self.capabilities_record or {}).get("project", {})
                 records = project.get("capabilities", []) if isinstance(project, dict) else []
@@ -1772,6 +1792,65 @@ class TerminalUI:
             fragments.append((style, f" {line}\n"))
         return fragments
 
+    def _vision_lines(self) -> list[StyleAndTextTuples]:
+        """The direction read-out as a list of screen lines (each a fragment list):
+        facet standings, readiness queues, and vision-branch states. Renders only
+        canonical primitives — `routines.facet_standings` (the same analysis
+        `horus consolidate` prints), `backlog.readiness_counts`, and the
+        `backlog_tree` branch projection — never a second parser or new analysis."""
+        root = self.project
+        if root is None:
+            return [[("class:muted", "  No project.\n")]]
+        lines: list[StyleAndTextTuples] = []
+
+        doc = frontmatter.parse_file(root / ".horus" / frontmatter.PRD_FILE)
+        prd_body = doc.body if doc is not None else ""
+        standings = routines.facet_standings(root, prd_body)
+
+        lines.append([("class:section", " Facet standings\n")])
+        if standings is None:
+            lines.append([("class:muted", "  No Vision facet table in PRD.md — no direction read-out.\n")])
+        else:
+            for facet, n in standings.with_work:
+                lines.append([("class:item", f"  {facet}  "), ("class:muted", f"— {n} open\n")])
+            for facet in standings.no_work:
+                lines.append([("class:muted", f"  {facet} — no open cards (converged or untouched)\n")])
+            if not standings.with_work and not standings.no_work:
+                lines.append([("class:muted", "  (no facets)\n")])
+            if standings.explore:
+                lines.append([("", "\n")])
+                lines.append([("class:section", " Exploratory (Ready-gate exempt)\n")])
+                lines.append([("class:muted", f"  {len(standings.explore)}: " + ", ".join(standings.explore) + "\n")])
+            for msg in standings.drift:
+                lines.append([("class:warning", f"  ⚠ {msg}\n")])
+
+        cards = self.project_cards.get(root, [])
+        counts = backlog.readiness_counts(cards)
+        lines.append([("", "\n")])
+        lines.append([("class:section", " Readiness queues\n")])
+        for key in backlog.READINESS_QUEUE_ORDER:
+            lines.append([("class:muted", f"  {backlog.READINESS_QUEUE_LABELS[key]}: {counts[key]}\n")])
+
+        tree = self.project_trees.get(root) or backlog_tree.build_tree(root)
+        if tree.branches:
+            lines.append([("", "\n")])
+            lines.append([("class:section", " Vision branches\n")])
+            for group in tree.branches:
+                note = "" if group.resolved else " (no umbrella card)"
+                lines.append([("class:branch", f"  {group.title} ({len(group.children)} open){note}\n")])
+                if group.convergence:
+                    lines.append([("class:muted", f"     converges: {group.convergence}\n")])
+        return lines
+
+    def _vision_body_text(self) -> StyleAndTextTuples:
+        lines = self._vision_lines()
+        frags: StyleAndTextTuples = []
+        for index, line in enumerate(lines[self.vision_scroll:]):
+            if index == 0:
+                frags.append(("[SetCursorPosition]", ""))
+            frags.extend(line)
+        return frags or [("class:muted", "\n  Nothing to show.\n")]
+
     def _receipt_lines(self) -> list[str]:
         if self.receipt is None:
             return ["", "Receipt unavailable."]
@@ -2212,6 +2291,9 @@ class TerminalUI:
             return [("class:footer", text)]
         if self.screen == "receipt":
             text = " ↑↓ read · Esc back" if narrow else " ↑↓/swipe read   Esc back   q quit"
+            return [("class:footer", text)]
+        if self.screen == "vision":
+            text = " ↑↓ read · Esc back" if narrow else " ↑↓/swipe scroll   Esc back   q quit"
             return [("class:footer", text)]
         if self.screen == "backlog_fields":
             text = (
