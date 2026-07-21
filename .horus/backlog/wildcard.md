@@ -9,6 +9,7 @@ readiness_reason: "A 'fun to try' exploratory idea; the grounding (what steers t
 phase: explore
 type: spike
 vision_facet: "PO lifecycle"
+depends-on: pathfinder-structured-outcome
 ---
 
 # wildcard — an autonomous divergence skill that emits ONE reviewable card
@@ -71,20 +72,19 @@ of the autonomous substrate.
 - Not autonomous implementation — the emitted card follows the normal
   refine → approve → implement path.
 
-## Likely prerequisite — a pathfinder run bundle / manifest
+## Prerequisite — structured pathfinder run outcome (`pathfinder-structured-outcome`)
 
 For wildcard to load a *coherent* set from "the previous pathfinder run," the artifacts
-need to be grouped by run. Today they land as **dated receipts** in `.horus/research/`
-and `.horus/audits/` — not tied together by run. So wildcard likely needs an explicit
-**run-bundle / manifest** (a way to enumerate one pathfinder run's artifacts). This is a
-small companion prerequisite — may become its own card (e.g. `pathfinder-run-artifact-bundle`)
-if wildcard's implementation needs it. The owner flagged this is fine to improve when needed.
+must be grouped by run. Today they land as **dated receipts** in `.horus/research/` and
+`.horus/audits/` — not tied together. This is now its own card,
+**`pathfinder-structured-outcome`** (refine the chain to emit an addressable per-run
+bundle + manifest); wildcard `depends-on` it for the "previous run" path.
 
 ## Open questions
 
 - Fresh vs previous default + staleness flagging (see Grounding).
 - Run substrate (scheduled job vs on-demand); cadence + a bounded token budget per run.
-- Whether the run-bundle/manifest prerequisite becomes its own card.
+- (Resolved) run-bundle/manifest is now its own card, `pathfinder-structured-outcome`.
 - Overlap with `pathfinder` / `scope-cards` / `market-scan` — it reuses their divergence
   machinery but strips the attended gates; position so it is not a duplicate.
 
