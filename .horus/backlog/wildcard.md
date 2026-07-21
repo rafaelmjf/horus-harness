@@ -31,17 +31,26 @@ This is literally `refine-autonomy-hardening-lens` applied to pathfinder: isolat
 one autonomizable step (divergence → a bounded-output card) from the intrinsic-attended
 steps (direction, taste, shipping).
 
-## The sharp design question (open): what steers it?
+## Grounding — the pathfinder run (owner-decided, 2026-07-21)
 
-A spectrum:
+Not free-roaming. `wildcard` is grounded on a **pathfinder run** — either a **fresh** one
+(if the owner wants current evidence) or the **previous** run's saved artifacts. Every
+pathfinder run already persists its evidence: the position brief, the `product-audit`
+receipt, the `market-scan` receipt, and the `roadmap-branches` divergence tree (dated,
+under `.horus/research/` and `.horus/audits/`). Wildcard reads that artifact set and
+autonomously synthesises **ONE** opportunity worth a card — effectively an autonomous
+"convergence into a single proposal" over pathfinder's divergence evidence, safe because
+the output is a card, not a direction commitment.
 
-- **Pure wild** — free-roaming "surprise me" ideation. Fun, serendipitous, but low
-  hit-rate / backlog-spam risk.
-- **Signal-grounded** — mines real signals (backlog gaps, audit findings,
-  shipped-vs-used drift, recurring friction in receipts, a market-scan receipt) and
-  proposes an opportunity the owner wouldn't have prioritised. Higher value, less "wild."
-- Likely: **signal-grounded with a wild-card streak** — ground each proposal in
-  evidence so the card is discovery, not noise.
+**Fresh vs previous — the tradeoff:**
+
+- **Previous run (default):** cheap, no re-gathering; risk is staleness — cite the
+  artifacts' dates and flag when the run is old.
+- **Fresh run:** current evidence, but re-runs the (autonomizable) evidence steps
+  (`product-audit` / `market-scan`) at real token cost. Convergence and direction stay
+  the owner's; only the evidence-gathering + single-proposal synthesis is autonomous.
+
+Each emitted card cites the specific artifacts it was grounded in.
 
 ## Quality bar (open)
 
@@ -62,15 +71,32 @@ of the autonomous substrate.
 - Not autonomous implementation — the emitted card follows the normal
   refine → approve → implement path.
 
+## Likely prerequisite — a pathfinder run bundle / manifest
+
+For wildcard to load a *coherent* set from "the previous pathfinder run," the artifacts
+need to be grouped by run. Today they land as **dated receipts** in `.horus/research/`
+and `.horus/audits/` — not tied together by run. So wildcard likely needs an explicit
+**run-bundle / manifest** (a way to enumerate one pathfinder run's artifacts). This is a
+small companion prerequisite — may become its own card (e.g. `pathfinder-run-artifact-bundle`)
+if wildcard's implementation needs it. The owner flagged this is fine to improve when needed.
+
 ## Open questions
 
-- Grounding (above); run substrate (scheduled job vs on-demand); cadence + a bounded
-  token budget per run.
+- Fresh vs previous default + staleness flagging (see Grounding).
+- Run substrate (scheduled job vs on-demand); cadence + a bounded token budget per run.
+- Whether the run-bundle/manifest prerequisite becomes its own card.
 - Overlap with `pathfinder` / `scope-cards` / `market-scan` — it reuses their divergence
   machinery but strips the attended gates; position so it is not a duplicate.
 
 ## Source
 
 In-session, 2026-07-21 (owner idea — "could be fun to try and test to see what outcomes
-we get"). Related: `pathfinder`, `scope-cards`, `market-scan`,
-`refine-autonomy-hardening-lens`, `autotest-e2e-away-mode-drill`.
+we get"; grounding decided same session). Related: `pathfinder`, `scope-cards`,
+`market-scan`, `refine-autonomy-hardening-lens`, `autotest-e2e-away-mode-drill`.
+
+## Reviews
+
+- 2026-07-21 — **Grounding decided** (owner): wildcard runs on a pathfinder run's saved
+  artifacts (fresh or previous), not free-roaming — resolving the pure-wild-vs-grounded
+  question toward grounded. Surfaced a likely prerequisite: a per-run artifact
+  bundle/manifest so the previous run's evidence can be loaded coherently.
