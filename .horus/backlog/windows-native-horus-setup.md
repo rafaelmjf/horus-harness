@@ -3,9 +3,10 @@ status: open
 priority: high
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-21
 readiness: shaping
-readiness_reason: "Exploratory — the alternatives (WSL2 / native Windows / native app) are not yet assessed against the recent TUI features; owner-flagged as intended next focus, promote to Ready after a refine pass."
+readiness_reason: "Per the 2026-07-20 Findings (below): the install is already current (0.0.73), WSL2 is already installed, and the native capability inventory is done. Remaining open question is the recommendation. This session (2026-07-21) narrows it: native Windows is fine for the owner's local-project work, but the 'attach any session' / persistence experience is exactly what degrades native, so WSL+tmux (already present) is the path for THAT. First concrete step: run the TUI under WSL+tmux and validate attach-any-session end to end, then confirm the native-for-local + WSL-for-attach split as the recommendation."
+order: 20
 phase: explore
 type: spike
 vision_facet: "Distribution"
@@ -48,9 +49,11 @@ The candidates to weigh:
 - **Git Bash / MSYS** middle ground (hooks already run through Git Bash on
   Windows) — is there partial tmux/persistence there, or not worth it.
 
-First step regardless: get the stale install current (version floor;
-`uv tool install --force --refresh --python 3.12`, never `uv tool upgrade
---reinstall`) so the assessment runs against real current behavior.
+First step (the "stale install" premise was already disproven — see Findings below;
+the install is current and WSL2 is installed): run the TUI under the already-installed
+WSL2 + tmux and validate the owner's "attach any session" experience end to end — that
+is precisely the capability the inventory marks as degraded on native Windows. This
+validation doubles as the evidence for the recommendation.
 
 Non-goals: not committing to native-Windows TUI feature parity as an outcome (that
 is one possible conclusion, not the premise); no new Windows-only runtime.
@@ -106,4 +109,14 @@ points at native-Windows-is-fine, but that is a judgment to confirm, not a findi
 
 In-session, 2026-07-20 (owner-flagged as intended next focus). Grounding: the
 tmux-persistence rule (Linux/macOS/WSL only) and the three-OS Distribution facet
-in `.horus/PRD.md`. Findings section from the attended setup run the same day.
+in `.horus/PRD.md`.
+
+## Reviews
+
+- 2026-07-21 — **Kept shaping, ordered #2** (`order: 20`) (owner, refine pass):
+  promoted to the second slot behind `session-remote-control-default`. The
+  recommendation stays open, but this session narrows it: native Windows is fine for
+  local work while the "attach any session" experience is the degraded-native piece, so
+  WSL+tmux (already installed per the 2026-07-20 Findings) is the path for that. First
+  step reframed to *validate* the TUI under WSL+tmux — not "upgrade a stale install,"
+  which the Findings had already disproven (install was current at 0.0.73).

@@ -6,7 +6,7 @@ autonomy: eligible
 readiness_reason: "Demonstrated live (2026-07-20), not theorised: a duplicate-identity Codex account was created and mapped with no objection from any surface. The fix mirrors an existing, working Claude implementation."
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-21
 vision_facet: "Accounts & isolation"
 tier: medium
 type: bug
@@ -87,3 +87,11 @@ address). The alias table already keys Codex on that id, so no schema change.
 
 Hand-executed setup run, owner-attended, 2026-07-20. The duplicate `codex-work` mapping
 was created and then removed (`config.remove_account`) in the same session.
+
+## Reviews
+
+- 2026-07-21 — **Kept Ready (eligible); NOT e2e-drill food** (owner, refine pass): it is
+  the priority safety ship, but excluded from drill-leg candidates — the drill wants
+  trivial always-green legs, and a safety-critical identity guard should ship on its own
+  merits, with the refusal probe observed by the owner rather than merged unattended as a
+  test.
