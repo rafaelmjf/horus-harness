@@ -61,6 +61,102 @@ class Tree:
     readiness: tuple[backlog.ReadinessGroup, ...] = field(default_factory=tuple)
 
 
+# --- configurable group-by lens (TUI grouped-list view) --------------------
+#
+# The flat backlog list is great for "start on a card now" but poor for "see the
+# shape". A group-by lens folds the same cards into collapsible, counted sections
+# on a chosen dimension. `none` is the flat list (and the universal fallback when
+# a lens yields no real structure — e.g. a new project with no facets/branches).
+GROUP_BY_LENSES: tuple[str, ...] = ("none", "readiness", "facet", "status", "priority")
+GROUP_BY_LABELS: dict[str, str] = {
+    "none": "None (flat)",
+    "readiness": "Readiness",
+    "facet": "Facet / branch",
+    "status": "Status",
+    "priority": "Priority",
+}
+DEFAULT_GROUP_BY = "facet"
+
+# Display order for the priority lens; anything unrecognized sorts after these,
+# then the empty "(none)" bucket last.
+_PRIORITY_ORDER: tuple[str, ...] = ("now", "next", "high", "medium", "low")
+
+
+@dataclass(frozen=True)
+class GroupSection:
+    """One collapsible section in the grouped backlog list: a header (label +
+    child count, optional subtitle) over an ordered set of cards. Uniform across
+    every lens so a single renderer draws them all."""
+
+    key: str  # stable id, unique within a lens — used for expand-state and tests
+    label: str
+    subtitle: str  # e.g. a branch convergence line; "" when there is none
+    children: tuple[backlog.Card, ...]
+
+
+def _sections_by_field(cards, keyfn, order: tuple[str, ...], prefix: str) -> list[GroupSection]:
+    """Group ``cards`` by a single string key, ordering known keys by ``order``
+    (unknowns after, alphabetically; the empty key last), with children in
+    readiness order inside each section."""
+    buckets: dict[str, list] = {}
+    for card in cards:
+        buckets.setdefault(keyfn(card), []).append(card)
+
+    def rank(key: str) -> tuple:
+        if key == "":
+            return (2, "")
+        return (0, order.index(key)) if key in order else (1, key)
+
+    sections: list[GroupSection] = []
+    for key in sorted(buckets, key=rank):
+        sections.append(GroupSection(
+            key=f"{prefix}:{key}",
+            label=key or "(none)",
+            subtitle="",
+            children=tuple(sorted(buckets[key], key=_card_sort_key)),
+        ))
+    return sections
+
+
+def sections_for(cards, lens: str, tree: "Tree | None" = None) -> list[GroupSection]:
+    """Project ``cards`` into ordered, counted sections for ``lens``.
+
+    ``none`` returns no sections (the caller renders a flat list). ``facet`` reuses
+    the branch/facet ``tree`` (which carries umbrella titles + convergence lines
+    read from disk), so the caller passes the already-built projection; the other
+    lenses derive purely from the card list. Empty sections are dropped.
+    """
+    cards = list(cards)
+    if lens == "readiness":
+        return [
+            GroupSection(key=f"readiness:{g.key}", label=g.label, subtitle="", children=g.cards)
+            for g in backlog.readiness_groups(cards) if g.cards
+        ]
+    if lens == "facet":
+        tree = tree if tree is not None else build_tree_from_cards(cards)
+        sections: list[GroupSection] = []
+        for b in tree.branches:
+            if b.convergence:
+                subtitle = f"converges: {b.convergence}"
+            elif not b.resolved:
+                subtitle = "no matching umbrella card"
+            else:
+                subtitle = ""
+            sections.append(GroupSection(
+                key=f"branch:{b.branch}", label=b.title, subtitle=subtitle, children=b.children,
+            ))
+        for f in tree.facets:
+            sections.append(GroupSection(
+                key=f"facet:{f.facet}", label=f.facet or "Unsorted", subtitle="", children=f.children,
+            ))
+        return [s for s in sections if s.children]
+    if lens == "status":
+        return _sections_by_field(cards, lambda c: c.status or "", ("open", "claimed"), "status")
+    if lens == "priority":
+        return _sections_by_field(cards, lambda c: c.priority or "", _PRIORITY_ORDER, "priority")
+    return []  # "none" (and any unknown lens) -> flat list
+
+
 def _body_text(path: Path) -> str:
     try:
         return frontmatter.parse(path.read_text(encoding="utf-8")).body
@@ -96,7 +192,12 @@ def _convergence_line(card: backlog.Card) -> str:
 def build_tree(root: Path) -> Tree:
     """Read `.horus/backlog/` fresh and project it into branch umbrellas (with
     their children) plus facet groups for everything left over."""
-    cards = backlog.load_active_cards(root)
+    return build_tree_from_cards(backlog.load_active_cards(root))
+
+
+def build_tree_from_cards(cards: list[backlog.Card]) -> Tree:
+    """The projection core, over an already-loaded card list (each card keeps its
+    ``path`` so umbrella convergence lines are still read from disk)."""
     by_name = {card.name: card for card in cards}
 
     branch_of: dict[str, str] = {}

@@ -88,7 +88,16 @@ LAUNCH_PROFILE_KEYS: tuple[str, ...] = ("model", "effort", "posture")
 # override wins over it. Claude-only — other agents ignore the request.
 REMOTE_CONTROL_DEFAULT: bool = True
 
-TUI_DEFAULTS: dict[str, object] = {"backlog_fields": [], "remote_control_default": REMOTE_CONTROL_DEFAULT}
+# The group-by lens the TUI backlog list opens to. One of
+# ``backlog_tree.GROUP_BY_LENSES``; kept as a bare string here to avoid a config→
+# backlog_tree import cycle. Validated on read/write against that roster.
+BACKLOG_GROUP_BY_DEFAULT: str = "facet"
+
+TUI_DEFAULTS: dict[str, object] = {
+    "backlog_fields": [],
+    "remote_control_default": REMOTE_CONTROL_DEFAULT,
+    "backlog_group_by": BACKLOG_GROUP_BY_DEFAULT,
+}
 
 # A frontmatter key as `horus.frontmatter` can parse one back: no whitespace, no
 # ':', nothing needing TOML escaping. Anything else can't name a real field, so it
@@ -515,27 +524,59 @@ def load_tui_defaults() -> dict[str, object]:
     ``remote_control_default`` (whether interactive Claude launches enable Remote
     Control at spawn — default on).
     """
-    defaults = {"backlog_fields": [], "remote_control_default": REMOTE_CONTROL_DEFAULT}
+    defaults = {
+        "backlog_fields": [],
+        "remote_control_default": REMOTE_CONTROL_DEFAULT,
+        "backlog_group_by": BACKLOG_GROUP_BY_DEFAULT,
+    }
     path = config_path()
     if not path.exists():
-        return defaults
+        return dict(defaults)
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError):
-        return defaults
+        return dict(defaults)
     raw = data.get("tui") or {}
     if not isinstance(raw, dict):
-        return defaults
+        return dict(defaults)
     rc = raw.get("remote_control_default", REMOTE_CONTROL_DEFAULT)
+    grp = raw.get("backlog_group_by", BACKLOG_GROUP_BY_DEFAULT)
     return {
         "backlog_fields": _clean_backlog_fields(raw.get("backlog_fields", [])),
         "remote_control_default": bool(rc) if isinstance(rc, bool) else REMOTE_CONTROL_DEFAULT,
+        "backlog_group_by": _clean_group_by(grp),
     }
 
 
 def load_backlog_fields() -> list[str]:
     """The card frontmatter keys the TUI backlog list renders inline, in order."""
     return load_tui_defaults()["backlog_fields"]
+
+
+def _clean_group_by(value: object) -> str:
+    """Coerce a stored/incoming group-by lens to a valid one, falling back to the
+    default. Validated against the live roster (lazy import avoids a cycle)."""
+    from horus import backlog_tree
+    return value if value in backlog_tree.GROUP_BY_LENSES else BACKLOG_GROUP_BY_DEFAULT
+
+
+def load_backlog_group_by() -> str:
+    """The group-by lens the TUI backlog list opens to (a
+    ``backlog_tree.GROUP_BY_LENSES`` value)."""
+    return str(load_tui_defaults()["backlog_group_by"])
+
+
+def set_backlog_group_by(lens: str) -> str:
+    """Persist the global default backlog group-by lens (preserving other ``[tui]``
+    keys). Returns the stored value; an unknown lens raises ``ValueError``."""
+    from horus import backlog_tree
+    if lens not in backlog_tree.GROUP_BY_LENSES:
+        allowed = ", ".join(backlog_tree.GROUP_BY_LENSES)
+        raise ValueError(f"Unknown group-by lens {lens!r}. Choose one of: {allowed}.")
+    current = load_tui_defaults()
+    current["backlog_group_by"] = lens
+    _write_config(load_projects(), load_github_owners(), load_workspace_root(), tui=current)
+    return lens
 
 
 def load_remote_control_default() -> bool:
