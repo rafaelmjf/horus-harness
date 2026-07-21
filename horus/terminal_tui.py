@@ -7,6 +7,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import textwrap
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -135,6 +136,10 @@ _WINDOW_LABELS: dict[str, str] = {
     "new-window": "New window on desktop — opens beside the TUI; takeover on mobile/SSH",
 }
 
+# The priority board needs real horizontal room for legible columns; below this
+# it degrades to the grouped list (the narrow/mobile view). ~3 columns × ~32 cols.
+_BOARD_MIN_WIDTH = 100
+
 class _BodyControl(FormattedTextControl):
     def __init__(self, text, on_scroll, *, invert_mouse_scroll: bool) -> None:
         super().__init__(text, focusable=True)
@@ -175,6 +180,13 @@ class TerminalUI:
         # state. Sections default to EXPANDED; a key present here is collapsed.
         self.backlog_group_by = config.load_backlog_group_by()
         self.collapsed_groups: set[tuple[Path, str, str]] = set()
+        # Readiness filter (session-level; `r` cycles) and the priority-board view
+        # (`b`; only rendered when the terminal is wide, else the list). Board column
+        # layout — a list of per-column item-index lists — is rebuilt each refresh.
+        self.backlog_filter = "all"
+        self.backlog_board = False
+        self._board_columns: list[list[int]] = []
+        self._board_sections: list[backlog_tree.GroupSection] = []
         self.priority_card: backlog.Card | None = None  # card whose priority the picker edits
         self.receipt: backlog_tree.Receipt | None = None
         self.receipt_scroll = 0
@@ -338,6 +350,9 @@ class TerminalUI:
                 self._show("backlog_fields")
 
         on_card = Condition(lambda: self.screen == "card" and self.card is not None)
+        # Backlog-only bindings (g/r/b) are filtered to the backlog screen so they
+        # never shadow same-letter bindings elsewhere (e.g. `r` = review on a card).
+        on_backlog = Condition(lambda: self.screen == "backlog")
 
         @keys.add("e", filter=on_card)
         def _edit_card(event) -> None:
@@ -357,17 +372,42 @@ class TerminalUI:
                     self.priority_card = value  # type: ignore[assignment]
                     self._show("card_priority")
 
-        @keys.add("g")
+        @keys.add("g", filter=on_backlog)
         def _cycle_group_by(event) -> None:
             # Cycle the backlog group-by lens for THIS session (the persisted
             # default lives in the Settings pane). Wraps None→Readiness→…→Priority.
-            if self.screen != "backlog":
-                return
             lenses = backlog_tree.GROUP_BY_LENSES
             self.backlog_group_by = lenses[(lenses.index(self.backlog_group_by) + 1) % len(lenses)]
             self.selected = 0
             self._refresh_items()
             self.status = f"Grouped by: {backlog_tree.GROUP_BY_LABELS[self.backlog_group_by]}"
+            self.application.invalidate()
+
+        @keys.add("r", filter=on_backlog)
+        def _cycle_filter(event) -> None:
+            # Cycle the readiness filter (list AND board). All→Active→Ready→Parked.
+            filters = backlog_tree.READINESS_FILTERS
+            self.backlog_filter = filters[(filters.index(self.backlog_filter) + 1) % len(filters)]
+            self.selected = 0
+            self._refresh_items()
+            label = backlog_tree.READINESS_FILTER_LABELS[self.backlog_filter]
+            shown = sum(1 for kind, _v in self.items if kind == "card")
+            self.status = f"Filter: {label} ({shown} shown)"
+            self.application.invalidate()
+
+        @keys.add("b", filter=on_backlog)
+        def _toggle_board(event) -> None:
+            # Toggle the priority-board view. Only renders when the terminal is
+            # wide; otherwise the backlog stays the list and we say so.
+            self.backlog_board = not self.backlog_board
+            self.selected = 0
+            self._refresh_items()
+            if self.backlog_board and not self._backlog_is_wide():
+                self.status = "Board on — needs a wider terminal; showing the list until then."
+            elif self.backlog_board:
+                self.status = "Priority board on (b to switch back to the list)."
+            else:
+                self.status = "List view on."
             self.application.invalidate()
 
         @keys.add("q")
@@ -430,6 +470,39 @@ class TerminalUI:
             return 1
         return min(3, max(2, width // 72))
 
+    def _backlog_is_wide(self) -> bool:
+        """Whether the terminal is wide enough to render the priority board
+        (else the backlog stays the grouped list — the narrow/mobile view)."""
+        try:
+            return self.application.output.get_size().columns >= _BOARD_MIN_WIDTH
+        except Exception:  # noqa: BLE001 - no live output (tests) -> not wide
+            return False
+
+    def _board_active(self) -> bool:
+        return self.screen == "backlog" and self.backlog_board and bool(self._board_columns)
+
+    def _board_nav_target(self, selected: int, direction: str) -> int:
+        """2D navigation over the column-major priority board: up/down move within
+        a column, left/right move to the same row of the adjacent column (clamped
+        to that column's height). Returns the destination item index (unchanged if
+        the move runs off the board)."""
+        for col_index, col in enumerate(self._board_columns):
+            if selected in col:
+                row = col.index(selected)
+                break
+        else:
+            return selected
+        if direction == "up":
+            return col[max(0, row - 1)]
+        if direction == "down":
+            return col[min(len(col) - 1, row + 1)]
+        step = -1 if direction == "left" else 1
+        target_col = col_index + step
+        if 0 <= target_col < len(self._board_columns):
+            dest = self._board_columns[target_col]
+            return dest[min(row, len(dest) - 1)]
+        return selected
+
     def _nav(self, direction: str) -> None:
         """Arrow/vim navigation. Card/receipt screens scroll their text body;
         every list screen routes through the 2D-aware grid nav so on the wide
@@ -442,6 +515,11 @@ class TerminalUI:
                 self.scroll(1)
             elif direction == "left":
                 self.back()
+            return
+        if self._board_active():
+            target = self._board_nav_target(self.selected, direction)
+            if target != self.selected:
+                self.move(target - self.selected)
             return
         cols = self._project_columns()
         projects = sum(1 for kind, _ in self.items if kind == "project")
@@ -849,21 +927,42 @@ class TerminalUI:
         elif self.screen == "receipt":
             self.items = []
         elif self.screen == "backlog":
-            cards = self.project_cards.get(self.project, [])
-            tree = self.project_trees.get(self.project) or backlog_tree.Tree()
-            sections = backlog_tree.sections_for(cards, self.backlog_group_by, tree)
-            if len(sections) <= 1:
-                # `none`, or a lens with no real structure (a new project, or one
-                # that does not use facets/branches): the flat list is the fallback,
-                # identical to the pre-grouping view.
-                self.items = [("card", card) for card in cards]
-            else:
-                items: list[tuple[str, object]] = []
-                for section in sections:
-                    items.append(("group", section))
-                    if (self.project, self.backlog_group_by, section.key) not in self.collapsed_groups:
-                        items.extend(("card", card) for card in section.children)
+            all_cards = self.project_cards.get(self.project, [])
+            cards = backlog_tree.filter_cards(all_cards, self.backlog_filter)
+            self._board_columns = []
+            self._board_sections = []
+            if self.backlog_board and self._backlog_is_wide():
+                # Priority board: one column per priority, cards column-major so the
+                # flat `selected` index still addresses a cell; `_board_columns` maps
+                # columns→item-indices for 2D navigation.
+                self._board_sections = backlog_tree.sections_for(cards, "priority")
+                items = []
+                for section in self._board_sections:
+                    col: list[int] = []
+                    for card in section.children:
+                        col.append(len(items))
+                        items.append(("card", card))
+                    self._board_columns.append(col)
                 self.items = items
+            else:
+                # List view (also the narrow/mobile fallback for the board). Facet
+                # lens needs a tree; rebuild it from the filtered cards unless the
+                # filter is off (then the prebuilt projection is exact and cheaper).
+                if self.backlog_filter == "all":
+                    tree = self.project_trees.get(self.project) or backlog_tree.Tree()
+                else:
+                    tree = backlog_tree.build_tree_from_cards(cards)
+                sections = backlog_tree.sections_for(cards, self.backlog_group_by, tree)
+                if len(sections) <= 1:
+                    # `none`, or a lens with no real structure: the flat list.
+                    self.items = [("card", card) for card in cards]
+                else:
+                    items = []
+                    for section in sections:
+                        items.append(("group", section))
+                        if (self.project, self.backlog_group_by, section.key) not in self.collapsed_groups:
+                            items.extend(("card", card) for card in section.children)
+                    self.items = items
         elif self.screen == "card_priority":
             self.items = [("priority_choice", p) for p in backlog.PRIORITY_CHOICES]
             current = self.priority_card.priority if self.priority_card else ""
@@ -1102,6 +1201,8 @@ class TerminalUI:
             return [("class:muted", f"\n  {message}\n")]
         if self.screen == "projects" and self.application.output.get_size().columns >= 96:
             return self._wide_home_text(self.application.output.get_size().columns)
+        if self._board_active():
+            return self._board_body_text(self.application.output.get_size())
         lines: StyleAndTextTuples = []
         if self.screen == "backlog":
             counts = backlog.readiness_counts(self.project_cards.get(self.project, []))
@@ -1502,6 +1603,105 @@ class TerminalUI:
                     ("class:muted", "   Optional cross-project supervision — asks for outcome + targets\n")
                 )
         return fragments
+
+    @staticmethod
+    def _readiness_dot(card: backlog.Card) -> tuple[str, str]:
+        """A color-coded readiness dot for a board cell: green = ready (dispatch-
+        able), amber = shaping, dim = parked (gated/deferred)."""
+        queue = backlog.readiness_queue(card)
+        if queue in (backlog.QUEUE_READY_ELIGIBLE, backlog.QUEUE_READY_ATTENDED):
+            return ("class:rdy-ready", "● ")
+        if queue == backlog.QUEUE_SHAPING:
+            return ("class:rdy-shaping", "● ")
+        return ("class:rdy-parked", "● ")
+
+    def _card_detail_lines(self, card: backlog.Card, width: int) -> StyleAndTextTuples:
+        """The bottom detail pane for the selected card: a headline row, a facet/
+        surface row, a blank spacer, then a wrapped 'why' snippet from the body."""
+        frags: StyleAndTextTuples = []
+        meta = f"[{card.type or 'card'} · {card.priority or 'no priority'} · {backlog.readiness_label(card)}]"
+        title = _clip(card.title, max(8, width - len(meta) - 4))
+        frags.append(("class:card-title", f" {title}"))
+        frags.append(("class:muted", f"   {meta}\n"))
+        context = f" facet: {card.vision_facet or '—'}"
+        if card.field_value("surface"):
+            context += f"   ·   surface: {card.field_value('surface')}"
+        frags.append(("class:muted", _clip(context, width - 1) + "\n"))
+        frags.append(("", "\n"))  # spacer between facet and the why text
+        why = _card_why_snippet(card)
+        if why:
+            for line in _wrap(why, max(20, width - 2), limit=3):
+                frags.append(("class:item", f" {line}\n"))
+        else:
+            frags.append(("class:muted", " (no description on the card)\n"))
+        return frags
+
+    def _board_body_text(self, size) -> StyleAndTextTuples:
+        """The priority board: one column per priority (readiness-dotted, ready-
+        first), then a rule and the selected card's detail pane. Columns use
+        ``_fit_cell`` (pad/truncate) + whitespace gaps — no borders — so a long
+        title truncates cleanly and never misaligns a column."""
+        width, rows = size.columns, size.rows
+        n = len(self._board_sections)
+        gap = 2
+        col_w = max(16, (width - gap * (n - 1)) // n)
+        # Reserve space for the detail pane (+ header/footer chrome) so the board
+        # itself stays bounded; overflow in a column collapses to "… +N more".
+        detail_reserve = 7
+        max_rows = max(3, rows - detail_reserve - 4)
+
+        frags: StyleAndTextTuples = [("class:section", "\n Priority board")]
+        if self.backlog_filter != "all":
+            hidden = len(self.project_cards.get(self.project, [])) - sum(
+                len(s.children) for s in self._board_sections
+            )
+            frags.append((
+                "class:muted",
+                f"   ·   filter: {backlog_tree.READINESS_FILTER_LABELS[self.backlog_filter]}"
+                f" ({hidden} hidden)",
+            ))
+        frags.append(("", "\n\n"))
+
+        # Build each column as a block of (style, text) cells, then interleave rows.
+        blocks: list[list[tuple[str, str]]] = []
+        for section in self._board_sections:
+            ready = backlog_tree.ready_count(section.children)
+            header = _fit_cell(f"{section.label} · {ready} ready", col_w)
+            block: list[tuple[str, str]] = [("class:branch", header)]
+            shown = section.children[:max_rows]
+            for card in shown:
+                idx = next(
+                    (i for i, (k, v) in enumerate(self.items) if k == "card" and v is card),
+                    -1,
+                )
+                selected = idx == self.selected
+                marker = "▶" if selected else " "
+                dot_style, dot = self._readiness_dot(card)
+                name = _fit_cell(f"{marker}{dot}{card.name}", col_w)
+                block.append(("class:selected" if selected else dot_style, name))
+            if len(section.children) > max_rows:
+                block.append(("class:muted", _fit_cell(f"   … +{len(section.children) - max_rows} more", col_w)))
+            blocks.append(block)
+
+        height = max((len(b) for b in blocks), default=0)
+        for row in range(height):
+            for col, block in enumerate(blocks):
+                style, text = block[row] if row < len(block) else ("", " " * col_w)
+                frags.append((style, text))
+                if col < len(blocks) - 1:
+                    frags.append(("", " " * gap))
+            frags.append(("", "\n"))
+
+        # Detail pane for the selected card, under a full-width rule.
+        frags.append(("class:rule", "\n " + "─" * max(0, width - 2) + "\n"))
+        selected_card = None
+        if 0 <= self.selected < len(self.items) and self.items[self.selected][0] == "card":
+            selected_card = self.items[self.selected][1]
+        if selected_card is not None:
+            frags.extend(self._card_detail_lines(selected_card, width))
+        else:
+            frags.append(("class:muted", " No card selected.\n"))
+        return frags
 
     def _account_summary_text(self) -> StyleAndTextTuples:
         if not self.accounts:
@@ -1987,11 +2187,18 @@ class TerminalUI:
             text = " ↑↓ read · Esc back" if narrow else " ↑↓/swipe read   Esc back   q quit"
             return [("class:footer", text)]
         if self.screen == "backlog":
-            text = (
-                " ↑↓ · Enter open/expand · g group · p priority · f fields · Esc"
-                if narrow
-                else " ↑↓/swipe scroll   Enter open / expand   g group-by   p priority   f fields   Esc back   q quit"
-            )
+            if self._board_active():
+                text = (
+                    " ↑↓←→ · Enter open · r filter · b list · Esc"
+                    if narrow
+                    else " ↑↓←→ move   Enter open   r filter   b back to list   Esc back   q quit"
+                )
+            else:
+                text = (
+                    " ↑↓ · Enter open/expand · g group · r filter · b board · Esc"
+                    if narrow
+                    else " ↑↓/swipe   Enter open / expand   g group-by   r filter   b board   p priority   f fields   Esc back   q quit"
+                )
             return [("class:footer", text)]
         if self.screen == "card_priority":
             text = (
@@ -2076,6 +2283,10 @@ _STYLE = Style.from_dict(
         "prio-high": "#f85149",
         "prio-medium": "#e3b341",
         "prio-low": "#8c98a5",
+        # Priority-board readiness dots: green ready / amber shaping / dim parked.
+        "rdy-ready": "#3fb950",
+        "rdy-shaping": "#e3b341",
+        "rdy-parked": "#6b7681",
     }
 )
 
@@ -2461,6 +2672,44 @@ def _fit_cell(text: str, width: int) -> str:
     if len(text) > width:
         text = f"{text[: max(0, width - 1)]}…"
     return text.ljust(width)
+
+
+def _clip(text: str, width: int) -> str:
+    """Truncate to ``width`` with an ellipsis (no padding), for single lines."""
+    return text if len(text) <= width else f"{text[: max(0, width - 1)]}…"
+
+
+def _card_why_snippet(card: backlog.Card) -> str:
+    """The first meaningful paragraph of a card's body — its 'why', for the board
+    detail pane. Skips the `# title` and any `## section` headings; joins the
+    first run of non-empty lines. Empty when the body is unreadable or bare."""
+    try:
+        body = frontmatter.parse(card.path.read_text(encoding="utf-8")).body
+    except OSError:
+        return ""
+    paragraph: list[str] = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):  # title or a section heading
+            if paragraph:
+                break
+            continue
+        if not stripped:
+            if paragraph:
+                break
+            continue
+        paragraph.append(stripped.lstrip("-*").strip())
+    return " ".join(paragraph)
+
+
+def _wrap(text: str, width: int, *, limit: int) -> list[str]:
+    """Word-wrap ``text`` to ``width``, capped at ``limit`` lines; a truncated
+    tail is marked with an ellipsis."""
+    wrapped = textwrap.wrap(text, width=max(1, width)) or [""]
+    if len(wrapped) > limit:
+        wrapped = wrapped[:limit]
+        wrapped[-1] = wrapped[-1][: max(0, width - 2)].rstrip() + " …"
+    return wrapped
 
 
 def _grid_nav_target(selected: int, count: int, projects: int, cols: int, direction: str) -> int | None:

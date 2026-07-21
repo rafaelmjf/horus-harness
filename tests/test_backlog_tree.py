@@ -216,6 +216,47 @@ def test_sections_priority_missing_value_buckets_last_as_none(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# filter_cards / ready_count — the readiness filter (list + board)
+# ---------------------------------------------------------------------------
+
+
+def _mixed_readiness(tmp_path):
+    _mk_card(tmp_path, "elig", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "att", readiness="ready", autonomy="attended")
+    _mk_card(tmp_path, "shaped", readiness="shaping", readiness_reason="tbd", autonomy="")
+    _mk_card(tmp_path, "gated-one", readiness="gated", readiness_reason="blocked", autonomy="")
+    _mk_card(tmp_path, "deferred-one", readiness="deferred", readiness_reason="later", autonomy="")
+    return _cards(tmp_path)
+
+
+def test_filter_all_passes_everything(tmp_path):
+    cards = _mixed_readiness(tmp_path)
+    assert {c.name for c in backlog_tree.filter_cards(cards, "all")} == {
+        "elig", "att", "shaped", "gated-one", "deferred-one",
+    }
+
+
+def test_filter_active_hides_gated_and_deferred(tmp_path):
+    cards = _mixed_readiness(tmp_path)
+    assert {c.name for c in backlog_tree.filter_cards(cards, "active")} == {"elig", "att", "shaped"}
+
+
+def test_filter_ready_is_only_dispatchable(tmp_path):
+    cards = _mixed_readiness(tmp_path)
+    assert {c.name for c in backlog_tree.filter_cards(cards, "ready")} == {"elig", "att"}
+
+
+def test_filter_parked_is_gated_and_deferred(tmp_path):
+    cards = _mixed_readiness(tmp_path)
+    assert {c.name for c in backlog_tree.filter_cards(cards, "parked")} == {"gated-one", "deferred-one"}
+
+
+def test_ready_count_counts_dispatchable_only(tmp_path):
+    cards = _mixed_readiness(tmp_path)
+    assert backlog_tree.ready_count(cards) == 2  # elig + att, not shaping/gated/deferred
+
+
+# ---------------------------------------------------------------------------
 # render_json / render_text
 # ---------------------------------------------------------------------------
 

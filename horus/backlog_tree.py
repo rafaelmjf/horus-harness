@@ -81,6 +81,45 @@ DEFAULT_GROUP_BY = "facet"
 # then the empty "(none)" bucket last.
 _PRIORITY_ORDER: tuple[str, ...] = ("now", "next", "high", "medium", "low")
 
+# --- readiness filter (applies to list AND board; works on mobile too) -----
+#
+# A view-level focus over the same cards, orthogonal to the group-by lens. It
+# answers the two real questions: "what can I work next" (hide parked) and
+# "what should I unblock" (only parked).
+READINESS_FILTERS: tuple[str, ...] = ("all", "active", "ready", "parked")
+READINESS_FILTER_LABELS: dict[str, str] = {
+    "all": "All",
+    "active": "Active",       # not deferred, not gated
+    "ready": "Ready",         # dispatchable now
+    "parked": "Parked",       # deferred + gated — the "what to unblock" view
+}
+_FILTER_QUEUES: dict[str, frozenset[str]] = {
+    "active": frozenset({
+        backlog.QUEUE_READY_ELIGIBLE, backlog.QUEUE_READY_ATTENDED,
+        backlog.QUEUE_SHAPING, backlog.QUEUE_UNCLASSIFIED,
+    }),
+    "ready": frozenset({backlog.QUEUE_READY_ELIGIBLE, backlog.QUEUE_READY_ATTENDED}),
+    "parked": frozenset({backlog.QUEUE_GATED, backlog.QUEUE_DEFERRED}),
+}
+_READY_QUEUES: frozenset[str] = frozenset(
+    {backlog.QUEUE_READY_ELIGIBLE, backlog.QUEUE_READY_ATTENDED}
+)
+
+
+def filter_cards(cards, readiness_filter: str) -> list[backlog.Card]:
+    """Keep only the cards a readiness filter admits. ``all`` (and any unknown
+    filter) passes everything through; the result preserves input order."""
+    allowed = _FILTER_QUEUES.get(readiness_filter)
+    if allowed is None:  # "all" / unknown -> no filtering
+        return list(cards)
+    return [c for c in cards if backlog.readiness_queue(c) in allowed]
+
+
+def ready_count(cards) -> int:
+    """How many of ``cards`` are dispatchable-ready (eligible or attended) — the
+    honest denominator for a priority column header."""
+    return sum(1 for c in cards if backlog.readiness_queue(c) in _READY_QUEUES)
+
 
 @dataclass(frozen=True)
 class GroupSection:
