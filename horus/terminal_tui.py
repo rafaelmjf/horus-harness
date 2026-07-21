@@ -171,7 +171,10 @@ class TerminalUI:
         }
         self.project_trees = {project: _project_tree(project) for project in self.projects}
         self.project_receipts = {project: _receipts(project) for project in self.projects}
-        self.expanded_branches: set[tuple[Path, str]] = set()
+        # Group-by lens for the backlog list, and per-(project, lens, group) collapse
+        # state. Sections default to EXPANDED; a key present here is collapsed.
+        self.backlog_group_by = config.load_backlog_group_by()
+        self.collapsed_groups: set[tuple[Path, str, str]] = set()
         self.priority_card: backlog.Card | None = None  # card whose priority the picker edits
         self.receipt: backlog_tree.Receipt | None = None
         self.receipt_scroll = 0
@@ -354,6 +357,19 @@ class TerminalUI:
                     self.priority_card = value  # type: ignore[assignment]
                     self._show("card_priority")
 
+        @keys.add("g")
+        def _cycle_group_by(event) -> None:
+            # Cycle the backlog group-by lens for THIS session (the persisted
+            # default lives in the Settings pane). Wraps None→Readiness→…→Priority.
+            if self.screen != "backlog":
+                return
+            lenses = backlog_tree.GROUP_BY_LENSES
+            self.backlog_group_by = lenses[(lenses.index(self.backlog_group_by) + 1) % len(lenses)]
+            self.selected = 0
+            self._refresh_items()
+            self.status = f"Grouped by: {backlog_tree.GROUP_BY_LABELS[self.backlog_group_by]}"
+            self.application.invalidate()
+
         @keys.add("q")
         def _quit(event) -> None:
             event.app.exit(result="quit")
@@ -490,13 +506,13 @@ class TerminalUI:
             self._show("skills")
         elif self.screen == "project" and kind == "receipts":
             self._show("receipts")
-        elif self.screen == "backlog" and kind == "branch":
-            group = value  # type: ignore[assignment]
-            key = (self.project, group.branch)
-            if key in self.expanded_branches:
-                self.expanded_branches.discard(key)
+        elif self.screen == "backlog" and kind == "group":
+            section = value  # type: ignore[assignment]
+            key = (self.project, self.backlog_group_by, section.key)
+            if key in self.collapsed_groups:
+                self.collapsed_groups.discard(key)  # expand
             else:
-                self.expanded_branches.add(key)
+                self.collapsed_groups.add(key)  # collapse
             selected = self.selected
             self._refresh_items()
             self.selected = min(selected, max(0, len(self.items) - 1))
@@ -694,6 +710,7 @@ class TerminalUI:
         except Exception:  # noqa: BLE001 - a bad config degrades to 'none', never a crash
             self.control_sink = "none"
         self.control_remote_control = config.load_remote_control_default()
+        self.control_backlog_group_by = config.load_backlog_group_by()
         today = datetime.now().date()
         self.control_envelopes = []
         for env in envelope.load_all():
@@ -777,6 +794,13 @@ class TerminalUI:
                 "phone-attachable at spawn." if new else
                 "Remote Control off by default — enable per launch with `open --remote-control`."
             )
+        elif kind == "ctl_backlog_group_by":
+            lenses = backlog_tree.GROUP_BY_LENSES
+            nxt = lenses[(lenses.index(self.control_backlog_group_by) + 1) % len(lenses)]
+            config.set_backlog_group_by(nxt)
+            self.control_backlog_group_by = nxt
+            self.backlog_group_by = nxt  # apply to the live session too
+            self.status = f"Backlog opens grouped by: {backlog_tree.GROUP_BY_LABELS[nxt]}"
         self._refresh_items()
         self.selected = min(self.selected, max(0, len(self.items) - 1))
         self.application.invalidate()
@@ -797,6 +821,7 @@ class TerminalUI:
             items.append(("ctl_notify_test", None))
             items.append(("ctl_proxy", None))
             items.append(("ctl_remote_control", None))
+            items.append(("ctl_backlog_group_by", None))
             self.items = items
             return
         if self.screen == "projects":
@@ -824,20 +849,20 @@ class TerminalUI:
         elif self.screen == "receipt":
             self.items = []
         elif self.screen == "backlog":
+            cards = self.project_cards.get(self.project, [])
             tree = self.project_trees.get(self.project) or backlog_tree.Tree()
-            if not tree.branches and len(tree.facets) <= 1:
-                # No branch umbrellas (and nothing to facet-split either) — the
-                # forward-readable degrade: identical to the pre-tree flat view.
-                self.items = [("card", card) for card in self.project_cards.get(self.project, [])]
+            sections = backlog_tree.sections_for(cards, self.backlog_group_by, tree)
+            if len(sections) <= 1:
+                # `none`, or a lens with no real structure (a new project, or one
+                # that does not use facets/branches): the flat list is the fallback,
+                # identical to the pre-grouping view.
+                self.items = [("card", card) for card in cards]
             else:
                 items: list[tuple[str, object]] = []
-                for group in tree.branches:
-                    items.append(("branch", group))
-                    if (self.project, group.branch) in self.expanded_branches:
-                        items.extend(("card", card) for card in group.children)
-                for group in tree.facets:
-                    items.append(("facet", group))
-                    items.extend(("card", card) for card in group.children)
+                for section in sections:
+                    items.append(("group", section))
+                    if (self.project, self.backlog_group_by, section.key) not in self.collapsed_groups:
+                        items.extend(("card", card) for card in section.children)
                 self.items = items
         elif self.screen == "card_priority":
             self.items = [("priority_choice", p) for p in backlog.PRIORITY_CHOICES]
@@ -1130,15 +1155,13 @@ class TerminalUI:
         recommended_model = (
             self._recommended_model_for_launch() if self.screen == "launch_form" else None
         )
-        under_branch = False  # backlog: are we rendering an expanded branch's children?
+        under_group = False  # backlog: are we rendering cards under a group header?
         for index, (kind, value) in enumerate(self.items):
             selected = index == self.selected
             marker = ">" if selected else " "
             style = "class:selected" if selected else "class:item"
-            if kind == "branch":
-                under_branch = True
-            elif kind == "facet":
-                under_branch = False
+            if kind == "group":
+                under_group = True
             if selected:
                 lines.append(("[SetCursorPosition]", ""))
             if kind == "project":
@@ -1267,9 +1290,9 @@ class TerminalUI:
                 card = value
                 status = " · claimed" if card.status == "claimed" else ""
                 suffix = _card_field_suffix(card, self.backlog_fields)
-                # A card under an expanded branch gets a tree connector + indent so
+                # A card under a group header gets a tree connector + indent so
                 # its membership is visible; the last child closes with └─.
-                if under_branch:
+                if under_group:
                     last = index + 1 >= len(self.items) or self.items[index + 1][0] != "card"
                     connector = "   └─ " if last else "   ├─ "
                 else:
@@ -1277,7 +1300,7 @@ class TerminalUI:
                 lines.append((style, f"\n{connector}{marker} "))
                 lines.append(_priority_dot(card.priority))
                 lines.append((style, f"[{card.type}{status}] {card.title}{suffix}\n"))
-                indent = "        " if under_branch else "     "
+                indent = "        " if under_group else "     "
                 lines.append(("class:muted", f"{indent}{backlog.readiness_label(card)}\n"))
                 if card.readiness_reason:
                     lines.append(("class:muted", f"{indent}{card.readiness_reason}\n"))
@@ -1285,20 +1308,14 @@ class TerminalUI:
                 # inline field — then it's already on the row above.
                 if card.priority and "priority" not in self.backlog_fields:
                     lines.append(("class:muted", f"{indent}priority {card.priority}\n"))
-            elif kind == "branch":
-                group = value
-                expanded = (self.project, group.branch) in self.expanded_branches
-                caret = "▾" if expanded else "▸"
+            elif kind == "group":
+                section = value
+                collapsed = (self.project, self.backlog_group_by, section.key) in self.collapsed_groups
+                caret = "▸" if collapsed else "▾"
                 header_style = "class:selected" if selected else "class:branch"
-                lines.append((header_style, f"\n {marker} {caret} {group.title} ({len(group.children)})\n"))
-                if group.convergence:
-                    lines.append(("class:muted", f"     converges: {group.convergence}\n"))
-                elif not group.resolved:
-                    lines.append(("class:muted", "     no matching umbrella card\n"))
-            elif kind == "facet":
-                group = value
-                label = group.facet or "Unsorted"
-                lines.append(("class:section", f"\n  {label} ({len(group.children)})\n"))
+                lines.append((header_style, f"\n {marker} {caret} {section.label} ({len(section.children)})\n"))
+                if section.subtitle:
+                    lines.append(("class:muted", f"     {section.subtitle}\n"))
             elif kind == "receipt":
                 receipt = value
                 lines.append((style, f"\n {marker} {receipt.title}\n"))
@@ -1867,6 +1884,10 @@ class TerminalUI:
                           if self.control_remote_control
                           else "off — enable per launch with `open --remote-control`")
                 frags.append(("class:muted", f"       {detail}\n"))
+            elif kind == "ctl_backlog_group_by":
+                label = backlog_tree.GROUP_BY_LABELS.get(self.control_backlog_group_by, self.control_backlog_group_by)
+                frags.append((style, f"\n {marker}     ⇢ Backlog default group-by: {label}  (Enter cycles)\n"))
+                frags.append(("class:muted", "       what the backlog list opens to; g cycles it live\n"))
         return frags
 
     def _capabilities_body_text(self) -> StyleAndTextTuples:
@@ -1967,9 +1988,9 @@ class TerminalUI:
             return [("class:footer", text)]
         if self.screen == "backlog":
             text = (
-                " ↑↓ · Enter open/expand · p priority · f fields · Esc"
+                " ↑↓ · Enter open/expand · g group · p priority · f fields · Esc"
                 if narrow
-                else " ↑↓/swipe scroll   Enter open / expand   p priority   f fields   Esc back   q quit"
+                else " ↑↓/swipe scroll   Enter open / expand   g group-by   p priority   f fields   Esc back   q quit"
             )
             return [("class:footer", text)]
         if self.screen == "card_priority":

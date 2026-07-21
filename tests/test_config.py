@@ -326,6 +326,7 @@ def test_backlog_fields_default_to_empty(tmp_path, monkeypatch):
     assert config.load_tui_defaults() == {
         "backlog_fields": [],
         "remote_control_default": True,
+        "backlog_group_by": "facet",
     }
 
 
@@ -350,13 +351,31 @@ def test_remote_control_default_is_on_and_round_trips(tmp_path, monkeypatch):
 
 
 def test_tui_keys_do_not_clobber_each_other(tmp_path, monkeypatch):
-    # The two [tui] keys share one table; writing one must preserve the other.
+    # The [tui] keys share one table; writing one must preserve the others.
     _home(tmp_path, monkeypatch)
     config.set_remote_control_default(False)
     config.set_backlog_fields(["tier"])
-    assert config.load_remote_control_default() is False  # not reset by the fields write
+    config.set_backlog_group_by("readiness")
+    assert config.load_remote_control_default() is False  # not reset by later writes
+    assert config.load_backlog_group_by() == "readiness"
     config.set_remote_control_default(True)
     assert config.load_backlog_fields() == ["tier"]       # not reset by the toggle write
+    assert config.load_backlog_group_by() == "readiness"  # still preserved
+
+
+def test_backlog_group_by_defaults_to_facet_and_round_trips(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.load_backlog_group_by() == "facet"
+    assert config.set_backlog_group_by("priority") == "priority"
+    assert config.load_backlog_group_by() == "priority"
+
+
+def test_backlog_group_by_rejects_unknown_lens(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    with pytest.raises(ValueError):
+        config.set_backlog_group_by("nonsense")
+    # A corrupt/unknown stored value degrades to the default on read.
+    assert config._clean_group_by("nonsense") == "facet"
 
 
 def test_set_backlog_fields_dedupes_and_rejects_unusable_names(tmp_path, monkeypatch):

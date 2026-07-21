@@ -148,6 +148,74 @@ def test_build_tree_excludes_done_and_shipped_cards(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# sections_for — the configurable group-by lens (TUI grouped list)
+# ---------------------------------------------------------------------------
+
+
+def _cards(tmp_path):
+    from horus import backlog
+    return backlog.load_active_cards(tmp_path)
+
+
+def test_sections_none_lens_returns_no_sections(tmp_path):
+    # `none` = flat list; the caller renders cards without headers.
+    _mk_card(tmp_path, "a")
+    _mk_card(tmp_path, "b")
+    assert backlog_tree.sections_for(_cards(tmp_path), "none") == []
+
+
+def test_sections_readiness_lens_drops_empty_queues_and_orders_canonically(tmp_path):
+    _mk_card(tmp_path, "ready-elig", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "ready-att", readiness="ready", autonomy="attended")
+    _mk_card(tmp_path, "shaped", readiness="shaping", readiness_reason="tbd", autonomy="")
+
+    sections = backlog_tree.sections_for(_cards(tmp_path), "readiness")
+    labels = [s.label for s in sections]
+    # canonical execution order, and empty queues (gated/deferred/unclassified) dropped
+    assert labels == ["Ready—Autonomous eligible", "Ready—Attended", "Shaping"]
+    assert all(s.children for s in sections)
+
+
+def test_sections_facet_lens_matches_the_tree_projection(tmp_path):
+    _mk_card(tmp_path, "umbrella-a", title="Umbrella A",
+             body="## Acceptance\n\n- Converged when it all ships.\n")
+    _mk_card(tmp_path, "child-1", branch="umbrella-a")
+    _mk_card(tmp_path, "loose", vision_facet="Continuity core")
+
+    cards = _cards(tmp_path)
+    tree = backlog_tree.build_tree_from_cards(cards)
+    sections = backlog_tree.sections_for(cards, "facet", tree)
+
+    keys = [s.key for s in sections]
+    assert "branch:umbrella-a" in keys and "facet:Continuity core" in keys
+    branch_sec = next(s for s in sections if s.key == "branch:umbrella-a")
+    assert branch_sec.label == "Umbrella A"
+    assert branch_sec.subtitle == "converges: Converged when it all ships."
+
+
+def test_sections_status_and_priority_lenses(tmp_path):
+    _mk_card(tmp_path, "hi", priority="high", status="open")
+    _mk_card(tmp_path, "lo", priority="low", status="open")
+    _mk_card(tmp_path, "claimed-one", priority="medium", status="claimed")
+
+    by_status = backlog_tree.sections_for(_cards(tmp_path), "status")
+    # known statuses ordered open→claimed
+    assert [s.label for s in by_status] == ["open", "claimed"]
+
+    by_priority = backlog_tree.sections_for(_cards(tmp_path), "priority")
+    assert [s.label for s in by_priority] == ["high", "medium", "low"]
+
+
+def test_sections_priority_missing_value_buckets_last_as_none(tmp_path):
+    _mk_card(tmp_path, "hi", priority="high")
+    _mk_card(tmp_path, "unset", priority="")  # no priority line
+
+    sections = backlog_tree.sections_for(_cards(tmp_path), "priority")
+    assert [s.label for s in sections] == ["high", "(none)"]
+    assert sections[-1].key == "priority:"
+
+
+# ---------------------------------------------------------------------------
 # render_json / render_text
 # ---------------------------------------------------------------------------
 

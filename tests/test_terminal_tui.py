@@ -381,42 +381,60 @@ def _project_with_branch_tree(tmp_path, monkeypatch) -> tuple[terminal_tui.Termi
     return ui, root
 
 
-def test_backlog_screen_shows_collapsed_branch_and_facet_section(tmp_path, monkeypatch):
+def test_backlog_screen_shows_grouped_sections_expanded_by_default(tmp_path, monkeypatch):
     ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
 
+    # Default lens is facet/branch; sections render EXPANDED (children visible)
+    # with `(count)` headers: umbrella section + its child, then facet + its card.
     kinds = [kind for kind, _value in ui.items]
-    assert kinds == ["branch", "facet", "card"]  # branch collapsed; facet + its card shown
+    assert kinds == ["group", "card", "group", "card"]
 
     rendered = "".join(text for _style, text in ui._body_text())
     assert "Umbrella A (1)" in rendered
     assert "converges: Converged when it ships." in rendered
     assert "Dashboard (1)" in rendered
     assert "[task] Lonely card" in rendered
-    assert "Child one" not in rendered  # collapsed umbrella hides its child
+    assert "Child one" in rendered  # expanded by default now shows the child
 
 
-def test_selecting_a_branch_expands_it_inline(tmp_path, monkeypatch):
+def test_selecting_a_group_header_collapses_then_expands_it(tmp_path, monkeypatch):
     ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
-    ui.selected = 0  # the branch header
-    assert ui.items[0][0] == "branch"
+    ui.selected = 0  # the first group header (the branch umbrella)
+    assert ui.items[0][0] == "group"
 
-    ui.activate()
-
+    ui.activate()  # collapse it
     kinds = [kind for kind, _value in ui.items]
-    assert kinds == ["branch", "card", "facet", "card"]
+    assert kinds == ["group", "group", "card"]  # umbrella's child now hidden
     rendered = "".join(text for _style, text in ui._body_text())
-    assert "Child one" in rendered
+    assert "Child one" not in rendered
 
-    # Selecting it again collapses it back.
     ui.selected = 0
-    ui.activate()
+    ui.activate()  # expand it again
     kinds = [kind for kind, _value in ui.items]
-    assert kinds == ["branch", "facet", "card"]
+    assert kinds == ["group", "card", "group", "card"]
 
 
-def test_backlog_screen_with_no_branches_stays_flat(tmp_path, monkeypatch):
-    """Forward-readable degrade: a project with no `branch:` keys renders
-    exactly like the pre-tree flat card list (no branch/facet headers)."""
+def test_group_by_lens_switch_regroups_and_none_is_flat(tmp_path, monkeypatch):
+    ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
+
+    # Switch to the priority lens: 3 distinct priorities -> 3 group sections
+    # (the umbrella card is a plain card under non-facet lenses).
+    ui.backlog_group_by = "priority"
+    ui.selected = 0
+    ui._refresh_items()
+    group_labels = [v.label for k, v in ui.items if k == "group"]
+    assert group_labels == ["high", "medium", "low"]
+
+    # `none` lens: a flat card list, no group headers, every card present.
+    ui.backlog_group_by = "none"
+    ui._refresh_items()
+    assert all(kind == "card" for kind, _v in ui.items)
+    assert len(ui.items) == 3
+
+
+def test_backlog_screen_with_no_facets_or_branches_falls_back_to_flat(tmp_path, monkeypatch):
+    """Universal fallback: a project whose default (facet) lens yields no real
+    structure renders the flat card list — no headers."""
     ui, _root = _project_with_cards(tmp_path, monkeypatch)
 
     kinds = [kind for kind, _value in ui.items]
@@ -821,13 +839,11 @@ def test_project_columns_narrow_vs_wide(tmp_path, monkeypatch):
 
 # Backlog visual guidance (item 3) — branch membership + priority dots.
 
-def test_backlog_expanded_branch_children_get_tree_connectors_and_priority_dots(tmp_path, monkeypatch):
+def test_backlog_group_children_get_tree_connectors_and_priority_dots(tmp_path, monkeypatch):
     from horus import terminal_tui
     ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
-    # Expand the branch.
-    branch_index = next(i for i, (k, _v) in enumerate(ui.items) if k == "branch")
-    ui.selected = branch_index
-    ui.activate()
+    # Groups are expanded by default, so the umbrella's child is already shown.
+    assert ui.items[0][0] == "group"
 
     frags = ui._body_text()
     rendered = "".join(text for _style, text in frags)
