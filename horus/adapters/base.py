@@ -73,6 +73,7 @@ class SpawnSpec:
     worker: bool = False                # unattended worker run (--worker); exported to hooks
     run_session_id: str | None = None   # Horus run id, exported so hooks have a stable key
     proxied: bool = False               # route this launch through the CLIProxyAPI proxy (vision-branch-x4)
+    remote_control: bool = False        # request Remote Control at spawn; honored only by adapters that support it (Claude)
 
 
 @dataclass(frozen=True)
@@ -153,6 +154,11 @@ class AgentAdapter(ABC):
     # without hardcoding a model list of their own. Empty by default; a real
     # adapter overrides it with its own static roster.
     KNOWN_MODELS: tuple[str, ...] = ()
+
+    # Whether this agent's CLI supports Remote Control (reach a live interactive
+    # session from the native app). Only a capable adapter honors
+    # ``SpawnSpec.remote_control``; others ignore the request. Claude-only today.
+    supports_remote_control: bool = False
 
     # --- the contract: adapter-specific, pure, individually testable ---------
 

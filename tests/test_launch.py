@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from horus import launch, launcher, registry
+from horus import config, launch, launcher, registry
 from horus.registry import Registry
 
 
@@ -60,6 +60,39 @@ def test_prepare_interactive_threads_model_and_effort(tmp_path, monkeypatch):
     assert error is None and prepared is not None
     assert ["--model", "sonnet"] == [prepared.argv[prepared.argv.index("--model")], prepared.argv[prepared.argv.index("--model") + 1]]
     assert ["--effort", "xhigh"] == [prepared.argv[prepared.argv.index("--effort")], prepared.argv[prepared.argv.index("--effort") + 1]]
+
+
+def test_prepare_interactive_enables_remote_control_by_default(tmp_path, monkeypatch):
+    # The whole point is catching the sessions you FORGOT to enable it on: with no
+    # per-launch override, a Claude launch reads the global default (on).
+    _home(tmp_path, monkeypatch)
+    prepared, error = launch.prepare_interactive(agent="claude", project_dir=tmp_path)
+    assert error is None and prepared is not None
+    assert "--remote-control" in prepared.argv
+
+
+def test_prepare_interactive_per_launch_override_beats_global_default(tmp_path, monkeypatch):
+    # Explicit False wins over the on-by-default global; explicit True wins over an off global.
+    _home(tmp_path, monkeypatch)
+    off, _ = launch.prepare_interactive(agent="claude", project_dir=tmp_path, remote_control=False)
+    assert off is not None and "--remote-control" not in off.argv
+
+    config.set_remote_control_default(False)
+    still_off, _ = launch.prepare_interactive(agent="claude", project_dir=tmp_path)
+    assert still_off is not None and "--remote-control" not in still_off.argv
+    forced_on, _ = launch.prepare_interactive(agent="claude", project_dir=tmp_path, remote_control=True)
+    assert forced_on is not None and "--remote-control" in forced_on.argv
+
+
+def test_prepare_interactive_remote_control_is_claude_only(tmp_path, monkeypatch):
+    # A non-Claude adapter ignores the request even with the global default on —
+    # the launch layer gates it on the adapter's `supports_remote_control`.
+    _home(tmp_path, monkeypatch)
+    prepared, error = launch.prepare_interactive(
+        agent="fake", project_dir=tmp_path, remote_control=True,
+    )
+    assert error is None and prepared is not None
+    assert "--remote-control" not in prepared.argv
 
 
 def test_launch_interactive_unknown_agent(tmp_path, monkeypatch):

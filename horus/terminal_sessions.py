@@ -86,6 +86,7 @@ def run_attached(
     effort: str | None = None,
     prompt: str = "",
     proxied: bool = False,
+    remote_control: bool | None = None,
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
     """Run an attended agent in this TTY, returning after the agent exits."""
@@ -98,6 +99,7 @@ def run_attached(
         effort=effort,
         prompt=prompt,
         proxied=proxied,
+        remote_control=remote_control,
     )
     root = Path(project_dir).resolve()
     if prepared is None:
@@ -146,6 +148,7 @@ def launch_tmux(
     cols: int | None = None,
     rows: int | None = None,
     proxied: bool = False,
+    remote_control: bool | None = None,
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
     """Create a unique detached tmux session, then optionally attach this TTY."""
@@ -170,6 +173,7 @@ def launch_tmux(
         effort=effort,
         prompt=prompt,
         proxied=proxied,
+        remote_control=remote_control,
     )
     if prepared is None:
         return launch.LaunchResult(False, agent, root, account=account, error=error)
@@ -324,6 +328,7 @@ def launch_window(
     effort: str | None = None,
     prompt: str = "",
     proxied: bool = False,
+    remote_control: bool | None = None,
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
     """Open a session in its own native terminal window, backed by tmux when
@@ -340,6 +345,7 @@ def launch_window(
             model=model,
             effort=effort,
             prompt=prompt,
+            remote_control=remote_control,
             reg=reg,
         )
 
@@ -353,6 +359,7 @@ def launch_window(
         prompt=prompt,
         attach=False,
         proxied=proxied,
+        remote_control=remote_control,
         reg=reg,
     )
     if not result.ok or not result.session_id or not result.target_ref:

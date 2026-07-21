@@ -129,6 +129,14 @@ def test_interactive_command_session_id_accepted_but_not_forwarded():
     assert "horus-track-id" not in argv
 
 
+def test_codex_ignores_remote_control_request():
+    # Codex has no Remote Control (Claude-only feature); it neither declares support
+    # nor emits a flag even when the spec requests it.
+    assert CodexAdapter.supports_remote_control is False
+    argv = CodexAdapter().interactive_command(_spec(remote_control=True), session_id="s1")
+    assert "--remote-control" not in argv
+
+
 def test_interactive_command_prompt_seeded():
     argv = CodexAdapter().interactive_command(_spec(prompt="resume the project"), session_id="s1")
     assert argv[-1] == "resume the project"

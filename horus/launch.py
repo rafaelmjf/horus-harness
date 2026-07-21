@@ -17,7 +17,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from horus import adapters, launcher, registry
+from horus import adapters, config, launcher, registry
 
 # A launch has exactly one axis: WHAT CONTEXT IS LOADED (`fresh` / `resume` / a card).
 # There is deliberately no second "session mode" axis describing how much process the
@@ -63,8 +63,16 @@ def prepare_interactive(
     prompt: str = "",
     session_id: str | None = None,
     proxied: bool = False,
+    remote_control: bool | None = None,
 ) -> tuple[PreparedInteractive | None, str | None]:
-    """Validate and build an attended launch without choosing its terminal host."""
+    """Validate and build an attended launch without choosing its terminal host.
+
+    ``remote_control`` is the per-launch override: ``None`` (the usual case) reads
+    the global default (``config.load_remote_control_default()``), so the sessions
+    you *forgot* about are still covered; an explicit ``True``/``False`` wins over
+    it. The request is honored only by an adapter that supports Remote Control
+    (Claude today); others ignore it.
+    """
     root = Path(project_dir).resolve()
     try:
         adapter = adapters.get_adapter(agent)
@@ -77,6 +85,7 @@ def prepare_interactive(
     except ValueError:
         return None, f"unknown permission posture: {posture!r}"
 
+    want_rc = remote_control if remote_control is not None else config.load_remote_control_default()
     spec = adapters.SpawnSpec(
         prompt=prompt,
         project_dir=root,
@@ -85,6 +94,7 @@ def prepare_interactive(
         model=model,
         effort=effort,
         proxied=proxied,
+        remote_control=bool(want_rc) and getattr(adapter, "supports_remote_control", False),
     )
     # Never enter an attended session under a mapped alias whose login differs — EXCEPT
     # a proxied launch, whose auth is the proxy's subscription token, not the account's
@@ -117,6 +127,7 @@ def launch_interactive(
     model: str | None = None,
     effort: str | None = None,
     prompt: str = "",
+    remote_control: bool | None = None,
     reg: registry.Registry | None = None,
 ) -> LaunchResult:
     """Open an attended session in its own terminal and register it as running.
@@ -136,6 +147,7 @@ def launch_interactive(
         model=model,
         effort=effort,
         prompt=prompt,
+        remote_control=remote_control,
     )
     if prepared is None:
         return LaunchResult(ok=False, agent=agent, project=root, account=account, error=error)

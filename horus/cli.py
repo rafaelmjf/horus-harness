@@ -2260,6 +2260,7 @@ def cmd_open(args: argparse.Namespace) -> int:
             posture=args.posture,
             model=args.model,
             prompt=prompt,
+            remote_control=args.remote_control,
         )
         try:
             handle = backend.LocalBackend().launch(brief)
@@ -2277,6 +2278,7 @@ def cmd_open(args: argparse.Namespace) -> int:
         "posture": args.posture,
         "model": args.model,
         "prompt": prompt,
+        "remote_control": args.remote_control,
     }
     if args.target == terminal_sessions.TMUX:
         result = terminal_sessions.launch_tmux(**kwargs, attach=not args.detach)
@@ -5135,6 +5137,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--prompt",
         default=None,
         help="initial prompt to seed the interactive session (default: fresh, unseeded)",
+    )
+    p_open.add_argument(
+        "--remote-control",
+        dest="remote_control",
+        default=None,
+        action=argparse.BooleanOptionalAction,
+        help="enable/disable Claude Remote Control at spawn (per-launch override; "
+             "default: the global [tui] remote_control_default). No effect for non-Claude agents.",
     )
     p_open.set_defaults(func=cmd_open)
 
