@@ -528,6 +528,56 @@ def test_readiness_filter_applies_to_the_list_on_mobile(tmp_path, monkeypatch):
     assert names == {"lo-deferred"}
 
 
+def test_vision_view_renders_facet_standings_readiness_and_branches(tmp_path, monkeypatch):
+    _isolated_home(tmp_path, monkeypatch)
+    root = tmp_path / "demo"
+    hdir = root / ".horus" / "backlog"
+    hdir.mkdir(parents=True)
+    (root / ".horus" / "PRD.md").write_text(
+        "---\nstatus: active\n---\n# demo\n\n## Vision\n\n"
+        "| Facet | Definition of done |\n|---|---|\n"
+        "| **Continuity core** | resumes. |\n"
+        "| **Dashboard / cockpit** | cockpit. |\n\n## Backlog\n\nmenu\n",
+        encoding="utf-8",
+    )
+    (hdir / "umbrella-a.md").write_text(
+        "---\nstatus: open\n---\n# Umbrella A\n\n## Acceptance\n\n- Converged when it ships.\n",
+        encoding="utf-8",
+    )
+    (hdir / "child-1.md").write_text(
+        '---\nstatus: open\nvision_facet: "Continuity core"\nbranch: umbrella-a\n---\n# Child one\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(terminal_tui.config, "load_projects", lambda: [str(root)])
+    inp = create_pipe_input()
+    ui = terminal_tui.TerminalUI(input=inp, output=DummyOutput())
+    ui.project = root
+    ui._show("vision")
+
+    rendered = "".join(text for line in ui._vision_lines() for _s, text in line)
+    assert "Facet standings" in rendered
+    assert "Continuity core" in rendered and "1 open" in rendered
+    assert "Dashboard / cockpit — no open cards" in rendered   # facet with no cards
+    assert "Readiness queues" in rendered and "Ready—Attended:" in rendered
+    assert "Vision branches" in rendered and "Umbrella A (1 open)" in rendered
+    assert "converges: Converged when it ships." in rendered
+
+
+def test_vision_view_is_scroll_only_with_no_selectable_items(tmp_path, monkeypatch):
+    ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
+    ui._show("vision")
+    assert ui.items == []
+    # down scrolls the read-out rather than moving a selection
+    ui._nav("down")
+    assert ui.vision_scroll == 1
+
+
+def test_project_screen_offers_vision_entry(tmp_path, monkeypatch):
+    ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
+    ui._show("project")
+    assert ("vision", None) in ui.items
+
+
 def test_project_screen_offers_receipts_entry(tmp_path, monkeypatch):
     ui, root = _project_with_branch_tree(tmp_path, monkeypatch)
     ui._show("project")

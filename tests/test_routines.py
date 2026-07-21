@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from horus import routines
+from horus import frontmatter, routines
 
 
 def _mk_fresh(
@@ -855,3 +855,27 @@ def test_convergence_silent_without_a_facet_table(tmp_path):
     _facet_card(hdir, "a")  # off-vision converge card, but no facets to converge against
     msgs = " ".join(f.message for f in routines.consolidate_signals(tmp_path))
     assert "convergence" not in msgs
+
+
+def _prd_body(hdir):
+    return frontmatter.parse((hdir / "PRD.md").read_text(encoding="utf-8")).body
+
+
+def test_facet_standings_structured_counts_explore_and_drift(tmp_path):
+    hdir = _mk_prd_facets(tmp_path)
+    _facet_card(hdir, "a", facet="Continuity core")
+    _facet_card(hdir, "b", facet="Continuity core")
+    _facet_card(hdir, "poc", phase="explore")
+    _facet_card(hdir, "orphan")  # converge card, no facet -> drift
+
+    st = routines.facet_standings(tmp_path, _prd_body(hdir))
+    assert dict(st.with_work) == {"Continuity core": 2}
+    assert "PO lifecycle" in st.no_work
+    assert st.explore == ["poc"]
+    assert any("orphan" in d and "no vision_facet" in d for d in st.drift)
+
+
+def test_facet_standings_none_without_a_facet_table(tmp_path):
+    hdir = _mk_prd_facets(tmp_path, vision_table=False)
+    _facet_card(hdir, "a", facet="Continuity core")
+    assert routines.facet_standings(tmp_path, _prd_body(hdir)) is None

@@ -1278,7 +1278,7 @@ def test_terminal_tui_project_vision_and_capabilities_share_generated_record(tmp
     assert "A lightweight continuity layer" in project_text
     assert "Capabilities" in project_text and "2 shipped capabilities" in project_text
 
-    ui.move(3)
+    ui.move(4)  # mode, mode, backlog, vision, [capabilities]
     ui.activate()
     assert ui.screen == "capabilities"
     assert calls == [root.as_posix()]  # screen renders the retained record; no second data path
@@ -1303,7 +1303,7 @@ def test_terminal_tui_capabilities_failure_does_not_block_project_actions(tmp_pa
     ui = terminal_tui.TerminalUI()
     ui.activate()
     assert ui.screen == "project"
-    assert [kind for kind, _value in ui.items] == ["mode", "mode", "backlog", "capabilities", "skills", "receipts"]
+    assert [kind for kind, _value in ui.items] == ["mode", "mode", "backlog", "vision", "capabilities", "skills", "receipts"]
     rendered = "".join(fragment[1] for fragment in ui._body_text())
     assert "Capabilities unavailable: record unavailable" in rendered
 
