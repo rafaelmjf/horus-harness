@@ -441,6 +441,93 @@ def test_backlog_screen_with_no_facets_or_branches_falls_back_to_flat(tmp_path, 
     assert kinds == ["card", "card"]
 
 
+# ---------------------------------------------------------------------------
+# Priority board + readiness filter
+# ---------------------------------------------------------------------------
+
+
+def _board_ui(tmp_path, monkeypatch, *, columns=120):
+    """A UI parked on the backlog of a project with a priority + readiness spread,
+    board view on, at a wide terminal size."""
+    from prompt_toolkit.data_structures import Size
+    _isolated_home(tmp_path, monkeypatch)
+    root = tmp_path / "demo"
+    hdir = root / ".horus" / "backlog"
+    hdir.mkdir(parents=True)
+    cards = [
+        ("hi-ready", "high", "ready", "eligible"),
+        ("hi-shaped", "high", "shaping", ""),
+        ("med-ready", "medium", "ready", "attended"),
+        ("lo-deferred", "low", "deferred", ""),
+    ]
+    for name, prio, rdy, auto in cards:
+        fm = f"---\nstatus: open\npriority: {prio}\ntype: feature\nreadiness: {rdy}\n"
+        if auto:
+            fm += f"autonomy: {auto}\n"
+        fm += "---\n"
+        (hdir / f"{name}.md").write_text(fm + f"# {name.title()}\n\nWhy {name} matters.\n", encoding="utf-8")
+    monkeypatch.setattr(terminal_tui.config, "load_projects", lambda: [str(root)])
+    inp = create_pipe_input()
+    ui = terminal_tui.TerminalUI(input=inp, output=DummyOutput())
+    ui.application.output.get_size = lambda: Size(rows=40, columns=columns)
+    ui.project = root
+    ui.backlog_board = True
+    ui._show("backlog")
+    return ui, root
+
+
+def test_board_renders_priority_columns_and_detail_pane_when_wide(tmp_path, monkeypatch):
+    ui, _root = _board_ui(tmp_path, monkeypatch)
+    assert ui._board_active()
+    # one column per non-empty priority (high, medium, low)
+    assert len(ui._board_columns) == 3
+    rendered = "".join(text for _s, text in ui._body_text())
+    assert "Priority board" in rendered
+    assert "high · 1 ready" in rendered   # only hi-ready is dispatchable
+    assert "medium · 1 ready" in rendered
+    assert "low · 0 ready" in rendered
+    # detail pane (under the rule) shows the selected card's why snippet
+    assert "─" in rendered
+    assert "Why hi-ready matters." in rendered
+
+
+def test_board_falls_back_to_list_when_narrow(tmp_path, monkeypatch):
+    ui, _root = _board_ui(tmp_path, monkeypatch, columns=80)
+    # board flag is on, but a narrow terminal renders the list instead
+    assert not ui._board_active()
+    assert ui._board_columns == []
+
+
+def test_board_2d_navigation_moves_across_and_within_columns(tmp_path, monkeypatch):
+    ui, _root = _board_ui(tmp_path, monkeypatch)
+    ui.selected = ui._board_columns[0][0]  # top of the high column
+    ui._nav("down")
+    assert ui.selected == ui._board_columns[0][1]  # down within the column
+    ui._nav("right")
+    assert ui.selected in ui._board_columns[1]     # over to the medium column
+
+
+def test_readiness_filter_applies_to_the_board(tmp_path, monkeypatch):
+    ui, _root = _board_ui(tmp_path, monkeypatch)
+    ui.backlog_filter = "ready"
+    ui.selected = 0
+    ui._refresh_items()
+    names = {v.name for k, v in ui.items if k == "card"}
+    assert names == {"hi-ready", "med-ready"}  # only dispatchable cards remain
+    # low column is now empty -> dropped, so 2 columns
+    assert len(ui._board_columns) == 2
+
+
+def test_readiness_filter_applies_to_the_list_on_mobile(tmp_path, monkeypatch):
+    # The filter's real payoff: it works in the list view too (narrow/mobile).
+    ui, _root = _board_ui(tmp_path, monkeypatch, columns=80)
+    ui.backlog_group_by = "none"
+    ui.backlog_filter = "parked"
+    ui._refresh_items()
+    names = {v.name for k, v in ui.items if k == "card"}
+    assert names == {"lo-deferred"}
+
+
 def test_project_screen_offers_receipts_entry(tmp_path, monkeypatch):
     ui, root = _project_with_branch_tree(tmp_path, monkeypatch)
     ui._show("project")
