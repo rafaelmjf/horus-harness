@@ -15,6 +15,11 @@ The native mobile apps are good; the only things worth owning are the gaps and t
 middle layer (account switching) that no vendor will solve for this multi-account,
 multi-agent setup.
 
+**Live evidence (2026-07-21):** this entire session — the discussion above, this
+receipt, and ~12 backlog cards landed across 7 PRs with CI — was authored end-to-end
+**from mobile**. That is itself the strongest argument for the remote-access priority
+(`session-remote-control-default`, the #1 next action).
+
 ## The problem, separated into its real parts
 
 The conversation kept converging because several distinct problems were tangled
