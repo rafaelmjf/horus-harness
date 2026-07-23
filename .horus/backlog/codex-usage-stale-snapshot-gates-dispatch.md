@@ -71,3 +71,19 @@ reader is wrong beyond mere staleness.
   **not** dispatch routing or a spend policy." This card is exactly that excluded
   routing/gating correctness, so it should not be folded into it.
 - Workaround today: `horus run --force` (`cli.py:5067`) skips the preflight refusal.
+
+## Reviews
+
+- 2026-07-23 — **Live evidence, agentic-travel-guide `tabi-triage-1` dispatch.**
+  The codex-personal leg (`activity-image-cache`) was *refused* by the `horus run`
+  preflight: *"codex account personal weekly usage is 99% (resets 2026-07-25 08:55)
+  … the session would likely die mid-run."* Owner checked ChatGPT directly →
+  **~100% remaining (~0% used)**; Codex had simply been idle for a while. Launched
+  with `--force`: the worker **ran to completion (rc=0), opened PR #37, which was
+  reviewed and merged (`4a6efa5`)** — a full build+test+PR dispatch on an account
+  the gate declared all-but-dead. The refusal was flatly wrong. For the same window
+  and reset timestamp, `horus usage check` independently reported **21% used** — a
+  third, different number — confirming the two readers disagree, not just that the
+  snapshot is old. Net: the gate produced a **false refusal that only `--force`
+  bypassed**, and would equally have waved through a genuinely-exhausted account.
+  This is the concrete routing-correctness failure the card predicted.
