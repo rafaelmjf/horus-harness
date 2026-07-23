@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: low
 created: 2026-07-21
 created_by: owner
@@ -9,6 +9,8 @@ readiness_reason: "Wildcard-proposed and owner-approved as a direction; the stal
 phase: explore
 type: feature
 vision_facet: "Autonomous dispatch"
+shipped_pr: 392
+shipped_sha: 2d7c4bea9c4c906e2388d67b6a3e34dfe8c35e06
 ---
 
 # backlog-librarian — autonomous, zero-blast-radius backlog-hygiene digest
