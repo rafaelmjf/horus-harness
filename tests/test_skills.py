@@ -101,6 +101,32 @@ def test_cockpit_dispatch_contract_skill_registered_and_sequences():
     assert "horus usage check" in ct.content
 
 
+def test_backlog_librarian_skill_is_bounded_actionable_and_projected():
+    librarian = next(s for s in skills.SKILLS if s.name == "backlog-librarian")
+    assert librarian.version == 1
+    for marker in (
+        "exactly one receipt",
+        "never overwrite",
+        "8 weeks (56 days)",
+        "one owner-authorized run every 4 weeks",
+        "25 candidate pairs",
+        "read every active card once",
+        "Satisfied dependency",
+        "State contradiction",
+        "proposed card diff/action",
+        "Advisory only; no cards or continuity were changed.",
+        "never arms its own schedule",
+    ):
+        assert marker in librarian.content
+    assert "No web research, embeddings service, subagents, or extra model call" in librarian.content
+    assert "Never edit `PRD.md` or a card" in librarian.content
+    assert "Do not add a daemon" in librarian.content
+    for root in (".claude/skills", ".agents/skills"):
+        assert Path(f"{root}/backlog-librarian/SKILL.md").read_text(
+            encoding="utf-8"
+        ) == librarian.content
+
+
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
     assert pf.version == 9
