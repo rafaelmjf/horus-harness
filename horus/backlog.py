@@ -291,6 +291,24 @@ def readiness_counts(cards: list[Card] | tuple[Card, ...]) -> dict[str, int]:
     return {group.key: len(group.cards) for group in readiness_groups(cards)}
 
 
+def readiness_count_summary(counts: dict[str, int]) -> tuple[str, str]:
+    """Two readiness count lines for the cockpit panel, labelled from the single
+    canonical ``READINESS_QUEUE_LABELS`` map so a label rename cannot drift a
+    hardcoded copy at the call site."""
+    labels = READINESS_QUEUE_LABELS
+    ready = (
+        f"{labels[QUEUE_READY_ELIGIBLE]} {counts[QUEUE_READY_ELIGIBLE]} · "
+        f"{labels[QUEUE_READY_ATTENDED]} {counts[QUEUE_READY_ATTENDED]}"
+    )
+    rest = (
+        f"{labels[QUEUE_SHAPING]} {counts[QUEUE_SHAPING]} · "
+        f"{labels[QUEUE_GATED]} {counts[QUEUE_GATED]} · "
+        f"{labels[QUEUE_DEFERRED]} {counts[QUEUE_DEFERRED]} · "
+        f"{labels[QUEUE_UNCLASSIFIED]} {counts[QUEUE_UNCLASSIFIED]}"
+    )
+    return ready, rest
+
+
 def autonomy_block_reason(card: Card) -> str:
     """Empty only for Ready—Eligible; otherwise an actionable refusal reason."""
     queue = readiness_queue(card)
@@ -399,6 +417,64 @@ def hygiene_findings(root: Path) -> list[Finding]:
                 "warn",
                 f"backlog card '{card.name}' has shipped provenance but status is "
                 f"'{card.status}' — run `horus backlog ship {card.name} --pr … --sha …`",
+            ))
+    findings.extend(prd_readiness_count_findings(root))
+    return findings
+
+
+# Queues whose parenthetical count is stated in PRD.md's "Readiness breakdown"
+# line; Unclassified is deliberately not summarised there.
+_PRD_COUNTED_QUEUES = (
+    QUEUE_READY_ELIGIBLE,
+    QUEUE_READY_ATTENDED,
+    QUEUE_SHAPING,
+    QUEUE_GATED,
+    QUEUE_DEFERRED,
+)
+
+
+def _readiness_breakdown_line(prd_text: str) -> str | None:
+    for line in prd_text.splitlines():
+        if line.lstrip().startswith("Readiness breakdown"):
+            return line
+    return None
+
+
+def _stated_count(line: str, label: str) -> int | None:
+    """The first ``(N)`` following ``label`` on the breakdown line, or None."""
+    match = re.search(re.escape(label) + r"\s*\((\d+)\)", line)
+    return int(match.group(1)) if match else None
+
+
+def prd_readiness_count_findings(root: Path) -> list[Finding]:
+    """Compare the parenthetical counts in PRD.md's "Readiness breakdown" line
+    against the computed queue sizes, so a stale hand-edited count is caught at
+    the consolidate/close gate instead of relying on the owner noticing.
+
+    Advisory only — it reports a mismatch, never rewrites. A queue the line does
+    not mention is skipped (no false alarm), and a project without the line or
+    without a PRD produces nothing."""
+    prd = backlog_dir(root).parent / frontmatter.PRD_FILE
+    try:
+        text = prd.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    line = _readiness_breakdown_line(text)
+    if line is None:
+        return []
+    counts = readiness_counts(load_active_cards(root))
+    findings: list[Finding] = []
+    for queue in _PRD_COUNTED_QUEUES:
+        label = READINESS_QUEUE_LABELS[queue]
+        stated = _stated_count(line, label)
+        if stated is None:
+            continue
+        actual = counts[queue]
+        if stated != actual:
+            findings.append(Finding(
+                "warn",
+                f"PRD readiness breakdown says {label} ({stated}) but {actual} "
+                f"card(s) are in that queue — update the count",
             ))
     return findings
 

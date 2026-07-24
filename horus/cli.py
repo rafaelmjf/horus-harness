@@ -2606,6 +2606,8 @@ def cmd_backlog(args: argparse.Namespace) -> int:
                 if c.readiness_reason:
                     print(f"      reason: {c.readiness_reason}")
                 print(f"      surface: {surface}")
+                if backlog.readiness_queue(c) == backlog.QUEUE_UNCLASSIFIED:
+                    print(f"      unclassified: {backlog.autonomy_block_reason(c)}")
                 if c.shipped_pr or c.shipped_sha:
                     print(f"      shipped: pr={c.shipped_pr or '-'} sha={c.shipped_sha or '-'}")
         if any(
