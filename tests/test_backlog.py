@@ -490,3 +490,77 @@ def test_stamp_delivered_preserves_body(tmp_path):
     path = backlog.backlog_dir(tmp_path) / "keep-body.md"
     backlog.stamp_delivered(path, shipped_date="2026-07-14")
     assert "Important detail." in path.read_text(encoding="utf-8")
+
+
+def _write_prd(root: Path, breakdown: str) -> None:
+    hdir = root / ".horus"
+    hdir.mkdir(parents=True, exist_ok=True)
+    (hdir / "PRD.md").write_text(
+        "---\nstatus: active\n---\n\n## Backlog\n\n" + breakdown + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_prd_readiness_count_findings_flags_stale_count(tmp_path):
+    _mk_card(tmp_path, "s1", readiness="shaping", readiness_reason="x")
+    _mk_card(tmp_path, "s2", readiness="shaping", readiness_reason="y")
+    _write_prd(
+        tmp_path,
+        "Readiness breakdown (deterministic): **Shaping (5)**. **Deferred (0):** none.",
+    )
+
+    findings = backlog.prd_readiness_count_findings(tmp_path)
+
+    assert any("Shaping (5)" in f.message and "2 card" in f.message for f in findings)
+    # Deferred stated 0 matches actual 0 — no false alarm for it.
+    assert not any("Deferred" in f.message for f in findings)
+
+
+def test_prd_readiness_count_findings_silent_when_counts_match(tmp_path):
+    _mk_card(tmp_path, "s1", readiness="shaping", readiness_reason="x")
+    _write_prd(tmp_path, "Readiness breakdown: **Shaping (1)** and the rest.")
+
+    assert backlog.prd_readiness_count_findings(tmp_path) == []
+
+
+def test_prd_readiness_count_findings_skips_missing_prd_or_line(tmp_path):
+    _mk_card(tmp_path, "s1", readiness="shaping", readiness_reason="x")
+    # No PRD file at all.
+    assert backlog.prd_readiness_count_findings(tmp_path) == []
+    # PRD present but without the breakdown line.
+    _write_prd(tmp_path, "No counts stated here.")
+    assert backlog.prd_readiness_count_findings(tmp_path) == []
+
+
+def test_prd_readiness_count_findings_wired_into_hygiene(tmp_path):
+    _mk_card(tmp_path, "s1", readiness="shaping", readiness_reason="x")
+    _write_prd(tmp_path, "Readiness breakdown: **Shaping (9)**.")
+
+    messages = [f.message for f in backlog.hygiene_findings(tmp_path)]
+    assert any("Shaping (9)" in m for m in messages)
+
+
+def test_readiness_count_summary_uses_canonical_labels():
+    counts = {
+        backlog.QUEUE_READY_ELIGIBLE: 2,
+        backlog.QUEUE_READY_ATTENDED: 3,
+        backlog.QUEUE_SHAPING: 39,
+        backlog.QUEUE_GATED: 6,
+        backlog.QUEUE_DEFERRED: 24,
+        backlog.QUEUE_UNCLASSIFIED: 0,
+    }
+    labels = backlog.READINESS_QUEUE_LABELS
+    ready, rest = backlog.readiness_count_summary(counts)
+
+    assert ready == (
+        f"{labels[backlog.QUEUE_READY_ELIGIBLE]} 2 · "
+        f"{labels[backlog.QUEUE_READY_ATTENDED]} 3"
+    )
+    # Every rest-queue label comes from the canonical map, not a hardcoded copy.
+    for key in (
+        backlog.QUEUE_SHAPING,
+        backlog.QUEUE_GATED,
+        backlog.QUEUE_DEFERRED,
+        backlog.QUEUE_UNCLASSIFIED,
+    ):
+        assert f"{labels[key]} {counts[key]}" in rest

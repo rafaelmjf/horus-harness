@@ -395,3 +395,16 @@ def test_cmd_backlog_list_still_works_unaffected(tmp_path, capsys):
 
     assert rc == 0
     assert "a-card" in capsys.readouterr().out
+
+
+def test_cmd_backlog_list_surfaces_why_unclassified(tmp_path, capsys):
+    # Declared ready but missing autonomy → silently Unclassified; the list must
+    # now say why instead of hiding the demotion.
+    _mk_card(tmp_path, "half-ready", readiness="ready", autonomy="")
+
+    rc = main(["backlog", "list", "--path", str(tmp_path)])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "unclassified:" in out
+    assert "missing or invalid autonomy" in out

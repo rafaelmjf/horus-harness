@@ -1223,20 +1223,11 @@ class TerminalUI:
         lines: StyleAndTextTuples = []
         if self.screen == "backlog":
             counts = backlog.readiness_counts(self.project_cards.get(self.project, []))
+            ready_line, rest_line = backlog.readiness_count_summary(counts)
             lines.extend([
                 ("class:section", "\n  Readiness\n"),
-                (
-                    "class:muted",
-                    f"  Ready—Autonomous eligible {counts[backlog.QUEUE_READY_ELIGIBLE]} · "
-                    f"Ready—Attended {counts[backlog.QUEUE_READY_ATTENDED]}\n",
-                ),
-                (
-                    "class:muted",
-                    f"  Shaping {counts[backlog.QUEUE_SHAPING]} · "
-                    f"Gated {counts[backlog.QUEUE_GATED]} · "
-                    f"Deferred {counts[backlog.QUEUE_DEFERRED]} · "
-                    f"Unclassified {counts[backlog.QUEUE_UNCLASSIFIED]}\n",
-                ),
+                ("class:muted", f"  {ready_line}\n"),
+                ("class:muted", f"  {rest_line}\n"),
             ])
         if self.screen == "projects":
             lines.extend(self._account_summary_text())
