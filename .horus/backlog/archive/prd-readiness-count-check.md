@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: low
 created: 2026-07-24
 created_by: claude
@@ -10,6 +10,8 @@ type: chore
 tier: small
 parallel: safe
 vision_facet: "Continuity core"
+shipped_pr: 396
+shipped_sha: 2c28d3b39bde8be8f77f81eea4ff4c2f5d57d8e6
 ---
 
 # prd-readiness-count-check — keep the PRD readiness-breakdown counts honest automatically
