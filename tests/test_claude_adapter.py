@@ -203,12 +203,28 @@ def test_interactive_command_carries_permission_posture():
 
 
 def test_interactive_command_injects_initial_prompt():
-    # A non-empty prompt seeds the TUI as Claude's positional initial prompt;
-    # an empty prompt leaves the session fresh (no trailing positional).
+    # A non-empty prompt seeds the TUI as Claude's positional initial prompt,
+    # after `--` so no preceding option can claim it as a value; an empty prompt
+    # leaves the session fresh (no trailing positional, and no bare `--`).
     seeded = ClaudeAdapter().interactive_command(_spec(prompt="resume the foo project"), session_id="s1")
-    assert seeded[-1] == "resume the foo project"
+    assert seeded[-2:] == ["--", "resume the foo project"]
     fresh = ClaudeAdapter().interactive_command(_spec(prompt=""), session_id="s1")
     assert fresh[-1] == "s1"  # ends at --session-id value; nothing appended
+    assert "--" not in fresh
+
+
+def test_interactive_command_prompt_survives_optional_value_flags():
+    # Regression: `claude --remote-control [name]` takes an OPTIONAL value, so a
+    # bare flag immediately followed by the prompt makes Commander parse the
+    # ~2 KB handoff as the RC session name -- the session launches unseeded and
+    # Remote Control never comes up. Assert adjacency, not membership: nothing
+    # may sit between an option and the prompt except the `--` separator.
+    argv = ClaudeAdapter().interactive_command(
+        _spec(prompt="resume the foo project", remote_control=True), session_id="s1"
+    )
+    assert "--remote-control" in argv
+    assert argv[-2:] == ["--", "resume the foo project"]
+    assert argv[argv.index("--remote-control") + 1] == "--"
 
 
 def test_get_adapter_resolves_claude():

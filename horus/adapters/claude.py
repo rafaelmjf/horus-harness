@@ -156,7 +156,7 @@ class ClaudeAdapter(AgentAdapter):
         ``--session-id`` is pre-assigned so we can track the session before any
         output is parsed (interactive runs don't stream stream-json back to us).
         A non-empty ``spec.prompt`` is passed as Claude's positional initial prompt
-        (``claude [options] [prompt]``) to seed the session — used to inject a
+        (``claude [options] -- [prompt]``) to seed the session — used to inject a
         project's continuity/resume prompt; empty means a fresh, unseeded session.
         """
         argv = [self.executable, "--session-id", session_id]
@@ -173,7 +173,11 @@ class ClaudeAdapter(AgentAdapter):
             argv.append("--remote-control")
         argv += list(spec.extra_args)
         if spec.prompt:
-            argv.append(spec.prompt)  # positional initial prompt for the TUI
+            # `--` ends option parsing so the prompt is unambiguously positional.
+            # Without it an optional-value option ahead of it swallows the prompt as
+            # its value — `--remote-control [name]` did exactly that, launching
+            # unseeded sessions with the handoff parsed as the RC session name.
+            argv += ["--", spec.prompt]
         return argv
 
     # --- multi-account identity ----------------------------------------------
