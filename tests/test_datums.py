@@ -865,6 +865,23 @@ def test_capture_usage_snapshot_unavailable_on_failed_read(tmp_path, monkeypatch
     # No credentials/rollouts anywhere reachable (isolated fake HOME) -> both
     # targets read as unavailable, never block, never fabricate a percent.
     _home(tmp_path, monkeypatch)
+
+    # Assert the PRECONDITION before the outcome. Faking HOME alone does NOT isolate
+    # the credential lookup: `claude_usage.credentials_path()` resolves
+    # CLAUDE_CONFIG_DIR *ahead* of HOME, so with that var set this test read the real
+    # logged-in account, made a live authenticated call to the usage endpoint, and got
+    # `fresh` back. It then passed or failed on whether that network call happened to
+    # succeed — green on CI (no credentials) and intermittently red locally, which cost
+    # a dispatched worker its delivery on 2026-07-26. The autouse fixture in
+    # tests/conftest.py clears it; this assertion makes a regression fail HERE, naming
+    # the cause, instead of resurfacing as an unexplained flake.
+    from horus import claude_usage
+
+    assert not claude_usage.credentials_path().exists(), (
+        "credentials are reachable despite the fake HOME — CLAUDE_CONFIG_DIR is "
+        "probably set; see tests/conftest.py::isolate_ambient_agent_env"
+    )
+
     snap = datums.capture_usage_snapshot("claude", None)
     assert snap["claude"]["freshness"] == "unavailable"
     assert "pct_5h" not in snap["claude"]
