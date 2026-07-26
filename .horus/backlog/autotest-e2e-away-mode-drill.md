@@ -119,3 +119,19 @@ runnable once its two `depends-on` gaps land.
   gate but is incomplete?** If it cannot, the honest posture stays verify-and-escalate
   (already the default) rather than granting `--allow-merge`. Worth arming one leg
   specifically as a *known* partial fix and seeing whether supervision catches it.
+- 2026-07-26 (leg roster erosion) — **Ordinary progress is consuming this drill's
+  candidate legs; arm it before more go.** The roster needs 3 small always-green legs and
+  has **1 confirmed** (`verify-guidance-long-running-services`). The two candidates named
+  in the 2026-07-21 pass were `audit-advisory-interval` and `backlog-default-list` — and
+  `backlog-default-list` **shipped this same day** (PR #408), so it is gone as a leg.
+
+  That is a structural dynamic worth seeing, not a one-off: this drill is *fed by* exactly
+  the small, low-risk, always-green cards that any productive session naturally clears
+  first. The better the throughput, the faster the drill's payload disappears. Two
+  consequences: (a) `verify-guidance-long-running-services` must NOT be implemented early
+  — it is payload, not free work, and this session nearly took it; (b) the remaining leg
+  slots should be **chosen and reserved now**, while candidates still exist, rather than
+  discovered empty on 2026-07-29.
+
+  Body-check candidates from the current backlog when arming — and prefer cards whose
+  value is mostly *as* a drill leg, so reserving them costs nothing.
