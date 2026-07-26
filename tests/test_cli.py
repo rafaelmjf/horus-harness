@@ -1050,6 +1050,37 @@ def test_close_check_gates_on_freshness(tmp_path, monkeypatch, capsys):
     assert "Stale" in capsys.readouterr().out
 
 
+def test_close_check_keeps_unclassified_cards_advisory(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from tests.test_routines import _mk_fresh
+
+    _mk_fresh(tmp_path)
+    _write_backlog_card(tmp_path, "needs-triage", status="open", priority="medium")
+
+    assert main(["close", "--check", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "is Unclassified — run backlog-refine before scheduling" in out
+    assert "Fresh" in out
+
+
+def test_close_check_still_fails_for_delivery_not_covered_by_continuity(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    from tests.test_routines import _mk_fresh
+
+    _init_repo(tmp_path)
+    _mk_fresh(tmp_path)
+    _git(tmp_path, "add", ".horus")
+    _git(tmp_path, "commit", "-m", "record continuity")
+    (tmp_path / "delivery.py").write_text("delivered = True\n", encoding="utf-8")
+    _git(tmp_path, "add", "delivery.py")
+    _git(tmp_path, "commit", "-m", "deliver feature")
+
+    assert main(["close", "--check", "--path", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "delivery commit(s) pending the next continuity boundary" in out
+    assert "Stale" in out
+
+
 def test_close_check_names_sibling_pr_but_stays_fresh(tmp_path, monkeypatch, capsys):
     """A merely-open sibling PR (item 5's parallel-delivery signal) must not flip
     'Fresh' to 'Stale — action needed' — it is advisory, not a close-blocking gate."""

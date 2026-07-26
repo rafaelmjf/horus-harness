@@ -2811,7 +2811,7 @@ def _close_merge_hook(root: Path) -> int:
         return 0  # not a merge — let it through
 
     try:
-        stale = any(f.level in ("warn", "fail") for f in closure.freshness_gate(root))
+        stale = not closure.close_check_healthy(root, closure.freshness_gate(root))
     except Exception:
         return 0  # never block the merge on a checker error
     if not stale:
@@ -2951,7 +2951,8 @@ def cmd_close(args: argparse.Namespace) -> int:
             else closure.boundary_freshness_gate(root)
         )
         findings = freshness + closure.checkpoint_gate(root)
-        healthy = _print_findings(findings)
+        _print_findings(findings)
+        healthy = closure.close_check_healthy(root, findings)
         if healthy and base_ref:
             print(
                 "\nDelivery accepted — git evidence is durable; canonical continuity may remain "
