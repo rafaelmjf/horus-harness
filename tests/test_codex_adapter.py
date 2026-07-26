@@ -303,3 +303,37 @@ def test_spawn_guard_refuses_account_id_aliased_to_different_account(tmp_path, m
     with pytest.raises(AccountMismatch, match="personal") as exc_info:
         adapter.spawn(_spec(account="personal"))
     assert "work" in str(exc_info.value)
+
+
+# --- identity guard reaches EVERY launch path --------------------------------
+
+
+def test_account_dirs_resolves_codex_homes_not_just_claude_config_dirs():
+    # `codex-identity-guard` (#404): every launch path gates its identity check on
+    # "is this alias mapped to an isolated dir". Asking for `config_dirs` directly
+    # returns {} for Codex, which SKIPS the guard silently instead of failing loudly
+    # — so both paths must ask through adapters.account_dirs().
+    from horus import adapters
+
+    codex = adapters.get_adapter("codex")
+    assert not hasattr(codex, "config_dirs"), "if Codex grows config_dirs, revisit account_dirs()"
+    codex.codex_homes = {"work": "/tmp/codex-work"}
+    assert adapters.account_dirs(codex) == {"work": "/tmp/codex-work"}
+
+    claude = adapters.get_adapter("claude")
+    claude.config_dirs = {"personal": "/tmp/claude-personal"}
+    assert adapters.account_dirs(claude) == {"personal": "/tmp/claude-personal"}
+
+    # An adapter with neither must be an empty map, never None.
+    assert adapters.account_dirs(adapters.get_adapter("fake")) == {}
+
+
+def test_pty_host_gates_the_identity_check_through_the_shared_accessor():
+    # Regression for the half-fix: #404 taught launch.py about codex_homes but left
+    # pty_host.py reading `config_dirs`, so the DASHBOARD-hosted launch path still
+    # skipped the guard for Codex entirely.
+    from pathlib import Path
+
+    source = Path("horus/pty_host.py").read_text(encoding="utf-8")
+    assert "adapters.account_dirs(adapter)" in source
+    assert 'getattr(adapter, "config_dirs", {})' not in source

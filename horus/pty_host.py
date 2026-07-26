@@ -140,11 +140,13 @@ class PtyHost:
             posture=adapters.PermissionPosture(posture), model=model,
             remote_control=bool(want_rc) and getattr(adapter, "supports_remote_control", False),
         )
-        if account and getattr(adapter, "config_dirs", {}).get(account) and hasattr(adapter, "verify_account"):
+        if account and adapters.account_dirs(adapter).get(account) and hasattr(adapter, "verify_account"):
             check = adapter.verify_account(account)
             if not check.ok:
                 raise adapters.AccountMismatch(
-                    f"account {account!r} login mismatch (found {check.detected_email or 'no login'})."
+                    f"account {account!r} login mismatch "
+                    f"(found {check.detected_email or 'no login'}, "
+                    f"alias {config.alias_for(check.detected_email)!r})."
                 )
 
         session_id = str(uuid.uuid4())
