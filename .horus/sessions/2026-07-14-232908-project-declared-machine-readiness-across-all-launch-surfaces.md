@@ -676,3 +676,55 @@ as a fourth consumer, without introducing a second parser or probe path.
   10 registered projects are already v3) but that is an open PR with real code,
   so closing it is the owner's call, not a branch cleanup.
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `18c0050` fix(datums): label Codex lanes by declared length, not slot order (#417)
+  `_codex_usage_entry` read the rate-limit lanes POSITIONALLY --
+  primary->pct_5h, secondary->pct_weekly -- while `usage_snapshot` and
+  `usage check` both classify via `report.windows()`, which uses the length Codex
+  declared for each lane. Since Codex lifted the 5-hour limit it reports ONE
+  window, a weekly one, in the primary slot; the datum path therefore recorded a
+  weekly percentage as `pct_5h`.
+  Observed live 2026-07-26: for the same account at the same moment `horus usage
+  all` rendered `5h - · weekly 82%` while the worker datum recorded `pct_5h=82`.
+  Today's dispatch actuals ("start=5h=82% -> end=5h=1%") were weekly readings all
+  along. Datums feed `horus capabilities --models` and the delegation rubric, so
+  a mislabelled lane silently corrupts calibration data.
+  Also fixes staleness, which was judged on `primary_resets_at` -- the same
+  positional assumption -- so a weekly reading sitting in the primary slot was
+  assessed as if it were the fast lane. Now any lane past its OWN reset is stale.
+  Owner input (2026-07-26): weekly-only is likely the NEW NORMAL for Codex rather
+  than a temporary state, which is what makes this worth correcting now instead of
+  watching.
+  The three existing tests used hand-rolled stubs declaring only the positional
+  fields, so they could not exercise `windows()` -- exactly how this drifted.
+  Replaced with a builder returning a REAL `codex_usage.UsageReport`, plus three
+  regressions: weekly-only is never recorded as 5h, a fast lane in the secondary
+  slot is still 5h, and staleness follows the lane whose own reset passed.
+  Live after the fix: datum reads pct_weekly=6.0 with no pct_5h, agreeing with
+  `usage all`. Suite 2252.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+- `cdcd435` fix(usage): say the percent is USED, and lock that orientation (#418)
+  A bare "weekly 6%" reads equally well as "6% used" or "6% left". The owner read
+  it the second way on 2026-07-26 and asked to invert the Codex calc so it would
+  match Claude.
+  Both providers already report USED and Horus was already consistent. Ground
+  truth from a live rollout:
+      "rate_limits":{"primary":{"used_percent":6.0,"window_minutes":10080,
+                                "resets_at":1785668181},"secondary":null}
+  Codex's field is literally `used_percent`; Claude's is `utilization`. Inverting
+  would have turned 6% used into 94% used, so the run preflight (PREFLIGHT_REFUSE
+  = 95) would start refusing launches on a nearly EMPTY account -- and would wave
+  through an exhausted one. The apparent conflict was staleness, not orientation:
+  the 82% that looked wrong was a 27h-old pre-reset reading, and a fresh one read
+  2% used, which agrees with the owner's "~100% available".
+  So no calc changed. Instead the orientation is now stated where it is read:
+    - `usage all` header: "Usage — all accounts (% USED, 5h · weekly)" -- in the
+      header rather than per cell, so phone-width rows stay short;
+    - `usage check`: "weekly limit 6% used (resets ...)" for both providers;
+    - run preflight: "{who} has USED 96% of its weekly window (resets ...)".
+  And two contract tests pin it: the parsers must keep reading `used_percent` /
+  `utilization` and must not parse a remaining-oriented field, and the thresholds
+  must stay ordered so a HIGHER percent means LESS headroom -- true only under
+  used-orientation. The question was asked from memory; now it is checkable.
+  Suite 2251.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
