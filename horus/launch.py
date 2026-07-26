@@ -105,8 +105,8 @@ def prepare_interactive(
         if not check.ok:
             return None, (
                 f"account {account!r} login mismatch "
-                f"(found {check.detected_email or 'no login'}, "
-                f"alias {config.alias_for(check.detected_email)!r})."
+                f"(found {adapter.identity_label} {check.detected_identity or 'none'}, "
+                f"alias {config.alias_for(check.detected_identity)!r})."
             )
 
     sid = session_id or str(uuid.uuid4())

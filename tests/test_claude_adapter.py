@@ -247,7 +247,7 @@ def test_verify_account_match(tmp_path, monkeypatch):
 
     check = adapter.verify_account("work")
     assert check.ok is True
-    assert check.detected_email == "rafa@work.com"
+    assert check.detected_identity == "rafa@work.com"
     assert check.config_dir == str(cfg)
 
 
@@ -260,7 +260,7 @@ def test_verify_account_mismatch(tmp_path, monkeypatch):
 
     check = adapter.verify_account("personal")
     assert check.ok is False
-    assert check.detected_email == "rafa@work.com"
+    assert check.detected_identity == "rafa@work.com"
 
 
 def test_verify_account_adopts_first_login_in_own_dir(tmp_path, monkeypatch):

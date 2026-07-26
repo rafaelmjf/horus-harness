@@ -289,7 +289,7 @@ def test_verify_account_adopts_first_login_in_own_home(tmp_path, monkeypatch):
     check = adapter.verify_account("work")
 
     assert check.ok is True
-    assert check.detected_email == "acct-work"
+    assert check.detected_identity == "acct-work"
     assert config.load_account_aliases()["acct-work"] == "work"
 
 
@@ -337,3 +337,37 @@ def test_pty_host_gates_the_identity_check_through_the_shared_accessor():
     source = Path("horus/pty_host.py").read_text(encoding="utf-8")
     assert "adapters.account_dirs(adapter)" in source
     assert 'getattr(adapter, "config_dirs", {})' not in source
+
+
+def test_identity_label_names_what_detected_identity_actually_holds():
+    # `IdentityCheck.detected_identity` is an email for Claude and an opaque account
+    # id for Codex, so a shared message printing a bare value told the owner nothing:
+    # "found 6d67cc97-1f90-4dd5-af80-3558e3628b0e" gave no hint what it was looking at.
+    # Every shared identity message interpolates the owning adapter's label instead.
+    from horus import adapters
+
+    assert adapters.get_adapter("claude").identity_label == "login email"
+    assert adapters.get_adapter("codex").identity_label == "account id"
+    # An adapter that declares none still reads sensibly rather than crashing.
+    assert adapters.get_adapter("fake").identity_label == "identity"
+
+
+def test_shared_mismatch_messages_never_print_a_bare_identifier():
+    # Both shared launch paths must name the identifier. Guards against a future edit
+    # reverting to `found {check.detected_identity}` with no label.
+    from pathlib import Path
+
+    for path in ("horus/launch.py", "horus/pty_host.py"):
+        source = Path(path).read_text(encoding="utf-8")
+        assert "{adapter.identity_label}" in source, path
+        assert "(found {check.detected_identity" not in source, path
+
+
+def test_detected_identity_is_not_named_for_one_agents_identifier_shape():
+    # The field was `detected_email` while holding a UUID for Codex. Keep the honest
+    # name, and keep the value RAW -- config.alias_for() resolves it, so it must not be
+    # prefixed or decorated.
+    from horus.adapters.claude import IdentityCheck
+
+    assert "detected_identity" in IdentityCheck.__annotations__
+    assert "detected_email" not in IdentityCheck.__annotations__

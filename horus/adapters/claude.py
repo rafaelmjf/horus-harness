@@ -38,9 +38,18 @@ class AccountMismatch(RuntimeError):
 
 @dataclass
 class IdentityCheck:
+    """The identity an adapter actually found in a mapped account dir.
+
+    ``detected_identity`` is deliberately NOT named for one agent's identifier
+    shape: Claude reports a login email, Codex an opaque account id. It stays the
+    RAW value because ``config.alias_for()`` resolves it back to an alias, so it
+    must not be prefixed or decorated. Read the owning adapter's
+    ``identity_label`` when a message needs to say what the value is.
+    """
+
     account: str | None
     config_dir: str | None
-    detected_email: str | None
+    detected_identity: str | None
     ok: bool
 
 # The bare family aliases Claude Code's `--model` accepts (probed live,
@@ -82,6 +91,7 @@ class ClaudeAdapter(AgentAdapter):
     name = "claude"
     KNOWN_MODELS = _MODEL_FAMILIES
     supports_remote_control = True
+    identity_label = "login email"
 
     def __init__(self, *, executable: str = "claude", config_dirs: dict[str, str] | None = None) -> None:
         """``config_dirs`` maps an account alias to its ``CLAUDE_CONFIG_DIR`` for
@@ -209,7 +219,7 @@ class ClaudeAdapter(AgentAdapter):
                 config.set_account_alias(email, account)
                 aliased = account
             ok = aliased == account
-        return IdentityCheck(account=account, config_dir=str(cfg) if cfg else None, detected_email=email, ok=ok)
+        return IdentityCheck(account=account, config_dir=str(cfg) if cfg else None, detected_identity=email, ok=ok)
 
     def _launch(self, spec: SpawnSpec, *, resume_id: str | None) -> AgentRun:
         # Guard only when explicit per-account isolation is configured (a mapped dir).
@@ -219,8 +229,8 @@ class ClaudeAdapter(AgentAdapter):
             if not check.ok:
                 raise AccountMismatch(
                     f"account {spec.account!r} maps to config dir {check.config_dir!r}, but its "
-                    f"login is {check.detected_email or 'absent'} "
-                    f"(alias {config.alias_for(check.detected_email)!r}) — refusing to spawn"
+                    f"{self.identity_label} is {check.detected_identity or 'absent'} "
+                    f"(alias {config.alias_for(check.detected_identity)!r}) — refusing to spawn"
                 )
         return super()._launch(spec, resume_id=resume_id)
 

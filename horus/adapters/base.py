@@ -160,6 +160,12 @@ class AgentAdapter(ABC):
     # ``SpawnSpec.remote_control``; others ignore the request. Claude-only today.
     supports_remote_control: bool = False
 
+    # What ``IdentityCheck.detected_identity`` actually IS for this agent, for shared
+    # messages that must name it. Claude reports a login email, Codex an opaque account
+    # id — a bare "found 6d67cc97-..." told the owner nothing about what it was looking
+    # at, so every shared identity message interpolates this label.
+    identity_label: str = "identity"
+
     # --- the contract: adapter-specific, pure, individually testable ---------
 
     @abstractmethod
