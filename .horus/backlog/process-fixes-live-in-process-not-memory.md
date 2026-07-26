@@ -80,3 +80,22 @@ Owner correction 2026-07-20 in the calibration session;
 
   Note the recursion: this card is itself the durable artifact for a rule that had been
   living in one agent's head, so filing it already did half the job.
+
+## Sweep result — 2026-07-26 (verified, not assumed)
+
+The card asked for a short sweep confirming no other 2026-07-20 calibration correction
+lives only in agent memory. Checked:
+
+- **Questionnaire format** — lives in the shared artifact. `horus/skills.py` carries the
+  literal screen spec and the corrected rule verbatim: *"Strictly one card per exchange —
+  one at a time, never batched"*, with the note that it was the twice-corrected failure
+  mode. Nothing memory-only.
+- **Receipt spines** — live in the shared artifact; the skill bodies specify them
+  throughout (`product-audit`, `market-scan`, `roadmap-branches`, `scope-cards`,
+  `process-retrospective`, `skill-audit` all name their dated receipt).
+- **Render-confirm before merging a contract change** — this WAS memory-only. It is the
+  one correction the sweep found unshared, and it is what this card moves into the
+  managed block. Its evidence remains in `merge-release-owner-gate`'s Reviews (card still
+  active, not archived), which stays the owner of the eventual hard guard.
+
+Conclusion: one correction was memory-only, now fixed; the other two were already durable.

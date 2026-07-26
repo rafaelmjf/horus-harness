@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 13
+BLOCK_VERSION = 14
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -118,6 +118,10 @@ Working discipline (every session, whether or not the work is delegated):
 - **Put safety in the code, not the reviewer.** Guards and invariants prevent the
   dangerous class of bug; review — human or model — misses things, so it is a help, not
   a guarantee.
+- **Fix a process error in the process, never only in agent memory** — a private memory
+  is invisible to other agents, accounts, and machines, so the correction must land in a
+  skill, managed block, PRD rule, or card. Concretely: render and confirm a format or
+  contract change before merging it, rather than remembering to.
 - **Ground token-intensive actions before spending.** Before an action that fans out
   many subagents or otherwise burns a large amount of tokens (multi-agent workflows,
   broad research sweeps, whole-repo re-reads, adversarial verification passes), first
