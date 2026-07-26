@@ -1165,14 +1165,14 @@ def _run_usage_preflight(
 
     reset = reset or "unknown reset"
     if pct >= usage_snapshot.PREFLIGHT_REFUSE and not force:
-        print(f"Refusing to run: {who} {window} usage is {pct:.0f}% (resets {reset}).")
+        print(f"Refusing to run: {who} has USED {pct:.0f}% of its {window} window (resets {reset}).")
         print("The window is nearly exhausted — the session would likely die mid-run.")
         print("Pass --force to launch anyway, or wait for the reset.")
         return 2
     if pct >= usage_snapshot.PREFLIGHT_WARN:
-        print(f"Warning: {who} {window} usage is {pct:.0f}% (resets {reset}) — launching into a closing window.")
+        print(f"Warning: {who} has used {pct:.0f}% of its {window} window (resets {reset}) — launching into a closing window.")
     elif pct >= usage_snapshot.PREFLIGHT_CLOSING:
-        print(f"Note: {who} {window} usage is {pct:.0f}% (resets {reset}) — a long dispatch may not finish this window.")
+        print(f"Note: {who} has used {pct:.0f}% of its {window} window (resets {reset}) — a long dispatch may not finish this window.")
     return None
 
 

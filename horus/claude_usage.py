@@ -232,9 +232,9 @@ def usage_findings(*, threshold: float = 90.0, report: UsageReport | None = None
     # mid-session. The weekly figure is shown for context but does not drive closure
     # (a separate weekly-aware nudge is a future feature). See is_over_threshold.
     if report.five_hour_percent is not None:
-        parts.append(f"5h limit {report.five_hour_percent:.0f}% (resets {_fmt_reset(report.five_hour_resets_at)})")
+        parts.append(f"5h limit {report.five_hour_percent:.0f}% used (resets {_fmt_reset(report.five_hour_resets_at)})")
     if report.seven_day_percent is not None:
-        parts.append(f"weekly limit {report.seven_day_percent:.0f}% (resets {_fmt_reset(report.seven_day_resets_at)})")
+        parts.append(f"weekly limit {report.seven_day_percent:.0f}% used (resets {_fmt_reset(report.seven_day_resets_at)})")
 
     if not parts:
         return [Finding("ok", "no Claude usage signal available")]
