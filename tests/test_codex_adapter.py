@@ -416,3 +416,41 @@ def test_thresholds_are_used_oriented_so_higher_means_less_headroom():
     # `worst()` picks the MORE-CONSTRAINING window, i.e. the higher used percent.
     worst = u.UsageSnapshot(10.0, "r1", 90.0, "r2").worst()
     assert worst[0] == 90.0 and worst[2] == "weekly"
+
+
+def test_limit_homes_prefer_isolated_accounts_over_the_ambient_home(tmp_path, monkeypatch):
+    """Under account isolation the ambient ~/.codex never sees a real session.
+
+    Every isolated run writes its rollouts into the account's own CODEX_HOME, so a
+    reader consulting only the ambient home goes permanently stale. Observed
+    2026-07-26: ambient's newest rollout was a week old while codex-personal's was
+    minutes old, which is why `usage check` said "snapshot stale" and reported a
+    week-old context percent while `usage all` correctly read 6%.
+    """
+    from horus import codex_usage, config
+
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "ambient"))
+    monkeypatch.setattr(
+        config, "load_account_codex_homes",
+        lambda: {"personal": str(tmp_path / "acct-personal"), "work": str(tmp_path / "acct-work")},
+    )
+    homes = [h.as_posix() for h in codex_usage.account_limit_homes()]
+
+    assert (tmp_path / "acct-personal").as_posix() in homes
+    assert (tmp_path / "acct-work").as_posix() in homes
+    assert (tmp_path / "ambient").as_posix() in homes, "ambient stays a candidate, just not the only one"
+    assert homes.index((tmp_path / "ambient").as_posix()) == len(homes) - 1, "ambient goes last"
+    assert len(homes) == len(set(homes)), "de-duplicated"
+
+
+def test_limit_homes_survive_a_broken_account_map(monkeypatch):
+    # A usage read must never blind itself on a malformed accounts map -- the
+    # contract for this whole module is best-effort, never raise.
+    from horus import codex_usage, config
+
+    def _boom():
+        raise RuntimeError("accounts.toml is corrupt")
+
+    monkeypatch.setattr(config, "load_account_codex_homes", _boom)
+    homes = codex_usage.account_limit_homes()
+    assert len(homes) >= 1, "must still fall back to the ambient home"

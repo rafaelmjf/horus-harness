@@ -215,7 +215,7 @@ def latest_usage(project_root: Path, *, home: Path | None = None) -> UsageReport
     """Latest Codex token_count event for ``project_root`` across local rollouts."""
     best: UsageReport | None = None
     best_ts = -1.0
-    for path in _rollouts(home or codex_home()):
+    for path in _rollouts_to_scan(home):
         current_project = False
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
@@ -244,6 +244,63 @@ def latest_usage(project_root: Path, *, home: Path | None = None) -> UsageReport
     return best
 
 
+def account_limit_homes() -> list[Path]:
+    """Every Codex home whose rollouts can carry this machine's rate-limit state.
+
+    Under Horus account isolation each account runs with its own ``CODEX_HOME``, so
+    a real session writes its rollouts THERE and never into the ambient
+    ``~/.codex``. A reader that consults only the ambient home therefore goes
+    permanently stale the moment isolation is in use — observed 2026-07-26, where
+    the ambient home's newest rollout was a week old while the account home had one
+    from minutes earlier, which is why `usage check` reported "snapshot stale" while
+    `usage all` correctly read 6%.
+
+    Configured account homes first, then the ambient home, de-duplicated.
+    """
+    from horus import config
+
+    homes: list[Path] = []
+    seen: set[str] = set()
+    try:
+        configured = config.load_account_codex_homes().values()
+    except Exception:  # noqa: BLE001 (best-effort: a broken map must not blind the read)
+        configured = []
+    for raw in (*configured, codex_home()):
+        try:
+            path = Path(raw).expanduser()
+        except Exception:  # noqa: BLE001
+            continue
+        key = path.as_posix()
+        if key not in seen:
+            seen.add(key)
+            homes.append(path)
+    return homes
+
+
+def _rollouts_to_scan(home: Path | None):
+    """Rollouts to scan when the caller did not name a home.
+
+    Used by BOTH readers, deliberately: ``latest_account_usage`` (account-global
+    rate limits) and ``latest_usage`` (this project's context). Both were reading
+    only the ambient home, and under Horus account isolation neither can find
+    anything current there — a real session writes its rollouts into the account's
+    own ``CODEX_HOME``. Observed 2026-07-26: ambient's newest rollout was a week
+    old while the account home had one from minutes earlier, so `usage check`
+    reported a stale limit snapshot AND a week-old context percent while
+    `usage all` read correctly.
+
+    An explicit ``home`` stays authoritative — that caller knows which account it
+    means. With none, scan every known home and let the newest observation win.
+    With several configured accounts this can mix them; the per-account view is
+    `horus usage all`, which always passes an explicit home.
+    """
+    if home is not None:
+        yield from _rollouts(home)
+        return
+    for candidate in account_limit_homes():
+        yield from _rollouts(candidate)
+
+
 def latest_account_usage(home: Path | None = None) -> UsageReport | None:
     """Most recent Codex rate-limit snapshot for the account at ``home``.
 
@@ -257,7 +314,7 @@ def latest_account_usage(home: Path | None = None) -> UsageReport | None:
     """
     best: UsageReport | None = None
     best_ts = -1.0
-    for path in _rollouts(home or codex_home()):
+    for path in _rollouts_to_scan(home):
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except OSError:
