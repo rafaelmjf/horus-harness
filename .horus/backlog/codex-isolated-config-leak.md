@@ -96,8 +96,12 @@ decided delete-vs-promote; nothing was removed.
 - `account-settings-sync` — owns settings *drift* across dirs; this card owns what gets
   copied at *creation*. Whichever ships first should not build a second writer.
 - `account-login-verb` — remedies 1 and 3 depend on login being a first-class verb.
-- `isolated-account-plugin-parity` — directly affected: remedy 1 makes plugin parity a
-  required companion rather than a nice-to-have.
+- `isolated-account-plugin-parity` — directly affected, and still a required companion
+  under the **chosen remedy 3**: a dir produced by a fresh `codex login` carries only
+  `auth.json`, so it has no plugin/MCP/marketplace block either. The consequence is the
+  same as remedy 1's, but it arrives because the dir is *generated clean* rather than
+  because a file was deliberately not copied. (Corrected 2026-07-26 — this note still
+  described remedy 1, which was not chosen; librarian receipt L3.)
 
 ## Source
 

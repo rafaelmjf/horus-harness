@@ -1,8 +1,9 @@
 ---
 status: open
 priority: high
-readiness: gated
-readiness_reason: "Land backlog-readiness-disposition tooling first; then this becomes Ready—Attended."
+readiness: ready
+autonomy: attended
+readiness_reason: "Gate satisfied — `backlog-readiness-disposition` shipped and is archived, and the card itself named that as the only precondition ('then this becomes Ready—Attended'). Attended because this is the owner-facing interactive refinement flow. Surfaced by the 2026-07-26 backlog-librarian receipt (L1): it had been sitting Gated on already-delivered work."
 created: 2026-07-18
 last_refined: 2026-07-19
 vision_facet: "PO lifecycle"
@@ -11,7 +12,6 @@ tier: high
 type: feature
 parallel: safe
 created_by: owner
-depends-on: backlog-readiness-disposition
 surface: horus/backlog.py (readiness/order fields + writer), horus/backlog_tree.py, horus/terminal_tui.py (thin trigger from the backlog pane), horus/cli.py
 ---
 
@@ -88,3 +88,14 @@ execution order and will write sparse `order:` values once this card supplies th
 machine-readable field and consumers. The scheduler consumes that durable state without
 an LLM in its loop. The field and first consumer still land together; a parser-only
 field would be ceremony.
+
+## Reviews
+
+- 2026-07-26 — **Gated → Ready / attended.** Surfaced by the backlog-librarian receipt
+  (L1): `depends-on: backlog-readiness-disposition` resolved to an archived card with
+  `status: shipped`, while this card's own reason named that as the only precondition
+  ("Land backlog-readiness-disposition tooling first; then this becomes Ready—Attended").
+  So a **high-priority** card had been sitting blocked on already-delivered work.
+  Dependency removed and readiness minted as the card itself specified. Attended, not
+  eligible: this is the owner-facing interactive refinement flow, so owner presence is
+  the point. Re-check scope before scheduling — it is `tier: high`.

@@ -2,7 +2,7 @@
 status: open
 priority: medium
 readiness: deferred
-readiness_reason: "Resume when Horus has a real per-card usage signal for the remaining usage-ripeness flag."
+readiness_reason: "Resume when Horus has a real per-card usage signal for the remaining usage-ripeness flag. (Its former `depends-on: roadmap-convergence` was removed 2026-07-26 — that card shipped — but this stays DEFERRED because the usage-signal gate above is a different, unmet one; librarian receipt L2.)"
 created: 2026-07-16
 last_refined: 2026-07-19
 vision_facet: "PO lifecycle"
@@ -10,7 +10,6 @@ tier: medium
 type: feature
 parallel: safe
 surface: PRD.md (Vision divergence framing), backlog card frontmatter (phase marker), horus-consolidate skill (phase-aware read-out)
-depends-on: roadmap-convergence
 ---
 
 # explore-converge-lifecycle — a roadmap that breathes (divergence → convergence)
@@ -55,3 +54,11 @@ default part of the roadmap rather than an off-book detour.
   that piece.
 - Reframes, doesn't replace, `roadmap-convergence`: convergence stays exactly as scoped; this
   card adds the explore phase and the promotion/drop dynamic around it.
+
+## Reviews
+
+- 2026-07-26 — **Stale dependency removed; stays Deferred.** Backlog-librarian receipt
+  (L2): `depends-on: roadmap-convergence` resolved to an archived card with
+  `status: shipped`. Removed. Readiness deliberately **unchanged** — the card's real gate
+  is a different, unmet one ("a real per-card usage signal for the remaining
+  usage-ripeness flag"), so a satisfied dependency here is not a readiness change.
