@@ -62,6 +62,7 @@ _SANDBOX_FLAGS: dict[PermissionPosture, list[str]] = {
 
 class CodexAdapter(AgentAdapter):
     name = "codex"
+    identity_label = "account id"
     # The GPT-5.6 family variants + the retained prior generation Horus tracks
     # today (mirrors `horus/datums.py`'s `PRIORS_SEED` roster). Edit alongside
     # that seed as the fleet's model roster grows — this is the TUI's per-
@@ -174,7 +175,7 @@ class CodexAdapter(AgentAdapter):
         return IdentityCheck(
             account=account,
             config_dir=str(home) if home else None,
-            detected_email=account_id,
+            detected_identity=account_id,
             ok=ok,
         )
 
@@ -186,8 +187,8 @@ class CodexAdapter(AgentAdapter):
             if not check.ok:
                 raise AccountMismatch(
                     f"account {spec.account!r} maps to CODEX_HOME {check.config_dir!r}, but its "
-                    f"account_id is {check.detected_email or 'absent'} "
-                    f"(alias {config.alias_for(check.detected_email)!r}) — refusing to spawn"
+                    f"{self.identity_label} is {check.detected_identity or 'absent'} "
+                    f"(alias {config.alias_for(check.detected_identity)!r}) — refusing to spawn"
                 )
         return super()._launch(spec, resume_id=resume_id)
 
