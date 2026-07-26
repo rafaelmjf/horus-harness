@@ -495,6 +495,14 @@ def all_accounts_usage(
 
 
 def _usage_cell(percent: float | None, reset: str | None) -> str:
+    """One capacity cell. The percent is always USED, never remaining.
+
+    Both providers report utilization: Codex's payload field is literally
+    ``used_percent`` and Claude's is ``utilization``. The orientation lives in
+    `render_all_accounts`'s header rather than on every cell, so a phone-width row
+    stays short — but it must be stated SOMEWHERE, because a bare "weekly 6%" reads
+    equally well as "6% left" and was misread that way (owner, 2026-07-26).
+    """
     if percent is None:
         return "—"
     return f"{percent:.0f}%" + (f" (resets {reset})" if reset else "")
@@ -502,7 +510,7 @@ def _usage_cell(percent: float | None, reset: str | None) -> str:
 
 def render_all_accounts(rows: list[AccountUsage]) -> str:
     """Compact per-account capacity table for a CLI glance / a phone screen."""
-    lines = ["Usage — all accounts (5h · weekly):"]
+    lines = ["Usage — all accounts (% USED, 5h · weekly):"]
     if not rows:
         return lines[0] + "\n  (no accounts configured)"
     width = max(len(f"{r.agent}/{r.account}") for r in rows)

@@ -314,7 +314,7 @@ def usage_findings(project_root: Path, *, threshold: float = 90.0, home: Path | 
         if window.resets_at is not None and window.resets_at <= time.time():
             parts.append(f"{window.label()} limit snapshot stale (reset {reset})")
             return
-        parts.append(f"{window.label()} limit {window.percent:.0f}% (resets {reset})")
+        parts.append(f"{window.label()} limit {window.percent:.0f}% used (resets {reset})")
         over = over or window.percent >= threshold
 
     if account_report is not None:

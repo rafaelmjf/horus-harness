@@ -371,3 +371,48 @@ def test_detected_identity_is_not_named_for_one_agents_identifier_shape():
 
     assert "detected_identity" in IdentityCheck.__annotations__
     assert "detected_email" not in IdentityCheck.__annotations__
+
+
+# --- usage orientation contract ----------------------------------------------
+
+
+def test_both_providers_report_percent_USED_not_remaining():
+    """Codex and Claude must stay on the same orientation: the percent is USED.
+
+    Codex's rollout payload field is literally `used_percent`; Claude's is
+    `utilization`. Every Horus threshold reads that way — PREFLIGHT_REFUSE at 95
+    means "95% consumed", so an upstream flip to a remaining-oriented field would
+    invert the dispatch gate in BOTH directions: refusing launches on an empty
+    account and waving through an exhausted one. Asked directly by the owner on
+    2026-07-26 ("codex reports how much is left") — it does not; this test exists
+    so the answer is checkable rather than remembered.
+    """
+    import inspect
+
+    from horus import claude_usage, codex_usage
+
+    codex_src = inspect.getsource(codex_usage)
+    assert '"used_percent"' in codex_src or "'used_percent'" in codex_src, (
+        "Codex rate_limits no longer parsed from `used_percent` — re-verify the "
+        "orientation before trusting any threshold"
+    )
+    claude_src = inspect.getsource(claude_usage)
+    assert '"utilization"' in claude_src or "'utilization'" in claude_src, (
+        "Claude usage no longer parsed from `utilization` — re-verify the orientation"
+    )
+    # A remaining-oriented field name appearing in either parser is the tell.
+    for name, src in (("codex_usage", codex_src), ("claude_usage", claude_src)):
+        for suspect in ('"remaining', "'remaining", '"percent_left', '"available_percent'):
+            assert suspect not in src, f"{name} parses a remaining-oriented field: {suspect}"
+
+
+def test_thresholds_are_used_oriented_so_higher_means_less_headroom():
+    # Guards the direction of the comparison the gate makes: a HIGHER percent must
+    # mean LESS capacity, which is only true under used-orientation.
+    from horus import usage_snapshot as u
+
+    assert u.PREFLIGHT_CLOSING < u.PREFLIGHT_WARN < u.PREFLIGHT_REFUSE
+    assert u.GUARD_ADVISORY < u.GUARD_EMERGENCY
+    # `worst()` picks the MORE-CONSTRAINING window, i.e. the higher used percent.
+    worst = u.UsageSnapshot(10.0, "r1", 90.0, "r2").worst()
+    assert worst[0] == 90.0 and worst[2] == "weekly"
