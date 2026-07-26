@@ -95,6 +95,25 @@ def freshness_gate(root: Path) -> list[Finding]:
     return routines.freshness_signals(root) + backlog.hygiene_findings(root)
 
 
+def close_check_healthy(root: Path, findings: list[Finding]) -> bool:
+    """Whether ``close --check`` should return success for these findings.
+
+    Card readiness is an owner-gated scheduling concern, not delivery freshness.
+    Keep its warnings in the output, but do not let any readiness combination turn
+    the merge/close gate non-zero.  Other hygiene findings deliberately retain
+    their existing warn/fail behaviour.
+    """
+    readiness_messages = {
+        finding.message
+        for card in backlog.load_cards(root)
+        for finding in backlog.readiness_findings(card)
+    }
+    return not any(
+        finding.level in ("warn", "fail") and finding.message not in readiness_messages
+        for finding in findings
+    )
+
+
 def _canonical_continuity_paths(root: Path) -> tuple[str, ...]:
     if frontmatter.has_prd(root):
         return (".horus/PRD.md",)
