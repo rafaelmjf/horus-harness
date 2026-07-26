@@ -7,7 +7,7 @@
 > restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 13 -->
+<!-- horus-block-version: 14 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -107,6 +107,10 @@ Working discipline (every session, whether or not the work is delegated):
 - **Put safety in the code, not the reviewer.** Guards and invariants prevent the
   dangerous class of bug; review — human or model — misses things, so it is a help, not
   a guarantee.
+- **Fix a process error in the process, never only in agent memory** — a private memory
+  is invisible to other agents, accounts, and machines, so the correction must land in a
+  skill, managed block, PRD rule, or card. Concretely: render and confirm a format or
+  contract change before merging it, rather than remembering to.
 - **Ground token-intensive actions before spending.** Before an action that fans out
   many subagents or otherwise burns a large amount of tokens (multi-agent workflows,
   broad research sweeps, whole-repo re-reads, adversarial verification passes), first
