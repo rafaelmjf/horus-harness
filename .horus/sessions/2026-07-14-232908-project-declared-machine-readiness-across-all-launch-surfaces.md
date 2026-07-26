@@ -728,3 +728,32 @@ as a fourth consumer, without introducing a second parser or probe path.
   used-orientation. The question was asked from memory; now it is checkable.
   Suite 2251.
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `ad3d06c` fix(codex): usage readers were blind to isolated account homes (#419)
+  `latest_account_usage` and `latest_usage` both fell back to `codex_home()` --
+  $CODEX_HOME or ~/.codex -- when no home was passed. Three callers do exactly
+  that: closure.py:570, cli.py:3415 (`usage check`) and dashboard.py:237.
+  Under Horus account isolation that home never sees a real session. Every
+  isolated run writes its rollouts into the ACCOUNT's own CODEX_HOME, so the
+  ambient home only accumulates non-isolated runs and goes permanently stale --
+  these readers could not report current Codex usage at all, by construction.
+  Measured on this machine:
+      ~/.codex/sessions                          newest rollout 2026-07-19
+      ~/.horus/accounts/codex-personal/sessions  newest rollout 2026-07-26
+  which is exactly why `usage check` said "weekly limit snapshot stale (reset
+  2026-07-25)" while `usage all` -- which resolves the per-account home -- read
+  6% correctly. That is the "two readers disagree" half of
+  codex-usage-stale-snapshot-gates-dispatch, and the disagreement was never about
+  rollout selection within a home: they were reading DIFFERENT HOMES.
+  With no explicit home, both readers now scan every known home (configured
+  account homes first, then ambient, de-duplicated) and let the newest observation
+  win. An explicit home stays authoritative, so `usage all` is unchanged.
+  Applies to the project-context read too, deliberately: it had the same defect
+  for the same reason, which is why `usage check` also reported a week-old 20.0%
+  context where the true figure is 74.2%.
+  Known limitation, documented in the helper: with several configured accounts a
+  homeless read can mix them. The per-account view is `horus usage all`, which
+  always passes an explicit home.
+  All three surfaces now agree: weekly 6% used, resets 2026-08-02 12:56.
+  Suite 2256.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369

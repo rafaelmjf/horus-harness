@@ -138,3 +138,29 @@ reader is wrong beyond mere staleness.
   Retiring the other card loses a deliberate boundary (display correctness vs gate
   correctness) that its own text defended; the owner judged that one owner for all
   wrong-reading defects is worth more, since the same readings feed both surfaces.
+
+- 2026-07-26 (third entry) — **Five of six acceptance items now met; one remains.**
+
+  Met: (a) preflight and `usage check` report the same percentage and orientation from
+  one shared source — the two readers were never picking different *rollouts*, they were
+  reading different **homes** (`closure.py:570`, `cli.py:3415`, `dashboard.py:237` all
+  fall back to the ambient `~/.codex`, which under account isolation no real session ever
+  writes to, so they were permanently stale by construction; PR #419 makes a homeless
+  read scan every known home). (b) One reading, one window label everywhere — the datum
+  path classified lanes positionally and recorded weekly percentages as `pct_5h`
+  (PR #417). (c) Never invent a window duration — `windows()` classifies by declared
+  length with a neutral fallback. (d) Tests cover primary-only, dual-window and
+  changed-horizon payloads (#417). (e) Orientation regression tests (#418), which also
+  established from ground truth that Codex reports `used_percent`, i.e. USED like Claude.
+
+  **NOT met — the staleness guard.** There is still no age/horizon check on the preflight
+  refusal. `without_expired_windows` only blanks a percent whose recorded reset has
+  already *passed*, which does not catch the case that started all of this: a reading 27
+  hours old whose reset is still in the future. An idle account therefore continues to
+  produce a confident stale figure that can hard-gate a launch.
+
+  Well-defined remaining leg, and it needs no invented horizon: each lane declares
+  `window_minutes` and `resets_at`, so the current window's start is
+  `resets_at - window_minutes*60`. A reading whose own timestamp predates that start
+  describes a **previous** window — it must degrade the refusal to a warning and surface
+  "stale as of <ts>" rather than gate on it.
