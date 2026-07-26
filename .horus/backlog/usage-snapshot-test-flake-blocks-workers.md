@@ -1,8 +1,9 @@
 ---
 status: open
 priority: high
-readiness: shaping
-readiness_reason: "The symptom is captured with a worker log and two direct observations on unmodified main, but the mechanism is NOT identified and did not reproduce on demand — two hypotheses were checked and refuted. Needs a real repro before a fix can be scoped."
+readiness: ready
+autonomy: eligible
+readiness_reason: "RESOLVED 2026-07-26: mechanism reproduced on demand and the fix verified. `claude_usage.credentials_path()` resolves CLAUDE_CONFIG_DIR ahead of HOME, so the faked HOME never isolated the credential lookup — the test made a LIVE authenticated call and got a real reading. The conftest fixture from #406 fixes it; this card carries only the precondition-assertion hardening."
 created: 2026-07-26
 created_by: claude
 vision_facet: "Continuity core"
@@ -43,7 +44,7 @@ The test asserts that with no reachable credentials the usage snapshot reads
 green. The failure only exists where a real logged-in account is reachable —
 local sessions and dispatched workers, i.e. exactly where it does damage.
 
-## Mechanism — NOT identified. Two hypotheses checked and refuted
+## Mechanism — IDENTIFIED and reproduced, 2026-07-26 (this section preserved as filed; see Reviews for the correction)
 
 Recording these so the next session does not re-walk them:
 
@@ -101,3 +102,57 @@ recreated on demand.
 
 Supervisor observation while landing two dispatched cards, 2026-07-26. Worker log:
 `~/.horus/logs/runs/1da08b24-98d8-437b-bd96-eab2972b4444.log`.
+
+## Reviews
+
+- 2026-07-26 — **Reproduced on demand; mechanism identified; already fixed by #406.**
+  The card was filed saying the mechanism was unknown and that hypothesis 2 had been
+  *refuted*. **That refutation was wrong**, and hypothesis 2 was right.
+
+  The chain: `datums.capture_usage_snapshot` → `usage_snapshot.cached_usage` → (cache
+  miss under the fake HOME) → `_read_live` → `claude_usage.latest_usage(cred_path=None)`
+  → `fetch_usage` → `_oauth_token(None)` → **`credentials_path()`**, which returns
+  `CLAUDE_CONFIG_DIR / ".credentials.json"` when that variable is set and only falls back
+  to `Path.home()/.claude/...` when it is not. Under Horus account isolation it is always
+  set, so the faked HOME isolated the *cache* but never the *credentials*. The test then
+  made a live authenticated call to the usage endpoint, got a real payload, and rendered
+  `fresh`.
+
+  Proof, run with network available:
+
+  ```
+  credentials_path(): /home/rafa/.horus/accounts/claude-personal/.credentials.json exists: True
+  _oauth_token()    : <token>   (0.00s)
+  fetch_usage()     : PAYLOAD   (0.86s)
+  ```
+
+  and the A/B on the fixture, same machine, minutes apart:
+
+  ```
+  WITH    tests/conftest.py -> 1 passed
+  WITHOUT tests/conftest.py -> FAILED ... assert 'fresh' == 'unavailable'
+  ```
+
+  **Why the original A/B refuted it wrongly:** the test passes when the live call FAILS
+  and fails when it SUCCEEDS. The first A/B ran during a window when the call was failing
+  (transient — plausibly rate-limiting after the dispatch batch hammered usage reads), so
+  a passing test was misread as evidence against the hypothesis. The lesson is specific:
+  *a green test is not evidence that a network-dependent hypothesis is false.* Verify the
+  precondition directly (does `fetch_usage` return a payload right now?) rather than
+  inferring it from an outcome that depends on the same network.
+
+  **This also corrects #406**, which was committed and PR'd as "hardening, NOT a verified
+  fix" and told readers not to close this card on it. It *was* the fix. The remaining work
+  in this card is only the hardening below.
+
+  Not flaky in a random sense, for the record: it is deterministic given (env var set) AND
+  (network + auth working). It is green on CI forever because CI has no credentials — which
+  is exactly why it could survive to bite a dispatched worker.
+
+## Hardening shipped with this card
+
+The test now asserts its **precondition** before its outcome — that credentials really are
+unreachable — so a future regression fails at that line naming `CLAUDE_CONFIG_DIR` and
+`tests/conftest.py::isolate_ambient_agent_env`, instead of resurfacing as an unexplained
+`assert 'fresh' == 'unavailable'`. Verified by removing the fixture and observing the new
+diagnostic fire.
