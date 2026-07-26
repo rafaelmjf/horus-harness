@@ -93,3 +93,29 @@ runnable once its two `depends-on` gaps land.
   arming: `audit-advisory-interval`, `backlog-default-list`. `codex-identity-guard` was
   explicitly **excluded** (safety-critical, ships on its own merits). Satisfied
   `depends-on` (both landed v0.0.68) removed from frontmatter.
+- 2026-07-26 — **Sibling exercise in `fabric-build`, and the question this drill should
+  actually answer.**
+
+  *Cross-reference (not a completion tag).* `fabric-build/.horus/backlog/lower-model-e2e-drill.md`
+  is an active sibling: point a lower-capability model at the repo and have it build a
+  workspace end to end. It is **Ready/attended and mid-arc, not finished** — runs 1–2
+  surfaced **seven real defects, all fixed and merged** (its PRs #15–#22, suite 82 → 107),
+  the test workspace has been reset to its 8-item baseline, and that project's
+  `next_action` is "Rerun `lower-model-e2e-drill` run 3". Nothing was ever tagged here;
+  this Review is the first link between the two. **Evidence worth borrowing: a drill of
+  this shape pays for itself in defects found.** Note it exercises a different axis
+  (can a weaker model follow the route?) than this card (does the unattended
+  dispatch→supervise→merge loop hold?).
+
+  *What this drill should test, from the 2026-07-26 retrospective.* An unattended loop
+  that day **would have shipped `codex-identity-guard` (#404) as done**: required CI was
+  green on the exact SHA, freshness passed, and the worker's report was honest and
+  accurate — yet the fix was incomplete, because `pty_host.py` held a second copy of the
+  same guard that the card's `surface:` list never named. Every gate this loop possesses
+  would have said yes. What caught it was a supervisor probing a *different* surface
+  before a release, which is not a reproducible gate.
+
+  So the drill's real readiness question is: **can the loop detect work that passes every
+  gate but is incomplete?** If it cannot, the honest posture stays verify-and-escalate
+  (already the default) rather than granting `--allow-merge`. Worth arming one leg
+  specifically as a *known* partial fix and seeing whether supervision catches it.
