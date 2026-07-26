@@ -804,3 +804,23 @@ as a fourth consumer, without introducing a second parser or probe path.
   Suite 2258.
   From the 2026-07-26 process retrospective, recommendation R2.
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `7d1b96e` Bump version to 0.0.76 (#422)
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+- `d694a4d` fix(deploy): wait for the service to bind before judging the deploy (#423)
+  `deploy-hosted.sh` restarted the unit, slept 2 seconds, then probed /health and /
+  exactly once. That races systemd. Observed on the 0.0.76 deploy: /health came
+  back unreachable, / returned 000, the script printed an "it may be ungated"
+  warning and exited 1 -- while the service was in fact healthy moments later
+  (active, --exposed, /health version 0.0.76, / -> 403).
+  A false failure here is not cosmetic. This script is the mandatory last step of
+  every release and is intended to become the last step of an AUTOMATED one
+  (CLAUDE.md: the webhook/self-hosted-runner is the eventual hard guarantee); a
+  verdict that flaps would fail good deploys and train people to ignore it.
+  Now polls /health for up to ~30s and proceeds as soon as it answers. The
+  subsequent assertions are unchanged -- / must still be 403, and the running
+  version must still match the target -- so a genuinely broken deploy fails
+  exactly as before.
+  Verified by re-running the real deploy: the same restart that produced the false
+  failure now reports "done; running version 0.0.76 matches target".
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
