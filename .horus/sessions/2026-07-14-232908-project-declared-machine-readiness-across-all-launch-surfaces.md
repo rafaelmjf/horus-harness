@@ -649,3 +649,30 @@ as a fourth consumer, without introducing a second parser or probe path.
   truncation), no broken links (8 apparent dangles resolve to .horus/research/
   docs), no lingering terminal states, no unclassified cards.
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `86a37fc` backlog: apply librarian L1-L3 and retire three dead branches
+  L1 tui-backlog-refine-and-order [high]: Gated -> Ready/attended. Its
+     depends-on (backlog-readiness-disposition) resolved to an archived card with
+     status: shipped, while the card's own reason named that as the ONLY
+     precondition ("then this becomes Ready-Attended"). A high-priority card had
+     been blocked on already-delivered work.
+  L2 explore-converge-lifecycle: removed the satisfied depends-on
+     (roadmap-convergence, shipped). Readiness deliberately UNCHANGED -- its real
+     gate (a per-card usage signal) is different and still unmet.
+  L3 codex-isolated-config-leak: the Related note still described remedy 1's
+     consequence for plugin parity, but remedy 3 was chosen 2026-07-26. Rewritten
+     for the chosen remedy (a fresh `codex login` dir carries no plugin block
+     either, so parity remains a companion -- for a different reason).
+  PRD counts corrected: Ready-Attended 1->2, Gated 7->6.
+  Deleted three provably dead remote branches:
+    fix/codex-usage-stale-cache     -- its fix (494f897) is already in main;
+                                       only a stale continuity commit remained
+    design/process-tree-orphan-reap -- card archived in main as status: retired,
+                                       with MORE content than the branch
+    feat/pwa-installable            -- PWA already landed by another route
+                                       (dashboard manifest/SW + assets/icon-512)
+  Kept: spike/horus-wiki-readmodel (563 lines, no card -- librarian L5).
+  Left alone: PR #117 feat/structure-staleness-migration; it is arguably moot (all
+  10 registered projects are already v3) but that is an open PR with real code,
+  so closing it is the owner's call, not a branch cleanup.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
