@@ -1,12 +1,12 @@
 ---
 status: open
 priority: medium
-readiness: ready
-autonomy: attended
-readiness_reason: "Fully specified by a live run (2026-07-20): the flow was executed by hand end-to-end, the working code path already exists in the dashboard, and the two consumers are named. Nothing left to shape."
+readiness: deferred
+readiness_reason: "DEFERRED until 2026-07-28 by owner instruction (2026-07-26): implementing and verifying this requires performing a real interactive agent login, which is not available before then. The card itself is fully specified and needs no further shaping — it was Ready/attended and returns straight to that state on 2026-07-28, no re-refinement needed."
+reactivate_after: 2026-07-28
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-26
 vision_facet: "Accounts & isolation"
 tier: medium
 type: feature
@@ -113,3 +113,17 @@ not. `write_statusline_pointer` must stay the single writer.
 ## Source
 
 Live friction report + hand-executed setup run, owner-attended, 2026-07-20.
+
+## Reviews
+
+- 2026-07-26 — **Deferred until 2026-07-28, capacity not scope.** Owner instruction: cards
+  requiring an active interactive login are held until after 2026-07-28. Nothing about the
+  card changed — it remains fully specified from the 2026-07-20 hand-executed run, with the
+  working code path already in the dashboard and both consumers named. On 2026-07-28 it
+  returns to **Ready / attended** directly, with no re-refinement pass needed.
+
+  Worth knowing when it does return: it is now the **unblocker** for
+  `codex-isolated-config-leak`, which the owner resolved the same day to remedy 3
+  (re-login instead of copying config.toml). That card is Gated on this one, so this
+  deferral moves both. Attended is inherent here, not conservatism — an interactive login
+  cannot be dispatched to a worker.

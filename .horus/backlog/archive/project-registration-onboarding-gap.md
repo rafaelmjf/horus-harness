@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 readiness: ready
 autonomy: eligible
@@ -13,6 +13,8 @@ parallel: safe
 phase: converge
 vision_facet: "Dashboard / cockpit"
 surface: "horus/terminal_tui.py, horus/routines.py (infer/resume signals), horus/initialize.py, tests/test_terminal_tui.py, tests/test_init.py"
+shipped_pr: 412
+shipped_sha: dee776d
 ---
 
 # project-registration-onboarding-gap — cloned Horus project stays invisible and mobile hides registration

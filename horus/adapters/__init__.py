@@ -42,8 +42,27 @@ __all__ = [
     "IdentityCheck",
     "PermissionPosture",
     "SpawnSpec",
+    "account_dirs",
     "get_adapter",
 ]
+
+
+def account_dirs(adapter: AgentAdapter) -> dict[str, str]:
+    """The adapter's alias -> isolated-config-dir map, whatever it calls it.
+
+    Claude exposes ``config_dirs`` (``CLAUDE_CONFIG_DIR``), Codex exposes
+    ``codex_homes`` (``CODEX_HOME``). Every launch path gates its identity check on
+    "is this alias mapped to an isolated dir", so it must ask through here rather
+    than reaching for one adapter's attribute name: `getattr(adapter,
+    "config_dirs", {})` silently returns ``{}`` for Codex, which skips the guard
+    entirely instead of failing loudly. That was the `codex-identity-guard` defect,
+    and fixing it in one launch path (#404, `launch.py`) left the PTY-hosted path
+    still skipping it — hence one shared accessor.
+    """
+    dirs = getattr(adapter, "config_dirs", None)
+    if dirs is None:
+        dirs = getattr(adapter, "codex_homes", None)
+    return dirs or {}
 
 
 def get_adapter(name: str) -> AgentAdapter:
