@@ -599,3 +599,53 @@ as a fourth consumer, without introducing a second parser or probe path.
   Deferred from pre-release on purpose: it touches a guard's error path, and the
   release was better off without it. Suite 2249.
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `3a71f33` test: assert the precondition that made the usage-snapshot flake invisible (#416)
+  Reproduced the flake on demand and identified the mechanism, which the card had
+  recorded as unknown with this hypothesis REFUTED. The refutation was wrong.
+  claude_usage.credentials_path() resolves CLAUDE_CONFIG_DIR ahead of HOME, so
+  faking HOME isolated the usage CACHE but never the CREDENTIALS. The test read
+  the real logged-in account, made a live authenticated call to the usage
+  endpoint, and got `fresh` back:
+      credentials_path(): .../claude-personal/.credentials.json exists: True
+      _oauth_token()    : <token>   (0.00s)
+      fetch_usage()     : PAYLOAD   (0.86s)
+  A/B on the #406 fixture, same machine, minutes apart:
+      WITH    tests/conftest.py -> 1 passed
+      WITHOUT tests/conftest.py -> FAILED ... assert 'fresh' == 'unavailable'
+  So #406 WAS the fix, despite being committed as "hardening, NOT a verified
+  fix". The original A/B misled because this test passes when the live call FAILS
+  and fails when it SUCCEEDS -- it ran during a window where the call was failing,
+  and a green test was misread as refuting the hypothesis.
+  This commit adds only the hardening: assert the PRECONDITION (credentials are
+  genuinely unreachable) before asserting the outcome, so a regression fails at
+  that line naming CLAUDE_CONFIG_DIR and the conftest fixture, instead of
+  resurfacing as an unexplained `assert 'fresh' == 'unavailable'`. Verified by
+  removing the fixture and watching the new diagnostic fire.
+  Green on CI forever because CI has no credentials -- which is precisely how it
+  survived to cost a dispatched worker its delivery.
+  Suite 2249.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+- `1e187de` backlog: librarian receipt + hygiene (satisfied deps, stale count)
+  Ships the usage-snapshot-test-flake card (PR #416) that was left uncommitted,
+  corrects the PRD Shaping count 38->37, and records the v0.0.75-era flake
+  resolution in Shipped.
+  Adds .horus/audits/2026-07-26-backlog-librarian.md — one advisory receipt over
+  70 active / 121 archived cards. Five actionable findings, none applied (the
+  librarian is advisory by contract):
+    L1 tui-backlog-refine-and-order [high] is Gated on backlog-readiness-
+       disposition, which is archived as status: shipped. Its own reason says the
+       gate would make it Ready-Attended, so a high-priority card has been blocked
+       on delivered work.
+    L2 explore-converge-lifecycle carries a satisfied depends-on (roadmap-
+       convergence, shipped) but its real gate is different -- remove the field,
+       keep deferred.
+    L3 codex-isolated-config-leak's Related note still attributes plugin-parity
+       companionship to remedy 1, but remedy 3 was chosen 2026-07-26.
+    L4 PRD Shaping count (fixed in this commit).
+    L5 horus-wiki-readmodel: 563 lines on origin/spike/horus-wiki-readmodel with
+       no card at all.
+  Clean: no stale cards (>56d), no duplicates (13 pairs compared, cap 25, no
+  truncation), no broken links (8 apparent dangles resolve to .horus/research/
+  docs), no lingering terminal states, no unclassified cards.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
