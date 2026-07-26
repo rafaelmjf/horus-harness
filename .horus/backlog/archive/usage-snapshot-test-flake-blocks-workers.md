@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: ready
 autonomy: eligible
@@ -12,6 +12,8 @@ type: bug
 parallel: safe
 phase: converge
 surface: "tests/test_datums.py:869 (test_capture_usage_snapshot_unavailable_on_failed_read), horus/datums.py:369 (_claude_usage_entry), horus/usage_snapshot.py:386 (cached_usage) / :148 (_read_claude), tests/conftest.py"
+shipped_pr: 416
+shipped_sha: 3a71f33
 ---
 
 # usage-snapshot-test-flake-blocks-workers — a green-on-CI test fails locally and kills dispatched deliveries
