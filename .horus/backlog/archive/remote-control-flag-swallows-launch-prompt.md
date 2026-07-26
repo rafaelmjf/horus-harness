@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: ready
 autonomy: eligible
@@ -12,6 +12,8 @@ type: bug
 parallel: safe
 phase: converge
 surface: "horus/adapters/claude.py:169-176 (interactive_command), tests/test_claude_adapter.py:172"
+shipped_pr: 403
+shipped_sha: 90e3fb1
 ---
 
 # remote-control-flag-swallows-launch-prompt — `--remote-control` eats the seeded prompt, so no interactive launch is seeded and Remote Control does not come up

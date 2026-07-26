@@ -313,3 +313,100 @@ as a fourth consumer, without introducing a second parser or probe path.
   readiness filter, Direction read-out) + Claude Remote Control on launch.
   PRs #386-#389.
 - `2d7c4be` feat: add autonomous backlog librarian skill (#392)
+
+- `7120b92` backlog: capture intent-preserving goal campaign (#393)
+- `3895591` backlog: record native goal campaign probe (#394)
+- `5ec6197` backlog: mint three wildcard candidate cards (2026-07-24) (#395)
+  Three grounded candidate cards from three wildcard runs, each under a
+  tighter owner-set frame; all Shaping, no code shipped.
+  - managed-instruction-drift-lint: advisory lint of the Horus-managed
+    instruction block against the live CLI surface (07-20 audit's
+    self-detection gap).
+  - dispatch-collision-guard: guards the selection moment — two concurrent
+    agents both building the same card — upstream of the merge-moment
+    problem concurrency-safe-continuity covers.
+  - prd-readiness-count-check: auto-reconcile the PRD readiness-breakdown
+    counts against the existing backlog.readiness_counts(); shaped for
+    autonomous execution.
+  PRD: Shaping 36 -> 39; frontmatter handoff refreshed.
+  Claude-Session: https://claude.ai/code/session_01QAZHkJZsVbULEDmSaoJLid
+- `2c28d3b` feat: three autonomous continuity checks (readiness counts, TUI labels, unclassified reason) (#396)
+  Implements the three owner-approved autonomous cards in one pass; all
+  deterministic, code-only, verified by unit tests + the full suite.
+  - prd_readiness_count_findings: reconcile PRD.md "Readiness breakdown"
+    counts against backlog.readiness_counts(); wired into hygiene_findings
+    so a stale hand-edited count surfaces at consolidate/close instead of
+    relying on the owner noticing. (card: prd-readiness-count-check)
+  - readiness_count_summary: single-source the cockpit readiness labels
+    from READINESS_QUEUE_LABELS; removes the hardcoded literals in
+    terminal_tui.py that could drift on a canonical rename.
+    (card: tui-queue-label-single-source)
+  - backlog list: surface autonomy_block_reason for Unclassified cards so a
+    card that declared `readiness: ready` but silently degraded says why.
+    The core logic (readiness_findings) already existed and is surfaced by
+    consolidate/close; only the list surfacing was net-new.
+    (card: declared-vs-effective-readiness-advisory)
+  Full suite 2229 + 2 new tests; close --check green (the new count check
+  confirms Shaping 39). Ship/closure follows this PR's merge.
+  Claude-Session: https://claude.ai/code/session_01QAZHkJZsVbULEDmSaoJLid
+- `c11f0db` chore: ship three autonomous continuity checks (closure) (#397)
+  * chore: ship three autonomous continuity checks; close out
+  Continuity closure for PR #396 (merge 2c28d3b):
+  - archive prd-readiness-count-check as shipped (pr #396)
+  - Shipped line for the three-check trio
+  - Readiness breakdown Shaping 39 -> 38; frontmatter handoff refreshed
+  The new prd_readiness_count_findings check validates this very closure
+  (Shaping 38 reconciles with the archived-card count).
+  Claude-Session: https://claude.ai/code/session_01QAZHkJZsVbULEDmSaoJLid
+  * ci: retrigger checks
+  Claude-Session: https://claude.ai/code/session_01QAZHkJZsVbULEDmSaoJLid
+  ---------
+- `52eb4c5` backlog: capture execution skill planning false trigger (#398)
+- `e3152e6` docs: file project registration onboarding bug
+- `d1fa399` Merge pull request #399 from rafaelmjf/docs/project-registration-onboarding-gap
+  File cloned-project registration and mobile TUI onboarding gap
+- `172a0c9` docs: card the --remote-control seeded-prompt regression (#386) (#400)
+  `--remote-control [name]` takes an optional value, so Commander eats the
+  next non-`-` token as the RC session name. `interactive_command` appends
+  the bare flag and then the positional prompt, so every seeded interactive
+  Claude launch since #386 has had its prompt swallowed: no handoff
+  delivered, and RC not active at spawn (the multi-line name is rejected).
+  Root-caused live from this machine's session argv, reproduced with a
+  one-line `-p` probe, and both candidate fixes verified against the live
+  binary. Filed ready/autonomy-eligible with the `--` separator remedy and
+  the combined-case regression test the suite is missing.
+  Claude-Session: https://claude.ai/code/session_01Wydt7hUHBsZZt35NSsn8gj
+- `c41225d` docs: card the Vision contract's missing intent and audiences (#401)
+  Every place Horus specifies a Vision asks for the same triplet — what the
+  project is, its shape, its boundaries (templates.py:35/:264,
+  skills.py:516/:1127). All three describe the destination. None asks why the
+  project exists, what it deliberately inherited, or who each surface serves.
+  Field failure 2026-07-25 in fabric-build: an Opus 5 session with a fine
+  resume prompt and a fresh PRD recommended retiring ~193 inherited files that
+  are a deliberate offering and the preset path's fixture, identified an
+  interactive human command as the agent contract, and proposed fab
+  passthrough verbs. Owner corrections were the only thing that caught it.
+  The owner located the defect: sessions in the parent metadata repo never get
+  this wrong, because there the product is the framework and deploy/ is
+  tooling, so surface audience never needs stating. In the fork the product IS
+  the command surface, so it does — and the files travelled while the audience
+  model did not. horus-infer makes it systematic: it distils inherited docs,
+  which describe the parent's product.
+  Filed ready/eligible with the exact replacement text. Evidence that these
+  are the right two elements: the failed session's own deliverable converged
+  on all of them.
+  Claude-Session: https://claude.ai/code/session_01Wydt7hUHBsZZt35NSsn8gj
+- `90e3fb1` fix(claude): end option parsing before the seeded prompt (#403)
+  `claude --remote-control [name]` takes an optional value, so Commander
+  consumed the positional initial prompt as the Remote Control session name.
+  Every seeded interactive launch since #386 (v0.0.74) — resume handoffs, card
+  scopes, dispatch briefs — started unseeded, and Remote Control did not come
+  up, both silently.
+  Emit `--` before the prompt so it is unambiguously positional. This guards
+  any future optional-value flag, keeps Claude's own derived session name, and
+  additionally protects prompts beginning with `-`.
+  The existing tests asserted `--remote-control` in argv and, separately, that
+  the prompt was present; neither exercised the combination. Add the combined
+  case asserting adjacency.
+  Codex is unaffected — no optional-value flag precedes its prompt.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
