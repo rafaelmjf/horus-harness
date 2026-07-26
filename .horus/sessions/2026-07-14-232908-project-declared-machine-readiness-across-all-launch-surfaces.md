@@ -757,3 +757,50 @@ as a fourth consumer, without introducing a second parser or probe path.
   All three surfaces now agree: weekly 6% used, resets 2026-08-02 12:56.
   Suite 2256.
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `d158bf4` feat(closure): surface unmerged remote branches (#420)
+  Fetch-first guidance already exists and is not sufficient on its own. On
+  2026-07-26 a session fetched, then still opened a duplicate PR (#402) for a card
+  that had already merged as #401, and separately re-diagnosed a defect from
+  scratch because its card sat on PR #391, open since 07-23.
+  Both share one cause: `gh pr list` shows only OPEN PRs and nothing inspects
+  branches, so work living on an unmerged ref is invisible to every check a
+  session actually runs. Five such branches existed that day, carrying real cards
+  and 563 lines of code.
+  Guidance was the cheap rung and it was already in place, so this promotes one
+  rung to a deterministic signal: `close --check` / the boundary gate now name
+  unmerged remote branches, oldest first, and add an explicit "invisible to `gh pr
+  list`" advisory once the oldest passes UNMERGED_BRANCH_STALE_DAYS (3).
+  Rendered at `info`, exactly like parallel deliveries: a supervisor legitimately
+  closes with branches in flight, so it must be visible without ever flipping a
+  fresh verdict to stale.
+  Best-effort throughout -- an unusable git, a missing origin/HEAD, or unparseable
+  dates all resolve to silence rather than a false alarm. The default branch and
+  HEAD are excluded.
+  Verified live in both directions: silent at zero unmerged branches, and naming
+  the branch once one exists. Suite 2262.
+  From the 2026-07-26 process retrospective, recommendation R1.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+- `eb26b63` docs(backlog-refine): a card's `surface` is a hint, not a boundary (#421)
+  Twice on 2026-07-26 an implementer scoped itself faithfully to a card's
+  `surface:` list and correctly left everything else alone:
+    codex-identity-guard (#404) named horus/launch.py, so pty_host.py's second
+    copy of the same guard went untouched -- it shipped as a HALF-FIX, and the
+    gap was found only by probing a different surface before a release.
+    project-registration-onboarding-gap omitted horus/skills.py and
+    horus/templates.py, the two files carrying the guidance text its own control 1
+    required.
+  Neither was worker error. Both workers did exactly as briefed and CI was green
+  on the exact SHA. The defect is that `surface` reads as a boundary while being
+  hand-written and unverified.
+  backlog-refine v5 now states that it is a HINT, requires the implementer to
+  report any file touched beyond it and why, and records WHY this stays guidance:
+  a hand-written list cannot be mechanically verified as complete, and a check
+  demanding it would only teach people to pad the field.
+  The cheap control is already proven -- the project-registration worker was
+  briefed with exactly that reporting line and duly surfaced four files the card
+  never named, which is how the supervisor knew where to look.
+  Projections regenerated for both agents; the existing version pin moved 4 -> 5.
+  Suite 2258.
+  From the 2026-07-26 process retrospective, recommendation R2.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
