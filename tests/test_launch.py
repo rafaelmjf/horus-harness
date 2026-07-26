@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import json
+
 from horus import config, launch, launcher, registry
 from horus.registry import Registry
 
@@ -112,3 +114,22 @@ def test_launch_interactive_reports_terminal_failure(tmp_path, monkeypatch):
     result = launch.launch_interactive(agent="fake", project_dir=tmp_path)
     assert not result.ok and "no console" in result.error
     assert Registry.default().all() == []
+
+
+def test_prepare_interactive_refuses_mismatched_codex_account_before_spawning(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    codex_home = tmp_path / "personal-codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps({"tokens": {"account_id": "acct-work"}}), encoding="utf-8"
+    )
+    config.set_account_codex_home("personal", str(codex_home))
+    config.set_account_alias("acct-work", "work")
+
+    prepared, error = launch.prepare_interactive(
+        agent="codex", project_dir=tmp_path, account="personal"
+    )
+
+    assert prepared is None
+    assert error is not None
+    assert "personal" in error and "work" in error
