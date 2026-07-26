@@ -99,12 +99,16 @@ def prepare_interactive(
     # Never enter an attended session under a mapped alias whose login differs — EXCEPT
     # a proxied launch, whose auth is the proxy's subscription token, not the account's
     # own login (so the account's login is irrelevant; this is "works regardless of account").
-    if account and not proxied and getattr(adapter, "config_dirs", {}).get(account) and hasattr(adapter, "verify_account"):
+    account_dirs = getattr(adapter, "config_dirs", None)
+    if account_dirs is None:
+        account_dirs = getattr(adapter, "codex_homes", {})
+    if account and not proxied and account_dirs.get(account) and hasattr(adapter, "verify_account"):
         check = adapter.verify_account(account)
         if not check.ok:
             return None, (
                 f"account {account!r} login mismatch "
-                f"(found {check.detected_email or 'no login'})."
+                f"(found {check.detected_email or 'no login'}, "
+                f"alias {config.alias_for(check.detected_email)!r})."
             )
 
     sid = session_id or str(uuid.uuid4())

@@ -37,14 +37,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from horus import config
+from horus import codex_usage, config
 from horus.adapters.base import (
+    AgentRun,
     AgentAdapter,
     AgentEvent,
     EventType,
     PermissionPosture,
     SpawnSpec,
 )
+from horus.adapters.claude import AccountMismatch, IdentityCheck
 
 # Normalized posture → codex exec sandbox/bypass flags (spawn only).
 # ``exec resume`` does not accept ``--sandbox``; FULL_AUTO maps to the bypass flag
@@ -147,6 +149,47 @@ class CodexAdapter(AgentAdapter):
         if spec.prompt:
             argv.append(spec.prompt)
         return argv
+
+    # --- multi-account identity ----------------------------------------------
+
+    def verify_account(self, account: str | None) -> IdentityCheck:
+        """Confirm the CODEX_HOME for ``account`` is logged in as that account.
+
+        Codex's ``auth.json`` identifies a ChatGPT login by ``tokens.account_id``.
+        As with Claude, the first login into an account's mapped isolated home adopts
+        that identity; an identity already mapped to a different alias refuses.
+        """
+        home = self.codex_homes.get(account) if account else None
+        account_id = codex_usage.current_account(Path(home) if home else None)
+        if account is None:
+            ok = account_id is not None
+        elif account_id is None:
+            ok = False
+        else:
+            aliased = config.load_account_aliases().get(account_id)
+            if aliased is None and home:
+                config.set_account_alias(account_id, account)
+                aliased = account
+            ok = aliased == account
+        return IdentityCheck(
+            account=account,
+            config_dir=str(home) if home else None,
+            detected_email=account_id,
+            ok=ok,
+        )
+
+    def _launch(self, spec: SpawnSpec, *, resume_id: str | None) -> AgentRun:
+        # Guard only when explicit per-account isolation is configured (a mapped home).
+        # Ambient single-account runs are unaffected.
+        if spec.account and spec.account in self.codex_homes:
+            check = self.verify_account(spec.account)
+            if not check.ok:
+                raise AccountMismatch(
+                    f"account {spec.account!r} maps to CODEX_HOME {check.config_dir!r}, but its "
+                    f"account_id is {check.detected_email or 'absent'} "
+                    f"(alias {config.alias_for(check.detected_email)!r}) — refusing to spawn"
+                )
+        return super()._launch(spec, resume_id=resume_id)
 
     def parse_event(self, line: str) -> list[AgentEvent]:
         line = line.strip()

@@ -10,13 +10,28 @@ from pathlib import Path
 import pytest
 
 from horus import config
-from horus.adapters import CodexAdapter, EventType, PermissionPosture, SpawnSpec, get_adapter
+from horus.adapters import AccountMismatch, CodexAdapter, EventType, PermissionPosture, SpawnSpec, get_adapter
 
 
 def _spec(**kw) -> SpawnSpec:
     base = {"prompt": "do the thing", "project_dir": Path("/proj")}
     base.update(kw)
     return SpawnSpec(**base)
+
+
+def _home(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+
+def _codex_home_with_account_id(tmp_path, name, account_id):
+    """A fake CODEX_HOME containing an auth.json logged in as ``account_id``."""
+    home = tmp_path / name
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "auth.json").write_text(
+        json.dumps({"tokens": {"account_id": account_id}}), encoding="utf-8"
+    )
+    return home
 
 
 # --- build_command -----------------------------------------------------------
@@ -262,3 +277,29 @@ def test_codex_homes_default_from_config(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     config.set_account_codex_home("work", "/home/work/.codex")
     assert CodexAdapter().codex_homes == {"work": "/home/work/.codex"}
+
+
+# --- multi-account identity -------------------------------------------------
+
+def test_verify_account_adopts_first_login_in_own_home(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    home = _codex_home_with_account_id(tmp_path, "work-home", "acct-work")
+    adapter = CodexAdapter(codex_homes={"work": str(home)})
+
+    check = adapter.verify_account("work")
+
+    assert check.ok is True
+    assert check.detected_email == "acct-work"
+    assert config.load_account_aliases()["acct-work"] == "work"
+
+
+def test_spawn_guard_refuses_account_id_aliased_to_different_account(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    home = _codex_home_with_account_id(tmp_path, "personal-home", "acct-work")
+    config.set_account_alias("acct-work", "work")
+    adapter = CodexAdapter(codex_homes={"personal": str(home)})
+
+    # The guard runs before any subprocess and names both conflicting aliases.
+    with pytest.raises(AccountMismatch, match="personal") as exc_info:
+        adapter.spawn(_spec(account="personal"))
+    assert "work" in str(exc_info.value)
