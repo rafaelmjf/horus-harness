@@ -904,16 +904,50 @@ def test_capture_usage_snapshot_claude_fresh_at_read_time(monkeypatch):
     }
 
 
+def _codex_report(
+    *,
+    primary_percent: float | None = 10.0,
+    primary_resets_at: int | None = 4102444800,
+    primary_window_minutes: int | None = 300,
+    secondary_percent: float | None = None,
+    secondary_resets_at: int | None = None,
+    secondary_window_minutes: int | None = None,
+    context_percent: float = 5.0,
+    timestamp: str = "2026-07-14T01:00:00+00:00",
+):
+    """A REAL ``codex_usage.UsageReport``, not a hand-rolled stub.
+
+    The previous doubles declared only the positional fields, so they could not
+    exercise ``windows()`` — which is exactly how the datum path drifted into
+    reading slots positionally and recording a weekly percentage as ``pct_5h``.
+    Defaults describe a declared 5-hour primary lane; pass
+    ``primary_window_minutes=10080`` to model the weekly-only shape Codex reports
+    now that the 5-hour limit is lifted.
+    """
+    from pathlib import Path as _Path
+
+    from horus import codex_usage
+
+    return codex_usage.UsageReport(
+        rollout=_Path("/tmp/rollout.jsonl"),
+        timestamp=timestamp,
+        context_tokens=1000,
+        context_window=100000,
+        context_percent=context_percent,
+        primary_percent=primary_percent,
+        primary_resets_at=primary_resets_at,
+        secondary_percent=secondary_percent,
+        secondary_resets_at=secondary_resets_at,
+        primary_window_minutes=primary_window_minutes,
+        secondary_window_minutes=secondary_window_minutes,
+    )
+
+
 def test_capture_usage_snapshot_codex_stale_when_reset_past(monkeypatch):
     from horus import codex_usage
 
-    class _Report:
-        primary_percent = 90.0
-        primary_resets_at = 1  # epoch second 1 -- always in the past
-        context_percent = 47.0
-        timestamp = "2026-07-13T00:00:00Z"
-
-    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: _Report())
+    report = _codex_report(primary_percent=90.0, primary_resets_at=1, context_percent=47.0)
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: report)
     snap = datums.capture_usage_snapshot("claude", None)  # codex read under default account
     assert snap["codex"]["freshness"] == "stale"
     assert snap["codex"]["pct_5h"] == 90.0
@@ -923,13 +957,8 @@ def test_capture_usage_snapshot_codex_stale_when_reset_past(monkeypatch):
 def test_capture_usage_snapshot_codex_stale_when_cache_predates_run(monkeypatch):
     from horus import codex_usage
 
-    class _Report:
-        primary_percent = 10.0
-        primary_resets_at = 4102444800  # far future -- reset not expired
-        context_percent = 5.0
-        timestamp = "2026-07-13T00:00:00+00:00"  # before the run's own launch
-
-    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: _Report())
+    report = _codex_report(primary_resets_at=4102444800, timestamp="2026-07-13T00:00:00+00:00")
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: report)
     snap = datums.capture_usage_snapshot(None, None, since="2026-07-14T00:00:00+00:00")
     assert snap["codex"]["freshness"] == "stale"  # cached codex read predates this run's launch
 
@@ -937,13 +966,8 @@ def test_capture_usage_snapshot_codex_stale_when_cache_predates_run(monkeypatch)
 def test_capture_usage_snapshot_codex_fresh_when_recent_and_unexpired(monkeypatch):
     from horus import codex_usage
 
-    class _Report:
-        primary_percent = 10.0
-        primary_resets_at = 4102444800
-        context_percent = 5.0
-        timestamp = "2026-07-14T01:00:00+00:00"  # after the run's own launch
-
-    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: _Report())
+    report = _codex_report(primary_resets_at=4102444800, timestamp="2026-07-14T01:00:00+00:00")
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: report)
     snap = datums.capture_usage_snapshot(None, None, since="2026-07-14T00:00:00+00:00")
     assert snap["codex"]["freshness"] == "fresh"
 
@@ -1414,3 +1438,58 @@ def test_capabilities_models_cli_renders_cost_glance(tmp_path, monkeypatch, caps
     assert rc == 0
     out = capsys.readouterr().out
     assert "Cost:" in out and "dividend +1/~0/-0" in out
+
+
+def test_codex_weekly_only_reading_is_not_recorded_as_a_5h_lane(monkeypatch):
+    # Since Codex lifted the 5-hour limit it reports ONE window, a weekly one, in the
+    # PRIMARY slot (owner, 2026-07-26: likely the new normal rather than temporary).
+    # Reading that slot positionally recorded a weekly percentage as `pct_5h`.
+    # Observed live: `horus usage all` correctly rendered `5h — · weekly 82%` while the
+    # datum for the same account and moment recorded `pct_5h=82`. Datums feed
+    # `horus capabilities --models` and the delegation rubric, so the mislabel silently
+    # corrupts calibration.
+    from horus import codex_usage
+
+    report = _codex_report(
+        primary_percent=82.0,
+        primary_resets_at=4102444800,
+        primary_window_minutes=10080,   # a WEEK, declared, sitting in the primary slot
+        secondary_percent=None,
+    )
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: report)
+
+    codex = datums.capture_usage_snapshot("claude", None)["codex"]
+    assert codex["pct_weekly"] == 82.0, "a declared weekly lane must be recorded as weekly"
+    assert "pct_5h" not in codex, "a weekly reading must never be recorded as a 5h lane"
+    assert codex["freshness"] == "fresh"
+
+
+def test_codex_lane_labels_follow_declared_length_not_slot_order(monkeypatch):
+    # The inverse: a fast lane arriving in the SECONDARY slot is still the 5h lane.
+    from horus import codex_usage
+
+    report = _codex_report(
+        primary_percent=70.0, primary_resets_at=4102444800, primary_window_minutes=10080,
+        secondary_percent=12.0, secondary_resets_at=4102444800, secondary_window_minutes=300,
+    )
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: report)
+
+    codex = datums.capture_usage_snapshot("claude", None)["codex"]
+    assert codex["pct_5h"] == 12.0      # declared 300 min -> fast lane
+    assert codex["pct_weekly"] == 70.0  # declared 10080 min -> slow lane
+
+
+def test_codex_staleness_follows_the_lane_whose_reset_passed(monkeypatch):
+    # Staleness was judged on the primary SLOT, so a weekly reading sitting there was
+    # assessed as if it were the fast lane. Any lane past its own reset is stale.
+    from horus import codex_usage
+
+    report = _codex_report(
+        primary_percent=82.0, primary_resets_at=1, primary_window_minutes=10080,
+        secondary_percent=None,
+    )
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: report)
+
+    codex = datums.capture_usage_snapshot("claude", None)["codex"]
+    assert codex["freshness"] == "stale"
+    assert codex["pct_weekly"] == 82.0
