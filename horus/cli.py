@@ -2574,14 +2574,15 @@ def cmd_backlog(args: argparse.Namespace) -> int:
     if root is None:
         return 2
 
+    if getattr(args, "tree", False):
+        tree = backlog_tree.build_tree(root)
+        if getattr(args, "json", False):
+            print(backlog_tree.render_json(tree), end="")
+        else:
+            print(backlog_tree.render_text(tree), end="")
+        return 0
+
     if args.backlog_cmd is None:
-        if getattr(args, "tree", False):
-            tree = backlog_tree.build_tree(root)
-            if getattr(args, "json", False):
-                print(backlog_tree.render_json(tree), end="")
-            else:
-                print(backlog_tree.render_text(tree), end="")
-            return 0
         print("error: pass a backlog subcommand (list|migrate|claim|ship|review) or --tree")
         return 2
 
@@ -5228,7 +5229,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_execution_handoff.set_defaults(func=cmd_execution)
 
     p_backlog = sub.add_parser(
-        "backlog", help="work with .horus/backlog/ cards (parallel-safety metadata + claim check)"
+        "backlog",
+        help="work with .horus/backlog/ cards (default: list; parallel-safety metadata + claim check)",
+        description="work with .horus/backlog/ cards (default: list)",
     )
     p_backlog.add_argument("--path", default=".", help="project root (default: cwd); only used with --tree")
     p_backlog.add_argument(
@@ -5237,8 +5240,8 @@ def build_parser() -> argparse.ArgumentParser:
         "then by `vision_facet` for unbranched cards",
     )
     p_backlog.add_argument("--json", action="store_true", help="with --tree, emit the projection as JSON")
-    p_backlog.set_defaults(func=cmd_backlog, backlog_cmd=None)
     backlog_sub = p_backlog.add_subparsers(dest="backlog_cmd", required=False)
+    p_backlog.set_defaults(func=cmd_backlog, backlog_cmd="list", type="")
     p_backlog_list = backlog_sub.add_parser(
         "list", help="list backlog cards with status/priority/tier/type/parallel/surface"
     )

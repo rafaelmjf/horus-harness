@@ -2458,6 +2458,23 @@ def test_backlog_list_shows_parallel_safety_metadata(tmp_path, monkeypatch, caps
     assert "surface: unverified" in out
 
 
+def test_backlog_defaults_to_list_and_help_states_default(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "card-a", status="open", priority="later")
+    capsys.readouterr()
+
+    assert main(["backlog", "--path", str(tmp_path)]) == 0
+    bare_out = capsys.readouterr().out
+    assert main(["backlog", "list", "--path", str(tmp_path)]) == 0
+    assert capsys.readouterr().out == bare_out
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["backlog", "--help"])
+    assert exc_info.value.code == 0
+    assert "default: list" in capsys.readouterr().out
+
+
 def test_backlog_list_reports_all_six_readiness_queues(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes", "--no-skills"])

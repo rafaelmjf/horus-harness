@@ -381,11 +381,11 @@ def test_cmd_backlog_tree_json(tmp_path, capsys):
     assert data["branches"][0]["branch"] == "umbrella-a"
 
 
-def test_cmd_backlog_no_subcommand_and_no_tree_errors(tmp_path, capsys):
+def test_cmd_backlog_no_subcommand_defaults_to_list(tmp_path, capsys):
     rc = main(["backlog", "--path", str(tmp_path)])
 
-    assert rc == 2
-    assert "error:" in capsys.readouterr().out
+    assert rc == 0
+    assert "No cards in .horus/backlog/." in capsys.readouterr().out
 
 
 def test_cmd_backlog_list_still_works_unaffected(tmp_path, capsys):
