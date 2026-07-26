@@ -485,7 +485,7 @@ description: >-
   Runs `horus infer` first to find canonical docs and empty/placeholder sections.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -514,7 +514,15 @@ With no useful source truth and no concrete user request, leave the scaffold bla
    - Frontmatter: `status`, `current_focus`, `next_action`, `next_prompt`,
      `execution_recommendation`, `last_updated`.
    - `## Vision` — what the project is, its shape, and explicit out-of-scope
-     boundaries.
+     boundaries:
+     - **Why this exists.** The originating problem, who it was built for, and — if
+       the project was forked, split, or pivoted — what it inherited **on purpose**
+       and what that inheritance is for. A reader must be able to tell deliberate
+       inheritance from legacy without asking.
+     - **Surfaces and audiences.** Once a project has more than one entry point,
+       name each and say who it serves (human operator, agent, CI, consumer). When
+       the product *is* an interface, this is load-bearing: an unlabelled surface
+       will be mistaken for the contract.
    - `## Backlog` — retain the thin pointer. Create one
      `.horus/backlog/<slug>.md` card per evidenced open item, with
      `status`/`priority`/`type` frontmatter; do not create a starter card.
@@ -542,6 +550,8 @@ With no useful source truth and no concrete user request, leave the scaffold bla
   planned), **ask the user** rather than guess. Never invent decisions, dates,
   or versions — `## Rules` in particular: only record an invariant the docs
   actually state; leave it thin rather than manufacturing one.
+- When a project is a fork, split, or pivot, ask the owner for "why this exists"
+  rather than distilling it from inherited docs.
 - Edit scope is `.horus/PRD.md`, plus — with care and consent — a one-line
   pointer atop a superseded source doc.
 
@@ -2793,7 +2803,7 @@ notify, and the owner-gated-at-every-step boundary are identical.
 SKILLS: tuple[Skill, ...] = (
     Skill("horus-consolidate", 15, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
-    Skill("horus-infer", 4, _INFER_SKILL),
+    Skill("horus-infer", 5, _INFER_SKILL),
     Skill("horus-execution", 14, _EXECUTION_SKILL),
     Skill("delegation-rubric", 9, _DELEGATION_RUBRIC_SKILL),
     Skill("execution-decision", 5, _EXECUTION_DECISION_SKILL),

@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 12
+BLOCK_VERSION = 13
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -32,7 +32,15 @@ and why, what shipped, dead ends, the next step.
 
 Before substantial work, read `.horus/PRD.md` — the one maintained continuity file:
 
-- Vision — what this project is, its shape, its boundaries.
+- Vision — what this project is, its shape, its boundaries:
+  - **Why this exists.** The originating problem, who it was built for, and — if the
+    project was forked, split, or pivoted — what it inherited **on purpose** and what
+    that inheritance is for. A reader must be able to tell deliberate inheritance
+    from legacy without asking.
+  - **Surfaces and audiences.** Once a project has more than one entry point, name
+    each and say who it serves (human operator, agent, CI, consumer). When the
+    product *is* an interface, this is load-bearing: an unlabelled surface will be
+    mistaken for the contract.
 - Backlog — prioritized open work (the *what's next*), features and bugs together.
 - Shipped — one line per capability; details live in git history.
 - Rules — concise current rules, grouped by topic (not a log).
@@ -265,6 +273,16 @@ merge freshness gate — see `resolve_focus`).
 
 What this project is, its shape, and its boundaries. A paragraph or two, plus an
 explicit **out of scope** list once the project has one.
+
+**Why this exists.** The originating problem, who it was built for, and — if the
+project was forked, split, or pivoted — what it inherited **on purpose** and what
+that inheritance is for. A reader must be able to tell deliberate inheritance from
+legacy without asking.
+
+**Surfaces and audiences.** Once a project has more than one entry point, name each
+and say who it serves (human operator, agent, CI, consumer). When the product *is*
+an interface, this is load-bearing: an unlabelled surface will be mistaken for the
+contract.
 
 ## Backlog
 
@@ -1124,7 +1142,15 @@ do not manufacture work merely to fill placeholders.
    roadmap -> CLAUDE.md/AGENTS.md -> linked docs). Build a model before writing.
 2. Distill durable state into .horus/PRD.md:
    - frontmatter: current focus, next action/prompt, execution recommendation, date;
-   - Vision: shape and explicit boundaries;
+   - Vision: shape and explicit boundaries:
+     - **Why this exists.** The originating problem, who it was built for, and — if
+       the project was forked, split, or pivoted — what it inherited **on purpose**
+       and what that inheritance is for. A reader must be able to tell deliberate
+       inheritance from legacy without asking.
+     - **Surfaces and audiences.** Once a project has more than one entry point,
+       name each and say who it serves (human operator, agent, CI, consumer). When
+       the product *is* an interface, this is load-bearing: an unlabelled surface
+       will be mistaken for the contract.
    - Backlog: keep the pointer in PRD.md and create one .horus/backlog/<slug>.md card
      per evidenced open item, with status/priority/type frontmatter;
    - Shipped: one line per evidenced capability;
@@ -1135,6 +1161,8 @@ do not manufacture work merely to fill placeholders.
    its current-state role; ask before substantially rewriting source docs.
 6. When intent is unclear, ask rather than guess. Never invent decisions, dates,
    priorities, versions, or shipped state.
+   When a project is a fork, split, or pivot, ask the owner for "why this exists"
+   rather than distilling it from inherited docs.
 
 Edit scope: .horus/PRD.md and .horus/backlog/** (plus, with care and consent, a
 one-line pointer atop a genuinely superseded source doc).
