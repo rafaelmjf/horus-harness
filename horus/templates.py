@@ -1144,7 +1144,11 @@ do not manufacture work merely to fill placeholders.
 
 1. Read the canonical docs found above and follow their pointers (README -> status/
    roadmap -> CLAUDE.md/AGENTS.md -> linked docs). Build a model before writing.
-2. Distill durable state into .horus/PRD.md:
+2. **Registration is separate from continuity.** A cloned `.horus/` directory is
+   repo-local continuity, not machine-local fleet registration. If the signals say
+   the project is not visible in the Horus fleet/TUI, run the named `horus init
+   <path>` remedy before treating onboarding as done.
+3. Distill durable state into .horus/PRD.md:
    - frontmatter: current focus, next action/prompt, execution recommendation, date;
    - Vision: shape and explicit boundaries:
      - **Why this exists.** The originating problem, who it was built for, and — if
@@ -1159,11 +1163,11 @@ do not manufacture work merely to fill placeholders.
      per evidenced open item, with status/priority/type frontmatter;
    - Shipped: one line per evidenced capability;
    - Rules: concise current invariants only.
-3. Do not create a starter card or infer an item solely because the backlog is empty.
-4. Point to canonical deep references instead of copying them wholesale.
-5. Add a one-line superseded pointer to a source doc only when PRD.md truly replaces
+4. Do not create a starter card or infer an item solely because the backlog is empty.
+5. Point to canonical deep references instead of copying them wholesale.
+6. Add a one-line superseded pointer to a source doc only when PRD.md truly replaces
    its current-state role; ask before substantially rewriting source docs.
-6. When intent is unclear, ask rather than guess. Never invent decisions, dates,
+7. When intent is unclear, ask rather than guess. Never invent decisions, dates,
    priorities, versions, or shipped state.
    When a project is a fork, split, or pivot, ask the owner for "why this exists"
    rather than distilling it from inherited docs.

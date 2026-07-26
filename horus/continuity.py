@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import NamedTuple
 
-from horus import frontmatter
+from horus import config, frontmatter
 
 HORUS_DIR = ".horus"
 # Required lanes: a project's continuity is broken without these.
@@ -62,7 +62,19 @@ def _check_sessions(project_root: Path) -> list[Finding]:
     return [Finding("ok", "no local recovery notes (optional)")]
 
 
-def check_project(project_root: Path) -> list[Finding]:
+def registration_findings(project_root: Path) -> list[Finding]:
+    """Report when repo-local continuity is absent from this machine's fleet."""
+    project_key = project_root.resolve().as_posix()
+    if project_key in config.load_projects():
+        return []
+    return [Finding(
+        "warn",
+        "project is not registered on this machine — not visible in Horus fleet/TUI "
+        f"— run `horus init {project_key}`",
+    )]
+
+
+def check_project(project_root: Path, *, include_registration: bool = False) -> list[Finding]:
     """Inspect a project's `.horus/` continuity and return findings."""
     findings: list[Finding] = []
     hdir = horus_dir(project_root)
@@ -86,6 +98,8 @@ def check_project(project_root: Path) -> list[Finding]:
             findings.append(Finding("warn", f"{HORUS_DIR}/{frontmatter.PRD_FILE} is empty"))
         findings.extend(_check_focus(project_root, frontmatter.PRD_FILE))
         findings.extend(_check_sessions(project_root))
+        if include_registration:
+            findings.extend(registration_findings(project_root))
         return findings
 
     for name in COMMITTED_FILES:
@@ -125,5 +139,7 @@ def check_project(project_root: Path) -> list[Finding]:
             )
 
     findings.extend(_check_sessions(project_root))
+    if include_registration:
+        findings.extend(registration_findings(project_root))
 
     return findings

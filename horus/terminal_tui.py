@@ -2218,6 +2218,14 @@ class TerminalUI:
             return [("class:status", f" {self.status}")]
         return [("class:status", "")]
 
+    def _projects_enter_action(self) -> str:
+        """Name the selected Projects row's action, including remote state."""
+        if self.items:
+            kind, value = self.items[self.selected]
+            if kind == "remote_project" and isinstance(value, github_catalog.RemoteProject):
+                return "Enter register" if value.is_local else "Enter clone + register"
+        return "Enter open"
+
     def _footer_text(self) -> StyleAndTextTuples:
         narrow = self.application.output.get_size().columns < 64
         if self.screen == "card":
@@ -2317,7 +2325,15 @@ class TerminalUI:
                 else " ↑↓/swipe review   Enter start curator   u refresh   Esc back   q quit"
             )
             return [("class:footer", text)]
-        if self.screen in {"projects", "accounts"}:
+        if self.screen == "projects":
+            enter_action = self._projects_enter_action()
+            text = (
+                f" ↑↓ · {enter_action} · f fleet · u refresh · m mission · t settings · q"
+                if narrow
+                else f" ↑↓/swipe · {enter_action} · f fleet · u refresh · Esc · s sessions · d defaults · m mission · t settings · q quit"
+            )
+            return [("class:footer", text)]
+        if self.screen == "accounts":
             text = (
                 " ↑↓ · f fleet · u refresh · m mission · t settings · q"
                 if narrow

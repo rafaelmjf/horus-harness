@@ -20,6 +20,7 @@ from horus.continuity import (
     TEMP_DIR,
     Finding,
     horus_dir,
+    registration_findings,
     recent_sessions,
 )
 
@@ -187,6 +188,9 @@ def resume_prompt(root: Path) -> str:
         return ""
     info = resume_context(root)
     readiness_warning = machine_requirements.warning_text(machine_requirements.inspect(root))
+    registration_warning = "\n".join(
+        finding.message for finding in registration_findings(root)
+    )
     project = info["project"]
     current_focus = info["current_focus"] or "(not set)"
     next_action = info["next_action"] or "(not set)"
@@ -235,7 +239,8 @@ Minimum Horus state already loaded:
 Authored handoff:
 {continuation}
 """
-    return f"{readiness_warning}\n\n{prompt}" if readiness_warning else prompt
+    warnings = "\n\n".join(warning for warning in (readiness_warning, registration_warning) if warning)
+    return f"{warnings}\n\n{prompt}" if warnings else prompt
 
 
 def campaign_prompt(*, outcome: str, cockpit: str, targets: list[str]) -> str:
@@ -834,6 +839,8 @@ def infer_signals(root: Path) -> list[Finding]:
     hdir = horus_dir(root)
     if not hdir.is_dir():
         findings.append(Finding("warn", "no .horus/ yet — run `horus init`, then infer populates it"))
+    else:
+        findings.extend(registration_findings(root))
 
     docs = discover_canonical_docs(root)
     is_v3 = hdir.is_dir() and frontmatter.has_prd(root)

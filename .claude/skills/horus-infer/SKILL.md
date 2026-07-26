@@ -12,7 +12,7 @@ description: >-
   Runs `horus infer` first to find canonical docs and empty/placeholder sections.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -32,6 +32,10 @@ With no useful source truth and no concrete user request, leave the scaffold bla
 1. **Get the signals.** Run `horus infer` (optionally `--path <repo>`). It lists
    the canonical docs to distill from and which `PRD.md` skeleton sections
    (Vision / Backlog / Shipped / Rules) are missing or still placeholder text.
+   **Registration is separate from continuity.** A cloned `.horus/` directory is
+   repo-local continuity, not machine-local fleet registration. If the signals say
+   the project is not visible in the Horus fleet/TUI, run the named `horus init
+   <path>` remedy before treating onboarding as done.
 
 2. **Read the canonical docs and follow their pointers** — README → status/roadmap →
    CLAUDE.md/AGENTS.md → linked docs like `docs/*.md`. Build a real model of the

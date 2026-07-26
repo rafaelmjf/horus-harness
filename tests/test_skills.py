@@ -491,7 +491,7 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
 
 def test_infer_skill_v3_reports_prd_skeleton_gaps():
     infer = next(s for s in skills.SKILLS if s.name == "horus-infer")
-    assert infer.version == 5
+    assert infer.version == 6
     assert "Vision" in infer.content and "Backlog" in infer.content
     assert "Shipped" in infer.content and "Rules" in infer.content
     assert "PRD.md" in infer.content
