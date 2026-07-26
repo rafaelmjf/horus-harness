@@ -498,3 +498,74 @@ as a fourth consumer, without introducing a second parser or probe path.
 - `ed0dcd5` fix: default backlog command to list (#408)
 
 - `1fa00b3` fix: make close-check readiness warnings advisory (#409)
+
+- `7b6334d` fix(instructions): put process corrections in the process, not agent memory (#410)
+  Owner rule (2026-07-20): a mistake that is an error in the PROCESS must be
+  fixed in the process -- skills, managed blocks, PRD rules, cards -- never only
+  in an agent's private memory, because memories are not shared across agents,
+  accounts, or machines.
+  The observed instance was itself that failure: after auto-merging a format
+  contract change without a rendered confirmation, the corrective
+  "render-confirm before merging" discipline was written into the Claude agent's
+  memory, invisible to Codex and to every other account and machine.
+  Adds one bullet to the managed block's working discipline, so it reaches every
+  project, both agents, and all machines on upgrade. Capped at one bullet on
+  purpose -- this text loads in every session -- and a test asserts that cap
+  alongside the wording. BLOCK_VERSION 13->14 so upgrade-project refreshes
+  downstream projects; this repo's own CLAUDE.md/AGENTS.md regenerated through
+  `horus upgrade-project --apply`.
+  Also records the card's memory sweep: the questionnaire format and the receipt
+  spines were verified to already live in horus/skills.py, so the render-confirm
+  discipline was the only 2026-07-20 correction that was memory-only.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+- `130eb11` rules: card what you won't do now; fix what you will (#411)
+  Owner-raised: carding small tasks that could just be solved adds bureaucracy
+  with no durability benefit. A card's only job is to carry work across a context
+  boundary, so if it gets fixed in this session the card is pure overhead -- the
+  commit and PR are already the record.
+  The test is not size, it is whether the work must survive the boundary. Found
+  something small and fixing it now would not derail the work in hand -> fix it,
+  in its own commit, and say so. Card it only when genuinely not doing it now:
+  needs an owner decision, blocked, would derail the task, or too large for the
+  session. The "own commit" clause is load-bearing -- without it "just fix it"
+  becomes a licence to smuggle unrelated changes into whatever PR is open.
+  Evidence from today: backlog-default-list was a ~10-line argparse fix that was
+  carded, waited six days, then consumed a refinement exchange, a dispatch, a
+  supervisor review cycle, a PR, a merge and a ship stamp.
+  Placed in PRD Rules rather than the managed block -- cheapest rung on the
+  instruction ladder, no BLOCK_VERSION bump, and no growth in text every session
+  loads (the block already gained a bullet today in #410, and
+  managed-instruction-drift-lint is open against it). Promote on evidence.
+  Also corrects the v0.0.73 Shipped entry in the same commit, because it is the
+  finding that motivated the rule rather than an unrelated change: it claimed the
+  mode-axis deletion preserved "delegation-trigger and inline-batch
+  card-vs-finding rules". Only the delegation-trigger rule survived; the
+  card-vs-finding rule is in neither PRD Rules, horus/skills.py, nor the
+  projected skills -- it lived in the deleted mode-skill text. The new rule now
+  covers that ground.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+- `dee776d` fix: surface unregistered Horus projects (#412)
+- `8ef48b3` fix(codex): the identity guard was still skipped on the PTY-hosted path (#413)
+  #404 fixed `codex-identity-guard` in launch.prepare_interactive, because the
+  card's `surface:` named only horus/launch.py:92. pty_host.py carries its own
+  copy of the same guard and was left reading `config_dirs` directly:
+      if account and getattr(adapter, "config_dirs", {}).get(account) and ...
+  The Codex adapter has no `config_dirs` (it exposes `codex_homes`), so that
+  getattr returns {}, the lookup is None, and the guard SILENTLY DOES NOT RUN --
+  the exact defect the card exists to fix, still live on the dashboard-hosted
+  launch path. Measured: adapters.account_dirs(codex) is non-empty where
+  getattr(adapter,"config_dirs",{}) was empty, so "guard runs" goes False -> True.
+  Rather than copy launch.py's three-line resolution into a second place -- which
+  is the drift that caused this -- adds one shared accessor,
+  `adapters.account_dirs(adapter)`, and routes both paths through it. An adapter
+  that names its dir map something new now fails in one place instead of silently
+  skipping a guard in another. Also aligns pty_host's mismatch message with the
+  alias suffix #404 gave launch.py.
+  Tests lock both halves: the accessor across claude/codex/fake, and a source
+  assertion that pty_host no longer reaches for `config_dirs` directly.
+  Found while probing #404 pre-release: the four dispatched Codex workers this
+  session all used the headless path, so nothing had exercised the attended or
+  hosted guards. Direct probe confirmed launch.py's guard is correct
+  (verify_account('personal') -> ok=True, alias 'personal', no false refusal);
+  pty_host's was not reached at all.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
