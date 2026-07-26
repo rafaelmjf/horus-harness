@@ -1,6 +1,7 @@
 from unittest.mock import Mock
 
 import pytest
+from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import DummyOutput
 
@@ -295,6 +296,27 @@ def test_projects_screen_lists_remote_items_and_renders_distinct_states(tmp_path
     assert "Ship the thing" in rendered
     assert "1 remote repo hidden via `horus ignore`" in rendered
     assert "Remote catalog unavailable: rafaelmjf: last refresh failed: gh auth required" in rendered
+
+
+def test_projects_footer_names_selected_row_action_at_narrow_width(tmp_path, monkeypatch):
+    ui = _new_ui(tmp_path, monkeypatch)
+    registered = tmp_path / "registered"
+    (registered / ".horus").mkdir(parents=True)
+    monkeypatch.setattr(terminal_tui.config, "load_projects", lambda: [str(registered)])
+    ui.projects = [registered]
+    cloned = _remote_project("rafaelmjf/cloned", local_path=str(tmp_path / "cloned"))
+    remote = _remote_project("rafaelmjf/remote")
+    ui.remote_projects = [cloned, remote]
+    ui._refresh_items()
+    monkeypatch.setattr(ui.application.output, "get_size", lambda: Size(rows=40, columns=63))
+
+    for expected, index in (
+        ("Enter open", next(i for i, (kind, _value) in enumerate(ui.items) if kind == "project")),
+        ("Enter register", next(i for i, (_kind, value) in enumerate(ui.items) if value is cloned)),
+        ("Enter clone + register", next(i for i, (_kind, value) in enumerate(ui.items) if value is remote)),
+    ):
+        ui.selected = index
+        assert expected in _footer(ui)
 
 
 def test_activate_remote_project_exits_with_remote_start(tmp_path, monkeypatch):

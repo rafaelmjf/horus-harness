@@ -185,7 +185,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"doctor project: {root}")
         requirements = machine_requirements.inspect(root)
         findings = (
-            check_project(root)
+            check_project(root, include_registration=True)
             + machine_requirements.findings(requirements)
             + skills.skill_findings(root, targets=("claude", "codex"))
             + integration.continuity_pr_findings(root)

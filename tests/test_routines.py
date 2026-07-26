@@ -290,6 +290,19 @@ def test_infer_warns_without_horus(tmp_path):
     assert any("no .horus/" in f.message for f in routines.infer_signals(tmp_path))
 
 
+def test_infer_and_resume_surface_unregistered_project_remedy(tmp_path, monkeypatch):
+    from horus import config, initialize
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    initialize.init_project(tmp_path, assume_yes=True)
+    assert config.unregister_project(tmp_path)
+
+    expected = f"not visible in Horus fleet/TUI — run `horus init {tmp_path.resolve().as_posix()}`"
+    assert expected in " ".join(f.message for f in routines.infer_signals(tmp_path))
+    assert expected in routines.resume_prompt(tmp_path)
+
+
 def test_distill_history_explicit_source(tmp_path):
     hdir = tmp_path / ".horus"
     hdir.mkdir()

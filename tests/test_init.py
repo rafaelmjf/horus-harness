@@ -1,6 +1,7 @@
 """Tests for `horus init` scaffolding behavior (no-clobber, block injection)."""
 
-from horus import closure, initialize
+from horus import closure, config, initialize
+from horus.cli import main
 from horus.continuity import check_project
 from horus.instructions import extract_block
 
@@ -309,6 +310,23 @@ def test_doctor_passes_on_fresh_init(tmp_path, monkeypatch):
     assert not any(f.level == "fail" for f in findings)
     assert any(f.level == "ok" and "recovery notes (optional)" in f.message for f in findings)
     assert not any(f.level == "warn" and "session" in f.message for f in findings)
+
+
+def test_init_existing_project_registers_and_doctor_names_unregistered_remedy(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+
+    initialize.init_project(tmp_path, assume_yes=True)
+    assert config.unregister_project(tmp_path)
+    expected = f"not visible in Horus fleet/TUI — run `horus init {tmp_path.resolve().as_posix()}`"
+    assert expected in " ".join(
+        finding.message for finding in check_project(tmp_path, include_registration=True)
+    )
+    assert main(["doctor", "project", "--path", str(tmp_path)]) == 1
+
+    actions = initialize.init_project(tmp_path, assume_yes=True)
+    assert any(a.message == "registered project in ~/.horus/config.toml" for a in actions)
+    assert str(tmp_path.resolve()) in config.load_projects()
 
 
 def test_doctor_v3_prd_project_needs_no_lanes(tmp_path):
