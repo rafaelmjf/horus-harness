@@ -569,3 +569,6 @@ as a fourth consumer, without introducing a second parser or probe path.
   (verify_account('personal') -> ok=True, alias 'personal', no false refusal);
   pty_host's was not reached at all.
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `9a24a15` Bump version to 0.0.75 (#414)
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
