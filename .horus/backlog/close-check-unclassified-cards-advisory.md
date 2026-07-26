@@ -2,11 +2,11 @@
 status: open
 priority: medium
 readiness: ready
-autonomy: attended
-readiness_reason: "Demonstrated live (2026-07-20): a merge with fully-fresh continuity was blocked by `horus close --check` EXIT=1 whose only non-ok lines were Unclassified-card warnings. Fix is a scoped change to the check's exit-code logic, but the exact set of conditions that stay hard-blocking is an owner call (it changes gate semantics)."
+autonomy: eligible
+readiness_reason: "Demonstrated live (2026-07-20), and the owner call it was waiting on is now made (2026-07-26): the hard-block set is the five freshness conditions, and no card-readiness state ever blocks merge. Acceptance is fully deterministic, so it no longer needs owner presence during execution."
 created: 2026-07-20
 created_by: claude
-last_refined: 2026-07-20
+last_refined: 2026-07-26
 vision_facet: "Continuity core"
 tier: small
 type: bug
@@ -56,9 +56,12 @@ cards being *Unclassified*. The merge only completed via an owner-authorized byp
 - Reserve `close --check` non-zero (and the `gh pr merge` block) for genuine freshness
   failures: dashboard stale, continuity does not cover all product commits, dirty tree,
   unpushed commits, or an unaccounted parallel delivery.
-- Owner decision embedded here: confirm that list is the complete set of hard-block
-  conditions, and whether any card-state (e.g. a card marked `blocking`) should ever
-  hard-fail — default proposal is "no card-readiness state blocks merge".
+- **Owner decision, made 2026-07-26:** those five conditions — dashboard stale,
+  continuity does not cover all product commits, dirty tree, unpushed commits,
+  unaccounted parallel delivery — are the **complete** hard-block set, and **no
+  card-readiness state ever blocks merge**. A `blocking` card state was considered
+  and declined: it would reintroduce planning state into a delivery gate, which is
+  the defect this card exists to remove.
 
 ## Acceptance
 
@@ -72,3 +75,15 @@ cards being *Unclassified*. The merge only completed via an owner-authorized byp
 
 Observed by the claude-work session working in `pbi-ecosystem`, 2026-07-20, while merging
 the continuity-consolidation + kickstart-E2E PRs. Filed from that session's direct context.
+
+## Reviews
+
+- 2026-07-26 — Refined with the owner. The embedded gate-semantics decision is now
+  made (see "What to change"): the five freshness conditions are the complete
+  hard-block set; no card-readiness state blocks merge; a `blocking` card state was
+  considered and declined. With the decision closed the acceptance is fully
+  deterministic — unclassified + fresh exits 0, an uncovered delivery still exits 1 —
+  so autonomy moved **attended → eligible**. Note for sequencing: verify the
+  verdict/exit-code surface against `codex-usage-stale-snapshot-gates-dispatch` and
+  `project-registration-onboarding-gap` before running any of them in parallel;
+  `routines.py` may be shared.
