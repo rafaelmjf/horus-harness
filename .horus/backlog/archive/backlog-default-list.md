@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: low
 created: 2026-07-20
 created_by: agent
@@ -12,6 +12,8 @@ phase: converge
 type: bug
 vision_facet: "Continuity core"
 surface: "the `backlog` subparser in horus/cli.py (default action when no subcommand is given) + its help text, tests/test_cli.py"
+shipped_pr: 408
+shipped_sha: ed0dcd5
 ---
 
 # backlog-default-list — `horus backlog` should default to `list`

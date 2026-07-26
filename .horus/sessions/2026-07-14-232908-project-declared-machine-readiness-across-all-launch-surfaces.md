@@ -410,3 +410,89 @@ as a fourth consumer, without introducing a second parser or probe path.
   case asserting adjacency.
   Codex is unaffected — no optional-value flag precedes its prompt.
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `828b936` fix(codex): guard isolated account identity (#404)
+- `e90eee0` fix(vision): ask for intent and audiences, not just the destination (#405)
+  Every place Horus specified a Vision asked for the same triplet -- what the
+  project is, its shape, its boundaries. Three present-tense descriptions of the
+  destination. None asked why the project exists, what it deliberately inherited,
+  or who each surface serves.
+  Field failure 2026-07-25 in fabric-build: a session with a fresh PRD and a fine
+  resume prompt recommended retiring ~193 inherited files that are a deliberate
+  offering, mistook an interactive human command for the agent contract, and
+  proposed passthrough verbs. Sessions in the parent metadata repo never get this
+  wrong -- there the product is the framework, so surface audience never needs
+  stating, and the audience model did not travel at the split.
+  Adds "Why this exists" and "Surfaces and audiences" to the Vision contract in
+  all four places (managed block, PRD template, and both horus-infer routines),
+  and makes horus-infer ask the owner for intent on a fork/split/pivot rather
+  than distilling the parent's docs. BLOCK_VERSION 12->13 and horus-infer 4->5 so
+  upgrade-project refreshes downstream projects.
+  Per the card: no gate or lint, no review-provenance field, no new frontmatter
+  field.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+- `da0ddc2` test: isolate the ambient agent config dirs suite-wide (#406)
+  ~20 test helpers fake HOME to point Horus's config/cache tree at a tmp dir, but
+  CLAUDE_CONFIG_DIR and CODEX_HOME are resolved ahead of HOME when locating an
+  agent's config/credentials (config.py:787), and account isolation always sets
+  both. A faked HOME therefore left a real logged-in account dir reachable.
+  An autouse fixture in a new tests/conftest.py clears both for every test, so
+  "isolated fake HOME" means it. Suite-green: 2233 passed.
+  Hardening, NOT a verified fix. It was prompted by
+  test_capture_usage_snapshot_unavailable_on_failed_read returning 'fresh'
+  instead of 'unavailable' twice on unmodified main, which blocked a dispatched
+  worker's delivery -- but that symptom did not reproduce afterwards with or
+  without this fixture, and the mechanism is still unidentified. Filed as
+  usage-snapshot-test-flake-blocks-workers with the refuted hypotheses recorded;
+  do not close that card on this commit.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+- `c9f02af` bug(backlog): codex usage stale-snapshot gates dispatch (2 readers disagree) (#391)
+  * bug(backlog): file codex-usage-stale-snapshot-gates-dispatch
+  Owner-reported from an agentic-travel-guide dispatch: horus run preflight
+  refused a codex leg on a stale/wrong weekly-usage read (99% used) while
+  `horus usage check` said 21% and ground truth was ~0% used. Two readers
+  disagree over the same window; a best-effort snapshot is used as an
+  authoritative dispatch gate. Distinct from codex-usage-window-semantics
+  (labeling/display, deferred).
+  Claude-Session: https://claude.ai/code/session_01CJqw3FXA3F89VbsNYAE9XY
+  * backlog: add today's live evidence to codex-usage bug + follow-up research card
+  - codex-usage-stale-snapshot-gates-dispatch: ## Reviews entry with the 2026-07-23
+    tabi-triage-1 evidence — forced codex leg ran to completion + merged (PR #37,
+    4a6efa5) on an account the gate declared 99%-exhausted; usage check said 21%;
+    ChatGPT ~0% used. False refusal, two readers disagree.
+  - dispatch-workflow-comparative-study (type: research): follow-up comparing our
+    dispatch/continuity/backlog workflow to other existing agent-workflow systems.
+  Claude-Session: https://claude.ai/code/session_01CJqw3FXA3F89VbsNYAE9XY
+  * research: sharpen dispatch-workflow-comparative-study to the continuity-cost crux
+  Focus narrowed (owner): capability + use case are settled; the live question is
+  proportional continuity. Added a starting-point ## Findings from the tabi-triage-1
+  run — the ceremony-vs-leverage placement, and the diagnosis that continuity cost
+  scaled with concurrency (3 workers each rewrote shared PRD.md → 3-way conflicts)
+  while per-card files merged cleanly. Recorded 4 design directions to test
+  (append-only per-unit receipts; batch-boundary synthesis; supervisor-only
+  frontmatter; delivery-granularity workers) and pointed the continuity research
+  question at concrete prior-art patterns.
+  Claude-Session: https://claude.ai/code/session_01CJqw3FXA3F89VbsNYAE9XY
+  * backlog: land the stranded usage card + refine two bugs to Ready
+  The codex-usage-stale-snapshot-gates-dispatch card has sat on this unmerged
+  branch since 2026-07-23, so it was invisible to the local backlog. A session
+  today hit exactly that defect in horus-harness, re-diagnosed it from scratch,
+  and nearly filed a duplicate. Landing it, with today's evidence appended.
+  New evidence closes the staleness leg end-to-end: `usage all` reported weekly
+  82% from a rollout ~27h old while the owner had reset to ~100% available, both
+  `horus run` launches warned "closing window" on it, and the dispatched worker's
+  own readings went start=5h=82% -> end=5h=1% -- one real Codex turn collapsed the
+  stale figure. The two readers also disagreed again, differently: `usage all` gave
+  a confident 82% while `usage check` called the same account's window stale with a
+  DIFFERENT reset timestamp, so the paths select different rollouts.
+  Refinement pass (owner-attended), two bugs to Ready/eligible:
+  - backlog-default-list: confirmed `list` (not --tree) as the bare default,
+    matching how `sessions`/`status` answer bare. Added surface + acceptance.
+  - close-check-unclassified-cards-advisory: the embedded gate-semantics decision
+    is made -- five freshness conditions are the complete hard-block set, no
+    card-readiness state ever blocks merge, a `blocking` state declined. Acceptance
+    is now deterministic, so attended -> eligible.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+  ---------
+- `5a0a67f` fix(skills): make horus execution delegation-only (#407)
+- `ed0dcd5` fix: default backlog command to list (#408)

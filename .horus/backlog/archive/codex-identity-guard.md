@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: ready
 autonomy: eligible
@@ -13,6 +13,8 @@ type: bug
 parallel: safe
 phase: converge
 surface: "horus/adapters/codex.py (verify_account + _launch guard), horus/launch.py:92 (attribute-name mismatch)"
+shipped_pr: 404
+shipped_sha: 828b936
 ---
 
 # codex-identity-guard — Codex launches skip the account identity check entirely

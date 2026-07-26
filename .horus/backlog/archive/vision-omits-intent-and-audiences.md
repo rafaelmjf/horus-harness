@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: ready
 autonomy: eligible
@@ -12,6 +12,8 @@ type: bug
 parallel: safe
 phase: converge
 surface: "horus/templates.py:35 + :264 (managed block + PRD template Vision), horus/skills.py:516 + :1127 (horus-infer), tests/test_templates.py, tests/test_skills.py, projected .claude/.agents skill copies"
+shipped_pr: 405
+shipped_sha: e90eee0
 ---
 
 # vision-omits-intent-and-audiences — the Vision contract captures the destination, never the intent

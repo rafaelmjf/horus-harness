@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: ready
 autonomy: eligible
@@ -12,6 +12,8 @@ type: bug
 parallel: safe
 phase: converge
 surface: "horus/skills.py (_EXECUTION_SKILL), tests/test_skills.py, projected horus-execution skills"
+shipped_pr: 407
+shipped_sha: 5a0a67f
 ---
 
 # horus-execution-general-plan-false-trigger — ordinary planning enters the worker-supervision workflow
