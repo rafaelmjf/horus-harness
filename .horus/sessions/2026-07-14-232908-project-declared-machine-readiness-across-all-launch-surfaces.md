@@ -496,3 +496,5 @@ as a fourth consumer, without introducing a second parser or probe path.
   ---------
 - `5a0a67f` fix(skills): make horus execution delegation-only (#407)
 - `ed0dcd5` fix: default backlog command to list (#408)
+
+- `1fa00b3` fix: make close-check readiness warnings advisory (#409)

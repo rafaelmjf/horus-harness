@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 readiness: ready
 autonomy: eligible
@@ -13,6 +13,8 @@ type: bug
 parallel: safe
 phase: converge
 surface: "`horus close --check` verdict/exit-code logic (the pre-merge freshness gate that the `gh pr merge` interceptor keys on) — the Unclassified-card finding should be advisory, not exit-failing."
+shipped_pr: 409
+shipped_sha: 1fa00b3
 ---
 
 # close --check hard-blocks merge on Unclassified cards (should be advisory)
