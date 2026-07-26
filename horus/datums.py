@@ -404,15 +404,31 @@ def _codex_usage_entry(account: str | None, *, since: str | None) -> dict:
     if report is None:
         return {"freshness": "unavailable", "read_at": read_at}
     entry: dict = {"read_at": read_at, "pct_context": report.context_percent}
-    if report.primary_percent is not None:
-        entry["pct_5h"] = report.primary_percent
-        entry["resets_5h"] = getattr(report, "primary_resets_at", None)
-    secondary_percent = getattr(report, "secondary_percent", None)
-    if secondary_percent is not None:
-        entry["pct_weekly"] = secondary_percent
-        entry["resets_weekly"] = getattr(report, "secondary_resets_at", None)
+    # Classify each lane by the length Codex DECLARED for it, never by the slot it
+    # arrived in — `report.windows()` is the same accessor `usage_snapshot` and
+    # `usage check` already use. Reading the slots positionally recorded a WEEKLY
+    # percentage as `pct_5h` whenever Codex reported only a weekly window, which is
+    # its behaviour since the 5-hour limit was lifted (owner, 2026-07-26: likely the
+    # new normal, not a temporary state). Observed 2026-07-26: `usage all` correctly
+    # rendered `5h — · weekly 82%` while the datum for the same account and moment
+    # recorded `pct_5h=82`. Datums feed `horus capabilities --models` and the
+    # delegation rubric, so a mislabelled lane silently corrupts calibration.
+    fast, slow = report.windows()
+    if fast is not None and fast.percent is not None:
+        entry["pct_5h"] = fast.percent
+        entry["resets_5h"] = fast.resets_at
+    if slow is not None and slow.percent is not None:
+        entry["pct_weekly"] = slow.percent
+        entry["resets_weekly"] = slow.resets_at
     now = time.time()
-    reset_expired = report.primary_resets_at is not None and report.primary_resets_at <= now
+    # Staleness follows the same rule: a lane whose own reset has passed no longer
+    # describes current capacity. Judging this on the primary SLOT meant a weekly
+    # reading sitting in the primary slot was assessed as if it were the fast lane.
+    reset_expired = any(
+        window.resets_at is not None and window.resets_at <= now
+        for window in (fast, slow)
+        if window is not None
+    )
     predates_run = False
     if since:
         report_epoch = codex_usage._timestamp_key(report.timestamp)
