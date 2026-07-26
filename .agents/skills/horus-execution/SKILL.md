@@ -1,31 +1,47 @@
 ---
 name: horus-execution
 description: >-
-  Supervise an optional Horus phased execution plan from `.horus/execution.md`.
-  Use this when the project's `execution_recommendation` (in `PRD.md` on a v3
-  project, `roadmap.md` on a v2 project) says `plan-execution`, when the user
-  asks to split a feature into phases, spawn implementation workers/subagents,
-  prepare worker handoff notes, or review worker output before continuing to
-  the next phase. It keeps `.horus/execution.md` fluid, uses `.horus/temp/` for
-  fleeting worker notes, and distills durable outcomes back into `PRD.md` (v3)
-  or roadmap/features/decisions/history (v2) at closure.
+  Supervise a Horus execution plan for work actually delegated/dispatched to one
+  or more other agent sessions. Use this when the project's
+  `execution_recommendation` (in `PRD.md` on a v3 project, `roadmap.md` on a v2
+  project) says `plan-execution` for that worker/supervisor plan, when the user
+  requests workers/subagents, dispatch, handoff, model separation, or
+  supervision, or when resuming an active delegated plan or reviewing an
+  existing worker handoff. It keeps `.horus/execution.md` fluid, uses
+  `.horus/temp/` for fleeting worker notes, and distills durable outcomes back
+  into `PRD.md` (v3) or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 14 -->
+<!-- horus-skill-version: 15 -->
 
 # Horus execution supervision
 
-This skill is for the supervisor agent. It coordinates a bounded implementation
-plan without turning `.horus/` into a transcript or a second issue tracker.
+This skill is for the supervisor agent. It coordinates work actually delegated
+or dispatched to other agent sessions without turning `.horus/` into a
+transcript or a second issue tracker.
+
+## Invocation boundary
+
+Requests for a plan, phased implementation, sequencing, estimation, or “are
+you ready to start?” do **not** invoke this skill unless they also request
+another agent/worker/subagent, dispatch, handoff, model separation, or
+supervision. Those requests remain ordinary inline planning and do not create
+`.horus/execution.md`.
+
+`execution_recommendation: plan-execution` denotes a worker/supervisor execution
+plan whose work is actually delegated or dispatched to other agent sessions. It
+does not denote an ordinary multi-step task; ordinary phased work remains direct
+and needs no `.horus/execution.md`.
 
 ## When to use it
 
-- `roadmap.md` has `execution_recommendation: "plan-execution - ..."` or similar.
-- The user asks to divide a substantial feature into phases.
+- `PRD.md` or `roadmap.md` has `execution_recommendation: "plan-execution - ..."`
+  for an active delegated worker/supervisor plan.
 - The user is explicitly testing or requesting supervisor/worker model separation.
-- A phase should be delegated to a native worker/subagent and reviewed before the
-  next phase starts.
-- A worker returned a note under `.horus/temp/` that needs supervisor review.
+- The user requests another agent/worker/subagent, dispatch, handoff, or
+  supervision for bounded work.
+- An already-active delegated execution plan needs to resume.
+- An existing worker handoff under `.horus/temp/` needs supervisor review.
 
 ## Confirm delegation already earned its cost
 

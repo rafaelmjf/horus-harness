@@ -514,7 +514,7 @@ def test_distill_history_skill_v3_targets_archive():
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 14
+    assert execution.version == 15
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -552,6 +552,24 @@ def test_execution_skill_requires_real_delegation_for_model_separation():
     assert "--posture full-auto" in execution.content
     assert "Bounce protocol" in execution.content
     assert "Merge sequencing" in execution.content
+
+
+def test_execution_skill_is_delegation_only_and_projects_to_both_agents():
+    execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
+    # Ordinary planning language must not route a cold context into supervision.
+    assert "Requests for a plan, phased implementation, sequencing, estimation" in execution.content
+    assert "you ready to start?" in execution.content
+    assert "do **not** invoke this skill unless they also request" in execution.content
+    assert "another agent/worker/subagent, dispatch, handoff, model separation, or" in execution.content
+    assert "The user asks to divide a substantial feature into phases." not in execution.content
+    assert "asks to split a feature into phases" not in execution.content
+    # `plan-execution` is exclusively a delegated worker/supervisor workflow.
+    assert "denotes a worker/supervisor execution" in execution.content
+    assert "ordinary phased work remains direct" in execution.content
+    assert "An already-active delegated execution plan needs to resume." in execution.content
+    assert "existing worker handoff" in execution.content
+    for root in (".claude/skills", ".agents/skills"):
+        assert Path(f"{root}/horus-execution/SKILL.md").read_text(encoding="utf-8") == execution.content
 
 
 def test_execution_template_carries_worker_agent_marking():
