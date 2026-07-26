@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-20
 created_by: owner
@@ -14,6 +14,8 @@ phase: converge
 type: bug
 vision_facet: "Introspection & self-improvement"
 surface: "horus/templates.py (_SHARED_BODY working discipline + BLOCK_VERSION bump), projected CLAUDE.md/AGENTS.md blocks, tests/test_templates.py"
+shipped_pr: 410
+shipped_sha: 7b6334d
 ---
 
 # process-fixes-live-in-process-not-memory — shared artifacts, not one agent's recall
