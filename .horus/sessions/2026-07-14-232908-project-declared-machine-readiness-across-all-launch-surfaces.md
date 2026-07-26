@@ -572,3 +572,30 @@ as a fourth consumer, without introducing a second parser or probe path.
 
 - `9a24a15` Bump version to 0.0.75 (#414)
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `708d952` fix(adapters): name the identity an account check actually found (#415)
+  `IdentityCheck.detected_email` held an email for Claude and an opaque
+  account_id for Codex, and the two SHARED mismatch messages in launch.py and
+  pty_host.py printed it bare:
+      account 'personal' login mismatch (found 6d67cc97-1f90-4dd5-af80-3558e3628b0e,
+      alias 'personal').
+  A UUID with no indication of what it is. The adapters' own messages already
+  labelled it correctly ("account_id is ..."), so only the shared paths were
+  opaque -- and the field name was the root cause, since it described one agent's
+  identifier shape as if it were universal.
+  Three changes:
+  - rename `detected_email` -> `detected_identity`, with a docstring stating it is
+    deliberately not named for one agent's shape and that the value stays RAW
+    because config.alias_for() resolves it (prefixing it would break alias
+    resolution -- the reason the obvious one-line fix was wrong);
+  - add `AgentAdapter.identity_label`, defaulting to "identity", overridden to
+    "login email" (Claude) and "account id" (Codex);
+  - interpolate that label in all four messages, so they read consistently:
+      account 'personal' login mismatch (found account id 6d67cc97-..., alias
+      'personal').
+  Tests lock the labels per adapter (including the base default via `fake`), the
+  absence of the old field name, and -- as a guard against reverting -- that
+  neither shared path prints `found {check.detected_identity` without a label.
+  Deferred from pre-release on purpose: it touches a guard's error path, and the
+  release was better off without it. Suite 2249.
+  Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
