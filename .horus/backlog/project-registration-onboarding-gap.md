@@ -1,10 +1,13 @@
 ---
 status: open
 priority: medium
-readiness: shaping
-readiness_reason: "The live defect and cheapest controls are evidenced; refine the exact uncached local-project affordance (path prompt versus workspace discovery) before implementation."
+readiness: ready
+autonomy: eligible
+readiness_reason: "Scoped with the owner 2026-07-26: control 3 (the TUI uncached-local fallback) is DROPPED because the owner's own repair path is to ask an agent, which already has a shell. Controls 1 (deterministic unregistered signal + horus-infer guidance) and 2 (context-specific narrow footer) were already evidenced and are now the whole card."
 created: 2026-07-25
 created_by: owner
+last_refined: 2026-07-26
+tier: small
 type: bug
 parallel: safe
 phase: converge
@@ -86,10 +89,10 @@ The missing behavior is detection and discoverability around those primitives.
    context-specific at narrow widths: `Enter open`, `Enter register`, or
    `Enter clone + register`. Do not rely on an unlabeled Enter key that disappears on
    phones.
-3. **Uncached local fallback.** Offer one explicit Add/Register project action in the
-   TUI for an existing local path (or workspace-root discovery), reusing
-   `initialize.init_project`/the canonical start service rather than adding a second
-   registry writer. Choose the smallest phone-usable shape during refinement.
+3. ~~**Uncached local fallback.**~~ **DROPPED 2026-07-26** — see Reviews. The owner's
+   repair path for this situation is to ask an agent, which already has a shell and can
+   run `horus init <path>`; a TUI registration affordance is human ceremony that the
+   actual actor never touches, and it would not have prevented the observed failure.
 
 Guidance alone is insufficient: the existing init behavior was correct, yet both the
 agent and owner missed it. A registration-state signal and a visible action are the
@@ -105,13 +108,13 @@ cheapest controls that catch the observed failure in the product.
 - On a mobile-width projects screen, a selected registered project says
   `Enter open`; a selected cloned/unregistered project says `Enter register`; and a
   remote-only project says `Enter clone + register`.
-- A local Horus checkout missing from the GitHub cache can be registered through a
-  visible TUI path without typing a separate shell command.
 - Every path uses the existing canonical registry/init/start services, and tests prove
   no duplicate registry writer or second onboarding implementation is introduced.
 
 ## Non-goals
 
+- **Do not build a TUI registration path for an uncached local checkout** (dropped
+  control 3). The repair actor is an agent with a shell.
 - Do not auto-register arbitrary repositories merely because they contain `.horus/`.
 - Do not add network work to TUI first paint.
 - Do not replace `horus init`, `horus start`, or the remote catalogue.
@@ -121,3 +124,28 @@ cheapest controls that catch the observed failure in the product.
 
 Owner-observed `fabric-build` onboarding incident, 2026-07-25. Exact live repair:
 idempotent `horus init` registration followed by `horus status` visibility.
+
+## Reviews
+
+- 2026-07-26 — Scoped with the owner. **Control 3 dropped, not deferred.** The owner's
+  stated path if this recurs is *"I'll ask the agent to do it"* — and an agent already
+  has the only thing needed, a shell running `horus init <path>`. Both shapes considered
+  for control 3 (workspace-root discovery, explicit path prompt) are human affordances
+  the actual actor never touches, and neither would have prevented the observed failure:
+  the card's own cost attribution puts that on the **supervisor** equating "`.horus/`
+  exists" with "initialized on this machine".
+
+  So control 1 is the load-bearing control and is explicitly **agent-facing**: the
+  deterministic finding must name the state, the user impact (absent from fleet/TUI) and
+  the exact remedy, and the `horus-infer` guidance must stop a session conflating
+  repo-local continuity with machine-local registration. This also satisfies the repo's
+  agent-first boundary — structure earns its place by making a fresh agent session act
+  more correctly, never by adding human-process ceremony.
+
+  Control 2 (context-specific narrow footer) is kept deliberately: owner visibility on
+  the mobile TUI is how the gap was noticed at all, and the narrow footer omitting
+  `Enter` entirely is a real defect independent of who performs registration.
+
+  Minted **Ready / eligible**, tier small. Surface note for sequencing: it touches
+  `terminal_tui.py` and `routines.py`, so it must not run concurrently with
+  `codex-usage-stale-snapshot-gates-dispatch` (same files).

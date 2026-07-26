@@ -1,11 +1,12 @@
 ---
 status: open
 priority: medium
-readiness: shaping
-readiness_reason: "The defect is confirmed on disk, but the correct remedy is a real choice (rewrite paths vs stop copying config.toml vs re-login into a clean dir) with a plugin/MCP tradeoff the owner has not made."
+readiness: gated
+readiness_reason: "Remedy chosen by the owner 2026-07-26 — remedy 3, re-login instead of copying, making login the isolation primitive and retiring file-copying. That requires login to be a first-class verb, so this card is gated on `account-login-verb` (currently Ready—Attended); it becomes Ready the moment that lands."
+depends-on: account-login-verb
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-26
 vision_facet: "Accounts & isolation"
 tier: medium
 type: bug
@@ -52,7 +53,7 @@ Also note `[projects.'c:\users\rafa'] trust_level = "trusted"` was copied along 
 a *trust* decision propagated by a file copy, which is not a thing an isolation
 mechanism should do silently.
 
-## Candidate remedies (not chosen — this is the shaping question)
+## Remedy — **3 chosen by the owner, 2026-07-26**
 
 1. **Stop copying `config.toml`; copy only `auth.json`.** Cleanest isolation, and
    evidenced: a dir created by fresh `codex login` in this run contained only
@@ -64,10 +65,13 @@ mechanism should do silently.
 3. **Re-login instead of copy** — make `isolate_account` for Codex drive a fresh login
    (i.e. defer to `account-login-verb`) rather than copying anything.
 
-Option 1 or 3 is likely right; both make "log in" the isolation primitive and retire
-file-copying, which also removes the trust-propagation surprise. Decide with the owner
-against how much the plugin block is actually used in *CLI* runs (the desktop app keeps
-its own ambient config regardless).
+ **Remedy 3 is the decision.** Login becomes the isolation primitive and
+file-copying retires entirely — which is the only option that also fixes the
+*frozen-mirror drift* second defect, since a logged-in dir is generated in place
+rather than copied at a point in time. Remedy 2 was declined explicitly: the card's
+own admission that the rewrite rules "are not obvious" makes it a standing
+maintenance tax on a file Horus does not own. Remedy 1 was the cheaper fallback and
+remains so if `account-login-verb` stalls.
 
 ## Acceptance (draft)
 
@@ -97,3 +101,21 @@ decided delete-vs-promote; nothing was removed.
 ## Source
 
 Hand-executed setup run, owner-attended, 2026-07-20.
+
+## Reviews
+
+- 2026-07-26 — Refined with the owner. **Remedy 3 chosen: re-login instead of copying.**
+  It is the only candidate that fixes all three observed problems at once — the ambient
+  path leak, the silently-propagated `trust_level = "trusted"`, and the frozen-mirror
+  drift — because a dir produced by `codex login` is generated in place instead of
+  copied at a moment in time. Remedy 2 (copy + rewrite paths) declined: unowned schema,
+  non-obvious rules, re-derived on every Codex change. Remedy 1 (copy only `auth.json`)
+  noted as the cheaper fallback if `account-login-verb` stalls.
+
+  Consequence accepted: this card is **Gated**, not Ready — it cannot be dispatched
+  until `account-login-verb` (Ready—Attended) lands, which makes that card the
+  unblocker and raises its practical priority. Also unresolved and deliberately
+  untouched: `~/.horus/accounts/codex-codex-work/` is still unmapped on this machine
+  and holds a clean `auth.json` copy for the personal account. Under remedy 3 it is not
+  needed as a promotion target, so it becomes ordinary housekeeping (delete or ignore),
+  not part of this card's scope.

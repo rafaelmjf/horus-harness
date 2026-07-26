@@ -58,6 +58,15 @@ reader is wrong beyond mere staleness.
 
 - Preflight and `horus usage check` report the **same** percentage and orientation
   (used vs remaining) for the same account/window from one shared source.
+- **One reading is labelled with one window, everywhere.** `usage all`, the datum
+  capture, `usage check`, the TUI and the dashboard must not disagree about which window
+  a given percentage belongs to (see the 2026-07-26 review: the same 82% was rendered as
+  `weekly` by `usage all` and as `5h` by the worker datum).
+- **Never invent a window duration.** Preserve the provider's reported primary/secondary
+  percentages and reset timestamps; label a window `5h` or `weekly` only when the
+  provider contract or the reset horizon supports it, otherwise render a neutral
+  `primary`/`secondary`. (Folded from the retired `codex-usage-window-semantics`.)
+- Tests cover primary-only, dual-window, and changed/reset-horizon payloads.
 - **Staleness guard:** a reading older than a documented horizon (or when the account
   is idle / no fresh rollout) is not treated as an authoritative *refusal*. Degrade to
   a warning and/or surface "stale as of <ts>"; never hard-gate a launch on a stale read.
@@ -66,10 +75,15 @@ reader is wrong beyond mere staleness.
 
 ## Boundaries / relation
 
-- Distinct from [[codex-usage-window-semantics]] — that card is window *labeling*
-  (5h vs weekly), deferred, and explicitly scoped to "display/telemetry correctness,
-  **not** dispatch routing or a spend policy." This card is exactly that excluded
-  routing/gating correctness, so it should not be folded into it.
+- **Absorbed [[codex-usage-window-semantics]] on 2026-07-26 (owner decision).** That card
+  owned window *labeling* (5h vs weekly vs a neutral primary/secondary) and was deferred
+  pending upstream stability. An earlier draft of this card argued the two should stay
+  split — display correctness vs gate correctness — and the owner overruled that: one card
+  now owns every wrong-usage-reading defect in this subsystem, because in practice the
+  same readings feed both the display and the gate, and splitting them meant neither card
+  owned the whole picture. That card is retired; its acceptance criteria are folded in
+  below. The tradeoff accepted: this card is now broader than pure routing correctness,
+  so its scope must be re-checked before it is called Ready.
 - Workaround today: `horus run --force` (`cli.py:5067`) skips the preflight refusal.
 
 ## Reviews
@@ -109,3 +123,18 @@ reader is wrong beyond mere staleness.
   defect, because the branch carrying it had never merged. The defect was
   re-diagnosed from scratch and a duplicate card was nearly minted. Land cards
   promptly, and check unmerged remote branches before filing.
+
+- 2026-07-26 (second entry) — **Absorbed `codex-usage-window-semantics` by owner decision.**
+  New evidence that made the split untenable: for the same account at the same moment,
+  `horus usage all` rendered `5h — · weekly 82%` while the worker datum for session
+  `5d8ce1ad` recorded `start=5h=82%`. The same number, two different window labels. It
+  repeated with the later value (`usage all` weekly 2% vs datum `5h=2%`).
+
+  `_read_codex` carries a comment about routing each lane "by the length Codex declared
+  for it, not by its slot", added 2026-07-17 to fix precisely this, so either the datum
+  path regressed that fix or `usage all` mislabels. **Which one is wrong is unverified** —
+  the datum write path was not read. Establishing that is the first concrete step.
+
+  Retiring the other card loses a deliberate boundary (display correctness vs gate
+  correctness) that its own text defended; the owner judged that one owner for all
+  wrong-reading defects is worth more, since the same readings feed both surfaces.

@@ -4,11 +4,16 @@ priority: medium
 created: 2026-07-20
 created_by: owner
 last_refined: 2026-07-20
-readiness: shaping
-readiness_reason: "Decide which shared artifact carries the render-confirm-before-merge discipline (managed block vs merge-release-owner-gate scope) and sweep for other corrections living only in one agent's memory."
+readiness: ready
+autonomy: eligible
+readiness_reason: "Artifact chosen by the owner 2026-07-26: the Horus-managed block's working discipline in templates.py, so it reaches every project, both agents, and all machines — the exact sharing failure this card is about. Remaining work is one tight instruction line plus the memory sweep, both bounded."
+last_refined: 2026-07-26
+tier: small
+parallel: safe
 phase: converge
 type: bug
 vision_facet: "Introspection & self-improvement"
+surface: "horus/templates.py (_SHARED_BODY working discipline + BLOCK_VERSION bump), projected CLAUDE.md/AGENTS.md blocks, tests/test_templates.py"
 ---
 
 # process-fixes-live-in-process-not-memory — shared artifacts, not one agent's recall
@@ -27,11 +32,15 @@ other accounts, and other machines.
 
 ## Intended outcome
 
-The render-confirm-before-merge discipline lives in a shared process artifact
-(candidates: the managed-block working discipline, or folded into
-`merge-release-owner-gate`'s scope as the interim instruction rung), and a
-short sweep confirms no other 2026-07-20 calibration correction exists only in
-agent memory (the questionnaire format and receipt spines already live in the
+The render-confirm-before-merge discipline lives in **the Horus-managed block's
+working discipline** (`horus/templates.py` `_SHARED_BODY`), sitting alongside
+"Reproduce the gate; never trust the report" — chosen by the owner 2026-07-26 because
+it propagates to every project, both agents, and every machine on upgrade, which is
+precisely the sharing failure this card exists to fix. It must be **one tight line**,
+not a paragraph: this text is loaded by every session. `BLOCK_VERSION` bumps with it.
+
+Plus a short sweep confirming no other 2026-07-20 calibration correction exists only
+in agent memory (the questionnaire format and receipt spines already live in the
 skills — verify, don't assume).
 
 ## Non-goals
@@ -44,3 +53,30 @@ skills — verify, don't assume).
 
 Owner correction 2026-07-20 in the calibration session;
 `merge-release-owner-gate` Reviews entry of the same date.
+
+## Acceptance
+
+- The managed block carries a single-line render-confirm-before-merge discipline; both
+  projected copies (`CLAUDE.md`, `AGENTS.md`) regenerate from `templates.py` and
+  `BLOCK_VERSION` is bumped so `upgrade-project` refreshes downstream projects.
+- The sweep result is recorded: for each 2026-07-20 calibration correction, either the
+  shared artifact that already carries it, or the artifact it was moved into.
+- Gate: full suite green on the exact SHA. Probe: scaffold a throwaway project and
+  confirm the new discipline line appears in its `AGENTS.md` managed block.
+
+## Reviews
+
+- 2026-07-26 — Refined with the owner. **Artifact chosen: the managed block's working
+  discipline.** Reach is the deciding factor — a rule that failed *because it lived in
+  one agent's memory* is not fixed by putting it somewhere else narrow. The managed
+  block travels to every project, both agents, and every machine on upgrade.
+  `merge-release-owner-gate`'s scope was considered and declined: a card is read when
+  someone works that card, not when a session is merely merging, which is exactly when
+  the discipline is needed. PRD Rules alone was declined as repo-local.
+
+  Constraint attached: **one tight line, not a paragraph** — this text loads in every
+  session, and the managed block already has a `managed-instruction-drift-lint` card
+  open against it. Minted **Ready / eligible**, tier small.
+
+  Note the recursion: this card is itself the durable artifact for a rule that had been
+  living in one agent's head, so filing it already did half the job.

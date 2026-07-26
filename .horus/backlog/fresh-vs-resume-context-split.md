@@ -2,9 +2,9 @@
 status: open
 priority: low
 readiness: deferred
-readiness_reason: "Observe several more session launches before reopening; owner hold from 2026-07-19."
+readiness_reason: "Owner hold continues (2026-07-26). The 2026-07-21→2026-07-26 observation window yielded NO evidence: #386 swallowed the seeded prompt, so resume sessions received no handoff either and both modes were indistinguishable. The window genuinely starts 2026-07-26, now that #403 makes the resume path deliver."
 created: 2026-07-19
-last_refined: 2026-07-19
+last_refined: 2026-07-26
 vision_facet: "Continuity core"
 phase: explore
 tier: medium
@@ -134,3 +134,30 @@ Raised by the owner after a fresh session executed a stale pinned checklist agai
 different opening intent. The owner's framing: "resume loads the next action, fresh
 doesn't — it doesn't need to be non-deterministic, it's a simple IF/ELSE condition to be
 enforced via our launch options."
+
+## Reviews
+
+- 2026-07-26 — **Hold continues, but the evidence window restarts today.** The 07-19 hold
+  said to observe several more launches before deciding. That observation never happened,
+  for a structural reason nobody knew at the time: `session-remote-control-default` (#386,
+  shipped v0.0.74 on 2026-07-21) put a bare `--remote-control` ahead of the positional
+  prompt, and because that flag takes an *optional value* it consumed the seeded prompt as
+  its session name. So from 07-21 until #403 landed on 07-26, **resume launches received no
+  handoff via the prompt either** — every interactive session, fresh or resume, got the
+  pinned directive by exactly one route: reading `PRD.md`. The two modes were
+  indistinguishable, so no differential evidence could accumulate.
+
+  Net: five days later there is still exactly **one** observation (2026-07-19), and the
+  card's own guidance forbids acting on it alone. Deferred stands, for a sound reason
+  rather than an assumed one, and the window starts now.
+
+  What to watch, unchanged from the 07-19 list but now actually measurable: how often a
+  fresh launch's opening moves match the owner's intent versus chasing a stale pinned
+  action; whether misdirection self-corrects in one exchange or compounds; and whether the
+  context cost is ever load-bearing (prior: no — measured at ~2% of one file).
+
+  Not extracted this pass, still available: the card's own "Adjacent" suggestion to
+  generalise *"a stored `next_prompt` is a PROPOSAL, not a confirmation"* from
+  `pathfinder/SKILL.md:76` into the managed block. It is cheap, broad, and independent of
+  the routing design; it was left unsplit deliberately to avoid a second concurrent
+  managed-block change alongside `process-fixes-live-in-process-not-memory`.
