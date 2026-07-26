@@ -87,3 +87,25 @@ reader is wrong beyond mere staleness.
   snapshot is old. Net: the gate produced a **false refusal that only `--force`
   bypassed**, and would equally have waved through a genuinely-exhausted account.
   This is the concrete routing-correctness failure the card predicted.
+- 2026-07-26 — **Reproduced in horus-harness itself, and the staleness leg is now
+  measured end-to-end.** The owner stated codex-personal had reset to 100%
+  available; `horus usage all` reported **weekly 82% (resets 2026-07-29 09:11)** and
+  both `horus run` launches printed *"weekly usage is 82% … launching into a closing
+  window."* The reading's source was a rollout file dated **2026-07-25 09:48**, ~27
+  hours old — Codex had not run since. Then the dispatched worker's own recorded
+  readings closed the loop: `start=5h=82%[fresh] → end=5h=1%[fresh]`. The 82% was the
+  stale artifact; one real session collapsed it to ~1%, confirming the owner's figure
+  and that nothing but a Codex turn can refresh it.
+
+  Also observed: the two readers disagreed **again**, differently. `usage all` showed
+  a confident `82%` while `usage check` on the same account said *"weekly limit
+  snapshot stale (reset 2026-07-25 08:55)"* — a **different reset timestamp** for the
+  same window. So the divergence is not only used-vs-remaining orientation: the two
+  paths select different rollouts. `without_expired_windows` only blanks a percent
+  whose *recorded* reset has passed, which is why the older reading self-reported
+  stale and the newer one did not.
+
+  Process note worth keeping: this card was invisible to the session that hit the
+  defect, because the branch carrying it had never merged. The defect was
+  re-diagnosed from scratch and a duplicate card was nearly minted. Land cards
+  promptly, and check unmerged remote branches before filing.
