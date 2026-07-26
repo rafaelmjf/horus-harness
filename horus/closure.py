@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -289,6 +290,61 @@ def parallel_deliveries(
     return signals, pr_checked
 
 
+# Age past which an unmerged remote branch is worth naming. Short enough that a
+# branch stranded across sessions surfaces, long enough that today's in-flight
+# work stays quiet.
+UNMERGED_BRANCH_STALE_DAYS = 3
+
+
+def unmerged_branch_findings(root: Path) -> list[Finding]:
+    """Name remote branches that are not merged into the default branch.
+
+    Fetch-first guidance already exists and is not sufficient on its own: on
+    2026-07-26 a session fetched, then still opened a duplicate PR for a card that
+    had already merged, and separately re-diagnosed a defect from scratch because
+    its card sat on a PR open since 07-23. Both failures share a cause — `gh pr
+    list` shows only OPEN PRs and nothing inspects branches, so work living on an
+    unmerged ref is invisible to every check a session actually runs. Five such
+    branches existed that day, carrying real cards and 563 lines of code.
+
+    Rendered at ``info`` for the same reason as parallel deliveries: it must be
+    seen, but a supervisor legitimately closes while branches are in flight, so it
+    must never flip a fresh verdict to stale.
+    """
+    listed = _git(root, "branch", "-r", "--no-merged", "origin/HEAD", "--format=%(refname:short)|%(committerdate:unix)")
+    if listed is None:
+        listed = _git(root, "branch", "-r", "--no-merged", "--format=%(refname:short)|%(committerdate:unix)")
+    if not listed:
+        return []
+    now = time.time()
+    stale: list[tuple[str, int]] = []
+    for line in listed.splitlines():
+        name, _, raw = line.partition("|")
+        name = name.strip()
+        if not name or name.endswith("/HEAD") or name.endswith("/main") or name.endswith("/master"):
+            continue
+        try:
+            age_days = int((now - float(raw)) // 86400)
+        except (TypeError, ValueError):
+            age_days = 0
+        stale.append((name, age_days))
+    if not stale:
+        return []
+    stale.sort(key=lambda pair: pair[1], reverse=True)
+    oldest_name, oldest_days = stale[0]
+    detail = ", ".join(f"{n} ({d}d)" for n, d in stale[:3])
+    if len(stale) > 3:
+        detail += f", +{len(stale) - 3} more"
+    level = "info"
+    suffix = ""
+    if oldest_days >= UNMERGED_BRANCH_STALE_DAYS:
+        suffix = (
+            f" — oldest is {oldest_days}d; check it before filing or branching "
+            f"(work on an unmerged ref is invisible to `gh pr list`)"
+        )
+    return [Finding(level, f"{len(stale)} unmerged remote branch(es): {detail}{suffix}")]
+
+
 def parallel_delivery_findings(root: Path, *, self_session_id: str | None = None) -> list[Finding]:
     """Render :func:`parallel_deliveries` as gate findings. Empty (not a false
     'all clear') when gh is unavailable and no live co-session exists.
@@ -307,7 +363,12 @@ def parallel_delivery_findings(root: Path, *, self_session_id: str | None = None
 
 def boundary_freshness_gate(root: Path) -> list[Finding]:
     """A real pause/handoff close must fold every pending delivery."""
-    return freshness_gate(root) + pending_delivery_findings(root) + parallel_delivery_findings(root)
+    return (
+        freshness_gate(root)
+        + pending_delivery_findings(root)
+        + parallel_delivery_findings(root)
+        + unmerged_branch_findings(root)
+    )
 
 
 def pr_diff_freshness(root: Path, base_ref: str) -> list[Finding]:

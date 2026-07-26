@@ -775,3 +775,60 @@ def test_commit_continuity_refuses_to_push_past_the_boundary(tmp_path, monkeypat
     assert did and "push refused" in detail and "feature.py" in detail
     # The closure commit landed locally but nothing reached the remote.
     assert closure.direct_push_violations(work) == ["feature.py"]
+
+
+# --- unmerged remote branches (2026-07-26 retrospective, R1) ------------------
+
+
+def _branch_lines(*pairs) -> str:
+    """`git branch -r --no-merged --format=...` output: "name|committerdate-unix"."""
+    import time as _t
+
+    now = _t.time()
+    return "\n".join(f"{name}|{int(now - days * 86400)}" for name, days in pairs)
+
+
+def test_unmerged_branches_are_silent_when_there_are_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(closure, "_git", lambda root, *a: "")
+    assert closure.unmerged_branch_findings(tmp_path) == []
+
+
+def test_unmerged_branches_never_flip_a_verdict_to_stale(tmp_path, monkeypatch):
+    # info, like parallel deliveries: a supervisor legitimately closes with branches
+    # in flight, so this must be visible without ever failing the gate.
+    monkeypatch.setattr(closure, "_git", lambda root, *a: _branch_lines(("origin/feat/x", 0)))
+    findings = closure.unmerged_branch_findings(tmp_path)
+    assert len(findings) == 1 and findings[0].level == "info"
+
+
+def test_unmerged_branches_name_the_oldest_and_advise_once_stale(tmp_path, monkeypatch):
+    # The 2026-07-26 failure: a card sat on a PR open since 07-23 and was re-diagnosed
+    # from scratch, because `gh pr list` shows only OPEN PRs and nothing inspects
+    # branches. Past the threshold the finding must say so, not just count.
+    monkeypatch.setattr(closure, "_git", lambda root, *a: _branch_lines(
+        ("origin/feat/recent", 0), ("origin/bug/ancient", 9), ("origin/spike/mid", 4)))
+    message = closure.unmerged_branch_findings(tmp_path)[0].message
+    assert "3 unmerged remote branch(es)" in message
+    assert "origin/bug/ancient (9d)" in message          # oldest first
+    assert message.index("ancient") < message.index("mid")
+    assert "invisible to `gh pr list`" in message
+
+
+def test_unmerged_branches_stay_quiet_about_todays_work(tmp_path, monkeypatch):
+    # In-flight work from this session must not nag; only a branch older than the
+    # threshold earns the advisory clause.
+    monkeypatch.setattr(closure, "_git", lambda root, *a: _branch_lines(("origin/feat/today", 0)))
+    message = closure.unmerged_branch_findings(tmp_path)[0].message
+    assert "invisible to `gh pr list`" not in message
+
+
+def test_unmerged_branches_ignore_the_default_branch_and_head(tmp_path, monkeypatch):
+    monkeypatch.setattr(closure, "_git", lambda root, *a: _branch_lines(
+        ("origin/HEAD", 0), ("origin/main", 0), ("origin/master", 0)))
+    assert closure.unmerged_branch_findings(tmp_path) == []
+
+
+def test_unmerged_branches_survive_an_unusable_git(tmp_path, monkeypatch):
+    # Contract for every closure signal: best-effort, never raise, never false-alarm.
+    monkeypatch.setattr(closure, "_git", lambda root, *a: None)
+    assert closure.unmerged_branch_findings(tmp_path) == []
