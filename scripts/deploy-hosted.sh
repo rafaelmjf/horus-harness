@@ -72,9 +72,19 @@ if systemctl --user list-unit-files "$LISTEN_UNIT" >/dev/null 2>&1 \
     echo "[deploy-hosted] note: could not restart $LISTEN_UNIT (non-fatal)" >&2
 fi
 
-# Give it a moment to bind, then verify: /health public (200), / gated (403).
-sleep 2
-health="$(curl -s --max-time 3 "http://127.0.0.1:${PORT}/health" || true)"
+# Verify: /health public (200), / gated (403).
+# Wait for the restarted service to actually BIND before judging it. A single
+# probe after `sleep 2` races systemd: observed 2026-07-26 on the 0.0.76 deploy,
+# where /health was unreachable and / returned 000, the script exited 1, and the
+# service was in fact healthy moments later (version 0.0.76, / -> 403). A false
+# failure here is not cosmetic — this script is meant to become the last step of an
+# automated release, and a flaky verdict would fail good deploys.
+health=""
+for _ in $(seq 1 15); do
+  health="$(curl -s --max-time 3 "http://127.0.0.1:${PORT}/health" || true)"
+  [ -n "$health" ] && break
+  sleep 2
+done
 root_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:${PORT}/" || true)"
 echo "[deploy-hosted] /health -> ${health:-<unreachable>}"
 echo "[deploy-hosted] /       -> ${root_code} (expect 403 = still gated)"
