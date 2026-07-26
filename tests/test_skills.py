@@ -241,7 +241,7 @@ def test_scope_cards_skill_registered_as_high_level_shaping():
 
 def test_backlog_refine_owns_interactive_flow_and_ready_contract():
     refine = next(s for s in skills.SKILLS if s.name == "backlog-refine")
-    assert refine.version == 4
+    assert refine.version == 5
     assert "Here is our current picture" in refine.content
     assert "product direction in 2–3 lines" in refine.content
     assert "card by card" in refine.content and "Verdict" in refine.content
@@ -743,3 +743,34 @@ def test_session_mode_skills_are_gone():
     for root in (".claude/skills", ".agents/skills"):
         for mode in ("inline-batch-session", "all-gas-no-breaks-session"):
             assert not Path(f"{root}/{mode}").exists()
+
+
+def test_backlog_refine_says_surface_is_a_hint_not_a_boundary():
+    # 2026-07-26 retrospective R2: `surface` is hand-written and unverified, so an
+    # implementer that treats it as the edge of the work leaves the rest undone.
+    # It happened twice that day -- codex-identity-guard shipped as a half-fix because
+    # pty_host.py held a second copy of the guard the card never named, and
+    # project-registration-onboarding-gap omitted the two files carrying the guidance
+    # it required. Both workers did exactly as briefed, and CI was green.
+    from horus import skills
+
+    body = skills._BACKLOG_REFINE_SKILL
+    assert "`surface` is a HINT, never a boundary" in body
+    assert "report any file it touched beyond that list" in body
+    # Deliberately NOT promoted to a gate -- record the reasoning so a later pass does
+    # not "helpfully" add one.
+    assert "cannot be mechanically verified as complete" in body
+
+
+def test_backlog_refine_projections_match_the_bumped_source():
+    from pathlib import Path
+
+    from horus import skills
+
+    for target in (".claude", ".agents"):
+        projected = Path(target) / "skills" / "backlog-refine" / "SKILL.md"
+        assert projected.is_file(), projected
+        text = projected.read_text(encoding="utf-8")
+        assert "`surface` is a HINT, never a boundary" in text, target
+        version = next(s.version for s in skills.SKILLS if s.name == "backlog-refine")
+        assert f"horus-skill-version: {version}" in text, target

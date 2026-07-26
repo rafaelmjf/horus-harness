@@ -2312,7 +2312,7 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
@@ -2450,6 +2450,21 @@ frontier`), `vision_facet` or an explicit speculative `branch`, `phase`, `create
 
 Second-order findings are never fabricated. Scope the evidence-gathering probe and
 state how later findings will be carded.
+
+**`surface` is a HINT, never a boundary.** It is hand-written and unverified, so it
+is routinely incomplete — an agent that treats it as the edge of the work will
+faithfully leave the rest undone. Observed twice on 2026-07-26: `codex-identity-guard`
+named `launch.py` and shipped as a HALF-FIX because `pty_host.py` held a second copy
+of the same guard, and `project-registration-onboarding-gap` omitted the two files
+carrying the guidance text it required. In both cases the worker did exactly as
+briefed and CI was green.
+
+So: write `surface` as the best-known starting point, and require the implementer to
+**report any file it touched beyond that list, and why**. That reporting line is the
+cheap control that works — the `project-registration` worker was briefed with it and
+duly surfaced four files the card never named. Do not promote this to a gate: a
+hand-written list cannot be mechanically verified as complete, and a check that
+demanded it would only teach people to pad the field.
 
 ## 4. Apply approved state
 
@@ -2836,7 +2851,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("market-scan", 7, _MARKET_SCAN_SKILL),
     Skill("roadmap-branches", 4, _ROADMAP_BRANCHES_SKILL),
     Skill("scope-cards", 7, _SCOPE_CARDS_SKILL),
-    Skill("backlog-refine", 4, _BACKLOG_REFINE_SKILL),
+    Skill("backlog-refine", 5, _BACKLOG_REFINE_SKILL),
     Skill("pathfinder", 9, _PATHFINDER_SKILL),
     Skill("cockpit-autonomous-dispatch-contract", 3, _COCKPIT_DISPATCH_SKILL),
 )
