@@ -7,7 +7,7 @@
 > restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 12 -->
+<!-- horus-block-version: 13 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -21,7 +21,15 @@ and why, what shipped, dead ends, the next step.
 
 Before substantial work, read `.horus/PRD.md` — the one maintained continuity file:
 
-- Vision — what this project is, its shape, its boundaries.
+- Vision — what this project is, its shape, its boundaries:
+  - **Why this exists.** The originating problem, who it was built for, and — if the
+    project was forked, split, or pivoted — what it inherited **on purpose** and what
+    that inheritance is for. A reader must be able to tell deliberate inheritance
+    from legacy without asking.
+  - **Surfaces and audiences.** Once a project has more than one entry point, name
+    each and say who it serves (human operator, agent, CI, consumer). When the
+    product *is* an interface, this is load-bearing: an unlabelled surface will be
+    mistaken for the contract.
 - Backlog — prioritized open work (the *what's next*), features and bugs together.
 - Shipped — one line per capability; details live in git history.
 - Rules — concise current rules, grouped by topic (not a log).

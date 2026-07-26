@@ -491,12 +491,18 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
 
 def test_infer_skill_v3_reports_prd_skeleton_gaps():
     infer = next(s for s in skills.SKILLS if s.name == "horus-infer")
-    assert infer.version == 4
+    assert infer.version == 5
     assert "Vision" in infer.content and "Backlog" in infer.content
     assert "Shipped" in infer.content and "Rules" in infer.content
     assert "PRD.md" in infer.content
     assert "do not create a starter card" in infer.content
     assert "leave the scaffold blank" in infer.content
+    assert "**Why this exists.** The originating problem, who it was built for" in infer.content
+    assert "**Surfaces and audiences.** Once a project has more than one entry point" in infer.content
+    assert 'ask the owner for "why this exists"' in infer.content
+    assert "rather than distilling it from inherited docs" in infer.content
+    for root in (".claude/skills", ".agents/skills"):
+        assert Path(f"{root}/horus-infer/SKILL.md").read_text(encoding="utf-8") == infer.content
 
 
 def test_distill_history_skill_v3_targets_archive():
