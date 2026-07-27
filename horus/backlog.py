@@ -30,6 +30,12 @@ claim-time check + display), not a scheduler — no daemon, no auto-routing.
   status. Non-Ready cards carry `readiness_reason`; Ready cards alone carry
   `autonomy: eligible | attended`. Missing or malformed readiness is
   Unclassified and never safe for autonomous scheduling.
+- `order: <int>` is the owner-approved execution sequence within a readiness
+  queue, written by the `backlog-refine` pass. Sparse by design (gaps of 10, so
+  inserting at 15 renumbers nothing). Unordered cards form the unsequenced pool
+  *after* ordered ones, so a repo that has never been ordered renders exactly as
+  before. Planning state, never auto-routing: `order` says what the owner
+  intends next, not that anything may run.
 """
 
 from __future__ import annotations
@@ -140,6 +146,11 @@ class Card:
     shipped_sha: str
     shipped: str  # legacy free-text shipped note, used only to detect unflipped drift
     title: str
+    # Sparse owner-approved execution sequence within the card's readiness queue.
+    # None means unsequenced (no `order:`, or a value that isn't an integer — a
+    # malformed stamp must never be guessed into a position). Defaulted so a card
+    # predating the field, and any caller constructing a Card by keyword, stays valid.
+    order: int | None = None
     # Every frontmatter key/value as written, in file order — the named fields above
     # are the ones tooling reasons about; this is the raw record so display surfaces
     # (the TUI's backlog field picker) can offer whatever a card actually carries
@@ -167,6 +178,21 @@ def _parse_surface(raw: str) -> tuple[str, ...]:
         if token:
             parts.append(token)
     return tuple(parts)
+
+
+def _parse_order(raw: object) -> int | None:
+    """A card's `order:` as an int, or None when absent/blank/not an integer.
+
+    Deliberately strict: `order: soon` or `order: 1.5` yields None (unsequenced)
+    rather than a coerced position, and `order_findings` reports it. Guessing a
+    position from a malformed stamp would silently reorder the owner's plan."""
+    text = str(raw or "").strip().strip("'\"").strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
 
 
 def _title(body: str, fallback: str) -> str:
@@ -208,6 +234,7 @@ def _card_from_path(path: Path) -> Card:
         shipped_sha=fm.get("shipped_sha", "").strip(),
         shipped=fm.get("shipped", "").strip(),
         title=_title(doc.body, path.stem),
+        order=_parse_order(fm.get("order", "")),
         fields=tuple((key, str(value).strip()) for key, value in fm.items()),
     )
 
@@ -262,10 +289,23 @@ def readiness_label(card: Card) -> str:
     return READINESS_QUEUE_LABELS[readiness_queue(card)]
 
 
-def readiness_sort_key(card: Card) -> tuple[int, int, str, str]:
+def readiness_sort_key(card: Card) -> tuple[int, int, int, int, str, str]:
+    """The single canonical card sort — `horus backlog list`, `--tree`, and the TUI
+    all route through this, so the approved sequence needs writing here only once.
+
+    Queue first, then the owner's `order:` plan, then priority, then filename:
+    `(queue, order missing?, order, priority-rank, priority, name)`. `order` nests
+    *inside* the queue rather than spanning the whole backlog because every
+    renderer prints per readiness queue — a cross-queue sequence could not be
+    displayed — and because the plan that matters is the sequence of cards that
+    are actually schedulable. Unordered cards keep today's priority ordering and
+    sit after the ordered ones in their own queue, so a repo with no `order:`
+    anywhere renders byte-for-byte as before."""
     queue = readiness_queue(card)
     return (
         READINESS_QUEUE_ORDER.index(queue),
+        0 if card.order is not None else 1,
+        card.order if card.order is not None else 0,
         _PRIORITY_RANK.get(card.priority, len(_PRIORITY_RANK)),
         card.priority,
         card.name,
@@ -369,6 +409,45 @@ def readiness_findings(card: Card) -> list[Finding]:
     return findings
 
 
+def order_findings(cards: list[Card] | tuple[Card, ...]) -> list[Finding]:
+    """Warn about `order:` stamps that can't express a sequence — never repair one.
+
+    Two failure modes, both warnings rather than errors because an ambiguous plan is
+    still a working backlog (the sort falls back to priority, and refusing would
+    block `list`/`consolidate` over a planning field):
+
+    - duplicate values *within one readiness queue*: two cards claiming position 20
+      have no defined relative order, so the tie breaks on filename and the owner's
+      intent is lost. Across different queues a repeated number is fine — each queue
+      is its own sequence.
+    - a non-integer value: parsed as unsequenced, so the card silently drops to the
+      pool unless it's named here.
+    """
+    findings: list[Finding] = []
+    for card in cards:
+        raw = card.field_value("order")
+        if raw and card.order is None:
+            findings.append(Finding(
+                "warn",
+                f"backlog card '{card.name}' has non-integer order '{raw}' — it stays "
+                "unsequenced; use a sparse integer (gaps of 10) or remove the field",
+            ))
+    by_queue: dict[str, dict[int, list[str]]] = {}
+    for card in cards:
+        if card.order is None:
+            continue
+        by_queue.setdefault(readiness_queue(card), {}).setdefault(card.order, []).append(card.name)
+    for queue in READINESS_QUEUE_ORDER:
+        for value, names in sorted(by_queue.get(queue, {}).items()):
+            if len(names) > 1:
+                findings.append(Finding(
+                    "warn",
+                    f"duplicate order {value} in {READINESS_QUEUE_LABELS[queue]}: "
+                    f"{', '.join(sorted(names))} — the sequence between them is undefined",
+                ))
+    return findings
+
+
 def _reviews_span(lines: list[str]) -> tuple[int, int] | None:
     """(start, end) line indices of the `## Reviews` section — `start` is the
     heading line, `end` the next `## ` heading (or EOF). None if absent."""
@@ -397,7 +476,9 @@ def _lines_outside_reviews(body: str) -> list[str]:
 def hygiene_findings(root: Path) -> list[Finding]:
     """Report card lifecycle drift for consolidate and the recurring close gate."""
     findings: list[Finding] = []
-    for card in load_cards(root):
+    cards = load_cards(root)
+    findings.extend(order_findings(cards))
+    for card in cards:
         findings.extend(readiness_findings(card))
         body = frontmatter.parse(card.path.read_text(encoding="utf-8")).body
         # Review entries are free text — a reviewer writing "DONE" or quoting a

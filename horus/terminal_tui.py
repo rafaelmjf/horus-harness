@@ -34,6 +34,7 @@ from horus import (
     adapters,
     backlog,
     backlog_migrate,
+    backlog_refine,
     backlog_tree,
     capabilities,
     claude_usage,
@@ -61,6 +62,12 @@ from horus import (
     usage_snapshot,
     warmup,
 )
+
+
+# Launch "mode" is only ever read by `_launch_prompt` — it names WHAT CONTEXT the
+# session loads, never what it may do (that is the permission posture). `refine`
+# loads the whole backlog plus its live delivery state for an attended pass.
+_MODE_REFINE = "refine"
 
 
 @dataclass(frozen=True)
@@ -395,6 +402,10 @@ class TerminalUI:
             shown = sum(1 for kind, _v in self.items if kind == "card")
             self.status = f"Filter: {label} ({shown} shown)"
             self.application.invalidate()
+
+        @keys.add("o", filter=on_backlog)
+        def _refine_and_order(event) -> None:
+            self.start_refine_pass()
 
         @keys.add("b", filter=on_backlog)
         def _toggle_board(event) -> None:
@@ -1113,6 +1124,24 @@ class TerminalUI:
             return
         if kind == "launch" and self.pending_account is not None:
             self._exit_launch(self.pending_account)
+
+    def start_refine_pass(self) -> None:
+        """Begin the owner-attended refine + order pass over the whole backlog (`o`).
+
+        The one action the backlog pane owes this flow: it routes into the SAME
+        accounts -> launch_form pipeline as every other launch, so account, model,
+        posture, and window handling are not reimplemented. Nothing about the pass
+        itself lives here — the flow, the readiness judgment, and the ordering rules
+        belong to the `backlog-refine` skill, and the prompt is built at spawn time
+        (see `_launch_prompt`) so its `gh` read never blocks this keypress.
+        """
+        if self.project is None:
+            return
+        self.pending_mode = _MODE_REFINE
+        self.pending_card = None
+        self.pending_prompt = None
+        self.pending_origin = "backlog"
+        self._show("accounts")
 
     def _exit_launch(self, account: LaunchAccount) -> None:
         if self.project is None or self.pending_mode is None:
@@ -2273,9 +2302,9 @@ class TerminalUI:
                 )
             else:
                 text = (
-                    " ↑↓ · Enter open/expand · g group · r filter · b board · Esc"
+                    " ↑↓ · Enter open · g group · r filter · b board · o refine · Esc"
                     if narrow
-                    else " ↑↓/swipe   Enter open / expand   g group-by   r filter   b board   p priority   f fields   Esc back   q quit"
+                    else " ↑↓/swipe   Enter open / expand   g group-by   r filter   b board   p priority   f fields   o refine+order   Esc back   q quit"
                 )
             return [("class:footer", text)]
         if self.screen == "card_priority":
@@ -3039,13 +3068,18 @@ def _launch_prompt(result: _Launch) -> str:
     the launch loads.
 
     A card launch loads that card's scope; a resume loads the authored handoff; a
-    fresh launch loads NOTHING and returns "" so the owner types into an empty
-    session. Nothing is prepended: there is no mode preamble to spend a turn on.
+    refine launch loads the whole backlog plus its live delivery state; a fresh
+    launch loads NOTHING and returns "" so the owner types into an empty session.
+    Nothing is prepended: there is no mode preamble to spend a turn on.
     Kept module-level and pure so the wiring is testable without driving the app."""
     if result.prompt_override is not None:
         return result.prompt_override
     if result.card is not None:
         return _card_prompt(result.project, result.card)
+    if result.mode == _MODE_REFINE:
+        # Built here, not at the keypress: this reads `gh pr list`, and a spawn is
+        # already the place where a second of latency is expected and invisible.
+        return backlog_refine.refine_prompt(result.project)
     return routines.resume_prompt(result.project) if result.mode == "resume" else ""
 
 

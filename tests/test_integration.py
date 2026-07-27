@@ -487,8 +487,8 @@ def _pr_json(stdout: str) -> subprocess.CompletedProcess:
 def test_open_horus_prs_filters_to_horus_branches(tmp_path, monkeypatch):
     (tmp_path / ".git").mkdir()
     payload = (
-        '[{"headRefName": "horus/chore-continuity", "url": "https://gh/pr/7", "title": "Continuity"},'
-        ' {"headRefName": "feat/other-work", "url": "https://gh/pr/8", "title": "Other"}]'
+        '[{"number": 7, "headRefName": "horus/chore-continuity", "url": "https://gh/pr/7", "title": "Continuity"},'
+        ' {"number": 8, "headRefName": "feat/other-work", "url": "https://gh/pr/8", "title": "Other"}]'
     )
     monkeypatch.setattr(
         intmod.subprocess, "run", lambda *a, **k: _pr_json(payload)
@@ -496,7 +496,25 @@ def test_open_horus_prs_filters_to_horus_branches(tmp_path, monkeypatch):
 
     prs = intmod.open_horus_prs(tmp_path)
 
-    assert prs == [{"branch": "horus/chore-continuity", "url": "https://gh/pr/7", "title": "Continuity"}]
+    assert prs == [
+        {"number": "7", "branch": "horus/chore-continuity", "url": "https://gh/pr/7", "title": "Continuity"}
+    ]
+
+
+def test_open_prs_is_unfiltered_and_carries_numbers(tmp_path, monkeypatch):
+    """The refine pass needs EVERY open PR — a bug fix another session opened on a
+    `fix/…` head is exactly the delivery that makes a backlog picture wrong."""
+    (tmp_path / ".git").mkdir()
+    payload = (
+        '[{"number": 7, "headRefName": "horus/chore-continuity", "url": "https://gh/pr/7", "title": "Continuity"},'
+        ' {"number": 8, "headRefName": "fix/usage-flake", "url": "https://gh/pr/8", "title": "Fix the flake"}]'
+    )
+    monkeypatch.setattr(intmod.subprocess, "run", lambda *a, **k: _pr_json(payload))
+
+    prs = intmod.open_prs(tmp_path)
+
+    assert [pr["branch"] for pr in prs] == ["horus/chore-continuity", "fix/usage-flake"]
+    assert [pr["number"] for pr in prs] == ["7", "8"]
 
 
 def test_open_horus_prs_non_repo_returns_none_without_gh(tmp_path, monkeypatch):

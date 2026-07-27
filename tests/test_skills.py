@@ -241,7 +241,7 @@ def test_scope_cards_skill_registered_as_high_level_shaping():
 
 def test_backlog_refine_owns_interactive_flow_and_ready_contract():
     refine = next(s for s in skills.SKILLS if s.name == "backlog-refine")
-    assert refine.version == 5
+    assert refine.version == 6
     assert "Here is our current picture" in refine.content
     assert "product direction in 2–3 lines" in refine.content
     assert "card by card" in refine.content and "Verdict" in refine.content
