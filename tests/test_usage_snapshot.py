@@ -257,3 +257,70 @@ def test_render_all_accounts_shows_percents_and_unknown():
     out = usage_snapshot.render_all_accounts(rows)
     assert "claude/work" in out and "30%" in out and "weekly 12%" in out
     assert "codex/default  unknown" in out
+
+
+def test_codex_reader_carries_the_rollout_capture_time_not_now(tmp_path, monkeypatch):
+    """Codex reports capacity only when it takes a turn, so an idle account's newest
+    rollout can be hours old while this read happens right now. Presenting that as
+    current is what let a stale reading hard-refuse a valid dispatch."""
+    _home(tmp_path, monkeypatch)
+    from horus import codex_usage
+
+    report = codex_usage.UsageReport(
+        rollout=tmp_path / "r.jsonl", timestamp="2026-07-04T21:10:00Z",
+        context_tokens=1, context_window=100, context_percent=1.0,
+        primary_percent=99.0, primary_resets_at=1, secondary_percent=None, secondary_resets_at=None,
+    )
+    monkeypatch.setattr(codex_usage, "latest_account_usage", lambda home=None: report)
+
+    snap = usage_snapshot._read_codex(None)
+
+    from datetime import datetime, timezone
+    expected = datetime(2026, 7, 4, 21, 10, tzinfo=timezone.utc).timestamp()
+    assert snap.captured_at == expected
+    # An hour later that reading can still warn, but can no longer refuse.
+    assert not snap.is_authoritative_for_refusal(now=expected + 3 * 3600)
+    assert snap.is_authoritative_for_refusal(now=expected + 60)
+
+
+def test_capture_time_round_trips_through_the_cache(tmp_path, monkeypatch):
+    """Without this the refusal gate would trust a cache hit as freshly captured."""
+    _home(tmp_path, monkeypatch)
+    path = tmp_path / "usage-cache.json"
+    captured = 1_780_000_000.0
+
+    usage_snapshot._write_cache(
+        path, UsageSnapshot(99.0, "2026-07-04 21:10", captured_at=captured), now=captured + 5,
+    )
+    loaded = usage_snapshot._load_cache(path, ttl=None, now=captured + 5)
+
+    assert loaded.snapshot.captured_at == captured
+
+
+def test_a_cache_written_before_capture_tracking_reads_as_unknown_age(tmp_path, monkeypatch):
+    """Back-compat: an old cache file has no `captured_at`, which must read as "the
+    source didn't say" and keep the pre-existing refusal behavior."""
+    _home(tmp_path, monkeypatch)
+    path = tmp_path / "usage-cache.json"
+    path.write_text(
+        '{"ts": 1780000000, "ok": true, "source": "rollout", "percent": 99.0,'
+        ' "resets_at": "2026-07-04 21:10"}',
+        encoding="utf-8",
+    )
+
+    snap = usage_snapshot._load_cache(path, ttl=None, now=1_780_000_005).snapshot
+
+    assert snap.captured_at is None
+    assert snap.reading_age_seconds(now=1_780_000_005) is None
+    assert snap.is_authoritative_for_refusal(now=1_780_000_005)
+
+
+def test_expiring_a_window_preserves_the_capture_time(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    captured = 1_780_000_000.0
+    snap = UsageSnapshot(99.0, "2020-01-01 00:00", 50.0, "2099-01-01 00:00", captured)
+
+    fresh = snap.without_expired_windows(now=captured)
+
+    assert fresh.percent is None          # the past-reset window was blanked
+    assert fresh.captured_at == captured  # ...without losing how old the reading is
