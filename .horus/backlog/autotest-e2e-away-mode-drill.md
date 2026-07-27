@@ -135,3 +135,20 @@ runnable once its two `depends-on` gaps land.
 
   Body-check candidates from the current backlog when arming — and prefer cards whose
   value is mostly *as* a drill leg, so reserving them costs nothing.
+
+  **Reserving a leg is an OPERATION, not a sentence (2026-07-27).** "Chosen and reserved
+  now" above had no mechanism, so the reservation lived only in prose — and a wildcard run
+  found the consequence: `verify-guidance-long-running-services` was the single card
+  `is_autonomous_candidate()` returned, i.e. the deterministic selector was aiming an
+  unattended loop at the one card that must not be built. Prose in this card had zero
+  effect on that card's machine-readable state.
+
+  So: **to reserve a leg, set that card `readiness: deferred` with a `readiness_reason`
+  naming the release trigger** (`released when the drill is armed and this leg is used or
+  dropped, or when the drill is abandoned`). Deferred already means "deliberately inactive
+  until an explicit trigger or owner review" and is already excluded from
+  `is_autonomous_candidate()`, so no new field, state, or code is needed — a reserved leg
+  simply stops being selectable. Un-reserving is the same edit in reverse.
+
+  Expect the eligible pool to read **0** while legs are reserved. That is the honest
+  number, not a problem to fix by promoting something.
