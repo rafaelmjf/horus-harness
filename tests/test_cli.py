@@ -3062,3 +3062,37 @@ def test_backlog_refine_prompt_only_is_pipeable(tmp_path, monkeypatch, capsys):
     assert "`backlog-refine` skill" in out
     # Nothing but the prompt, so `horus open --prompt "$(...)"` gets no shell noise.
     assert "horus open --prompt" not in out
+
+
+def test_run_resume_accepts_the_id_horus_sessions_shows(tmp_path, monkeypatch, capsys):
+    """End to end: `--resume <horus id>` now resumes instead of dying in 2s with rc=1.
+
+    The operator has only ever been shown the horus id, so this is the value they
+    reach for. It must reach the adapter as the AGENT id.
+    """
+    _home(tmp_path, monkeypatch)
+    from horus.registry import Registry, SessionRecord
+
+    reg = Registry.default()
+    reg.upsert(SessionRecord(
+        session_id="horus-visible", agent="fake", project=str(tmp_path),
+        pid=os.getpid(), status="exited", agent_session_id="agent-real",
+    ))
+
+    rc = main(["run", "continue", "--agent", "fake", "--resume", "horus-visible", "--path", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "is the horus session id" in out and "agent-real" in out
+    resumed = [r for r in reg.all() if r.session_id != "horus-visible"]
+    assert len(resumed) == 1 and resumed[0].agent_session_id == "agent-real"
+
+
+def test_run_resume_with_an_untracked_id_warns_but_still_launches(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+
+    rc = main(["run", "continue", "--agent", "fake", "--resume", "not-in-registry", "--path", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert rc == 0  # never refused — an agent session Horus never tracked is resumable
+    assert "not a session id Horus has tracked" in out

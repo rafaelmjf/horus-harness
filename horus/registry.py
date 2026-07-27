@@ -178,6 +178,20 @@ class SessionRecord:
         )
 
 
+@dataclass(frozen=True)
+class ResumeResolution:
+    """What `--resume` should actually be handed, plus why.
+
+    ``note`` is "" only when the supplied value needed no explanation (it was already
+    the agent id). ``known`` says whether Horus recognized the value at all — false
+    means it passes through unvalidated, which is deliberate: a session Horus never
+    tracked is still resumable by the agent.
+    """
+    agent_session_id: str
+    note: str
+    known: bool
+
+
 # How long a terminal (non-running) row stays in `horus sessions`'s default view
 # before it's hidden behind ``--all`` — long enough to catch "what happened
 # yesterday", short enough that months of dead workers don't bury a live session.
@@ -293,6 +307,68 @@ class Registry:
         self.reconcile()
         row = self._load().get(session_id)
         return self._record(row) if row else None
+
+    def resolve_resume_id(self, supplied: str) -> "ResumeResolution":
+        """Translate whichever session id an operator has in hand into the AGENT id
+        that ``--resume`` actually needs.
+
+        ``horus sessions`` and ``horus tail`` identify a run by its **horus** id;
+        ``--resume`` needs the **agent** conversation id. Passing the visible one used
+        to die in two seconds with rc=1 and nothing explaining which of the two ids
+        was wanted (observed 2026-07-27 resuming a drill worker). So accept either.
+
+        **Lookup order is load-bearing.** The horus id is a row KEY, so it is checked
+        first; the agent-id scan runs only if that misses. A failed resume attempt
+        registers a fresh row whose ``agent_session_id`` is the bad horus id that was
+        passed in — so scanning agent ids first would match that self-inflicted row
+        and hand the same wrong value straight back to the adapter.
+
+        Never refuses an unrecognized value: an agent session Horus never tracked is
+        legitimately resumable, so an unknown id passes through carrying a note rather
+        than blocking the launch.
+        """
+        supplied = (supplied or "").strip()
+        if not supplied:
+            return ResumeResolution(agent_session_id=supplied, note="", known=False)
+        rows = self._load()
+        row = rows.get(supplied)
+        if row is not None:
+            agent_id = str(row.get("agent_session_id") or "").strip()
+            if agent_id and agent_id != supplied:
+                return ResumeResolution(
+                    agent_session_id=agent_id,
+                    note=(
+                        f"resume: {supplied} is the horus session id; using the agent "
+                        f"session id {agent_id} that `--resume` needs"
+                    ),
+                    known=True,
+                )
+            # Equal (or a row predating the split, which normalizes to the same value)
+            # means the two ids coincide — nothing to translate.
+            if agent_id:
+                return ResumeResolution(agent_session_id=supplied, note="", known=True)
+            return ResumeResolution(
+                agent_session_id=supplied,
+                note=(
+                    f"resume: horus session {supplied} never recorded an agent session id "
+                    "(it may have failed before the agent started), so there is nothing to "
+                    "translate — passing the value through as given"
+                ),
+                known=True,
+            )
+        for candidate in rows.values():
+            if str(candidate.get("agent_session_id") or "").strip() == supplied:
+                return ResumeResolution(agent_session_id=supplied, note="", known=True)
+        return ResumeResolution(
+            agent_session_id=supplied,
+            note=(
+                f"resume: {supplied} is not a session id Horus has tracked — neither a "
+                "horus id nor a recorded agent id. Passing it through; if the agent "
+                "rejects it, check `horus sessions --all` (the id shown there is the "
+                "horus id, and `--resume` wants the agent id)"
+            ),
+            known=False,
+        )
 
     # --- writes ---------------------------------------------------------------
 
