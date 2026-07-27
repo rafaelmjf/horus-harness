@@ -8,7 +8,7 @@
 > at most once and do not restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 14 -->
+<!-- horus-block-version: 15 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -101,8 +101,20 @@ Working discipline (every session, whether or not the work is delegated):
   actually do is the permission posture, enforced by the agent CLI itself.
 - **Reproduce the gate; never trust the report.** Before calling work done, observe a
   deterministic signal yourself: rerun the check locally, or watch a *required* CI
-  check go green on the exact commit — plus one live probe of the changed surface.
+  check go green on the exact commit — `horus merge-watch <pr|sha>` does exactly that
+  (bounded `--interval`/`--timeout`, prints each check as it resolves), so do not
+  hand-roll a polling loop for it — plus one live probe of the changed surface.
   A confident "tests pass" in prose is not evidence, whoever wrote it.
+- **A wait must be able to fail loudly, and must be accounted for before the turn ends.**
+  Never send stderr to `/dev/null` on a command whose output drives a loop condition or
+  a gate: the discarded line is usually the one that explains the hang, and a silent
+  wrong condition turns a one-second error into a wait that never ends. Run any wait's
+  exit condition once in the foreground and see it produce output before backgrounding
+  it. Then close the loop: a backgrounded wait either reported or you stop it — do not
+  assume its timeout bounds it. (Observed 2026-07-27: three loops on a `gh` flag that
+  did not exist, with its `unknown flag` error discarded, cost ~30 minutes; a fourth was
+  still polling a deleted PR an hour later, past its stated timeout, and only the owner
+  noticing a task indicator surfaced it.)
 - **Bound each step to a green, committed-and-pushed checkpoint**, so there is always a
   clean resume point and nothing half-finished stranded only on this machine.
 - **Put safety in the code, not the reviewer.** Guards and invariants prevent the
