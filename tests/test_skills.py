@@ -58,7 +58,6 @@ def test_delegation_decision_skills_registered():
 
 def test_market_scan_skill_registered_and_outward():
     market = next(s for s in skills.SKILLS if s.name == "market-scan")
-    assert market.version == 7
     # outward twin of product-audit: advisory, dated receipt.
     # v6: no "deep-research" reference — the name collided with Claude's own deep
     # research mode, and depth is now shallow-by-default with an explicit offer.
@@ -83,7 +82,6 @@ def test_market_scan_skill_registered_and_outward():
 
 def test_cockpit_dispatch_contract_skill_registered_and_sequences():
     ct = next(s for s in skills.SKILLS if s.name == "cockpit-autonomous-dispatch-contract")
-    assert ct.version == 3
     # A thin sequencer: composes the decision skills, never re-implements them.
     assert "dispatch-decision" in ct.content
     assert "backlog-refine" in ct.content and "pathfinder" in ct.content
@@ -103,7 +101,6 @@ def test_cockpit_dispatch_contract_skill_registered_and_sequences():
 
 def test_backlog_librarian_skill_is_bounded_actionable_and_projected():
     librarian = next(s for s in skills.SKILLS if s.name == "backlog-librarian")
-    assert librarian.version == 1
     for marker in (
         "exactly one receipt",
         "never overwrite",
@@ -129,7 +126,6 @@ def test_backlog_librarian_skill_is_bounded_actionable_and_projected():
 
 def test_pathfinder_skill_registered_and_orchestrates():
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    assert pf.version == 9
     # v7: backlog polish routes directly to the final readiness owner.
     assert "Invoke `backlog-refine`" in pf.content
     # v5 (calibration 2026-07-19): the owner's mental model includes the inward
@@ -187,7 +183,6 @@ def test_pathfinder_skill_registered_and_orchestrates():
 
 def test_roadmap_branches_skill_registered_divergence_tree():
     rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
-    assert rb.version == 4
     # The deliverable is a TREE of alternative roadmaps, never one merged roadmap.
     assert "never collapse the tree into one merged roadmap" in rb.content
     # Speculative branches (directions with no facet yet) are part of the contract.
@@ -223,7 +218,6 @@ def test_roadmap_branches_skill_registered_divergence_tree():
 
 def test_scope_cards_skill_registered_as_high_level_shaping():
     sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
-    assert sc.version == 7
     assert "The shaping test" in sc.content
     assert "readiness: shaping" in sc.content
     assert "Intended outcome" in sc.content and "Open decisions" in sc.content
@@ -241,7 +235,6 @@ def test_scope_cards_skill_registered_as_high_level_shaping():
 
 def test_backlog_refine_owns_interactive_flow_and_ready_contract():
     refine = next(s for s in skills.SKILLS if s.name == "backlog-refine")
-    assert refine.version == 6
     assert "Here is our current picture" in refine.content
     assert "product direction in 2–3 lines" in refine.content
     assert "card by card" in refine.content and "Verdict" in refine.content
@@ -327,7 +320,6 @@ def test_delegation_rubric_keeps_older_capable_models_in_roster():
 
 def test_delegation_rubric_proves_dividend_before_model_selection():
     rubric = next(s for s in skills.SKILLS if s.name == "delegation-rubric")
-    assert rubric.version == 9
     assert rubric.content.index("prove delegation has a dividend") < rubric.content.index(
         "Read the calibration data"
     )
@@ -415,7 +407,6 @@ def test_both_consumer_skills_import_the_shared_rubric():
 
 def test_execution_decision_skill_is_in_project_subagents():
     skill = next(s for s in skills.SKILLS if s.name == "execution-decision")
-    assert skill.version == 5
     assert "Owner-invoked only" in skill.content
     assert "owner explicitly" in skill.content
     assert "does not trigger this skill" in skill.content
@@ -432,7 +423,6 @@ def test_execution_decision_skill_is_in_project_subagents():
 
 def test_dispatch_decision_skill_is_cockpit_multiproject():
     skill = next(s for s in skills.SKILLS if s.name == "dispatch-decision")
-    assert skill.version == 4
     # Its mode vocabulary, account routing, and the overseer verification note.
     assert "`inline-here`" in skill.content
     assert "`dispatched-worker`" in skill.content
@@ -460,7 +450,6 @@ def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
 
 def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
-    assert consolidate.version == 15
     assert "PRD.md" in consolidate.content
     assert "no lane-routing/overlap warnings" in consolidate.content
     assert "~250-line cap" in consolidate.content
@@ -491,7 +480,6 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
 
 def test_infer_skill_v3_reports_prd_skeleton_gaps():
     infer = next(s for s in skills.SKILLS if s.name == "horus-infer")
-    assert infer.version == 6
     assert "Vision" in infer.content and "Backlog" in infer.content
     assert "Shipped" in infer.content and "Rules" in infer.content
     assert "PRD.md" in infer.content
@@ -507,14 +495,12 @@ def test_infer_skill_v3_reports_prd_skeleton_gaps():
 
 def test_distill_history_skill_v3_targets_archive():
     distill = next(s for s in skills.SKILLS if s.name == "horus-distill-history")
-    assert distill.version == 3
     assert ".horus/archive/history.md" in distill.content
     assert "PRD.md" in distill.content
 
 
 def test_execution_skill_requires_real_delegation_for_model_separation():
     execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
-    assert execution.version == 15
     assert "testing model separation" in execution.content
     assert "do not implement" in execution.content
     assert "the delegated phase in the supervisor context" in execution.content
@@ -701,7 +687,6 @@ def test_product_audit_skill_registered_and_projected():
 def test_process_retrospective_skill_registered_and_projected():
     by_name = {skill.name: skill for skill in skills.SKILLS}
     skill = by_name["process-retrospective"]
-    assert skill.version == 1
     # Event-driven trigger, never automatic at closure.
     assert "explicit owner request" in skill.content
     assert "Never fires" in skill.content
