@@ -126,21 +126,20 @@ HORUS_BRANCH_PREFIX = "horus/"
 _PR_LIST_TIMEOUT = 5.0
 
 
-def open_horus_prs(root: str | Path, *, timeout: float = _PR_LIST_TIMEOUT) -> list[dict[str, str]] | None:
-    """Open PRs from Horus-created branches (head ``horus/…``), or ``None`` when
-    the answer is unknowable (no ``gh``, unauthenticated, no GitHub remote,
-    timeout).
+def open_prs(root: str | Path, *, timeout: float = _PR_LIST_TIMEOUT) -> list[dict[str, str]] | None:
+    """EVERY open PR on the repo (number, head branch, url, title), or ``None`` when
+    the answer is unknowable (no ``gh``, unauthenticated, no GitHub remote, timeout).
 
-    Best-effort read-only probe behind the "continuity PR still open" nudge:
-    when a repo's GitHub "Allow auto-merge" setting is off, ``integrate()``'s
-    auto-merge request fails or silently never fires, and the PR sits OPEN with
-    the continuity stranded on its branch. Never raises.
+    Unfiltered on purpose: the ``horus/`` prefix identifies continuity PRs only, and
+    the deliveries that make a backlog picture wrong are ordinary feature/fix PRs
+    other sessions opened (``fix/…``, ``auto/<card>``). A caller that wants only
+    continuity PRs filters this — see :func:`open_horus_prs`. Never raises.
     """
     if not (Path(root) / ".git").exists():  # covers dirs and worktree files
         return None
     try:
         r = subprocess.run(  # noqa: S603
-            ["gh", "pr", "list", "--state", "open", "--json", "headRefName,url,title"],
+            ["gh", "pr", "list", "--state", "open", "--json", "number,headRefName,url,title"],
             cwd=str(Path(root)),
             capture_output=True,
             text=True,
@@ -159,13 +158,30 @@ def open_horus_prs(root: str | Path, *, timeout: float = _PR_LIST_TIMEOUT) -> li
         return None
     return [
         {
+            "number": str(p.get("number", "")),
             "branch": str(p.get("headRefName", "")),
             "url": str(p.get("url", "")),
             "title": str(p.get("title", "")),
         }
         for p in prs
-        if isinstance(p, dict) and str(p.get("headRefName", "")).startswith(HORUS_BRANCH_PREFIX)
+        if isinstance(p, dict)
     ]
+
+
+def open_horus_prs(root: str | Path, *, timeout: float = _PR_LIST_TIMEOUT) -> list[dict[str, str]] | None:
+    """Open PRs from Horus-created branches (head ``horus/…``), or ``None`` when
+    the answer is unknowable (no ``gh``, unauthenticated, no GitHub remote,
+    timeout).
+
+    Best-effort read-only probe behind the "continuity PR still open" nudge:
+    when a repo's GitHub "Allow auto-merge" setting is off, ``integrate()``'s
+    auto-merge request fails or silently never fires, and the PR sits OPEN with
+    the continuity stranded on its branch. Never raises.
+    """
+    prs = open_prs(root, timeout=timeout)
+    if prs is None:
+        return None
+    return [pr for pr in prs if pr["branch"].startswith(HORUS_BRANCH_PREFIX)]
 
 
 def pr_for_branch(

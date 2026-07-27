@@ -1118,3 +1118,63 @@ def test_mission_all_dead_envelopes_reads_as_no_live_envelope(tmp_path, monkeypa
     body = _plain(ui._body_text())
     assert "no live dispatch envelope" in body
     assert "dead-one · REVOKED" in body  # still visible, just not counted live
+
+
+def test_backlog_pane_o_launches_an_attended_refine_pass(tmp_path, monkeypatch):
+    """The one action the card asked for: `o` on the backlog pane hands the whole
+    backlog to `backlog-refine` through the SAME accounts -> launch pipeline every
+    other launch uses, so nothing about account/model/posture is reimplemented."""
+    from horus import terminal_tui
+
+    ui = _new_ui(tmp_path, monkeypatch)
+    ui.project = tmp_path
+    ui._show("backlog")
+
+    # Drive the real binding, not just the method behind it, so the key stays wired.
+    bindings = [b for b in ui.application.key_bindings.bindings if b.keys == ("o",)]
+    assert len(bindings) == 1, "the backlog pane's refine key must be registered once"
+    binding = bindings[0]
+    assert binding.filter(), "must be live on the backlog pane"
+    binding.handler(None)
+
+    assert ui.screen == "accounts"
+    assert ui.pending_mode == terminal_tui._MODE_REFINE
+    assert ui.pending_card is None
+    # Not built at the keypress: the prompt reads `gh pr list`, so it is deferred to
+    # spawn time where a second of latency is expected.
+    assert ui.pending_prompt is None
+    assert ui.pending_origin == "backlog"
+
+
+def test_refine_launch_prompt_is_built_at_spawn_time(tmp_path, monkeypatch):
+    from horus import terminal_tui
+
+    (tmp_path / ".horus" / "backlog").mkdir(parents=True)
+    (tmp_path / ".horus" / "backlog" / "a-card.md").write_text(
+        "---\nstatus: open\npriority: high\nreadiness: ready\nautonomy: eligible\n---\n# A\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(terminal_tui.backlog_refine.integration, "open_prs", lambda root, timeout=0: [])
+    monkeypatch.setattr(terminal_tui.backlog_refine.closure, "unmerged_branch_findings", lambda root: [])
+    monkeypatch.setattr(terminal_tui.backlog_refine.routines, "freshness_signals", lambda root: [])
+
+    prompt = terminal_tui._launch_prompt(
+        terminal_tui._Launch(
+            tmp_path, "claude", terminal_tui._MODE_REFINE, None, None, None, None, None, "default",
+        )
+    )
+
+    assert "`backlog-refine` skill" in prompt
+    assert "1 active cards" in prompt
+
+
+def test_refine_key_is_scoped_to_the_backlog_pane(tmp_path, monkeypatch):
+    """`o` must not fire on other screens — the backlog-only bindings are filtered
+    precisely so they never shadow a same-letter binding elsewhere."""
+    ui = _new_ui(tmp_path, monkeypatch)
+    ui.project = tmp_path
+    ui._show("project")
+
+    binding = next(b for b in ui.application.key_bindings.bindings if b.keys == ("o",))
+
+    assert not binding.filter()

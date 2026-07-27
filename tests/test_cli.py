@@ -2970,3 +2970,95 @@ def test_git_push_recognizer_does_not_fire_on_other_git_verbs(monkeypatch, capsy
         assert not cli._is_git_push_command(command), command
     assert cli._is_git_push_command("git push")
     assert cli._is_git_push_command("FOO=1 git push origin main")
+
+
+def test_backlog_list_renders_the_approved_sequence(tmp_path, monkeypatch, capsys):
+    """`order:` has a consumer, which is the whole point: the sequence renders with no
+    LLM in the loop, and an unstamped card drops to the pool behind the stamped ones."""
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    for name, order in (("second", "20"), ("first", "10")):
+        _write_backlog_card(
+            tmp_path, name, status="open", priority="low", order=order,
+            readiness="ready", autonomy="eligible",
+        )
+    _write_backlog_card(
+        tmp_path, "unstamped", status="open", priority="high",
+        readiness="ready", autonomy="eligible",
+    )
+    capsys.readouterr()
+
+    assert main(["backlog", "list", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+
+    assert "#10  first" in out and "#20  second" in out
+    # Sequence wins over priority, and the pool follows the stamped cards.
+    assert out.index("first") < out.index("second") < out.index("unstamped")
+
+
+def test_backlog_list_stays_byte_identical_without_any_order_stamp(tmp_path, monkeypatch, capsys):
+    """Zero migration: a project that has never been ordered shows no sequence column."""
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "card-a", status="open", priority="later")
+    capsys.readouterr()
+
+    assert main(["backlog", "list", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+
+    assert "  card-a  [open]" in out  # no sequence gutter inserted
+    assert "#" not in out
+
+
+def test_backlog_list_warns_on_an_ambiguous_sequence(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    for name in ("one", "two"):
+        _write_backlog_card(
+            tmp_path, name, status="open", priority="low", order="10",
+            readiness="ready", autonomy="eligible",
+        )
+    capsys.readouterr()
+
+    assert main(["backlog", "list", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+
+    assert "duplicate order 10" in out
+    assert "one, two" in out
+
+
+def test_backlog_refine_prints_the_prompt_and_writes_nothing(tmp_path, monkeypatch, capsys):
+    """The verb is print-only: the one-keypress launch lives in the TUI, and this
+    command must never touch a card."""
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    _write_backlog_card(tmp_path, "card-a", status="open", priority="high")
+    card = tmp_path / ".horus" / "backlog" / "card-a.md"
+    before = card.read_text(encoding="utf-8")
+    monkeypatch.setattr(cli.backlog_refine.integration, "open_prs", lambda root, timeout=0: [])
+    monkeypatch.setattr(cli.backlog_refine.closure, "unmerged_branch_findings", lambda root: [])
+    monkeypatch.setattr(cli.backlog_refine.routines, "freshness_signals", lambda root: [])
+    capsys.readouterr()
+
+    assert main(["backlog", "refine", "--path", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+
+    assert "`backlog-refine` skill" in out
+    assert "never rewrites a card" in out
+    assert card.read_text(encoding="utf-8") == before
+
+
+def test_backlog_refine_prompt_only_is_pipeable(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes", "--no-skills"])
+    monkeypatch.setattr(cli.backlog_refine.integration, "open_prs", lambda root, timeout=0: [])
+    monkeypatch.setattr(cli.backlog_refine.closure, "unmerged_branch_findings", lambda root: [])
+    monkeypatch.setattr(cli.backlog_refine.routines, "freshness_signals", lambda root: [])
+    capsys.readouterr()
+
+    assert main(["backlog", "refine", "--path", str(tmp_path), "--prompt-only"]) == 0
+    out = capsys.readouterr().out
+
+    assert "`backlog-refine` skill" in out
+    # Nothing but the prompt, so `horus open --prompt "$(...)"` gets no shell noise.
+    assert "horus open --prompt" not in out

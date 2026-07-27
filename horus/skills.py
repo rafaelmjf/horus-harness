@@ -2312,14 +2312,15 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
 This skill owns the **single execution-ready card contract**. It turns existing
 cards — including `scope-cards` shaping drafts — into honest Ready, Shaping,
-Gated, or Deferred state. The TUI may launch this flow later; the LLM judgment and
-owner decisions remain here.
+Gated, or Deferred state. Two launch surfaces exist (`horus backlog refine` prints
+the prompt; `o` on the TUI's backlog pane opens an attended session), and both
+hand straight over to this skill: the LLM judgment and owner decisions live here.
 
 ## Hard boundary
 
@@ -2330,6 +2331,26 @@ owner decisions remain here.
   frontmatter lint is not refinement.
 - Use LLM judgment first and deterministic checks second. A missing field may be
   by design; a clean schema does not make a weak card valuable.
+
+## 0. Reconcile against live delivery state before the picture
+
+The cards alone cannot say what is still open work. Other sessions open bug PRs and
+leave branches unmerged, so a card whose fix is already sitting on an open PR reads
+as untouched — and `gh pr list` shows only OPEN PRs while nothing at all inspects
+branches. Before the picture:
+
+1. `git fetch --all --prune`, then read **open PRs** and **unmerged remote
+   branches** (`horus close --check` names the branches; a launch through `horus
+   backlog refine` / the TUI already embeds both in the prompt).
+2. Name every card that an open PR, an unmerged branch, or already-merged work
+   answers — in full or in part. A card covered by a merged delivery is a `ship`/
+   archive candidate, not a refinement decision; a card sitting on an open PR is
+   in flight and must not be re-scoped or re-minted as Ready underneath it.
+3. If continuity is stale, consolidate first so the picture rests on current state
+   rather than on the previous session's prose.
+
+Report what you found before step 1's picture, so the owner sees the same ground
+truth the classification rests on.
 
 ## 1. Present the backlog picture before any questions
 
@@ -2477,6 +2498,14 @@ When ordering is requested, respect `depends-on`, branch grouping, priority, and
 `surface`/`parallel` collisions. Propose sparse integer `order` values with gaps of
 10; explain whenever a constraint forced a position. Unordered cards stay in the
 unsequenced pool. Ordering is owner-approved planning, never auto-routing.
+
+`order` is consumed deterministically, with no LLM in the loop: `horus backlog list`,
+`--tree`, and the TUI all sort on `(queue, order missing?, order, priority-rank,
+name)`. So it sequences cards **within one readiness queue** — a repeated number
+across two different queues is fine, two cards claiming the same number inside one
+queue is a warned-about ambiguity. Only an integer counts; `order: soon` leaves the
+card unsequenced. Write the value only where sequencing is decision-bearing: a
+stamp on every card is noise that the next insert has to renumber around.
 
 End with the updated picture and the exact remaining pending decisions. Do not
 dispatch, schedule, implement, or invoke pathfinder unless the product direction
@@ -2851,7 +2880,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("market-scan", 7, _MARKET_SCAN_SKILL),
     Skill("roadmap-branches", 4, _ROADMAP_BRANCHES_SKILL),
     Skill("scope-cards", 7, _SCOPE_CARDS_SKILL),
-    Skill("backlog-refine", 5, _BACKLOG_REFINE_SKILL),
+    Skill("backlog-refine", 6, _BACKLOG_REFINE_SKILL),
     Skill("pathfinder", 9, _PATHFINDER_SKILL),
     Skill("cockpit-autonomous-dispatch-contract", 3, _COCKPIT_DISPATCH_SKILL),
 )

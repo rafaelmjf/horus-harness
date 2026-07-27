@@ -20,11 +20,15 @@ def _mk_card(
     readiness_reason="",
     autonomy="",
     last_refined="",
+    order="",
+    priority="later",
     body="Card body.\n",
 ):
     hdir = root / ".horus" / "backlog"
     hdir.mkdir(parents=True, exist_ok=True)
-    lines = ["---", f"status: {status}", "priority: later", "tier: sonnet", "created: 2026-07-11"]
+    lines = ["---", f"status: {status}", f"priority: {priority}", "tier: sonnet", "created: 2026-07-11"]
+    if order != "":
+        lines.append(f"order: {order}")
     if parallel:
         lines.append(f"parallel: {parallel}")
     if surface:
@@ -564,3 +568,98 @@ def test_readiness_count_summary_uses_canonical_labels():
         backlog.QUEUE_UNCLASSIFIED,
     ):
         assert f"{labels[key]} {counts[key]}" in rest
+
+
+# ---------------------------------------------------------------------------
+# Sparse `order:` — the owner-approved execution sequence
+# ---------------------------------------------------------------------------
+
+def test_order_parses_as_int_and_absent_stays_unsequenced(tmp_path):
+    _mk_card(tmp_path, "stamped", order="20")
+    _mk_card(tmp_path, "bare")
+
+    cards = {c.name: c for c in backlog.load_cards(tmp_path)}
+
+    assert cards["stamped"].order == 20
+    assert cards["bare"].order is None
+
+
+def test_non_integer_order_is_unsequenced_not_coerced(tmp_path):
+    """A malformed stamp must never be guessed into a position — it drops to the
+    pool and says so, rather than silently reordering the owner's plan."""
+    _mk_card(tmp_path, "vague", order="soon")
+    _mk_card(tmp_path, "fractional", order="1.5")
+
+    cards = {c.name: c for c in backlog.load_cards(tmp_path)}
+    assert cards["vague"].order is None
+    assert cards["fractional"].order is None
+
+    messages = [f.message for f in backlog.order_findings(list(cards.values()))]
+    assert any("non-integer order 'soon'" in m for m in messages)
+    assert any("non-integer order '1.5'" in m for m in messages)
+
+
+def test_ordered_cards_sort_by_order_ahead_of_the_unsequenced_pool(tmp_path):
+    # Deliberately adversarial: alphabetical order, priority, and `order:` all
+    # disagree, so only the documented sort key produces this sequence.
+    _mk_card(tmp_path, "zebra", order="10", priority="low", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "alpha", order="20", priority="high", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "beta", priority="high", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "yak", priority="low", readiness="ready", autonomy="eligible")
+
+    names = [c.name for c in sorted(backlog.load_cards(tmp_path), key=backlog.readiness_sort_key)]
+
+    # Stamped cards first in stamp order; the pool keeps today's priority ordering.
+    assert names == ["zebra", "alpha", "beta", "yak"]
+
+
+def test_order_sequences_within_a_queue_not_across_queues(tmp_path):
+    """Every renderer prints per readiness queue, so `order` is a per-queue
+    sequence: a Deferred card stamped 10 never outranks a Ready card stamped 20."""
+    _mk_card(tmp_path, "ready-later", order="20", readiness="ready", autonomy="eligible")
+    _mk_card(
+        tmp_path, "deferred-first", order="10",
+        readiness="deferred", readiness_reason="waiting on the owner",
+    )
+
+    names = [c.name for c in sorted(backlog.load_cards(tmp_path), key=backlog.readiness_sort_key)]
+
+    assert names == ["ready-later", "deferred-first"]
+
+
+def test_unordered_backlog_sorts_exactly_as_before(tmp_path):
+    """Zero migration: with no `order:` anywhere the sequence is unchanged."""
+    _mk_card(tmp_path, "b-card", priority="high", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "a-card", priority="low", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "c-card", priority="high", readiness="ready", autonomy="eligible")
+
+    names = [c.name for c in sorted(backlog.load_cards(tmp_path), key=backlog.readiness_sort_key)]
+
+    assert names == ["b-card", "c-card", "a-card"]  # priority, then filename
+
+
+def test_duplicate_order_warns_within_a_queue_only(tmp_path):
+    _mk_card(tmp_path, "first", order="20", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "second", order="20", readiness="ready", autonomy="eligible")
+    _mk_card(
+        tmp_path, "elsewhere", order="20",
+        readiness="shaping", readiness_reason="still scoping",
+    )
+
+    messages = [f.message for f in backlog.order_findings(backlog.load_cards(tmp_path))]
+    dupes = [m for m in messages if "duplicate order" in m]
+
+    assert len(dupes) == 1
+    assert "first, second" in dupes[0]
+    assert "Ready—Autonomous eligible" in dupes[0]
+    assert "elsewhere" not in dupes[0]  # a repeat in another queue is a separate sequence
+
+
+def test_hygiene_findings_reports_duplicate_order(tmp_path):
+    """The check rides consolidate and `close --check`, where card hygiene lives."""
+    _mk_card(tmp_path, "one", order="10", readiness="ready", autonomy="eligible")
+    _mk_card(tmp_path, "two", order="10", readiness="ready", autonomy="eligible")
+
+    messages = [f.message for f in backlog.hygiene_findings(tmp_path)]
+
+    assert any("duplicate order 10" in m for m in messages)

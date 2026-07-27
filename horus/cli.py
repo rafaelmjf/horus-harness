@@ -22,6 +22,7 @@ from horus import (
     backend,
     backlog,
     backlog_migrate,
+    backlog_refine,
     backlog_tree,
     batch,
     brainstorm,
@@ -2583,7 +2584,7 @@ def cmd_backlog(args: argparse.Namespace) -> int:
         return 0
 
     if args.backlog_cmd is None:
-        print("error: pass a backlog subcommand (list|migrate|claim|ship|review) or --tree")
+        print("error: pass a backlog subcommand (list|migrate|claim|ship|review|refine) or --tree")
         return 2
 
     if args.backlog_cmd == "list":
@@ -2594,13 +2595,19 @@ def cmd_backlog(args: argparse.Namespace) -> int:
             scope = f" with type={args.type}" if args.type else ""
             print(f"No cards in {HORUS_DIR}/{backlog.BACKLOG_DIR}/{scope}.")
             return 0
+        any_ordered = any(c.order is not None for c in cards)
         for group in backlog.readiness_groups(cards):
             print(f"{group.label} ({len(group.cards)})")
             for c in group.cards:
                 parallel = c.parallel or "unstated"
                 surface = ", ".join(c.surface) if c.surface else "unverified"
+                # The approved sequence is the point of `order:`, so it leads the row
+                # (aligned, so unstamped cards line up with stamped ones rather than
+                # shifting left). Blank when nothing in this project is sequenced.
+                stamp = f"#{c.order}" if c.order is not None else "·"
+                seq = f"{stamp:>4}  " if any_ordered else ""
                 print(
-                    f"  {c.name}  [{c.status}]  priority={c.priority or '-'} "
+                    f"  {seq}{c.name}  [{c.status}]  priority={c.priority or '-'} "
                     f"tier={c.tier or '-'} type={c.type} parallel={parallel}"
                 )
                 print(f"      {c.title}")
@@ -2611,6 +2618,10 @@ def cmd_backlog(args: argparse.Namespace) -> int:
                     print(f"      unclassified: {backlog.autonomy_block_reason(c)}")
                 if c.shipped_pr or c.shipped_sha:
                     print(f"      shipped: pr={c.shipped_pr or '-'} sha={c.shipped_sha or '-'}")
+        # An order stamp that can't express a sequence is only visible where the
+        # sequence is rendered, so warn right here as well as at consolidate/close.
+        for finding in backlog.order_findings(cards):
+            print(f"\n  warn: {finding.message}")
         if any(
             backlog.readiness_queue(card) == backlog.QUEUE_UNCLASSIFIED
             for card in cards
@@ -2619,6 +2630,22 @@ def cmd_backlog(args: argparse.Namespace) -> int:
                 "\nUnclassified cards stay unscheduled. Run the owner-gated "
                 "backlog-refine flow to propose classifications; this command never rewrites cards."
             )
+        return 0
+
+    if args.backlog_cmd == "refine":
+        # Print-only on purpose: the one-keypress launch lives in the TUI's backlog
+        # pane, which already owns account/model/posture selection. Duplicating
+        # `horus open`'s whole flag surface inside this verb would buy nothing.
+        prompt = backlog_refine.refine_prompt(root)
+        if args.prompt_only:
+            print(prompt, end="")
+            return 0
+        print(prompt, end="")
+        print(
+            "\n--- attended pass, not a dispatch ---\n"
+            "Launch it with:  horus open --prompt \"$(horus backlog refine --prompt-only)\"\n"
+            "or press `o` on the TUI's backlog pane. This command never rewrites a card.\n"
+        )
         return 0
 
     if args.backlog_cmd == "migrate":
@@ -5292,6 +5319,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_backlog_review.add_argument("--path", default=".", help="project root (default: cwd)")
     p_backlog_review.set_defaults(func=cmd_backlog)
+
+    p_backlog_refine = backlog_sub.add_parser(
+        "refine",
+        help="print the launch prompt for an owner-attended refine + order pass "
+        "(reads open PRs/branches/continuity; never rewrites a card)",
+    )
+    p_backlog_refine.add_argument("--path", default=".", help="project root (default: cwd)")
+    p_backlog_refine.add_argument(
+        "--prompt-only", action="store_true",
+        help="emit just the prompt, for piping: horus open --prompt \"$(horus backlog refine --prompt-only)\"",
+    )
+    p_backlog_refine.set_defaults(func=cmd_backlog)
 
     p_account = sub.add_parser("account", help="show the detected agent account, alias, and isolation dir")
     p_account.add_argument("--agent", default="claude", help="which agent's account to inspect (default: claude)")
