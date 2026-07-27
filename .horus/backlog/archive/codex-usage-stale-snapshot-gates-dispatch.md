@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 readiness: shaping
 readiness_reason: "Needs investigation of two disagreeing readers over the same snapshot + a staleness horizon before a gate change; not yet a clean ready leg."
@@ -11,6 +11,8 @@ tier: medium
 type: bug
 parallel: safe
 surface: "horus/codex_usage.py (rollout snapshot), horus/usage_snapshot.py (shared preflight+check source), horus/cli.py:1168 (run preflight refusal) / :5067 (--force skip)"
+shipped_pr: 429
+shipped_sha: 52ecc0b
 ---
 
 # codex-usage-stale-snapshot gates dispatch — wrong, and two readers disagree
