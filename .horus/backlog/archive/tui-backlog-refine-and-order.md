@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: ready
 autonomy: attended
@@ -13,6 +13,8 @@ type: feature
 parallel: safe
 created_by: owner
 surface: horus/backlog.py (readiness/order fields + writer), horus/backlog_tree.py, horus/terminal_tui.py (thin trigger from the backlog pane), horus/cli.py
+shipped_pr: 425
+shipped_sha: 9297624
 ---
 
 # tui-backlog-refine-and-order — groom + order the backlog into a schedulable plan
