@@ -1165,7 +1165,23 @@ def _run_usage_preflight(
         return None
 
     reset = reset or "unknown reset"
+    stale_for_refusal = not snap.is_authoritative_for_refusal(now=now)
     if pct >= usage_snapshot.PREFLIGHT_REFUSE and not force:
+        if stale_for_refusal:
+            # A best-effort snapshot must not hard-gate dispatch on a reading that no
+            # longer describes now. Say what it is and how old, then proceed: a false
+            # refusal blocks valid work and teaches `--force`, which disables the gate
+            # entirely — strictly worse than a warning that turns out to be right.
+            print(
+                f"Warning: {who} last REPORTED {pct:.0f}% of its {window} window used "
+                f"(resets {reset}), but the provider captured that reading "
+                f"{_age_phrase(snap.reading_age_seconds(now=now))}."
+            )
+            print(
+                "Not refusing on a stale reading: capacity may have reset or been spent "
+                "since. Check `horus usage check` if this launch is expensive."
+            )
+            return None
         print(f"Refusing to run: {who} has USED {pct:.0f}% of its {window} window (resets {reset}).")
         print("The window is nearly exhausted — the session would likely die mid-run.")
         print("Pass --force to launch anyway, or wait for the reset.")

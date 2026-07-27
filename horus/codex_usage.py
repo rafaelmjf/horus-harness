@@ -378,6 +378,20 @@ def usage_findings(project_root: Path, *, threshold: float = 90.0, home: Path | 
         fast, slow = account_report.windows()
         add_limit(fast)
         add_limit(slow)
+        # Codex reports capacity only when it takes a turn, so an idle account's newest
+        # rollout can be hours or days old. Presenting that percentage bare is the
+        # original complaint on this defect ("presented as current with no staleness
+        # signal") — say when it was captured. The horizon is imported rather than
+        # redefined so this surface and the `horus run` refusal gate cannot drift
+        # apart; the import is lazy because usage_snapshot reads this module.
+        from horus.usage_snapshot import REFUSAL_MAX_READING_AGE
+
+        captured = _timestamp_key(account_report.timestamp)
+        if captured and (time.time() - captured) > REFUSAL_MAX_READING_AGE:
+            parts.append(
+                f"reading captured {_fmt_reset(int(captured))} — Codex has been idle "
+                "since, so these limit percentages are not current"
+            )
 
     level = "warn" if over else "ok"
     suffix = "; run the closure ritual before starting another large turn" if over else ""

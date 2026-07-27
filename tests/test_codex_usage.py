@@ -1,6 +1,7 @@
 """Tests for read-only Codex rollout usage signals."""
 
 import json
+from datetime import datetime, timezone
 
 from horus import codex_usage
 
@@ -231,3 +232,47 @@ def test_label_names_windows_from_their_length():
     assert label(20160) == "2-week"
     assert label(90) == "90min"
     assert codex_usage.RateWindow(1.0, None, None, "5h").label() == "5h"
+
+
+def test_usage_check_says_when_a_reading_is_stale(tmp_path, monkeypatch):
+    """The card's original complaint: an idle account's percentage was "presented as
+    current with no staleness signal". A bare 99% from a two-day-old rollout invites
+    exactly the wrong conclusion."""
+    from horus import codex_usage as cu
+    from horus.usage_snapshot import REFUSAL_MAX_READING_AGE
+
+    now = 1_780_000_000.0
+    captured = now - (2 * 86400)
+    stamp = datetime.fromtimestamp(captured, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    report = cu.UsageReport(
+        rollout=tmp_path / "r.jsonl", timestamp=stamp,
+        context_tokens=1, context_window=100, context_percent=1.0,
+        primary_percent=99.0, primary_resets_at=int(now + 86400), secondary_percent=None,
+        secondary_resets_at=None, primary_window_minutes=10080,
+    )
+    monkeypatch.setattr(cu, "latest_usage", lambda *a, **k: None)
+    monkeypatch.setattr(cu, "latest_account_usage", lambda home=None: report)
+    monkeypatch.setattr(cu.time, "time", lambda: now)
+
+    message = cu.usage_findings(tmp_path)[0].message
+
+    assert "99% used" in message
+    assert "reading captured" in message and "not current" in message
+
+
+def test_usage_check_stays_quiet_about_a_fresh_reading(tmp_path, monkeypatch):
+    from horus import codex_usage as cu
+
+    now = 1_780_000_000.0
+    stamp = datetime.fromtimestamp(now - 60, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    report = cu.UsageReport(
+        rollout=tmp_path / "r.jsonl", timestamp=stamp,
+        context_tokens=1, context_window=100, context_percent=1.0,
+        primary_percent=99.0, primary_resets_at=int(now + 86400), secondary_percent=None,
+        secondary_resets_at=None, primary_window_minutes=10080,
+    )
+    monkeypatch.setattr(cu, "latest_usage", lambda *a, **k: None)
+    monkeypatch.setattr(cu, "latest_account_usage", lambda home=None: report)
+    monkeypatch.setattr(cu.time, "time", lambda: now)
+
+    assert "reading captured" not in cu.usage_findings(tmp_path)[0].message
