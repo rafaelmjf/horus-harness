@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 readiness: ready
 autonomy: eligible
@@ -13,6 +13,8 @@ type: bug
 parallel: safe
 phase: converge
 surface: "horus run --resume argument handling; the id shown by horus sessions / horus tail; run jsonl `agent_session_id`"
+shipped_pr: 426
+shipped_sha: ff6c65a
 ---
 
 # resume-session-id-mismatch — the id you can see is not the id `--resume` wants
