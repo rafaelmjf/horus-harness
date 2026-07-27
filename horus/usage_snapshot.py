@@ -41,6 +41,21 @@ PREFLIGHT_REFUSE = 95.0   # `horus run`: refuse (exit 2) unless --force
 GUARD_ADVISORY = 90.0     # PreToolUse: inject an advisory (existing 90% semantics)
 GUARD_EMERGENCY = 97.0    # PreToolUse: emergency state-save, once per window
 
+# How old a reading may be and still authoritatively REFUSE a launch.
+#
+# A best-effort telemetry snapshot became a hard gate, and on 2026-07-23 it refused a
+# valid `--worker codex --account personal` dispatch at "99% used" when the account was
+# actually ~0% used; the reading came from a rollout that was hours old because Codex
+# had been idle. Reproduced in this repo on 2026-07-26 — an 82% reading traced to a
+# rollout ~27 hours old, and the very next real Codex turn collapsed it to ~1%.
+#
+# Two hours, because the cost is asymmetric. A false refusal blocks legitimate dispatch
+# and teaches `--force`, which disables the gate wholesale; a false green-light merely
+# lets a run die in a window it would have died in anyway, which the run itself reports.
+# Only the *refusal* is gated on freshness — warnings still fire on a stale read,
+# because "possibly low" is exactly what a stale reading can honestly say.
+REFUSAL_MAX_READING_AGE = 2 * 3600.0
+
 
 class UsageSnapshot(NamedTuple):
     percent: float | None            # 5-hour window utilization percent (None = unknown)
@@ -50,6 +65,28 @@ class UsageSnapshot(NamedTuple):
     # caller keeps working; the ``PreToolUse`` guard reads only the 5h fields above.
     weekly_percent: float | None = None   # weekly/secondary window percent (None = unknown)
     weekly_resets_at: str | None = None   # weekly reset time, or None
+    # When the PROVIDER captured this reading (unix epoch seconds), not when Horus
+    # cached it. The distinction is the whole point: Codex's percentages come from the
+    # newest local rollout, so an idle account yields a reading that is hours old while
+    # Horus's own cache entry is seconds old. None = the source does not say.
+    captured_at: float | None = None
+
+    def reading_age_seconds(self, *, now: float | None = None) -> float | None:
+        """How old the underlying reading is, or None when the source doesn't say."""
+        if self.captured_at is None:
+            return None
+        return max(0.0, (time.time() if now is None else now) - self.captured_at)
+
+    def is_authoritative_for_refusal(self, *, now: float | None = None) -> bool:
+        """Whether this reading is fresh enough to justify REFUSING a launch.
+
+        A reading with no capture time is treated as authoritative — that is the
+        pre-existing behavior for every source that doesn't report one, and silently
+        weakening the gate for Claude's pushed statusline readings is not this card's
+        job.
+        """
+        age = self.reading_age_seconds(now=now)
+        return age is None or age <= REFUSAL_MAX_READING_AGE
 
     def has_expired_window(self, *, now: float | None = None) -> bool:
         now = time.time() if now is None else now
@@ -73,7 +110,7 @@ class UsageSnapshot(NamedTuple):
         if _window_expired(weekly_resets_at, now):
             weekly_percent = None
             weekly_resets_at = None
-        return UsageSnapshot(percent, resets_at, weekly_percent, weekly_resets_at)
+        return UsageSnapshot(percent, resets_at, weekly_percent, weekly_resets_at, self.captured_at)
 
     def worst(self) -> tuple[float | None, str | None, str]:
         """The MORE-CONSTRAINING window as ``(percent, reset, label)``.
@@ -182,11 +219,17 @@ def _read_codex(account: str | None) -> UsageSnapshot | None:
     # there makes every consumer say "5h" about a window that resets in six days
     # (observed 2026-07-17, while Codex had the 5-hour limit removed).
     fast, slow = report.windows()
+    # Carry the ROLLOUT's own timestamp, not "now": Codex reports capacity only when it
+    # takes a turn, so an idle account's newest rollout can be hours old while this read
+    # happens right now. Presenting that as current is what let a stale 99%/82% reading
+    # hard-refuse a valid dispatch (2026-07-23, reproduced 2026-07-26).
+    captured = codex_usage._timestamp_key(report.timestamp)
     return UsageSnapshot(
         fast.percent if fast else None,
         codex_usage._fmt_reset(fast.resets_at) if fast else None,
         slow.percent if slow else None,
         codex_usage._fmt_reset(slow.resets_at) if slow else None,
+        captured or None,  # _timestamp_key yields 0.0 on unparseable input
     )
 
 
@@ -320,12 +363,16 @@ def _load_cache(path: Path, *, ttl: float | None, now: float) -> _Cached | None:
     wpct = data.get("weekly_percent")
     weekly_percent = float(wpct) if isinstance(wpct, int | float) else None
     wresets = data.get("weekly_resets_at")
+    # Absent in caches written before capture-time tracking -> None, which reads as
+    # "the source didn't say" and keeps the pre-existing refusal behavior.
+    captured = data.get("captured_at")
     return _Cached(
         UsageSnapshot(
             percent,
             resets if isinstance(resets, str) else None,
             weekly_percent,
             wresets if isinstance(wresets, str) else None,
+            float(captured) if isinstance(captured, int | float) and not isinstance(captured, bool) else None,
         ),
         source,
         ts,
@@ -377,6 +424,9 @@ def _write_cache(
                 "resets_at": snapshot.resets_at,
                 "weekly_percent": snapshot.weekly_percent,
                 "weekly_resets_at": snapshot.weekly_resets_at,
+                # Must round-trip: without it a cache hit would look freshly captured
+                # and the refusal gate would trust a reading it should not.
+                "captured_at": snapshot.captured_at,
             }
         path.write_text(json.dumps(payload), encoding="utf-8")
     except OSError:

@@ -194,3 +194,63 @@ def test_run_fake_adapter_is_not_gated_by_preflight(tmp_path, monkeypatch, capsy
     rc = main(["run", "hello", "--agent", "fake", "--path", str(tmp_path)])
     assert rc == 0
     assert "Refusing to run" not in capsys.readouterr().out
+
+
+# --- staleness: a best-effort reading must never HARD-GATE a launch -----------
+#
+# 2026-07-23: a valid `--worker codex --account personal` dispatch was refused at
+# "99% used" on an account that was ~0% used — the reading came from a rollout hours
+# old because Codex had been idle, and only `--force` got the work through (it then
+# ran to completion and merged a PR). Reproduced 2026-07-26 from a ~27h-old rollout.
+
+STALE_CAPTURE = NOW - (27 * 3600)   # the reproduced case: a 27-hour-old rollout
+FRESH_CAPTURE = NOW - 600           # ten minutes old
+
+
+def test_stale_reading_warns_instead_of_refusing(monkeypatch, capsys):
+    _stub(monkeypatch, UsageSnapshot(99.0, FUTURE_RESET, captured_at=STALE_CAPTURE))
+
+    assert cli._run_usage_preflight("codex", "personal", force=False) is None
+
+    out = capsys.readouterr().out
+    assert "Refusing to run" not in out
+    assert "Warning" in out and "99%" in out
+    assert "27h ago" in out                      # names how old, not just "stale"
+    assert "Not refusing on a stale reading" in out
+
+
+def test_fresh_reading_still_refuses(monkeypatch, capsys):
+    """The gate is not weakened generally — only readings that can't describe now."""
+    _stub(monkeypatch, UsageSnapshot(99.0, FUTURE_RESET, captured_at=FRESH_CAPTURE))
+
+    assert cli._run_usage_preflight("codex", "personal", force=False) == 2
+    assert "Refusing to run" in capsys.readouterr().out
+
+
+def test_reading_without_a_capture_time_keeps_refusing(monkeypatch, capsys):
+    """Claude's pushed statusline readings report no capture time; silently
+    weakening their gate is not this fix's job."""
+    _stub(monkeypatch, UsageSnapshot(99.0, FUTURE_RESET))
+
+    assert cli._run_usage_preflight("claude", None, force=False) == 2
+    assert "Refusing to run" in capsys.readouterr().out
+
+
+def test_a_stale_reading_still_warns_in_the_warn_band(monkeypatch, capsys):
+    """Staleness gates only the REFUSAL. "possibly low" is exactly what an old
+    reading can honestly say, so the advisory bands keep firing."""
+    _stub(monkeypatch, UsageSnapshot(83.0, FUTURE_RESET, captured_at=STALE_CAPTURE))
+
+    assert cli._run_usage_preflight("codex", "personal", force=False) is None
+    assert "Warning" in capsys.readouterr().out
+
+
+def test_refusal_age_boundary_is_the_documented_horizon(monkeypatch):
+    horizon = usage_snapshot.REFUSAL_MAX_READING_AGE
+    just_inside = UsageSnapshot(99.0, FUTURE_RESET, captured_at=NOW - horizon + 1)
+    just_outside = UsageSnapshot(99.0, FUTURE_RESET, captured_at=NOW - horizon - 1)
+
+    _stub(monkeypatch, just_inside)
+    assert cli._run_usage_preflight("codex", "personal", force=False) == 2
+    _stub(monkeypatch, just_outside)
+    assert cli._run_usage_preflight("codex", "personal", force=False) is None
