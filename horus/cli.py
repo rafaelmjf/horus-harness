@@ -1282,12 +1282,23 @@ def cmd_run(args: argparse.Namespace) -> int:
     if refusal is not None:
         return refusal
 
+    # Accept either id form: the operator has only ever been SHOWN the horus id, but
+    # `--resume` needs the agent conversation id. Translating here (not in the
+    # executor) means the detached runner receives an already-correct payload, so both
+    # the foreground and tmux paths resume identically.
+    resume_id = args.resume
+    if resume_id:
+        resolution = registry.Registry.default().resolve_resume_id(resume_id)
+        if resolution.note:
+            print(resolution.note)
+        resume_id = resolution.agent_session_id
+
     request = run_executor.RunRequest(
         session_id=str(uuid.uuid4()), agent=args.agent, project=root, prompt=args.prompt,
         account=args.account,
         posture=_resolve_run_posture(args.posture, getattr(args, "worker", None)),
         model=args.model, effort=args.effort, worker=bool(getattr(args, "worker", None)),
-        resume=args.resume, dispatch_base_sha=dispatch_base_sha, dispatch_pending=dispatch_pending,
+        resume=resume_id, dispatch_base_sha=dispatch_base_sha, dispatch_pending=dispatch_pending,
         delivery_expected=getattr(args, "expect_delivery", False),
         watch=getattr(args, "watch", False),
         proxied=bool(getattr(args, "proxied", False)),

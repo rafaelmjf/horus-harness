@@ -260,6 +260,15 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
             except Exception:  # noqa: BLE001 — a rollup signal must never break completion
                 pass
     emit(f"\n{status} — session {request.session_id} (account {request.account or '-'})")
+    # A resume that dies immediately used to say only "failed", which reads as a
+    # crashed worker rather than a rejected argument — the expensive misreading inside
+    # a scheduled supervise loop. Name the id that was actually used, so the next thing
+    # the operator checks is the id rather than the agent.
+    if request.resume and status != "exited":
+        emit(
+            f"  resumed with agent session id {request.resume} — if the agent rejected it, "
+            "confirm that value against `horus sessions --all` before re-running"
+        )
     return 0 if status == "exited" else 1
 
 

@@ -221,3 +221,118 @@ def test_track_registers_from_a_fake_run(tmp_path):
     assert rec is not None
     assert rec.agent == "fake" and rec.account == "rafa"
     assert rec.status == "exited"  # final status recorded after the stream ended
+
+
+# --- `--resume` id translation ----------------------------------------------
+#
+# `horus sessions` / `horus tail` show the HORUS id; `--resume` needs the AGENT
+# conversation id. Passing the visible one died in 2s with rc=1 and no text
+# (observed 2026-07-27 resuming a drill worker), so both forms are accepted.
+
+def test_resume_translates_the_horus_id_operators_actually_see(tmp_path):
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(session_id="horus-1", agent_session_id="agent-1"))
+
+    res = reg.resolve_resume_id("horus-1")
+
+    assert res.agent_session_id == "agent-1"
+    assert res.known
+    assert "horus session id" in res.note and "agent-1" in res.note
+
+
+def test_resume_passes_an_agent_id_through_without_comment(tmp_path):
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(session_id="horus-1", agent_session_id="agent-1"))
+
+    res = reg.resolve_resume_id("agent-1")
+
+    assert res.agent_session_id == "agent-1"
+    assert res.known
+    assert res.note == ""  # nothing to explain — it was already the right form
+
+
+def test_a_failed_resume_attempt_cannot_feed_its_own_bad_id_back(tmp_path):
+    """The regression that makes lookup ORDER load-bearing.
+
+    A failed `--resume horus-1` registers a NEW row whose `agent_session_id` is the
+    bad horus id it was given. Scanning agent ids before row keys would match that
+    self-inflicted row and hand `horus-1` straight back to the adapter — the exact
+    silent failure again, now permanently.
+    """
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(session_id="horus-1", agent_session_id="agent-1"))
+    # The wreckage of the failed attempt, exactly as run_executor records it.
+    reg.upsert(_rec(session_id="horus-2", agent_session_id="horus-1", status="failed"))
+
+    res = reg.resolve_resume_id("horus-1")
+
+    assert res.agent_session_id == "agent-1"
+
+
+def test_resume_id_unknown_to_horus_passes_through_with_a_note(tmp_path):
+    """Never refuse: an agent session Horus never tracked is still resumable."""
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(session_id="horus-1", agent_session_id="agent-1"))
+
+    res = reg.resolve_resume_id("never-seen")
+
+    assert res.agent_session_id == "never-seen"
+    assert not res.known
+    assert "not a session id Horus has tracked" in res.note
+    assert "horus sessions --all" in res.note
+
+
+def test_resume_row_without_an_agent_id_says_so_rather_than_guessing(tmp_path):
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(session_id="horus-1", agent_session_id=None))
+    # Blank it explicitly: `_record` back-fills a missing key with the horus id, so the
+    # only way to hold "no agent id" is an empty value.
+    raw = json.loads((tmp_path / "registry.json").read_text())
+    raw["sessions"]["horus-1"]["agent_session_id"] = ""
+    (tmp_path / "registry.json").write_text(json.dumps(raw))
+
+    res = reg.resolve_resume_id("horus-1")
+
+    assert res.agent_session_id == "horus-1"  # passed through, not invented
+    assert "never recorded an agent session id" in res.note
+
+
+def test_legacy_row_where_both_ids_coincide_needs_no_translation(tmp_path):
+    reg = _reg(tmp_path)
+    reg.upsert(_rec(session_id="same-id", agent_session_id="same-id"))
+
+    res = reg.resolve_resume_id("same-id")
+
+    assert res.agent_session_id == "same-id"
+    assert res.note == ""
+
+
+def test_a_failed_resume_names_the_id_it_used(tmp_path, monkeypatch, capsys):
+    """"failed" alone reads as a crashed worker rather than a rejected argument —
+    the expensive misreading inside a scheduled supervise loop. The id must be named."""
+    from horus import run_executor
+    from horus.adapters import FakeAdapter
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    class RejectingFake(FakeAdapter):
+        """An agent that refuses the resume id, as `claude --resume <bad id>` does."""
+        def __init__(self) -> None:
+            super().__init__(script=[{"event": "result", "ok": False}])
+
+    monkeypatch.setattr(run_executor.adapters, "get_adapter", lambda _agent: RejectingFake())
+    request = run_executor.RunRequest(
+        session_id="51345678-1234-1234-1234-123456789abc", agent="fake", project=project,
+        prompt="continue", account=None, posture="default", model=None, effort=None,
+        worker=False, resume="agent-xyz", dispatch_base_sha=None, dispatch_pending=0,
+    )
+
+    rc = run_executor.execute(request)
+    out = capsys.readouterr().out
+
+    assert rc == 1
+    assert "resumed with agent session id agent-xyz" in out
+    assert "horus sessions --all" in out
