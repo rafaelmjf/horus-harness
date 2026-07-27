@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 15
+BLOCK_VERSION = 16
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -145,7 +145,14 @@ Working discipline (every session, whether or not the work is delegated):
   remote (`git fetch --all --prune`) before trusting local refs or continuity prose.
   Implement on a feature branch and land it via PR; do not commit straight to the
   default branch unless the project's workflow policy or the user explicitly allows
-  it (continuity closure commits follow that same policy).
+  it (continuity closure commits follow that same policy). **Cut each branch from
+  the synced default branch, not from wherever the checkout happens to be sitting** —
+  branching off the previous task's branch creates a dependent PR out of two
+  independent changes, and a stack is markedly more expensive than two siblings: no
+  CI while it targets a non-default base, and merging the parent can destroy it (see
+  the stacked-PR rule above). Observed 2026-07-27: two changesets sharing one file
+  and touching different functions in it were stacked purely because the checkout was
+  standing on the earlier branch; that accident cost a PR.
 - **Authorize the exact worker envelope before spending.** Agent-initiated delegation
   first proves a concrete context, parallelism, or lower-tier dividend exceeds the
   brief/review/gate/merge/closure tax; default inline when unclear. An owner may instead
