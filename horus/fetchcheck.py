@@ -104,8 +104,8 @@ def warning_line(state: dict[str, Any] | None) -> str:
     branch = state.get("branch") or "?"
     line = (
         f"Horus fetch-check: local branch '{branch}' is {behind} commit(s) behind "
-        "its upstream. Sync before trusting local refs or continuity prose "
-        "(git pull / git rebase), per the fetch-first rule."
+        "its upstream. Sync before trusting local refs or continuity prose — "
+        "`horus sync` fast-forwards when that is safe, per the fetch-first rule."
     )
     if state.get("dirty"):
         line += " Note: the working tree also has uncommitted changes."

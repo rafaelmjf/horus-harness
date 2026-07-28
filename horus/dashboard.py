@@ -1288,7 +1288,7 @@ def _git_html(p: dict[str, Any]) -> str:
     elif g["behind"] or g["ahead"]:
         sync = []
         if g["behind"]:
-            sync.append(f"behind origin by {g['behind']} &mdash; <code>git pull --ff-only</code>")
+            sync.append(f"behind origin by {g['behind']} &mdash; <code>horus sync</code>")
         if g["ahead"]:
             sync.append(f"ahead by {g['ahead']}")
         rows.append("<span class='health-warn'>" + "; ".join(sync) + "</span>")
