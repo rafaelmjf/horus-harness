@@ -5,7 +5,8 @@ readiness: deferred
 readiness_reason: "A strong front-runner emerged (horus-builder, 2026-07-21 — see Candidates/Reviews). The rename itself stays deferred until first external distribution (cost unchanged); the name is effectively pre-decided pending that + a PyPI-availability check + confirming the slight identity rebroadening it implies."
 tier: medium
 created: 2026-07-16
-last_refined: 2026-07-21
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Distribution"
 type: ops
 parallel: safe

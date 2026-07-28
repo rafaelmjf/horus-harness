@@ -4,7 +4,8 @@ priority: high
 readiness: deferred
 readiness_reason: "Defer the whole X5 branch until an owner branch review decides preserve, narrow, split, or drop."
 created: 2026-07-18
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 tier: frontier
 type: feature
 parallel: safe
@@ -88,6 +89,24 @@ host integration that makes Horus useful.
 - The owner can evaluate model/harness quality independently of host-safety failures.
 
 ## Reviews
+
+- 2026-07-28 — **Hold confirmed deliberate; the undated trigger is a choice, not neglect**
+  (owner, refine pass). The 2026-07-20 product audit flagged this branch as
+  deferred-and-untouched and warned that "a deferred branch nobody revisits is a silent
+  commitment" — 7 cards, including 3 of the repo's high-priority items, held on an owner
+  review with no date that had not fired in 9 days. Offered a date stamp or a partial narrow
+  (promoting the two evidence-backed children: the cgroup containment that directly answers
+  the freeze, and the service envelopes the audit found at infinite limits). The owner chose
+  neither: the hold stands as owner-review-on-demand, undated, **consciously**.
+
+  Recorded so this is not re-raised as a finding: the absence of a date here is the decision,
+  not an oversight. The branch disposition itself (preserve / narrow / split / drop) remains
+  routed to the convergence step paired with a market scan, which is not a refinement pass's
+  authority.
+
+  One knock-on, resolved the same day: `x4-pi-harness-via-proxy` was fully Gated on this
+  review. Its gate was narrowed to its unattended half only, so an undated hold here no
+  longer idles a `[high]` card's attended probe.
 
 - 2026-07-19 — **Defer whole branch (owner):** do not assume containment calibration
   is currently needed. Hold the umbrella and all six children until a dedicated branch

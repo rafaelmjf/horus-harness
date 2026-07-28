@@ -4,7 +4,8 @@ priority: medium
 readiness: deferred
 readiness_reason: "Deferred with the X5 branch pending the owner preserve/narrow/split/drop review."
 created: 2026-07-18
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 tier: high
 type: spike
 parallel: safe

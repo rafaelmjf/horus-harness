@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-21
 created_by: owner
-last_refined: 2026-07-21
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "A real design card: the manifest/bundle format, directory layout, which chain steps emit what, and back-compat with the existing dated receipts are all open. Agree the structure before implementing across the chain skills."
 phase: explore

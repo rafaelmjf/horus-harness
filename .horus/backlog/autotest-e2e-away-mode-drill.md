@@ -4,7 +4,8 @@ priority: high
 readiness: deferred
 readiness_reason: "Deferred until after 2026-07-29 (owner, 2026-07-21) — run then as the attended away-mode drill, when weekly account capacity supports the multi-account run. Leg roster in Reviews."
 created: 2026-07-19
-last_refined: 2026-07-21
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Autonomous dispatch"
 phase: converge
 tier: medium
@@ -152,3 +153,30 @@ runnable once its two `depends-on` gaps land.
 
   Expect the eligible pool to read **0** while legs are reserved. That is the honest
   number, not a problem to fix by promoting something.
+- 2026-07-28 — **Leg roster COMPLETE, and leg 3 was never a scavenging problem** (owner,
+  refine pass). Final roster:
+
+  | Leg | Card | State |
+  |---|---|---|
+  | 1 | `verify-guidance-long-running-services` | reserved (deferred + trigger) |
+  | 2 | `audit-advisory-interval` | reserved this pass (deferred + trigger, formula settled) |
+  | 3 | a **deliberately-constructed partial fix**, authored at arming time | not a backlog card |
+
+  Leg 2 was the last surviving always-green candidate in the backlog — a sweep of all 68
+  cards found no third, because every remaining Shaping card carries a genuine open design
+  decision, which is why it is Shaping. That looked like a roster shortfall one day before
+  the drill. It is not: **leg 3 was never supposed to be always-green.** The 2026-07-26
+  Review above and the PRD `next_action` both call for one leg armed as a KNOWN partial fix,
+  because the drill's real readiness question is whether the loop can detect work that
+  passes every gate but is incomplete.
+
+  So leg 3 is *constructed*, not scavenged: author it at arming time in the
+  `codex-identity-guard` shape — CI green on the exact SHA, an honest worker report, and the
+  fix still incomplete because the card's `surface:` list under-names the work. This closes
+  the roster-erosion worry structurally: the scarce resource was never leg 3, and **no
+  further cards need reserving.**
+
+  Consequence for the drill's verdict: pass/fail now centres on whether supervision catches
+  that partial. If it cannot, the honest posture stays verify-and-escalate rather than
+  granting `--allow-merge` — and that answer is upstream of `fleet-sourced-autonomous-batch`'s
+  envelope bounds, which is why that card was ordered after this drill in the same pass.

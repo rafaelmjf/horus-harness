@@ -5,7 +5,8 @@ readiness: deferred
 readiness_reason: "Await stall-frequency evidence and native CLI progress signals; see the 2026-07-16 review."
 tier: medium
 created: 2026-07-15
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Delegation calibration"
 type: feature
 parallel: unsafe

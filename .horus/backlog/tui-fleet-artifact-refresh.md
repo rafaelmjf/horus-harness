@@ -5,7 +5,8 @@ readiness: gated
 readiness_reason: "Wait for the unified skill/artifact refresh brainstorm verdict before fixing this card's workflow."
 tier: medium
 created: 2026-07-16
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Dashboard / cockpit"
 created_by: owner
 type: feature

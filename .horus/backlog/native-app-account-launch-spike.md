@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Exact probe steps, which OS is authoritative for the finding, and the pass/fail bar are undecided — refine before running."
 phase: explore

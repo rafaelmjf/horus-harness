@@ -4,7 +4,8 @@ priority: low
 readiness: deferred
 readiness_reason: "X4 branch remains on hold under the 2026-07-18 owner verdict."
 created: 2026-07-18
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 tier: high
 type: feature
 parallel: unsafe

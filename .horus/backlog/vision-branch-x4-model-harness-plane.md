@@ -4,7 +4,8 @@ priority: low
 readiness: deferred
 readiness_reason: "Branch on hold after the net-negative 2026-07-18 trial; reopen only for an owner-approved low-risk re-test."
 created: 2026-07-18
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 tier: frontier
 type: feature
 parallel: safe

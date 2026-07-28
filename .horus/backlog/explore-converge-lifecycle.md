@@ -4,7 +4,8 @@ priority: medium
 readiness: deferred
 readiness_reason: "Resume when Horus has a real per-card usage signal for the remaining usage-ripeness flag. (Its former `depends-on: roadmap-convergence` was removed 2026-07-26 — that card shipped — but this stays DEFERRED because the usage-signal gate above is a different, unmet one; librarian receipt L2.)"
 created: 2026-07-16
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "PO lifecycle"
 tier: medium
 type: feature

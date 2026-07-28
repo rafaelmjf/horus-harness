@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-20
 created_by: agent
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Wildcard explore: verb grammar, stub shape, and project-name resolution undecided; the drop condition is part of the design."
 phase: explore

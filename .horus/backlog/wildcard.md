@@ -3,7 +3,8 @@ status: open
 priority: low
 created: 2026-07-21
 created_by: owner
-last_refined: 2026-07-21
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "A 'fun to try' exploratory idea; the grounding (what steers the exploration), the quality bar, and the run substrate are unscoped. Explore before drafting the skill."
 phase: explore

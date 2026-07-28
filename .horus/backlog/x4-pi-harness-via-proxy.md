@@ -1,17 +1,17 @@
 ---
 status: open
 priority: high
-readiness: gated
-readiness_reason: "Wait for the owner review of the deferred X5 containment branch."
+readiness: shaping
+readiness_reason: "Gate narrowed 2026-07-28: the ATTENDED probe is unblocked, because this card's own body scopes the X5 dependency to \"anything unattended\" and an owner-present probe needs no containment (the host-freeze was survived via tty3). Anything UNATTENDED remains gated on the X5 branch review, which is deferred with no date by deliberate owner choice. Still Shaping rather than Ready: the card does not yet know what PI is as a launchable harness, how it takes a base-URL + credential, or whether it integrates as a first-class adapter or a thinner launch profile — and its own Notes ask for the plan to be redrafted in a fresh session."
 created: 2026-07-18
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 tier: frontier
 type: feature
 parallel: safe
 phase: explore
 created_by: owner
 branch: vision-branch-x4-model-harness-plane
-depends-on: vision-branch-x5-safe-execution-boundaries
 surface: run the PI coding-agent harness through Horus via the CLIProxyAPI proxy
 ---
 
@@ -61,3 +61,27 @@ rewrite — the safe integration contract already proven for the Claude adapter.
 
 The exact plan should be (re)drafted in a fresh, unhurried session — consistent with the
 owner's intent to revise all X4/X5 planning cards before actioning them.
+
+## Open decisions
+
+- What PI is as a launchable harness, and how it takes a model endpoint / base-URL +
+  credential so it can be pointed at the local CLIProxyAPI gateway. [session] — needs a
+  hands-on working session; not answerable in a refinement exchange.
+- First-class Horus harness adapter vs a thinner launch profile. [session] — follows from
+  the above.
+- Nothing on this card is [refine]-answerable today, which is why it stays Shaping rather
+  than converting.
+
+## Reviews
+
+- 2026-07-28 — **Gated → Shaping; the gate was over-broad** (owner, refine pass). The
+  frontmatter blocked this card outright on the X5 branch review, while the body gates X5
+  only on "anything unattended". So a `[high]` card had been fully idle for 9 days behind a
+  review with no date, when its attended half was never actually blocked. The blanket
+  `depends-on: vision-branch-x5-safe-execution-boundaries` was removed and the scope written
+  into `readiness_reason` instead. The X5 review itself stays undated by deliberate owner
+  choice (see that umbrella's 2026-07-28 Review), so the unattended half is honestly
+  open-ended — but that no longer holds the attended probe hostage.
+
+  General lesson worth carrying: a card's `depends-on` can be broader than the dependency its
+  own body describes, and the frontmatter is what tooling reads. Check the two agree.

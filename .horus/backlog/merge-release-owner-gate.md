@@ -2,8 +2,10 @@
 status: open
 priority: high
 readiness: shaping
-readiness_reason: "Where the owner token lives and which commands it covers is an owner design decision."
+readiness_reason: "Held for a DEDICATED DESIGN SESSION (owner, 2026-07-28), not a refinement exchange. All four open questions are architectural: a hard gate on merge/release/deploy is a control every session lives with, and getting the envelope pass-through wrong either blocks legitimate autonomous dispatch or opens a hole. The strongest candidate answer is recorded below (reuse the existing PreToolUse chokepoint) but was deliberately not adopted in a screening pass."
 created: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 1
 vision_facet: "Accounts & isolation"
 phase: converge
 tier: medium
@@ -44,6 +46,26 @@ at least once, which is the standing bar for promoting to a gate.
 - Not a replacement for CI or the exact-SHA gate — those verify *what* merged; this
   governs *whether the agent may merge at all* without the owner saying so.
 
+## Candidate answers recorded 2026-07-28 (NOT adopted — for the design session)
+
+There is a working precedent in-repo that bears on three of the four questions:
+**`closure.direct_push_violations` already refuses at the `PreToolUse` chokepoint** and
+decides from the actual branch and diff. Reuse it rather than building a second chokepoint.
+
+Sketch offered and deliberately declined in favour of a dedicated session:
+
+- **Where:** the existing `PreToolUse` chokepoint.
+- **Token:** a short-lived file under `~/.horus/`, created only by the owner.
+- **Covered:** `gh pr merge`, `git push --tags`, `gh release create`,
+  `scripts/deploy-hosted.sh`.
+- **Envelope pass-through:** validate a live envelope carrying `merge_authority`; never mint
+  one.
+- **Matching:** at shell command position only, never inside quoted prompt prose — the same
+  parsing discipline the existing PR-check rule already states.
+
+A narrower `gh pr merge`-only v1 was also offered and declined; it would leave the release and
+deploy paths — the most irreversible of the four — ungated.
+
 ## Open design questions (why this is Shaping, not Ready)
 
 1. **Where does the owner token live?** Candidates: an env var set at launch, a
@@ -74,6 +96,24 @@ Deferred from #368 (`review-session-control-calibration` verdict) — named in t
 follow-ups and consciously left unbuilt rather than half-wired.
 
 ## Reviews
+
+- 2026-07-28 — **Held for a dedicated design session; candidate answers recorded** (owner,
+  refine pass). Offered a full front-load of all four questions (which would have made this
+  Ready—attended) and the owner chose a dedicated session instead. Recorded rather than
+  re-derived next pass: the answers sketched above, and the reason they were not taken — the
+  four questions are architectural, not editorial, and the envelope pass-through in
+  particular has failure modes in both directions.
+
+  **Exposure accepted in the meantime, stated plainly:** until this lands, the only control
+  against the originating failure is instruction (render-confirm before merging a
+  contract-bearing change), and instruction is what has already failed in the field twice —
+  the original brainstorm-to-merged-PR, and #374 on 2026-07-20. Priority stays `high` on that
+  basis.
+
+  This card is the clearest evidence for the axis-2 lens minted in
+  `refine-autonomy-hardening-lens` the same day: it is the best-structured card in the repo,
+  with an explicit "why this is Shaping, not Ready" section, and it still correctly did not
+  convert. More structure was never the missing thing.
 
 - **2026-07-20 (fresh evidence, same failure class):** the owner dropped a format
   sketch as an example to try; the agent encoded its interpretation and opened AND

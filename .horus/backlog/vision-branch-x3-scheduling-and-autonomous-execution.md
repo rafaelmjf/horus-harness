@@ -4,7 +4,8 @@ priority: medium
 readiness: gated
 readiness_reason: "Archive only after autotest-e2e-away-mode-drill passes and confirms the promoted branch end to end."
 created: 2026-07-17
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 tier: high
 type: feature
 parallel: safe

@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "The plumbing question is settled (the signal already exists) but the placement, the refresh trigger's blast radius, and whether the GitHub-identity panel earns permanent space are undecided. Refine before building."
 phase: converge

@@ -4,7 +4,8 @@ priority: low
 readiness: deferred
 readiness_reason: "Reserved as `autotest-e2e-away-mode-drill` payload. Decision-complete and implementable — that is exactly why it must stay undone: the drill needs a real always-green leg, and implementing it early destroys the experiment (the drill card records that a session nearly took it). TRIGGER: released to Ready—eligible when the drill is armed and this leg is either used or dropped, or when the drill is abandoned. Deferred, not Gated: nothing is missing, it is deliberately inactive until that trigger."
 created: 2026-07-18
-last_refined: 2026-07-27
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Introspection & self-improvement"
 phase: converge
 tier: medium

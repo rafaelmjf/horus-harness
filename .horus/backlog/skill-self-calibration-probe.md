@@ -3,7 +3,8 @@ status: open
 priority: low
 created: 2026-07-20
 created_by: agent
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Wildcard explore: canary format and the diff-judging protocol are undecided; PoC on one skill before any generalization."
 phase: explore

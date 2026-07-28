@@ -3,8 +3,10 @@ status: open
 priority: medium
 readiness: ready
 autonomy: attended
+order: 20
 created: 2026-07-18
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Autonomous dispatch"
 phase: converge
 tier: medium
@@ -54,3 +56,13 @@ input bridge ([[input-bridge-remote-ask]]) and the future hermes relay.
 
 - No per-project bot (still one bot, one consumer).
 - No LLM/hermes here — this is deterministic routing; hermes layers on top later.
+
+## Reviews
+
+- 2026-07-28 — **Kept Ready (attended), ordered `20`** (refine pass). No scope change; the
+  card was re-read and stands. Attended confirmed **intrinsic** under the contingent-vs-intrinsic
+  lens, not conservatism: reply-binding verification needs a real Telegram tap in a real topic,
+  which cannot be made deterministic, so no front-loading would promote this to eligible.
+
+  Ordered second behind `refine-autonomy-hardening-lens` (`10`), which is smaller, editorial,
+  and improves the next refinement pass. This remains the feature the owner named as next.

@@ -3,7 +3,8 @@ status: open
 priority: low
 created: 2026-07-20
 created_by: agent
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Where the contract is declared (docs vs code constants vs README), the exact field list per tier, and how tier names surface to users are undecided; refine before writing."
 phase: explore

@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "The probe is live (refresh delivered 2026-07-20; owner using fabric in production), but the evidence bar — what observations count, where findings land, and what triggers the tier verdict — is undecided."
 phase: explore

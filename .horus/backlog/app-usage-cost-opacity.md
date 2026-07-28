@@ -3,7 +3,8 @@ status: open
 priority: low
 created: 2026-07-21
 created_by: owner
-last_refined: 2026-07-21
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Just captured as a pain-point; scope open. Likely a feature of the self-hosted chat-app direction rather than standalone — explore before drafting."
 phase: explore

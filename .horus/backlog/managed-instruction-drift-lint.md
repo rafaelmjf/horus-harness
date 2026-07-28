@@ -2,6 +2,8 @@
 status: open
 priority: medium
 created: 2026-07-24
+last_refined: 2026-07-28
+refine_passes: 1
 created_by: claude
 readiness: shaping
 readiness_reason: "The reference-extraction rule (which tokens in the managed block count as CLI-surface claims) and where the lint runs (doctor vs consolidate vs a standalone check) are undecided; refine before build."

@@ -4,7 +4,8 @@ priority: low
 readiness: deferred
 readiness_reason: "Park until the X3 kit ships and a real provider-roster need appears."
 created: 2026-07-17
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Delegation calibration"
 phase: explore
 tier: medium

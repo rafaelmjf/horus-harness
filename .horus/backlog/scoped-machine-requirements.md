@@ -5,7 +5,8 @@ readiness: deferred
 readiness_reason: "Defer trigger (a real project requirement declaration) is now satisfied by fabric; whether it un-defers is the 2026-07-20 refinement pass's call."
 tier: medium
 created: 2026-07-15
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Continuity core"
 type: feature
 parallel: safe

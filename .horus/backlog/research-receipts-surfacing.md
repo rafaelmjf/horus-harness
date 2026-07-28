@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Index shape (frontmatter? naming convention? generated list?), render surfaces, and whether receipts gain lifecycle states are undecided."
 phase: converge

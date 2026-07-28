@@ -3,7 +3,8 @@ status: open
 priority: low
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "The evidence source is unresolved (no transcripts live in .horus/ by rule) and the agent flagged ceremony risk; needs a concrete instance list before any build."
 phase: explore

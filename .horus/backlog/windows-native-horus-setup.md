@@ -1,12 +1,12 @@
 ---
 status: open
-priority: high
+priority: medium
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-21
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Per the 2026-07-20 Findings (below): the install is already current (0.0.73), WSL2 is already installed, and the native capability inventory is done. Remaining open question is the recommendation. This session (2026-07-21) narrows it: native Windows is fine for the owner's local-project work, but the 'attach any session' / persistence experience is exactly what degrades native, so WSL+tmux (already present) is the path for THAT. First concrete step: run the TUI under WSL+tmux and validate attach-any-session end to end, then confirm the native-for-local + WSL-for-attach split as the recommendation."
-order: 20
 phase: explore
 type: spike
 vision_facet: "Distribution"
@@ -112,6 +112,19 @@ tmux-persistence rule (Linux/macOS/WSL only) and the three-OS Distribution facet
 in `.horus/PRD.md`.
 
 ## Reviews
+
+- 2026-07-28 — **high → medium; `order: 20` removed** (owner, refine pass). Two things had
+  gone stale. First, the priority: the question that was actually blocking the owner — which
+  TUI features degrade on native Windows — is already answered by the 2026-07-20 probed
+  inventory, the daily driver is Linux, and what remains is a validation run plus a
+  documentation-grade recommendation. Second, the ordering: `order: 20` meant "second slot,
+  behind `session-remote-control-default`", and that card shipped in #386 — so the stamp
+  pointed at a vacant first slot and made a medium-priority Shaping card lead its queue for
+  no reason. Removed, leaving the Shaping pool deliberately unsequenced.
+
+  Open decisions remain as listed and are `[session]`-class: the invest-in-native-parity vs
+  steer-Windows-to-WSL call is strategic, which is why this card has now been screened twice
+  without converting.
 
 - 2026-07-21 — **Kept shaping, ordered #2** (`order: 20`) (owner, refine pass):
   promoted to the second slot behind `session-remote-control-default`. The

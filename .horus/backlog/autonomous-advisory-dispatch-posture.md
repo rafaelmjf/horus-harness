@@ -2,6 +2,8 @@
 status: open
 priority: medium
 created: 2026-07-23
+last_refined: 2026-07-28
+refine_passes: 1
 created_by: agent
 readiness: shaping
 readiness_reason: "The advisory authority/output contract and whether read-only runs still need isolated worktrees require a focused probe."

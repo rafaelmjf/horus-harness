@@ -3,7 +3,8 @@ status: open
 priority: low
 created: 2026-07-21
 created_by: owner
-last_refined: 2026-07-21
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Anticipatory design card for a regime (parallel multi-agent dev in one repo) that is not active yet; deliberately open-ended to explore options when it arrives. Escalate priority when parallel development actually starts."
 phase: explore

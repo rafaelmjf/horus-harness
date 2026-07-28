@@ -5,7 +5,8 @@ readiness: shaping
 readiness_reason: "Focus sharpened (owner, 2026-07-23): the capability + use case are settled; the live question is how to make continuity PROPORTIONAL so it isn't expensive ceremony under concurrent dispatch. Starting-point findings recorded below; still needs the external comparison sweep."
 created: 2026-07-23
 created_by: owner
-last_refined: 2026-07-23
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Delegation calibration"
 tier: medium
 type: research
@@ -96,10 +97,9 @@ nothing. The design target is to capture nearly all of continuity's durable valu
    freshness **once at batch close**, not per leg.
 3. **Dashboard/frontmatter fields become supervisor-authored only**; the merge gate
    accepts worker branches carrying "delivery facts only" and defers narrative.
-4. **Lean on the existing continuity-granularity knob** (`handoff`/`delivery`/
-   `manual`): dispatched workers should run at a *delivery-receipt* granularity with
-   narrative batched at handoff. The knobs may already exist — the gap is that
-   workers currently author narrative at all.
+*(A fourth direction — "lean on the existing continuity-granularity knob
+(`handoff`/`delivery`/`manual`)" — was deleted on 2026-07-28. See Reviews: the knob it
+rested on no longer exists.)*
 
 ### Non-negotiable
 
@@ -145,3 +145,26 @@ A written comparison (matrix over the dimensions above + short prose) with:
   scoped cards.
 - Time-box the sweep; breadth over exhaustiveness. Cite sources.
 - Keep provider-specific limits factual (verify against current docs, don't guess).
+
+## Open decisions
+
+- The external comparison sweep has not run; it is this card's remaining work. [session] —
+  a bounded research session, not a refinement exchange.
+- Which alternatives are worth a deep look. [refine] — answerable once you name them; the
+  card asks for owner confirmation before the sweep.
+
+## Reviews
+
+- 2026-07-28 — **Design direction #4 deleted; it rested on a knob that no longer exists**
+  (owner, refine pass). Direction #4 told the reader to "lean on the existing
+  continuity-granularity knob (`handoff`/`delivery`/`manual`)". #368 deleted
+  `continuity_granularity` in full, and a PRD Rule now states there is **no** granularity
+  knob at any scope — per-machine, per-project or per-session. So the direction was not
+  merely stale, it pointed at a lever a fresh agent would go looking for and not find, inside
+  a section headed "directions to test". Removed rather than annotated, for that reason.
+
+  Directions 1-3 are unaffected and stand as the live hypotheses: workers emit append-only
+  per-unit delivery receipts; narrative synthesis happens once at the *batch* boundary, not
+  per PR; frontmatter/dashboard fields become supervisor-authored only. Those are now
+  cross-linked from `session-process-cadence`, which owns the same mechanism for the
+  sequential single-agent case — see that card's 2026-07-28 Review. Design it once.

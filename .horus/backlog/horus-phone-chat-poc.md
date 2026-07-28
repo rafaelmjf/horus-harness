@@ -3,7 +3,8 @@ status: open
 priority: low
 created: 2026-07-21
 created_by: owner
-last_refined: 2026-07-21
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Deliberately a one-shot spike — casual exploration. Scope and pass/fail are drafted; owner to confirm SDK-vs-stream-json before running. Do not expand into an architecture commitment from this card."
 phase: explore

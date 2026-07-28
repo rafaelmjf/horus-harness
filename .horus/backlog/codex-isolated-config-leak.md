@@ -2,12 +2,13 @@
 status: open
 priority: medium
 readiness: gated
-readiness_reason: "Remedy chosen by the owner 2026-07-26 — remedy 3, re-login instead of copying, making login the isolation primitive and retiring file-copying. That requires login to be a first-class verb, so this card is gated on `account-login-verb`, which is itself DEFERRED until 2026-07-28 (interactive login unavailable before then). Earliest possible start is therefore after 2026-07-28, once its gate lands; nothing to shape in the meantime."
+readiness_reason: "Remedy chosen by the owner 2026-07-26 — remedy 3, re-login instead of copying, making login the isolation primitive and retiring file-copying. That requires login to be a first-class verb, so this card is gated on `account-login-verb`, which is itself DEFERRED until 2026-07-29 (interactive login unavailable; the 07-28 trigger was extended one day by the owner on 2026-07-28). Earliest possible start is therefore after 2026-07-29, once its gate lands; nothing to shape in the meantime."
 depends-on: account-login-verb
-reactivate_after: 2026-07-28
+reactivate_after: 2026-07-29
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-26
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Accounts & isolation"
 tier: medium
 type: bug

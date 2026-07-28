@@ -2,6 +2,8 @@
 status: open
 priority: medium
 created: 2026-07-24
+last_refined: 2026-07-28
+refine_passes: 1
 created_by: owner
 readiness: shaping
 readiness_reason: "The owner deliberately parked the attended experiment until fully available; the target campaign, explicit authority boundaries, and adoption evidence must be chosen without predesigning the agent's implementation."

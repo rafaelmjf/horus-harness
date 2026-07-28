@@ -4,7 +4,8 @@ priority: low
 readiness: gated
 readiness_reason: "Keep for the next-machine installation, whose real settings drift will provide shaping evidence."
 created: 2026-07-17
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Accounts & isolation"
 tier: medium
 type: feature

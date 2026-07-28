@@ -2,11 +2,12 @@
 status: open
 priority: medium
 readiness: deferred
-readiness_reason: "DEFERRED until 2026-07-28 by owner instruction (2026-07-26): implementing and verifying this requires performing a real interactive agent login, which is not available before then. The card itself is fully specified and needs no further shaping — it was Ready/attended and returns straight to that state on 2026-07-28, no re-refinement needed."
-reactivate_after: 2026-07-28
+readiness_reason: "DEFERRED until 2026-07-29 by owner instruction (extended 2026-07-28): implementing and verifying this requires performing a real interactive agent login, which was still not available on 2026-07-28. The card itself is fully specified and needs no further shaping — it was Ready/attended and returns straight to that state on 2026-07-29, no re-refinement needed."
+reactivate_after: 2026-07-29
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-26
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Accounts & isolation"
 tier: medium
 type: feature
@@ -127,3 +128,9 @@ Live friction report + hand-executed setup run, owner-attended, 2026-07-20.
   (re-login instead of copying config.toml). That card is Gated on this one, so this
   deferral moves both. Attended is inherent here, not conservatism — an interactive login
   cannot be dispatched to a worker.
+- 2026-07-28 — **Hold extended to 2026-07-29, capacity again, not scope.** The 07-28 trigger
+  fired during a refinement pass; the owner extended the hold by one day because an
+  interactive login was still unavailable. Nothing about the card changed. It remains fully
+  specified and returns to **Ready / attended** on 2026-07-29 with no re-refinement pass.
+  Note the knock-on: `codex-isolated-config-leak` is Gated on this card and its
+  `reactivate_after` moved with it, so this one-day extension moves both.

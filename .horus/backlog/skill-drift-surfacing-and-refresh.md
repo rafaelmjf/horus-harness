@@ -2,9 +2,10 @@
 status: open
 priority: low
 readiness: shaping
-readiness_reason: "Dedicated owner brainstorm must unify detect, preview, refresh, git integration, and remote verification before implementation."
+readiness_reason: "Narrowed 2026-07-28: three of the five lifecycle steps are answered by the card's own field evidence, so the dedicated brainstorm is now scoped to the two that are not — SELECTION (which projects AND which skill classes) and INTEGRATE (nothing drives the commit/PR after the write). Both are [session]-class design questions, which is why this stays Shaping."
 created: 2026-07-17
-last_refined: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 2
 tier: medium
 type: feature
 vision_facet: "Introspection & self-improvement"
@@ -19,6 +20,20 @@ inside initialized projects. Bundled skills are the observed failure, but the pr
 problem is broader: managed instructions, hooks, workflow dependencies, and other
 project artifacts can all lag the installed CLI. Detection, update, git integration,
 and remote verification currently feel like separate partial operations.
+
+## Narrowed scope (2026-07-28) — two steps, not five
+
+The card's own field evidence (both sections below) answered three of the five steps, so the
+brainstorm no longer needs to design them:
+
+| Step | State |
+|---|---|
+| **Detect** + **Refresh** | **Answered.** "One command sufficed" — `upgrade-project --apply` covered blocks, all skill projections and hooks in one pass; the separately-advertised `skill install` path was never needed. The "two paths, no contract" concern **may reduce to a documentation fix.** |
+| **Verify** | **Answered.** "Dry-run → apply → dry-run-zero is a clean idempotence receipt" — exactly the deterministic refresh-complete signal the lifecycle wanted. Caveat to carry: consumer repos may have no required checks, so Verify cannot assume they exist. |
+| **Selection** | **OPEN — the hard part.** Per-project AND per-skill-class, not just which projects. Two traps already documented below: worktrees masquerade as projects (four `horus-harness-wt-*` dirs would take managed-block commits onto stale worker branches), and dormant projects should be skipped, composing with `fleet-curation`'s lifecycle state rather than ignoring it. Scale matters: 126 stale installs spanning several versions, so the plan must be idempotent and resumable, never one transactional sweep. |
+| **Integrate** | **OPEN — and observed failing.** pbi-ecosystem carried a stranded *uncommitted* projection refresh for days: the tool wrote, nothing drove commit/branch/PR. The lifecycle must own integration, not assume a human finishes it. |
+
+The original five-step framing is kept below as the design's shape.
 
 The dedicated shaping session must design one owner-visible lifecycle:
 
@@ -56,6 +71,17 @@ The related [[tui-fleet-artifact-refresh]] card already carries a detailed candi
 fleet workflow. It remains Gated on this shaping verdict so the session can decide
 whether that card is the implementation, a child, or should be merged here.
 
+## Open decisions
+
+- **Selection** granularity: which projects, and which skill classes within a project.
+  [session] — the hard design question this card exists for.
+- **Integrate**: what drives commit/branch/push/PR after the write. [session]
+- Whether `tui-fleet-artifact-refresh` is the Integrate implementation card, a child, or a
+  duplicate to retire. [session] — this card's Exit clause owes that disposition; it was
+  deliberately NOT exercised on 2026-07-28, so that card stays Gated here.
+- Whether the "two advertised paths" concern is just a documentation fix. [refine] — the
+  2026-07-20 evidence says probably yes.
+
 ## Shaping questions
 
 - Which artifacts are genuinely Horus-managed and how is customization distinguished
@@ -77,6 +103,23 @@ duplicate. Then run `backlog-refine` before promoting any delivery card to Ready
 - No narrow warning-only fix before the full lifecycle is understood.
 - No silent mass rewrite, auto-stash, force push, or bypass of repository policy.
 - No assumption that skills are the only managed artifact that can drift.
+
+## Reviews
+
+- 2026-07-28 — **Brainstorm narrowed from five steps to two** (owner, refine pass). Detect,
+  Refresh and Verify were answered by this card's own field evidence from the two 2026-07-20
+  hand refreshes; only Selection and Integrate remain genuinely open, and both are
+  `[session]`-class, which is the honest reason this card has not converted. Priority left at
+  low.
+
+  Also settled, confirming the 2026-07-26 librarian's read: **`skill-self-calibration-probe`
+  stays a separate card.** Adjacent but not duplicate — this card is unified artifact-refresh
+  *mechanics* (detect → preview → integrate → verify); that one is a replay PoC where a skill
+  notices *its own* drift. Distinct intents; do not merge them.
+
+  Deliberately not done: `tui-fleet-artifact-refresh` was NOT freed from its gate on this
+  card, even though its acceptance criteria already specify the Integrate half in detail.
+  That disposition belongs to the brainstorm, per this card's Exit clause.
 
 ## Field evidence — v0.0.73 made the fleet's prose stale (2026-07-19)
 

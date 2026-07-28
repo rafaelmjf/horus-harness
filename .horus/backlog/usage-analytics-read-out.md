@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "The steering questions the analytics must answer, the snapshot-history retention, and the render surface (CLI vs TUI vs dashboard) are undecided."
 phase: converge

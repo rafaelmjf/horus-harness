@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-20
 created_by: agent
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Wildcard explore: fire-time resolution semantics and the comparison protocol against a clock-timed twin are undecided."
 phase: explore

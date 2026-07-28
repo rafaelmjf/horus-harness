@@ -5,7 +5,8 @@ readiness: shaping
 readiness_reason: "The launch-defaulting use is well-motivated, but the field's second consumer (fleet alias discovery) is worth less than it first appeared, and the auto-stamp point needs picking. Shape before building."
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 vision_facet: "Accounts & isolation"
 tier: medium
 type: feature

@@ -4,6 +4,8 @@ priority: medium
 readiness: shaping
 readiness_reason: "Needs an owner design pass on the receipt's shape and where it binds in the envelope/supervise flow."
 created: 2026-07-19
+last_refined: 2026-07-28
+refine_passes: 1
 vision_facet: "Autonomous dispatch"
 phase: converge
 tier: medium

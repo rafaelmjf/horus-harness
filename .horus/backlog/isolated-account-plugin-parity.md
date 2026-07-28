@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-20
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Whether this is Horus's job at all is undecided — the cheap cause (marketplace re-clone uses SSH) may make it a Claude-surface problem needing no Horus code. Probe that before scoping."
 phase: explore

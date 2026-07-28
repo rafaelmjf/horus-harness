@@ -3,7 +3,8 @@ status: open
 priority: medium
 created: 2026-07-21
 created_by: owner
-last_refined: 2026-07-21
+last_refined: 2026-07-28
+refine_passes: 2
 readiness: shaping
 readiness_reason: "Problem and live evidence are clear; the fix space is deliberately left OPEN (cheap auto-fetch vs deeper format changes) to explore before committing. Refine into concrete increments when picked up."
 phase: explore
@@ -62,8 +63,25 @@ backlog cards conflicted zero times.
 - **Explicitly the sequential on-ramp to `concurrency-safe-continuity`** — design any fix
   here so it does not have to be redone under parallel multi-agent development.
 
+## Open decisions
+
+- Which candidate directions are worth doing, and in what order. [session]
+- Whether open decisions get their own register or simply become cards. [session]
+- Enact-fetch-first (the SessionStart hook actually running a read-only `git fetch`, and
+  `ff-only` pulling when the tree is clean with no local commits). [refine] — the card itself
+  calls this "cheap + high-value" and it is separable from the format questions.
+
 ## Source
 
 In-session process review, 2026-07-21, prompted by the friction during this session's own
 landing. Research receipt `.horus/research/2026-07-21-mobile-agent-session-access.md`.
-Related: `close-check-unclassified-cards-advisory`, `concurrency-safe-continuity`.
+Related: `concurrency-safe-continuity`, `session-process-cadence`.
+
+## Reviews
+
+- 2026-07-28 — **Note only, no scope change** (refine pass). `close-check-unclassified-cards-advisory`,
+  listed here as related work, **shipped in #409** (v0.0.75) — removed from Related so it stops
+  reading as an open blocker. Both of this card's own frictions remain live and unaddressed:
+  session-start staleness (fetch-first is still advisory, not enacted) and the `PRD.md`
+  frontmatter hand-merge. Tagged its open decisions on the way past; the enact-fetch-first
+  direction is the one `[refine]`-class item and is separable from the format work.

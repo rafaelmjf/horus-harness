@@ -2,6 +2,8 @@
 status: open
 priority: medium
 created: 2026-07-24
+last_refined: 2026-07-28
+refine_passes: 1
 created_by: claude
 readiness: shaping
 readiness_reason: "The claim signal (derive from open branch/PR referencing the slug vs a written marker vs the schedule ledger) and the enforcement point (pre-dispatch refuse vs advisory warn) are undecided; refine before build. Escalate to high the moment two concurrent dispatches run against one backlog."

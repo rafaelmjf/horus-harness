@@ -2,6 +2,8 @@
 status: open
 priority: medium
 created: 2026-07-24
+last_refined: 2026-07-28
+refine_passes: 1
 created_by: owner
 readiness: deferred
 readiness_reason: "Live Codex 0.144.6 proved native goal RPCs exist, but using them from Horus Campaign requires the still-experimental app-server/remote-TUI host surface. Reactivate when Codex exposes a stable spawn-time goal setter or promotes that launch contract."
