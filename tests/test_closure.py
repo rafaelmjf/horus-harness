@@ -366,7 +366,13 @@ def test_push_refused_when_remote_lanes_newer(tmp_path, monkeypatch):
     # machine B, unaware, tries to close --commit --push: refused, nothing committed
     (b / ".horus" / "PRD.md").write_text("from machine b\n", encoding="utf-8")
     did, detail = closure.commit_continuity(b, "close on b", push=True)
-    assert not did and "pull" in detail and "newer continuity" in detail
+    # Assert the contract, not the wording: it refuses, names why, and names a
+    # remedy the reader can run. (The remedy moved from a hand-typed
+    # `git pull --ff-only` to `horus sync`; pinning the literal verb made this
+    # test fail on a message improvement rather than on a behaviour change.)
+    assert not did
+    assert "newer continuity" in detail
+    assert "horus sync" in detail
     assert closure.remote_lane_divergence(b) == 1
     # after pulling (theirs wins for the test), the push goes through
     _run(b, "checkout", "--", ".")

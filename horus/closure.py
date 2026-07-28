@@ -784,7 +784,7 @@ def commit_continuity(root: Path, message: str | None = None, *, push: bool = Fa
         n = remote_lane_divergence(root)
         if n:
             return False, (
-                f"origin has {n} newer continuity commit(s) — run `git pull --ff-only` "
+                f"origin has {n} newer continuity commit(s) — run `horus sync` "
                 "to fold them in, then re-run `horus close --commit --push`"
             )
     # Fold work commits into an existing optional recovery note BEFORE staging continuity.

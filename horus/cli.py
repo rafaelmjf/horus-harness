@@ -67,6 +67,7 @@ from horus import (
     skills,
     statusline,
     supervise,
+    sync,
     templates,
     terminal_app,
     terminal_sessions,
@@ -289,6 +290,40 @@ def cmd_status(args: argparse.Namespace) -> int:
         hint = gitstate.staleness_hint(p.get("git"))
         if hint:
             print(f"  note: {hint}")
+    return 0
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    """Fast-forward the checkout to its upstream when that is unambiguously safe.
+
+    The remedy half of fetch-first: `fetchcheck` already reports behind-N at
+    session start, but acting on it was a hand-typed `git pull --ff-only`. This
+    refuses rather than resolving anything it cannot resolve safely — a dirty tree,
+    local commits, divergence and a detached HEAD are all reasons to stop.
+    """
+    root = Path(getattr(args, "path", None) or ".").resolve()
+    # ttl=0: an explicit sync always fetches fresh; the session-start cache is for
+    # the passive signal, not for a command the owner ran on purpose.
+    state = fetchcheck.fetch_and_state(root, ttl=0)
+    outcome, reason = sync.plan(state)
+
+    if outcome == sync.REFUSED:
+        print(f"sync refused: {reason}")
+        return 1
+    if outcome == sync.CURRENT:
+        print(f"sync: {reason}")
+        return 0
+
+    print(f"sync: {reason}")
+    ok, message = sync.fast_forward(root, str(state["upstream"]))
+    if not ok:
+        print(f"sync failed: {message}")
+        return 1
+    if message:
+        print(message)
+    after = gitstate.git_state(root)
+    commit = (after or {}).get("commit") or {}
+    print(f"sync: now at {commit.get('hash', '?')[:8]} {commit.get('subject', '')}".rstrip())
     return 0
 
 
@@ -4398,6 +4433,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="print git freshness + latest session for all registered projects")
     p_status.set_defaults(func=cmd_status)
+
+    p_sync = sub.add_parser(
+        "sync",
+        help="fast-forward this repo to its upstream when clean, unpushed-free and strictly behind",
+    )
+    p_sync.add_argument("--path", help="repo to sync (default: current directory)")
+    p_sync.set_defaults(func=cmd_sync)
 
     p_fleet = sub.add_parser(
         "fleet",
