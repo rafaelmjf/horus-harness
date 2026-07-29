@@ -100,7 +100,7 @@ def _project(root: Path, input_fn: InputFn, out: TextIO) -> None:
         _line(out, f"Starting {agent} · {account or 'ambient'} · {mode} · {target} …")
         result = _launch(target=target, agent=agent, root=root, account=account, prompt=prompt)
         if result.ok:
-            _line(out, f"Session {result.session_id[:8]} returned to Horus.")
+            _line(out, terminal_sessions.launch_outcome_message(result))
         else:
             _line(out, f"Launch failed: {result.error}")
 
@@ -145,7 +145,7 @@ def _sessions(input_fn: InputFn, out: TextIO, *, project: Path | None = None) ->
         return
     if action.lower() == "a":
         error = terminal_sessions.attach_session(record.session_id, reg=store)
-        _line(out, error or f"Detached from {record.session_id[:8]}.")
+        _line(out, error or terminal_sessions.attach_outcome_message(record.session_id))
     elif action.lower() == "x":
         confirm = _ask(input_fn, f"Close {record.session_id[:8]}? [y/N]: ")
         if confirm and confirm.lower() == "y":

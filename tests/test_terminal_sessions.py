@@ -1,7 +1,9 @@
 import asyncio
+import contextlib
 import io
 import json
 import os
+import pty
 import shutil
 import subprocess
 import sys
@@ -84,15 +86,21 @@ def test_default_target_prefers_tmux_when_available(monkeypatch):
     assert terminal_sessions.default_target() == "tmux"
 
 
-def test_default_target_falls_back_without_tmux_or_inside_tmux(monkeypatch):
+def test_default_target_falls_back_only_without_tmux(monkeypatch):
     monkeypatch.delenv("TMUX", raising=False)
     monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
     monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: False)
     assert terminal_sessions.default_target() == "current"
 
+
+def test_default_target_keeps_a_persistent_host_inside_tmux(monkeypatch):
+    """Horus running in a tmux pane is NOT a reason to drop to ``current``: the new
+    session lands on the same server, and attaching switches this client rather than
+    nesting one. Falling back would silently cost attachability (and the phone path)."""
+    monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
     monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
-    monkeypatch.setenv("TMUX", "/tmp/tmux")
-    assert terminal_sessions.default_target() == "current"
+    monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
+    assert terminal_sessions.default_target() == "tmux"
 
 
 def test_default_target_honors_explicit_override(monkeypatch):
@@ -436,14 +444,180 @@ def test_launch_window_rolls_back_tmux_when_viewer_fails(tmp_path, monkeypatch):
     assert stopped == [(launched.session_id, None)]
 
 
-def test_launch_tmux_refuses_nested_attach(tmp_path, monkeypatch):
+def test_launch_tmux_inside_tmux_creates_a_tracked_session_and_switches_to_it(tmp_path, monkeypatch):
+    """The nested launch path: Horus in a tmux pane creates a real Horus-managed
+    session (attachable, phone-reachable) and moves this client onto it, instead of
+    refusing or hijacking the Horus pane."""
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
     monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
-    monkeypatch.setenv("TMUX", "/tmp/tmux")
+    monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
+    monkeypatch.setattr(
+        launch,
+        "prepare_interactive",
+        lambda **_kwargs: (
+            PreparedInteractive(
+                agent="fake", project=root, account=None,
+                session_id="12345678-1234-1234-1234-123456789abc",
+                argv=[sys.executable, "-c", "pass"], env={},
+            ),
+            None,
+        ),
+    )
+    calls = []
+    monkeypatch.setattr(
+        terminal_sessions.subprocess,
+        "run",
+        lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0),
+    )
     result = terminal_sessions.launch_tmux(agent="fake", project_dir=root)
-    assert not result.ok and "already inside tmux" in result.error
-    assert Registry.default().all() == []
+    assert result.ok, result.error
+    assert result.target_ref == "horus-12345678-123"
+
+    verbs = [argv[1] for argv in calls if argv[0] == "tmux"]
+    assert verbs == ["new-session", "set-option", "switch-client"]
+    assert calls[-1] == ["tmux", "switch-client", "-t", "horus-12345678-123"]
+    # Attachable, not "original terminal only" — the whole point of not falling back.
+    record = Registry.default().get("12345678-1234-1234-1234-123456789abc")
+    assert record.launch_target == "tmux" and record.target_ref == "horus-12345678-123"
+    assert terminal_sessions.is_attachable(record)
+
+
+def test_attach_session_switches_the_current_client_inside_tmux(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    sid = "12345678-1234-1234-1234-123456789abc"
+    Registry.default().upsert(
+        SessionRecord(
+            session_id=sid, agent="fake", project=root.as_posix(), pid=os.getpid(),
+            launch_target="tmux", target_ref="horus-123456781234",
+        )
+    )
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
+    calls = []
+    monkeypatch.setattr(
+        terminal_sessions.subprocess,
+        "run",
+        lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""),
+    )
+    assert terminal_sessions.attach_session(sid) is None
+    # No `-c`: inside a pane tmux resolves the current client from $TMUX itself.
+    assert calls == [["tmux", "switch-client", "-t", "horus-123456781234"]]
+
+
+def test_attach_session_surfaces_why_a_switch_failed(tmp_path, monkeypatch):
+    """A wait/handoff that fails must say why. tmux's own message ("no current
+    client" when the Horus pane has no client attached) is the only thing that
+    explains this failure, so it is captured and surfaced, never discarded."""
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    sid = "12345678-1234-1234-1234-123456789abc"
+    Registry.default().upsert(
+        SessionRecord(
+            session_id=sid, agent="fake", project=root.as_posix(), pid=os.getpid(),
+            launch_target="tmux", target_ref="horus-123456781234",
+        )
+    )
+    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
+    monkeypatch.setattr(
+        terminal_sessions.subprocess,
+        "run",
+        lambda argv, **kwargs: subprocess.CompletedProcess(argv, 1, "", "no current client\n"),
+    )
+    error = terminal_sessions.attach_session(sid)
+    assert "switch-client failed" in error and "no current client" in error
+
+
+def test_outcome_messages_describe_the_host_that_actually_ran(monkeypatch):
+    """Inside tmux control returns at once with the session still live, so
+    "Detached from …" / "returned to Horus" would be false."""
+    sid = "12345678-1234-1234-1234-123456789abc"
+    tmux_hosted = LaunchResult(
+        True, "fake", Path("/tmp/x"), session_id=sid, target_ref="horus-12345678-123",
+    )
+    current_hosted = LaunchResult(True, "fake", Path("/tmp/x"), session_id=sid)
+    monkeypatch.delenv("TMUX", raising=False)
+    assert terminal_sessions.attach_outcome_message(sid) == "Detached from 12345678."
+    assert terminal_sessions.launch_outcome_message(tmux_hosted) == (
+        "Session 12345678 returned to Horus."
+    )
+
+    monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
+    assert "Ctrl-b L" in terminal_sessions.attach_outcome_message(sid)
+    assert "Switched to 12345678" in terminal_sessions.attach_outcome_message(sid)
+    assert "started in tmux" in terminal_sessions.launch_outcome_message(tmux_hosted)
+
+    # Inside tmux but launched on the `current` host (forced override): there is no
+    # switchable session, so promising one would send the owner chasing nothing.
+    assert terminal_sessions.launch_outcome_message(current_hosted) == (
+        "Session 12345678 returned to Horus."
+    )
+
+
+def test_live_isolated_switch_client_moves_a_real_client_between_sessions(tmp_path, monkeypatch):
+    """The mechanism this card rests on, against a real tmux server: a client
+    attached to the "Horus" session is *moved* onto an agent session by
+    ``switch-client`` run from inside a pane — no nested client, source session
+    intact. Isolation is mandatory (PRD Rules, 2026-07-13 incident): a private
+    ``-S`` socket and inherited ``TMUX`` unset, so this can never see the real
+    server or any live session on it."""
+    if shutil.which("tmux") is None:
+        pytest.skip("tmux is not installed")
+    monkeypatch.delenv("TMUX", raising=False)
+    socket_path = tmp_path / "switch.sock"
+
+    def tmux(*args, **kwargs):
+        return subprocess.run(
+            ["tmux", "-S", str(socket_path), *args],
+            capture_output=True, text=True, check=False, **kwargs,
+        )
+
+    def clients() -> str:
+        return tmux("list-clients", "-F", "#{client_session}").stdout.strip()
+
+    client_proc = None
+    primary_fd = replica_fd = None
+    try:
+        assert tmux("new-session", "-d", "-s", "horus-tui").returncode == 0
+        assert tmux("new-session", "-d", "-s", "horus-agent").returncode == 0
+
+        # A real attached client is required for switch-client to have anything to
+        # move, and tmux refuses to attach without a terminal. Hand it one via
+        # openpty + Popen rather than forkpty: this process is multi-threaded, where
+        # forking into Python (even briefly, before exec) risks a child deadlock.
+        primary_fd, replica_fd = pty.openpty()
+        client_proc = subprocess.Popen(
+            ["tmux", "-S", str(socket_path), "attach", "-t", "horus-tui"],
+            stdin=replica_fd, stdout=replica_fd, stderr=replica_fd, start_new_session=True,
+        )
+
+        deadline = time.time() + 10
+        while clients() != "horus-tui" and time.time() < deadline:
+            time.sleep(0.1)
+        assert clients() == "horus-tui", "the probe client never attached"
+
+        # Exactly what attach_session issues, run from inside the Horus pane.
+        tmux("send-keys", "-t", "horus-tui",
+             f"tmux -S {socket_path} switch-client -t horus-agent", "Enter")
+        deadline = time.time() + 10
+        while clients() != "horus-agent" and time.time() < deadline:
+            time.sleep(0.1)
+        assert clients() == "horus-agent", "switch-client did not move the client"
+
+        # One client, moved — not a second nested one; and the source session lives.
+        assert len(clients().splitlines()) == 1
+        assert "horus-tui" in tmux("list-sessions", "-F", "#{session_name}").stdout
+    finally:
+        if client_proc is not None:
+            client_proc.kill()
+            client_proc.wait(timeout=10)
+        for descriptor in (primary_fd, replica_fd):
+            if descriptor is not None:
+                with contextlib.suppress(OSError):
+                    os.close(descriptor)
+        tmux("kill-server")
 
 
 def test_attach_and_stop_use_horus_generated_tmux_name(tmp_path, monkeypatch):
