@@ -448,6 +448,20 @@ def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
         assert "## v2 six-lane projects (fallback)" in s.content, s.name
 
 
+def test_launch_model_refresh_skill_names_its_mechanism_and_sources():
+    s = next(sk for sk in skills.SKILLS if sk.name == "launch-model-refresh")
+    # The write mechanism it must drive.
+    assert "config.set_launch_models" in s.content
+    assert "[launch_models]" in s.content
+    # The per-vendor trustworthy sources (Claude = one page; Codex = two merged).
+    assert "model-deprecations" in s.content
+    assert "developers.openai.com" in s.content
+    # Owner-gated and bounded to availability, distinct from the calibration sibling.
+    assert "owner-gated" in s.content.lower()
+    assert "never auto-run" in s.content.lower() or "never scheduled" in s.content.lower()
+    assert "automated-model-roster-grounding" in s.content
+
+
 def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
     assert "PRD.md" in consolidate.content

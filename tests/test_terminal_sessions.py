@@ -1762,7 +1762,7 @@ def test_terminal_tui_models_screen_scoped_to_the_selected_account_agent(tmp_pat
 
     ui.pending_account = terminal_tui.LaunchAccount("claude", "personal", None)
     claude_models = [None] + ui._launch_model_choices()
-    assert claude_models == [None, "opus", "sonnet", "haiku", "fable"]
+    assert claude_models == [None, "opus", "sonnet", "haiku", "fable", "claude-opus-5", "claude-opus-4-8"]
 
     ui.pending_account = terminal_tui.LaunchAccount("codex", "personal", None)
     codex_models = [None] + ui._launch_model_choices()

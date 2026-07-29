@@ -2909,8 +2909,16 @@ def _ambient_alias(agent: str) -> str | None:
 
 
 def _agent_models(agent: str) -> list[str]:
-    """The `--model` selectors valid for `agent`, straight from its adapter —
-    never a list hardcoded here, so a new adapter model shows up automatically."""
+    """The `--model` selectors the launch form offers for `agent`.
+
+    An owner-curated `[launch_models]` list in config.toml wins (kept current from
+    vendor docs by the `launch-model-refresh` skill) — this is how pinned older models
+    the `/model` picker hides become launchable. With no config, the adapter's built-in
+    default is used, so a new adapter model still shows up automatically.
+    """
+    configured = config.launch_models_for(agent)
+    if configured:
+        return configured
     try:
         return list(adapters.get_adapter(agent).KNOWN_MODELS)
     except KeyError:
