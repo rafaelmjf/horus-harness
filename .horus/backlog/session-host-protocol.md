@@ -143,3 +143,38 @@ Owner session, 2026-07-29 — "can we add a layer and make Horus launchable in t
 normal terminal, or in herdr?". Call-site sweep and leak table gathered in that session.
 Depends on `herdr-host-probe`. Related: `tui-nested-tmux-navigation` (ships first; its two
 functions move into `hosts/tmux.py` here), `session-agent-state-awareness`.
+
+## Reviews
+
+- **2026-07-29 — Stage A landed (PR #441): the protocol exists, every leak is
+  closed, no behavior change.** `horus/hosts/` holds `base.py` (protocol +
+  `Capabilities`), `tmux.py`, `current.py`, and `runnerspec.py`; `terminal_sessions`
+  is the façade with an unchanged public API. Verified by the full suite (2350
+  passed) plus a re-run of the nested-tmux live probe through the new layer, with
+  byte-identical results.
+
+  Two design calls made while building, both worth keeping:
+
+  - **`viewer_argv` takes the ref, not a record.** The first pass had
+    `launch_window` look the record up to build the argv; two tests caught it. A
+    viewer is a property of the host's own naming, so it must not depend on a
+    registry lookup succeeding — and taking the ref is also exactly what herdr's
+    focus-then-attach needs.
+  - **`liveness` gates reaping structurally**, not by convention: a host without it
+    is never even asked for candidates (there is a test asserting `live_refs()` is
+    not called). The positive-confirmation rule is now something the interface
+    cannot express wrongly.
+
+  Settling the two shape decisions this card was holding:
+
+  1. **The `pane_runner` contract**: the host is never asked for the agent's
+     outcome. `reports_exit_code` is declared but is *informational* — the registry
+     is the single source of outcome truth, written by the runner itself, which is
+     already true on every host today. A host that types a command into a shell is
+     therefore the normal case, not a degraded one.
+  2. **The herdr host is a separate PR**, so Stage A stayed a strict
+     no-behavior-change refactor and a failure cannot be ambiguous between the two.
+
+  Remaining on this card: the herdr host (Stage B), and renaming `tmux_runner` →
+  `pane_runner` with a shim — deferred deliberately, because the module name is
+  embedded in the runner specs of sessions running right now, and it is cosmetics.
