@@ -12,6 +12,7 @@ import json
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -46,14 +47,38 @@ def _fail(stderr: str) -> subprocess.CompletedProcess:
     return subprocess.CompletedProcess([], 1, "", stderr)
 
 
-def _created(pane_id: str = "w1:p1") -> dict:
+def _created(pane_id: str = "w1:p1", label: str = "Agents") -> dict:
     """The envelope `herdr workspace create` actually returns (probe, v0.7.5)."""
     return {
         "type": "workspace_created",
-        "workspace": {"workspace_id": "w1", "label": "horus-12345678-123"},
+        "workspace": {"workspace_id": "w1", "label": label},
         "root_pane": {"pane_id": pane_id, "workspace_id": "w1", "agent_status": "unknown"},
-        "tab": {"tab_id": "w1:t1"},
+        "tab": {"tab_id": "w1:t1", "label": "1"},
     }
+
+
+def _placement_stub(existing_tabs=(), idle_panes=(), panes=()):
+    """A `_run` stand-in covering the calls `place_session` makes."""
+    def fake(*args, **_kwargs):
+        body: dict = {"type": "ok"}
+        if args[:2] == ("workspace", "list"):
+            body = {"workspaces": list(existing_tabs and [{"workspace_id": "w1",
+                                                           "label": "Agents"}] or [])}
+        elif args[:2] == ("workspace", "create"):
+            body = _created()
+        elif args[:2] == ("api", "snapshot"):
+            body = {"snapshot": {"tabs": list(existing_tabs)}}
+        elif args[:2] == ("pane", "list"):
+            body = {"panes": list(panes)}
+        elif args[:2] == ("pane", "process-info"):
+            ref = args[3]
+            name = "bash" if ref in idle_panes else "python"
+            body = {"process_info": {"foreground_processes": [{"name": name, "cmdline": name}]}}
+        elif args[:2] == ("tab", "create"):
+            body = {"root_pane": {"pane_id": "w1:p9", "tab_id": "w1:t9"},
+                    "tab": {"tab_id": "w1:t9"}}
+        return _ok(body)
+    return fake
 
 
 def _prepared(root):
@@ -120,15 +145,19 @@ def test_ensure_ready_reports_a_server_that_never_comes_up(host, monkeypatch):
     assert "did not come up" in host.ensure_ready()
 
 
-def test_launch_creates_a_workspace_and_runs_the_pane_runner(host, tmp_path, monkeypatch):
+def test_launch_puts_the_session_in_a_project_named_tab(host, tmp_path, monkeypatch):
+    """Layout: two fixed spaces, a tab per session labelled with just the project name.
+    The first session reuses the fresh space's root tab rather than leaving an empty
+    "1" tab beside it."""
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
     monkeypatch.setattr(launch, "prepare_interactive", lambda **_k: (_prepared(root), None))
     calls = []
+    stub = _placement_stub()
 
-    def fake_run(*args, **_kwargs):
+    def fake_run(*args, **kwargs):
         calls.append(args)
-        return _ok(_created()) if args[:2] == ("workspace", "create") else _ok({"type": "ok"})
+        return stub(*args, **kwargs)
 
     monkeypatch.setattr(herdr_host, "_run", fake_run)
     monkeypatch.setattr(runnerspec, "await_handoff", lambda *_a, **_k: True)
@@ -137,10 +166,15 @@ def test_launch_creates_a_workspace_and_runs_the_pane_runner(host, tmp_path, mon
     assert result.ok, result.error
     # The pane id is the ref: it is what every other verb takes.
     assert result.target_ref == "w1:p1"
-    assert calls[0][:2] == ("workspace", "create")
-    assert "--cwd" in calls[0] and "--no-focus" in calls[0]
-    assert calls[1][:3] == ("pane", "run", "w1:p1")
-    assert "horus.tmux_runner" in calls[1][3]
+
+    created = next(a for a in calls if a[:2] == ("workspace", "create"))
+    assert "--label" in created and created[created.index("--label") + 1] == "Agents"
+    assert "--cwd" in created and "--no-focus" in created
+    # The root tab is renamed to the project, not left as "1".
+    renamed = next(a for a in calls if a[:2] == ("tab", "rename"))
+    assert renamed == ("tab", "rename", "w1:t1", root.name)
+    ran = next(a for a in calls if a[:2] == ("pane", "run"))
+    assert ran[:3] == ("pane", "run", "w1:p1") and "horus.tmux_runner" in ran[3]
 
     record = Registry.default().get(SID)
     assert record.launch_target == "herdr" and record.target_ref == "w1:p1"
@@ -155,13 +189,13 @@ def test_launch_tears_down_its_own_pane_when_the_runner_never_takes_over(host, t
     monkeypatch.setattr(launch, "prepare_interactive", lambda **_k: (_prepared(root), None))
     closed = []
 
-    def fake_run(*args, **_kwargs):
-        if args[:2] == ("workspace", "create"):
-            return _ok(_created())
+    stub = _placement_stub()
+
+    def fake_run(*args, **kwargs):
         if args[:2] == ("pane", "close"):
             closed.append(args[2])
             return _ok({"type": "ok"})
-        return _ok({"type": "ok"})
+        return stub(*args, **kwargs)
 
     monkeypatch.setattr(herdr_host, "_run", fake_run)
     monkeypatch.setattr(runnerspec, "await_handoff", lambda *_a, **_k: False)
@@ -184,7 +218,7 @@ def test_launch_surfaces_why_the_workspace_could_not_be_created(host, tmp_path, 
     )
     result = host.launch(agent="fake", project_dir=root, attach=False)
     assert not result.ok
-    assert "failed to create a herdr workspace" in result.error and "NotFound" in result.error
+    assert "failed to create the Agents space" in result.error and "NotFound" in result.error
 
 
 def test_viewer_focuses_the_pane_before_handing_back_the_client(host, monkeypatch):
@@ -335,3 +369,93 @@ def test_failures_name_a_stopped_server_rather_than_blaming_the_pane(host, monke
     # Server up but the pane genuinely absent → the specific message survives.
     monkeypatch.setattr(herdr_host.HerdrHost, "server_running", lambda _self: True)
     assert "does not know pane w1:p1" in host.attach(record)
+
+
+# ---------------------------------------------------------------------------
+# Placement (owner decision, 2026-07-29): two fixed spaces, a tab per session
+# labelled with just the project name.
+# ---------------------------------------------------------------------------
+
+
+def test_the_layout_labels_are_spelled_for_a_human():
+    """These are read in a sidebar and a tab strip, so they are names, not refs. The
+    tmux cockpit keeps its `horus-` prefixed session name — that prefix is how
+    Horus-owned tmux sessions are identifiable."""
+    assert herdr_host.COCKPIT_LABEL == "Horus"
+    assert herdr_host.AGENTS_LABEL == "Agents"
+
+
+def test_a_second_project_gets_its_own_tab_in_the_existing_space(monkeypatch):
+    existing = [{"tab_id": "w1:t1", "label": "horus-harness", "workspace_id": "w1"}]
+    calls = []
+    stub = _placement_stub(existing_tabs=existing, panes=[{"pane_id": "w1:p1", "tab_id": "w1:t1"}])
+
+    def fake(*args, **kwargs):
+        calls.append(args)
+        return stub(*args, **kwargs)
+
+    monkeypatch.setattr(herdr_host, "_run", fake)
+    pane, error = herdr_host.place_session(Path("/tmp/agentic-gym-coach"))
+    assert (pane, error) == ("w1:p9", None)
+    # Reused the space, added a tab, and did not create a second Agents space.
+    assert ("workspace", "create") not in [a[:2] for a in calls]
+    created = next(a for a in calls if a[:2] == ("tab", "create"))
+    assert created[created.index("--label") + 1] == "agentic-gym-coach"
+    assert created[created.index("--cwd") + 1] == "/tmp/agentic-gym-coach"
+
+
+def test_an_idle_same_project_tab_is_reused_rather_than_duplicated(monkeypatch):
+    """A restart leaves tabs behind holding only a shell, and this owner runs about one
+    session per project — so without reuse the Agents space grows a tab per launch
+    forever."""
+    existing = [{"tab_id": "w1:t1", "label": "horus-harness", "workspace_id": "w1"}]
+    calls = []
+    stub = _placement_stub(
+        existing_tabs=existing,
+        panes=[{"pane_id": "w1:p1", "tab_id": "w1:t1"}],
+        idle_panes=("w1:p1",),
+    )
+
+    def fake(*args, **kwargs):
+        calls.append(args)
+        return stub(*args, **kwargs)
+
+    monkeypatch.setattr(herdr_host, "_run", fake)
+    pane, error = herdr_host.place_session(Path("/tmp/horus-harness"))
+    assert (pane, error) == ("w1:p1", None)
+    assert ("tab", "create") not in [a[:2] for a in calls]
+
+
+def test_a_busy_same_project_tab_gets_a_sibling_never_trampled(monkeypatch):
+    """Launching a second session for a project must not land in the pane where the
+    first one is still working."""
+    existing = [{"tab_id": "w1:t1", "label": "horus-harness", "workspace_id": "w1"}]
+    stub = _placement_stub(
+        existing_tabs=existing,
+        panes=[{"pane_id": "w1:p1", "tab_id": "w1:t1"}],
+        idle_panes=(),  # w1:p1 is busy
+    )
+    monkeypatch.setattr(herdr_host, "_run", stub)
+    pane, error = herdr_host.place_session(Path("/tmp/horus-harness"))
+    assert error is None and pane == "w1:p9"  # a new tab, not the busy pane
+
+
+def test_pane_is_idle_judges_by_process_name_not_our_command_line(monkeypatch):
+    """Matching our own argv would break the moment the runner's command changes; a
+    bare shell is the durable signal."""
+    for name, expected in [("bash", True), ("zsh", True), ("fish", True),
+                           ("python", False), ("claude", False), ("node", False)]:
+        monkeypatch.setattr(
+            herdr_host, "_run",
+            lambda *_a, _n=name, **_k: _ok(
+                {"process_info": {"foreground_processes": [{"name": _n, "cmdline": _n}]}},
+            ),
+        )
+        assert herdr_host.pane_is_idle("w1:p1") is expected, name
+
+    # No foreground process at all, and an unreachable server, both read as idle —
+    # never as "something of ours is running here".
+    monkeypatch.setattr(herdr_host, "_run", lambda *_a, **_k: _ok({"process_info": {}}))
+    assert herdr_host.pane_is_idle("w1:p1") is True
+    monkeypatch.setattr(herdr_host, "_run", lambda *_a, **_k: _fail("no server"))
+    assert herdr_host.pane_is_idle("w1:p1") is True

@@ -122,6 +122,12 @@ persisted choice — pick it in the TUI's Defaults screen (`d` → Session host)
 `[terminal] host`; `auto` prefers the host Horus is running inside, then the most
 capable one available.
 
+On herdr the layout is two fixed spaces: **Horus** holds the TUI, **Agents** holds one
+tab per running session labelled with the project name (herdr reports agent state per
+tab, so the tab strip shows which session needs you). A finished session's tab closes
+with it, and a tab left holding only a shell — herdr restores workspace structure across
+a server restart but not processes — is reused rather than duplicated.
+
 [herdr](https://herdr.dev) is supported as a third host and is **opt-in**: set
 `[terminal] host = "herdr"` in `~/.horus/config.toml` (or `HORUS_TERMINAL_TARGET=herdr`),
 because tmux stays the default — it can be reaped and it backs the phone path. A herdr
