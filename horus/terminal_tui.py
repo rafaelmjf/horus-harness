@@ -3324,6 +3324,4 @@ def _launch(
         "effort": effort,
         "proxied": proxied,
     }
-    if target == terminal_sessions.TMUX:
-        return terminal_sessions.launch_tmux(**kwargs)
-    return terminal_sessions.run_attached(**kwargs)
+    return terminal_sessions.launch_on(target, **kwargs)

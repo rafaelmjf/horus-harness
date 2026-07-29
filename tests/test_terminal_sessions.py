@@ -33,6 +33,7 @@ from horus import (
     tmux_runner,
     usage_snapshot,
 )
+from horus.hosts import current as hosts_current, runnerspec, tmux as hosts_tmux
 from horus.launch import LaunchResult, PreparedInteractive
 from horus.adapters import FakeAdapter
 from horus.registry import Registry, SessionRecord
@@ -82,14 +83,14 @@ def test_default_target_prefers_tmux_when_available(monkeypatch):
     monkeypatch.delenv("TMUX", raising=False)
     monkeypatch.delenv("SSH_CONNECTION", raising=False)
     monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     assert terminal_sessions.default_target() == "tmux"
 
 
 def test_default_target_falls_back_only_without_tmux(monkeypatch):
     monkeypatch.delenv("TMUX", raising=False)
     monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: False)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: False)
     assert terminal_sessions.default_target() == "current"
 
 
@@ -98,25 +99,25 @@ def test_default_target_keeps_a_persistent_host_inside_tmux(monkeypatch):
     session lands on the same server, and attaching switches this client rather than
     nesting one. Falling back would silently cost attachability (and the phone path)."""
     monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
     assert terminal_sessions.default_target() == "tmux"
 
 
 def test_default_target_honors_explicit_override(monkeypatch):
     monkeypatch.delenv("TMUX", raising=False)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
     assert terminal_sessions.default_target() == "current"
 
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: False)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: False)
     monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
     assert terminal_sessions.default_target() == "tmux"
 
 
 def test_tmux_is_unavailable_on_native_windows(monkeypatch):
-    monkeypatch.setattr(terminal_sessions.os, "name", "nt")
-    monkeypatch.setattr(terminal_sessions.shutil, "which", lambda _name: "C:/tmux.exe")
+    monkeypatch.setattr(hosts_tmux.os, "name", "nt")
+    monkeypatch.setattr(hosts_tmux.shutil, "which", lambda _name: "C:/tmux.exe")
     assert terminal_sessions.tmux_available() is False
 
 
@@ -164,7 +165,7 @@ def test_run_attached_tracks_final_status(tmp_path, monkeypatch):
         captured.update(kwargs)
         return Proc()
 
-    monkeypatch.setattr(terminal_sessions.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(hosts_current.subprocess, "Popen", fake_popen)
     result = terminal_sessions.run_attached(agent="fake", project_dir=root, account="demo")
     assert result.ok and result.pid == 4242
     assert captured["cwd"] == str(root)
@@ -177,8 +178,8 @@ def test_run_attached_tracks_final_status(tmp_path, monkeypatch):
 def test_launch_tmux_creates_unique_tracked_session(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
-    monkeypatch.setattr(terminal_sessions.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
+    monkeypatch.setattr(hosts_tmux.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.delenv("TMUX", raising=False)
     calls = []
 
@@ -186,7 +187,7 @@ def test_launch_tmux_creates_unique_tracked_session(tmp_path, monkeypatch):
         calls.append((argv, kwargs))
         return subprocess.CompletedProcess(argv, 0, "", "")
 
-    monkeypatch.setattr(terminal_sessions.subprocess, "run", fake_run)
+    monkeypatch.setattr(hosts_tmux.subprocess, "run", fake_run)
     first = terminal_sessions.launch_tmux(
         agent="fake", project_dir=root, attach=False, cols=39, rows=24,
     )
@@ -209,8 +210,8 @@ def test_launch_tmux_enables_scoped_mouse_mode_before_attach(tmp_path, monkeypat
     right order, scoped to only the new session — the exact mechanism report."""
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
-    monkeypatch.setattr(terminal_sessions.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
+    monkeypatch.setattr(hosts_tmux.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.delenv("TMUX", raising=False)
     calls = []
 
@@ -218,7 +219,7 @@ def test_launch_tmux_enables_scoped_mouse_mode_before_attach(tmp_path, monkeypat
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, "", "")
 
-    monkeypatch.setattr(terminal_sessions.subprocess, "run", fake_run)
+    monkeypatch.setattr(hosts_tmux.subprocess, "run", fake_run)
     result = terminal_sessions.launch_tmux(agent="fake", project_dir=root, attach=True)
     assert result.ok, result.error
     tmux_name = result.target_ref
@@ -235,8 +236,8 @@ def test_launch_tmux_enables_scoped_mouse_mode_before_attach(tmp_path, monkeypat
 def test_launch_tmux_cleans_up_when_mouse_mode_configuration_fails(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
-    monkeypatch.setattr(terminal_sessions.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
+    monkeypatch.setattr(hosts_tmux.shutil, "which", lambda name: f"/usr/bin/{name}")
     monkeypatch.delenv("TMUX", raising=False)
     calls = []
 
@@ -246,7 +247,7 @@ def test_launch_tmux_cleans_up_when_mouse_mode_configuration_fails(tmp_path, mon
             return subprocess.CompletedProcess(argv, 1, "", "no server running on socket")
         return subprocess.CompletedProcess(argv, 0, "", "")
 
-    monkeypatch.setattr(terminal_sessions.subprocess, "run", fake_run)
+    monkeypatch.setattr(hosts_tmux.subprocess, "run", fake_run)
     result = terminal_sessions.launch_tmux(agent="fake", project_dir=root, attach=False)
     assert not result.ok
     assert "mouse" in result.error
@@ -280,8 +281,8 @@ def test_live_isolated_tmux_session_reports_mouse_on_and_leaves_global_untouched
             argv = ["tmux", "-S", str(socket_path), *argv[1:]]
         return real_run(argv, **kwargs)
 
-    monkeypatch.setattr(terminal_sessions.subprocess, "run", isolated_run)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux.subprocess, "run", isolated_run)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.delenv("TMUX", raising=False)
 
     # A real, short-lived process to keep the pane (and session) alive long
@@ -343,8 +344,8 @@ def test_live_isolated_detached_fake_run_keeps_terminal_receipt(tmp_path, monkey
             argv = ["tmux", "-S", str(socket_path), *argv[1:]]
         return real_run(argv, **kwargs)
 
-    monkeypatch.setattr(terminal_sessions.subprocess, "run", isolated_run)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux.subprocess, "run", isolated_run)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.delenv("TMUX", raising=False)
     sid = "28345678-1234-1234-1234-123456789abc"
     request = run_executor.RunRequest(
@@ -387,8 +388,8 @@ def test_launch_window_opens_tmux_viewer_when_supported(tmp_path, monkeypatch):
         session_id="12345678-1234-1234-1234-123456789abc",
         target_ref="horus-123456781234",
     )
-    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "tmux")
-    monkeypatch.setattr(terminal_sessions, "launch_tmux", lambda **_kwargs: launched)
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
+    monkeypatch.setattr(hosts_tmux.TmuxHost, "launch", lambda _self, **_kwargs: launched)
     opened = {}
 
     def fake_open(argv, cwd, env=None):
@@ -405,7 +406,7 @@ def test_launch_window_opens_tmux_viewer_when_supported(tmp_path, monkeypatch):
 def test_launch_window_preserves_direct_fallback(tmp_path, monkeypatch):
     root = _project(tmp_path)
     captured = {}
-    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "current")
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
 
     def fake_launch(**kwargs):
         captured.update(kwargs)
@@ -427,8 +428,8 @@ def test_launch_window_rolls_back_tmux_when_viewer_fails(tmp_path, monkeypatch):
         target_ref="horus-123456781234",
     )
     stopped = []
-    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "tmux")
-    monkeypatch.setattr(terminal_sessions, "launch_tmux", lambda **_kwargs: launched)
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
+    monkeypatch.setattr(hosts_tmux.TmuxHost, "launch", lambda _self, **_kwargs: launched)
     monkeypatch.setattr(
         terminal_sessions.launcher,
         "open_terminal",
@@ -450,7 +451,7 @@ def test_launch_tmux_inside_tmux_creates_a_tracked_session_and_switches_to_it(tm
     refusing or hijacking the Horus pane."""
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
     monkeypatch.setattr(
         launch,
@@ -466,7 +467,7 @@ def test_launch_tmux_inside_tmux_creates_a_tracked_session_and_switches_to_it(tm
     )
     calls = []
     monkeypatch.setattr(
-        terminal_sessions.subprocess,
+        hosts_tmux.subprocess,
         "run",
         lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0),
     )
@@ -493,11 +494,11 @@ def test_attach_session_switches_the_current_client_inside_tmux(tmp_path, monkey
             launch_target="tmux", target_ref="horus-123456781234",
         )
     )
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
     calls = []
     monkeypatch.setattr(
-        terminal_sessions.subprocess,
+        hosts_tmux.subprocess,
         "run",
         lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""),
     )
@@ -519,10 +520,10 @@ def test_attach_session_surfaces_why_a_switch_failed(tmp_path, monkeypatch):
             launch_target="tmux", target_ref="horus-123456781234",
         )
     )
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
     monkeypatch.setattr(
-        terminal_sessions.subprocess,
+        hosts_tmux.subprocess,
         "run",
         lambda argv, **kwargs: subprocess.CompletedProcess(argv, 1, "", "no current client\n"),
     )
@@ -647,11 +648,11 @@ def test_attach_and_stop_use_horus_generated_tmux_name(tmp_path, monkeypatch):
             target_ref="horus-123456781234",
         )
     )
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.delenv("TMUX", raising=False)
     calls = []
     monkeypatch.setattr(
-        terminal_sessions.subprocess,
+        hosts_tmux.subprocess,
         "run",
         lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0),
     )
@@ -677,34 +678,34 @@ def _fake_list_sessions(rows):
 
 
 def test_reap_orphans_returns_nothing_without_tmux(monkeypatch):
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: False)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: False)
     assert terminal_sessions.reap_orphans() == []
 
 
 def test_reap_orphans_skips_attached_session(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
     monkeypatch.setattr(
-        terminal_sessions.subprocess, "run",
+        hosts_tmux.subprocess, "run",
         _fake_list_sessions([("horus-abc123456789", "1", "9000")]),
     )
     calls = []
-    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    monkeypatch.setattr(hosts_tmux, "_kill_tmux_session", lambda name: calls.append(name))
     assert terminal_sessions.reap_orphans() == []
     assert calls == []
 
 
 def test_reap_orphans_skips_recently_active_session(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
     monkeypatch.setattr(
-        terminal_sessions.subprocess, "run",
+        hosts_tmux.subprocess, "run",
         _fake_list_sessions([("horus-abc123456789", "0", "9700")]),  # idle 300s < grace
     )
     calls = []
-    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    monkeypatch.setattr(hosts_tmux, "_kill_tmux_session", lambda name: calls.append(name))
     assert terminal_sessions.reap_orphans() == []
     assert calls == []
 
@@ -719,15 +720,15 @@ def test_reap_orphans_skips_live_session_backed_by_a_running_process(tmp_path, m
             status="running", launch_target="tmux", target_ref="horus-abc123456789",
         )
     )
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
     monkeypatch.setattr(
-        terminal_sessions.subprocess, "run",
+        hosts_tmux.subprocess, "run",
         _fake_list_sessions([("horus-abc123456789", "0", "9000")]),  # idle 1000s, unattached
     )
     monkeypatch.setattr(terminal_sessions.registry, "process_alive", lambda pid: True)
     calls = []
-    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    monkeypatch.setattr(hosts_tmux, "_kill_tmux_session", lambda name: calls.append(name))
     assert terminal_sessions.reap_orphans() == []
     assert calls == []
     assert Registry.default().get(sid).status == "running"
@@ -743,15 +744,15 @@ def test_reap_orphans_kills_provably_orphaned_session(tmp_path, monkeypatch):
             status="stale", launch_target="tmux", target_ref="horus-abc123456789",
         )
     )
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
     monkeypatch.setattr(
-        terminal_sessions.subprocess, "run",
+        hosts_tmux.subprocess, "run",
         _fake_list_sessions([("horus-abc123456789", "0", "9000")]),  # idle 1000s, unattached
     )
     monkeypatch.setattr(terminal_sessions.registry, "process_alive", lambda pid: False)
     calls = []
-    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    monkeypatch.setattr(hosts_tmux, "_kill_tmux_session", lambda name: calls.append(name))
     assert terminal_sessions.reap_orphans() == ["horus-abc123456789"]
     assert calls == ["horus-abc123456789"]
     reaped = Registry.default().get(sid)
@@ -763,14 +764,14 @@ def test_reap_orphans_never_touches_a_session_with_no_registry_record(tmp_path, 
     # stale/foreign/rebuilt registry looking at a real tmux server) — reap_orphans
     # must leave it alone even though it's idle and unattached.
     _home(tmp_path, monkeypatch)
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
     monkeypatch.setattr(
-        terminal_sessions.subprocess, "run",
+        hosts_tmux.subprocess, "run",
         _fake_list_sessions([("horus-untracked00000", "0", "9000")]),
     )
     calls = []
-    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    monkeypatch.setattr(hosts_tmux, "_kill_tmux_session", lambda name: calls.append(name))
     assert terminal_sessions.reap_orphans() == []
     assert calls == []
 
@@ -785,15 +786,15 @@ def test_reap_orphans_kills_a_running_record_whose_tracked_pid_is_dead(tmp_path,
             status="running", launch_target="tmux", target_ref="horus-abc123456789",
         )
     )
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     monkeypatch.setattr(terminal_sessions.time, "time", lambda: 10_000.0)
     monkeypatch.setattr(
-        terminal_sessions.subprocess, "run",
+        hosts_tmux.subprocess, "run",
         _fake_list_sessions([("horus-abc123456789", "0", "9000")]),  # idle 1000s, unattached
     )
     monkeypatch.setattr(terminal_sessions.registry, "process_alive", lambda pid: False)
     calls = []
-    monkeypatch.setattr(terminal_sessions, "_kill_tmux_session", lambda name: calls.append(name))
+    monkeypatch.setattr(hosts_tmux, "_kill_tmux_session", lambda name: calls.append(name))
     assert terminal_sessions.reap_orphans() == ["horus-abc123456789"]
     assert calls == ["horus-abc123456789"]
     reaped = Registry.default().get(sid)
@@ -843,10 +844,10 @@ def test_detached_run_returns_only_after_runner_pid_handoff(tmp_path, monkeypatc
         effort="high", worker=True, resume="native-resume", dispatch_base_sha="a" * 40,
         dispatch_pending=2,
     )
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     calls = []
     monkeypatch.setattr(
-        terminal_sessions.subprocess, "run",
+        hosts_tmux.subprocess, "run",
         lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""),
     )
 
@@ -855,7 +856,7 @@ def test_detached_run_returns_only_after_runner_pid_handoff(tmp_path, monkeypatc
         terminal_sessions._runner_ready_path(session_id).write_text("5150\n", encoding="utf-8")
         return True
 
-    monkeypatch.setattr(terminal_sessions, "_await_runner_handoff", handoff)
+    monkeypatch.setattr(runnerspec, "await_handoff", handoff)
     result = terminal_sessions.launch_detached_run(request)
 
     assert result.ok and result.pid == 5150 and result.target_ref == "horus-12345678-123"
@@ -877,10 +878,10 @@ def test_detached_run_handoff_failure_kills_only_its_new_tmux_host_and_cleans_fi
         prompt="do bounded work", account=None, posture="auto-edit", model=None, effort=None,
         worker=True, resume=None, dispatch_base_sha=None, dispatch_pending=0,
     )
-    monkeypatch.setattr(terminal_sessions, "tmux_available", lambda: True)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     calls = []
     monkeypatch.setattr(
-        terminal_sessions.subprocess, "run",
+        hosts_tmux.subprocess, "run",
         lambda argv, **kwargs: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", ""),
     )
 
@@ -888,7 +889,7 @@ def test_detached_run_handoff_failure_kills_only_its_new_tmux_host_and_cleans_fi
         terminal_sessions._runner_ready_path(session_id).write_text("not-ready\n", encoding="utf-8")
         return False
 
-    monkeypatch.setattr(terminal_sessions, "_await_runner_handoff", failed_handoff)
+    monkeypatch.setattr(runnerspec, "await_handoff", failed_handoff)
     result = terminal_sessions.launch_detached_run(request)
 
     assert not result.ok and "runner did not report" in result.error
@@ -1061,14 +1062,14 @@ def test_terminal_app_launches_selected_fresh_agent(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
     config.register_project(root)
-    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "current")
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
     captured = {}
 
     def fake_launch(**kwargs):
         captured.update(kwargs)
         return LaunchResult(True, kwargs["agent"], Path(kwargs["project_dir"]), session_id="12345678-rest")
 
-    monkeypatch.setattr(terminal_sessions, "run_attached", fake_launch)
+    monkeypatch.setattr(hosts_current.CurrentHost, "launch", lambda _self, **kw: fake_launch(**kw))
     answers = iter(["1", "2", "b", "q"])
     out = io.StringIO()
     assert terminal_app.run(input_fn=lambda _: next(answers), output=out) == 0
@@ -1619,14 +1620,14 @@ def test_terminal_tui_run_applies_persisted_posture_to_new_launches(tmp_path, mo
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
     config.set_launch_default_posture("auto-edit")
-    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "current")
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
     captured = {}
 
     def fake_run_attached(**kwargs):
         captured.update(kwargs)
         return LaunchResult(True, kwargs["agent"], Path(kwargs["project_dir"]), session_id="12345678-rest")
 
-    monkeypatch.setattr(terminal_sessions, "run_attached", fake_run_attached)
+    monkeypatch.setattr(hosts_current.CurrentHost, "launch", lambda _self, **kw: fake_run_attached(**kw))
 
     results = iter([terminal_tui._Launch(root, "fake", "fresh", None, None), "quit"])
 
@@ -1648,14 +1649,14 @@ def test_terminal_tui_run_applies_persisted_posture_to_new_launches(tmp_path, mo
 def test_terminal_tui_run_prefers_bounded_prompt_override(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     root = _project(tmp_path)
-    monkeypatch.setattr(terminal_sessions, "default_target", lambda: "current")
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
     captured = {}
 
     def fake_run_attached(**kwargs):
         captured.update(kwargs)
         return LaunchResult(True, kwargs["agent"], Path(kwargs["project_dir"]), session_id="12345678-rest")
 
-    monkeypatch.setattr(terminal_sessions, "run_attached", fake_run_attached)
+    monkeypatch.setattr(hosts_current.CurrentHost, "launch", lambda _self, **kw: fake_run_attached(**kw))
     results = iter([
         terminal_tui._Launch(root, "fake", "resume", None, None, "bounded curator prompt"),
         "quit",
@@ -2094,7 +2095,7 @@ def test_cmd_open_resume_tmux_uses_continuity_prompt(tmp_path, monkeypatch):
         captured.update(kwargs)
         return LaunchResult(True, kwargs["agent"], Path(kwargs["project_dir"]), session_id="12345678-rest")
 
-    monkeypatch.setattr(terminal_sessions, "launch_tmux", fake_tmux)
+    monkeypatch.setattr(hosts_tmux.TmuxHost, "launch", lambda _self, **kw: fake_tmux(**kw))
     assert cli.main(["open", str(root), "--agent", "fake", "--mode", "resume", "--target", "tmux", "--detach"]) == 0
     assert "Resume the demo project" in captured["prompt"]
     assert captured["attach"] is False
@@ -2293,3 +2294,120 @@ def test_resolve_window_launch_falls_back_without_display(monkeypatch):
     monkeypatch.setattr(terminal_sessions.launcher, "has_display", lambda: False)
     monkeypatch.delenv("SSH_CONNECTION", raising=False)
     assert terminal_sessions.resolve_window_launch("new-window") is False
+
+
+# ---------------------------------------------------------------------------
+# The session-host seam: capabilities, selection, and honest degradation.
+# ---------------------------------------------------------------------------
+
+
+def test_every_host_satisfies_the_protocol_and_is_registered_once():
+    from horus import hosts
+    from horus.hosts.base import SessionHost
+
+    registered = hosts.all_hosts()
+    assert [host.id for host in registered] == list(hosts.ids())
+    assert len(set(hosts.ids())) == len(registered)
+    for host in registered:
+        assert isinstance(host, SessionHost), host.id
+        # Declared, not implied: a host must answer every capability question.
+        assert host.capabilities.__dataclass_fields__.keys() == {
+            "persistent", "attach", "viewer", "liveness", "reports_exit_code", "state",
+        }
+
+
+def test_current_host_is_the_floor_that_promises_nothing():
+    """The no-tmux/Windows path is a real host with declared limits, not an
+    `else` branch — that is what lets a third host declare a different set of
+    gaps instead of adding a special case."""
+    from horus import hosts
+
+    caps = hosts.get("current").capabilities
+    assert not caps.persistent and not caps.attach and not caps.viewer and not caps.liveness
+    assert not caps.state
+
+
+def test_selection_prefers_the_override_then_config_then_availability(monkeypatch):
+    from horus import config, hosts
+
+    monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
+    monkeypatch.setattr(config, "load_terminal_host", lambda: "auto")
+    assert hosts.resolve().id == "tmux"
+
+    monkeypatch.setattr(hosts_tmux, "available", lambda: False)
+    assert hosts.resolve().id == "current"  # auto falls through to the floor
+
+    monkeypatch.setattr(config, "load_terminal_host", lambda: "tmux")
+    assert hosts.resolve().id == "current"  # configured but unavailable → floor
+
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
+    assert hosts.resolve().id == "tmux"  # the override wins even over availability
+
+
+def test_an_unknown_launch_target_degrades_instead_of_raising():
+    """A record written by a newer Horus (or a host this install lacks) must be
+    labelled honestly rather than offered an attach that cannot work."""
+    from horus import hosts
+
+    record = SessionRecord(
+        session_id="12345678-1234-1234-1234-123456789abc", agent="fake",
+        project="/tmp/x", launch_target="herdr", target_ref="w1:p1",
+    )
+    assert hosts.for_record(record) is None
+    assert terminal_sessions.is_attachable(record) is False
+    assert terminal_sessions.access_label(record) == "original terminal only"
+    assert terminal_sessions.viewer_argv(record) is None
+    assert "not hosted by an attachable host" in (terminal_sessions.attach_session(
+        record.session_id, reg=_reg_with(record)) or "")
+
+
+def _reg_with(record):
+    store = Registry.default()
+    store.upsert(record)
+    return store
+
+
+def test_launch_on_refuses_an_unknown_host_and_surfaces_ensure_ready(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    root = _project(tmp_path)
+    result = terminal_sessions.launch_on("nosuchhost", agent="fake", project_dir=root)
+    assert not result.ok and "unknown session host" in result.error
+
+    # A host that owns a server it cannot start must fail the launch with the
+    # reason, not proceed and fail confusingly somewhere deeper.
+    monkeypatch.setattr(hosts_tmux.TmuxHost, "ensure_ready", lambda _self: "server is not running")
+    result = terminal_sessions.launch_on("tmux", agent="fake", project_dir=root)
+    assert not result.ok and result.error == "server is not running"
+
+
+def test_reaping_only_considers_hosts_that_can_prove_liveness(tmp_path, monkeypatch):
+    """The positive-confirmation rule, made structural: a host that cannot report
+    'attached?' and 'idle how long?' has no reapable sessions at all."""
+    _home(tmp_path, monkeypatch)
+    from horus import hosts
+
+    asked = []
+
+    class Blind:
+        id = "blind"
+        capabilities = hosts.Capabilities(
+            persistent=True, attach=True, viewer=True, liveness=False,
+            reports_exit_code=False, state=True,
+        )
+
+        def live_refs(self):  # pragma: no cover - must never be called
+            asked.append("live_refs")
+            return {"blind-1": (False, 0.0)}
+
+        def stop(self, record):  # pragma: no cover - must never be called
+            asked.append("stop")
+            return None
+
+    monkeypatch.setattr(hosts, "all_hosts", lambda: [Blind()])
+    Registry.default().upsert(SessionRecord(
+        session_id="12345678-1234-1234-1234-123456789abc", agent="fake", project="/tmp/x",
+        launch_target="blind", target_ref="blind-1", status="exited",
+    ))
+    assert terminal_sessions.reap_orphans(min_idle_seconds=0.0) == []
+    assert asked == []

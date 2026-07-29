@@ -107,9 +107,7 @@ def _project(root: Path, input_fn: InputFn, out: TextIO) -> None:
 
 def _launch(*, target: str, agent: str, root: Path, account: str | None, prompt: str):
     kwargs = {"agent": agent, "project_dir": root, "account": account, "prompt": prompt}
-    if target == terminal_sessions.TMUX:
-        return terminal_sessions.launch_tmux(**kwargs)
-    return terminal_sessions.run_attached(**kwargs)
+    return terminal_sessions.launch_on(target, **kwargs)
 
 
 def _sessions(input_fn: InputFn, out: TextIO, *, project: Path | None = None) -> None:

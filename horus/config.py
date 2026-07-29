@@ -634,6 +634,31 @@ def set_backlog_group_by(lens: str) -> str:
     return lens
 
 
+TERMINAL_HOST_DEFAULT = "auto"
+
+
+def load_terminal_host() -> str:
+    """Which session host to use: ``auto`` (default) or a specific host id.
+
+    Deliberately NOT validated against the known host ids here — this is read by
+    :mod:`horus.hosts`, and importing that from config would cycle. An unknown or
+    unavailable value falls through to ``auto`` at resolution time, which is the
+    right behaviour for a config file that may name a host a newer Horus adds.
+    """
+    path = config_path()
+    if not path.exists():
+        return TERMINAL_HOST_DEFAULT
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return TERMINAL_HOST_DEFAULT
+    raw = data.get("terminal") or {}
+    if not isinstance(raw, dict):
+        return TERMINAL_HOST_DEFAULT
+    host = raw.get("host", TERMINAL_HOST_DEFAULT)
+    return host.strip().lower() if isinstance(host, str) and host.strip() else TERMINAL_HOST_DEFAULT
+
+
 def load_remote_control_default() -> bool:
     """Whether Horus-launched interactive Claude sessions enable Remote Control at
     spawn (so they are reachable from the native app without a manual step)."""

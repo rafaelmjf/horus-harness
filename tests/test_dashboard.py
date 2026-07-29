@@ -13,6 +13,7 @@ import json
 
 import pytest
 
+from horus.hosts import tmux as hosts_tmux
 from horus import cache_status, config, dashboard, github_catalog, initialize, launcher, native_hooks, overhead, registry, routines, skills, templates
 from horus.registry import Registry, SessionRecord
 from horus.upgrade import UpgradeAction
@@ -831,11 +832,11 @@ def test_process_launch_window_opens_managed_tmux_viewer(tmp_path, monkeypatch):
     proj.mkdir()
     initialize.init_project(proj, assume_yes=True)
     opened = {}
-    monkeypatch.setattr(dashboard.terminal_sessions, "default_target", lambda: "tmux")
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
     monkeypatch.setattr(
-        dashboard.terminal_sessions,
-        "launch_tmux",
-        lambda **kwargs: dashboard.backend.launch.LaunchResult(
+        hosts_tmux.TmuxHost,
+        "launch",
+        lambda _self, **kwargs: dashboard.backend.launch.LaunchResult(
             True,
             kwargs["agent"],
             Path(kwargs["project_dir"]),
