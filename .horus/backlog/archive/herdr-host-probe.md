@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-29
 created_by: owner
@@ -12,6 +12,8 @@ tier: medium
 parallel: safe
 vision_facet: "Dashboard / cockpit"
 surface: throwaway herdr install; findings land in this card's Reviews (no product code)
+shipped_pr: 440
+shipped_sha: 3d594a0
 ---
 
 # herdr-host-probe — answer three questions before designing the host protocol
