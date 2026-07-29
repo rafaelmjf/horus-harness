@@ -106,3 +106,54 @@ Horus feature rather than a reason to adopt herdr wholesale. Related:
 `herdr-host-probe` (may supply the state for free on that host),
 `session-host-protocol` (the `state` capability), `activity.py` (deliberately a different
 thing).
+
+## Reviews
+
+- **2026-07-29 — REAL Claude sessions on the herdr host: detection works, and it has
+  a false-idle failure mode worth designing around.** Three live runs (real `claude`,
+  `work` account, posture forced to `default` because the owner's `full-auto` default
+  bypasses permissions and could never produce a `blocked`), launched through
+  `terminal_sessions.launch_on("herdr", …)`.
+
+  **What works.** herdr identifies the process as an agent, not just a pane:
+  `agent list` returned `{"agent":"claude","agent_status":"idle","pane_id":"w1:p1",…}`
+  with the right cwd. Observed transitions on real work:
+  - run 2 (Read tool, auto-allowed): `idle → working → idle`
+  - run 3 (Write tool, needs approval): `working → **blocked**` at t+6s, with the pane
+    showing "Do you want to create probe-out.txt? ❯ 1. Yes / 2. Yes, allow all edits /
+    3. No / Esc to cancel · Tab to amend"
+
+  So `blocked` fires on a genuine tool-permission prompt. That is the state the whole
+  feature exists for, and it is real.
+
+  **The false idle.** Run 1 sat on Claude's *trust-folder* dialog — "Is this a project
+  you created or one you trust? ❯ 1. Yes, I trust this folder / 2. No, exit / Enter to
+  confirm · Esc to cancel" — and herdr reported **`idle`**. `agent explain --json`
+  shows why: the `live_blocked_form` rule requires the literal "enter to select", and
+  this dialog says "Enter to confirm", so no blocked rule matched and the
+  `live_prompt_box` idle rule (`^\s*❯`) won instead.
+
+  That is a blocking prompt reported as idle — precisely the failure that destroys the
+  feature's value, because the sidebar's whole claim is "this one needs me". And it is
+  not a herdr bug so much as the *structural* cost of screen-scraping: the manifest
+  tracks Claude's exact wording, one dialog changed its verb, and the state silently
+  inverted. herdr already mitigates this the only way scraping can be mitigated — a
+  versioned manifest fetched from the network — which is the treadmill this card
+  already decided not to join.
+
+  **Consequences for this card, now evidence-backed rather than argued:**
+  1. **Hooks are the primary mechanism**, not a nicety. A lifecycle hook knows it is
+     awaiting input; no wording can drift out from under it.
+  2. **Host-supplied state is a welcome *secondary*** — genuinely useful (it caught
+     `blocked` correctly in run 3, with zero Horus code) but it must be treated as
+     advisory, never as the only signal.
+  3. **Never render a bare `idle` as "free".** An honest three-way — needs-you /
+     working / unknown — beats a confident `idle` that might be a dialog waiting on a
+     keypress. This is the same discipline as `activity.py` refusing to guess `✓`.
+  4. The trust dialog specifically is worth handling: it is the *first* thing a fresh
+     agent in a fresh directory hits, so the very state most likely to be
+     mis-reported is also the most common one.
+
+  Probe hygiene: three panes created and all closed, the herdr server left stopped as
+  found, the throwaway project removed; three honest `failed` registry rows remain
+  (that is what `stop_session` records).
