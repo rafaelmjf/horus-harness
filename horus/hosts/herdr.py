@@ -100,6 +100,18 @@ def _pane(target_ref: str) -> dict:
     return _payload(_run("pane", "get", target_ref)).get("pane", {})
 
 
+def _why_not(fallback: str) -> str:
+    """Explain a failed call, checking the cheap structural cause first.
+
+    Every herdr verb fails identically when the server is down — a bare ENOENT on
+    the socket — so a message about the *pane* would send someone hunting the wrong
+    thing. Only consulted on a failure path, so the extra call costs nothing normally.
+    """
+    if not HerdrHost().server_running():
+        return "the herdr server is not running"
+    return fallback
+
+
 def _bring_into_view(target_ref: str) -> str | None:
     """Make ``target_ref`` the visible pane. Error string, or ``None``.
 
@@ -112,7 +124,7 @@ def _bring_into_view(target_ref: str) -> str | None:
     """
     workspace_id = _pane(target_ref).get("workspace_id")
     if not workspace_id:
-        return f"herdr does not know pane {target_ref}"
+        return _why_not(f"herdr does not know pane {target_ref}")
     focused = _run("workspace", "focus", workspace_id)
     if focused.returncode != 0:
         return f"herdr could not focus the workspace: {_detail(focused)}"
@@ -369,7 +381,7 @@ class HerdrHost:
         closed = _run("pane", "close", record.target_ref)
         runnerspec.spec_path(record.session_id).unlink(missing_ok=True)
         if closed.returncode != 0:
-            return f"herdr could not close the pane: {_detail(closed)}"
+            return _why_not(f"herdr could not close the pane: {_detail(closed)}")
         return None
 
     def viewer_argv(self, target_ref: str) -> list[str] | None:

@@ -9,6 +9,7 @@ import tempfile
 import pytest
 
 from horus import cli, cockpit, config, hosts, terminal_sessions
+from horus.launch import LaunchResult
 from horus.hosts import herdr as herdr_host
 from horus.hosts import tmux as tmux_host
 
@@ -283,3 +284,126 @@ def test_defaults_screen_shows_what_auto_resolves_to(tmp_path, monkeypatch):
     ui.move(target - ui.selected)
     ui.activate()
     assert "auto (resolves to tmux)" in ui.status
+
+
+# ---------------------------------------------------------------------------
+# Host-selection leaks found in a pre-release sweep (2026-07-29). Each of these
+# only bites a machine that opted into a non-default host, which is exactly the
+# configuration the herdr work just made possible.
+# ---------------------------------------------------------------------------
+
+
+def test_launch_window_makes_the_host_ready_before_launching(tmp_path, monkeypatch):
+    """Bug: `launch_window` skipped `ensure_ready()`, so a herdr window launch died
+    on a bare ENOENT from the socket instead of starting the server."""
+    _home(tmp_path, monkeypatch)
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "herdr")
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(
+        herdr_host.HerdrHost, "ensure_ready", lambda _self: "the herdr server did not come up",
+    )
+    monkeypatch.setattr(
+        herdr_host.HerdrHost, "launch",
+        lambda _self, **_k: pytest.fail("must not launch onto a host that is not ready"),
+    )
+    result = terminal_sessions.launch_window(agent="fake", project_dir=tmp_path)
+    assert not result.ok and result.error == "the herdr server did not come up"
+
+
+def test_browser_terminal_launches_on_the_same_host_it_gated_on(tmp_path, monkeypatch):
+    """Bug: pty_host gated on the RESOLVED host's viewer capability but launched via
+    the tmux façade, then asked the resolved host for a viewer onto a tmux ref. On a
+    herdr-configured machine that returns None and the browser terminal dies."""
+    from horus import pty_host
+
+    _home(tmp_path, monkeypatch)
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "herdr")
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host.HerdrHost, "ensure_ready", lambda _self: None)
+    monkeypatch.setattr(
+        tmux_host.TmuxHost, "launch",
+        lambda _self, **_k: pytest.fail("gated on herdr, so it must not launch on tmux"),
+    )
+    launched = {}
+    monkeypatch.setattr(
+        herdr_host.HerdrHost, "launch",
+        lambda _self, **kwargs: launched.update(kwargs) or LaunchResult(
+            True, kwargs["agent"], tmp_path,
+            session_id="12345678-1234-1234-1234-123456789abc", target_ref="w1:p1",
+        ),
+    )
+    seen = {}
+
+    def fake_viewer(_self, ref):
+        seen["ref"] = ref
+        return ["herdr"]
+
+    monkeypatch.setattr(herdr_host.HerdrHost, "viewer_argv", fake_viewer)
+
+    # Reuse the properly-shaped fake: pty_host starts a reader thread, and a
+    # half-fake without read() only surfaces as a swallowed thread exception.
+    from tests.test_pty_host import _FakePty
+
+    fake = _FakePty()
+    monkeypatch.setattr(pty_host, "spawn_pty", lambda *_a, **_k: fake)
+    try:
+        pty_host.PtyHost().start(agent="fake", project_dir=tmp_path, managed=True)
+    finally:
+        fake.eof()
+    # The viewer was asked for the ref the SAME host produced, not a foreign one.
+    assert seen["ref"] == "w1:p1"
+
+
+def test_detached_workers_follow_the_named_host_not_tmux(tmp_path, monkeypatch):
+    """Bug: `launch_detached_run` hardcoded tmux, so `--target herdr` was accepted by
+    argparse and then ignored; and the `--detach` guards compared against the literal
+    tmux, so a herdr machine could not host a worker at all."""
+    _home(tmp_path, monkeypatch)
+    from horus.run_executor import RunRequest
+
+    # The guards now ask about persistence, so every persistent host qualifies.
+    assert set(terminal_sessions.persistent_hosts()) == {"tmux", "herdr"}
+    assert terminal_sessions.hosts_persistently("herdr")
+    assert not terminal_sessions.hosts_persistently("current")
+
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host.HerdrHost, "ensure_ready", lambda _self: None)
+    picked = {}
+    monkeypatch.setattr(
+        herdr_host.HerdrHost, "launch_worker",
+        lambda _self, request, reg=None: picked.setdefault("host", "herdr"),
+    )
+    monkeypatch.setattr(
+        tmux_host.TmuxHost, "launch_worker",
+        lambda _self, request, reg=None: pytest.fail("--target herdr must not run on tmux"),
+    )
+    request = RunRequest(
+        session_id="12345678-1234-1234-1234-123456789abc", agent="fake", project=tmp_path,
+        prompt="host-selection probe", account=None, posture="auto-edit", model=None,
+        effort=None, worker=True, resume=None, dispatch_base_sha=None, dispatch_pending=0,
+    )
+    terminal_sessions.launch_detached_run(request, target="herdr")
+    assert picked["host"] == "herdr"
+
+    # A non-persistent host is refused with a reason rather than silently redirected.
+    result = terminal_sessions.launch_detached_run(request, target="current")
+    assert not result.ok and "cannot host a detached worker" in result.error
+
+
+def test_worker_default_host_follows_the_machine_config(monkeypatch):
+    """`horus run --unattended` used to default the target to literal tmux, so a
+    herdr-configured machine had its workers land on the wrong host."""
+    monkeypatch.setattr(tmux_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("HERDR_ENV", raising=False)
+
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "herdr")
+    assert terminal_sessions.default_persistent_host() == "herdr"
+
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
+    assert terminal_sessions.default_persistent_host() == "tmux"
+
+    # The resolved host cannot host a worker → fall back to one that can.
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
+    assert terminal_sessions.default_persistent_host() in {"tmux", "herdr"}

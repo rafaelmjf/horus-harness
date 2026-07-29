@@ -1147,7 +1147,7 @@ def _apply_unattended_defaults(args: argparse.Namespace) -> int | None:
         return 2
 
     args.worker = getattr(args, "worker", None) or args.agent
-    args.target = getattr(args, "target", None) or terminal_sessions.TMUX
+    args.target = getattr(args, "target", None) or terminal_sessions.default_persistent_host()
     args.detach = True
     if not getattr(args, "worktree", None):
         # --unattended requires --envelope, which requires --card, so a card slug is
@@ -1363,18 +1363,19 @@ def cmd_run(args: argparse.Namespace) -> int:
             envelope_auth.name, envelope_auth.request, session_id=request.session_id
         )
     if getattr(args, "detach", False):
-        if not getattr(args, "worker", None) or args.target != terminal_sessions.TMUX:
-            print("Refusing to run: --detach requires --worker and --target tmux")
+        if not getattr(args, "worker", None) or not terminal_sessions.hosts_persistently(args.target):
+            print("Refusing to run: --detach requires --worker and a persistent "
+                  f"--target (one of: {', '.join(terminal_sessions.persistent_hosts())})")
             return 2
-        result = terminal_sessions.launch_detached_run(request)
+        result = terminal_sessions.launch_detached_run(request, target=args.target)
         if not result.ok:
             print(f"Refusing to run: {result.error}")
             return 2
-        print(f"Started detached {request.agent} worker (tmux, "
+        print(f"Started detached {request.agent} worker ({args.target}, "
               f"session {request.session_id}, runner pid {result.pid}).")
         return 0
     if getattr(args, "target", terminal_sessions.CURRENT) != terminal_sessions.CURRENT:
-        print("Refusing to run: --target tmux requires --detach")
+        print(f"Refusing to run: --target {args.target} requires --detach")
         return 2
     return run_executor.execute(request, watcher=_spawn_watcher)
 
@@ -2313,8 +2314,9 @@ def cmd_open(args: argparse.Namespace) -> int:
     prompt = args.prompt if args.prompt is not None else (
         routines.resume_prompt(root) if args.mode == "resume" else ""
     )
-    if args.detach and args.target != terminal_sessions.TMUX:
-        print("Refusing to open: --detach is only valid with --target tmux")
+    if args.detach and not terminal_sessions.hosts_persistently(args.target):
+        print("Refusing to open: --detach needs a persistent host "
+              f"(one of: {', '.join(terminal_sessions.persistent_hosts())})")
         return 2
     if args.target == terminal_sessions.WINDOW:
         brief = backend.LaunchBrief(

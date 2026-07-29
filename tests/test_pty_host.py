@@ -9,6 +9,7 @@ import time
 import pytest
 
 from horus import pty_host
+from horus.hosts import tmux as hosts_tmux
 from horus.launch import LaunchResult
 from horus.pty_session import spawn_pty
 
@@ -104,11 +105,11 @@ def test_managed_host_views_and_closes_same_tmux_session(tmp_path, monkeypatch):
     fake = _FakePty()
     captured = {}
     stopped = []
-    monkeypatch.setattr(pty_host.terminal_sessions, "default_target", lambda: "tmux")
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
     monkeypatch.setattr(
-        pty_host.terminal_sessions,
-        "launch_tmux",
-        lambda **kwargs: captured.update(launch=kwargs) or LaunchResult(
+        hosts_tmux.TmuxHost,
+        "launch",
+        lambda _self, **kwargs: captured.update(launch=kwargs) or LaunchResult(
             True,
             kwargs["agent"],
             tmp_path,
@@ -153,11 +154,11 @@ def test_managed_host_views_and_closes_same_tmux_session(tmp_path, monkeypatch):
 
 def test_managed_host_rolls_back_tmux_when_browser_viewer_fails(tmp_path, monkeypatch):
     stopped = []
-    monkeypatch.setattr(pty_host.terminal_sessions, "default_target", lambda: "tmux")
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
     monkeypatch.setattr(
-        pty_host.terminal_sessions,
-        "launch_tmux",
-        lambda **kwargs: LaunchResult(
+        hosts_tmux.TmuxHost,
+        "launch",
+        lambda _self, **kwargs: LaunchResult(
             True,
             kwargs["agent"],
             tmp_path,
