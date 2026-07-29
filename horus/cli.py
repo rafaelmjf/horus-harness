@@ -2309,7 +2309,7 @@ def cmd_tail(args: argparse.Namespace) -> int:
 
 
 def cmd_open(args: argparse.Namespace) -> int:
-    """Open a tracked attended agent in a window, this TTY, or persistent tmux."""
+    """Open a tracked attended agent in a window, this TTY, or a persistent host."""
     root = Path(args.path).resolve()
     prompt = args.prompt if args.prompt is not None else (
         routines.resume_prompt(root) if args.mode == "resume" else ""
@@ -5073,11 +5073,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_focus.add_argument("session_id", help="session id (or a unique prefix)")
     p_focus.set_defaults(func=cmd_focus)
 
-    p_attach = sub.add_parser("attach", help="attach this terminal to a running Horus tmux session")
+    p_attach = sub.add_parser("attach", help="attach this terminal to a running Horus session on a persistent host")
     p_attach.add_argument("session_id", help="session id (or a unique prefix)")
     p_attach.set_defaults(func=cmd_attach)
 
-    p_stop = sub.add_parser("stop", help="close a running Horus tmux session")
+    p_stop = sub.add_parser("stop", help="close a running Horus session on a persistent host")
     p_stop.add_argument("session_id", help="session id (or a unique prefix)")
     p_stop.set_defaults(func=cmd_session_stop)
 
@@ -5174,7 +5174,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.add_argument(
         "--detach", action="store_true",
-        help="return after managed-tmux runner PID handoff (requires --worker --target tmux)",
+        help="return after the managed runner's PID handoff (requires --worker and a persistent --target)",
     )
     p_run.add_argument(
         "--worktree",
@@ -5254,7 +5254,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_open.add_argument(
         "--detach",
         action="store_true",
-        help="with --target tmux, create the session without attaching this terminal",
+        help="with a persistent --target, create the session without attaching this terminal",
     )
     p_open.add_argument(
         "--posture",
