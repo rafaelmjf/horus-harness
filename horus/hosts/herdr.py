@@ -226,6 +226,9 @@ def place_session(project: Path) -> tuple[str | None, str | None]:
 
 class HerdrHost:
     id = ID
+    # herdr leaves `previous_workspace` unbound by default, so point at the
+    # picker rather than a key that does nothing.
+    switch_hint = "Ctrl+b w picks a space — the cockpit is 'Horus'"
     capabilities = Capabilities(
         persistent=True,
         attach=True,

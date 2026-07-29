@@ -543,3 +543,64 @@ def test_new_window_is_vetoed_inside_a_host_because_the_host_is_the_window_manag
 
     # `takeover` is unaffected either way.
     assert terminal_sessions.resolve_window_launch("takeover") is False
+
+
+def test_help_text_does_not_promise_tmux_where_any_persistent_host_works():
+    """Shipped in 0.0.78: `--detach` guards were widened to any persistent host but
+    five help strings still said "tmux", implying herdr could not be used. The reap
+    strings are exempt on purpose — reaping really is tmux-only, because it is the
+    only host that can report attached/idle."""
+    parser = cli.build_parser()
+    subparsers = parser._subparsers._group_actions[0].choices
+
+    def help_for(command: str, dest: str) -> str:
+        return next(a.help for a in subparsers[command]._actions if a.dest == dest)
+
+    for command, dest in [("open", "detach"), ("run", "detach")]:
+        text = help_for(command, dest)
+        assert "tmux" not in text, f"{command} --detach: {text!r}"
+        assert "persistent" in text, f"{command} --detach: {text!r}"
+
+    # A sub-command's own `help=` lives on the parent's choice action, not on the
+    # subparser's description.
+    action = parser._subparsers._group_actions[0]
+    summaries = {choice.dest: (choice.help or "") for choice in action._choices_actions}
+
+    # Verbs that act on any persistent host must not name one.
+    for command in ("attach", "stop"):
+        assert "tmux" not in summaries[command], f"{command}: {summaries[command]!r}"
+        assert "persistent host" in summaries[command], f"{command}: {summaries[command]!r}"
+
+    # And the exemption holds: reap still says tmux, because it is true — only a host
+    # that can report attached/idle is reapable, and tmux is the only one that can.
+    assert "tmux" in summaries["reap"]
+
+
+def test_the_switch_hint_comes_from_the_host_not_a_hardcoded_tmux_key(monkeypatch):
+    """Shipped wrong in 0.0.78: every launch/attach message said "Ctrl-b L toggles
+    between it and Horus" and "started in tmux". On herdr `previous_workspace` is
+    UNBOUND by default, so Ctrl-b L does nothing — the hint has to be the host's."""
+    from horus.launch import LaunchResult
+
+    sid = "12345678-1234-1234-1234-123456789abc"
+    hosted = LaunchResult(True, "fake", __import__("pathlib").Path("/tmp/x"),
+                          session_id=sid, target_ref="w1:p1")
+    monkeypatch.setattr(tmux_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+
+    monkeypatch.delenv("HERDR_ENV", raising=False)
+    monkeypatch.setenv("TMUX", "/tmp/tmux,1,0")
+    assert "Ctrl-b L" in terminal_sessions.attach_outcome_message(sid)
+    assert "started in tmux" in terminal_sessions.launch_outcome_message(hosted)
+
+    monkeypatch.delenv("TMUX")
+    monkeypatch.setenv("HERDR_ENV", "1")
+    attached = terminal_sessions.attach_outcome_message(sid)
+    launched = terminal_sessions.launch_outcome_message(hosted)
+    assert "Ctrl+b w" in attached and "Ctrl-b L" not in attached, attached
+    assert "started in herdr" in launched and "tmux" not in launched, launched
+
+    # Every host that can switch in place must offer a hint; `current` never does.
+    for host in hosts.all_hosts():
+        if host.capabilities.persistent:
+            assert host.switch_hint, host.id

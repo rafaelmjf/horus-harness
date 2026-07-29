@@ -65,6 +65,15 @@ class SessionHost(Protocol):
     id: str
     capabilities: Capabilities
 
+    switch_hint: str
+    """How the owner gets back to Horus from one of this host's sessions.
+
+    User-facing text, and it belongs to the host because the keys differ: tmux binds
+    last-session to ``Ctrl-b L`` out of the box, herdr leaves `previous_workspace`
+    unbound and offers a space picker instead. A single hardcoded hint was shipped in
+    0.0.78 and was simply wrong on herdr.
+    """
+
     def available(self) -> bool:
         """Whether this host can be used on this machine at all."""
 

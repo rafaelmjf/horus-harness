@@ -28,6 +28,8 @@ class CurrentHost:
     """Run the agent in this terminal; it lives and dies with it."""
 
     id = ID
+    # Never switches in place, so no hint is ever shown for it.
+    switch_hint = ""
     capabilities = Capabilities(
         persistent=False,
         attach=False,

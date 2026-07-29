@@ -3,8 +3,8 @@
 `horus tui` runs the TUI in the terminal you are standing in. Naming a host runs
 it inside that host instead, which is what makes the multi-agent workflow
 practical: the cockpit lives in one pane, every launch creates a sibling session
-on the same server, and attaching switches you there and back (`Ctrl-b L` on
-tmux) rather than nesting a client.
+on the same server, and attaching switches you there and back (each host's own key — see
+`SessionHost.switch_hint`) rather than nesting a client.
 
 This is composition, not new mechanism — it reuses each host's own create/attach
 verbs. Two behaviours are the whole design:

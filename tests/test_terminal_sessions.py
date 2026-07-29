@@ -577,6 +577,7 @@ def test_outcome_messages_describe_the_host_that_actually_ran(monkeypatch):
     )
 
     monkeypatch.setenv("TMUX", "/tmp/tmux,123,0")
+    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
     assert "Ctrl-b L" in terminal_sessions.attach_outcome_message(sid)
     assert "Switched to 12345678" in terminal_sessions.attach_outcome_message(sid)
     assert "started in tmux" in terminal_sessions.launch_outcome_message(tmux_hosted)

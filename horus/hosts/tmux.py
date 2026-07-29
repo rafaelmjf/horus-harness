@@ -70,6 +70,7 @@ def _kill_tmux_session(name: str) -> None:
 
 class TmuxHost:
     id = ID
+    switch_hint = "Ctrl-b L toggles between it and Horus"
     capabilities = Capabilities(
         persistent=True,
         attach=True,

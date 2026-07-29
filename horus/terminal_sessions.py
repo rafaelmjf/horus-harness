@@ -140,8 +140,9 @@ def attach_outcome_message(session_id: str) -> str:
     to stay true whenever it is read — including after the owner switched back.
     """
     short = session_id[:8]
-    if attach_returns_immediately():
-        return f"Switched to {short}. Ctrl-b L toggles between it and Horus."
+    host = hosts.resolve()
+    if host.switches_in_place():
+        return f"Switched to {short}. {host.switch_hint}."
     return f"Detached from {short}."
 
 
@@ -154,8 +155,9 @@ def launch_outcome_message(result: launch.LaunchResult) -> str:
     and telling them otherwise would send them chasing one that isn't there.
     """
     short = (result.session_id or "")[:8]
-    if result.target_ref and attach_returns_immediately():
-        return f"Session {short} started in tmux. Ctrl-b L toggles between it and Horus."
+    host = hosts.resolve()
+    if result.target_ref and host.switches_in_place():
+        return f"Session {short} started in {host.id}. {host.switch_hint}."
     return f"Session {short} returned to Horus."
 
 
