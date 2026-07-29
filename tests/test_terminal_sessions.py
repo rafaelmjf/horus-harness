@@ -587,16 +587,29 @@ def test_live_isolated_switch_client_moves_a_real_client_between_sessions(tmp_pa
         # move, and tmux refuses to attach without a terminal. Hand it one via
         # openpty + Popen rather than forkpty: this process is multi-threaded, where
         # forking into Python (even briefly, before exec) risks a child deadlock.
+        # TERM must be explicit — a bare CI runner has none, and tmux then exits with
+        # "terminal does not support clear" (same reason pty_host/launch_window pass it).
         primary_fd, replica_fd = pty.openpty()
         client_proc = subprocess.Popen(
             ["tmux", "-S", str(socket_path), "attach", "-t", "horus-tui"],
             stdin=replica_fd, stdout=replica_fd, stderr=replica_fd, start_new_session=True,
+            env={**os.environ, "TERM": os.environ.get("TERM") or "xterm-256color"},
         )
+
+        def client_said() -> str:
+            """Whatever tmux told the pty. The one line that explains a failure here,
+            so it is reported rather than discarded."""
+            os.set_blocking(primary_fd, False)
+            with contextlib.suppress(BlockingIOError, OSError):
+                return os.read(primary_fd, 2048).decode(errors="replace").strip()
+            return "<nothing>"
 
         deadline = time.time() + 10
         while clients() != "horus-tui" and time.time() < deadline:
+            if client_proc.poll() is not None:
+                pytest.fail(f"tmux attach exited {client_proc.returncode}: {client_said()}")
             time.sleep(0.1)
-        assert clients() == "horus-tui", "the probe client never attached"
+        assert clients() == "horus-tui", f"the probe client never attached: {client_said()}"
 
         # Exactly what attach_session issues, run from inside the Horus pane.
         tmux("send-keys", "-t", "horus-tui",
