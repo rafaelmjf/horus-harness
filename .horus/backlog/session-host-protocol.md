@@ -178,3 +178,29 @@ functions move into `hosts/tmux.py` here), `session-agent-state-awareness`.
   Remaining on this card: the herdr host (Stage B), and renaming `tmux_runner` →
   `pane_runner` with a shim — deferred deliberately, because the module name is
   embedded in the runner specs of sessions running right now, and it is cosmetics.
+
+- **2026-07-29 — Stage B landed (PR #442) and the front door with it (PR #443).**
+  The herdr host is ~370 lines and needed **no caller change** — registering it made
+  it work in the TUI, the terminal app, `horus open` and `--target herdr` through
+  `launch_on()`, which is the result Stage A was for. Verified end-to-end on a real
+  server; full evidence in `.horus/backlog/archive/herdr-host-probe.md` and the PR.
+
+  Two implementation facts only a live server could have produced, both now pinned
+  by tests: `herdr pane focus` is *directional* (bringing a session into view is
+  `workspace focus <workspace_id>`, read from `pane get` rather than parsed off the
+  ref), and agent state comes from `pane get`.`agent_status` — `agent explain`
+  errors `agent_not_found` on an undetected pane, which is a normal state.
+
+  #443 then added the cockpit front door the owner asked for (`horus tui tmux` /
+  `horus tui herdr`, positional by owner preference) plus a persisted
+  where-to-host default in the TUI Defaults screen. It also fixed a **latent
+  resolution bug** this card's design had not anticipated: `resolve()` ignored the
+  host Horus was running *inside*, so a cockpit in a herdr pane launched agents onto
+  tmux — different servers, no way to switch back. `hosts.enclosing()` now ranks
+  below the env override and an explicit config choice but above `AUTO_ORDER`.
+
+  **All that remains on this card is the `tmux_runner` → `pane_runner` rename**
+  (needs a shim; the module name is embedded in the runner specs of sessions running
+  right now). Its `tier: high` / `parallel: unsafe` stamps describe the refactor that
+  has now shipped, not a rename — worth rescoping or carving out in the next refine
+  pass rather than me deciding here.
