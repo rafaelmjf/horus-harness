@@ -119,38 +119,19 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   for Codex Windows). Never add an exit-code-signaling hook without revisiting this.
   Anything committed to the repo executes on every machine it reaches — strictest
   portability bar; the `horus` console script is the only guaranteed spelling.
-- **Hooks advise and ask, never override** — injected context defers to the user's
-  command; Stop asks (close now vs push ahead); never strand uncommitted work. Emergency
-  state-save keeps this: never denies the tool call; worker tree = full-tree commit to the
-  disposable branch (+push, `-u origin` fallback); main checkout = `.horus/**`-only rescue
-  ref via a temp `GIT_INDEX_FILE`, never touching the user's index/HEAD/worktree. Hook
-  sentinels are machine-global under `/tmp` — probe session ids must be unique across
-  supervisor/worker probes.
+- **Hooks advise and ask, never override** — injected context defers to the user's command; Stop asks (close now vs push ahead); never strand uncommitted work. Emergency state-save never denies the tool call: worker tree = full-tree commit to the disposable branch (+push); main checkout = a `.horus/**`-only rescue ref via a temp `GIT_INDEX_FILE`, never touching the user's index/HEAD/worktree. Hook sentinels are machine-global under `/tmp`, so probe session ids must be unique across supervisor/worker probes.
 - **Bundled skill edits bump the skill version, always.** The version-aware install
   skips same-version content, so an unbumped text change leaves committed projections
   silently stale (observed: #247 fleet-curation drift, caught 2026-07-16). Resync with
   `skill install --force`; never hand-edit the projected `SKILL.md` copies.
 - **Three OS targets** (Windows/Linux/macOS); Claude/Codex projections move together and each compares with the CLI, never with its peer. Before release, project from prospective source (`uv run horus`) or repeat after install—the previous installed version can falsely look current. Fleet Projection Sync is read-only; curator launch never mass-writes targets.
 - **Every release:** bump `pyproject.toml` + `horus/__init__.py` + `uv.lock`, rerun tests, publish promptly, and prove PyPI JSON/simple-index plus a fresh install on all three OSes. The final release action is `scripts/deploy-hosted.sh`: exact refreshed install, service restart, `/health` version match, and `/` still 403 behind Access. A green publish job alone is insufficient.
-- **An outdated CLI must never silently regress `.horus/` structure.** Repos stamp
-  `horus_min_version` (PRD frontmatter); two guards honor it — the managed-block
-  Version-floor preflight (agent checks `horus --version`; the only guard that binds an
-  *already-installed* old CLI, so it lives in block text, not code) and
-  `_enforce_version_floor` (running CLI < floor ⇒ exit 4 on every mutating command).
-  Set the stamp on scaffold, raise-never-lower via `upgrade-project`; bump
-  `versioning.MIN_CLI_VERSION` only on a real structure break.
+- **An outdated CLI must never silently regress `.horus/` structure.** Repos stamp `horus_min_version` (PRD frontmatter); two guards honor it — the managed-block Version-floor preflight (agent checks `horus --version`; the only guard binding an *already-installed* old CLI, so it lives in block text, not code) and `_enforce_version_floor` (running CLI < floor ⇒ exit 4 on every mutating command). Set on scaffold, raise-never-lower via `upgrade-project`; bump `versioning.MIN_CLI_VERSION` only on a real structure break.
 - **Dashboard contract:** read-mostly; every form POST is PRG; heavy/network panels load
   async, never in the page paint; a stale-build server never writes artifacts; empty
   nudge fragments return empty (no false "all clear"); no first-run splash/overlay
   (the welcome overlay looped and was removed — render straight to content).
-- **Exposure is an explicit launch property, never ambient config.** The `[access]`
-  Cloudflare gate arms ONLY under `horus dashboard --exposed`; local mode never reads
-  `[access]`, so a machine-global block can't 403 a local `horus app` (v0.0.31). Fail
-  closed: `--exposed` with no `[access]` block refuses to serve. A hosted backend must
-  pass `--exposed` (its systemd unit does) — flipping this default without updating the
-  unit would silently un-gate the public dashboard, so treat the harness flag + the
-  deploy unit as one lockstep change. Persist a client-side seen-flag in `localStorage`,
-  not `sessionStorage` (per-tab → resets on every new window Horus opens).
+- **Exposure is an explicit launch property, never ambient config.** The `[access]` Cloudflare gate arms ONLY under `horus dashboard --exposed`; local mode never reads `[access]`, so a machine-global block can't 403 a local `horus app`. Fail closed: `--exposed` with no `[access]` block refuses to serve. A hosted backend must pass `--exposed` (its systemd unit does), so treat the harness flag + deploy unit as one lockstep change — flipping the default without the unit would silently un-gate the public dashboard. Persist the client-side seen-flag in `localStorage`, not `sessionStorage`.
 - **An account is named `<agent>-<alias>`, and names are resolved, never guessed.** Identity is
   (agent, alias) — `personal` is a different rate-limit pool per agent — but accounts.toml keys
   on the bare alias while its isolated dir is `<agent>-<alias>`, so surfaces invite the wrong
@@ -160,27 +141,8 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   Unresolvable or ambiguous is REFUSED naming the real accounts — a wrong account spends
   someone else's subscription. Durable artifacts store the canonical label; agents without
   accounts (the fake adapter) are exempt.
-- **Usage comes from the surface the app pushes, not one we poll.** Claude Code hands
-  `rate_limits` to every statusline render (official, unauthenticated, unmeterable); `GET
-  /api/oauth/usage` is experimental and 429s under real polling. `horus usage record` captures
-  the pushed reading into the shared cache, so consumers stop reaching for the endpoint. Codex
-  has no equivalent (declarative statusline), so its rollout JSONL stays the source — and each
-  lane declares its own `window_minutes`, so never infer a window from its slot (that reported
-  "5h limit 92%" for a window resetting in six days). Readings carry a source and an age; a
-  read-out never asserts a cause it did not diagnose.
-- **Unattended scheduling is systemd `--user` timers, on disk.** Transient units
-  (`systemd-run`) live in RAM, so a reboot silently erases every pending dispatch; on-disk +
-  `enable` + `Persistent=true` survives reboot and catches up a slot missed while suspended.
-  `loginctl` linger is the away-mode precondition — without it user timers stop at logout.
-  systemd owns the state (no parallel registry); `horus schedule` re-implements no part of
-  `horus run` and passes its surface through. A one-shot's `LastTrigger` reads empty once
-  elapsed and its `ActiveState` still reads active, so "has it fired?" comes from `NextElapse`
-  plus the Persistent stamp's mtime. **`ExecStart` must be an ABSOLUTE path** — systemd resolves
-  a bare command name against the manager's own compiled-in PATH (system bins), NOT the unit's
-  `Environment=PATH`, so `ExecStart=horus …` fails `203/EXEC` from `~/.local/bin` (v0.0.62
-  listener crash-loop, #322). A long-running unit's live probe must confirm it reaches `active`
-  + logs its job, not just that it installs. The persistent listener runs the pinned CLI —
-  restart it after an upgrade (`notify listen --restart`; deploy-hosted does automatically).
+- **Usage comes from the surface the app pushes, not one we poll.** Claude Code hands `rate_limits` to every statusline render (official, unauthenticated); `GET /api/oauth/usage` is experimental and 429s under real polling, so `horus usage record` captures the pushed reading into the shared cache. Codex has no equivalent, so its rollout JSONL stays the source — and each lane declares its own `window_minutes`, so never infer a window from its slot. Readings carry a source and an age; a read-out never asserts a cause it did not diagnose.
+- **Unattended scheduling is on-disk systemd `--user` timers.** Transient `systemd-run` units die on reboot; on-disk + `enable` + `Persistent=true` survives and catches up a slot missed while suspended, and `loginctl` linger is the away-mode precondition. systemd owns the state (no parallel registry); `horus schedule` re-implements no part of `horus run`. **`ExecStart` must be an ABSOLUTE path** — systemd resolves a bare name against its own compiled-in PATH, not the unit's `Environment=PATH` (`203/EXEC`, #322). "Has a one-shot fired?" reads from `NextElapse` + the Persistent stamp mtime (`LastTrigger`/`ActiveState` mislead). A long-running unit's probe confirms it reaches `active` and logs; the persistent listener runs the pinned CLI, so restart it after an upgrade.
 - **Accounts:** login-driven setup into isolated dirs; TOFU identity adoption; the real email never lands in a commit; forward-slash every path written to TOML/JSON. A `CLAUDE_CONFIG_DIR` isolates renderer preferences too (incl. the statusLine pointer — `config.write_statusline_pointer` is the single writer, wired into `isolate_account`); compare account settings when UI behavior differs rather than cloning ambient config. **Prefer login over copy:** a dir made by fresh login holds only the credential file, while `isolate_account`'s copy drags along config that may carry absolute paths back to the ambient home (Codex `config.toml` does — `codex-isolated-config-leak`) and even propagates trust decisions. **Aliases stay generic** (`personal`/`work`, never a client or employer name): they are non-secret by design and already appear in committed prose, so they must stay safe to publish. **Every agent needs its own identity guard** — Claude has `verify_account`, Codex has none, and `launch.py`'s shared check reads `config_dirs`, which Codex does not have, so it silently skips (`codex-identity-guard`); an unguarded agent can run under the wrong account while every receipt names the right one.
 - **Agent terminals on phones:** keep the browser terminal functional, but use native
   iOS Termius SSH over the private Tailscale network into `horus tui` as the reliable
@@ -227,16 +189,7 @@ The invariants that constrain new work. Full rationale: `archive/decisions.md` +
   supersede/tombstone metadata on archived cards, ever: curation decays, byproducts of
   the ship ritual don't. The capabilities project record is a display/fleet projection
   artifact, not an agent entry point.
-- **Capability catalogs stay idempotent EXCEPT the per-project stamp, by design
-  (2026-07-11).** The fleet-wide catalog has no timestamps (pure function of
-  sources, unchanged run = no write). `horus capabilities --project <name>`
-  (or the self-document default) deliberately relaxes this ONE way: its
-  `generated_at` stamp refreshes every run — the file is a regenerate-on-read
-  publishing artifact, never a cache read back — while the `project` payload
-  underneath stays just as idempotent. Don't "fix" the stamp, and don't let
-  the relaxation creep into the fleet-wide catalog. The TUI calls
-  `generate_project` once on project-open and renders that returned payload;
-  it never reads the generated file as a cache or maintains a parallel parser.
+- **Capability catalogs stay idempotent EXCEPT the per-project stamp, by design.** The fleet-wide catalog has no timestamps (pure function of sources; unchanged run = no write). `horus capabilities --project <name>` relaxes this ONE way — its `generated_at` refreshes every run (a regenerate-on-read publishing artifact, never a cache) while the `project` payload stays idempotent; don't "fix" the stamp or let the relaxation reach the fleet-wide catalog. The TUI calls `generate_project` once on project-open and renders the returned payload, never reading the file as a cache.
 - **Model calibration measures; the agent judges.** Measured datums and hand-edited owner priors stay separate; `horus/datums.py` is never a router/policy/spend engine. Outcomes are agent-supplied: clean/nudged/bounced form quality, died/void are separate operational counts, and exit is an orthogonal mechanical axis. Every consumer emits data only—no pick, `--for`, or auto-dispatch—and aliases normalize before joins.
 - **Orchestration (proven 2026-07-04, contract in execution skill v8):** parallel features run orchestrator > supervisor > worker (worktree per worker; claude workers `full-auto`, else headless stalls; bounce = resume the same session with the exact failure; watch main's push CI before arming the next). Orchestrator implements nothing and alone edits continuity; commit continuity before cutting a worktree from HEAD; name any unreviewed-output branch in the handoff; manually reap exact-handle orphaned port-holders after a worker death (automatic cross-platform reaping stays retired, PR #231).
 - **Orphan reaping only ever acts on positive confirmation (2026-07-13).** `reap_orphans()` kills a Horus tmux session only with a *matching* registry record that is terminal or whose pid is dead, AND unattached, AND idle past a grace window. A session with **no matching record is never touched** — absence of a record is not evidence (a stale/foreign/rebuilt registry looks identical). Extend this to any future reaper before relaxing it.
