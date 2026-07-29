@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 tier: medium
 created: 2026-07-20
@@ -14,6 +14,8 @@ type: feature
 vision_facet: "Dashboard / cockpit"
 parallel: exclusive
 surface: horus/terminal_tui.py, horus/fetchcheck.py, horus/fleet_review.py
+shipped_pr: 434
+shipped_sha: c916d70
 ---
 
 # tui-remote-freshness-indicator — see at TUI launch whether continuity is current

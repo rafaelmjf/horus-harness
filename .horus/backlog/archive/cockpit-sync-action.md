@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 tier: medium
 created: 2026-07-29
@@ -15,6 +15,8 @@ vision_facet: "Dashboard / cockpit"
 parallel: exclusive
 depends-on: tui-remote-freshness-indicator
 surface: horus/terminal_tui.py, horus/sync.py, horus/gitstate.py
+shipped_pr: 434
+shipped_sha: c916d70
 ---
 
 # cockpit-sync-action — one-tap "Sync" in the TUI (per-project + fleet), on the shipped engine
