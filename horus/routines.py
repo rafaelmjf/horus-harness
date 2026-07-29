@@ -320,6 +320,62 @@ def _section(body: str, heading: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _section_breakdown(body: str) -> list[tuple[str, int]]:
+    """(heading, physical-line-count) for every top-level `## ` section, largest first.
+
+    Turns "the PRD is over the cap" into "which section is the driver", so a distill
+    pass aims at the actual bloat instead of the section the cap message happens to name.
+    """
+    lines = body.splitlines()
+    heads = [(i, ln[3:].strip()) for i, ln in enumerate(lines) if ln.startswith("## ")]
+    out = [
+        (name, (heads[k + 1][0] if k + 1 < len(heads) else len(lines)) - i)
+        for k, (i, name) in enumerate(heads)
+    ]
+    return sorted(out, key=lambda t: t[1], reverse=True)
+
+
+def _hard_wrapped_bullets(section_body: str) -> int:
+    """Count top-level `- ` bullets that span >1 physical line via indented
+    continuation lines — the cheapest, purely-formatting distill lever (unwrapping to
+    one line per bullet reclaims lines without touching a single invariant)."""
+    lines = section_body.splitlines()
+    count = 0
+    i, n = 0, len(lines)
+    while i < n:
+        if lines[i].startswith("- "):
+            j, wrapped = i + 1, False
+            while j < n and lines[j].strip() and not lines[j].startswith("- "):
+                if lines[j][:1].isspace():  # indented continuation of this bullet
+                    wrapped = True
+                    j += 1
+                else:
+                    break
+            count += 1 if wrapped else 0
+            i = j
+        else:
+            i += 1
+    return count
+
+
+def _prd_size_hint(body: str) -> str:
+    """Name the section driving PRD size, and — when the driver has hard-wrapped
+    bullets — point at unwrapping as the cheapest trim. Empty when there is no body."""
+    breakdown = _section_breakdown(body)
+    if not breakdown:
+        return ""
+    top_name, top_lines = breakdown[0]
+    total = sum(n for _n, n in breakdown) or 1
+    hint = f"largest section is '{top_name}' ({top_lines} lines, {round(100 * top_lines / total)}%)"
+    wrapped = _hard_wrapped_bullets(_section(body, top_name))
+    if wrapped:
+        hint += (
+            f"; {wrapped} of its bullet(s) are hard-wrapped — unwrapping to one line "
+            "each reclaims lines with no loss"
+        )
+    return hint
+
+
 def _backlog_item_texts(section_body: str) -> list[str]:
     """Marker-stripped text of each top-level list item in a section (sub-bullets
     included; wrapped continuation lines without a marker are not list items)."""
@@ -457,20 +513,16 @@ def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
     prd_text = _read(hdir, frontmatter.PRD_FILE) or ""
     doc = frontmatter.parse(prd_text)
 
-    # 1. PRD size vs the ~250-line cap.
+    # 1. PRD size vs the ~250-line cap. When over, name the section driving the size
+    #    (and the hard-wrap lever) so the distill aims at the actual bloat.
     line_count = len(prd_text.splitlines())
-    if line_count > _PRD_HARD_CAP:
-        findings.append(Finding(
-            "warn",
-            f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {line_count} lines — over the ~250-line cap: "
-            f"distill one-line shipped entries, delete done backlog items (git remembers)",
-        ))
-    elif line_count > _PRD_SOFT_CAP:
-        findings.append(Finding(
-            "warn",
-            f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {line_count} lines — approaching the ~250-line "
-            f"cap — distill: one-line shipped entries, delete done backlog items (git remembers)",
-        ))
+    if line_count > _PRD_SOFT_CAP:
+        hint = _prd_size_hint(doc.body)
+        band = "over" if line_count > _PRD_HARD_CAP else "approaching"
+        message = f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {line_count} lines — {band} the ~250-line cap"
+        if hint:
+            message += f": {hint}"
+        findings.append(Finding("warn", message))
 
     # 2. Stale frontmatter: PRD last_updated older than the newest session note.
     sessions = recent_sessions(root, limit=999)

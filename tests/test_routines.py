@@ -614,6 +614,38 @@ def test_consolidate_v3_warns_over_line_cap(tmp_path):
     assert any("over the ~250-line cap" in m for m in msgs)
 
 
+def test_consolidate_v3_cap_warning_names_the_driving_section(tmp_path):
+    # A Rules section carrying a hard-wrapped bullet drives the size; the warning must
+    # name Rules and point at unwrapping — not just "the file is big" (the finding that
+    # cost a hand-measured investigation, 2026-07-29).
+    hdir = tmp_path / ".horus"
+    hdir.mkdir(parents=True)
+    rules = "## Rules\n\n- A wrapped rule that\n  spills onto a\n  second and third line.\n" + (
+        "- Another one-line rule.\n" * 260
+    )
+    (hdir / "PRD.md").write_text(
+        _PRD_HEADER.format(last_updated="2026-07-01")
+        + _PRD_BACKLOG.format(backlog="1. **Task one.** Do it.\n")
+        + "## Shipped\n\nOne line.\n\n"
+        + rules,
+        encoding="utf-8",
+    )
+    cap = next(m for m in _warn_msgs(routines.consolidate_signals(tmp_path)) if "~250-line cap" in m)
+    assert "largest section is 'Rules'" in cap
+    assert "hard-wrapped" in cap and "unwrapping" in cap
+
+
+def test_prd_size_hint_and_helpers_units():
+    body = "## Vision\nshort\n## Rules\n- one liner\n- wrapped bullet that\n  keeps going\n  and going\n"
+    assert routines._section_breakdown(body)[0][0] == "Rules"  # largest first
+    assert routines._hard_wrapped_bullets(routines._section(body, "Rules")) == 1
+    hint = routines._prd_size_hint(body)
+    assert "largest section is 'Rules'" in hint and "1 of its bullet(s) are hard-wrapped" in hint
+    # No wrapped bullets in the driver → the unwrap clause is omitted.
+    assert "hard-wrapped" not in routines._prd_size_hint("## Rules\n- a\n- b\n## Vision\nx\n")
+    assert routines._prd_size_hint("") == ""
+
+
 def test_consolidate_v3_under_cap_has_no_size_warning(tmp_path):
     _mk_prd_v3(tmp_path)
     msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
