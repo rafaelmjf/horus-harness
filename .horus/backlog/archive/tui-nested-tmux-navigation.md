@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-29
 created_by: owner
@@ -12,6 +12,8 @@ tier: medium
 parallel: safe
 vision_facet: "Dashboard / cockpit"
 surface: horus/terminal_sessions.py, horus/terminal_tui.py, horus/terminal_app.py, tests/test_terminal_sessions.py
+shipped_pr: 439
+shipped_sha: 755347a
 ---
 
 # tui-nested-tmux-navigation — make `horus tui` usable *inside* tmux (switch-client, not refuse)
