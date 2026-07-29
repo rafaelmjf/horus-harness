@@ -5,8 +5,8 @@ readiness: gated
 readiness_reason: "Wait for the unified skill/artifact refresh brainstorm verdict before fixing this card's workflow."
 tier: medium
 created: 2026-07-16
-last_refined: 2026-07-28
-refine_passes: 2
+last_refined: 2026-07-29
+refine_passes: 3
 vision_facet: "Dashboard / cockpit"
 created_by: owner
 type: feature
@@ -17,15 +17,22 @@ surface: horus/terminal_tui.py, horus/dashboard.py, horus/upgrade.py, horus/inte
 
 # TUI fleet artifact refresh
 
-Turn Projection Sync from read-only drift visibility into an owner-confirmed,
-end-to-end refresh workflow for one project or every eligible registered project.
-Refresh covers the canonical Horus-managed projection assets, including bundled
-skills and managed instructions; it is not complete when files are merely changed
-locally.
+Turn **Horus Assets Refresh** (the TUI screen renamed from "Projection Sync" —
+2026-07-29) from read-only drift visibility into an owner-confirmed, end-to-end
+refresh workflow for one project or every eligible registered project. Refresh
+covers the canonical Horus-managed assets projected into consumer repos — bundled
+skills and the managed instruction block; it is not complete when files are merely
+changed locally.
+
+This is the **outbound** direction: Horus's own assets pushed *out* into consumer
+repos as releases move them. It is deliberately named apart from the **inbound**
+`Sync` action (`tui-remote-freshness-indicator` / `cockpit-sync-action`), which
+fast-forwards a project's *own* checkout. "Refresh" = Horus assets outward;
+"Sync" = project state inward.
 
 ## Acceptance
 
-- Projection Sync offers both **Refresh project** and **Refresh all**. The fleet
+- Horus Assets Refresh offers both **Refresh project** and **Refresh all**. The fleet
   action first renders one dry-run plan naming every target, changed managed path,
   workflow policy, and any project that cannot safely participate, then requires
   explicit owner confirmation for that exact plan.
@@ -63,3 +70,14 @@ locally.
   requirement. Success means the remote default branches and clean synchronized
   local defaults contain the refreshed Horus artifacts, not merely that local files
   were regenerated.
+- **2026-07-29 — Rename (owner, refine pass).** The TUI screen "Projection Sync"
+  is renamed **"Horus Assets Refresh"** — "projection sync" was jargon and shared
+  the word "sync" with the opposite (inbound git) direction. Putting **Horus** first
+  draws the ownership boundary: these are *Horus's* assets pushed outward, distinct
+  from a project's own state. The paired resolution: the inbound git fast-forward is
+  named **Sync** (matching the shipped `horus sync` CLI verb). This also **closes the
+  "two differently-scoped refresh verbs on one surface" collision** that
+  `tui-remote-freshness-indicator` flagged — there is now one "Refresh" (assets, out)
+  and one "Sync" (state, in). Rename touches display labels only
+  (`terminal_tui.py:1210,1343,1633,452` + a docstring); no logic change, and the gate
+  on `skill-drift-surfacing-and-refresh` is unchanged.
