@@ -183,11 +183,12 @@ def test_claude_adapter_declares_remote_control_support():
     assert ClaudeAdapter.supports_remote_control is True
 
 
-def test_known_models_are_the_bare_family_aliases():
-    # The TUI's per-account model picker reads this directly — never a list of
-    # its own — so it must carry the CLI-executable bare aliases, not the
-    # dotted calibration-key spelling (see validate_model's rejection of those).
-    assert ClaudeAdapter.KNOWN_MODELS == ("opus", "sonnet", "haiku", "fable")
+def test_known_models_carry_families_and_pinned_selectors():
+    # The default launch list: bare family aliases (each = the latest in its family)
+    # plus a couple of pinned versions the /model picker hides but --model accepts, so
+    # comparing e.g. Opus 5 vs Opus 4.8 works out of the box. All must be CLI-executable
+    # selectors (never the dotted calibration-key spelling validate_model rejects).
+    assert ClaudeAdapter.KNOWN_MODELS == ("opus", "sonnet", "haiku", "fable", "claude-opus-5", "claude-opus-4-8")
     for model in ClaudeAdapter.KNOWN_MODELS:
         assert ClaudeAdapter().validate_model(model) is None
 
