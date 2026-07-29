@@ -19,7 +19,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from horus import adapters, config, terminal_sessions
+from horus import adapters, config, hosts, terminal_sessions
 from horus.pty_session import PtySession, spawn_pty
 
 # Cap the per-terminal scrollback kept for re-attach replay. Generous enough that a
@@ -113,10 +113,10 @@ class PtyHost:
         Reuses the adapter's ``interactive_command`` (the same argv as ``horus open``)
         and ``build_env`` (per-account isolation), plus the per-account identity guard.
         ``prompt`` seeds the TUI (e.g. a continuity/resume prompt); empty = fresh.
-        A managed launch creates the agent in tmux when the runtime supports it and
-        makes this PTY a viewer of that persistent session.
+        A managed launch hosts the agent on a persistent host when the runtime has
+        one that can provide a viewer, and makes this PTY that viewer.
         """
-        if managed and terminal_sessions.default_target() == terminal_sessions.TMUX:
+        if managed and hosts.resolve().capabilities.viewer:
             return self._start_managed_tmux(
                 agent=agent,
                 project_dir=project_dir,
@@ -201,12 +201,16 @@ class PtyHost:
             remote_control=remote_control,
         )
         if not result.ok or not result.session_id or not result.target_ref:
-            raise ValueError(result.error or "failed to create managed tmux session")
+            raise ValueError(result.error or "failed to create a managed session")
+        viewer = hosts.resolve().viewer_argv(result.target_ref)
+        if viewer is None:
+            terminal_sessions.stop_session(result.session_id)
+            raise ValueError("host could not provide a viewer for the new session")
 
         env = {"TERM": os.environ.get("TERM") or "xterm-256color"}
         try:
             pty = spawn_pty(
-                ["tmux", "attach-session", "-t", result.target_ref],
+                viewer,
                 cwd=result.project,
                 env=env,
                 cols=cols,
@@ -214,7 +218,7 @@ class PtyHost:
             )
         except OSError as exc:
             terminal_sessions.stop_session(result.session_id)
-            raise ValueError(f"failed to attach browser terminal to tmux: {exc}") from exc
+            raise ValueError(f"failed to attach browser terminal to the session: {exc}") from exc
 
         term_id = f"pty-{next(self._ids)}"
         term = PtyTerminal(

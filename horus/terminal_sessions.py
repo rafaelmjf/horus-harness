@@ -1,79 +1,94 @@
-"""Terminal-native attended sessions: current TTY and persistent tmux hosts.
+"""Terminal-native attended sessions: the caller-facing façade over session hosts.
 
-This module chooses *where the local interactive CLI is displayed*. It deliberately
-does not add remote execution targets to :mod:`horus.backend`: account validation,
-argv construction, and registry identity still come from the shared launch layer.
+This module chooses *where the local interactive CLI is displayed* and answers what
+the chosen host can do. The host implementations live in :mod:`horus.hosts`
+(`current`, `tmux`, …); nothing here knows a host's mechanics any more, and no
+caller outside this module should compare a launch target to a literal — ask the
+host's capabilities instead, because that is the only question with a stable
+answer as hosts are added.
+
+It deliberately does not add remote execution targets to :mod:`horus.backend`:
+account validation, argv construction, and registry identity still come from the
+shared launch layer.
 """
 
 from __future__ import annotations
 
-import json
 import os
-import re
-import shlex
-import shutil
-import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from horus import config, launch, launcher, registry
+from horus import hosts, launch, launcher, registry
+from horus.hosts import runnerspec
+from horus.hosts.tmux import _enable_mouse_mode, _kill_tmux_session, inside_tmux  # noqa: F401
 
 if TYPE_CHECKING:
     from horus.run_executor import RunRequest
 
-CURRENT = "current"
-TMUX = "tmux"
+CURRENT = hosts.CURRENT
+TMUX = hosts.TMUX
 WINDOW = "window"
+
+
+def host_choices() -> tuple[str, ...]:
+    """Host ids a `--target` may name, built from the host registry so a new host
+    is offered automatically. `current` and `tmux` keep working forever: scripted
+    `horus open --target` behaviour is explicit and stable by rule, so ids are
+    only ever added here, never renamed or removed."""
+    return hosts.ids()
+
+
+def display_choices() -> tuple[str, ...]:
+    """`horus open --target`: a host id, or ``window`` — which is not a host but a
+    way of displaying one (open the resolved host's viewer in a native window)."""
+    return (WINDOW, *hosts.ids())
+
+
+# Retained for callers that want the historical tuple; prefer display_choices().
 TARGETS = (WINDOW, CURRENT, TMUX)
 
-_SESSION_RE = re.compile(r"^[0-9a-f-]{36}$")
-
-# A detached, unattached tmux session must sit idle at least this long before it is
+# A detached, unattached session must sit idle at least this long before it is
 # even considered for reaping — insurance against racing a session that was just
-# created (tmux activity and the registry pid handoff both need a moment to settle).
+# created (host activity and the registry pid handoff both need a moment to settle).
 ORPHAN_MIN_IDLE_SECONDS = 600.0
+
+# Kept as module-level aliases because `horus.tmux_runner` and the tests import
+# them by these names, and a live session's spec is found through them.
+_SESSION_RE = runnerspec.SESSION_RE
+_runner_dir = runnerspec.runner_dir
+_runner_spec_path = runnerspec.spec_path
+_runner_ready_path = runnerspec.ready_path
+_write_runner_spec = runnerspec.write_spec
+_write_runner_payload = runnerspec.write_payload
+_await_runner_handoff = runnerspec.await_handoff
+_record = runnerspec.new_record
 
 
 def tmux_available() -> bool:
-    return os.name != "nt" and shutil.which("tmux") is not None
+    from horus.hosts import tmux
+
+    return tmux.available()
 
 
 def _inside_tmux() -> bool:
-    """Whether Horus itself is running in a tmux pane.
-
-    When it is, Horus and the sessions it creates share ONE tmux server (the plain
-    ``tmux`` CLI resolves its socket from ``$TMUX``), so a client can be *moved*
-    between them with ``switch-client`` instead of nesting a second client inside
-    the pane. That is what makes ``horus tui`` usable from inside tmux.
-    """
-    return bool(os.environ.get("TMUX"))
+    return inside_tmux()
 
 
 def attach_returns_immediately() -> bool:
-    """Whether ``attach_session`` hands control back right away.
+    """Whether :func:`attach_session` hands control back right away.
 
-    Inside tmux it switches the current client and returns at once; outside tmux it
-    blocks until the owner detaches. Callers use this only to describe what happened
-    — the attach itself needs no branch.
+    Inside a host Horus is itself running in, attaching switches the current client
+    and returns at once; otherwise it blocks until the owner detaches. Callers use
+    this only to describe what happened — the attach itself needs no branch.
     """
-    return _inside_tmux()
+    return hosts.resolve().switches_in_place()
 
 
 def default_target() -> str:
-    """Prefer a persistent host whenever this runtime can provide one.
-
-    Being inside tmux is deliberately NOT a reason to fall back to ``current``: the
-    session is created on the same server Horus is already talking to, and attaching
-    switches this client rather than nesting one.
-    """
-    override = os.environ.get("HORUS_TERMINAL_TARGET", "").strip().lower()
-    if override in {CURRENT, TMUX}:
-        return override
-    if tmux_available():
-        return TMUX
-    return CURRENT
+    """The id of the host this process will use. Prefers a persistent host whenever
+    this runtime can provide one; see :func:`horus.hosts.resolve`."""
+    return hosts.resolve().id
 
 
 def resolve_window_launch(preference: str) -> bool:
@@ -92,8 +107,14 @@ def resolve_window_launch(preference: str) -> bool:
 
 
 def is_attachable(record: registry.SessionRecord) -> bool:
-    """Whether Horus has a persistent host it can safely reattach."""
-    return record.launch_target == TMUX and bool(record.target_ref)
+    """Whether Horus has a persistent host it can safely reattach.
+
+    Asked of the host, not of the string: a record written by a newer Horus naming
+    a host this install lacks is honestly *not* attachable here, and must never be
+    offered a reattach that cannot work.
+    """
+    host = hosts.for_record(record)
+    return bool(host is not None and host.capabilities.attach and record.target_ref)
 
 
 def access_label(record: registry.SessionRecord) -> str:
@@ -101,11 +122,11 @@ def access_label(record: registry.SessionRecord) -> str:
 
 
 def attach_outcome_message(session_id: str) -> str:
-    """What a successful ``attach_session`` actually did, in the owner's words.
+    """What a successful :func:`attach_session` did, in the owner's words.
 
-    The two hosts differ in kind, not wording: inside tmux control came back at once
-    with the session still live, so "Detached from …" would be a lie. Phrased to stay
-    true whenever it is read — including after the owner has already switched back.
+    The two cases differ in kind, not wording: inside the host control came back at
+    once with the session still live, so "Detached from …" would be a lie. Phrased
+    to stay true whenever it is read — including after the owner switched back.
     """
     short = session_id[:8]
     if attach_returns_immediately():
@@ -116,10 +137,10 @@ def attach_outcome_message(session_id: str) -> str:
 def launch_outcome_message(result: launch.LaunchResult) -> str:
     """What a successful attended launch left behind.
 
-    Keyed on the host that actually ran — ``target_ref`` is set only by the tmux
-    host — never on the ambient ``$TMUX`` alone: an owner inside tmux who forced
-    ``HORUS_TERMINAL_TARGET=current`` did NOT get a switchable tmux session, and
-    telling them otherwise would send them chasing a session that isn't there.
+    Keyed on the host that actually ran — ``target_ref`` is set only by a
+    persistent host — never on the ambient environment alone: an owner inside tmux
+    who forced ``HORUS_TERMINAL_TARGET=current`` did NOT get a switchable session,
+    and telling them otherwise would send them chasing one that isn't there.
     """
     short = (result.session_id or "")[:8]
     if result.target_ref and attach_returns_immediately():
@@ -127,240 +148,47 @@ def launch_outcome_message(result: launch.LaunchResult) -> str:
     return f"Session {short} returned to Horus."
 
 
-def run_attached(
-    *,
-    agent: str,
-    project_dir: Path | str,
-    account: str | None = None,
-    posture: str = "default",
-    model: str | None = None,
-    effort: str | None = None,
-    prompt: str = "",
-    proxied: bool = False,
-    remote_control: bool | None = None,
-    reg: registry.Registry | None = None,
-) -> launch.LaunchResult:
+def run_attached(**kwargs) -> launch.LaunchResult:
     """Run an attended agent in this TTY, returning after the agent exits."""
-    prepared, error = launch.prepare_interactive(
-        agent=agent,
-        project_dir=project_dir,
-        account=account,
-        posture=posture,
-        model=model,
-        effort=effort,
-        prompt=prompt,
-        proxied=proxied,
-        remote_control=remote_control,
-    )
-    root = Path(project_dir).resolve()
-    if prepared is None:
-        return launch.LaunchResult(False, agent, root, account=account, error=error)
-
-    try:
-        proc = subprocess.Popen(  # noqa: S603 - argv is produced by a trusted adapter
-            prepared.argv,
-            cwd=str(prepared.project),
-            env={**os.environ, **prepared.env},
-        )
-    except OSError as exc:
-        return launch.LaunchResult(
-            False, prepared.agent, prepared.project, account=account,
-            error=f"failed to start in the current terminal: {exc}",
-        )
-
-    store = reg or registry.Registry.default()
-    store.upsert(_record(prepared, pid=proc.pid, target=CURRENT))
-    returncode = proc.wait()
-    store.set_status(
-        prepared.session_id,
-        "exited" if returncode == 0 else "failed",
-        returncode=returncode,
-    )
-    return launch.LaunchResult(
-        True,
-        prepared.agent,
-        prepared.project,
-        account=account,
-        session_id=prepared.session_id,
-        pid=proc.pid,
-    )
+    return hosts.get(CURRENT).launch(**kwargs)
 
 
-def launch_tmux(
-    *,
-    agent: str,
-    project_dir: Path | str,
-    account: str | None = None,
-    posture: str = "default",
-    model: str | None = None,
-    effort: str | None = None,
-    prompt: str = "",
-    attach: bool = True,
-    cols: int | None = None,
-    rows: int | None = None,
-    proxied: bool = False,
-    remote_control: bool | None = None,
-    reg: registry.Registry | None = None,
-) -> launch.LaunchResult:
+def launch_tmux(**kwargs) -> launch.LaunchResult:
     """Create a unique detached tmux session, then optionally attach this TTY."""
-    root = Path(project_dir).resolve()
-    if not tmux_available():
-        return launch.LaunchResult(
-            False, agent, root, account=account,
-            error="tmux is not installed or is unavailable on this platform",
-        )
-    prepared, error = launch.prepare_interactive(
-        agent=agent,
-        project_dir=root,
-        account=account,
-        posture=posture,
-        model=model,
-        effort=effort,
-        prompt=prompt,
-        proxied=proxied,
-        remote_control=remote_control,
-    )
-    if prepared is None:
-        return launch.LaunchResult(False, agent, root, account=account, error=error)
+    return hosts.get(TMUX).launch(**kwargs)
 
-    executable = shutil.which(prepared.argv[0])
-    if executable is None:
-        return launch.LaunchResult(
-            False, prepared.agent, prepared.project, account=account,
-            error=f"agent executable not found on PATH: {prepared.argv[0]}",
-        )
-    runner_argv = [executable, *prepared.argv[1:]]
 
-    tmux_name = f"horus-{prepared.session_id[:12]}"
-    spec_path = _write_runner_spec(prepared, argv=runner_argv)
-    store = reg or registry.Registry.default()
-    # Keep reconciliation honest during the short handoff before the runner records
-    # its own child PID. A failed tmux spawn is immediately corrected below.
-    store.upsert(_record(prepared, pid=os.getpid(), target=TMUX, target_ref=tmux_name))
-    runner = shlex.join([sys.executable, "-m", "horus.tmux_runner", prepared.session_id])
-    size_args = []
-    if cols is not None:
-        size_args.extend(["-x", str(cols)])
-    if rows is not None:
-        size_args.extend(["-y", str(rows)])
-    tmux_argv = [
-        "tmux", "new-session", "-d", *size_args,
-        "-s", tmux_name, "-c", str(prepared.project), runner,
-    ]
-    created = subprocess.run(  # noqa: S603,S607 - fixed tmux argv; runner is shell-quoted
-        tmux_argv,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if created.returncode != 0:
-        spec_path.unlink(missing_ok=True)
-        store.set_status(prepared.session_id, "failed", returncode=created.returncode)
-        detail = (created.stderr or created.stdout).strip() or f"tmux exited {created.returncode}"
-        return launch.LaunchResult(
-            False, prepared.agent, prepared.project, account=account,
-            session_id=prepared.session_id,
-            target_ref=tmux_name,
-            error=f"failed to create tmux session: {detail}",
-        )
+def launch_on(target: str, **kwargs) -> launch.LaunchResult:
+    """Launch on the host named ``target``.
 
-    # Wheel input reaches an attended agent as raw terminal escape sequences
-    # (e.g. recalled shell/agent history) unless tmux's mouse handling is on for
-    # this pane. Scope it to just the new session (-t <name>, never -g) so a
-    # Horus launch never touches the tmux server/user default. A session that
-    # fails to configure is torn down rather than left half-configured.
-    mouse_error = _enable_mouse_mode(tmux_name)
-    if mouse_error:
-        _kill_tmux_session(tmux_name)
-        spec_path.unlink(missing_ok=True)
-        store.set_status(prepared.session_id, "failed")
+    This is what a caller should use instead of branching on the host id: a new
+    host becomes launchable from the TUI, the plain terminal app, and `horus open`
+    the moment it is registered, with no caller-side change.
+    """
+    host = hosts.get(target)
+    if host is None:
         return launch.LaunchResult(
-            False, prepared.agent, prepared.project, account=account,
-            session_id=prepared.session_id,
-            target_ref=tmux_name,
-            error=f"failed to enable tmux mouse mode for the new session: {mouse_error}",
+            False, kwargs.get("agent", ""), Path(kwargs.get("project_dir", ".")),
+            account=kwargs.get("account"), error=f"unknown session host {target!r}",
         )
+    if (not_ready := host.ensure_ready()) is not None:
+        return launch.LaunchResult(
+            False, kwargs.get("agent", ""), Path(kwargs.get("project_dir", ".")),
+            account=kwargs.get("account"), error=not_ready,
+        )
+    return host.launch(**kwargs)
 
-    if attach:
-        attached = attach_session(prepared.session_id, reg=store)
-        if attached:
-            return launch.LaunchResult(
-                False, prepared.agent, prepared.project, account=account,
-                session_id=prepared.session_id,
-                target_ref=tmux_name,
-                error=attached,
-            )
-    return launch.LaunchResult(
-        True,
-        prepared.agent,
-        prepared.project,
-        account=account,
-        session_id=prepared.session_id,
-        target_ref=tmux_name,
-    )
+
+def hosts_persistently(target: str) -> bool:
+    """Whether ``target`` keeps the session alive after the launcher returns —
+    i.e. whether a launch on it "starts" something or merely "completes"."""
+    host = hosts.get(target)
+    return bool(host is not None and host.capabilities.persistent)
 
 
 def launch_detached_run(request: "RunRequest", *, reg: registry.Registry | None = None) -> launch.LaunchResult:
-    """Host a one-shot worker in managed tmux and return after runner handoff.
-
-    The pane executes the exact same adapter executor as a foreground ``run``;
-    this function only provides lifetime isolation and the attachable tmux target.
-    """
-    if not tmux_available():
-        return launch.LaunchResult(False, request.agent, request.project, account=request.account,
-                                   error="tmux is not installed or is unavailable on this platform")
-    tmux_name = f"horus-{request.session_id[:12]}"
-    store = reg or registry.Registry.default()
-    store.upsert(registry.SessionRecord(
-        session_id=request.session_id, agent=request.agent, project=request.project.as_posix(),
-        account=request.account, pid=os.getpid(), status="running", launch_target=TMUX,
-        target_ref=tmux_name, agent_session_id=request.resume,
-        dispatch_base_sha=request.dispatch_base_sha, delivery_expected=request.delivery_expected,
-    ))
-    spec_path = _write_runner_payload({"kind": "run", "run": request.payload()}, request.session_id)
-    runner = shlex.join([sys.executable, "-m", "horus.tmux_runner", request.session_id])
-    created = subprocess.run(  # noqa: S603,S607 - fixed tmux argv; runner is shell-quoted
-        ["tmux", "new-session", "-d", "-s", tmux_name, "-c", str(request.project), runner],
-        capture_output=True, text=True, check=False,
-    )
-    if created.returncode != 0:
-        spec_path.unlink(missing_ok=True)
-        _runner_ready_path(request.session_id).unlink(missing_ok=True)
-        store.update(request.session_id, termination_reason="launch-error")
-        store.set_status(request.session_id, "failed", returncode=created.returncode)
-        detail = (created.stderr or created.stdout).strip() or f"tmux exited {created.returncode}"
-        return launch.LaunchResult(False, request.agent, request.project, account=request.account,
-                                   session_id=request.session_id, target_ref=tmux_name,
-                                   error=f"failed to create tmux session: {detail}")
-    mouse_error = _enable_mouse_mode(tmux_name)
-    if mouse_error:
-        return _failed_detached_launch(
-            request, store, tmux_name, spec_path,
-            error=f"failed to enable tmux mouse mode for the new session: {mouse_error}",
-        )
-    if not _await_runner_handoff(request.session_id, store):
-        current = store.get(request.session_id)
-        detail = "runner did not report its PID handoff"
-        if current and current.status != "running":
-            detail = f"runner ended during launch ({current.status})"
-        return _failed_detached_launch(request, store, tmux_name, spec_path, error=detail)
-    current = store.get(request.session_id)
-    return launch.LaunchResult(True, request.agent, request.project, account=request.account,
-                               session_id=request.session_id, pid=current.pid if current else None,
-                               target_ref=tmux_name)
-
-
-def _failed_detached_launch(
-    request: "RunRequest", store: registry.Registry, tmux_name: str, spec_path: Path, *, error: str,
-) -> launch.LaunchResult:
-    """Undo a known newly-created detached host after its handoff fails."""
-    _kill_tmux_session(tmux_name)
-    spec_path.unlink(missing_ok=True)
-    _runner_ready_path(request.session_id).unlink(missing_ok=True)
-    store.update(request.session_id, termination_reason="launch-error")
-    store.set_status(request.session_id, "failed")
-    return launch.LaunchResult(False, request.agent, request.project, account=request.account,
-                               session_id=request.session_id, target_ref=tmux_name, error=error)
+    """Host a one-shot worker on the persistent host and return after runner handoff."""
+    return hosts.get(TMUX).launch_worker(request, reg=reg)
 
 
 def launch_window(
@@ -376,11 +204,13 @@ def launch_window(
     remote_control: bool | None = None,
     reg: registry.Registry | None = None,
 ) -> launch.LaunchResult:
-    """Open a session in its own native terminal window, backed by tmux when
-    supported. Used by web-requested windows and by a ``new-window`` TUI launch."""
-    if default_target() != TMUX:
-        # No tmux host to back the window: fall back to a plain interactive spawn.
-        # (This branch cannot carry the proxy env; a no-tmux desktop is the rare
+    """Open a session in its own native terminal window, backed by a persistent host
+    when one can provide a viewer. Used by web-requested windows and by a
+    ``new-window`` TUI launch."""
+    host = hosts.resolve()
+    if not host.capabilities.viewer:
+        # No host viewer to put in the window: fall back to a plain interactive spawn.
+        # (This branch cannot carry the proxy env; a no-viewer desktop is the rare
         # case and the proxy toggle is off by default.)
         return launch.launch_interactive(
             agent=agent,
@@ -394,7 +224,7 @@ def launch_window(
             reg=reg,
         )
 
-    result = launch_tmux(
+    result = host.launch(
         agent=agent,
         project_dir=project_dir,
         account=account,
@@ -409,9 +239,17 @@ def launch_window(
     )
     if not result.ok or not result.session_id or not result.target_ref:
         return result
+    argv = host.viewer_argv(result.target_ref)
+    if argv is None:
+        stop_session(result.session_id, reg=reg)
+        return launch.LaunchResult(
+            False, result.agent, result.project, account=account,
+            session_id=result.session_id, target_ref=result.target_ref,
+            error="host could not provide a viewer for the new session",
+        )
     try:
         viewer_pid = launcher.open_terminal(
-            ["tmux", "attach-session", "-t", result.target_ref],
+            argv,
             cwd=result.project,
             env={"TERM": os.environ.get("TERM") or "xterm-256color"},
         )
@@ -424,158 +262,100 @@ def launch_window(
             account=account,
             session_id=result.session_id,
             target_ref=result.target_ref,
-            error=f"failed to open tmux in a native terminal: {exc}",
+            error=f"failed to open the session in a native terminal: {exc}",
         )
     result.pid = viewer_pid
     return result
 
 
-def attach_session(session_id: str, *, reg: registry.Registry | None = None) -> str | None:
-    """Put this terminal on a tracked tmux session. Return an error string, or ``None``.
+def viewer_argv(record: registry.SessionRecord) -> list[str] | None:
+    """The argv that renders ``record`` in a PTY or native window, or ``None``.
 
-    Outside tmux this attaches a client and blocks until the owner detaches. Inside
-    tmux — Horus running in its own pane — it instead *switches* the current client to
-    the session and returns immediately, because both live on the same tmux server.
-    Nesting a client would double every prefix key; switching does not. Coming back is
-    ``Ctrl-b L`` (or choose-tree), and the Horus pane is untouched meanwhile.
+    The host may prepare itself first (focus the right workspace, say), so this is
+    a call rather than a template a caller can assemble.
     """
-    if not tmux_available():
-        return "tmux is not installed or is unavailable on this platform"
+    host = hosts.for_record(record)
+    if host is None or not record.target_ref:
+        return None
+    return host.viewer_argv(record.target_ref)
+
+
+def attach_session(session_id: str, *, reg: registry.Registry | None = None) -> str | None:
+    """Put this terminal on a tracked session. Return an error string, or ``None``."""
     record, error = resolve_session(session_id, reg=reg)
     if record is None:
         return error
-    if not is_attachable(record):
-        return f"session {record.session_id[:8]} is not hosted by tmux"
-    if record.status != "running":
-        return f"session {record.session_id[:8]} is {record.status}, not running"
-    if _inside_tmux():
-        # No -c: run from inside a pane, tmux resolves the current client from $TMUX.
-        # Keep stderr — "no current client" (a detached Horus pane) is the one message
-        # that explains a failure here, and discarding it would leave no explanation.
-        switched = subprocess.run(  # noqa: S603,S607 - tmux name is Horus-generated
-            ["tmux", "switch-client", "-t", record.target_ref],
-            capture_output=True, text=True, check=False,
-        )
-        if switched.returncode != 0:
-            detail = (switched.stderr or switched.stdout).strip() or f"exit code {switched.returncode}"
-            return f"tmux switch-client failed: {detail}"
-        return None
-    attached = subprocess.run(  # noqa: S603,S607 - tmux name is Horus-generated
-        ["tmux", "attach-session", "-t", record.target_ref],
-        check=False,
-    )
-    if attached.returncode != 0:
-        return f"tmux attach failed with exit code {attached.returncode}"
-    return None
+    host = hosts.for_record(record)
+    if host is None or not host.capabilities.attach:
+        return f"session {record.session_id[:8]} is not hosted by an attachable host"
+    return host.attach(record)
 
 
 def stop_session(session_id: str, *, reg: registry.Registry | None = None) -> str | None:
-    """Stop a tracked tmux session by id or unique prefix."""
+    """Stop a tracked session by id or unique prefix."""
     store = reg or registry.Registry.default()
     record, error = resolve_session(session_id, reg=store)
     if record is None:
         return error
-    if not is_attachable(record):
-        return f"session {record.session_id[:8]} is not hosted by tmux"
-    subprocess.run(  # noqa: S603,S607 - tmux name is Horus-generated
-        ["tmux", "kill-session", "-t", record.target_ref],
-        capture_output=True,
-        check=False,
-    )
+    host = hosts.for_record(record)
+    if host is None or not host.capabilities.persistent:
+        return f"session {record.session_id[:8]} is not hosted by a persistent host"
+    stopped = host.stop(record)
+    if stopped is not None:
+        return stopped
     store.update(record.session_id, termination_reason="stopped")
     store.set_status(record.session_id, "failed")
-    _runner_spec_path(record.session_id).unlink(missing_ok=True)
     return None
 
 
 def _live_tmux_sessions() -> dict[str, tuple[bool, float]]:
-    """Horus-named tmux sessions the tmux server currently holds, keyed by name to
-    ``(attached, last_activity_epoch)``. Empty when tmux is unavailable or has no
-    server running (never an error — an absent server just means nothing to reap)."""
-    if not tmux_available():
-        return {}
-    listed = subprocess.run(  # noqa: S603,S607 - fixed tmux argv, no user input
-        ["tmux", "list-sessions", "-F", "#{session_name}\t#{session_attached}\t#{session_activity}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if listed.returncode != 0:
-        return {}
-    sessions: dict[str, tuple[bool, float]] = {}
-    for line in listed.stdout.splitlines():
-        parts = line.split("\t")
-        if len(parts) != 3 or not parts[0].startswith("horus-"):
-            continue
-        name, attached, activity = parts
-        try:
-            sessions[name] = (attached != "0", float(activity))
-        except ValueError:
-            continue
-    return sessions
+    from horus.hosts import tmux
+
+    return tmux.TmuxHost().live_refs()
 
 
 def reap_orphans(
     *, reg: registry.Registry | None = None, min_idle_seconds: float = ORPHAN_MIN_IDLE_SECONDS,
 ) -> list[str]:
-    """Kill Horus tmux sessions that are provably abandoned; return the killed names.
+    """Kill host sessions that are provably abandoned; return the killed refs.
 
     Safety invariant — positive confirmation only: a session is reaped only when
     Horus's own registry positively confirms it is no longer live (a matching
     record exists, and either that record's own status is already terminal, or the
     pid Horus tracked for it is dead), AND it is not attached, AND it has been idle
-    beyond ``min_idle_seconds`` by tmux's own clock. A tmux session with NO
-    matching registry record is never touched, however idle or unattached it
-    looks — an absent record is not evidence of anything (a stale, foreign, or
-    rebuilt registry looks identical from here); guessing on absence is exactly
-    how a live session gets killed.
+    beyond ``min_idle_seconds`` by the host's own clock. A live ref with NO matching
+    registry record is never touched, however idle or unattached it looks — an
+    absent record is not evidence of anything (a stale, foreign, or rebuilt registry
+    looks identical from here); guessing on absence is exactly how a live session
+    gets killed.
+
+    Only hosts that declare ``liveness`` participate. A host that cannot report
+    "attached?" and "idle how long?" can never satisfy the last two conditions, so
+    its sessions are not candidates at all — leaking an idle pane is cheap, killing
+    a live agent is not.
     """
-    live = _live_tmux_sessions()
-    if not live:
-        return []
     store = reg or registry.Registry.default()
     by_target_ref = {record.target_ref: record for record in store.all() if record.target_ref}
     now = time.time()
     reaped: list[str] = []
-    for name, (attached, activity) in live.items():
-        if attached:
+    for host in hosts.all_hosts():
+        if not host.capabilities.liveness:
             continue
-        if now - activity < min_idle_seconds:
-            continue
-        record = by_target_ref.get(name)
-        if record is None:
-            continue  # no positive confirmation this is ours to reap — leave it alone
-        if record.status == "running" and registry.process_alive(record.pid):
-            continue
-        _kill_tmux_session(name)
-        store.update(record.session_id, termination_reason="orphan-reaped")
-        store.set_status(record.session_id, "failed")
-        _runner_spec_path(record.session_id).unlink(missing_ok=True)
-        reaped.append(name)
+        for name, (attached, activity) in host.live_refs().items():
+            if attached:
+                continue
+            if now - activity < min_idle_seconds:
+                continue
+            record = by_target_ref.get(name)
+            if record is None:
+                continue  # no positive confirmation this is ours to reap — leave it alone
+            if record.status == "running" and registry.process_alive(record.pid):
+                continue
+            host.stop(record)
+            store.update(record.session_id, termination_reason="orphan-reaped")
+            store.set_status(record.session_id, "failed")
+            reaped.append(name)
     return reaped
-
-
-def _enable_mouse_mode(tmux_name: str) -> str | None:
-    """Turn on mouse handling for exactly one session (never ``-g``/global).
-    Returns an error string on failure, or ``None`` on success."""
-    configured = subprocess.run(  # noqa: S603,S607 - tmux name is Horus-generated
-        ["tmux", "set-option", "-t", tmux_name, "mouse", "on"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if configured.returncode != 0:
-        detail = (configured.stderr or configured.stdout).strip() or f"tmux exited {configured.returncode}"
-        return detail
-    return None
-
-
-def _kill_tmux_session(name: str) -> None:
-    subprocess.run(  # noqa: S603,S607 - tmux name came from Horus's own list-sessions output
-        ["tmux", "kill-session", "-t", name],
-        capture_output=True,
-        check=False,
-    )
 
 
 def resolve_session(
@@ -588,79 +368,3 @@ def resolve_session(
     if len(matches) > 1:
         return None, f"session prefix {session_id!r} is ambiguous"
     return matches[0], None
-
-
-def _record(
-    prepared: launch.PreparedInteractive,
-    *,
-    pid: int | None,
-    target: str,
-    target_ref: str | None = None,
-) -> registry.SessionRecord:
-    return registry.SessionRecord(
-        session_id=prepared.session_id,
-        agent=prepared.agent,
-        project=prepared.project.as_posix(),
-        account=prepared.account,
-        pid=pid,
-        status="running",
-        launch_target=target,
-        target_ref=target_ref,
-    )
-
-
-def _runner_dir() -> Path:
-    return config.config_dir() / "tmux"
-
-
-def _runner_spec_path(session_id: str) -> Path:
-    if not _SESSION_RE.fullmatch(session_id):
-        raise ValueError("invalid Horus session id")
-    return _runner_dir() / f"{session_id}.json"
-
-
-def _runner_ready_path(session_id: str) -> Path:
-    return _runner_dir() / f"{session_id}.ready"
-
-
-def _write_runner_spec(prepared: launch.PreparedInteractive, *, argv: list[str] | None = None) -> Path:
-    payload = {
-        "kind": "interactive",
-        "session_id": prepared.session_id,
-        "agent": prepared.agent,
-        "account": prepared.account,
-        "project": prepared.project.as_posix(),
-        "argv": argv or prepared.argv,
-        # A long-lived tmux server may hold a stale PATH. Carry only this benign
-        # process-search value plus adapter-owned account isolation, never the full
-        # parent environment (which may contain credentials).
-        "env": {"PATH": os.environ.get("PATH", ""), **prepared.env},
-    }
-    return _write_runner_payload(payload, prepared.session_id)
-
-
-def _write_runner_payload(payload: dict, session_id: str) -> Path:
-    directory = _runner_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    path = _runner_spec_path(session_id)
-    _runner_ready_path(session_id).unlink(missing_ok=True)
-    encoded = json.dumps(payload).encode("utf-8")
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(descriptor, "wb") as stream:
-        stream.write(encoded)
-    return path
-
-
-def _await_runner_handoff(session_id: str, store: registry.Registry, *, timeout: float = 5.0) -> bool:
-    """Wait only for the runner's durable PID handoff, never for its agent."""
-    ready = _runner_ready_path(session_id)
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if ready.exists():
-            current = store.get(session_id)
-            return bool(current and current.pid and current.pid != os.getpid() and current.status == "running")
-        current = store.get(session_id)
-        if current is not None and current.status in registry.TERMINAL:
-            return False
-        time.sleep(0.02)
-    return False

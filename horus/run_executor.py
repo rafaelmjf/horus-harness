@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from horus import adapters, datums, delivery, notify, registry, runlog
+from horus import adapters, datums, delivery, hosts, notify, registry, runlog
 
 
 @dataclass(frozen=True)
@@ -131,7 +131,12 @@ def execute(request: RunRequest, *, watcher: Callable[[str, Path], None] | None 
     # Foreground runs have no durable host, so their adapter child stays the
     # correct liveness PID. In-memory adapters have no child and keep whichever
     # launcher/runner PID was already registered.
-    if run.session.pid is not None and record.launch_target != "tmux":
+    #
+    # "Is there a durable host?" is a capability question, not a string match: any
+    # persistent host owns the runner PID the same way tmux does.
+    host = hosts.for_record(record)
+    hosted = host is not None and host.capabilities.persistent
+    if run.session.pid is not None and not hosted:
         launch_fields["pid"] = run.session.pid
     reg.update(request.session_id, **launch_fields)
     log = runlog.RunLog()

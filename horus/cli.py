@@ -2343,14 +2343,11 @@ def cmd_open(args: argparse.Namespace) -> int:
         "prompt": prompt,
         "remote_control": args.remote_control,
     }
-    if args.target == terminal_sessions.TMUX:
-        result = terminal_sessions.launch_tmux(**kwargs, attach=not args.detach)
-    else:
-        result = terminal_sessions.run_attached(**kwargs)
+    result = terminal_sessions.launch_on(args.target, **kwargs, attach=not args.detach)
     if not result.ok:
         print(f"Refusing to open: {result.error}")
         return 2
-    verb = "Started" if args.target == terminal_sessions.TMUX else "Completed"
+    verb = "Started" if terminal_sessions.hosts_persistently(args.target) else "Completed"
     print(f"{verb} {args.agent} session in {root.name} as {args.account or 'ambient'} "
           f"({args.target}, session {result.session_id}).")
     return 0
@@ -5139,10 +5136,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_run.add_argument("--path", default=".", help="project root to run in (default: cwd)")
     p_run.add_argument(
-        "--target", choices=(terminal_sessions.CURRENT, terminal_sessions.TMUX),
+        "--target", choices=terminal_sessions.host_choices(),
         default=None,
-        help="execution host: current process or managed tmux (tmux requires --detach). "
-             "Default: current, or tmux under --unattended",
+        help="execution host: the current process or a persistent host (a persistent "
+             "host requires --detach). Default: current, or tmux under --unattended",
     )
     p_run.add_argument(
         "--detach", action="store_true",
@@ -5218,9 +5215,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_open.add_argument(
         "--target",
-        choices=terminal_sessions.TARGETS,
+        choices=terminal_sessions.display_choices(),
         default=terminal_sessions.WINDOW,
-        help="display target: new window, current TTY, or persistent tmux (default: window)",
+        help="display target: new window, current TTY, or a persistent host "
+             "(default: window)",
     )
     p_open.add_argument(
         "--detach",
