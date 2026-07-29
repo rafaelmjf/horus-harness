@@ -95,13 +95,24 @@ def resolve_window_launch(preference: str) -> bool:
     """Whether a TUI launch should open its own terminal window (True) or take
     over the current TTY (False), given the owner's ``window`` launch default.
 
-    Platform-aware: ``new-window`` only pops a real window when a desktop session
-    exists AND we are not driving the TUI over SSH. The mobile path (Termius SSH
-    into ``horus tui``) has no local display the phone can see, so it falls back to
-    ``takeover`` — the reliable attach/detach flow the Rules pin as the phone path.
+    Platform-aware, and three things can veto ``new-window``:
+
+    - **No desktop session** — there is no window to pop.
+    - **Driving the TUI over SSH** — the mobile path (Termius SSH into ``horus tui``)
+      has no local display the phone can see, so it falls back to ``takeover``, the
+      attach/detach flow the Rules pin as the phone path.
+    - **Horus is running inside a session host** — the host IS the window manager
+      there, so a new OS window is the wrong shape. Observed 2026-07-29 in a herdr
+      cockpit: a launch popped a native window running a second herdr *client*, which
+      renders the whole session and therefore just duplicated the cockpit instead of
+      framing the new agent. Keeping it in the host makes the launch a sibling you
+      switch to, which is what a cockpit implies.
+
     ``takeover`` (the default) always stays in this terminal.
     """
     if preference != "new-window":
+        return False
+    if hosts.enclosing() is not None:
         return False
     return launcher.has_display() and not os.environ.get("SSH_CONNECTION")
 

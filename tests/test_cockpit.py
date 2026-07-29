@@ -517,3 +517,28 @@ def test_a_live_cockpit_wins_over_a_stale_one(monkeypatch):
 
     monkeypatch.setattr(herdr_host, "_run", fake_run)
     assert cockpit._find_cockpit(herdr_host.HerdrHost()) == "w2:p1"
+
+
+def test_new_window_is_vetoed_inside_a_host_because_the_host_is_the_window_manager(monkeypatch):
+    """Observed in a real herdr cockpit: launching popped a native OS window running a
+    second herdr *client*, which renders the whole session — so it duplicated the
+    cockpit instead of framing the new agent. Inside a host, keep it in the host."""
+    from horus import launcher
+
+    monkeypatch.setattr(launcher, "has_display", lambda: True)
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    monkeypatch.setattr(tmux_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+
+    # Outside any host, a desktop `new-window` still pops a window as before.
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("HERDR_ENV", raising=False)
+    assert terminal_sessions.resolve_window_launch("new-window") is True
+
+    for env in ("TMUX", "HERDR_ENV"):
+        monkeypatch.setenv(env, "1")
+        assert terminal_sessions.resolve_window_launch("new-window") is False, env
+        monkeypatch.delenv(env)
+
+    # `takeover` is unaffected either way.
+    assert terminal_sessions.resolve_window_launch("takeover") is False
