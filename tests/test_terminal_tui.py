@@ -1392,6 +1392,18 @@ def test_sync_keys_are_inert_off_the_projects_screen(tmp_path, monkeypatch):
     assert ff_calls == []
 
 
+def test_agent_models_prefers_config_over_adapter_default(tmp_path, monkeypatch):
+    _isolated_home(tmp_path, monkeypatch)
+    # No config → the adapter default (bare families + the pinned comparison models).
+    default = terminal_tui._agent_models("claude")
+    assert "opus" in default and "claude-opus-4-8" in default and "claude-opus-5" in default
+    # An owner-curated [launch_models] list wins outright.
+    terminal_tui.config.set_launch_models("claude", ["claude-opus-5", "claude-opus-4-8"])
+    assert terminal_tui._agent_models("claude") == ["claude-opus-5", "claude-opus-4-8"]
+    # Unknown agent stays empty, never raises.
+    assert terminal_tui._agent_models("nope") == []
+
+
 def test_fmt_age_and_freshness_token_units():
     import time as _t
 

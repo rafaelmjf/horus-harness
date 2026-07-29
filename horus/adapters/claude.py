@@ -89,7 +89,13 @@ _PERMISSION_MODE: dict[PermissionPosture, str] = {
 
 class ClaudeAdapter(AgentAdapter):
     name = "claude"
-    KNOWN_MODELS = _MODEL_FAMILIES
+    # Default launch choices: the bare family aliases (each = the *latest* in its
+    # family) PLUS a couple of pinned versions the `/model` picker hides by default
+    # but `--model` accepts, so comparing e.g. Opus 5 vs Opus 4.8 works out of the
+    # box. This is only the fallback — `[launch_models] claude` in config.toml
+    # overrides it, and the `launch-model-refresh` skill keeps that current from
+    # Anthropic's model-deprecations docs (which older versions are still Active).
+    KNOWN_MODELS = _MODEL_FAMILIES + ("claude-opus-5", "claude-opus-4-8")
     supports_remote_control = True
     identity_label = "login email"
 

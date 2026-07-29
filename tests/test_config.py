@@ -205,6 +205,51 @@ def test_launch_defaults_tolerates_malformed_stored_value(tmp_path, monkeypatch)
     assert config.load_launch_defaults() == {"posture": "default", "window": "takeover"}
 
 
+def test_launch_models_default_to_empty(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    assert config.load_launch_models() == {}
+    assert config.launch_models_for("claude") == []
+
+
+def test_set_launch_models_round_trips_per_agent(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.set_launch_models("claude", ["opus", "claude-opus-4-8"])
+    config.set_launch_models("codex", ["gpt-5.6-sol", "gpt-5.4"])
+    assert config.launch_models_for("claude") == ["opus", "claude-opus-4-8"]
+    assert config.launch_models_for("codex") == ["gpt-5.6-sol", "gpt-5.4"]
+    # Re-setting one agent leaves the other's list intact.
+    config.set_launch_models("claude", ["claude-opus-5"])
+    assert config.launch_models_for("claude") == ["claude-opus-5"]
+    assert config.launch_models_for("codex") == ["gpt-5.6-sol", "gpt-5.4"]
+
+
+def test_set_launch_models_empty_removes_the_override(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.set_launch_models("claude", ["opus", "claude-opus-4-8"])
+    assert config.set_launch_models("claude", []) == []
+    assert config.launch_models_for("claude") == []  # falls back to adapter default
+
+
+def test_launch_models_survive_an_unrelated_config_write(tmp_path, monkeypatch):
+    # A later _write_config (triggered here by a posture change) must preserve the
+    # [launch_models] table rather than dropping it.
+    _home(tmp_path, monkeypatch)
+    config.set_launch_models("claude", ["claude-opus-4-8"])
+    config.set_launch_default_posture("full-auto")
+    assert config.launch_models_for("claude") == ["claude-opus-4-8"]
+
+
+def test_load_launch_models_tolerates_malformed(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    config.config_dir().mkdir(parents=True, exist_ok=True)
+    config.config_path().write_text(
+        '[launch_models]\nclaude = ["opus", 42, ""]\ncodex = "not-a-list"\n', encoding="utf-8"
+    )
+    # Non-string/empty entries are dropped; a non-list agent value is ignored.
+    assert config.launch_models_for("claude") == ["opus"]
+    assert config.launch_models_for("codex") == []
+
+
 def test_set_launch_default_posture_preserves_access_block(tmp_path, monkeypatch):
     config = _home_cfg(tmp_path, monkeypatch)
     config.set_launch_default_posture("auto-edit")

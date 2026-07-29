@@ -169,7 +169,7 @@ def _write_projects(projects: list[str]) -> None:
 # `register_project` write.
 _MANAGED_KEYS = frozenset({
     "workspace_root", "projects", "github_owners", "ignored_repos", "workflow", "launch",
-    "launch_profiles", "tui",
+    "launch_profiles", "launch_models", "tui",
     # Retired 2026-07-19. Still listed so a rewrite DROPS a pre-existing `[continuity]`
     # table instead of round-tripping it forward as an unmanaged entry.
     "continuity",
@@ -240,6 +240,7 @@ def _write_config(
     ignored_repos: list[str] | None = None,
     launch: dict[str, str] | None = None,
     launch_profiles: dict[str, dict[str, str]] | None = None,
+    launch_models: dict[str, list[str]] | None = None,
     tui: dict[str, object] | None = None,
 ) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
@@ -255,6 +256,8 @@ def _write_config(
         launch = load_launch_defaults()
     if launch_profiles is None:
         launch_profiles = _load_table("launch_profiles")
+    if launch_models is None:
+        launch_models = load_launch_models()
     # Preserve the current TUI preferences when the caller doesn't supply them.
     if tui is None:
         tui = load_tui_defaults()
@@ -279,6 +282,9 @@ def _write_config(
     for agent, profile in sorted(launch_profiles.items()):
         lines += ["", f"[launch_profiles.{agent}]"]
         lines += [f'{k} = "{v}"' for k, v in sorted(profile.items())]
+    if launch_models:
+        lines += ["", "[launch_models]"]
+        lines += [f"{agent} = {_toml_value(models)}" for agent, models in sorted(launch_models.items())]
     lines += ["", "[tui]"]
     lines += [f"{k} = {_toml_value(v)}" for k, v in tui.items()]
     lines += extra_tables
@@ -420,6 +426,55 @@ def load_launch_defaults() -> dict[str, str]:
     if not isinstance(window, str) or window not in LAUNCH_WINDOW_CHOICES:
         window = LAUNCH_DEFAULTS["window"]
     return {"posture": posture, "window": window}
+
+
+def load_launch_models() -> dict[str, list[str]]:
+    """The per-agent launch-model lists from ``[launch_models]``, e.g.
+    ``{"claude": ["opus", "claude-opus-4-8"], "codex": ["gpt-5.6-sol"]}``.
+
+    These are the ``--model`` selectors the TUI launch form offers for each agent,
+    OVERRIDING the adapter's built-in default when present. Owner-curated (hand-edited
+    or written by the `launch-model-refresh` skill after vendor-docs research); an
+    empty/absent list means "fall back to the adapter default". Never raises — a
+    malformed table degrades to {} so a launch is never broken by config.
+    """
+    path = config_path()
+    if not path.exists():
+        return {}
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+    raw = data.get("launch_models")
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, list[str]] = {}
+    for agent, models in raw.items():
+        if isinstance(models, list):
+            out[agent] = [m for m in models if isinstance(m, str) and m]
+    return out
+
+
+def launch_models_for(agent: str) -> list[str]:
+    """The configured launch-model selectors for ``agent``, or [] when unset."""
+    return load_launch_models().get(agent, [])
+
+
+def set_launch_models(agent: str, models: list[str]) -> list[str]:
+    """Persist the launch-model selectors offered for ``agent`` (replaces its list;
+    other agents' lists are preserved). An empty ``models`` removes the override so
+    the adapter default is used again. Returns the stored list.
+    """
+    table = load_launch_models()
+    cleaned = [m.strip() for m in models if isinstance(m, str) and m.strip()]
+    if cleaned:
+        table[agent] = cleaned
+    else:
+        table.pop(agent, None)
+    _write_config(
+        load_projects(), load_github_owners(), load_workspace_root(), launch_models=table
+    )
+    return cleaned
 
 
 def set_launch_default_posture(posture: str) -> str:
