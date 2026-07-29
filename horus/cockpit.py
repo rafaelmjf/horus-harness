@@ -17,7 +17,6 @@ verbs. Two behaviours are the whole design:
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 
@@ -29,15 +28,15 @@ COCKPIT_REF = "horus-cockpit"
 
 
 def _tui_command() -> list[str]:
-    """The argv that runs this same Horus's TUI inside a pane.
+    """The argv that runs *this* Horus's TUI inside a pane.
 
-    Uses the console script when it is on PATH, else this interpreter's own
-    module entry point — so a repo checkout (`uv run horus`) opens a cockpit
-    running the *checkout*, not whatever version happens to be installed
-    globally.
+    Always this interpreter's own module entry point, never `shutil.which("horus")`.
+    A console script resolves against ambient PATH, so the cockpit could end up
+    running a different Horus than the caller — observed live: a checkout invoked
+    a globally-installed 0.0.77 cockpit, which would not even have this command.
+    Binding to `sys.executable` makes "the cockpit runs what I ran" true by
+    construction rather than by PATH order.
     """
-    if (script := shutil.which("horus")) is not None:
-        return [script, "tui"]
     return [sys.executable, "-m", "horus", "tui"]
 
 
@@ -69,9 +68,48 @@ def open_in(host_id: str) -> tuple[int, str]:
         if error is not None:
             return 2, error
         existing = created
+    elif not _cockpit_is_live(host, existing):
+        # A cockpit whose TUI has died. This is not hypothetical: herdr persists
+        # workspace *structure* across a server restart but not processes, so the
+        # workspace comes back with a bare shell in it. Attaching to that is a blank
+        # screen; re-running the TUI in the pane we already have both fixes it and
+        # avoids leaving a second cockpit behind.
+        if (error := _revive_cockpit(host, existing)) is not None:
+            return 2, error
 
     error = _attach_cockpit(host, existing)
     return (2, error) if error else (0, "")
+
+
+def _cockpit_is_live(host, ref: str) -> bool:
+    """Whether the cockpit's TUI is actually running in ``ref``.
+
+    A ref existing is not evidence that anything is in it — the same reason the
+    reaper never trusts a ref's mere presence. Checked by looking for our own
+    process, because a host that cannot report liveness cannot be asked.
+    """
+    if host.id == hosts.TMUX:
+        # tmux ends a session when its process exits, so a listed session is live.
+        return True
+    if host.id == hosts.HERDR:
+        from horus.hosts import herdr
+
+        info = herdr._payload(herdr._run("pane", "process-info", "--pane", ref))
+        running = info.get("process_info", {}).get("foreground_processes", [])
+        return any("horus" in (proc.get("cmdline") or "") for proc in running)
+    return True
+
+
+def _revive_cockpit(host, ref: str) -> str | None:
+    """Restart the TUI inside an existing but dead cockpit pane."""
+    if host.id != hosts.HERDR:
+        return None
+    from horus.hosts import herdr
+
+    started = herdr._run("pane", "run", ref, " ".join(_tui_command()))
+    if started.returncode != 0:
+        return f"failed to restart the cockpit in {host.id}: {herdr._detail(started)}"
+    return None
 
 
 def _find_cockpit(host) -> str | None:
@@ -89,13 +127,23 @@ def _find_cockpit(host) -> str | None:
         from horus.hosts import herdr
 
         listed = herdr._payload(herdr._run("pane", "list")).get("panes", [])
+        candidates = []
         for pane in listed:
             workspace = herdr._payload(
                 herdr._run("workspace", "get", pane.get("workspace_id", "")),
             ).get("workspace", {})
-            if workspace.get("label") == COCKPIT_REF:
-                return pane.get("pane_id")
-        return None
+            if workspace.get("label") == COCKPIT_REF and pane.get("pane_id"):
+                candidates.append(pane["pane_id"])
+        if not candidates:
+            return None
+        # Restarts can leave more than one labelled workspace behind. Prefer one with
+        # a live TUI; otherwise take the first so it gets revived rather than
+        # duplicated. Never close the extras here — one of them may be someone's
+        # live cockpit, and guessing is how a live session gets killed.
+        for ref in candidates:
+            if _cockpit_is_live(host, ref):
+                return ref
+        return candidates[0]
     return None
 
 

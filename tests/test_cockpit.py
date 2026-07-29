@@ -9,6 +9,7 @@ import tempfile
 import pytest
 
 from horus import cli, cockpit, config, hosts, terminal_sessions
+from horus.launch import LaunchResult
 from horus.hosts import herdr as herdr_host
 from horus.hosts import tmux as tmux_host
 
@@ -283,3 +284,261 @@ def test_defaults_screen_shows_what_auto_resolves_to(tmp_path, monkeypatch):
     ui.move(target - ui.selected)
     ui.activate()
     assert "auto (resolves to tmux)" in ui.status
+
+
+# ---------------------------------------------------------------------------
+# Host-selection leaks found in a pre-release sweep (2026-07-29). Each of these
+# only bites a machine that opted into a non-default host, which is exactly the
+# configuration the herdr work just made possible.
+# ---------------------------------------------------------------------------
+
+
+def test_launch_window_makes_the_host_ready_before_launching(tmp_path, monkeypatch):
+    """Bug: `launch_window` skipped `ensure_ready()`, so a herdr window launch died
+    on a bare ENOENT from the socket instead of starting the server."""
+    _home(tmp_path, monkeypatch)
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "herdr")
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(
+        herdr_host.HerdrHost, "ensure_ready", lambda _self: "the herdr server did not come up",
+    )
+    monkeypatch.setattr(
+        herdr_host.HerdrHost, "launch",
+        lambda _self, **_k: pytest.fail("must not launch onto a host that is not ready"),
+    )
+    result = terminal_sessions.launch_window(agent="fake", project_dir=tmp_path)
+    assert not result.ok and result.error == "the herdr server did not come up"
+
+
+def test_browser_terminal_launches_on_the_same_host_it_gated_on(tmp_path, monkeypatch):
+    """Bug: pty_host gated on the RESOLVED host's viewer capability but launched via
+    the tmux façade, then asked the resolved host for a viewer onto a tmux ref. On a
+    herdr-configured machine that returns None and the browser terminal dies."""
+    from horus import pty_host
+
+    _home(tmp_path, monkeypatch)
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "herdr")
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host.HerdrHost, "ensure_ready", lambda _self: None)
+    monkeypatch.setattr(
+        tmux_host.TmuxHost, "launch",
+        lambda _self, **_k: pytest.fail("gated on herdr, so it must not launch on tmux"),
+    )
+    launched = {}
+    monkeypatch.setattr(
+        herdr_host.HerdrHost, "launch",
+        lambda _self, **kwargs: launched.update(kwargs) or LaunchResult(
+            True, kwargs["agent"], tmp_path,
+            session_id="12345678-1234-1234-1234-123456789abc", target_ref="w1:p1",
+        ),
+    )
+    seen = {}
+
+    def fake_viewer(_self, ref):
+        seen["ref"] = ref
+        return ["herdr"]
+
+    monkeypatch.setattr(herdr_host.HerdrHost, "viewer_argv", fake_viewer)
+
+    # Reuse the properly-shaped fake: pty_host starts a reader thread, and a
+    # half-fake without read() only surfaces as a swallowed thread exception.
+    from tests.test_pty_host import _FakePty
+
+    fake = _FakePty()
+    monkeypatch.setattr(pty_host, "spawn_pty", lambda *_a, **_k: fake)
+    try:
+        pty_host.PtyHost().start(agent="fake", project_dir=tmp_path, managed=True)
+    finally:
+        fake.eof()
+    # The viewer was asked for the ref the SAME host produced, not a foreign one.
+    assert seen["ref"] == "w1:p1"
+
+
+def test_detached_workers_follow_the_named_host_not_tmux(tmp_path, monkeypatch):
+    """Bug: `launch_detached_run` hardcoded tmux, so `--target herdr` was accepted by
+    argparse and then ignored; and the `--detach` guards compared against the literal
+    tmux, so a herdr machine could not host a worker at all."""
+    _home(tmp_path, monkeypatch)
+    from horus.run_executor import RunRequest
+
+    # The guards now ask about persistence, so every persistent host qualifies.
+    assert set(terminal_sessions.persistent_hosts()) == {"tmux", "herdr"}
+    assert terminal_sessions.hosts_persistently("herdr")
+    assert not terminal_sessions.hosts_persistently("current")
+
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host.HerdrHost, "ensure_ready", lambda _self: None)
+    picked = {}
+    monkeypatch.setattr(
+        herdr_host.HerdrHost, "launch_worker",
+        lambda _self, request, reg=None: picked.setdefault("host", "herdr"),
+    )
+    monkeypatch.setattr(
+        tmux_host.TmuxHost, "launch_worker",
+        lambda _self, request, reg=None: pytest.fail("--target herdr must not run on tmux"),
+    )
+    request = RunRequest(
+        session_id="12345678-1234-1234-1234-123456789abc", agent="fake", project=tmp_path,
+        prompt="host-selection probe", account=None, posture="auto-edit", model=None,
+        effort=None, worker=True, resume=None, dispatch_base_sha=None, dispatch_pending=0,
+    )
+    terminal_sessions.launch_detached_run(request, target="herdr")
+    assert picked["host"] == "herdr"
+
+    # A non-persistent host is refused with a reason rather than silently redirected.
+    result = terminal_sessions.launch_detached_run(request, target="current")
+    assert not result.ok and "cannot host a detached worker" in result.error
+
+
+def test_worker_default_host_follows_the_machine_config(monkeypatch):
+    """`horus run --unattended` used to default the target to literal tmux, so a
+    herdr-configured machine had its workers land on the wrong host."""
+    monkeypatch.setattr(tmux_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("HERDR_ENV", raising=False)
+
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "herdr")
+    assert terminal_sessions.default_persistent_host() == "herdr"
+
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "tmux")
+    assert terminal_sessions.default_persistent_host() == "tmux"
+
+    # The resolved host cannot host a worker → fall back to one that can.
+    monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
+    assert terminal_sessions.default_persistent_host() in {"tmux", "herdr"}
+
+
+def test_cockpit_runs_the_same_horus_as_the_caller(monkeypatch):
+    """Observed live: `_tui_command` used `shutil.which("horus")`, so a checkout
+    opened a cockpit running the globally-installed 0.0.77 — a version that does not
+    even have this command. Binding to sys.executable makes "the cockpit runs what I
+    ran" true by construction instead of by PATH order."""
+    import sys
+
+    assert cockpit._tui_command() == [sys.executable, "-m", "horus", "tui"]
+    # A stray `horus` earlier on PATH must not change what the cockpit runs.
+    monkeypatch.setenv("PATH", "/somewhere/with/another/horus:" + __import__("os").environ["PATH"])
+    assert cockpit._tui_command()[0] == sys.executable
+
+
+def test_a_cockpit_whose_tui_died_is_revived_not_attached_to(monkeypatch):
+    """The bug the owner's trial found. herdr persists workspace *structure* across a
+    server restart but not processes, so the cockpit comes back as a bare shell.
+    Attaching to that is a blank screen; the label existing is not evidence that
+    anything is running in it."""
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host.HerdrHost, "ensure_ready", lambda _self: None)
+    monkeypatch.delenv("HERDR_ENV", raising=False)
+    monkeypatch.delenv("HERDR_PANE_ID", raising=False)
+    calls = []
+
+    def fake_run(*args, **_kwargs):
+        calls.append(args)
+        body: dict = {"type": "ok"}
+        if args[:2] == ("pane", "list"):
+            body = {"panes": [{"pane_id": "w1:p1", "workspace_id": "w1"}]}
+        elif args[:2] == ("workspace", "get"):
+            body = {"workspace": {"workspace_id": "w1", "label": "horus-cockpit"}}
+        elif args[:2] == ("pane", "process-info"):
+            # A restored pane: the shell is back, the TUI is not.
+            body = {"process_info": {"foreground_processes": [
+                {"argv": ["/bin/bash"], "cmdline": "/bin/bash", "name": "bash"},
+            ]}}
+        elif args[:2] == ("pane", "get"):
+            body = {"pane": {"pane_id": "w1:p1", "workspace_id": "w1"}}
+        return subprocess.CompletedProcess([], 0, json.dumps({"result": body}), "")
+
+    monkeypatch.setattr(herdr_host, "_run", fake_run)
+    monkeypatch.setattr(
+        cockpit.subprocess, "run",
+        lambda argv, **_k: subprocess.CompletedProcess(argv, 0, "", ""),
+    )
+    assert cockpit.open_in("herdr") == (0, "")
+
+    verbs = [args[:2] for args in calls]
+    # It re-ran the TUI in the pane it already had …
+    assert ("pane", "run") in verbs
+    # … and did NOT create a second cockpit workspace for the owner to disambiguate.
+    assert ("workspace", "create") not in verbs
+
+
+def test_a_live_cockpit_is_reused_untouched(monkeypatch):
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host.HerdrHost, "ensure_ready", lambda _self: None)
+    monkeypatch.delenv("HERDR_ENV", raising=False)
+    calls = []
+
+    def fake_run(*args, **_kwargs):
+        calls.append(args)
+        body: dict = {"type": "ok"}
+        if args[:2] == ("pane", "list"):
+            body = {"panes": [{"pane_id": "w1:p1", "workspace_id": "w1"}]}
+        elif args[:2] == ("workspace", "get"):
+            body = {"workspace": {"workspace_id": "w1", "label": "horus-cockpit"}}
+        elif args[:2] == ("pane", "process-info"):
+            body = {"process_info": {"foreground_processes": [
+                {"argv": ["python", "-m", "horus", "tui"],
+                 "cmdline": "python -m horus tui", "name": "python"},
+            ]}}
+        elif args[:2] == ("pane", "get"):
+            body = {"pane": {"pane_id": "w1:p1", "workspace_id": "w1"}}
+        return subprocess.CompletedProcess([], 0, json.dumps({"result": body}), "")
+
+    monkeypatch.setattr(herdr_host, "_run", fake_run)
+    monkeypatch.setattr(
+        cockpit.subprocess, "run",
+        lambda argv, **_k: subprocess.CompletedProcess(argv, 0, "", ""),
+    )
+    assert cockpit.open_in("herdr") == (0, "")
+    verbs = [args[:2] for args in calls]
+    assert ("workspace", "create") not in verbs and ("pane", "run") not in verbs
+
+
+def test_a_live_cockpit_wins_over_a_stale_one(monkeypatch):
+    """A restart can leave several labelled workspaces. Pick the one with a live TUI
+    rather than the first found, and never close the others — one may be a live
+    cockpit, and guessing is how a live session gets killed."""
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+
+    def fake_run(*args, **_kwargs):
+        body: dict = {"type": "ok"}
+        if args[:2] == ("pane", "list"):
+            body = {"panes": [{"pane_id": "w1:p1", "workspace_id": "w1"},
+                              {"pane_id": "w2:p1", "workspace_id": "w2"}]}
+        elif args[:2] == ("workspace", "get"):
+            body = {"workspace": {"workspace_id": args[2], "label": "horus-cockpit"}}
+        elif args[:2] == ("pane", "process-info"):
+            live = args[3] == "w2:p1"
+            body = {"process_info": {"foreground_processes": [
+                {"cmdline": "python -m horus tui" if live else "/bin/bash"},
+            ]}}
+        return subprocess.CompletedProcess([], 0, json.dumps({"result": body}), "")
+
+    monkeypatch.setattr(herdr_host, "_run", fake_run)
+    assert cockpit._find_cockpit(herdr_host.HerdrHost()) == "w2:p1"
+
+
+def test_new_window_is_vetoed_inside_a_host_because_the_host_is_the_window_manager(monkeypatch):
+    """Observed in a real herdr cockpit: launching popped a native OS window running a
+    second herdr *client*, which renders the whole session — so it duplicated the
+    cockpit instead of framing the new agent. Inside a host, keep it in the host."""
+    from horus import launcher
+
+    monkeypatch.setattr(launcher, "has_display", lambda: True)
+    monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    monkeypatch.setattr(tmux_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+
+    # Outside any host, a desktop `new-window` still pops a window as before.
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("HERDR_ENV", raising=False)
+    assert terminal_sessions.resolve_window_launch("new-window") is True
+
+    for env in ("TMUX", "HERDR_ENV"):
+        monkeypatch.setenv(env, "1")
+        assert terminal_sessions.resolve_window_launch("new-window") is False, env
+        monkeypatch.delenv(env)
+
+    # `takeover` is unaffected either way.
+    assert terminal_sessions.resolve_window_launch("takeover") is False

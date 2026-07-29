@@ -2311,6 +2311,11 @@ def test_resolve_window_launch_takeover_is_always_false(monkeypatch):
 def test_resolve_window_launch_new_window_on_desktop(monkeypatch):
     monkeypatch.setattr(terminal_sessions.launcher, "has_display", lambda: True)
     monkeypatch.delenv("SSH_CONNECTION", raising=False)
+    # Being inside a host now vetoes new-window (the host is the window manager
+    # there), so the desktop case must pin that too rather than inherit it from
+    # whatever terminal the suite happens to run in.
+    for env in ("TMUX", "HERDR_ENV", "HERDR_PANE_ID"):
+        monkeypatch.delenv(env, raising=False)
     assert terminal_sessions.resolve_window_launch("new-window") is True
 
 

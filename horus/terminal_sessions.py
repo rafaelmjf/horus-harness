@@ -95,13 +95,24 @@ def resolve_window_launch(preference: str) -> bool:
     """Whether a TUI launch should open its own terminal window (True) or take
     over the current TTY (False), given the owner's ``window`` launch default.
 
-    Platform-aware: ``new-window`` only pops a real window when a desktop session
-    exists AND we are not driving the TUI over SSH. The mobile path (Termius SSH
-    into ``horus tui``) has no local display the phone can see, so it falls back to
-    ``takeover`` — the reliable attach/detach flow the Rules pin as the phone path.
+    Platform-aware, and three things can veto ``new-window``:
+
+    - **No desktop session** — there is no window to pop.
+    - **Driving the TUI over SSH** — the mobile path (Termius SSH into ``horus tui``)
+      has no local display the phone can see, so it falls back to ``takeover``, the
+      attach/detach flow the Rules pin as the phone path.
+    - **Horus is running inside a session host** — the host IS the window manager
+      there, so a new OS window is the wrong shape. Observed 2026-07-29 in a herdr
+      cockpit: a launch popped a native window running a second herdr *client*, which
+      renders the whole session and therefore just duplicated the cockpit instead of
+      framing the new agent. Keeping it in the host makes the launch a sibling you
+      switch to, which is what a cockpit implies.
+
     ``takeover`` (the default) always stays in this terminal.
     """
     if preference != "new-window":
+        return False
+    if hosts.enclosing() is not None:
         return False
     return launcher.has_display() and not os.environ.get("SSH_CONNECTION")
 
@@ -179,6 +190,26 @@ def launch_on(target: str, **kwargs) -> launch.LaunchResult:
     return host.launch(**kwargs)
 
 
+def persistent_hosts() -> tuple[str, ...]:
+    """Host ids that keep a session alive after the launcher returns — the hosts a
+    `--detach` or a worker can legitimately name."""
+    return tuple(host.id for host in hosts.all_hosts() if host.capabilities.persistent)
+
+
+def default_persistent_host() -> str:
+    """The persistent host a worker should use when none was named: the resolved
+    host if it qualifies, else the first that does. Never silently tmux — a machine
+    configured for another host would have its workers land somewhere else."""
+    resolved = hosts.resolve()
+    if resolved.capabilities.persistent:
+        return resolved.id
+    available = [
+        host.id for host in hosts.all_hosts()
+        if host.capabilities.persistent and host.available()
+    ]
+    return available[0] if available else TMUX
+
+
 def hosts_persistently(target: str) -> bool:
     """Whether ``target`` keeps the session alive after the launcher returns —
     i.e. whether a launch on it "starts" something or merely "completes"."""
@@ -186,9 +217,31 @@ def hosts_persistently(target: str) -> bool:
     return bool(host is not None and host.capabilities.persistent)
 
 
-def launch_detached_run(request: "RunRequest", *, reg: registry.Registry | None = None) -> launch.LaunchResult:
-    """Host a one-shot worker on the persistent host and return after runner handoff."""
-    return hosts.get(TMUX).launch_worker(request, reg=reg)
+def launch_detached_run(
+    request: "RunRequest", *, target: str | None = None, reg: registry.Registry | None = None,
+) -> launch.LaunchResult:
+    """Host a one-shot worker on a persistent host, returning after runner handoff.
+
+    ``target`` names the host; it defaults to the resolved one rather than to tmux,
+    because a machine configured for another host would otherwise have its workers
+    silently land somewhere else.
+    """
+    host = hosts.get(target) if target else hosts.resolve()
+    if host is None:
+        return launch.LaunchResult(
+            False, request.agent, request.project, account=request.account,
+            error=f"unknown session host {target!r}",
+        )
+    if not host.capabilities.persistent:
+        return launch.LaunchResult(
+            False, request.agent, request.project, account=request.account,
+            error=f"{host.id} cannot host a detached worker",
+        )
+    if (not_ready := host.ensure_ready()) is not None:
+        return launch.LaunchResult(
+            False, request.agent, request.project, account=request.account, error=not_ready,
+        )
+    return host.launch_worker(request, reg=reg)
 
 
 def launch_window(
@@ -208,6 +261,12 @@ def launch_window(
     when one can provide a viewer. Used by web-requested windows and by a
     ``new-window`` TUI launch."""
     host = hosts.resolve()
+    if host.capabilities.viewer and (not_ready := host.ensure_ready()) is not None:
+        # A host that owns a server it cannot start must fail with the reason here.
+        # Without this, a herdr window launch dies on a bare ENOENT from the socket.
+        return launch.LaunchResult(
+            False, agent, Path(project_dir).resolve(), account=account, error=not_ready,
+        )
     if not host.capabilities.viewer:
         # No host viewer to put in the window: fall back to a plain interactive spawn.
         # (This branch cannot carry the proxy env; a no-viewer desktop is the rare

@@ -117,7 +117,7 @@ class PtyHost:
         one that can provide a viewer, and makes this PTY that viewer.
         """
         if managed and hosts.resolve().capabilities.viewer:
-            return self._start_managed_tmux(
+            return self._start_managed_host(
                 agent=agent,
                 project_dir=project_dir,
                 account=account,
@@ -174,7 +174,7 @@ class PtyHost:
         threading.Thread(target=self._reader, args=(term,), daemon=True).start()
         return term_id
 
-    def _start_managed_tmux(
+    def _start_managed_host(
         self,
         *,
         agent: str,
@@ -188,7 +188,14 @@ class PtyHost:
         title: str | None,
         remote_control: bool | None = None,
     ) -> str:
-        result = terminal_sessions.launch_tmux(
+        # Gate and launch must agree on the host. Resolving here (rather than calling
+        # the tmux façade) is what stops a herdr-configured machine from gating on
+        # herdr's viewer, launching on tmux, and then asking herdr for a viewer onto a
+        # tmux ref — which fails, taking the browser terminal with it.
+        host = hosts.resolve()
+        if (not_ready := host.ensure_ready()) is not None:
+            raise ValueError(not_ready)
+        result = host.launch(
             agent=agent,
             project_dir=project_dir,
             account=account,
@@ -202,7 +209,7 @@ class PtyHost:
         )
         if not result.ok or not result.session_id or not result.target_ref:
             raise ValueError(result.error or "failed to create a managed session")
-        viewer = hosts.resolve().viewer_argv(result.target_ref)
+        viewer = host.viewer_argv(result.target_ref)
         if viewer is None:
             terminal_sessions.stop_session(result.session_id)
             raise ValueError("host could not provide a viewer for the new session")

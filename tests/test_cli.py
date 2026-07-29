@@ -794,15 +794,16 @@ def test_run_watch_failure_never_breaks_the_run(tmp_path, monkeypatch, capsys):
 def test_run_detach_requires_managed_tmux_worker(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     assert main(["run", "hello", "--agent", "fake", "--detach", "--path", str(tmp_path)]) == 2
-    assert "requires --worker and --target tmux" in capsys.readouterr().out
+    assert "requires --worker and a persistent --target" in capsys.readouterr().out
 
 
 def test_run_detach_preallocates_horus_id_before_managed_handoff(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     captured = {}
 
-    def detached(request):
+    def detached(request, *, target=None, reg=None):
         captured["request"] = request
+        captured["target"] = target
         return terminal_sessions.launch.LaunchResult(
             True, request.agent, request.project, account=request.account,
             session_id=request.session_id, pid=5150, target_ref=f"horus-{request.session_id[:12]}",

@@ -317,3 +317,21 @@ def test_live_herdr_server_lifecycle(tmp_path, monkeypatch):
         assert not registry.process_alive(pid), "closing the pane must kill its process"
     finally:
         herdr_host._run("server", "stop")
+
+
+def test_failures_name_a_stopped_server_rather_than_blaming_the_pane(host, monkeypatch):
+    """Every herdr verb fails the same way when the server is down (a bare ENOENT on
+    the socket), so "herdr does not know pane w1:p1" would send the owner hunting a
+    pane problem that does not exist."""
+    monkeypatch.setattr(herdr_host, "_run", lambda *_a, **_k: _fail("No such file or directory"))
+    monkeypatch.setattr(herdr_host.HerdrHost, "server_running", lambda _self: False)
+    record = SessionRecord(
+        session_id=SID, agent="fake", project="/tmp/x",
+        launch_target="herdr", target_ref="w1:p1", status="running",
+    )
+    assert host.attach(record) == "the herdr server is not running"
+    assert host.stop(record) == "the herdr server is not running"
+
+    # Server up but the pane genuinely absent → the specific message survives.
+    monkeypatch.setattr(herdr_host.HerdrHost, "server_running", lambda _self: True)
+    assert "does not know pane w1:p1" in host.attach(record)
