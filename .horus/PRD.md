@@ -103,6 +103,8 @@ Readiness breakdown (deterministic, verified 2026-07-29): **Ready—Autonomous e
 
 ## Rules (load-bearing)
 
+- **A green PR is not a landed PR — check for your own unmerged branches before closing (2026-07-29).** PR #445 carried the only record of the real-Claude-on-herdr trial (including the false-idle finding) and sat open for eight subsequent merges while later continuity cited its evidence; the branch went stale enough that merging it would have reverted work. `horus close --check` lists unmerged remote branches for exactly this — read that line rather than skimming past it.
+
 - **"Released to Ready—eligible" in a `readiness_reason` means the card becomes selectable — it is NOT a software release (misread twice on 2026-07-29).** The two reserved drill legs read "TRIGGER: released to Ready—eligible when the drill is armed…"; cutting v0.0.78 changed nothing for them. When a card's trigger is genuinely a version being published, say "when a version ships" and name it.
 
 - **`0.1` is reserved for the first version the owner considers stable enough to hand to someone else to test (owner, 2026-07-29).** Until then releases stay on `0.0.x` however structural the change — the session-host layer shipped in 0.0.78, not 0.1. So do not read a patch bump as "small", and do not propose `0.1` to signal architecture; it signals shareability.
