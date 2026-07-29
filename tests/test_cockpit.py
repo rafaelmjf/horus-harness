@@ -407,3 +407,113 @@ def test_worker_default_host_follows_the_machine_config(monkeypatch):
     # The resolved host cannot host a worker → fall back to one that can.
     monkeypatch.setenv("HORUS_TERMINAL_TARGET", "current")
     assert terminal_sessions.default_persistent_host() in {"tmux", "herdr"}
+
+
+def test_cockpit_runs_the_same_horus_as_the_caller(monkeypatch):
+    """Observed live: `_tui_command` used `shutil.which("horus")`, so a checkout
+    opened a cockpit running the globally-installed 0.0.77 — a version that does not
+    even have this command. Binding to sys.executable makes "the cockpit runs what I
+    ran" true by construction instead of by PATH order."""
+    import sys
+
+    assert cockpit._tui_command() == [sys.executable, "-m", "horus", "tui"]
+    # A stray `horus` earlier on PATH must not change what the cockpit runs.
+    monkeypatch.setenv("PATH", "/somewhere/with/another/horus:" + __import__("os").environ["PATH"])
+    assert cockpit._tui_command()[0] == sys.executable
+
+
+def test_a_cockpit_whose_tui_died_is_revived_not_attached_to(monkeypatch):
+    """The bug the owner's trial found. herdr persists workspace *structure* across a
+    server restart but not processes, so the cockpit comes back as a bare shell.
+    Attaching to that is a blank screen; the label existing is not evidence that
+    anything is running in it."""
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host.HerdrHost, "ensure_ready", lambda _self: None)
+    monkeypatch.delenv("HERDR_ENV", raising=False)
+    monkeypatch.delenv("HERDR_PANE_ID", raising=False)
+    calls = []
+
+    def fake_run(*args, **_kwargs):
+        calls.append(args)
+        body: dict = {"type": "ok"}
+        if args[:2] == ("pane", "list"):
+            body = {"panes": [{"pane_id": "w1:p1", "workspace_id": "w1"}]}
+        elif args[:2] == ("workspace", "get"):
+            body = {"workspace": {"workspace_id": "w1", "label": "horus-cockpit"}}
+        elif args[:2] == ("pane", "process-info"):
+            # A restored pane: the shell is back, the TUI is not.
+            body = {"process_info": {"foreground_processes": [
+                {"argv": ["/bin/bash"], "cmdline": "/bin/bash", "name": "bash"},
+            ]}}
+        elif args[:2] == ("pane", "get"):
+            body = {"pane": {"pane_id": "w1:p1", "workspace_id": "w1"}}
+        return subprocess.CompletedProcess([], 0, json.dumps({"result": body}), "")
+
+    monkeypatch.setattr(herdr_host, "_run", fake_run)
+    monkeypatch.setattr(
+        cockpit.subprocess, "run",
+        lambda argv, **_k: subprocess.CompletedProcess(argv, 0, "", ""),
+    )
+    assert cockpit.open_in("herdr") == (0, "")
+
+    verbs = [args[:2] for args in calls]
+    # It re-ran the TUI in the pane it already had …
+    assert ("pane", "run") in verbs
+    # … and did NOT create a second cockpit workspace for the owner to disambiguate.
+    assert ("workspace", "create") not in verbs
+
+
+def test_a_live_cockpit_is_reused_untouched(monkeypatch):
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+    monkeypatch.setattr(herdr_host.HerdrHost, "ensure_ready", lambda _self: None)
+    monkeypatch.delenv("HERDR_ENV", raising=False)
+    calls = []
+
+    def fake_run(*args, **_kwargs):
+        calls.append(args)
+        body: dict = {"type": "ok"}
+        if args[:2] == ("pane", "list"):
+            body = {"panes": [{"pane_id": "w1:p1", "workspace_id": "w1"}]}
+        elif args[:2] == ("workspace", "get"):
+            body = {"workspace": {"workspace_id": "w1", "label": "horus-cockpit"}}
+        elif args[:2] == ("pane", "process-info"):
+            body = {"process_info": {"foreground_processes": [
+                {"argv": ["python", "-m", "horus", "tui"],
+                 "cmdline": "python -m horus tui", "name": "python"},
+            ]}}
+        elif args[:2] == ("pane", "get"):
+            body = {"pane": {"pane_id": "w1:p1", "workspace_id": "w1"}}
+        return subprocess.CompletedProcess([], 0, json.dumps({"result": body}), "")
+
+    monkeypatch.setattr(herdr_host, "_run", fake_run)
+    monkeypatch.setattr(
+        cockpit.subprocess, "run",
+        lambda argv, **_k: subprocess.CompletedProcess(argv, 0, "", ""),
+    )
+    assert cockpit.open_in("herdr") == (0, "")
+    verbs = [args[:2] for args in calls]
+    assert ("workspace", "create") not in verbs and ("pane", "run") not in verbs
+
+
+def test_a_live_cockpit_wins_over_a_stale_one(monkeypatch):
+    """A restart can leave several labelled workspaces. Pick the one with a live TUI
+    rather than the first found, and never close the others — one may be a live
+    cockpit, and guessing is how a live session gets killed."""
+    monkeypatch.setattr(herdr_host, "available", lambda: True)
+
+    def fake_run(*args, **_kwargs):
+        body: dict = {"type": "ok"}
+        if args[:2] == ("pane", "list"):
+            body = {"panes": [{"pane_id": "w1:p1", "workspace_id": "w1"},
+                              {"pane_id": "w2:p1", "workspace_id": "w2"}]}
+        elif args[:2] == ("workspace", "get"):
+            body = {"workspace": {"workspace_id": args[2], "label": "horus-cockpit"}}
+        elif args[:2] == ("pane", "process-info"):
+            live = args[3] == "w2:p1"
+            body = {"process_info": {"foreground_processes": [
+                {"cmdline": "python -m horus tui" if live else "/bin/bash"},
+            ]}}
+        return subprocess.CompletedProcess([], 0, json.dumps({"result": body}), "")
+
+    monkeypatch.setattr(herdr_host, "_run", fake_run)
+    assert cockpit._find_cockpit(herdr_host.HerdrHost()) == "w2:p1"
