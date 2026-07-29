@@ -113,6 +113,15 @@ TUI can attach. Running Horus *itself* inside tmux is supported and keeps that
 persistence: the session is created on the same tmux server, and attaching switches
 this client onto it (`Ctrl-b L` toggles back) rather than nesting a second client.
 Native Windows and hosts without tmux fall back to the direct terminal host.
+`horus tui <host>` opens the cockpit *inside* a host — `horus tui tmux` puts the TUI
+in its own pane, so every launch becomes a sibling session you switch to and back
+from (`Ctrl-b L`) instead of taking over the TUI's terminal. One cockpit per host:
+re-running re-attaches the existing one. Bare `horus tui` (or `horus tui current`)
+runs in this terminal exactly as before. Which host new *sessions* use is a separate,
+persisted choice — pick it in the TUI's Defaults screen (`d` → Session host) or set
+`[terminal] host`; `auto` prefers the host Horus is running inside, then the most
+capable one available.
+
 [herdr](https://herdr.dev) is supported as a third host and is **opt-in**: set
 `[terminal] host = "herdr"` in `~/.horus/config.toml` (or `HORUS_TERMINAL_TARGET=herdr`),
 because tmux stays the default — it can be reaped and it backs the phone path. A herdr

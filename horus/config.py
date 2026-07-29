@@ -169,7 +169,7 @@ def _write_projects(projects: list[str]) -> None:
 # `register_project` write.
 _MANAGED_KEYS = frozenset({
     "workspace_root", "projects", "github_owners", "ignored_repos", "workflow", "launch",
-    "launch_profiles", "launch_models", "tui",
+    "launch_profiles", "launch_models", "tui", "terminal",
     # Retired 2026-07-19. Still listed so a rewrite DROPS a pre-existing `[continuity]`
     # table instead of round-tripping it forward as an unmanaged entry.
     "continuity",
@@ -242,6 +242,7 @@ def _write_config(
     launch_profiles: dict[str, dict[str, str]] | None = None,
     launch_models: dict[str, list[str]] | None = None,
     tui: dict[str, object] | None = None,
+    terminal: dict[str, str] | None = None,
 ) -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
     root = workspace_root or load_workspace_root()
@@ -261,6 +262,9 @@ def _write_config(
     # Preserve the current TUI preferences when the caller doesn't supply them.
     if tui is None:
         tui = load_tui_defaults()
+    # Same for the session host.
+    if terminal is None:
+        terminal = {"host": load_terminal_host()}
     # Round-trip any table/key we don't manage (e.g. [access]) — read before we write.
     extra_scalars, extra_tables = _unmanaged_entries()
     lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"']
@@ -287,6 +291,8 @@ def _write_config(
         lines += [f"{agent} = {_toml_value(models)}" for agent, models in sorted(launch_models.items())]
     lines += ["", "[tui]"]
     lines += [f"{k} = {_toml_value(v)}" for k, v in tui.items()]
+    lines += ["", "[terminal]"]
+    lines += [f'{k} = "{v}"' for k, v in terminal.items()]
     lines += extra_tables
     config_path().write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -657,6 +663,24 @@ def load_terminal_host() -> str:
         return TERMINAL_HOST_DEFAULT
     host = raw.get("host", TERMINAL_HOST_DEFAULT)
     return host.strip().lower() if isinstance(host, str) and host.strip() else TERMINAL_HOST_DEFAULT
+
+
+def set_terminal_host(host: str) -> str:
+    """Persist which session host new sessions use (``auto`` or a host id).
+
+    Validation is the caller's job for the same reason :func:`load_terminal_host`
+    does none: the set of hosts lives in :mod:`horus.hosts`, and importing it here
+    would cycle. The TUI offers only real ids, and an unknown value resolves back
+    to ``auto`` harmlessly.
+    """
+    cleaned = host.strip().lower()
+    if not cleaned:
+        raise ValueError("a session host cannot be empty")
+    _write_config(
+        load_projects(), load_github_owners(), load_workspace_root(),
+        terminal={"host": cleaned},
+    )
+    return cleaned
 
 
 def load_remote_control_default() -> bool:
