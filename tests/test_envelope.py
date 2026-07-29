@@ -51,6 +51,20 @@ def _make(**overrides) -> envelope.Envelope:
     return envelope.create(**bounds)
 
 
+def _make_live(**overrides) -> envelope.Envelope:
+    """Like :func:`_make` but dated against the *real* clock.
+
+    The guard tests exercise ``cli._envelope_guard``, which compares the envelope's
+    expiry to the real system date (it has no injectable ``now``). Pinning an
+    absolute ``expires`` there rots the moment wall-time passes it — so those tests
+    build the envelope with an expiry a week ahead of today instead of a fixed date.
+    """
+    real_today = date.today()
+    live = dict(today=real_today, expires=(real_today + timedelta(days=7)).isoformat())
+    live.update(overrides)
+    return _make(**live)
+
+
 def _req(**overrides) -> envelope.DispatchRequest:
     # Accounts travel as the canonical `<agent>-<alias>` label, never a bare alias.
     fields = dict(card="card-a", account="claude-personal", tier="sonnet")
@@ -384,7 +398,7 @@ def _full_capacity(monkeypatch):
 
 def test_guard_authorizes_an_in_bounds_run(tmp_path, _full_capacity):
     root = _project(tmp_path)
-    _make()
+    _make_live()
     refusal, auth = cli._envelope_guard(_args(root), root)
     assert refusal is None
     assert auth.name == "trip"
@@ -403,7 +417,7 @@ def test_guard_reads_tier_from_the_card_not_the_caller(tmp_path, _full_capacity)
 
 def test_guard_resolves_a_branch_stamped_card(tmp_path, _full_capacity):
     root = _project(tmp_path, branch="x3")
-    _make(cards=(), branch="x3")
+    _make_live(cards=(), branch="x3")
     refusal, auth = cli._envelope_guard(_args(root), root)
     assert refusal is None
     assert auth.request.branch == "x3"
