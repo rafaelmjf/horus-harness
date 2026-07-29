@@ -1,15 +1,18 @@
 ---
 status: open
 priority: medium
+tier: medium
 created: 2026-07-20
 created_by: owner
-last_refined: 2026-07-28
-refine_passes: 2
-readiness: shaping
-readiness_reason: "The plumbing question is settled (the signal already exists) but the placement, the refresh trigger's blast radius, and whether the GitHub-identity panel earns permanent space are undecided. Refine before building."
+last_refined: 2026-07-29
+refine_passes: 3
+readiness: ready
+autonomy: attended
+order: 30
 phase: converge
 type: feature
 vision_facet: "Dashboard / cockpit"
+parallel: exclusive
 surface: horus/terminal_tui.py, horus/fetchcheck.py, horus/fleet_review.py
 ---
 
@@ -34,8 +37,10 @@ Established before scoping, so the card is not mis-sized as a sync engine:
 - **`horus fleet` already renders `behind N` per project.** Verified live this
   session. The data layer is done.
 - The TUI's existing "stale" counter is **skill-projection drift only** — an
-  unrelated concept sharing the word. Reusing "stale" for remote-behind will
-  confuse both.
+  unrelated concept. That outbound screen is renamed **"Horus Assets Refresh"** as
+  of 2026-07-29 (see `tui-fleet-artifact-refresh`), so the two directions no longer
+  share a word: **"Refresh" = Horus assets outward; "Sync" = project state inward.**
+  Render remote-behind as **"behind N"**, never "stale".
 
 **So this card is presentation and trigger, not plumbing.**
 
@@ -49,6 +54,15 @@ paint path, and routes the owner to the project that needs attention.
 When the TUI opens with cached fetch state on disk, it should render each
 project's remote-freshness (current / behind N / unknown) with the age of that
 reading, without performing any network call during first paint.
+
+**Gate on the delivered SHA:** focused TUI tests assert (a) first paint renders
+per-row freshness from cached state with zero network calls, (b) an explicit fleet
+refresh fetches all registered projects concurrently under one global deadline with
+rows resolving independently, and (c) offline/no-upstream rows render `unknown` with
+age, never an error. **Live probe:** open the TUI against a fleet where one project's
+`main` is behind origin and one is current; the behind project renders `behind N`
+with the reading's age on its row, the current one renders `current`, and neither
+triggers a fetch during first paint.
 
 ## Broad boundaries
 
@@ -77,24 +91,50 @@ accounts. Placing them adjacent without naming the distinction invites the readi
 that the agent account and the GitHub account are one thing. It also changes almost
 never, which is weak justification for permanent screen space.
 
-**Known collision:** `tui-fleet-artifact-refresh` (gated) also adds a "Refresh"
-action to the TUI, for *projection artifacts*. Two differently-scoped refresh verbs
-on one surface is a UX problem to resolve deliberately, not discover later.
+**Collision — RESOLVED (2026-07-29).** `tui-fleet-artifact-refresh` adds an outbound
+refresh action; the risk was two same-named verbs on one surface. Resolved by the
+naming split: that screen is **"Horus Assets Refresh"** (assets, outward) and the
+inbound git action is **"Sync"** (state, inward, matching the shipped `horus sync`
+CLI verb). This card owns the **see** half (render "behind N"); the inbound **act**
+(the Sync button + fleet Sync-all) is `cockpit-sync-action` (order 40), sequenced
+after this one.
 
 Non-goals: no background polling loop; no auto-pull; no new fetch implementation;
-not the write-heavy projection refresh that the other card owns.
+not the write-heavy Horus Assets Refresh that the other card owns; **not the Sync
+button itself — that is `cockpit-sync-action`.** This card renders freshness and
+provides the explicit fleet-fetch trigger only.
 
-## Open decisions for backlog-refine
+## Decisions — RESOLVED in refine (2026-07-29)
 
-- Placement: freshness on each project row on Home, a dedicated section, or both.
-- Does the GitHub-identity panel earn permanent space, or is `doctor` enough?
-- How the two "refresh" verbs coexist (naming, or one entry point with two scopes).
-- Whether an explicit refresh also refreshes usage/accounts, or strictly git.
-- Behaviour when some projects are offline/unreachable — per-row unknown with age
-  is the presumed answer, inherited from the primitive's silent no-op.
+- **Placement → freshness on each project row on Home.** The card's own job is
+  "routing the owner to the project that needs attention," which argues for per-row
+  over a separate section; a dedicated section would duplicate the signal. Show
+  `current` / `behind N` / `unknown` plus the age of the reading, on the row.
+- **GitHub-identity panel → dropped.** It is machine-global (not per-project),
+  changes almost never, and `doctor machine` already checks it — weak justification
+  for permanent screen space. Out of scope for this card.
+- **The two "refresh" verbs → resolved by the naming split** (see the Collision
+  note): "Horus Assets Refresh" (out) vs "Sync" (in). No shared verb remains.
+- **Explicit refresh scope → strictly git freshness.** This card's fleet fetch
+  updates remote-behind state only; usage/accounts stay on the existing `u refresh`.
+- **Offline/unreachable → per-row `unknown` with age**, inherited from the
+  primitive's silent no-op. Confirmed.
 
 ## Source
 
 In-session brainstorm, 2026-07-20 (owner-attended), from the owner's own TUI
 friction on the Windows machine. Prior art the owner named: the abandoned browser
 dashboard explored this direction before the TUI became the cockpit.
+
+## Reviews
+
+- **2026-07-29 — Minted Ready/attended, `order: 30` (owner, refine pass).** All five
+  open decisions resolved above (placement → per-row on Home; GH-identity panel →
+  dropped; refresh-verb collision → resolved by the "Horus Assets Refresh" vs "Sync"
+  naming split; refresh scope → strictly git; offline → per-row unknown+age). Scoped
+  to the **see** half only; the inbound **act** (Sync button + fleet Sync-all) was
+  carved into `cockpit-sync-action` (`order: 40`), which `depends-on` this card.
+  Placed at 30/40 (after the existing `order: 10`/`20` attended cards) to avoid a
+  queue collision, not as a priority call — reprioritize freely.
+  `parallel: exclusive` because it and the act card both edit the hot `terminal_tui.py`.
+  Attended, not eligible: it changes first-paint UX and wants a real render-confirm.

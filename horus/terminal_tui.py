@@ -8,6 +8,8 @@ import shlex
 import shutil
 import subprocess
 import textwrap
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FuturesTimeout, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,9 +45,11 @@ from horus import (
     config,
     datums,
     envelope,
+    fetchcheck,
     fleet_review,
     frontmatter,
     github_catalog,
+    gitstate,
     launch,
     machine_requirements,
     notify,
@@ -58,6 +62,7 @@ from horus import (
     schedule,
     skills,
     statusline,
+    sync,
     terminal_sessions,
     usage_snapshot,
     warmup,
@@ -199,6 +204,15 @@ class TerminalUI:
         self.receipt_scroll = 0
         self.project_pending = {
             project: len(closure.pending_delivery_commits(project)) for project in self.projects
+        }
+        # Remote freshness — read from on-disk refs only (no network in the paint
+        # path); `g` triggers an explicit fleet fetch. Age comes from the fetch-check
+        # cache so a row can say how old its "behind N" reading is.
+        self.project_freshness: dict[Path, dict | None] = {
+            project: gitstate.git_state(project) for project in self.projects
+        }
+        self.project_fetch_at: dict[Path, float | None] = {
+            project: fetchcheck.last_fetch(project) for project in self.projects
         }
         self.remote_projects, self.remote_ignored, self.remote_errors = _remote_projects()
         self.running = [record for record in registry.Registry.default().all() if record.status == "running"]
@@ -349,6 +363,25 @@ class TerminalUI:
             else:
                 self.refresh_account_usage()
 
+        @keys.add("g")
+        def _fetch_freshness(event) -> None:
+            # Explicit fleet fetch → refresh remote-freshness. Projects screen only;
+            # elsewhere the key is a no-op so it never fetches unexpectedly.
+            if self.screen == "projects":
+                self.refresh_git_freshness()
+
+        @keys.add("y")
+        def _sync_selected(event) -> None:
+            # Inbound "Sync": fast-forward the selected project. Projects screen only.
+            if self.screen == "projects":
+                self.sync_selected_project()
+
+        @keys.add("Y")
+        def _sync_all(event) -> None:
+            # Fast-forward every clean-behind project. Projects screen only.
+            if self.screen == "projects":
+                self.sync_all_clean_behind()
+
         @keys.add("f")
         def _fleet_review(event) -> None:
             if self.screen == "projects":
@@ -443,13 +476,107 @@ class TerminalUI:
         self.status = "Account usage refreshed from cache."
         self.application.invalidate()
 
+    def refresh_git_freshness(self) -> None:
+        """Explicit fleet fetch (read-only) → refresh each project's remote-freshness.
+
+        The one place the TUI touches the network for git, and only on an explicit
+        keypress. Bounded by a single global deadline; a project that does not
+        resolve in time keeps its last-known reading rather than stalling the frame.
+        """
+        selected = self.selected
+        self.status = "Fetching all projects…"
+        self.application.invalidate()
+        self.project_freshness, self.project_fetch_at = _fetch_fleet_freshness(self.projects)
+        self._refresh_items()
+        self.selected = min(selected, max(0, len(self.items) - 1))
+        behind = 0
+        for project in self.projects:
+            token = _freshness_token(self.project_freshness.get(project), None)
+            if token and token[1].startswith("behind"):
+                behind += 1
+        self.status = (
+            f"Fetched {len(self.projects)} project(s) · {behind} behind origin"
+            if behind
+            else f"Fetched {len(self.projects)} project(s) · all current"
+        )
+        self.application.invalidate()
+
+    def _selected_project(self) -> Path | None:
+        """The project root under the cursor, or None when the row is not a project."""
+        if 0 <= self.selected < len(self.items):
+            kind, value = self.items[self.selected]
+            if kind == "project" and isinstance(value, Path):
+                return value
+        return None
+
+    def _sync_one(self, root: Path, *, announce: bool) -> str:
+        """Fast-forward one project when `sync.plan` says it is unambiguously safe.
+
+        Returns the outcome kind (synced / current / refused / failed). Inherits the
+        shipped `horus sync` refusal matrix wholesale — a dirty, ahead, diverged,
+        detached, or upstream-less checkout is never mutated, only reported.
+        """
+        state = self.project_freshness.get(root) or gitstate.git_state(root)
+        outcome, reason = sync.plan(state)
+        if outcome == sync.REFUSED:
+            if announce:
+                self.status = f"{root.name}: sync refused — {reason}"
+            return "refused"
+        if outcome == sync.CURRENT:
+            if announce:
+                self.status = f"{root.name}: {reason}"
+            return "current"
+        ok, message = sync.fast_forward(root, str(state["upstream"]))
+        if not ok:
+            if announce:
+                self.status = f"{root.name}: sync failed — {message}"
+            return "failed"
+        # Re-read this project's freshness so its row flips to current immediately.
+        self.project_freshness[root] = gitstate.git_state(root)
+        self.project_fetch_at[root] = fetchcheck.last_fetch(root)
+        if announce:
+            commit = (self.project_freshness[root] or {}).get("commit") or {}
+            self.status = (
+                f"{root.name}: synced → {commit.get('hash', '?')} {commit.get('subject', '')}".rstrip()
+            )
+        return "synced"
+
+    def sync_selected_project(self) -> None:
+        """Fast-forward the project under the cursor (the inbound "Sync" action)."""
+        root = self._selected_project()
+        if root is None:
+            self.status = "Move to a project row to sync it."
+            self.application.invalidate()
+            return
+        selected = self.selected
+        self._sync_one(root, announce=True)
+        self._refresh_items()
+        self.selected = min(selected, max(0, len(self.items) - 1))
+        self.application.invalidate()
+
+    def sync_all_clean_behind(self) -> None:
+        """Fast-forward every project `sync.plan` classifies safe, skipping the rest
+        with their reason. Sequential — a fast-forward is a local merge (the fetch
+        already happened via `g`), so no network and no concurrency needed."""
+        selected = self.selected
+        tally = {"synced": 0, "current": 0, "refused": 0, "failed": 0}
+        for root in self.projects:
+            tally[self._sync_one(root, announce=False)] += 1
+        self._refresh_items()
+        self.selected = min(selected, max(0, len(self.items) - 1))
+        parts = [f"{tally['synced']} synced", f"{tally['current']} current", f"{tally['refused']} skipped"]
+        if tally["failed"]:
+            parts.append(f"{tally['failed']} failed")
+        self.status = "Sync all clean-behind: " + " · ".join(parts)
+        self.application.invalidate()
+
     def refresh_projection_sync(self) -> None:
         """Re-run the canonical read-only projection comparison."""
         selected = self.selected
         self._load_projection_sync()
         self._refresh_items()
         self.selected = min(selected, max(0, len(self.items) - 1))
-        self.status = "Projection sync refreshed against the installed CLI."
+        self.status = "Horus Assets Refresh re-checked against the installed CLI."
         self.application.invalidate()
 
     def _page_size(self) -> int:
@@ -1207,7 +1334,7 @@ class TerminalUI:
             "mission": "HORUS · Mission Control",
             "toggles": "HORUS · Settings",
             "fleet_review": "HORUS · Fleet Review",
-            "projection_sync": "HORUS · Projection Sync",
+            "projection_sync": "HORUS · Horus Assets Refresh",
         }[self.screen]
         live = len(self.running)
         return [("class:header", f" {title}"), ("class:meta", f"   {live} live" if live else "")]
@@ -1313,7 +1440,16 @@ class TerminalUI:
                 card_count, bug_count = self.project_metrics.get(root, (0, 0))
                 pending = self.project_pending.get(root, 0)
                 continuity = f" · continuity {pending} pending" if pending else ""
-                lines.append(("class:muted", f"     backlog {card_count} · bugs {bug_count}{continuity}\n"))
+                base = f"     backlog {card_count} · bugs {bug_count}{continuity}"
+                token = _freshness_token(
+                    self.project_freshness.get(root), self.project_fetch_at.get(root)
+                )
+                if token:
+                    token_style, token_text = token
+                    lines.append(("class:muted", base + " · "))
+                    lines.append((token_style, token_text + "\n"))
+                else:
+                    lines.append(("class:muted", base + "\n"))
             elif kind == "remote_project":
                 project = value
                 badge = "cloned, not registered" if project.is_local else "remote only"
@@ -1340,7 +1476,7 @@ class TerminalUI:
                     detail += f" · {unknown} unknown"
                 if not stale and not unknown:
                     detail = "all tracked projects in sync"
-                lines.append((style, f"\n {marker} Projection Sync\n"))
+                lines.append((style, f"\n {marker} Horus Assets Refresh\n"))
                 lines.append(("class:muted", f"     {detail} · Claude/Codex vs installed CLI\n"))
             elif kind == "mode":
                 label = str(value).title()
@@ -1630,7 +1766,7 @@ class TerminalUI:
                     summary += f" · {unknown} unknown"
                 if not stale and not unknown:
                     summary = "all tracked projects in sync"
-                fragments.append((style, f" {marker} Projection Sync\n"))
+                fragments.append((style, f" {marker} Horus Assets Refresh\n"))
                 fragments.append(("class:muted", f"   {summary} · Claude/Codex vs installed CLI\n"))
             elif kind == "fleet_review":
                 fragments.append((style, f" {marker} Fleet Review\n"))
@@ -2357,9 +2493,9 @@ class TerminalUI:
         if self.screen == "projects":
             enter_action = self._projects_enter_action()
             text = (
-                f" ↑↓ · {enter_action} · f fleet · u refresh · m mission · t settings · q"
+                f" ↑↓ · {enter_action} · g fetch · y sync · f fleet · u refresh · q"
                 if narrow
-                else f" ↑↓/swipe · {enter_action} · f fleet · u refresh · Esc · s sessions · d defaults · m mission · t settings · q quit"
+                else f" ↑↓/swipe · {enter_action} · f fleet · g fetch · y sync · Y sync-all · u refresh · Esc · s sessions · d defaults · m mission · t settings · q quit"
             )
             return [("class:footer", text)]
         if self.screen == "accounts":
@@ -2527,6 +2663,81 @@ def _remote_projects() -> tuple[
     unregistered = github_catalog.drop_registered(all_projects, registered=local)
     visible, hidden = github_catalog.filter_ignored(unregistered)
     return visible, hidden, errors
+
+
+def _fmt_age(seconds: float | None) -> str:
+    """Human age for a fetch reading: "just now" / "5m ago" / "not fetched"."""
+    if seconds is None:
+        return "not fetched"
+    delta = int(time.time() - seconds)
+    if delta < 0:
+        delta = 0
+    if delta < 60:
+        return "just now"
+    if delta < 3600:
+        return f"{delta // 60}m ago"
+    if delta < 86400:
+        return f"{delta // 3600}h ago"
+    return f"{delta // 86400}d ago"
+
+
+def _freshness_token(state: dict | None, fetched_at: float | None) -> tuple[str, str] | None:
+    """(style, text) remote-freshness token for a project row, or None to omit it.
+
+    Reads only the on-disk state produced by :func:`horus.gitstate.git_state` — no
+    network. Renders "current" / "behind N" / "detached" plus the age of the last
+    fetch, so a stale reading is never mistaken for a live one. A repo with no
+    upstream and no remote has nothing to be fresh against and yields None.
+    """
+    if not state:
+        return None
+    age = _fmt_age(fetched_at)
+    if state.get("detached"):
+        return ("class:warning", f"detached · {age}")
+    if state.get("upstream") is None and not state.get("remote_url"):
+        return None  # purely local repo
+    # Prefer the branch's own upstream; fall back to divergence from origin/<default>
+    # when the checked-out branch has no upstream of its own (e.g. a fresh feature
+    # branch) so the row still answers "is my base current?".
+    if state.get("upstream") is not None:
+        behind = state.get("behind") or 0
+    else:
+        behind = state.get("default_behind") or 0
+    if behind:
+        return ("class:warning", f"behind {behind} · {age}")
+    return ("class:ok", f"current · {age}")
+
+
+def _fetch_fleet_freshness(
+    projects: list[Path], *, deadline: float = 25.0
+) -> tuple[dict[Path, dict | None], dict[Path, float | None]]:
+    """Fetch every project concurrently (read-only), bounded by one global deadline,
+    then re-read on-disk freshness. Projects unresolved when the deadline hits keep
+    their previous fetch age rather than blocking. Never raises."""
+    now = time.time()
+    fetched: dict[Path, float | None] = {}
+    if projects:
+        executor = ThreadPoolExecutor(max_workers=min(8, len(projects)))
+        futures = {executor.submit(fetchcheck.fetch, project): project for project in projects}
+        try:
+            for future in as_completed(futures, timeout=deadline):
+                project = futures[future]
+                try:
+                    ok = bool(future.result())
+                except Exception:
+                    ok = False
+                fetched[project] = now if ok else None
+                # Advance the shared TTL window single-threaded here, off the fetch
+                # threads, so concurrent workers never race on the cache file.
+                fetchcheck.note_fetch(project, ok)
+        except _FuturesTimeout:
+            pass  # global deadline reached; unresolved repos fall through below
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+    freshness = {project: gitstate.git_state(project) for project in projects}
+    for project in projects:
+        fetched.setdefault(project, fetchcheck.last_fetch(project))
+    return freshness, fetched
 
 
 def _projection_counts(records: list[tuple[Path, dict]]) -> tuple[int, int]:
@@ -2835,7 +3046,7 @@ def _grid_nav_target(selected: int, count: int, projects: int, cols: int, direct
 
     Layout mirrored from the wide render: items ``[0, projects)`` are a ``cols``-wide
     row-major grid; items ``[projects, count)`` are a single-column tail stacked
-    below it (remote projects, Projection Sync, Fleet Review, Campaign). ``down``/
+    below it (remote projects, Horus Assets Refresh, Fleet Review, Campaign). ``down``/
     ``up`` move a visual row, ``left``/``right`` move a column. Returns the new index,
     the same index for a no-op, or ``None`` for ``left`` with no column to its left
     (the caller then performs Back — preserving left-as-Back on a single list).

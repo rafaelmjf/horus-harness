@@ -1124,7 +1124,7 @@ def test_terminal_tui_projection_sync_reports_drift_and_launches_curator(tmp_pat
 
     ui = terminal_tui.TerminalUI()
     home = "".join(fragment[1] for fragment in ui._body_text())
-    assert "Projection Sync" in home
+    assert "Horus Assets Refresh" in home
     assert "1 stale · Claude/Codex vs installed CLI" in home
 
     ui.move(next(index for index, item in enumerate(ui.items) if item[0] == "projection_sync"))

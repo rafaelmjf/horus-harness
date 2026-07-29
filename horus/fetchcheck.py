@@ -95,6 +95,40 @@ def fetch_and_state(root: Path, *, ttl: float = TTL_SECONDS) -> dict[str, Any] |
     return state
 
 
+def fetch(root: Path, *, timeout: float = FETCH_TIMEOUT) -> bool:
+    """Public read-only fetch for one repo. Returns True on success.
+
+    Exposed for callers that fan out fetches themselves (e.g. the TUI's explicit
+    fleet refresh) and must not go through the shared TTL cache concurrently — the
+    cache file is not written under a lock, so concurrent ``fetch_and_state`` calls
+    could race on it. This just fetches; the caller reads state via
+    :func:`horus.gitstate.git_state` afterwards.
+    """
+    return _fetch(root, timeout=timeout)
+
+
+def last_fetch(root: Path) -> float | None:
+    """Epoch seconds of the last recorded fetch attempt for ``root``, or None.
+
+    Reads the TTL cache written by :func:`fetch_and_state`; used to tag freshness
+    readings with their age without triggering a fetch.
+    """
+    entry = _load_cache().get(str(Path(root).resolve()))
+    at = entry.get("at") if isinstance(entry, dict) else None
+    return at if isinstance(at, (int, float)) else None
+
+
+def note_fetch(root: Path, ok: bool) -> None:
+    """Record a fetch attempt in the TTL cache (single-threaded caller only).
+
+    Lets a caller that fetched via :func:`fetch` still advance the shared window so
+    the next session start does not immediately re-fetch. Never call concurrently.
+    """
+    cache = _load_cache()
+    cache[str(Path(root).resolve())] = {"at": time.time(), "ok": ok}
+    _save_cache(cache)
+
+
 def warning_line(state: dict[str, Any] | None) -> str:
     """The behind-origin warning for a session start, or "" when there is nothing
     to say (fresh, no upstream, not a repo)."""
