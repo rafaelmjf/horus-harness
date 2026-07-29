@@ -439,7 +439,7 @@ def test_a_cockpit_whose_tui_died_is_revived_not_attached_to(monkeypatch):
         if args[:2] == ("pane", "list"):
             body = {"panes": [{"pane_id": "w1:p1", "workspace_id": "w1"}]}
         elif args[:2] == ("workspace", "get"):
-            body = {"workspace": {"workspace_id": "w1", "label": "horus-cockpit"}}
+            body = {"workspace": {"workspace_id": "w1", "label": "Horus"}}
         elif args[:2] == ("pane", "process-info"):
             # A restored pane: the shell is back, the TUI is not.
             body = {"process_info": {"foreground_processes": [
@@ -475,7 +475,7 @@ def test_a_live_cockpit_is_reused_untouched(monkeypatch):
         if args[:2] == ("pane", "list"):
             body = {"panes": [{"pane_id": "w1:p1", "workspace_id": "w1"}]}
         elif args[:2] == ("workspace", "get"):
-            body = {"workspace": {"workspace_id": "w1", "label": "horus-cockpit"}}
+            body = {"workspace": {"workspace_id": "w1", "label": "Horus"}}
         elif args[:2] == ("pane", "process-info"):
             body = {"process_info": {"foreground_processes": [
                 {"argv": ["python", "-m", "horus", "tui"],
@@ -507,11 +507,12 @@ def test_a_live_cockpit_wins_over_a_stale_one(monkeypatch):
             body = {"panes": [{"pane_id": "w1:p1", "workspace_id": "w1"},
                               {"pane_id": "w2:p1", "workspace_id": "w2"}]}
         elif args[:2] == ("workspace", "get"):
-            body = {"workspace": {"workspace_id": args[2], "label": "horus-cockpit"}}
+            body = {"workspace": {"workspace_id": args[2], "label": "Horus"}}
         elif args[:2] == ("pane", "process-info"):
             live = args[3] == "w2:p1"
             body = {"process_info": {"foreground_processes": [
-                {"cmdline": "python -m horus tui" if live else "/bin/bash"},
+                {"name": "python" if live else "bash",
+                 "cmdline": "python -m horus tui" if live else "/bin/bash"},
             ]}}
         return subprocess.CompletedProcess([], 0, json.dumps({"result": body}), "")
 

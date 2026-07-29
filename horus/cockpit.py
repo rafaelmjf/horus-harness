@@ -24,6 +24,10 @@ from horus import hosts
 
 # One cockpit per host, by name. Deliberately not per-project: the TUI is the
 # fleet-level surface, and a second one is confusion rather than capacity.
+#
+# The tmux name keeps the ``horus-`` prefix, which is how Horus-owned tmux sessions are
+# identifiable (and what `_live_tmux_sessions` filters on). herdr's is a space label the
+# owner reads in a sidebar, so it is spelled for a human — see `hosts.herdr`.
 COCKPIT_REF = "horus-cockpit"
 
 
@@ -94,9 +98,7 @@ def _cockpit_is_live(host, ref: str) -> bool:
     if host.id == hosts.HERDR:
         from horus.hosts import herdr
 
-        info = herdr._payload(herdr._run("pane", "process-info", "--pane", ref))
-        running = info.get("process_info", {}).get("foreground_processes", [])
-        return any("horus" in (proc.get("cmdline") or "") for proc in running)
+        return not herdr.pane_is_idle(ref)
     return True
 
 
@@ -132,7 +134,7 @@ def _find_cockpit(host) -> str | None:
             workspace = herdr._payload(
                 herdr._run("workspace", "get", pane.get("workspace_id", "")),
             ).get("workspace", {})
-            if workspace.get("label") == COCKPIT_REF and pane.get("pane_id"):
+            if workspace.get("label") == herdr.COCKPIT_LABEL and pane.get("pane_id"):
                 candidates.append(pane["pane_id"])
         if not candidates:
             return None
@@ -162,7 +164,7 @@ def _create_cockpit(host) -> tuple[str | None, str | None]:
     if host.id == hosts.HERDR:
         from horus.hosts import herdr
 
-        created = herdr._run("workspace", "create", "--label", COCKPIT_REF, "--no-focus")
+        created = herdr._run("workspace", "create", "--label", herdr.COCKPIT_LABEL, "--no-focus")
         pane_id = herdr._payload(created).get("root_pane", {}).get("pane_id")
         if not pane_id:
             return None, f"failed to create the herdr cockpit: {herdr._detail(created)}"

@@ -41,6 +41,20 @@ if TYPE_CHECKING:
 
 ID = "herdr"
 
+# Layout (owner decision, 2026-07-29). herdr's own idiom is agents as tabs inside a
+# space, with the sidebar reporting their state across the session — so porting tmux's
+# session-per-agent 1:1 produced a flat list of spaces that read wrong. Two fixed
+# spaces instead: the cockpit in one, every agent session a tab in the other, labelled
+# with just the project name. Project *grouping* was considered and dropped: this owner
+# rarely runs parallel sessions per project, so a space per project would usually hold
+# exactly one tab.
+COCKPIT_LABEL = "Horus"
+AGENTS_LABEL = "Agents"
+
+# A pane sitting at one of these has nothing of ours running in it. Used instead of
+# matching our own command line, which would break the moment the runner's argv changes.
+_SHELLS = frozenset({"bash", "sh", "zsh", "fish", "dash", "ksh", "tcsh"})
+
 # The server takes a moment to bind its socket after being started.
 _SERVER_READY_TIMEOUT = 10.0
 
@@ -129,6 +143,85 @@ def _bring_into_view(target_ref: str) -> str | None:
     if focused.returncode != 0:
         return f"herdr could not focus the workspace: {_detail(focused)}"
     return None
+
+
+def _workspaces() -> list[dict]:
+    return _payload(_run("workspace", "list")).get("workspaces", [])
+
+
+def _find_workspace(label: str) -> str | None:
+    for workspace in _workspaces():
+        if workspace.get("label") == label and workspace.get("workspace_id"):
+            return workspace["workspace_id"]
+    return None
+
+
+def _tabs(workspace_id: str) -> list[dict]:
+    snapshot = _payload(_run("api", "snapshot")).get("snapshot", {})
+    return [tab for tab in snapshot.get("tabs", []) if tab.get("workspace_id") == workspace_id]
+
+
+def _pane_of_tab(tab_id: str) -> str | None:
+    for pane in _payload(_run("pane", "list")).get("panes", []):
+        if pane.get("tab_id") == tab_id:
+            return pane.get("pane_id")
+    return None
+
+
+def pane_is_idle(target_ref: str) -> bool:
+    """Whether ``target_ref`` is sitting at a bare shell with nothing of ours in it.
+
+    herdr restores workspace/tab *structure* across a server restart but not the
+    processes, so a tab can come back looking populated while holding only a shell.
+    Judging by "is the foreground process a shell" rather than by matching our own
+    command line means this keeps working when the runner's argv changes.
+    """
+    info = _payload(_run("pane", "process-info", "--pane", target_ref))
+    running = info.get("process_info", {}).get("foreground_processes", [])
+    if not running:
+        return True
+    return all((proc.get("name") or "") in _SHELLS for proc in running)
+
+
+def place_session(project: Path) -> tuple[str | None, str | None]:
+    """Find or make the tab this session belongs in. Returns ``(pane_id, error)``.
+
+    Reuses a same-project tab that is idle — a restart leaves those behind, and this
+    owner runs about one session per project, so reuse is what keeps the Agents space
+    from silently growing a tab per launch forever. A same-project tab that is *busy*
+    gets a sibling rather than being trampled.
+    """
+    label = project.name
+    workspace_id = _find_workspace(AGENTS_LABEL)
+    if workspace_id is None:
+        created = _run(
+            "workspace", "create", "--label", AGENTS_LABEL,
+            "--cwd", str(project), "--no-focus",
+        )
+        body = _payload(created)
+        pane_id = body.get("root_pane", {}).get("pane_id")
+        tab_id = body.get("tab", {}).get("tab_id")
+        if not pane_id or not tab_id:
+            return None, f"failed to create the {AGENTS_LABEL} space: {_detail(created)}"
+        # A fresh space already has one tab; name it and use it rather than leaving an
+        # empty "1" tab beside the first session.
+        _run("tab", "rename", tab_id, label)
+        return pane_id, None
+
+    for tab in _tabs(workspace_id):
+        if tab.get("label") != label:
+            continue
+        pane_id = _pane_of_tab(tab.get("tab_id", ""))
+        if pane_id and pane_is_idle(pane_id):
+            return pane_id, None
+
+    created = _run(
+        "tab", "create", "--workspace", workspace_id, "--cwd", str(project), "--label", label,
+    )
+    pane_id = _payload(created).get("root_pane", {}).get("pane_id")
+    if not pane_id:
+        return None, f"failed to create a tab for {label}: {_detail(created)}"
+    return pane_id, None
 
 
 class HerdrHost:
@@ -227,21 +320,14 @@ class HerdrHost:
                 error=f"agent executable not found on PATH: {prepared.argv[0]}",
             )
 
-        label = f"horus-{prepared.session_id[:12]}"
         spec_path = runnerspec.write_spec(prepared, argv=[resolved, *prepared.argv[1:]])
         store = reg or registry.Registry.default()
-        created = _run(
-            "workspace", "create", "--cwd", str(prepared.project), "--label", label, "--no-focus",
-        )
-        workspace = _payload(created).get("workspace", {})
-        pane = _payload(created).get("root_pane", {})
-        pane_id = pane.get("pane_id")
-        if not pane_id:
+        pane_id, placement_error = place_session(prepared.project)
+        if pane_id is None:
             spec_path.unlink(missing_ok=True)
             return launch.LaunchResult(
                 False, prepared.agent, prepared.project, account=account,
-                session_id=prepared.session_id,
-                error=f"failed to create a herdr workspace: {_detail(created)}",
+                session_id=prepared.session_id, error=placement_error,
             )
 
         # The pane id IS the ref: it is what every other verb takes, and unlike the
@@ -293,17 +379,12 @@ class HerdrHost:
                 False, request.agent, request.project, account=request.account,
                 error="herdr is not installed or is unavailable on this platform",
             )
-        label = f"horus-{request.session_id[:12]}"
         store = reg or registry.Registry.default()
-        created = _run(
-            "workspace", "create", "--cwd", str(request.project), "--label", label, "--no-focus",
-        )
-        pane_id = _payload(created).get("root_pane", {}).get("pane_id")
-        if not pane_id:
+        pane_id, placement_error = place_session(request.project)
+        if pane_id is None:
             return launch.LaunchResult(
                 False, request.agent, request.project, account=request.account,
-                session_id=request.session_id,
-                error=f"failed to create a herdr workspace: {_detail(created)}",
+                session_id=request.session_id, error=placement_error,
             )
         store.upsert(registry.SessionRecord(
             session_id=request.session_id, agent=request.agent, project=request.project.as_posix(),
