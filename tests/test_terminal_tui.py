@@ -1178,3 +1178,129 @@ def test_refine_key_is_scoped_to_the_backlog_pane(tmp_path, monkeypatch):
     binding = next(b for b in ui.application.key_bindings.bindings if b.keys == ("o",))
 
     assert not binding.filter()
+
+
+# --- remote-freshness indicator (tui-remote-freshness-indicator) ---
+
+
+def _remote_state(**over):
+    """A git_state dict with a live upstream, overridable per key."""
+    state = {
+        "branch": "main",
+        "commit": {"hash": "abc1234", "rel": "1 hour ago", "subject": "x"},
+        "dirty": False,
+        "upstream": "origin/main",
+        "behind": 0,
+        "ahead": 0,
+        "remote_url": "git@github.com:o/r.git",
+        "detached": False,
+        "own_upstream_gone": False,
+        "default_branch": "main",
+        "default_ahead": 0,
+        "default_behind": 0,
+    }
+    state.update(over)
+    return state
+
+
+def _home_with_project(tmp_path, monkeypatch, state):
+    """A UI parked on the projects (home) screen for one project whose git_state is
+    fixed to ``state`` (any callable receives the project path)."""
+    _isolated_home(tmp_path, monkeypatch)
+    root = tmp_path / "demo"
+    (root / ".horus" / "backlog").mkdir(parents=True)
+    monkeypatch.setattr(terminal_tui.config, "load_projects", lambda: [str(root)])
+    resolve = state if callable(state) else (lambda _root: state)
+    monkeypatch.setattr(terminal_tui.gitstate, "git_state", resolve)
+    inp = create_pipe_input()
+    ui = terminal_tui.TerminalUI(input=inp, output=DummyOutput())
+    return ui, root
+
+
+def test_project_row_shows_behind_when_behind_origin(tmp_path, monkeypatch):
+    ui, _root = _home_with_project(tmp_path, monkeypatch, _remote_state(behind=3))
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "behind 3 · not fetched" in rendered
+
+
+def test_project_row_shows_current_when_up_to_date(tmp_path, monkeypatch):
+    ui, _root = _home_with_project(tmp_path, monkeypatch, _remote_state(behind=0))
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "current · not fetched" in rendered
+
+
+def test_local_only_repo_shows_no_freshness_token(tmp_path, monkeypatch):
+    state = _remote_state(upstream=None, remote_url=None, default_behind=0)
+    ui, _root = _home_with_project(tmp_path, monkeypatch, state)
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "behind" not in rendered
+    assert "current ·" not in rendered
+
+
+def test_branch_without_upstream_falls_back_to_default_divergence(tmp_path, monkeypatch):
+    state = _remote_state(upstream=None, behind=None, default_behind=2)
+    ui, _root = _home_with_project(tmp_path, monkeypatch, state)
+    rendered = "".join(text for _style, text in ui._body_text())
+    assert "behind 2 · not fetched" in rendered
+
+
+def test_g_key_fetches_the_fleet_and_refreshes_freshness(tmp_path, monkeypatch):
+    """The real `g` binding must fetch every project (read-only) then re-read
+    freshness — behind-before, current-after, with a spoken status line."""
+    holder = {"behind": 5}
+    fetched = []
+
+    def fake_fetch(root, *, timeout=10.0):
+        fetched.append(root)
+        holder["behind"] = 0  # simulate the fast-forward the fetch enables
+        return True
+
+    ui, root = _home_with_project(
+        tmp_path, monkeypatch, lambda _root: _remote_state(behind=holder["behind"])
+    )
+    monkeypatch.setattr(terminal_tui.fetchcheck, "fetch", fake_fetch)
+    monkeypatch.setattr(terminal_tui.fetchcheck, "note_fetch", lambda root, ok: None)
+
+    before = "".join(text for _style, text in ui._body_text())
+    assert "behind 5 · not fetched" in before
+
+    binding = next(b for b in ui.application.key_bindings.bindings if b.keys == ("g",))
+    assert binding.filter(), "g must be live on the projects screen"
+    binding.handler(None)
+
+    assert fetched == [root], "every registered project is fetched exactly once"
+    assert "Fetched 1 project(s)" in ui.status and "all current" in ui.status
+    after = "".join(text for _style, text in ui._body_text())
+    assert "current · just now" in after
+
+
+def test_g_key_is_inert_off_the_projects_screen(tmp_path, monkeypatch):
+    """`g` must never fetch from another screen — the network touch is projects-only."""
+    fetched = []
+    ui, _root = _home_with_project(tmp_path, monkeypatch, _remote_state(behind=1))
+    monkeypatch.setattr(
+        terminal_tui.fetchcheck, "fetch", lambda root, **_k: fetched.append(root) or True
+    )
+    ui._show("sessions")
+
+    binding = next(b for b in ui.application.key_bindings.bindings if b.keys == ("g",))
+    binding.handler(None)
+
+    assert fetched == []
+
+
+def test_fmt_age_and_freshness_token_units():
+    import time as _t
+
+    assert terminal_tui._fmt_age(None) == "not fetched"
+    assert terminal_tui._fmt_age(_t.time()) == "just now"
+    assert terminal_tui._fmt_age(_t.time() - 300) == "5m ago"
+    assert terminal_tui._fmt_age(_t.time() - 7200) == "2h ago"
+
+    assert terminal_tui._freshness_token(None, None) is None
+    style, text = terminal_tui._freshness_token(_remote_state(detached=True), None)
+    assert style == "class:warning" and text.startswith("detached ·")
+    style, text = terminal_tui._freshness_token(_remote_state(behind=4), None)
+    assert style == "class:warning" and text.startswith("behind 4 ·")
+    style, text = terminal_tui._freshness_token(_remote_state(behind=0), None)
+    assert style == "class:ok" and text.startswith("current ·")
