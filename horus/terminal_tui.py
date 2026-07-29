@@ -2604,12 +2604,12 @@ def run() -> int:
             elif new_window:
                 status = f"Session {launched.session_id[:8]} opened in a new window."
             else:
-                status = f"Session {launched.session_id[:8]} returned to Horus."
+                status = terminal_sessions.launch_outcome_message(launched)
         elif isinstance(result, _EditCard):
             status = _edit_card(result.project, result.card, review=result.review)
         elif isinstance(result, _Attach):
             error = terminal_sessions.attach_session(result.session_id)
-            status = error or f"Detached from {result.session_id[:8]}."
+            status = error or terminal_sessions.attach_outcome_message(result.session_id)
         elif isinstance(result, _Stop):
             error = terminal_sessions.stop_session(result.session_id)
             status = error or f"Closed {result.session_id[:8]}."

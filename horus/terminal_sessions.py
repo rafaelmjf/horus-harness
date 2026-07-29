@@ -40,13 +40,37 @@ def tmux_available() -> bool:
     return os.name != "nt" and shutil.which("tmux") is not None
 
 
+def _inside_tmux() -> bool:
+    """Whether Horus itself is running in a tmux pane.
+
+    When it is, Horus and the sessions it creates share ONE tmux server (the plain
+    ``tmux`` CLI resolves its socket from ``$TMUX``), so a client can be *moved*
+    between them with ``switch-client`` instead of nesting a second client inside
+    the pane. That is what makes ``horus tui`` usable from inside tmux.
+    """
+    return bool(os.environ.get("TMUX"))
+
+
+def attach_returns_immediately() -> bool:
+    """Whether ``attach_session`` hands control back right away.
+
+    Inside tmux it switches the current client and returns at once; outside tmux it
+    blocks until the owner detaches. Callers use this only to describe what happened
+    — the attach itself needs no branch.
+    """
+    return _inside_tmux()
+
+
 def default_target() -> str:
-    """Prefer a persistent host whenever this runtime can provide one."""
+    """Prefer a persistent host whenever this runtime can provide one.
+
+    Being inside tmux is deliberately NOT a reason to fall back to ``current``: the
+    session is created on the same server Horus is already talking to, and attaching
+    switches this client rather than nesting one.
+    """
     override = os.environ.get("HORUS_TERMINAL_TARGET", "").strip().lower()
     if override in {CURRENT, TMUX}:
         return override
-    if os.environ.get("TMUX"):
-        return CURRENT
     if tmux_available():
         return TMUX
     return CURRENT
@@ -74,6 +98,33 @@ def is_attachable(record: registry.SessionRecord) -> bool:
 
 def access_label(record: registry.SessionRecord) -> str:
     return "attachable" if is_attachable(record) else "original terminal only"
+
+
+def attach_outcome_message(session_id: str) -> str:
+    """What a successful ``attach_session`` actually did, in the owner's words.
+
+    The two hosts differ in kind, not wording: inside tmux control came back at once
+    with the session still live, so "Detached from …" would be a lie. Phrased to stay
+    true whenever it is read — including after the owner has already switched back.
+    """
+    short = session_id[:8]
+    if attach_returns_immediately():
+        return f"Switched to {short}. Ctrl-b L toggles between it and Horus."
+    return f"Detached from {short}."
+
+
+def launch_outcome_message(result: launch.LaunchResult) -> str:
+    """What a successful attended launch left behind.
+
+    Keyed on the host that actually ran — ``target_ref`` is set only by the tmux
+    host — never on the ambient ``$TMUX`` alone: an owner inside tmux who forced
+    ``HORUS_TERMINAL_TARGET=current`` did NOT get a switchable tmux session, and
+    telling them otherwise would send them chasing a session that isn't there.
+    """
+    short = (result.session_id or "")[:8]
+    if result.target_ref and attach_returns_immediately():
+        return f"Session {short} started in tmux. Ctrl-b L toggles between it and Horus."
+    return f"Session {short} returned to Horus."
 
 
 def run_attached(
@@ -158,12 +209,6 @@ def launch_tmux(
             False, agent, root, account=account,
             error="tmux is not installed or is unavailable on this platform",
         )
-    if attach and os.environ.get("TMUX"):
-        return launch.LaunchResult(
-            False, agent, root, account=account,
-            error="already inside tmux; use --target current to avoid a nested tmux client",
-        )
-
     prepared, error = launch.prepare_interactive(
         agent=agent,
         project_dir=root,
@@ -386,11 +431,16 @@ def launch_window(
 
 
 def attach_session(session_id: str, *, reg: registry.Registry | None = None) -> str | None:
-    """Attach to a tracked tmux session. Return an error string, or ``None``."""
+    """Put this terminal on a tracked tmux session. Return an error string, or ``None``.
+
+    Outside tmux this attaches a client and blocks until the owner detaches. Inside
+    tmux — Horus running in its own pane — it instead *switches* the current client to
+    the session and returns immediately, because both live on the same tmux server.
+    Nesting a client would double every prefix key; switching does not. Coming back is
+    ``Ctrl-b L`` (or choose-tree), and the Horus pane is untouched meanwhile.
+    """
     if not tmux_available():
         return "tmux is not installed or is unavailable on this platform"
-    if os.environ.get("TMUX"):
-        return "already inside tmux; detach first, then attach the Horus session"
     record, error = resolve_session(session_id, reg=reg)
     if record is None:
         return error
@@ -398,6 +448,18 @@ def attach_session(session_id: str, *, reg: registry.Registry | None = None) -> 
         return f"session {record.session_id[:8]} is not hosted by tmux"
     if record.status != "running":
         return f"session {record.session_id[:8]} is {record.status}, not running"
+    if _inside_tmux():
+        # No -c: run from inside a pane, tmux resolves the current client from $TMUX.
+        # Keep stderr — "no current client" (a detached Horus pane) is the one message
+        # that explains a failure here, and discarding it would leave no explanation.
+        switched = subprocess.run(  # noqa: S603,S607 - tmux name is Horus-generated
+            ["tmux", "switch-client", "-t", record.target_ref],
+            capture_output=True, text=True, check=False,
+        )
+        if switched.returncode != 0:
+            detail = (switched.stderr or switched.stdout).strip() or f"exit code {switched.returncode}"
+            return f"tmux switch-client failed: {detail}"
+        return None
     attached = subprocess.run(  # noqa: S603,S607 - tmux name is Horus-generated
         ["tmux", "attach-session", "-t", record.target_ref],
         check=False,

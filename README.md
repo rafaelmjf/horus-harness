@@ -109,8 +109,10 @@ the agent CLI itself.
 Terminal launches from both the web app and terminal app
 automatically use a unique managed tmux session on Linux, macOS, and WSL whenever tmux
 is installed, so a browser terminal is now a viewer of the same detachable session the
-TUI can attach. Native Windows, hosts without tmux, and shells already inside tmux fall
-back to the previous direct terminal host. Set
+TUI can attach. Running Horus *itself* inside tmux is supported and keeps that
+persistence: the session is created on the same tmux server, and attaching switches
+this client onto it (`Ctrl-b L` toggles back) rather than nesting a second client.
+Native Windows and hosts without tmux fall back to the direct terminal host. Set
 `HORUS_TERMINAL_TARGET=current` to force that fallback or
 `HORUS_TERMINAL_TARGET=tmux` to explicitly require persistence. The session list labels
 each live process as `attachable` or `original terminal only`. Scripted `horus open`
