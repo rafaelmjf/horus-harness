@@ -83,11 +83,88 @@ inherits all of that unchanged.
 
 ## Open decisions
 
-- Whether a `no` on question 1 kills the herdr host entirely or just narrows it to
-  attended desktop launches. [session] — depends on what the probe finds.
+- ~~Whether a `no` on question 1 kills the herdr host entirely~~ — **settled 2026-07-29:
+  Q1 is yes.** A herdr host is viable for every surface, including the dashboard and
+  scheduled workers, provided Horus supervises `herdr server` itself.
 
 ## Source
 
 Owner session, 2026-07-29. Blocks `session-host-protocol`. Sibling:
 `session-agent-state-awareness` (the feature herdr would supply for free, and which is
 worth building on tmux regardless).
+
+## Reviews
+
+- **2026-07-29 — PROBE RUN, all four questions answered. Verdict: a herdr host is
+  viable on every surface; the one hard limit is reaping.** herdr **v0.7.5**, prebuilt
+  `herdr-linux-x86_64` release binary (21 MB, static-pie — no install script, nothing
+  written under the real `$HOME`; verified `~/.config/herdr` and `~/.local/state/herdr`
+  still absent afterwards, and the real tmux server kept all its sessions). Probe ran
+  with a private `XDG_CONFIG_HOME`/`HOME` and was fully torn down (`herdr server stop`,
+  no leftover processes).
+
+  **Q1 — headless creation: YES, with one obligation.** `herdr server` runs detached with
+  no TTY and no client. Against it:
+  `herdr workspace create --cwd <dir> --label horus-<id> --env KEY=VAL` returns JSON with
+  `workspace_id`/`tab_id`/`pane_id` (`w1:p1`) and honours `--cwd`. **But the CLI does NOT
+  autostart the server** — with none running, `workspace create` fails
+  `Os { code: 2, NotFound }`. So a herdr host must start and supervise `herdr server`
+  itself (a `horus`-managed unit or a start-if-absent preflight), which tmux gives for
+  free. Panes survived both PTY clients being killed, confirming the server/client split.
+
+  **Q2 — kill: YES. Liveness: PARTIAL, and it fails the reaping test.**
+  `herdr pane close <pane_id>` works and **kills the running process** (probed: pid alive
+  before → dead after, pane gone from `pane list`).
+  `herdr pane process-info --pane <id>` is *better* than tmux for confirming a runner:
+  it returns `foreground_processes[].{pid, argv, cmdline, cwd}` plus `shell_pid`.
+  **But there is no attached flag and no activity clock anywhere** — not in
+  `api snapshot` (only `agents`/`panes`/`tabs`/`workspaces`/`focused_*`), and confirmed
+  against the full bundled schema (`herdr api schema --json`, 248 KB: no `attached`,
+  no `activity`, no `idle_since`/timestamp field on a pane). Horus's reaping invariant
+  needs four conditions; herdr can answer 1–2 (Horus's own registry + that pid) but **not
+  3 (not attached) or 4 (idle past a grace window)**. So exactly as this card predicted:
+  **a herdr host declares `liveness=False` and its panes are never reaped.** Leaking an
+  idle pane is cheap; killing a live agent is not.
+
+  **Q3 — viewer under a bare PTY: YES.** Both `herdr session attach <name>` and a bare
+  `herdr` client, spawned via `pty.openpty()` + `Popen` with `TERM` set, stayed alive and
+  emitted alt-screen + mouse-tracking sequences (`\x1b[?1049h`, `\x1b[?1006h`) — streamable
+  to xterm.js exactly like the tmux viewer. **Shape caveat:** it attaches the whole
+  *session UI* (sidebar + tabs + panes), not one pane. With tmux, Horus creates one session
+  per agent so `attach -t <ref>` frames exactly one agent; herdr's unit is a session
+  containing many panes, so a browser tab would show herdr's entire interface unless
+  `herdr agent attach <target>` narrows it (untested — needs a detected agent pane).
+
+  **Q4 — state: the enum is real and richer than expected, but it is a maintained
+  screen-scrape.** `AgentStatus` = **`idle` · `working` · `blocked` · `done` · `unknown`**
+  (from the schema), and `herdr agent wait <target> --until <status> --timeout <ms>` waits
+  on it — directly useful for supervising a worker. Detection is a **versioned per-agent
+  TOML manifest fetched from the network** (`herdr server agent-manifests` listed 20 agents;
+  claude `2026.07.13.1`, codex `2026.07.18.1`, and it auto-fetched on first run). Reading
+  the shipped `claude.toml`: prioritised region-scoped rules — `working` from a braille
+  spinner in the OSC title, `blocked` from `after_last_horizontal_rule` containing
+  "enter to select" + "esc to cancel" plus a navigation hint, `idle` from `^\s*❯` in
+  `prompt_box_body`. Strict, as advertised — and **coupled to Claude's exact UI wording,
+  which is why it needs a remotely-updated manifest.**
+
+  **What this means for the two dependent cards.**
+  - `session-host-protocol` is **unblocked**. Capabilities for the herdr host:
+    `persistent=True`, `attach=True`, `viewer_argv=True`, `state=True`,
+    **`liveness=False`**, plus a new obligation the tmux host doesn't have —
+    *ensure the server is running*. Two protocol shapes need adjusting from what that
+    card assumed: (a) `pane run` **types the command into the pane's shell** rather than
+    exec'ing an argv (probed: `sh -c 'echo X; sleep 300'` lost its quoting and ran as two
+    commands), so the `pane_runner` is a child of a shell, not the pane's root process,
+    and **there is no exit-code observation** the way tmux's `new-session <cmd>` + `wait`
+    gives — the runner must report its own outcome (it already does, via the registry);
+    (b) a herdr **socket path is derived from its config dir**, and a long path exceeds
+    `sun_path` (hit immediately: the scratchpad path failed with *"local socket name
+    length exceeds capacity of sun_path"*). Horus gives every account an isolated config
+    dir, so a herdr host must keep those paths short — a real constraint, not a detail.
+  - `session-agent-state-awareness`: the probe **changes the recommendation**. herdr's own
+    approach shows the true cost of mechanism (1) — a screen-scraper is not a one-off, it
+    is a versioned manifest per agent, remotely updated, because it tracks another
+    product's UI strings. Horus should not take on that treadmill. Prefer **(2) agent
+    lifecycle hooks** (`native_hooks.py` already exists) as the authoritative source, and
+    **(3) host-supplied state** where the host already pays that cost. Note `herdr pane
+    report-agent` accepts *pushed* state, so Claude hooks could drive herdr's sidebar too.
