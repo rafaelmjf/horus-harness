@@ -3,7 +3,7 @@ status: open
 priority: high
 readiness: ready
 autonomy: attended
-readiness_reason: "A second live false trigger exposed two exact instruction gaps. The owner set the categorical boundary, the negative and positive probes are concrete, and this behavioral contract needs owner review before merge."
+readiness_reason: "Two live false-trigger variants exposed both an authorization gap and a substrate-routing gap. The owner set the categorical boundaries, the negative and positive probes are concrete, and this behavioral contract needs owner review before merge."
 created: 2026-07-29
 created_by: owner
 vision_facet: "Delegation calibration"
@@ -11,10 +11,10 @@ tier: small
 type: bug
 parallel: safe
 phase: converge
-surface: "horus/skills.py (horus-consolidate + horus-execution), tests/test_skills.py, projected Claude/Codex skills; related artifact-refresh lifecycle"
+surface: "horus/skills.py (execution-decision, horus-consolidate, horus-execution), tests/test_skills.py, projected Claude/Codex skills; native Codex collaboration boundary; related artifact-refresh lifecycle"
 ---
 
-# execution-requires-explicit-owner-delegation — task breadth must never activate supervision
+# execution-requires-explicit-owner-delegation — authorization and substrate must both be explicit
 
 ## Why — live recurrence, 2026-07-29
 
@@ -50,6 +50,41 @@ Owner contract:
 Large, multi-surface, multi-phase, or long-running work remains direct by default.
 Those properties may affect an inline plan, but they do not grant authority to
 create a supervisor/worker workflow.
+
+## Second variant — native Codex subagents were routed into Horus workers
+
+Later in the same `fabric-build` campaign, after the direct implementation was
+green, the owner asked whether Codex should run the E2E itself or whether the
+project could already test with lower models, similar to the earlier Claude
+Haiku/Sonnet drill.
+
+Codex loaded `execution-decision`, read `horus capabilities --models`, checked
+separate Claude account capacity, and proposed a `horus run` envelope using
+Haiku on `claude-work`. That was internally consistent with the skill text, but
+it answered a different question. The owner meant **Codex's native
+`spawn_agent` capability inside the current supervising session**, without
+necessarily switching provider, CLI session, or account.
+
+The current vocabulary makes that mistake easy:
+
+- `execution-decision` describes one “subagents substrate” containing both
+  native subagents and `horus run` workers;
+- its only delegated mode is `subagent-plan`;
+- the emitted contract then always requires an external agent/model/account/
+  usage envelope and routes through `horus-execution` / `execution.md`.
+
+Those are different execution substrates with different costs and semantics:
+
+| Substrate | Session/account | Coordination |
+|---|---|---|
+| Native Codex subagent | child of the current Codex supervisor; normally the same account/runtime | Codex collaboration tools; bounded task and supervisor synthesis |
+| Horus worker | tracked external agent-CLI session; may select another provider/model/account/worktree | `horus run`, usage/account envelope, receipts, and optionally `horus-execution` |
+
+An explicit request to “use a subagent” authorizes delegation, but **does not
+authorize changing substrate, provider, account, or session topology**. When the
+owner names Codex's own spawning capability or same-session agents, Horus worker
+routing is out of scope. When “lower model” is ambiguous, ask which substrate
+they mean before reading account usage or proposing a dispatch envelope.
 
 ## Why the previous fix did not hold
 
@@ -93,6 +128,17 @@ records the stale-projection dependency as evidence that the refresh card matter
   not a task-size classifier.
 - Keep native inline planning artifact-free: no `.horus/execution.md` for
   ordinary sequencing, however large the task.
+- Treat native Codex subagents and Horus external workers as separate modes.
+  Native subagents use the current session's collaboration substrate and do not
+  imply `horus run`, account switching, `execution.md`, or Horus usage routing.
+- Delegation authorization is substrate-bounded. “Spawn a native Codex
+  subagent” is not permission to launch Claude/another account; “dispatch this
+  through Horus on another account” is the explicit external-worker case.
+- If the owner asks about “lower models” or “subagents” without identifying the
+  substrate and the answer would change provider/account/session topology, ask
+  one clarification question before routing.
+- Cost grounding still applies to native fan-out, but it must use the native
+  collaboration contract rather than manufacturing a Horus worker envelope.
 
 ## Acceptance
 
@@ -108,9 +154,20 @@ records the stale-projection dependency as evidence that the refresh card matter
 - Positive resume probe: an existing owner-authorized active execution plan or
   worker handoff resumes without requiring the owner to restate the delegation
   on every turn.
+- Native-subagent probe: “use Codex's own agent spawning in this supervising
+  session” may recommend or launch a native Codex child, but does not load
+  `horus-execution`, create `execution.md`, inspect another account's usage, or
+  propose `horus run`.
+- External-worker probe: “run this through Horus on the Claude work account”
+  uses the calibrated model/account/usage consent envelope and the tracked
+  worker flow.
+- Ambiguous-substrate probe: “can lower models test this?” asks whether the owner
+  means native Codex children or a Horus-managed external worker before changing
+  provider/account/session topology.
 - Canonical `horus-consolidate` and `horus-execution` text plus both Claude/Codex
-  projections carry the categorical boundary; edited bundled skill versions are
-  bumped.
+  projections carry the categorical authorization boundary; the canonical
+  `execution-decision` text and its projections carry the substrate split.
+  Edited bundled skill versions are bumped.
 - Tests lock the negative and positive wording, and the full suite is green on
   the exact SHA.
 
