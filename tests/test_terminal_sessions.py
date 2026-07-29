@@ -87,11 +87,42 @@ def test_default_target_prefers_tmux_when_available(monkeypatch):
     assert terminal_sessions.default_target() == "tmux"
 
 
-def test_default_target_falls_back_only_without_tmux(monkeypatch):
-    monkeypatch.delenv("TMUX", raising=False)
+def _only_available(monkeypatch, *host_ids: str) -> None:
+    """Pin availability for EVERY registered host.
+
+    A selection test that patches one host is really asserting about the machine it
+    runs on: installing a third host silently changes the answer, and CI (where that
+    host is absent) never notices. Pinning the whole set is what makes the assertion
+    about the code. Also clears the enclosing-host signals, since being inside a host
+    outranks AUTO_ORDER.
+    """
+    from horus import hosts
+    from horus.hosts import current as hosts_current
+    from horus.hosts import herdr as hosts_herdr
+
+    for env in ("TMUX", "HERDR_ENV", "HERDR_PANE_ID"):
+        monkeypatch.delenv(env, raising=False)
+    for module, host_id in ((hosts_tmux, "tmux"), (hosts_herdr, "herdr")):
+        monkeypatch.setattr(module, "available", lambda _id=host_id: _id in host_ids)
+    # `current` is the floor and is always available by construction; assert that
+    # rather than patching it, so a change there fails loudly here.
+    assert hosts_current.CurrentHost().available()
+    assert set(hosts.ids()) == {"tmux", "herdr", "current"}, (
+        "a new host was registered — teach this helper about it, or selection tests "
+        "start depending on whether it happens to be installed"
+    )
+
+
+def test_default_target_falls_back_only_without_a_persistent_host(monkeypatch):
     monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
-    monkeypatch.setattr(hosts_tmux, "available", lambda: False)
+    _only_available(monkeypatch)
     assert terminal_sessions.default_target() == "current"
+
+
+def test_default_target_prefers_herdr_when_it_is_the_only_persistent_host(monkeypatch):
+    monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
+    _only_available(monkeypatch, "herdr")
+    assert terminal_sessions.default_target() == "herdr"
 
 
 def test_default_target_keeps_a_persistent_host_inside_tmux(monkeypatch):
@@ -2331,11 +2362,11 @@ def test_selection_prefers_the_override_then_config_then_availability(monkeypatc
     from horus import config, hosts
 
     monkeypatch.delenv("HORUS_TERMINAL_TARGET", raising=False)
-    monkeypatch.setattr(hosts_tmux, "available", lambda: True)
+    _only_available(monkeypatch, "tmux")
     monkeypatch.setattr(config, "load_terminal_host", lambda: "auto")
     assert hosts.resolve().id == "tmux"
 
-    monkeypatch.setattr(hosts_tmux, "available", lambda: False)
+    _only_available(monkeypatch)  # nothing persistent installed
     assert hosts.resolve().id == "current"  # auto falls through to the floor
 
     monkeypatch.setattr(config, "load_terminal_host", lambda: "tmux")
