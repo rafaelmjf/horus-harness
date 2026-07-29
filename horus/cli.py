@@ -27,6 +27,7 @@ from horus import (
     batch,
     brainstorm,
     capabilities,
+    cockpit,
     claude_usage,
     closure,
     companion,
@@ -2354,6 +2355,24 @@ def cmd_open(args: argparse.Namespace) -> int:
 
 
 def cmd_terminal_app(args: argparse.Namespace) -> int:
+    """`horus tui [host]` — the cockpit, optionally hosted inside a session host.
+
+    Naming a host opens (or re-attaches) one cockpit inside it; `current`, or no
+    argument at all, runs the TUI right here. `cockpit.open_in` returns an empty
+    message when the cockpit is meant to run in this process — the in-place cases.
+    """
+    host_id = getattr(args, "host", None)
+    if host_id:
+        code, message = cockpit.open_in(host_id)
+        if code != 0:
+            print(f"Could not open the cockpit: {message}")
+            return code
+        if message != "":
+            print(message)
+            return 0
+        if host_id != terminal_sessions.CURRENT and not hosts.get(host_id).switches_in_place():
+            # The cockpit ran in its own pane and we have just detached from it.
+            return 0
     return terminal_app.run()
 
 
@@ -5015,6 +5034,16 @@ def build_parser() -> argparse.ArgumentParser:
         p_app.set_defaults(func=cmd_app)
 
     p_tui = sub.add_parser("tui", help="run the terminal-native Horus project/session application")
+    p_tui.add_argument(
+        "host", nargs="?", default=None,
+        # Choices come from the host registry, so a new host is offered here the
+        # moment it is registered.
+        choices=terminal_sessions.host_choices(),
+        help="open the cockpit inside this session host, so launches become sibling "
+             "sessions you switch between (e.g. `horus tui tmux`). One cockpit per "
+             "host: re-running re-attaches the existing one. Omit, or pass `current`, "
+             "to run the TUI in this terminal as before",
+    )
     p_tui.set_defaults(func=cmd_terminal_app)
 
     p_forget = sub.add_parser("forget", help="remove a project from the dashboard registry")

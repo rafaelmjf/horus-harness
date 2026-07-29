@@ -50,6 +50,7 @@ from horus import (
     frontmatter,
     github_catalog,
     gitstate,
+    hosts,
     launch,
     machine_requirements,
     notify,
@@ -146,6 +147,16 @@ _POSTURE_HELP: dict[str, str] = {
 _WINDOW_LABELS: dict[str, str] = {
     "takeover": "Take over this terminal — Ctrl-b d back to the TUI (default; phone-friendly)",
     "new-window": "New window on desktop — opens beside the TUI; takeover on mobile/SSH",
+}
+
+# Where new sessions are hosted (`config.load_terminal_host`). `auto` is the
+# recommendation, not a fixed answer: it prefers the host Horus is running inside,
+# then the most capable available one.
+_HOST_LABELS: dict[str, str] = {
+    "auto": "Automatic — the host Horus runs inside, else the best available (recommended)",
+    "tmux": "Managed tmux — attachable from the phone, and reapable when abandoned",
+    "herdr": "herdr — reports agent working/idle/blocked; panes are never auto-reaped",
+    "current": "This terminal only — no persistence, no attach (Windows/no-multiplexer)",
 }
 
 # The priority board needs real horizontal room for legible columns; below this
@@ -804,6 +815,19 @@ class TerminalUI:
             self._refresh_items()
             self.status = f"Default launch posture set to {posture}."
             self.application.invalidate()
+        elif self.screen == "settings" and kind == "host":
+            host = str(value)
+            config.set_terminal_host(host)
+            self._refresh_items()
+            self.selected = (
+                len(config.LAUNCH_POSTURE_CHOICES)
+                + len(config.LAUNCH_WINDOW_CHOICES)
+                + _host_choices().index(host)
+            )
+            resolved = hosts.resolve().id
+            detail = f"{host} (resolves to {resolved})" if host == "auto" else host
+            self.status = f"New sessions are hosted by: {detail}."
+            self.application.invalidate()
         elif self.screen == "settings" and kind == "window":
             window = str(value)
             config.set_launch_default_window(window)
@@ -1156,6 +1180,7 @@ class TerminalUI:
             posture = config.load_launch_defaults()["posture"]
             self.items = [("posture", choice) for choice in config.LAUNCH_POSTURE_CHOICES]
             self.items.extend(("window", choice) for choice in config.LAUNCH_WINDOW_CHOICES)
+            self.items.extend(("host", choice) for choice in _host_choices())
             self.selected = config.LAUNCH_POSTURE_CHOICES.index(posture)
         elif self.screen == "fleet_review":
             self.items = []
@@ -1654,6 +1679,20 @@ class TerminalUI:
                 active = "current" if window == current else "      "
                 lines.append((style, f"\n {marker} [{active}] {window}\n"))
                 lines.append(("class:muted", f"     {_WINDOW_LABELS.get(window, '')}\n"))
+            elif kind == "host":
+                if index == len(config.LAUNCH_POSTURE_CHOICES) + len(config.LAUNCH_WINDOW_CHOICES):
+                    lines.append(("class:section", "\n  Session host\n"))
+                host_id = str(value)
+                current = config.load_terminal_host()
+                active = "current" if host_id == current else "      "
+                unavailable = (
+                    host_id != "auto"
+                    and (host := hosts.get(host_id)) is not None
+                    and not host.available()
+                )
+                suffix = "  (not installed here)" if unavailable else ""
+                lines.append((style, f"\n {marker} [{active}] {host_id}{suffix}\n"))
+                lines.append(("class:muted", f"     {_HOST_LABELS.get(host_id, '')}\n"))
         return lines
 
     def _wide_home_text(self, width: int) -> StyleAndTextTuples:
@@ -3144,6 +3183,13 @@ def _capability_freshness(
             pass
     commit_text = "commits since unknown" if commits is None else f"{commits} commits since"
     return f"generated {age} · {commit_text}"
+
+
+def _host_choices() -> list[str]:
+    """`auto` plus every registered host. Unavailable hosts stay listed and are
+    marked instead of hidden: an owner setting up a machine needs to see that herdr
+    is an option they have not installed yet, not wonder why it vanished."""
+    return ["auto", *hosts.ids()]
 
 
 def _invert_mobile_scroll() -> bool:

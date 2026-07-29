@@ -59,6 +59,20 @@ def get(host_id: str) -> SessionHost | None:
     return _hosts().get(host_id)
 
 
+def enclosing() -> SessionHost | None:
+    """The host Horus is itself running inside, if any.
+
+    Both persistent hosts advertise themselves in their panes' environment
+    (``$TMUX``, ``$HERDR_ENV``), which is how attaching knows to switch a client
+    rather than nest one — and it is equally the answer to "where should this
+    cockpit's agents go".
+    """
+    for host in _hosts().values():
+        if host.available() and host.switches_in_place():
+            return host
+    return None
+
+
 def resolve() -> SessionHost:
     """The host this process should use. Never raises: `current` is always valid."""
     override = os.environ.get("HORUS_TERMINAL_TARGET", "").strip().lower()
@@ -66,6 +80,12 @@ def resolve() -> SessionHost:
         return host
     preferred = config.load_terminal_host()
     if preferred != "auto" and (host := _hosts().get(preferred)) is not None and host.available():
+        return host
+    # Launch agents where Horus is already running. A cockpit in a herdr pane whose
+    # agents land in tmux is incoherent — switching back cannot work, because the
+    # two live on different servers. Ranked below the override and an explicit
+    # config choice, both of which are the owner saying otherwise on purpose.
+    if (host := enclosing()) is not None:
         return host
     for host_id in AUTO_ORDER:
         host = _hosts()[host_id]
@@ -85,5 +105,5 @@ def for_record(record) -> SessionHost | None:
 
 __all__ = [
     "AUTO_ORDER", "CURRENT", "HERDR", "TMUX", "Capabilities", "SessionHost",
-    "all_hosts", "for_record", "get", "ids", "resolve",
+    "all_hosts", "enclosing", "for_record", "get", "ids", "resolve",
 ]
