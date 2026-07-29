@@ -2347,12 +2347,15 @@ def test_selection_prefers_the_override_then_config_then_availability(monkeypatc
 
 def test_an_unknown_launch_target_degrades_instead_of_raising():
     """A record written by a newer Horus (or a host this install lacks) must be
-    labelled honestly rather than offered an attach that cannot work."""
+    labelled honestly rather than offered an attach that cannot work.
+
+    The id here is deliberately fictional: naming a host that later ships (as
+    `herdr` did) would silently stop testing the unknown-host path."""
     from horus import hosts
 
     record = SessionRecord(
         session_id="12345678-1234-1234-1234-123456789abc", agent="fake",
-        project="/tmp/x", launch_target="herdr", target_ref="w1:p1",
+        project="/tmp/x", launch_target="not-a-host-this-install-knows", target_ref="x1:p1",
     )
     assert hosts.for_record(record) is None
     assert terminal_sessions.is_attachable(record) is False

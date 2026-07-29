@@ -19,15 +19,19 @@ import os
 from horus import config
 from horus.hosts.base import Capabilities, SessionHost
 from horus.hosts.current import CurrentHost
+from horus.hosts.herdr import HerdrHost
 from horus.hosts.tmux import TmuxHost
 
 CURRENT = "current"
+HERDR = "herdr"
 TMUX = "tmux"
 
-# Preference order for `auto`: the most capable host that works here wins. The
-# `current` host is last because it is the floor — it always works and promises
-# nothing.
-AUTO_ORDER: tuple[str, ...] = (TMUX, CURRENT)
+# Preference order for `auto`. tmux stays ahead of herdr deliberately: it is the
+# proven host, it can be reaped, and it backs the phone path — so herdr is opt-in
+# via `[terminal] host` or HORUS_TERMINAL_TARGET rather than something an install
+# silently switches to because the binary happens to be on PATH. `current` is last
+# because it is the floor: it always works and promises nothing.
+AUTO_ORDER: tuple[str, ...] = (TMUX, HERDR, CURRENT)
 
 _HOSTS: dict[str, SessionHost] = {}
 
@@ -36,7 +40,7 @@ def _hosts() -> dict[str, SessionHost]:
     # Built once, lazily: constructing a host must not run at import time, since
     # importing horus.hosts happens long before anyone launches anything.
     if not _HOSTS:
-        for host in (TmuxHost(), CurrentHost()):
+        for host in (TmuxHost(), HerdrHost(), CurrentHost()):
             _HOSTS[host.id] = host
     return _HOSTS
 
@@ -80,6 +84,6 @@ def for_record(record) -> SessionHost | None:
 
 
 __all__ = [
-    "AUTO_ORDER", "CURRENT", "TMUX", "Capabilities", "SessionHost",
+    "AUTO_ORDER", "CURRENT", "HERDR", "TMUX", "Capabilities", "SessionHost",
     "all_hosts", "for_record", "get", "ids", "resolve",
 ]

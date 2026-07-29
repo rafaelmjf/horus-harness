@@ -112,7 +112,13 @@ is installed, so a browser terminal is now a viewer of the same detachable sessi
 TUI can attach. Running Horus *itself* inside tmux is supported and keeps that
 persistence: the session is created on the same tmux server, and attaching switches
 this client onto it (`Ctrl-b L` toggles back) rather than nesting a second client.
-Native Windows and hosts without tmux fall back to the direct terminal host. Set
+Native Windows and hosts without tmux fall back to the direct terminal host.
+[herdr](https://herdr.dev) is supported as a third host and is **opt-in**: set
+`[terminal] host = "herdr"` in `~/.horus/config.toml` (or `HORUS_TERMINAL_TARGET=herdr`),
+because tmux stays the default — it can be reaped and it backs the phone path. A herdr
+host starts its own server (herdr's CLI never does), reports per-agent
+working/idle/blocked state that tmux cannot, and declares that its panes are never
+reaped, since herdr exposes no attached flag or idle clock. Set
 `HORUS_TERMINAL_TARGET=current` to force that fallback or
 `HORUS_TERMINAL_TARGET=tmux` to explicitly require persistence. The session list labels
 each live process as `attachable` or `original terminal only`. Scripted `horus open`
