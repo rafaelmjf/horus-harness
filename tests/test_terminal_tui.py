@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -1287,6 +1288,108 @@ def test_g_key_is_inert_off_the_projects_screen(tmp_path, monkeypatch):
     binding.handler(None)
 
     assert fetched == []
+
+
+# --- inbound Sync action (cockpit-sync-action) ---
+
+
+def _select_project_row(ui):
+    ui.selected = next(i for i, (kind, _v) in enumerate(ui.items) if kind == "project")
+
+
+def _drive(ui, key):
+    binding = next(b for b in ui.application.key_bindings.bindings if b.keys == (key,))
+    binding.handler(None)
+    return binding
+
+
+def test_y_fast_forwards_the_selected_project(tmp_path, monkeypatch):
+    holder = {"behind": 3}
+    ff_calls = []
+
+    def fake_ff(root, upstream, *, timeout=30.0):
+        ff_calls.append((root, upstream))
+        holder["behind"] = 0  # the fast-forward lands
+        return True, "Fast-forwarded to origin/main"
+
+    ui, root = _home_with_project(
+        tmp_path, monkeypatch, lambda _root: _remote_state(behind=holder["behind"])
+    )
+    monkeypatch.setattr(terminal_tui.sync, "fast_forward", fake_ff)
+    _select_project_row(ui)
+
+    _drive(ui, "y")
+
+    assert ff_calls == [(root, "origin/main")], "fast_forward runs once, on the real upstream"
+    assert "synced →" in ui.status
+    assert "current · " in "".join(text for _s, text in ui._body_text())
+
+
+def test_y_refuses_a_dirty_project_without_mutating(tmp_path, monkeypatch):
+    ff_calls = []
+    ui, _root = _home_with_project(
+        tmp_path, monkeypatch, _remote_state(behind=3, dirty=True)
+    )
+    monkeypatch.setattr(
+        terminal_tui.sync, "fast_forward", lambda *a, **k: ff_calls.append(a) or (True, "")
+    )
+    _select_project_row(ui)
+
+    _drive(ui, "y")
+
+    assert ff_calls == [], "a dirty tree is never fast-forwarded"
+    assert "sync refused" in ui.status and "uncommitted" in ui.status
+
+
+def test_y_on_a_non_project_row_explains_itself(tmp_path, monkeypatch):
+    ui, _root = _home_with_project(tmp_path, monkeypatch, _remote_state(behind=1))
+    ui.selected = next(i for i, (kind, _v) in enumerate(ui.items) if kind != "project")
+
+    _drive(ui, "y")
+
+    assert "Move to a project row" in ui.status
+
+
+def test_capital_y_syncs_every_clean_behind_project(tmp_path, monkeypatch):
+    _isolated_home(tmp_path, monkeypatch)
+    behind_root = tmp_path / "behind"
+    dirty_root = tmp_path / "dirty"
+    for root in (behind_root, dirty_root):
+        (root / ".horus" / "backlog").mkdir(parents=True)
+    monkeypatch.setattr(
+        terminal_tui.config, "load_projects", lambda: [str(behind_root), str(dirty_root)]
+    )
+    states = {
+        behind_root: _remote_state(behind=2),
+        dirty_root: _remote_state(behind=2, dirty=True),
+    }
+    monkeypatch.setattr(terminal_tui.gitstate, "git_state", lambda root: states[Path(root)])
+    synced = []
+    monkeypatch.setattr(
+        terminal_tui.sync,
+        "fast_forward",
+        lambda root, upstream, **k: (synced.append(root), (True, "ff"))[1],
+    )
+    ui = terminal_tui.TerminalUI(input=create_pipe_input(), output=DummyOutput())
+
+    _drive(ui, "Y")
+
+    assert synced == [behind_root], "only the clean-behind project is fast-forwarded"
+    assert "1 synced" in ui.status and "1 skipped" in ui.status
+
+
+def test_sync_keys_are_inert_off_the_projects_screen(tmp_path, monkeypatch):
+    ff_calls = []
+    ui, _root = _home_with_project(tmp_path, monkeypatch, _remote_state(behind=1))
+    monkeypatch.setattr(
+        terminal_tui.sync, "fast_forward", lambda *a, **k: ff_calls.append(a) or (True, "")
+    )
+    ui._show("sessions")
+
+    _drive(ui, "y")
+    _drive(ui, "Y")
+
+    assert ff_calls == []
 
 
 def test_fmt_age_and_freshness_token_units():

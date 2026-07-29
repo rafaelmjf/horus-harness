@@ -62,6 +62,7 @@ from horus import (
     schedule,
     skills,
     statusline,
+    sync,
     terminal_sessions,
     usage_snapshot,
     warmup,
@@ -369,6 +370,18 @@ class TerminalUI:
             if self.screen == "projects":
                 self.refresh_git_freshness()
 
+        @keys.add("y")
+        def _sync_selected(event) -> None:
+            # Inbound "Sync": fast-forward the selected project. Projects screen only.
+            if self.screen == "projects":
+                self.sync_selected_project()
+
+        @keys.add("Y")
+        def _sync_all(event) -> None:
+            # Fast-forward every clean-behind project. Projects screen only.
+            if self.screen == "projects":
+                self.sync_all_clean_behind()
+
         @keys.add("f")
         def _fleet_review(event) -> None:
             if self.screen == "projects":
@@ -486,6 +499,75 @@ class TerminalUI:
             if behind
             else f"Fetched {len(self.projects)} project(s) · all current"
         )
+        self.application.invalidate()
+
+    def _selected_project(self) -> Path | None:
+        """The project root under the cursor, or None when the row is not a project."""
+        if 0 <= self.selected < len(self.items):
+            kind, value = self.items[self.selected]
+            if kind == "project" and isinstance(value, Path):
+                return value
+        return None
+
+    def _sync_one(self, root: Path, *, announce: bool) -> str:
+        """Fast-forward one project when `sync.plan` says it is unambiguously safe.
+
+        Returns the outcome kind (synced / current / refused / failed). Inherits the
+        shipped `horus sync` refusal matrix wholesale — a dirty, ahead, diverged,
+        detached, or upstream-less checkout is never mutated, only reported.
+        """
+        state = self.project_freshness.get(root) or gitstate.git_state(root)
+        outcome, reason = sync.plan(state)
+        if outcome == sync.REFUSED:
+            if announce:
+                self.status = f"{root.name}: sync refused — {reason}"
+            return "refused"
+        if outcome == sync.CURRENT:
+            if announce:
+                self.status = f"{root.name}: {reason}"
+            return "current"
+        ok, message = sync.fast_forward(root, str(state["upstream"]))
+        if not ok:
+            if announce:
+                self.status = f"{root.name}: sync failed — {message}"
+            return "failed"
+        # Re-read this project's freshness so its row flips to current immediately.
+        self.project_freshness[root] = gitstate.git_state(root)
+        self.project_fetch_at[root] = fetchcheck.last_fetch(root)
+        if announce:
+            commit = (self.project_freshness[root] or {}).get("commit") or {}
+            self.status = (
+                f"{root.name}: synced → {commit.get('hash', '?')} {commit.get('subject', '')}".rstrip()
+            )
+        return "synced"
+
+    def sync_selected_project(self) -> None:
+        """Fast-forward the project under the cursor (the inbound "Sync" action)."""
+        root = self._selected_project()
+        if root is None:
+            self.status = "Move to a project row to sync it."
+            self.application.invalidate()
+            return
+        selected = self.selected
+        self._sync_one(root, announce=True)
+        self._refresh_items()
+        self.selected = min(selected, max(0, len(self.items) - 1))
+        self.application.invalidate()
+
+    def sync_all_clean_behind(self) -> None:
+        """Fast-forward every project `sync.plan` classifies safe, skipping the rest
+        with their reason. Sequential — a fast-forward is a local merge (the fetch
+        already happened via `g`), so no network and no concurrency needed."""
+        selected = self.selected
+        tally = {"synced": 0, "current": 0, "refused": 0, "failed": 0}
+        for root in self.projects:
+            tally[self._sync_one(root, announce=False)] += 1
+        self._refresh_items()
+        self.selected = min(selected, max(0, len(self.items) - 1))
+        parts = [f"{tally['synced']} synced", f"{tally['current']} current", f"{tally['refused']} skipped"]
+        if tally["failed"]:
+            parts.append(f"{tally['failed']} failed")
+        self.status = "Sync all clean-behind: " + " · ".join(parts)
         self.application.invalidate()
 
     def refresh_projection_sync(self) -> None:
@@ -2411,9 +2493,9 @@ class TerminalUI:
         if self.screen == "projects":
             enter_action = self._projects_enter_action()
             text = (
-                f" ↑↓ · {enter_action} · f fleet · g fetch · u refresh · m mission · t settings · q"
+                f" ↑↓ · {enter_action} · g fetch · y sync · f fleet · u refresh · q"
                 if narrow
-                else f" ↑↓/swipe · {enter_action} · f fleet · g fetch · u refresh · Esc · s sessions · d defaults · m mission · t settings · q quit"
+                else f" ↑↓/swipe · {enter_action} · f fleet · g fetch · y sync · Y sync-all · u refresh · Esc · s sessions · d defaults · m mission · t settings · q quit"
             )
             return [("class:footer", text)]
         if self.screen == "accounts":
