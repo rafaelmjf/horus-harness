@@ -824,3 +824,704 @@ as a fourth consumer, without introducing a second parser or probe path.
   Verified by re-running the real deploy: the same restart that produced the false
   failure now reports "done; running version 0.0.76 matches target".
   Claude-Session: https://claude.ai/code/session_014Z2jLATWKLECzqWk49X369
+
+- `1ff7e0e` docs: card the --resume session id mismatch (#424)
+  `horus sessions` and `horus tail` show the horus session id; `horus run
+  --resume` needs the agent session id. Passing the visible one exits
+  rc=1 in two seconds with no error text.
+  Observed while resuming a worker in another project: the run jsonl
+  records agent_session_id set to the horus id that was passed in, and the
+  result event is a bare failure. The healthy run records the id the agent
+  actually issued.
+  Worth fixing rather than documenting because the failure is silent and
+  the only id the operator has been shown is the wrong one. Inside a
+  scheduled supervise/resume loop it would read as a crashed worker rather
+  than a bad argument.
+  Three candidate remedies on the card; accepting either id subsumes the
+  others. Whichever is chosen, the error path should not exit rc=1 with no
+  text.
+  Claude-Session: https://claude.ai/code/session_016BGnNJHdmf9KPtsvegymXL
+- `9297624` feat(backlog): sparse `order:` sequence + a one-key attended refine pass (#425)
+  * feat(backlog): sparse `order:` sequence + a one-key attended refine pass
+  `tui-backlog-refine-and-order`. The `backlog-refine` skill already owned the
+  whole interactive contract *including* the ordering rules, and a 2026-07-21
+  pass had already written `order: 20` onto `windows-native-horus-setup` — but
+  nothing in Python parsed the field and no surface launched the pass. This
+  supplies both halves.
+  **The field.** `order:` parses to an int and joins `readiness_sort_key`, the
+  single sort chokepoint every renderer already routes through (`backlog list`,
+  `--tree`, the TUI), so the approved sequence needed writing once. It nests
+  INSIDE the readiness queue: every renderer prints per queue, so a cross-queue
+  sequence could not be displayed, and the plan that matters is the sequence of
+  schedulable cards. Unordered cards keep today's priority ordering behind the
+  stamped ones, so a repo that has never been ordered renders as before — zero
+  migration. A non-integer stamp stays unsequenced rather than being coerced into
+  a guessed position.
+  **The launch surface.** `o` on the TUI's backlog pane runs the existing
+  accounts -> launch_form pipeline with a refine prompt; `horus backlog refine`
+  prints the same prompt for piping into `horus open`. One builder, two
+  consumers. Neither restates the flow — the skill remains the single authority.
+  **Live delivery state (owner addition).** A refine pass judges what is open
+  work, and the cards alone cannot answer that: other sessions open bug PRs and
+  leave branches unmerged, so a card already fixed on an open PR reads as
+  untouched. The prompt embeds the deterministic facts — open PRs (via a new
+  unfiltered `integration.open_prs`; the `horus/` prefix only ever caught
+  continuity PRs), unmerged remote branches via #420's reader, and continuity
+  freshness — instead of instructing a session to go look. Every probe degrades
+  to a stated "unknown", never a false all-clear. Skill bumped v5 -> v6 with the
+  same reconciliation as step 0, so a hand-invoked refine does it too.
+  Duplicate/malformed stamps warn via `backlog.order_findings`, wired into
+  `hygiene_findings` (consolidate + `close --check`) and printed by `backlog
+  list`. This deviates from the card's "`horus doctor` warns" wording — doctor
+  does not call hygiene_findings, and wiring it in would have emitted every
+  existing card warning; owner-approved, recorded in the card's Reviews.
+  Gate: full suite 2288 green (was 2264; ~24 new tests). Probe: a scratch repo
+  with three stamped cards lists them in `order:` sequence ahead of the
+  unstamped one, and removing a stamp drops that card to the pool; the TUI, run
+  under an isolated tmux socket, shows `o refine+order` in its footer, sorts
+  identically, and `o` lands on the account picker titled "Refine account".
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  * closure: backlog order/refine delivered; PRD handoff refreshed
+  Folds PR #425 into canonical continuity, pre-merge because Horus's own gate
+  refuses the merge while lanes are stale — the closure needs THIS session's
+  context, which is gone afterward. Working as designed; it fired on me.
+  - Shipped: one line for the `order:` field + its consumers, the two launch
+    surfaces, and the owner's mid-session addition (the pass starts from live
+    delivery state, because bug PRs other sessions open make a picture wrong).
+  - Readiness breakdown corrected against `readiness_counts()`: Ready—eligible
+    was stale at (1) since #424 added `resume-session-id-mismatch`, and the Gated
+    prose still listed `tui-backlog-refine-and-order` as gated when the librarian
+    had un-gated it on 07-26. Ready—Attended stays (2) until the card is shipped
+    and archived post-merge.
+  - `tui-toggle-card-into-scheduler` flagged for a readiness re-check: it was
+    Gated on exactly the `order:` field that just shipped.
+  - Distribution line corrected — it claimed v0.0.74 was current; v0.0.76 has
+    been released and deployed since 07-26.
+  - Frontmatter handoff refreshed. PRD is 236 lines: past the 235 advisory, 14
+    short of the cap, and deliberately not trimmed — shaving it would mean
+    deleting real shipped history.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  ---------
+- `ad23575` closure: ship the refine/order card (#425, 9297624)
+  Stamps merge provenance and archives the delivered card, then corrects the one
+  count that shipping changes: Ready—Attended (2) -> (1). Deliberate two-step —
+  the ship stamp needs the merge SHA, which does not exist until after the merge
+  the freshness gate guards.
+  Continuity-only diff on main, per the closure direct-push exemption.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+- `ff6c65a` fix(run): `--resume` accepts either session id, and says which it used (#426)
+  `resume-session-id-mismatch`, remedy option 1 (accept either id) — the card's own
+  recommendation, and it subsumes option 3.
+  `horus sessions` and `horus tail` identify a run by its HORUS id; `--resume` needs
+  the AGENT conversation id. The operator has only ever been shown the horus id, so
+  that is the value they reach for, and passing it died in two seconds with rc=1 and
+  nothing naming which of the two ids was wanted. Inside a scheduled supervise loop
+  that reads as a crashed worker rather than a bad argument — the expensive version
+  of this bug, and the one that would have muddied the away-mode drill.
+  `Registry.resolve_resume_id` now translates: a known horus id becomes its recorded
+  `agent_session_id` (saying so), an agent id passes through silently, and an id
+  Horus never tracked passes through WITH a note rather than being refused — an agent
+  session Horus never registered is legitimately resumable. Translation happens in
+  `cmd_run` before the RunRequest, so the detached tmux runner receives an
+  already-correct payload and both paths resume identically.
+  **Lookup order is load-bearing.** The horus id is a row key, so it is checked before
+  the agent-id scan: a failed resume attempt registers a fresh row whose
+  `agent_session_id` is the bad horus id it was handed, so scanning agent ids first
+  would match that self-inflicted row and feed the same wrong value back forever.
+  Covered by a named regression test.
+  Also: a failed run that used `--resume` now names the id it resumed with, so the
+  rc=1 path can never again be textless about the cause.
+  Files touched beyond the card's `surface` list (which named only the run/`--resume`
+  handling, the sessions display, and the run jsonl): `horus/registry.py` holds the
+  translation, and `horus/run_executor.py` holds the failure message. The sessions
+  display was deliberately NOT changed — that was option 2, and option 1 makes it
+  unnecessary.
+  Gate: full suite 2297 green. Probe: with the fake adapter under an isolated HOME,
+  `--resume <horus id>` translates and resumes, `--resume <agent id>` is silent,
+  an untracked id warns and still launches, and re-resuming the original visible id
+  after a failed-attempt row exists still resolves correctly.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+- `52ecc0b` fix(usage): a stale reading may warn, but must never refuse a launch (#429)
+  * fix(usage): a stale reading may warn, but must never refuse a launch
+  The last open acceptance item on `codex-usage-stale-snapshot-gates-dispatch`.
+  A best-effort telemetry snapshot was being used as an authoritative gate. On
+  2026-07-23 it refused a valid `--worker codex --account personal` dispatch at
+  "99% used" on an account that was ~0% used; `--force` got the work through and it
+  ran to completion and merged a PR. Reproduced here 2026-07-26 from a rollout ~27h
+  old, where the next real Codex turn collapsed 82% to ~1%.
+  `UsageSnapshot` now carries `captured_at` — the PROVIDER's capture time, not
+  Horus's cache time. That distinction is the whole fix: Codex reports capacity only
+  when it takes a turn, so an idle account yields an hours-old rollout served through
+  a seconds-old cache entry. `_read_codex` populates it from the rollout event's own
+  timestamp, which was being discarded. A reading older than
+  `REFUSAL_MAX_READING_AGE` (2h) can still WARN but can no longer REFUSE.
+  Horizon rationale, because it is a judgment call: the cost is asymmetric. A false
+  refusal blocks legitimate dispatch and teaches `--force`, which disables the gate
+  wholesale; a false green-light merely lets a run die in a window it would have died
+  in anyway, which the run itself reports. Only the refusal is gated on freshness —
+  the advisory bands still fire, because "possibly low" is exactly what an old
+  reading can honestly say. Readings with no capture time (Claude's pushed statusline)
+  keep refusing unchanged.
+  NOTE — the previous session's handoff proposed a different rule, and it is wrong:
+  "a reading predating `resets_at - window_minutes*60` describes a previous window."
+  That can never fire. A reading is always captured inside the window its own
+  `resets_at` closes, so the test is equivalent to the `without_expired_windows`
+  check that already exists. Verified against this card's own reproduced case:
+  capture 07-25 09:48, resets_at 07-29 20:53, weekly window 10080min → span
+  [07-22 20:53, 07-29 20:53]; the capture sits inside it, so the formula scores that
+  reading FRESH — the very reading documented as stale and wrongly refusing. The
+  card's own acceptance bullet asks for "a reading older than a documented horizon",
+  which is what shipped. Recorded in the card's Reviews.
+  Gate: full suite 2306 green. Probe: with real rollout fixtures under an isolated
+  CODEX_HOME, a 99% reading captured 2d ago (window resets in 2 days, so NOT expired
+  — exactly the gap `without_expired_windows` misses) now warns and proceeds, while
+  the same 99% captured now still refuses with exit 2.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  * fix(usage): `usage check` says when a Codex reading is stale
+  Completes the same acceptance item rather than leaving a one-liner open. The card's
+  own diagnosis was that an idle account's percentage is "presented as current with no
+  staleness signal" — and `usage check` was still doing exactly that, printing a bare
+  `weekly limit 99% used` from a rollout captured two days earlier.
+  `UsageReport.timestamp` was already the capture time, so this only renders it. The
+  horizon is imported from `usage_snapshot` rather than redefined, so this surface and
+  the `horus run` refusal gate cannot drift apart (lazy import, since usage_snapshot
+  reads this module).
+  Verified while checking the card's OTHER acceptance items rather than trusting the
+  PRD's account of them: against one stale rollout fixture, `usage all`, `usage check`,
+  and the run preflight now all report the same window (weekly), the same orientation
+  (used), the same percentage, and the same reset — which was the card's core "two
+  readers disagree" complaint, and it holds.
+  Gate: full suite 2308 green. Probe: a 2-day-old 99% reading now renders "reading
+  captured 2026-07-25 11:48 — Codex has been idle since, so these limit percentages
+  are not current"; the same reading captured now prints no staleness noise.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  * closure: fold #426/#427 into continuity ahead of the merge
+  Both dispatch-path fixes recorded in one Shipped line, plus the frontmatter handoff
+  for a session that may or may not cut the release.
+  Corrections found by checking claims rather than trusting them:
+  - `tui-toggle-card-into-scheduler` is STILL correctly gated. I flagged it earlier
+    for a readiness re-check because #425 cleared its `order:` dependency; it also
+    depends on `autotest-e2e-away-mode-drill`, and arming cards for unattended
+    execution before the drill answers its readiness question is exactly what the
+    drill exists to prevent. The PRD now says so, so the next session doesn't
+    re-litigate it.
+  - The Shaping prose still named `usage-snapshot-test-flake-blocks-workers` as the
+    highest-value bug; it shipped in #416 and is archived.
+  - `codex-usage-stale-snapshot-gates-dispatch` is marked as delivered-pending-ship
+    rather than silently left in Shaping.
+  Handoff states plainly that v0.0.76 is still the published version and nothing
+  since is released, and repeats the invariant that `deploy-hosted.sh` must be the
+  last release step or the hosted app stays on the old pin.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  ---------
+- `d7ce84b` test: drop 15 hardcoded skill-version assertions (#428)
+  * test: drop 15 hardcoded skill-version assertions
+  Answering "are all these tests necessary?" with the one category that provably
+  isn't. The suite is not the problem — 2308 tests run in 76s (33ms each) and test
+  LOC is 0.78x prod LOC across 44k lines. Volume is fine; this is about edit
+  friction.
+  `assert refine.version == 6` and its fourteen siblings cannot catch a defect.
+  They assert only that a human typed the same integer in the test as in the
+  registry, and they break on every legitimate bump — I paid that cost four times
+  in this session alone while bumping backlog-refine v5 -> v6.
+  The two guards that DO catch real drift are untouched:
+  - `test_bundled_skills_have_version_markers` asserts, for every skill,
+    `installed_version(s.content) == s.version` — the marker-vs-registry
+    disagreement that actually breaks version-aware installs;
+  - `test_backlog_refine_projections_match_the_bumped_source` asserts the
+    checked-in projection carries the bundled version, DERIVED dynamically
+    (`next(s.version for s in skills.SKILLS ...)`) rather than hardcoded. That
+    test caught a real miss today when I bumped the skill without regenerating
+    the projections. It is also the pattern the deleted lines should have used.
+  No test lost its last assertion (checked by AST walk); 49 tests in
+  tests/test_skills.py still pass, full suite still 2308.
+  Known gap this exposes, NOT fixed here: nothing catches a skill's prose being
+  edited without a version bump, so installed copies would silently never
+  upgrade. The deleted assertions looked like they covered that but did not —
+  they pass whether or not the text changed. Worth a card if the risk is real.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  * closure: release bundle folded in; both fixes shipped and archived
+  Closes out the four-delivery bundle sitting on main, and records what the session
+  learned rather than just what it built.
+  - `resume-session-id-mismatch` shipped (#426, ff6c65a) and
+    `codex-usage-stale-snapshot-gates-dispatch` shipped (#429, 52ecc0b); both cards
+    archived. Readiness breakdown recomputed from `readiness_counts()` rather than
+    edited by hand: Ready—eligible 1, Ready—Attended 1, Shaping 36.
+  - The test-suite question answered with measurements that outlive the session
+    (2308 tests / 76s / 0.78x prod LOC), so it does not get re-litigated, plus the
+    prose-assertion judgment call left explicitly to the owner.
+  - NEW RULE: never `--delete-branch` a PR that another PR is stacked on. Merging
+    #426 that way auto-CLOSED #427, and a closed PR's base cannot be retargeted
+    (422), so it had to be reopened as #429. The rule also records that stacked PRs
+    get no CI at all while they target a non-main base, because the workflows
+    trigger on `pull_request: branches: [main]`. Landing this in the process rather
+    than in memory, per the project's own rule.
+  - Handoff states plainly that nothing is released (still v0.0.76) and that
+    `deploy-hosted.sh` must be the LAST step of any release, and flags that
+    `verify-guidance-long-running-services` is now the ONLY Ready—eligible card —
+    so an unattended loop with a free hand would pick exactly the reserved drill
+    payload it must not touch.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  ---------
+- `3c4343b` docs(block): name merge-watch in the gate rule; add wait discipline (block v14→15) (#430)
+  * docs(block): name merge-watch in the gate rule; add wait discipline (v14->15)
+  The two accepted retrospective controls for today's ~30 minutes of dead
+  wall-clock, landed in the process rather than in agent memory — per the block's
+  own rule about exactly that.
+  R1: the "reproduce the gate" rule prescribed watching a required CI check on the
+  exact commit but named no tool, so a session invents a mechanism. `horus
+  merge-watch <pr|sha>` has done precisely this all along — bounded
+  `--interval`/`--timeout`, prints each check as it resolves — and was mentioned
+  ONCE in horus/skills.py and nowhere in CLAUDE.md, AGENTS.md, or PRD.md. Now named
+  where the behavior is prescribed, with an explicit "do not hand-roll a polling
+  loop for it".
+  R2+R3, folded into one bullet because they share a root cause (a wait nobody can
+  see failing): never discard stderr from a command whose output drives a loop
+  condition or a gate; run a wait's exit condition once in the foreground and watch
+  it produce output before backgrounding it; and account for a backgrounded wait
+  before the turn ends rather than assuming its timeout bounds it.
+  The incident is cited inline, briefly, because the rule is otherwise easy to read
+  as generic hygiene: three loops on `gh pr checks --json` (a flag that does not
+  exist in this gh) with `2>/dev/null` swallowing `unknown flag`, ~30 minutes; then
+  a fourth still polling a DELETED PR an hour later, past its stated timeout,
+  surfaced only by the owner noticing a task indicator. Without the silenced
+  stderr the whole thing costs one second.
+  Also: dropped the hardcoded "block v9" from CLAUDE.md's hand-written preamble
+  (it was 6 versions stale, sits outside the managed block so upgrade-project never
+  corrects it, and would rot again on the next bump). It points at the block's own
+  marker instead — the same derive-don't-hardcode fix as #428.
+  Gate: full suite 2308 green; `horus doctor instructions` reports blocks matched
+  after regenerating both projections.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  * closure: record the retrospective and its two shipped controls
+  Folds PR #430 (block v14->v15) into continuity. The retrospective itself leaves no
+  artifact by design — the skill's rule is that accepted outcomes land in an existing
+  surface, which here is the managed block plus this Shipped line.
+  Two things recorded deliberately because they are easy to lose:
+  - the measured exoneration (CI 9s/46s/47s, local suite steady ~71s), so "things are
+    slow today" is not re-diagnosed from scratch next time;
+  - that the retrospective's own "capped at two recommendations" conclusion was WRONG,
+    and the owner found the third by spotting a task indicator while I was writing the
+    analysis. A fourth loop was still polling a deleted PR an hour later with 0 bytes
+    of output. The lesson that generalizes is about background waits surviving turn
+    boundaries, not about gh flags.
+  Also notes for the release decision that block v15 makes every other fleet project
+  show an instructions advisory until it upgrades.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  ---------
+- `9ff3139` closure: reserve the drill leg as Deferred+trigger, not as prose
+  Outcome of a wildcard run plus the owner's clarifying question, which killed the
+  skill's own proposal and left a better one.
+  The finding: `is_autonomous_candidate()` returned exactly one card,
+  `verify-guidance-long-running-services`, while `autotest-e2e-away-mode-drill`
+  says that card "must NOT be implemented early — it is payload, not free work, and
+  this session nearly took it". The deterministic selector was aiming an unattended
+  loop at the one card that would destroy the drill, and the only thing preventing
+  it was prose in the PRD and next_prompt — the authority the managed block
+  explicitly says does not count.
+  The wildcard proposed a new `reserved` frontmatter state. The owner asked what
+  "reserved" meant, and the answer dissolved the proposal: `deferred` is already
+  defined as "deliberately inactive until an explicit trigger or owner review",
+  which is exactly this, and deferred cards are already excluded from
+  `is_autonomous_candidate()`. No schema change, no code — the defect was one
+  misclassified card. I had checked the candidate against other CARDS and never
+  against the readiness vocabulary itself.
+  So:
+  - `verify-guidance-long-running-services` -> `readiness: deferred` with the release
+    trigger named (drill armed and leg used/dropped, or drill abandoned), `autonomy`
+    dropped since it belongs only on Ready cards; verdict recorded in its Reviews.
+  - The drill card now states that reserving a leg IS an operation — set the card
+    deferred + name the trigger — because "chosen and reserved now" previously had
+    no mechanism, which is what produced the contradiction.
+  - PRD: Ready—eligible 1->0, Deferred 24->25, both flagged by
+    `prd_readiness_count_findings` before I touched them (#396 earning its keep), and
+    next_action now says an empty eligible pool is the honest state and must NOT be
+    refilled by promoting something.
+  Recurring theme this session, third costume: prose in one artifact has no effect on
+  another artifact's machine-readable state.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+- `b6dc99e` docs(block): cut branches from the default branch, not the current one (block v15→16) (#431)
+  * docs(block): cut branches from the default branch, not the current one (v15->16)
+  The upstream half of the stacked-PR rule added in #430. That rule says how to land
+  a stack safely; this one prevents creating one by accident, which is what actually
+  happened.
+  Observed 2026-07-27: #426 (registry/run_executor) and #429 (usage_snapshot/
+  codex_usage) shared exactly ONE file and touched different functions ~100 lines
+  apart. They were never dependent — they were stacked purely because the checkout
+  was standing on the earlier branch when the second was cut. That accident cost a
+  PR: merging the parent with --delete-branch auto-closed the child, whose base
+  could then not be retargeted.
+  A stack is markedly more expensive than two siblings and the cost is not obvious
+  up front: no CI at all while it targets a non-default base, and the parent's merge
+  can destroy it. So the cheap habit is upstream of the careful one.
+  WHAT THIS COMMIT IS NOT: I went looking for a code fix first and did not find one
+  worth making. The candidate was the continuity/merge two-step (a card needs its
+  merge SHA, which exists only after the merge the freshness gate guards). It does
+  not survive evidence: all 102 archived cards have shipped_sha values that resolve
+  to real commits, so hand-typed provenance has no observed failure class to guard;
+  and the second write is mechanical and batchable — the block already says
+  continuity is "a checkpoint at context boundaries, not a transaction log for every
+  card". I was doing per-card transactions against a rule that already exists.
+  Batching a bundle into one continuity commit then merging the bundle already
+  works; 75df40e did exactly that for #426+#429.
+  Gate: full suite 2308 green; `horus doctor instructions` blocks matched after
+  regenerating both projections.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  * closure: record #431 and the code fix that failed its evidence test
+  Folds the branch-from-default rule (block v16) into continuity, and — more usefully
+  — records WHY the continuity/merge two-step did not become code, so it is not
+  re-proposed: 102/102 archived cards have resolvable shipped_sha values, and the
+  batching rule the friction violated already exists in the block.
+  Also notes the session's recurring theme now that it has three instances: prose in
+  one artifact has no effect on another artifact's machine-readable state.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  ---------
+- `2025e7c` closure: correct the Vision's one genuinely stale card reference
+  Found by the second wildcard run: the Vision presented `roadmap-convergence` as a
+  current card alongside `explore-converge-lifecycle`, but it shipped and is archived.
+  That was the ONLY genuinely misleading card reference in the document. The wildcard
+  had flagged a much bigger-looking number — 12 of 27 card-shaped references in PRD
+  prose point at archived cards — and rejected it as a candidate after checking WHERE
+  each sits: they are overwhelmingly legitimate history in `## Shipped` and citations
+  in `## Rules`. A naive lint would have fired ~12 times to catch this one, including
+  on prose that explicitly explains a card already shipped. Recorded here so the
+  "stale references!" finding is not re-raised as a defect.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+- `e4db28b` Bump version to 0.0.77 (#432)
+  * Bump version to 0.0.77
+  Cuts the release for six merged deliveries, none of which were reachable from an
+  installed CLI. Timing is not arbitrary: `horus schedule` bakes
+  `sys.executable -m horus` into the timer, so a scheduled dispatch runs whichever
+  horus scheduled it. With `autotest-e2e-away-mode-drill` armed after 2026-07-29,
+  staying on 0.0.76 would run the drill against exactly the two defects that were
+  fixed to protect it — `--resume` accepting only the agent id (a bad argument reads
+  as a crashed worker inside a supervise loop), and a stale usage reading able to
+  hard-refuse the launch outright.
+  In this release:
+  - #425 sparse `order:` in the single sort chokepoint, `o` on the TUI backlog pane,
+    `horus backlog refine`, and a refine prompt that embeds live delivery state
+  - #426 `--resume` accepts either the horus or the agent session id
+  - #429 a usage reading older than 2h may warn but never refuse; `usage check`
+    names its capture time
+  - #428 15 hardcoded skill-version assertions dropped
+  - #430 block v15: `horus merge-watch` named in the reproduce-the-gate rule; wait
+    discipline (no silenced stderr on a loop condition; account for backgrounded waits)
+  - #431 block v16: cut branches from the default branch, not the current one
+  Note for the fleet: block v14->v16 means every other initialized project shows an
+  instructions advisory until it runs `horus upgrade-project`.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  * closure: cover the v0.0.77 bump before its merge
+  The gate is pre-merge by design, so the release entry lands with the bump rather
+  than after it. Records WHY the release was cut now instead of batched further —
+  the scheduler bakes its own interpreter into the timer, so an unreleased fix does
+  not protect the drill it was written for.
+  Deployment verification (PyPI live, /health reporting 0.0.77, / still 403) is
+  deliberately NOT claimed here; it goes in the closure once observed.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+  ---------
+- `b3e455b` closure: v0.0.77 released, deployed and verified; session distilled
+  Release verified independently rather than from the deploy script's own word:
+  PyPI reports 0.0.77, hosted /health reports 0.0.77 with / still 403, the
+  dashboard (system unit) and notify-listen (user unit) are both active, and the
+  tag resolves to the bump commit e4db28b.
+  Distilled the day's six Shipped entries into the single v0.0.77 release entry —
+  the PRD's own "one line per capability" rule — taking the file 247 -> 237 lines.
+  Kept only the findings that would cost real time to rediscover:
+  - the resume lookup-order trap (a failed attempt poisons the registry with the
+    bad id, so scanning agent ids before row keys feeds it back forever);
+  - that the inherited staleness formula can NEVER fire, so it is not re-attempted;
+  - the test-suite measurements, so "are all these tests necessary" has an answer;
+  - the two code fixes withdrawn after testing, so they are not re-proposed;
+  - the session theme, now at four instances: prose in one artifact has no effect
+    on another artifact's machine-readable state.
+  Handoff points the next session at the drill (genuinely unblocked now — 0.0.77
+  carries both fixes written to protect it) and at a backlog-refine pass, which has
+  never run despite the 2026-07-20 audit routing 7 prune candidates and 4 facet
+  questions to it; its one-keypress launch shipped in this very release.
+  Claude-Session: https://claude.ai/code/session_01N4YL3xmgsVvKWuTgHrUnq4
+- `28bdf77` closure: refine 69 cards, retarget wildcard v1→v4, ship `horus sync`
+  Session had three arcs. (1) An owner-attended `backlog-refine` pass over all 69
+  cards — the first since the 2026-07-20 audit routed work to it. 13 decision
+  screens, 56 approved no-change keeps. The finding outweighed the card movement:
+  only 1 of 13 converted, because conversion tracks the KIND of open decision, not
+  whether a card documents one — 83% of Shaping cards already carried an explicit
+  open-decisions section. Hence `[refine]`/`[session]` tagging and a `refine_passes`
+  counter, both landing via `refine-autonomy-hardening-lens`.
+  (2) `wildcard` audited and rewritten v1→v4 across five live runs. Two of the three
+  revisions fixed defects a *previous revision introduced* — most sharply v2's
+  "promote-or-drop", which silently redefined the skill as subtractive and produced a
+  run where 4 of 6 ideas were pruning proposals, i.e. refinement's authority. Lesson
+  recorded in the receipt: re-read a revision against the skill's purpose, not only
+  against the finding it was written for.
+  (3) `horus sync` shipped (PR #433) closing the remedy half of fetch-first.
+  Also closed for good, so no future planning run re-raises them: the 7 audit prune
+  candidates (KEEP — resolution stamped into the audit receipt) and X5's undated hold
+  (deliberate, not neglect). And the Vision gained the **Why this exists** +
+  **Surfaces and audiences** sections that #405 shipped fleet-wide on 2026-07-25 but
+  never applied to this repo's own PRD, because that card's `surface:` list omitted it.
+  Known debt left as an owner decision, not hygiene: PRD.md is over the ~250-line cap
+  and a real distillation means promoting Shipped method lessons into Rules.
+  Claude-Session: https://claude.ai/code/session_01HibUJ7ufbu7LtXA2ES7WvD
+- `4c34684` feat(sync): `horus sync` — explicit ff-only remedy for fetch-first (+ wildcard skill v4) (#433)
+  * feat(sync): add `horus sync` — the explicit ff-only remedy for fetch-first
+  Fetch-first already fired deterministically at session start (`fetchcheck`), but
+  the *remedy* was hand-typed: three surfaces printed `git pull --ff-only` for the
+  owner to copy. A session on 2026-07-21 read continuity 5 commits stale and never
+  saw cards other sessions had left, because detecting behind-N and acting on it
+  were separate manual steps.
+  `horus sync` closes that gap without breaking the hook contract. Hooks advise and
+  ask, never override, so nothing runs implicitly — the owner invokes it. It
+  fast-forwards only when unambiguously safe (clean tree, no local commits, strictly
+  behind) and otherwise refuses with the reason, never mutating the tree to force an
+  outcome. `git merge --ff-only` is the operation rather than `git pull`: the fetch
+  already happened, so it avoids a second round-trip and cannot create a merge
+  commit.
+  `sync.plan()` is a pure decision over a `git_state` mapping, so the whole refusal
+  matrix is testable without a repo; two live probes on a throwaway repo pair prove a
+  real fast-forward moves the checkout and that `--ff-only` refuses a real divergence
+  without moving HEAD.
+  The three surfaces that printed the hand-typed command now name `horus sync`:
+  `fetchcheck.warning_line`, the `closure` remote-lanes refusal, and the dashboard
+  sync row.
+  One existing assertion in test_closure pinned the literal word "pull" and so failed
+  on a message improvement rather than a behaviour change; it now asserts the
+  contract (refuses · names why · names a runnable remedy).
+  Suite 2319 green.
+  Claude-Session: https://claude.ai/code/session_01HibUJ7ufbu7LtXA2ES7WvD
+  * docs(wildcard): retarget the skill at additive vision moves (v1 → v4)
+  Audited after five live runs in one session (receipt lands with the session's
+  continuity). Two rounds of findings, both from running it rather than reading it:
+  v2 — the skill never stated its purpose and its six example frames were all
+  operational-hygiene lenses, so three runs produced zero branch-advancing ideas
+  while 19 of 68 cards sat under four vision branches. Also replaced
+  one-winner-plus-rejects (mandated in five places, and the reject trace was most of
+  each run's output) with rank-all-valid, having established that the autonomy safety
+  comes from proposal-not-mutation, not from N=1. Added a Rules check and a premise
+  check — between them they would have caught both cards the owner rejected.
+  v3 — the ranked table made a decision, an experiment and a code change look like
+  the same size of thing, so added a per-idea scope block.
+  v4 — two defects the v3 run exposed, one of them introduced by v2's own text:
+  "promote-or-drop" in the Purpose and "a reason to drop it outright" in the lens
+  list steered the skill into pruning, which is backlog-refine's and convergence's
+  authority. The skill is now strictly ADDITIVE. And the scope block was still
+  abstract, so it is replaced with an action-first one led by `Do this` (one
+  imperative sentence) and `Change performed if accepted` (the concrete before→after,
+  naming files/commands/behaviour), gated by an action test: if it would not let a
+  fresh agent start work, the idea is not ready to emit. Added paired good/bad worked
+  examples, the bad one quoting the skill's own real output.
+  Lesson recorded in the receipt: a revision can *introduce* a drift — re-read it
+  against the skill's purpose, not only against the finding it was written for.
+  Both projections stay byte-identical. `wildcard` has no generator constant in
+  horus/skills.py yet, so these files are its source; `bundle-test-phase-skills`
+  carries the registration work.
+  Claude-Session: https://claude.ai/code/session_01HibUJ7ufbu7LtXA2ES7WvD
+  ---------
+- `10a04a9` closure: seal PR #433 merge SHA into the Shipped ledger
+  The pre-merge continuity gate is by design (closure authoring needs the session
+  context the merge discards), so the closure commit necessarily precedes the merge
+  and `close --check` then reports the squash commit as delivery not yet covered.
+  Stamping the merge SHA closes that loop.
+  Claude-Session: https://claude.ai/code/session_01HibUJ7ufbu7LtXA2ES7WvD
+- `1af2fbf` fix(tests): de-rot two date-pinned fixtures unblocking CI; card the model-roster staleness tripwire (#435)
+  * fix(tests): de-rot two date-pinned fixtures; card the model-roster staleness tripwire
+  Main's CI went red on 2026-07-29 for three date-driven reasons, blocking every PR.
+  Two are genuine fixture rot; one is a real signal we card rather than fake.
+  - test_envelope: the two guard tests run through `cli._envelope_guard`, which compares
+    expiry to the REAL clock (no injectable `now`), yet `_make()` pinned
+    `expires="2026-07-28"`. They rotted the instant wall-time passed it. New `_make_live()`
+    dates the envelope a week ahead of `date.today()`, so it never rots; the frozen-`now`
+    tests keep the fixed date they rely on.
+  - test_datums: `test_..._default_seed_is_fresh` is not a fixture bug — it is the 14-day
+    model-roster staleness tripwire firing correctly (seed researched_at=2026-07-14, 15
+    days old today). Faking freshness would lie about when the priors were checked, so the
+    test is `xfail(strict=False)` (self-heals on refresh) and the underlying reliance on
+    MANUAL refresh is carded.
+  - New card `automated-model-roster-grounding` (Delegation calibration, shaping): keep the
+    roster fresh from external benchmark platforms + other users' shared experience instead
+    of manual date bumps. Supersedes the retired `benchmark-platforms-grounding` with the
+    broader shared-experience dimension the owner named.
+  Full suite: 2318 passed, 1 xfailed, 0 failed.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  * closure: consolidate the sync/cockpit session — naming split, two cockpit cards, CI de-rot
+  Refreshes PRD frontmatter (current_focus / next_action / next_prompt /
+  execution_recommendation / last_updated) for the 2026-07-29 session, fixes the
+  Shaping count (35→36) for the new `automated-model-roster-grounding` card, and
+  records the naming split (Sync = state inward; Horus Assets Refresh = assets outward).
+  Continuity notes both PRs of this session: #435 (this branch — CI de-rot) and #434
+  (cockpit remote-freshness + inbound Sync, landing next). #434's card-state changes
+  (freshness → Ready, cockpit-sync-action minted) arrive with that PR; this branch's
+  deterministic breakdown reflects only the card added here.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  ---------
+- `c916d70` feat(tui): cockpit remote-freshness indicator + inbound "Sync" (see→act), name the two sync directions apart (#434)
+  * refine(backlog): name the two sync directions apart; mint the cockpit see→act pair
+  Owner refine pass on the sync/cockpit cluster. Resolves the "sync" collision that
+  had the CLI and TUI meaning opposite things: `horus sync` (shipped, PR #433) =
+  inbound git fast-forward; the TUI "Projection Sync" screen = outbound Horus-asset
+  refresh. Same word, opposite directions.
+  Naming split, applied across all four cards:
+  - "Sync"                = project state pulled INWARD (matches the horus sync verb)
+  - "Horus Assets Refresh" = Horus's skills/managed-block pushed OUTWARD (was
+    "Projection Sync"; jargon, and it put the ownership boundary last)
+  Cards:
+  - tui-fleet-artifact-refresh: renamed the screen label; stays gated.
+  - tui-remote-freshness-indicator: minted Ready/attended (order 30), the "see" half
+    — render behind-N per project row, cache-first paint. Five open decisions disposed
+    (placement=per-row Home; GH-identity panel dropped; verb collision resolved; scope
+    git-only; offline=unknown+age).
+  - cockpit-sync-action: NEW Ready/attended card (order 40), the "act" half — TUI Sync
+    button + fleet Sync-all over the shipped sync.plan/fast_forward, depends-on the see
+    card.
+  - continuity-sync-friction: kept as the residual explore card; its manual-sync slice
+    was promoted out, leaving the contentious auto-ff-at-launch question + format
+    frictions, all [session]-class.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  * feat(tui): remote-freshness indicator on the home screen + `g` fleet fetch
+  Implements tui-remote-freshness-indicator (the "see" half). The TUI was the one
+  launch surface that never fired fetch-first: it painted confident, current-looking
+  focus lines that could be silently behind origin.
+  - Each project row now shows remote freshness read from on-disk refs (no network in
+    the paint path): `current` / `behind N` / `detached`, tagged with the age of the
+    last fetch ("46m ago" / "not fetched"). A branch with no upstream falls back to
+    divergence from origin/<default> so the row still answers "is my base current?".
+    A purely local repo shows no token.
+  - `g` on the projects screen is an explicit fleet fetch: read-only `git fetch` across
+    all projects concurrently under one global deadline (ThreadPoolExecutor, never
+    N × the per-repo timeout), then re-read freshness. It is the only place the TUI
+    touches the network for git, and only on that keypress; inert on every other screen.
+  - fetchcheck gains public `fetch` / `last_fetch` / `note_fetch` so a concurrent fanout
+    can fetch without racing the single-threaded TTL cache.
+  - Renames the TUI "Projection Sync" screen to "Horus Assets Refresh" (display labels
+    only) — resolving the collision where the CLI's `horus sync` (inbound git) and the
+    TUI's "sync" (outbound assets) meant opposite things. Now: "Refresh" = Horus assets
+    out; freshness/"Sync" = project state in.
+  Tests: per-row behind/current/local-only/no-upstream rendering, the real `g` binding
+  driving a fleet fetch (behind→current) and its projects-only scoping, and age/token
+  units. Full suite green except 2 pre-existing date-pinned failures on main (expired
+  envelope fixture; 15-day-old model priors) unrelated to this change.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  * feat(tui): inbound "Sync" action — fast-forward a project (or the fleet) from the cockpit
+  Implements cockpit-sync-action (the "act" half). Once the freshness indicator shows
+  a project is behind, the owner can fast-forward it without leaving the TUI.
+  - `y` on the projects screen fast-forwards the SELECTED project; `Y` fast-forwards
+    every clean-behind project. Both are thin surfaces over the shipped
+    `horus.sync.plan` / `fast_forward` (PR #433) — no new git logic. A dirty, ahead,
+    diverged, detached, or upstream-less checkout is never mutated, only reported with
+    `sync.plan`'s exact reason. Fleet sync is sequential (a fast-forward is a local
+    merge; `g` already did the fetch). Both keys are inert off the projects screen.
+  - After a sync the project's row re-reads freshness and flips to `current`; the fleet
+    action shows a durable tally (N synced · N current · N skipped · [N failed]).
+  Naming: this is "Sync" — inbound project state — matching the `horus sync` CLI verb,
+  distinct from the outbound "Horus Assets Refresh".
+  Tests: `y` fast-forwards the selected project (behind→current), refuses a dirty tree
+  without calling fast_forward, explains a non-project row; `Y` syncs only the
+  clean-behind project across a mixed fleet; both keys inert off-screen. Live-probed
+  unmocked on a throwaway repo pair driven through the real `Y` binding: the clean-behind
+  clone fast-forwarded to origin, the dirty clone stayed put with its edit preserved.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  * closure: reflect #434's cockpit cards in the readiness breakdown
+  Ready—Attended 3→5 (tui-remote-freshness-indicator order 30, cockpit-sync-action
+  order 40 join the queue), Shaping 36→35 (freshness card left shaping for ready).
+  next_action updated: #435 is merged (1af2fbf); #434 rebased on it, fully green,
+  ready to merge and ship its two cards.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  ---------
+- `411db67` closure: ship the cockpit see→act cards; seal #434 into the Shipped ledger
+  Both PRs of the 2026-07-29 session landed: #434 (c916d70, cockpit remote-freshness
+  indicator + inbound Sync) and #435 (1af2fbf, CI de-rot). Ships tui-remote-freshness-
+  indicator and cockpit-sync-action to backlog/archive with the merge SHA, restores the
+  readiness breakdown (Ready—Attended 3, Shaping 35), adds the Shipped line, and points
+  the handoff at the remaining attended queue.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+- `c740f9b` closure: first Rules distillation pass — 257→210 lines (evidence for the audit shaping)
+  Tightened 6 of the heaviest Rules bullets (scheduling, usage, exposure, hooks,
+  capability-catalogs, version-floor). Every invariant preserved; dropped inline incident
+  narration (git/history hold it) and — the dominant lever — unwrapped hard-wrapped
+  bullets to single lines. Rules 165→118, PRD under both the 235 soft and 250 hard caps
+  with headroom. Deliberately did NOT touch the Rules↔Structure-contract duplication or
+  any possibly-superseded rule — those are judgment moves for owner sign-off.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+- `64792c3` feat(consolidate): PRD cap warning names the driving section + hard-wrap lever (#436)
+  * feat(consolidate): PRD cap warning names the driving section + the hard-wrap lever
+  The cap check said "the file is big" but its own remedy blamed Shipped ("one-line
+  shipped entries") — when the real driver is Rules (60% of the PRD), and the biggest,
+  purely-mechanical trim is unwrapping hard-wrapped bullets, not deleting content. This
+  cost a hand-measured investigation on 2026-07-29 before that was clear.
+  Now, whenever the PRD is over (or approaching) the cap, the warning names the largest
+  section with its share and — when that section has hard-wrapped bullets — points at
+  unwrapping ("largest section is 'Rules' (118 lines, 60%); 13 of its bullets are
+  hard-wrapped — unwrapping to one line each reclaims lines with no loss"). Purely
+  deterministic; no judgment, no new command. The judgment half (superseded/duplicate
+  rules) stays where it belongs — owner-gated skill territory, not a mechanical check.
+  New helpers `_section_breakdown` / `_hard_wrapped_bullets` / `_prd_size_hint`, unit +
+  integration tested; existing cap-substring assertions preserved. Suite 2332.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  * closure: record the consolidate cap-warning signal (PR #436)
+  Shipped line + next_action for the deterministic PRD-size-driver signal that grew out
+  of this session's first Rules distillation. Continuity boundary for the delivery commit.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  ---------
+- `1981a1e` closure: mark the session complete — #436 merged, next_action points at the standing queue
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+- `74ef334` closure: judgment distill — de-duplicate Rules against the Structure contract + skills
+  Three de-duplication moves, each deferring content to its authoritative home (no
+  invariant dropped — verified):
+  - Orchestration rule → trimmed to a pointer: its full contract lives in the
+    horus-execution skill (v8), it is behavioral text per "PRD is state, not behavior",
+    and the Vision disclaims orchestration. Reaping safety stays in Rules.
+  - Readiness rule → the field enum/reason/autonomy contract defers to the Structure
+    contract's `backlog/` entry (which owns it more completely); the behavioral
+    invariants (unclassified-never-schedulable, only-eligible-arms, tooling) stay.
+  - Structure-contract Closure → defers the procedure to the Rules closure cluster,
+    keeping only its unique "recovery note when needed" invariant.
+  Evidence for the audit shaping: unlike the earlier unwrap pass, de-duplication cuts
+  ~0 physical lines (these bullets were already single-line) — it removes drift risk,
+  not size. The two distill kinds are distinct: unwrap for the cap, de-dup for clarity.
+  13 hard-wrapped bullets still remain if a future unwrap pass is wanted.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+- `67638a4` closure: unwrap the remaining 13 Rules bullets — PRD 212→156, Rules 118→62
+  Pure formatting: each hard-wrapped bullet joined to a single line, zero content
+  changed (13 insertions / 69 deletions, bullet count intact). Completes the distillation
+  started this session — Rules is now uniformly one-line-per-bullet and the PRD sits well
+  under both caps (156 vs 235 soft / 250 hard), with headroom. The `consolidate` size
+  signal now reports 0 hard-wrapped bullets.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+- `a610fd0` feat: launchable pinned/older models — config-editable list (Layer 1) + vendor-docs refresh skill (Layer 2) (#438)
+  * feat(launch): config-editable launch-model list; expose pinned older Claude models
+  Layer 1 of the model-selection feature. The TUI launch form only offered bare family
+  aliases (opus/sonnet/haiku/fable), each = the latest, so pinned older versions the
+  `/model` picker hides (e.g. claude-opus-4-8) weren't launchable even though `--model`
+  accepts them.
+  - config: new managed `[launch_models]` table (per-agent selector lists) with
+    `load_launch_models` / `launch_models_for` / `set_launch_models`; threaded through
+    `_write_config` so it survives unrelated rewrites; tolerates malformed values.
+  - TUI `_agent_models`: a configured `[launch_models]` list wins; else the adapter
+    default — so a curated list (hand-edited or written by the coming skill) overrides,
+    with zero-config behaviour unchanged.
+  - Claude adapter default now includes `claude-opus-5` + `claude-opus-4-8` alongside the
+    families, so comparing Opus 5 vs Opus 4.8 works out of the box.
+  Layer 2 (the launch-model-refresh skill that keeps this list current from vendor
+  model-deprecation docs) follows in the next commit.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  * feat(skills): launch-model-refresh — keep the launch-model list current from vendor docs
+  Layer 2: the owner-invoked skill that populates Layer 1's [launch_models] config.
+  On the owner's signal (a model shipped/became default, "refresh the launch models"),
+  an agent researches the vendor's own model-deprecation docs — one authoritative table
+  for Claude (platform.claude.com model-deprecations), two merged pages for Codex
+  (OpenAI models ∪ deprecations) — identifies the still-Active --model selectors incl.
+  pinned older versions, proposes a curated subset for owner approval, and writes it via
+  config.set_launch_models(). Evidence-first, owner-gated, never auto-run/polled, never
+  exposes a model past retirement. Sibling of automated-model-roster-grounding (calibration
+  tiers/prices) — kept separate by data and source.
+  The per-vendor recipe (Claude=one page, Codex=two-page merge) and the retirement-date
+  bonus were validated by a live simulation before writing the skill. Registered in the
+  SKILLS generator (v1) with both projections; guard test pins its mechanism + sources.
+  Updated two adapter/TUI tests for the expanded Claude default. Suite 2339.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  * closure: record the launchable-models feature (PR #438)
+  Shipped line + next_action for Layer 1 ([launch_models] config) + Layer 2
+  (launch-model-refresh skill). Continuity boundary for the delivery commits.
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+  ---------
+- `82cd600` closure: mark the session complete — #438 merged, both model-selection layers landed
+  Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
