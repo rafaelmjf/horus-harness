@@ -4,7 +4,7 @@ priority: medium
 created: 2026-07-29
 created_by: owner
 readiness: shaping
-readiness_reason: "The value is clear and the gap is real, but the detection mechanism is deliberately open (pane-buffer heuristic vs agent lifecycle hooks vs host-supplied state) — needs a working session to pick one, ideally informed by what herdr-host-probe observes."
+readiness_reason: "The value is clear and the gap is real. The mechanism is now NARROWED rather than open: herdr-host-probe (2026-07-29) showed a screen-scraper is a maintained treadmill, not a one-off, so prefer agent lifecycle hooks + host-supplied state. Still wants a working session to settle hooks-vs-derived and the Codex path."
 phase: explore
 type: feature
 tier: medium
@@ -58,6 +58,24 @@ herdr's own approach is worth copying in one respect: it layers them (hooks when
 installed, else screen-manifest matching) and keeps **blocked detection deliberately
 strict** — only visible approval/permission prompts. A false `blocked` is worse than
 none, because the whole value is "this one needs me".
+
+### What the probe changed (2026-07-29 — evidence in `herdr-host-probe`)
+
+Mechanism (1) is **more expensive than it looks, and the probe priced it.** herdr does not
+ship a heuristic; it ships a **versioned per-agent TOML manifest fetched from the network**
+(20 agents, claude `2026.07.13.1`, codex `2026.07.18.1`, auto-updated). Its `claude.toml`
+matches Claude's literal UI strings by screen region — `working` from a braille spinner in
+the OSC title, `blocked` from "enter to select" + "esc to cancel" + a navigation hint after
+the last horizontal rule, `idle` from `^\s*❯` in the prompt box. That is a treadmill
+tracking another product's wording, and it is *why* the manifest is remotely updatable.
+**Horus should not take that on.** Prefer **(2) lifecycle hooks** as authoritative
+(`native_hooks.py` already exists) and **(3) host-supplied state** where a host already
+pays the cost. Note the traffic runs both ways: `herdr pane report-agent` accepts *pushed*
+state, so Claude hooks could feed herdr's sidebar rather than Horus re-deriving it.
+
+herdr's enum is also wider than this card assumed — `idle` · `working` · `blocked` ·
+`done` · `unknown` — and `herdr agent wait <target> --until <status> --timeout <ms>` blocks
+on it, which is directly interesting for supervising a dispatched worker.
 
 ## Acceptance (draft — sharpen when the mechanism is chosen)
 

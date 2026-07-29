@@ -3,13 +3,12 @@ status: open
 priority: medium
 created: 2026-07-29
 created_by: owner
-readiness: gated
-readiness_reason: "Blocked on herdr-host-probe: the capability set must be derived from two real hosts, not guessed from one. Design the protocol with the probe's three answers in hand."
+readiness: shaping
+readiness_reason: "UNGATED 2026-07-29 — herdr-host-probe answered all four questions, so the capability set is now derived from two real hosts. Two shape decisions remain before this is Ready, both surfaced by the probe: how a host without argv-exec/exit-code semantics (herdr `pane run` types into a shell) fits the pane_runner contract, and whether the herdr host ships with the protocol or follows it. Owner call in a refine pass."
 phase: converge
 type: feature
 tier: high
 parallel: unsafe
-depends-on: herdr-host-probe
 vision_facet: "Dashboard / cockpit"
 surface: horus/terminal_sessions.py → horus/hosts/, horus/pty_host.py, horus/run_executor.py, horus/cli.py, horus/terminal_tui.py, horus/terminal_app.py, horus/dashboard.py, horus/config.py
 ---
@@ -66,7 +65,29 @@ exactly the situation where "each reaper is careful" stops holding.
   liveness=False`. Behavior identical to today; the difference is it stops being an
   `else`.
 - **`tmux`** — everything today, plus nested `switch-client`.
-- **`herdr`** — mapping in `herdr-host-probe`; capabilities set by what that probe found.
+- **`herdr`** — probed live on v0.7.5 (2026-07-29; full evidence in `herdr-host-probe`).
+  Capabilities: `persistent=True`, `attach=True`, `viewer_argv=True`, `state=True`
+  (`idle`/`working`/`blocked`/`done`/`unknown`), **`liveness=False`** — it exposes no
+  attached flag and no activity clock, so its panes are never reaped. Three things the
+  probe found that this protocol must absorb:
+  - **A new obligation tmux doesn't have: `ensure_server`.** The herdr CLI does *not*
+    autostart its server; `workspace create` fails outright without one. So the host
+    interface needs a "make the host available" step, which for tmux is a no-op.
+  - **No argv-exec and no exit code.** `herdr pane run` *types the command into the
+    pane's shell* (probed: quoting was not preserved), so the runner is a child of a
+    shell rather than the pane's root process, and nothing plays the role of tmux's
+    `new-session <cmd>` + `wait` returncode. The `pane_runner` already records its own
+    status in the registry, so this works — but "the host reports the exit code" cannot
+    be part of the contract.
+  - **Isolated config dirs collide with socket-path limits.** herdr derives its API
+    socket from its config dir, and a long path fails with *"local socket name length
+    exceeds capacity of sun_path"* (hit on the first attempt). Horus gives every account
+    an isolated config dir, so per-account herdr isolation needs deliberately short
+    paths — a constraint on the design, not an implementation detail.
+  - **The viewer frames a whole session, not one pane.** `session attach` renders herdr's
+    entire UI. Horus's tmux model (one session per agent, so `attach -t` frames exactly
+    one agent) does not map directly; whether `agent attach <target>` narrows it is
+    untested and worth settling before the browser-viewer path is wired.
 
 ### Selection
 
