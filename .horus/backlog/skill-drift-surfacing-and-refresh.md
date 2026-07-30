@@ -189,3 +189,55 @@ PR → merge. Observations for the design session:
   fallback per git policy); "delivered main contains the artifacts" was a
   hand-run grep + version probe. The Verify step cannot assume required checks
   exist in consumer projects.
+
+## Field evidence — stale skill produced WRONG WORK, not stale prose (2026-07-30)
+
+The first observed case where drift cost real output rather than reading oddly.
+`fabric-build` ran `product-audit` at **v2** while the released CLI carried v3 and
+main now carries v4 (#463) — a *third* distinct baseline, confirming this card's
+"refresh cannot assume one common baseline" requirement from a second angle.
+
+What the stale copy did, beyond being stale:
+
+- It framed a **fabric-build** audit as a **Horus** audit ("You are auditing Horus
+  itself, not a target project"), so the run had to improvise the Fabric ecosystem
+  in place of the Claude Code / Codex changelogs the skill names, and the project's
+  own CLI verbs in place of hardcoded `horus/*` paths.
+- It produced a receipt (fabric-build PR #61) carrying `demote`/`defer`/`retire`
+  verdicts — reviving the "prune, never grow" verdict machine the owner retired on
+  2026-07-20 — and deliberately **skipped the `last_product_audit` stamp**, because
+  the frame made the stamp look like Horus's own bookkeeping.
+- Owner decision 2026-07-30: **do not stamp that audit retroactively.** The
+  anti-ceremony guard makes the next audit read the previous receipt, so stamping
+  would install a retired-contract receipt as fabric-build's calibration baseline.
+  The stamp should be written by the first properly-framed v4 run instead.
+
+**This escalates the impact argument above.** The v0.0.73 section rates drift
+"moderate, not urgent" because "behavior is correct everywhere because it lives in
+code." That reasoning holds for managed *prose* about a knob, and does not hold for
+**skills**: a skill's text IS its behavior, so a stale skill is a stale program. Skill
+drift and block drift are not one impact class. Whether that should lift this card's
+`priority: low` is a [refine] question, deliberately not decided here.
+
+**New Selection trap — the active project on a busy branch.** The two traps recorded
+above are worktrees and *dormant* projects. fabric-build is the opposite failure:
+fully live, a running session, sitting on a feature branch
+(`docs/declarative-config-and-ecosystem`). Refreshing it mid-flight would land managed
+artifacts on someone else's working branch. So Selection needs liveness on BOTH ends —
+skip dormant, and defer or isolate *busy* — which composes with session state, not just
+[[fleet-curation]]'s lifecycle state.
+
+**New Integrate constraint — refresh is gated by RELEASE, not by upgrade.** A fix
+merged to main does not reach the fleet: bundled skills ship in the CLI, so
+`upgrade-project --apply` in a consumer project installs whatever the *installed
+release* carries. v4 existed on main and was unreachable to every consumer until a
+release cut. Any refresh lifecycle must therefore treat "is the fix released yet" as a
+precondition, or it will confidently refresh projects to a version that predates the
+fix it was run to deliver.
+
+**Owed follow-up (not yet done):** after the next release, refresh fabric-build via
+branch → `upgrade-project --apply` → PR, taking product-audit v2 → v4, then re-run the
+audit there so it writes its own stamp. Sequenced behind the release deliberately;
+hand-writing the v4 projection now would be generated content committed by hand.
+
+Source: issue #462, fixed by #463 (skill scoping) and #464 (`releases_since` clock).
