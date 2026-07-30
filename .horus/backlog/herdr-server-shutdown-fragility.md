@@ -70,7 +70,7 @@ losable in a way tmux-hosted ones are not.**
    confirm the current version first). The fix is theirs: never exit the process because
    of an unrecognised pane.
 2. **Accept and compensate.** Treat herdr sessions as losable and make recovery cheap
-   rather than making the host durable — which is exactly [[session-rehost-recovery]].
+   rather than making the host durable — which is exactly [[session-restore]].
    This is the option that pays off regardless of what upstream does, since reboots and
    `tmux kill-server` lose sessions too.
 3. **Declare it.** If the host stays, consider surfacing the reduced durability where the

@@ -4,7 +4,7 @@ priority: high
 created: 2026-07-30
 created_by: agent
 readiness: shaping
-readiness_reason: "The gap is proven and both agent CLIs already support what is needed, so the mechanism is not in doubt. Two shape decisions remain: whether recording the thread id is a launch-time parse or an activity-time backfill, and how a fourth sense of the word 'resume' is named without colliding with the three that exist."
+readiness_reason: "The gap is proven and both agent CLIs already support what is needed, so the mechanism is not in doubt. The naming question is settled — the Horus-facing verb is 'restore' (owner, 2026-07-30). One shape decision remains: whether recording the thread id is a launch-time parse of the agent's stream or an activity-time backfill from the transcript."
 phase: converge
 type: feature
 tier: high
@@ -13,7 +13,7 @@ vision_facet: "Continuity core"
 surface: horus/registry.py (agent_session_id:145-147), horus/adapters/claude.py (interactive_command:169-191, build_command:114-118), horus/adapters/codex.py (interactive_command:132-152), horus/launch.py (prepare_interactive:55-118)
 ---
 
-# agent-thread-id-and-interactive-resume — Horus cannot reopen a session it launched
+# agent-thread-id-and-interactive-restore — Horus cannot reopen a session it launched
 
 ## Why — 2026-07-30, found while recovering three lost sessions
 
@@ -72,19 +72,21 @@ Confirmed working by hand the same day: three dead sessions were reopened with t
 history intact via `claude --resume <id>` and `codex resume <id>`, under
 `CLAUDE_CONFIG_DIR` / `CODEX_HOME` for the right account.
 
-## The naming collision to resolve
+## The naming collision — resolved: restore (owner, 2026-07-30)
 
-"Resume" already means three different things here, and this would be a fourth:
+"Resume" already meant three different things here, so the new capability is **restore**:
 
-| existing | meaning |
+| term | meaning |
 |---|---|
 | `horus resume` | prints the project's continuity digest / resume *prompt* |
-| TUI **fresh vs resume** launch mode | a *new* session seeded with the resume prompt (see [[fresh-vs-resume-context-split]]) |
+| TUI **fresh / resume / card-resume** launch modes (`terminal_tui.py:129`) | a *new* session seeded with the resume prompt (see [[fresh-vs-resume-context-split]]) |
 | `horus run --resume <id>` | the agent's own conversation thread, headless |
+| **restore** (new) | bring a vanished session's thread back on a live host |
 
-The new capability is "reopen this agent's thread interactively", which is none of the
-above. Naming it `resume` again would make [[fresh-vs-resume-context-split]] harder to
-reason about, not easier. Prefer a distinct verb — *reopen*, *rehost*, *adopt*.
+Note the split this keeps clean: *restore* is the Horus-facing verb, while the agent CLIs'
+own flags stay whatever they are (`claude --resume`, `codex resume`). A fourth sense of
+"resume" in Horus's own vocabulary would have made
+[[fresh-vs-resume-context-split]] harder to reason about, not easier.
 
 ## Shape
 
@@ -100,4 +102,4 @@ reason about, not easier. Prefer a distinct verb — *reopen*, *rehost*, *adopt*
    happened to be equal for Claude and *different* for Codex — any code assuming they
    match will be wrong exactly half the time.
 
-Unblocks [[session-rehost-recovery]], which is unimplementable without step 1.
+Unblocks [[session-restore]], which is unimplementable without step 1.
