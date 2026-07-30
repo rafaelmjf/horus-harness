@@ -2456,18 +2456,37 @@ def test_reaping_only_considers_hosts_that_can_prove_liveness(tmp_path, monkeypa
 
 
 def _vanished(tmp_path, monkeypatch, **over):
-    """A row shaped exactly as `reconcile()` leaves a session that disappeared."""
+    """A row that `reconcile()` itself turned into a vanished session.
+
+    DERIVED, never hand-written. The old version asserted the end state field by
+    field and omitted `target_ref`, which a real tmux row always carries — and that
+    single missing field is why the whole suite passed while Restore was unreachable
+    in the TUI (2026-07-30): `is_attachable()` answered False here and True in life.
+    Building the *pre*-state and letting the production writer produce the rest means
+    this fixture cannot drift from `reconcile()` again, because it IS `reconcile()`.
+
+    Overrides apply on top of the reconciled row, so a caller can still ask for a
+    shape reconcile would not produce (a `stopped` session, a missing thread id).
+    """
     _home(tmp_path, monkeypatch)
-    fields = {
-        "session_id": "aaaaaaaa-1111-2222-3333-444444444444", "agent": "claude",
-        "project": str(tmp_path), "status": "stale", "launch_target": "tmux",
-        "termination_reason": "vanished", "agent_session_id": "thread-9",
-    }
-    fields.update(over)
-    record = SessionRecord(**fields)
+    session_id = over.pop("session_id", "aaaaaaaa-1111-2222-3333-444444444444")
     store = Registry.default()
-    store.upsert(record)
-    return record, store
+    store.upsert(SessionRecord(
+        session_id=session_id,
+        agent="claude",
+        project=str(tmp_path),
+        status="running",
+        pid=999_999,  # a pid that is not alive, which is what makes it vanish
+        launch_target=over.pop("launch_target", "tmux"),
+        target_ref=over.pop("target_ref", f"horus-{session_id[:8]}-abc"),
+        agent_session_id=over.pop("agent_session_id", "thread-9"),
+    ))
+
+    store.reconcile()
+
+    if over:
+        store.update(session_id, **over)
+    return store.get(session_id), store
 
 
 def test_reconcile_names_the_vanished_transition_it_already_makes(tmp_path, monkeypatch):
