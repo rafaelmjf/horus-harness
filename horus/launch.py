@@ -71,8 +71,14 @@ def prepare_interactive(
     session_id: str | None = None,
     proxied: bool = False,
     remote_control: bool | None = None,
+    resume_thread_id: str | None = None,
 ) -> tuple[PreparedInteractive | None, str | None]:
     """Validate and build an attended launch without choosing its terminal host.
+
+    ``resume_thread_id`` is the AGENT's own conversation id (``agent_session_id``),
+    and reopens that conversation instead of starting a new one — the mechanism
+    behind *restore*. Do not confuse it with ``session_id``, which is Horus's run
+    identity and, for Claude only, doubles as the id assigned to a *new* thread.
 
     ``remote_control`` is the per-launch override: ``None`` (the usual case) reads
     the global default (``config.load_remote_control_default()``), so the sessions
@@ -122,11 +128,17 @@ def prepare_interactive(
         project=root,
         account=account,
         session_id=sid,
-        argv=adapter.interactive_command(spec, session_id=sid),
+        argv=adapter.interactive_command(spec, session_id=sid, resume_id=resume_thread_id),
         env=adapter.build_env(spec),
         # Recorded here, at the one place that knows both the adapter and the id,
-        # so every terminal surface gets it without repeating the rule.
-        agent_session_id=sid if adapter.assigns_interactive_thread_id else None,
+        # so every terminal surface gets it without repeating the rule. A resume
+        # knows the thread id for BOTH adapters — it is the thing being reopened —
+        # so the adapter asymmetry only applies to a fresh launch.
+        agent_session_id=(
+            resume_thread_id if resume_thread_id
+            else sid if adapter.assigns_interactive_thread_id
+            else None
+        ),
     ), None
 
 

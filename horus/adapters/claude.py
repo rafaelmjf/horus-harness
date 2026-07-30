@@ -169,7 +169,9 @@ class ClaudeAdapter(AgentAdapter):
             )
         return None
 
-    def interactive_command(self, spec: SpawnSpec, *, session_id: str) -> list[str]:
+    def interactive_command(
+        self, spec: SpawnSpec, *, session_id: str, resume_id: str | None = None,
+    ) -> list[str]:
         """Argv for an *attended* TUI session (no ``-p``): the user types in it.
 
         ``--session-id`` is pre-assigned so we can track the session before any
@@ -177,8 +179,16 @@ class ClaudeAdapter(AgentAdapter):
         A non-empty ``spec.prompt`` is passed as Claude's positional initial prompt
         (``claude [options] -- [prompt]``) to seed the session — used to inject a
         project's continuity/resume prompt; empty means a fresh, unseeded session.
+
+        ``resume_id`` reopens an EXISTING conversation instead, and the two are
+        mutually exclusive by construction: ``--session-id`` *assigns* an id to a new
+        session and collides if that id was already used, so passing both would ask
+        Claude to create the very conversation it is being told to resume.
         """
-        argv = [self.executable, "--session-id", session_id]
+        if resume_id:
+            argv = [self.executable, "--resume", resume_id]
+        else:
+            argv = [self.executable, "--session-id", session_id]
         if spec.model:
             argv += ["--model", spec.model]
         if spec.effort:

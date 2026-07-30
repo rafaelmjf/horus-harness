@@ -68,8 +68,13 @@ class FakeAdapter(AgentAdapter):
         # Stand-in for real per-account isolation (e.g. CLAUDE_CONFIG_DIR).
         return {"FAKE_AGENT_ACCOUNT": spec.account} if spec.account else {}
 
-    def interactive_command(self, spec: SpawnSpec, *, session_id: str) -> list[str]:
-        argv = ["fake-agent", "--session-id", session_id]
+    def interactive_command(
+        self, spec: SpawnSpec, *, session_id: str, resume_id: str | None = None,
+    ) -> list[str]:
+        # Mirrors a real adapter's assign-vs-resume split, so a test exercising the
+        # restore path through the fake agent sees the same shape.
+        argv = ["fake-agent", "--resume", resume_id] if resume_id else [
+            "fake-agent", "--session-id", session_id]
         if spec.prompt:
             argv.append(spec.prompt)  # mirrors a real adapter's initial-prompt injection
         return argv

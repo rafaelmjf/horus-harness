@@ -175,7 +175,9 @@ class CodexAdapter(AgentAdapter):
             env["HORUS_RUN_WORKER"] = "1"
         return env
 
-    def interactive_command(self, spec: SpawnSpec, *, session_id: str) -> list[str]:
+    def interactive_command(
+        self, spec: SpawnSpec, *, session_id: str, resume_id: str | None = None,
+    ) -> list[str]:
         """Argv for an *attended* interactive Codex session (no ``exec``).
 
         ``session_id`` is Horus's internal tracking id; Codex does not support
@@ -183,8 +185,15 @@ class CodexAdapter(AgentAdapter):
         pty_host contract) but not forwarded to the CLI. The session is tracked
         in the PTY terminal by Horus's own ``term_id``.
         A non-empty ``spec.prompt`` seeds the TUI as the positional initial prompt.
+
+        ``resume_id`` is different: it is Codex's OWN thread id, which it will
+        accept, so unlike ``session_id`` it is forwarded — as the ``resume``
+        subcommand (``codex resume [OPTIONS] [SESSION_ID] [PROMPT]``). This is the
+        attended twin of ``codex exec resume`` on the headless path.
         """
         argv = [self.executable]
+        if resume_id:
+            argv.append("resume")
         if spec.model:
             argv += ["-m", spec.model]
         if spec.effort:
@@ -193,6 +202,10 @@ class CodexAdapter(AgentAdapter):
         # FULL_AUTO is the only posture worth forcing headlessly (skips the interactive prompt).
         if spec.posture is PermissionPosture.FULL_AUTO:
             argv.append("--dangerously-bypass-approvals-and-sandbox")
+        # Positional order is fixed by `codex resume [OPTIONS] [SESSION_ID] [PROMPT]`,
+        # so the id goes after the options and before any prompt.
+        if resume_id:
+            argv.append(resume_id)
         if spec.prompt:
             argv.append(spec.prompt)
         return argv
