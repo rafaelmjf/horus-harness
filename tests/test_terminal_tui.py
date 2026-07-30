@@ -726,8 +726,8 @@ def test_skills_screen_groups_by_agent_and_shows_per_agent_states(tmp_path, monk
     ui, _root = _project_with_skill_drift(tmp_path, monkeypatch)
     ui._show("skills")
 
-    # One row per bundled skill, for both agents, straight from skill_states.
-    assert len(ui.items) == len(skills.SKILLS) * 2
+    # One row per skill that belongs in this project, for both agents.
+    assert len(ui.items) == len(skills.bundled_for(_root)) * 2
     assert {state.target for _kind, state in ui.items} == {"claude", "codex"}
 
     rendered = _plain(ui._body_text())

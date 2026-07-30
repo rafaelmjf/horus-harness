@@ -648,8 +648,45 @@ def test_execution_template_carries_worker_agent_marking():
     assert "cold reader" in doc
 
 
+def test_horus_audience_skills_stay_out_of_consumer_projects(tmp_path):
+    """A skill that operates on Horus's own source is not projected elsewhere.
+
+    `product-audit` spent months telling 20 consumer repos to audit Horus (#462)
+    because a bundled skill is read as being for the project it lands in. The
+    opposite fix applies to a genuinely Horus-only skill: withhold it.
+    """
+    consumer = tmp_path / "consumer"
+    consumer.mkdir()
+    horus_repo = tmp_path / "harness"
+    (horus_repo / "horus").mkdir(parents=True)
+    (horus_repo / "horus" / "skills.py").write_text("# generator\n", encoding="utf-8")
+
+    assert not skills.is_horus_repo(consumer)
+    assert skills.is_horus_repo(horus_repo)
+
+    audit = next(s for s in skills.SKILLS if s.name == "skill-audit")
+    assert audit.audience == skills.AUDIENCE_HORUS
+
+    consumer_names = {s.name for s in skills.bundled_for(consumer)}
+    assert "skill-audit" not in consumer_names
+    assert "horus-consolidate" in consumer_names  # project-audience ones still ship
+    assert {s.name for s in skills.bundled_for(horus_repo)} == {s.name for s in skills.SKILLS}
+
+    # User scope is a deliberate machine-wide install, so it stays unfiltered.
+    assert skills.bundled_for(consumer, user=True) == skills.SKILLS
+
+    skills.install_skills(consumer)
+    assert not (consumer / ".claude" / "skills" / "skill-audit").exists()
+    assert (consumer / ".claude" / "skills" / "horus-consolidate" / "SKILL.md").is_file()
+
+    # The agreement that matters: a withheld skill is never then reported
+    # missing, or doctor/TUI would nag for something install refuses to write.
+    assert skills.missing_or_stale(consumer) == []
+    assert "skill-audit" not in {st.name for st in skills.skill_states(consumer)}
+
+
 def test_missing_or_stale_and_findings(tmp_path):
-    assert skills.missing_or_stale(tmp_path) == list(skills.SKILLS)
+    assert skills.missing_or_stale(tmp_path) == list(skills.bundled_for(tmp_path))
     assert any(f.level == "warn" for f in skills.skill_findings(tmp_path))
 
     skills.install_skills(tmp_path)
@@ -708,7 +745,7 @@ def test_skill_findings_match_skill_states(tmp_path):
 def test_missing_or_stale_is_target_specific(tmp_path):
     skills.install_skills(tmp_path, targets=("codex",))
     assert skills.missing_or_stale(tmp_path, target="codex") == []
-    assert skills.missing_or_stale(tmp_path, target="claude") == list(skills.SKILLS)
+    assert skills.missing_or_stale(tmp_path, target="claude") == list(skills.bundled_for(tmp_path))
 
 
 def test_stale_install_is_flagged(tmp_path):
@@ -733,7 +770,7 @@ def test_init_scaffolds_all_skills_by_default(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     initialize.init_project(tmp_path / "a", assume_yes=True)
-    for s in skills.SKILLS:
+    for s in skills.bundled_for(tmp_path / "a"):
         assert (tmp_path / "a" / ".claude" / "skills" / s.name / "SKILL.md").exists()
         assert (tmp_path / "a" / ".agents" / "skills" / s.name / "SKILL.md").exists()
 
