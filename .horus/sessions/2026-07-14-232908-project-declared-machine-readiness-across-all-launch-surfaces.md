@@ -1884,3 +1884,49 @@ as a fourth consumer, without introducing a second parser or probe path.
   execution-decision 5→6; projections regenerated from source, never hand-edited.
   Claude-Session: https://claude.ai/code/session_01Xu9Kh81gFk1mJJLbeMRq9C
   ---------
+
+- `b15fa1c` fix: make vanished-session restore reachable, and stop it crashing the TUI (#459)
+  Found by the pre-release sweep for 0.0.79, driving the real TUI under a pty
+  against a real vanished Claude session. Two defects in #458's restore feature,
+  the second hidden behind the first.
+  1. Restore was unreachable. The sessions list correctly labelled the row
+  "vanished — restorable", but selecting it offered Attach/Close/Back. The
+  session screen asks `is_attachable()` first, and that only checked whether a
+  `target_ref` STRING was present — a tmux-hosted session keeps its pane name in
+  the row long after the pane is gone. So the attachable branch won, the restore
+  branch was dead code, and the owner was offered an attach that cannot work.
+  `is_attachable()` now answers `status` first: a stale row is not live, so it is
+  not attachable. That fixes the web app's copy of the same question too.
+  2. Restore then crashed the whole cockpit. `restore_session` reuses the original
+  session id — deliberately, so delivery evidence survives — and the runner spec
+  is keyed on that id. The runner unlinks its spec only after `proc.wait()`
+  returns, which is exactly what a vanished session never reaches, so the leftover
+  is guaranteed rather than rare. `write_payload` uses O_EXCL to protect a LIVE
+  session's spec, so it fired on a corpse and raised `FileExistsError` straight
+  through the TUI event loop. Restore now clears the dead session's spec first
+  (its precondition already proves nothing live owns that path), and an OSError
+  from the launch returns the error string this function promises rather than
+  taking the cockpit down.
+  Why the unit tests passed: the `_vanished` fixture never set `target_ref`, so it
+  agreed with the code instead of with what `reconcile()` actually writes. Both
+  new tests build the row as reconcile leaves it.
+  Verified live after the fix: a vanished session restored from the TUI came back
+  with its conversation intact, on a private tmux socket with the real server
+  untouched.
+  Claude-Session: https://claude.ai/code/session_01Xu9Kh81gFk1mJJLbeMRq9C
+- `ee191cd` test: derive the vanished-session fixture from reconcile instead of asserting it (#460)
+  `_vanished()` claimed to build "a row shaped exactly as reconcile() leaves a
+  session that disappeared" and then hand-wrote the end state, omitting
+  `target_ref` — which a real tmux row always carries. That one missing field is
+  why the suite stayed green while Restore was unreachable in the TUI: the
+  fixture answered `is_attachable() == False`, life answered True.
+  Now it builds the PRE-state (running, a dead pid, a target_ref) and lets
+  `store.reconcile()` produce the rest, so the fixture cannot drift from the
+  production writer again — it IS the production writer. Overrides still apply on
+  top, so callers can ask for shapes reconcile would not produce (a `stopped`
+  session, a missing thread id).
+  Proof it bites: with the `is_attachable` fix reverted, two tests now fail —
+  including `test_a_vanished_session_reaches_the_tui_and_offers_restore`, which
+  predates this change and was written for exactly this defect ("a Restore action
+  on a screen you cannot open is no feature"). It had been passing vacuously.
+  Claude-Session: https://claude.ai/code/session_01Xu9Kh81gFk1mJJLbeMRq9C
