@@ -35,6 +35,8 @@ browser verification. Git-integrated or browser-verified dispatch must add
 from __future__ import annotations
 
 import json
+import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from horus import codex_usage, config
@@ -60,9 +62,53 @@ _SANDBOX_FLAGS: dict[PermissionPosture, list[str]] = {
 }
 
 
+def _rollout_meta(path: Path) -> dict | None:
+    """The ``session_meta`` payload from a rollout file's first line, or ``None``.
+
+    Only the first line is read: these files grow to megabytes, and the header is
+    always line one (verified against codex 0.146.0 rollouts). Any unreadable or
+    unexpected file is skipped rather than raising — a half-written rollout from a
+    session starting right now is normal, not an error.
+    """
+    try:
+        with path.open(encoding="utf-8") as handle:
+            first = handle.readline()
+    except OSError:
+        return None
+    try:
+        record = json.loads(first)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(record, dict) or record.get("type") != "session_meta":
+        return None
+    payload = record.get("payload")
+    return payload if isinstance(payload, dict) else None
+
+
+def _parse_iso(value: object) -> datetime | None:
+    """Parse a rollout timestamp into an aware UTC datetime, or ``None``.
+
+    Rollout headers carry a ``Z``-suffixed UTC stamp, which ``fromisoformat``
+    only accepts natively from 3.11; normalising it keeps the comparison honest
+    against a naive local time, which would otherwise be off by the UTC offset
+    (observed: a header at 21:07Z inside a file named for 23-07 local).
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
 class CodexAdapter(AgentAdapter):
     name = "codex"
     identity_label = "account id"
+    # Codex mints its own thread id and writes it to a rollout file; it cannot be
+    # pre-assigned, so ``interactive_command`` drops the id it is handed and the
+    # real one is recovered afterwards by :func:`recover_interactive_thread_id`.
+    assigns_interactive_thread_id = False
     # The GPT-5.6 family variants + the retained prior generation Horus tracks
     # today (mirrors `horus/datums.py`'s `PRIORS_SEED` roster). Edit alongside
     # that seed as the fleet's model roster grows — this is the TUI's per-
@@ -150,6 +196,56 @@ class CodexAdapter(AgentAdapter):
         if spec.prompt:
             argv.append(spec.prompt)
         return argv
+
+    def recover_interactive_thread_id(
+        self,
+        *,
+        project: Path | str,
+        account: str | None,
+        started_at: datetime,
+        window: timedelta = timedelta(minutes=5),
+    ) -> str | None:
+        """The thread id Codex minted for an interactive session, read back afterwards.
+
+        Codex cannot be told its thread id (see ``assigns_interactive_thread_id``), so
+        the id only exists once Codex has written its rollout file. That file is the
+        only place it appears — it is not on stdout, and an attended TUI session streams
+        nothing back to Horus anyway.
+
+        Correlation uses the three fields the rollout's ``session_meta`` header carries,
+        because none of them is sufficient alone:
+
+        - ``cwd`` must equal the project (the same account runs many projects),
+        - ``originator`` must be ``codex-tui`` (an ``exec`` run is a different session
+          that Horus already tracks by other means),
+        - the header timestamp must fall within ``window`` of the launch.
+
+        Returns ``None`` — never a guess — when no single file matches. A wrong id is
+        far worse than a missing one: restoring on it would reopen somebody else's
+        conversation.
+        """
+        home = self.codex_homes.get(account) if account else None
+        root = Path(home) if home else Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+        sessions = root / "sessions"
+        if not sessions.is_dir():
+            return None
+        want_cwd = Path(project).resolve().as_posix()
+        matches: list[str] = []
+        for path in sessions.rglob("rollout-*.jsonl"):
+            meta = _rollout_meta(path)
+            if not meta:
+                continue
+            if meta.get("cwd") != want_cwd or meta.get("originator") != "codex-tui":
+                continue
+            stamp = _parse_iso(meta.get("timestamp"))
+            if stamp is None or abs(stamp - started_at) > window:
+                continue
+            thread_id = meta.get("session_id") or meta.get("id")
+            if isinstance(thread_id, str) and thread_id:
+                matches.append(thread_id)
+        # Ambiguity is a failure, not a coin flip: two sessions in the same project
+        # within the window are indistinguishable from here.
+        return matches[0] if len(matches) == 1 else None
 
     # --- multi-account identity ----------------------------------------------
 

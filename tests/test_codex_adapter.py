@@ -5,6 +5,7 @@ parse_event fixtures are real JSONL lines captured from ``codex exec --json``
 """
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -454,3 +455,92 @@ def test_limit_homes_survive_a_broken_account_map(monkeypatch):
     monkeypatch.setattr(config, "load_account_codex_homes", _boom)
     homes = codex_usage.account_limit_homes()
     assert len(homes) >= 1, "must still fall back to the ambient home"
+
+
+def _rollout(home: Path, *, when: str, cwd: str, thread_id: str, originator: str = "codex-tui") -> Path:
+    """A rollout file shaped like the real thing (codex 0.146.0): a `session_meta`
+    header on line one, then conversation records."""
+    day = home / "sessions" / when[:4] / when[5:7] / when[8:10]
+    day.mkdir(parents=True, exist_ok=True)
+    path = day / f"rollout-{when}-{thread_id}.jsonl"
+    header = {
+        "timestamp": when, "type": "session_meta",
+        "payload": {
+            "session_id": thread_id, "id": thread_id, "timestamp": when,
+            "cwd": cwd, "originator": originator, "cli_version": "0.146.0",
+        },
+    }
+    path.write_text(json.dumps(header) + '\n{"type":"turn"}\n', encoding="utf-8")
+    return path
+
+
+def test_codex_recovers_the_thread_id_it_minted_for_an_interactive_session(tmp_path):
+    """Codex cannot be told its thread id, so the only record of it is the rollout
+    header — which is what makes an interactive Codex session restorable at all."""
+    home = tmp_path / "codex-home"
+    _rollout(home, when="2026-07-30T10:00:00.000Z", cwd="/proj", thread_id="thread-abc")
+    adapter = CodexAdapter(codex_homes={"work": str(home)})
+
+    got = adapter.recover_interactive_thread_id(
+        project="/proj", account="work",
+        started_at=datetime(2026, 7, 30, 10, 0, tzinfo=timezone.utc),
+    )
+    assert got == "thread-abc"
+
+
+def test_codex_thread_recovery_discriminates_on_cwd_originator_and_time(tmp_path):
+    """None of the three correlation fields is sufficient alone, so each is checked:
+    the same account runs many projects, `exec` runs are a different kind of session
+    Horus already tracks, and a project is opened repeatedly over time."""
+    home = tmp_path / "codex-home"
+    started = datetime(2026, 7, 30, 10, 0, tzinfo=timezone.utc)
+    _rollout(home, when="2026-07-30T10:00:00.000Z", cwd="/other", thread_id="wrong-project")
+    _rollout(home, when="2026-07-30T10:00:00.000Z", cwd="/proj", thread_id="an-exec-run",
+             originator="codex-exec")
+    _rollout(home, when="2026-07-30T04:00:00.000Z", cwd="/proj", thread_id="hours-earlier")
+    adapter = CodexAdapter(codex_homes={"work": str(home)})
+
+    assert adapter.recover_interactive_thread_id(
+        project="/proj", account="work", started_at=started) is None
+
+
+def test_codex_thread_recovery_refuses_to_guess_between_two_candidates(tmp_path):
+    """Two interactive sessions in one project inside the window are
+    indistinguishable from the rollout headers alone. Returning either would be a
+    coin flip, and restoring on a wrong id reopens somebody else's conversation —
+    so ambiguity is a failure, not a default."""
+    home = tmp_path / "codex-home"
+    _rollout(home, when="2026-07-30T10:00:00.000Z", cwd="/proj", thread_id="first")
+    _rollout(home, when="2026-07-30T10:01:00.000Z", cwd="/proj", thread_id="second")
+    adapter = CodexAdapter(codex_homes={"work": str(home)})
+
+    assert adapter.recover_interactive_thread_id(
+        project="/proj", account="work",
+        started_at=datetime(2026, 7, 30, 10, 0, tzinfo=timezone.utc)) is None
+
+
+def test_codex_thread_recovery_survives_a_half_written_rollout(tmp_path):
+    """A session starting right now has a rollout that is not yet valid JSON. That
+    is normal, not an error, and must not stop the real match being found."""
+    home = tmp_path / "codex-home"
+    _rollout(home, when="2026-07-30T10:00:00.000Z", cwd="/proj", thread_id="good")
+    day = home / "sessions" / "2026" / "07" / "30"
+    (day / "rollout-2026-07-30T10-00-00-partial.jsonl").write_text('{"type":"sess', encoding="utf-8")
+    adapter = CodexAdapter(codex_homes={"work": str(home)})
+
+    assert adapter.recover_interactive_thread_id(
+        project="/proj", account="work",
+        started_at=datetime(2026, 7, 30, 10, 0, tzinfo=timezone.utc)) == "good"
+
+
+def test_codex_thread_recovery_compares_utc_against_a_local_looking_stamp(tmp_path):
+    """Rollout headers are UTC with a `Z` suffix while their FILENAME is local time —
+    observed 2h apart on a real file (header 21:07Z, filename 23-07). Comparing a
+    naive stamp would silently miss by the UTC offset, so the header is normalised."""
+    home = tmp_path / "codex-home"
+    _rollout(home, when="2026-07-29T21:07:37.988Z", cwd="/proj", thread_id="utc-normalised")
+    adapter = CodexAdapter(codex_homes={"work": str(home)})
+
+    assert adapter.recover_interactive_thread_id(
+        project="/proj", account="work",
+        started_at=datetime(2026, 7, 29, 21, 8, tzinfo=timezone.utc)) == "utc-normalised"

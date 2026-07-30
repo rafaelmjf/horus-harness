@@ -50,6 +50,13 @@ class PreparedInteractive:
     session_id: str
     argv: list[str]
     env: dict[str, str]
+    # The agent's OWN conversation/thread id, when it is knowable at launch — the
+    # thing `claude --resume` / `codex resume` take, and without which Horus cannot
+    # reopen a session it started. Set only for an adapter that pre-assigns it
+    # (Claude); ``None`` means it must be recovered afterwards, not that there is
+    # none. Deliberately separate from ``session_id``: the two are equal for Claude
+    # and different for Codex, so they are never interchangeable.
+    agent_session_id: str | None = None
 
 
 def prepare_interactive(
@@ -117,6 +124,9 @@ def prepare_interactive(
         session_id=sid,
         argv=adapter.interactive_command(spec, session_id=sid),
         env=adapter.build_env(spec),
+        # Recorded here, at the one place that knows both the adapter and the id,
+        # so every terminal surface gets it without repeating the rule.
+        agent_session_id=sid if adapter.assigns_interactive_thread_id else None,
     ), None
 
 
@@ -165,6 +175,7 @@ def launch_interactive(
         registry.SessionRecord(
             session_id=prepared.session_id, agent=prepared.agent, project=root.as_posix(),
             account=account, pid=pid, status="running",
+            agent_session_id=prepared.agent_session_id,
         )
     )
     return LaunchResult(

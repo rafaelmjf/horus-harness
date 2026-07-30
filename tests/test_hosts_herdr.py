@@ -492,3 +492,21 @@ def test_pane_is_idle_judges_by_process_name_not_our_command_line(monkeypatch):
     assert herdr_host.pane_is_idle("w1:p1") is True
     monkeypatch.setattr(herdr_host, "_run", lambda *_a, **_k: _fail("no server"))
     assert herdr_host.pane_is_idle("w1:p1") is True
+
+
+def test_a_hosted_launch_carries_the_thread_id_into_the_registry_row(tmp_path, monkeypatch):
+    """The thread id must survive the host layer, not just `prepare_interactive` —
+    `runnerspec.new_record` builds the row for every host, so a host that dropped it
+    would leave exactly the sessions worth restoring (the persistent ones) unrestorable."""
+    prepared = PreparedInteractive(
+        agent="claude", project=tmp_path, account=None, session_id=SID,
+        argv=["claude"], env={}, agent_session_id=SID,
+    )
+    record = runnerspec.new_record(prepared, pid=123, target="herdr", target_ref="w1:p1")
+    assert record.agent_session_id == SID
+
+    codex_like = PreparedInteractive(
+        agent="codex", project=tmp_path, account=None, session_id=SID,
+        argv=["codex"], env={}, agent_session_id=None,
+    )
+    assert runnerspec.new_record(codex_like, pid=123, target="herdr").agent_session_id is None

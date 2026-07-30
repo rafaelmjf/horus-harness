@@ -166,6 +166,20 @@ class AgentAdapter(ABC):
     # at, so every shared identity message interpolates this label.
     identity_label: str = "identity"
 
+    # Whether ``interactive_command`` PRE-ASSIGNS the agent's own conversation/thread
+    # id, rather than letting the agent mint one. This is what decides whether Horus
+    # can record ``agent_session_id`` at launch or has to recover it afterwards, and
+    # the two shipped adapters differ:
+    #
+    # - Claude passes ``--session-id <id>``, so the thread id IS Horus's run id.
+    # - Codex cannot pre-assign; it mints its own and writes it to a rollout file.
+    #
+    # Never assume the two ids match. Verified against three real sessions on
+    # 2026-07-30: both Claude rows had ``session_id == agent_session_id`` while the
+    # Codex row's differed, so code that assumes equality is wrong exactly half the
+    # time on a two-adapter install.
+    assigns_interactive_thread_id: bool = False
+
     # --- the contract: adapter-specific, pure, individually testable ---------
 
     @abstractmethod
