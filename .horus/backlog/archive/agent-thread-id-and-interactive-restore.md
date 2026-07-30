@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-30
 created_by: agent
@@ -12,6 +12,8 @@ tier: high
 parallel: unsafe
 vision_facet: "Continuity core"
 surface: horus/registry.py (agent_session_id:145-147), horus/adapters/claude.py (interactive_command:169-191, build_command:114-118), horus/adapters/codex.py (interactive_command:132-152), horus/launch.py (prepare_interactive:55-118)
+shipped_pr: 458
+shipped_sha: 531313d
 ---
 
 # agent-thread-id-and-interactive-restore — Horus cannot reopen a session it launched

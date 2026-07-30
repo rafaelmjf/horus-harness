@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-30
 created_by: agent
@@ -11,6 +11,8 @@ tier: medium
 parallel: unsafe
 vision_facet: "Dashboard / cockpit"
 surface: horus/registry.py (reconcile:445-452, snapshot:295-303, termination_reason:149), horus/hosts/ (a restore verb on the host protocol), horus/hosts/runnerspec.py, horus/cli.py, horus/terminal_tui.py (launch branch :2607, Sessions view)
+shipped_pr: 458
+shipped_sha: 531313d
 ---
 
 # session-restore — detect sessions that vanished, and offer to restore them
