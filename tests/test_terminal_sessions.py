@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -2604,3 +2605,75 @@ def test_a_live_session_is_still_offered_attach_not_restore(tmp_path, monkeypatc
     ui._show("session")
 
     assert [kind for kind, _ in ui.items] == ["attach", "close", "back"]
+
+
+def test_restore_clears_the_leftover_runner_spec_its_own_id_collides_with(tmp_path, monkeypatch):
+    """A vanished session ALWAYS leaves its runner spec behind, and restore reuses
+    its id — so the two collide on `O_EXCL` every single time.
+
+    The runner unlinks the spec only after `proc.wait()` returns, which is exactly
+    what a vanished session never reaches. Restore then rebuilds the spec at the
+    same path, so the guard that protects a live session's spec fired on a corpse
+    and took the whole TUI down with an unhandled `FileExistsError` (live probe,
+    2026-07-30).
+    """
+    record, store = _vanished(tmp_path, monkeypatch, target_ref="horus-aaaaaaaa-111")
+    stale_spec = runnerspec.spec_path(record.session_id)
+    stale_spec.parent.mkdir(parents=True, exist_ok=True)
+    stale_spec.write_text("{}", encoding="utf-8")
+
+    launched: dict = {}
+
+    class _Host:
+        id = "tmux"
+        capabilities = SimpleNamespace(persistent=True, attach=True)
+
+        def available(self):
+            return True
+
+        def ensure_ready(self):
+            return None
+
+        def launch(self, **kw):
+            # The real host writes the spec here; prove the path is free by then.
+            launched["spec_existed"] = stale_spec.exists()
+            runnerspec.write_payload({"kind": "interactive"}, kw["session_id"])
+            return launch.LaunchResult(
+                ok=True, agent=kw["agent"], project=str(kw["project_dir"]), account=None,
+                session_id=kw["session_id"], pid=4242, target_ref="horus-aaaaaaaa-111", error=None,
+            )
+
+    monkeypatch.setattr(terminal_sessions.hosts, "get", lambda _id: _Host())
+
+    error = terminal_sessions.restore_session(record.session_id, reg=store)
+
+    assert error is None, f"restore failed: {error}"
+    assert launched["spec_existed"] is False, "the stale spec must be gone before the host writes"
+
+
+def test_a_restore_that_cannot_start_returns_a_message_instead_of_crashing_the_tui(tmp_path, monkeypatch):
+    """`restore_session` promises an error STRING. A raised OSError escapes into the
+    TUI event loop and kills the cockpit — the owner loses the session list they
+    opened Horus to look at, over a failure that should have been one red line."""
+    record, store = _vanished(tmp_path, monkeypatch, target_ref="horus-aaaaaaaa-111")
+
+    class _Host:
+        id = "tmux"
+        capabilities = SimpleNamespace(persistent=True, attach=True)
+
+        def available(self):
+            return True
+
+        def ensure_ready(self):
+            return None
+
+        def launch(self, **_kw):
+            raise OSError("host went away mid-restore")
+
+    monkeypatch.setattr(terminal_sessions.hosts, "get", lambda _id: _Host())
+
+    error = terminal_sessions.restore_session(record.session_id, reg=store)
+
+    assert error is not None and "host went away mid-restore" in error
+    # Still restorable: a failure must not consume its own precondition.
+    assert terminal_sessions.is_restorable(store.get(record.session_id)) is True

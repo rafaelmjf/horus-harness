@@ -123,7 +123,15 @@ def is_attachable(record: registry.SessionRecord) -> bool:
     Asked of the host, not of the string: a record written by a newer Horus naming
     a host this install lacks is honestly *not* attachable here, and must never be
     offered a reattach that cannot work.
+
+    ``status`` is asked FIRST, because a `target_ref` outlives the thing it names:
+    a tmux-hosted session keeps its pane name in the row after the pane is gone, so
+    a string check alone still answers "attachable" for a session that vanished —
+    which cost the Restore action its only route into the TUI (found by live probe,
+    2026-07-30). A stale row is by definition not live, so it is never attachable.
     """
+    if record.status == "stale":
+        return False
     host = hosts.for_record(record)
     return bool(host is not None and host.capabilities.attach and record.target_ref)
 
@@ -459,19 +467,36 @@ def restore_session(
         if name.startswith("delivery_")
     }
 
-    result = host.launch(
-        agent=record.agent,
-        project_dir=Path(record.project),
-        account=record.account,
-        session_id=record.session_id,
-        resume_thread_id=record.agent_session_id,
-        attach=False,
-        # MUST be forwarded: the host writes the row itself, so without this a caller's
-        # registry is silently ignored and the update lands in the default one. Found
-        # by a live probe, which reported a successful restore while the row it was
-        # given stayed `stale` — and wrote into the real registry instead.
-        reg=store,
-    )
+    # Clear the dead session's runner spec before the host writes a new one at the
+    # SAME path — restore reuses the id, and the spec is keyed on it. The runner
+    # unlinks the spec only after its agent exits, which is precisely what a
+    # vanished session never did, so the leftover is guaranteed rather than rare.
+    # `write_payload` uses O_EXCL to protect a LIVE session's spec; here the row is
+    # already stale+vanished, so nothing live can own this path.
+    runnerspec.spec_path(record.session_id).unlink(missing_ok=True)
+    runnerspec.ready_path(record.session_id).unlink(missing_ok=True)
+
+    try:
+        result = host.launch(
+            agent=record.agent,
+            project_dir=Path(record.project),
+            account=record.account,
+            session_id=record.session_id,
+            resume_thread_id=record.agent_session_id,
+            attach=False,
+            # MUST be forwarded: the host writes the row itself, so without this a caller's
+            # registry is silently ignored and the update lands in the default one. Found
+            # by a live probe, which reported a successful restore while the row it was
+            # given stayed `stale` — and wrote into the real registry instead.
+            reg=store,
+        )
+    except OSError as exc:
+        # This function's contract is an error STRING; a raised one escapes into the
+        # TUI's event loop and takes the whole cockpit down with a traceback, which is
+        # how a leftover spec file cost the owner their session list. A restore that
+        # cannot start is a message, never a crash.
+        store.update(record.session_id, **preserved)
+        return f"the restored session failed to start: {exc}"
     if not result.ok:
         # The row is still the vanished one, so a failed restore is retryable rather
         # than having consumed its own precondition.
