@@ -1943,3 +1943,84 @@ as a fourth consumer, without introducing a second parser or probe path.
   this release, since projections only reach other projects through an upgraded
   CLI.
   Claude-Session: https://claude.ai/code/session_01Xu9Kh81gFk1mJJLbeMRq9C
+
+- `e3f0992` fix: make product-audit audit the host project, not Horus (#463)
+  `product-audit` is installed into every Horus-managed project and its
+  staleness advisory fires wherever a stamp exists, but its text scoped
+  itself to auditing Horus ("You are auditing Horus itself, not a target
+  project"). A target project following the advisory was handed a tool
+  pointed at the wrong subject.
+  Observed on fabric-build (#462): the method generalised fine — three
+  evidence questions, a one-page receipt, real findings — but the frame
+  did not, so the run had to improvise the Fabric ecosystem in place of
+  the Claude Code / Codex changelogs Q2 names, substitute the project's
+  own CLI verbs for the hardcoded `horus/*` integration points, and skip
+  the stamp rather than fake a signal it thought belonged to Horus.
+  Keeps everything that was project-agnostic already (the three questions,
+  the receipt spine, the routed-suggestions contract, the anti-ceremony
+  guard) and parameterises the two Horus-specific bits, via a new "pin the
+  subject" step:
+  - Vision units resolve down a ladder — facet table, else `vision_facet`
+    values on cards, else the Vision's own structural claims — because a
+    target project may carry no facet table (fabric-build does not). The
+    receipt states which rung it used, so no roster is ever invented.
+  - Reference surfaces are derived from the repository under audit rather
+    than naming `horus/*` paths.
+  - Overlap sources become 3-6 named, declared, reusable upstreams, with
+    agent-CLI changelogs as the special case when the audited project is
+    itself an agent harness. Bounded deliberately: "figure out the
+    ecosystem each run" would turn every audit into an open-ended web
+    sweep, against the skill's own anti-ceremony guard.
+  - The stamp is stated to belong to the audited project, resolving the
+    hesitation that left the fabric-build audit unstamped.
+  Also restores a contract the mis-scoped frame had let drift: the audit
+  suggests and routes, and does not issue demote/defer/retire verdicts of
+  its own — the fabric-build receipt did, reviving the retired "prune,
+  never grow" verdict machine.
+  Skill version 3 -> 4; regenerated the tracked `.claude/` and `.agents/`
+  projections from the working tree, which `test_skills.py` asserts.
+  Fixes #462
+  Claude-Session: https://claude.ai/code/session_018NXvmQRf54vgjsN9Repaoa
+- `b18358b` fix: stop releases_since() cancelling to zero across a minor bump (#464)
+  `releases_since()` summed SIGNED component deltas, so a resetting patch
+  counter cancelled the minor's forward step: 0.0.9 -> 0.1.0 is (+1, -9),
+  which summed to -8 and clamped to 0. Its own docstring already promised
+  the opposite ("a minor bump counts at least 1").
+  The consequence was latent but total: the first 0.1.x release would have
+  frozen every 0.0.x stamp at "0 releases ago" permanently, silently
+  killing the release half of the staleness advisory and leaving only the
+  30-day clock. It fails quiet, which is why it survived since #258.
+  Clamps each component at zero individually instead, plus an explicit
+  behind-guard so a backwards step across a boundary (0.1.0 -> 0.0.9,
+  where patch alone moves +9) still reports 0.
+  Exact within one minor line, and now a documented LOWER BOUND across a
+  boundary: two version strings do not say how many patches the previous
+  line ended on, so 0.0.73 -> 0.1.5 reports 1. Under-reporting keeps the
+  advisory's prose honest; tightening the boundary case belongs with the
+  threshold work reserved in `audit-advisory-interval`, so it is called
+  out in the docstring rather than smuggled in here.
+  Regression test verified against the old implementation: it fails there
+  with `assert 0 == 1`, the exact defect.
+  Claude-Session: https://claude.ai/code/session_018NXvmQRf54vgjsN9Repaoa
+- `477c1a4` backlog: record fabric-build skill drift as field evidence (#465)
+  Adds a dated field-evidence section to skill-drift-surfacing-and-refresh
+  from the #462 investigation. New material for both steps the card still
+  has open, rather than a restatement of the drift it already documents.
+  - Impact class: first observed case where drift produced WRONG WORK, not
+    stale prose. The v0.0.73 section rates drift "moderate, not urgent"
+    because behaviour lives in code — true for a managed paragraph about a
+    knob, false for a skill, whose text IS its behaviour. Flags the
+    priority question for a refine pass without deciding it here.
+  - Selection: a new trap opposite the recorded ones. fabric-build is not a
+    worktree and not dormant — it is live, mid-session, on a feature
+    branch. Selection needs liveness on both ends: skip dormant, defer or
+    isolate busy.
+  - Integrate: refresh is gated by RELEASE, not upgrade. Bundled skills
+    ship in the CLI, so upgrade-project installs whatever the installed
+    release carries; v4 sat on main unreachable to every consumer. A
+    refresh lifecycle that ignores this will refresh projects to a version
+    predating the fix it was run to deliver.
+  Also records the owner decision not to stamp fabric-build's audit
+  retroactively (the anti-ceremony guard would make a retired-contract
+  receipt the next run's baseline), and the owed post-release refresh.
+  Claude-Session: https://claude.ai/code/session_018NXvmQRf54vgjsN9Repaoa
