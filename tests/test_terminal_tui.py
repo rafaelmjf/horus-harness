@@ -2,12 +2,21 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
-from prompt_toolkit.data_structures import Size
+from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from prompt_toolkit.output import DummyOutput
 
 from horus import config, github_catalog, remote_start, terminal_tui
 from horus.cli import main
+
+
+def _plain(frags) -> str:
+    return "".join(fragment[1] for fragment in frags)
+
+
+def _mouse_event(event_type, button=MouseButton.LEFT) -> MouseEvent:
+    return MouseEvent(Point(0, 0), event_type, button, frozenset())
 
 
 def _isolated_home(tmp_path, monkeypatch):
@@ -64,11 +73,49 @@ def _project_with_cards(tmp_path, monkeypatch) -> tuple[terminal_tui.TerminalUI,
 def test_backlog_rows_are_unchanged_when_no_fields_are_configured(tmp_path, monkeypatch):
     ui, _root = _project_with_cards(tmp_path, monkeypatch)
 
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
 
     assert "[feature] My card\n" in rendered  # nothing appended after the title
     assert "     priority now\n" in rendered  # the classic sub-line survives
     assert "[feature] My card ·" not in rendered
+
+
+def test_left_click_selects_and_activates_the_clicked_row(tmp_path, monkeypatch):
+    ui, _root = _project_with_cards(tmp_path, monkeypatch)
+    clicked = next(
+        fragment
+        for fragment in ui._body_text()
+        if len(fragment) == 3 and "Thin card" in fragment[1]
+    )
+
+    assert clicked[2](_mouse_event(MouseEventType.MOUSE_UP)) is None
+    assert ui.screen == "card"
+    assert ui.card is not None and ui.card.title == "Thin card"
+
+
+def test_only_left_button_release_activates_the_launch_row(tmp_path, monkeypatch):
+    ui, root = _project_with_cards(tmp_path, monkeypatch)
+    ui.project = root
+    ui.pending_mode = "resume"
+    ui.pending_account = terminal_tui.LaunchAccount("claude", "personal", None)
+    ui._show("launch_form")
+    launch = next(
+        fragment
+        for fragment in ui._body_text()
+        if len(fragment) == 3 and fragment[1].strip().endswith("Launch")
+    )
+    exit_launch = Mock()
+    monkeypatch.setattr(ui, "_exit_launch", exit_launch)
+
+    assert launch[2](_mouse_event(MouseEventType.MOUSE_DOWN)) is NotImplemented
+    assert launch[2](
+        _mouse_event(MouseEventType.MOUSE_UP, MouseButton.RIGHT)
+    ) is NotImplemented
+    exit_launch.assert_not_called()
+
+    assert launch[2](_mouse_event(MouseEventType.MOUSE_UP)) is None
+    exit_launch.assert_called_once_with(ui.pending_account)
+    assert ui.items[ui.selected][0] == "launch"
 
 
 def test_backlog_screen_reports_all_six_readiness_queues(tmp_path, monkeypatch):
@@ -87,7 +134,7 @@ def test_backlog_screen_reports_all_six_readiness_queues(tmp_path, monkeypatch):
     ui._reload_project_backlog(root)
     ui._show("backlog")
 
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
 
     assert "Ready—Autonomous eligible 1 · Ready—Attended 0" in rendered
     assert "Shaping 0 · Gated 1 · Deferred 0 · Unclassified 1" in rendered
@@ -123,21 +170,21 @@ def test_readiness_transition_updates_cli_tui_and_scheduler_gate(
     assert "needs owner scope" in terminal_tui.backlog.autonomy_block_reason(card)
     assert main(["backlog", "list", "--path", str(root)]) == 0
     assert "Shaping (1)" in capsys.readouterr().out
-    assert "Shaping\n" in "".join(text for _style, text in ui._body_text())
+    assert "Shaping\n" in _plain(ui._body_text())
 
     card = write_state(readiness="ready", autonomy="attended")
     assert not terminal_tui.backlog.is_autonomous_candidate(card)
     assert "owner presence" in terminal_tui.backlog.autonomy_block_reason(card)
     assert main(["backlog", "list", "--path", str(root)]) == 0
     assert "Ready—Attended (1)" in capsys.readouterr().out
-    assert "Ready—Attended\n" in "".join(text for _style, text in ui._body_text())
+    assert "Ready—Attended\n" in _plain(ui._body_text())
 
     card = write_state(readiness="ready", autonomy="eligible")
     assert terminal_tui.backlog.is_autonomous_candidate(card)
     assert terminal_tui.backlog.autonomy_block_reason(card) == ""
     assert main(["backlog", "list", "--path", str(root)]) == 0
     assert "Ready—Autonomous eligible (1)" in capsys.readouterr().out
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "Ready—Autonomous eligible\n" in rendered
 
 
@@ -145,7 +192,7 @@ def test_backlog_rows_render_configured_fields_inline_in_pick_order(tmp_path, mo
     ui, _root = _project_with_cards(tmp_path, monkeypatch)
     ui.backlog_fields = ["tier", "status"]
 
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
 
     assert "[feature] My card · tier sonnet · status open\n" in rendered
     # The card without `tier` omits it cleanly rather than showing a blank slot.
@@ -156,7 +203,7 @@ def test_inline_priority_replaces_the_priority_sub_line(tmp_path, monkeypatch):
     ui, _root = _project_with_cards(tmp_path, monkeypatch)
     ui.backlog_fields = ["priority"]
 
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
 
     assert "[feature] My card · priority now\n" in rendered
     assert "     priority now\n" not in rendered  # not repeated below the row
@@ -168,7 +215,7 @@ def test_field_picker_offers_every_key_present_on_the_cards(tmp_path, monkeypatc
 
     assert [value for _kind, value in ui.items] == ["priority", "status", "tier", "type"]
 
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "[ ] tier\n" in rendered
     assert "on 1 of 2 cards · e.g. sonnet" in rendered
 
@@ -179,7 +226,7 @@ def test_field_picker_keeps_a_configured_field_visible_where_no_card_has_it(tmp_
     ui._show("backlog_fields")
 
     assert "vision_facet" in [value for _kind, value in ui.items]
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "[x] vision_facet\n" in rendered
     assert "on no card here" in rendered
 
@@ -193,9 +240,9 @@ def test_toggling_a_field_saves_globally_and_renders_immediately(tmp_path, monke
 
     assert ui.backlog_fields == ["tier"]
     assert config.load_backlog_fields() == ["tier"]  # persisted, not just in memory
-    assert "[x] tier" in "".join(text for _style, text in ui._body_text())
+    assert "[x] tier" in _plain(ui._body_text())
     ui._show("backlog")
-    assert "[feature] My card · tier sonnet" in "".join(text for _style, text in ui._body_text())
+    assert "[feature] My card · tier sonnet" in _plain(ui._body_text())
 
     # Toggling again removes it, and that removal persists too.
     ui._show("backlog_fields")
@@ -213,7 +260,7 @@ def test_saved_fields_apply_on_the_next_launch(tmp_path, monkeypatch):
     fresh._show("backlog")
 
     assert fresh.backlog_fields == ["type"]
-    assert "[feature] My card · type feature" in "".join(text for _style, text in fresh._body_text())
+    assert "[feature] My card · type feature" in _plain(fresh._body_text())
 
 
 def test_remote_projects_reads_cache_only_and_never_calls_gh(tmp_path, monkeypatch):
@@ -291,7 +338,7 @@ def test_projects_screen_lists_remote_items_and_renders_distinct_states(tmp_path
     kinds = [kind for kind, _value in ui.items]
     assert kinds.count("remote_project") == 2
 
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "remote-only · remote only" in rendered
     assert "cloned-repo · cloned, not registered" in rendered
     assert "Ship the thing" in rendered
@@ -412,7 +459,7 @@ def test_backlog_screen_shows_grouped_sections_expanded_by_default(tmp_path, mon
     kinds = [kind for kind, _value in ui.items]
     assert kinds == ["group", "card", "group", "card"]
 
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "Umbrella A (1)" in rendered
     assert "converges: Converged when it ships." in rendered
     assert "Dashboard (1)" in rendered
@@ -428,7 +475,7 @@ def test_selecting_a_group_header_collapses_then_expands_it(tmp_path, monkeypatc
     ui.activate()  # collapse it
     kinds = [kind for kind, _value in ui.items]
     assert kinds == ["group", "group", "card"]  # umbrella's child now hidden
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "Child one" not in rendered
 
     ui.selected = 0
@@ -504,7 +551,7 @@ def test_board_renders_priority_columns_and_detail_pane_when_wide(tmp_path, monk
     assert ui._board_active()
     # one column per non-empty priority (high, medium, low)
     assert len(ui._board_columns) == 3
-    rendered = "".join(text for _s, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "Priority board" in rendered
     assert "high · 1 ready" in rendered   # only hi-ready is dispatchable
     assert "medium · 1 ready" in rendered
@@ -512,6 +559,19 @@ def test_board_renders_priority_columns_and_detail_pane_when_wide(tmp_path, monk
     # detail pane (under the rule) shows the selected card's why snippet
     assert "─" in rendered
     assert "Why hi-ready matters." in rendered
+
+
+def test_clicking_a_card_in_the_wide_board_opens_that_card(tmp_path, monkeypatch):
+    ui, _root = _board_ui(tmp_path, monkeypatch)
+    clicked = next(
+        fragment
+        for fragment in ui._body_text()
+        if len(fragment) == 3 and "med-ready" in fragment[1]
+    )
+
+    assert clicked[2](_mouse_event(MouseEventType.MOUSE_UP)) is None
+    assert ui.screen == "card"
+    assert ui.card is not None and ui.card.name == "med-ready"
 
 
 def test_board_falls_back_to_list_when_narrow(tmp_path, monkeypatch):
@@ -606,7 +666,7 @@ def test_project_screen_offers_receipts_entry(tmp_path, monkeypatch):
     ui._show("project")
 
     assert ("receipts", None) in ui.items
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "Receipts" in rendered
     assert "1 research receipt" in rendered
 
@@ -621,7 +681,7 @@ def test_receipts_screen_lists_newest_first_and_opens_read_only(tmp_path, monkey
     ui.activate()
 
     assert ui.screen == "receipt"
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "X receipt" in rendered
     assert "body" in rendered
 
@@ -655,7 +715,7 @@ def test_project_screen_offers_skills_entry(tmp_path, monkeypatch):
     ui._show("project")
 
     assert ("skills", None) in ui.items
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "Skills" in rendered
     assert "outdated" in rendered  # roll-up reflects the drifted claude skill
 
@@ -670,7 +730,7 @@ def test_skills_screen_groups_by_agent_and_shows_per_agent_states(tmp_path, monk
     assert len(ui.items) == len(skills.SKILLS) * 2
     assert {state.target for _kind, state in ui.items} == {"claude", "codex"}
 
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "Claude" in rendered and "Codex" in rendered
     assert "outdated (v0 → v" in rendered  # downgraded claude skill
     assert "unversioned / customized" in rendered  # unmarked claude skill
@@ -731,7 +791,7 @@ def test_launch_form_is_compact_until_a_row_is_expanded(tmp_path, monkeypatch):
     assert kinds == ["launch_row", "launch_row", "launch_row", "save_defaults", "launch"]
     assert ui.items[ui.selected][0] == "launch"
 
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "Model" in rendered and "Effort" in rendered and "Permission" in rendered
     assert "Launch" in rendered and "Save as defaults" in rendered
     # Help stays hidden while compact.
@@ -739,7 +799,7 @@ def test_launch_form_is_compact_until_a_row_is_expanded(tmp_path, monkeypatch):
 
     ui.launch_expanded = "posture"
     ui._refresh_items()
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     # ...and appears on demand when the row is entered.
     assert "bypass permissions" in rendered
     assert "(o)" in rendered  # radio marker on the selected alternative
@@ -815,10 +875,6 @@ def _machine_ui(tmp_path, monkeypatch, *, listener=False, keepwarm=None, linger=
     monkeypatch.setattr(terminal_tui.activity, "collect",
                         lambda limit=8: activity.Activity(armed=armed or [], ran=ran or []))
     return ui
-
-
-def _plain(frags) -> str:
-    return "".join(text for _style, text in frags)
 
 
 # Settings pane (`t`) — the machine feature toggles
@@ -1006,15 +1062,15 @@ def test_backlog_group_children_get_tree_connectors_and_priority_dots(tmp_path, 
     assert ui.items[0][0] == "group"
 
     frags = ui._body_text()
-    rendered = "".join(text for _style, text in frags)
+    rendered = _plain(frags)
     # The child card is nested under the branch with a tree connector...
     assert "└─" in rendered or "├─" in rendered
     assert "Child one" in rendered
     # ...and its priority renders as a colored dot fragment.
-    assert any(style == "class:prio-high" and "●" in text for style, text in frags)
+    assert any(fragment[0] == "class:prio-high" and "●" in fragment[1] for fragment in frags)
     # The branch header caret + accent style is present.
-    assert any(style == "class:branch" and "▾" in text for style, text in frags) or \
-           any(style == "class:selected" and "▾" in text for style, text in frags)
+    assert any(fragment[0] == "class:branch" and "▾" in fragment[1] for fragment in frags) or \
+           any(fragment[0] == "class:selected" and "▾" in fragment[1] for fragment in frags)
 
 
 def test_priority_dot_colors_by_band_and_omits_when_absent():
@@ -1220,20 +1276,34 @@ def _home_with_project(tmp_path, monkeypatch, state):
 
 def test_project_row_shows_behind_when_behind_origin(tmp_path, monkeypatch):
     ui, _root = _home_with_project(tmp_path, monkeypatch, _remote_state(behind=3))
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "behind 3 · not fetched" in rendered
 
 
 def test_project_row_shows_current_when_up_to_date(tmp_path, monkeypatch):
     ui, _root = _home_with_project(tmp_path, monkeypatch, _remote_state(behind=0))
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "current · not fetched" in rendered
+
+
+def test_clicking_a_project_in_the_wide_grid_opens_it(tmp_path, monkeypatch):
+    ui, root = _home_with_project(tmp_path, monkeypatch, _remote_state())
+    ui.application.output.get_size = lambda: Size(rows=40, columns=120)
+    clicked = next(
+        fragment
+        for fragment in ui._body_text()
+        if len(fragment) == 3 and "demo" in fragment[1]
+    )
+
+    assert clicked[2](_mouse_event(MouseEventType.MOUSE_UP)) is None
+    assert ui.screen == "project"
+    assert ui.project == root
 
 
 def test_local_only_repo_shows_no_freshness_token(tmp_path, monkeypatch):
     state = _remote_state(upstream=None, remote_url=None, default_behind=0)
     ui, _root = _home_with_project(tmp_path, monkeypatch, state)
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "behind" not in rendered
     assert "current ·" not in rendered
 
@@ -1241,7 +1311,7 @@ def test_local_only_repo_shows_no_freshness_token(tmp_path, monkeypatch):
 def test_branch_without_upstream_falls_back_to_default_divergence(tmp_path, monkeypatch):
     state = _remote_state(upstream=None, behind=None, default_behind=2)
     ui, _root = _home_with_project(tmp_path, monkeypatch, state)
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = _plain(ui._body_text())
     assert "behind 2 · not fetched" in rendered
 
 
@@ -1262,7 +1332,7 @@ def test_g_key_fetches_the_fleet_and_refreshes_freshness(tmp_path, monkeypatch):
     monkeypatch.setattr(terminal_tui.fetchcheck, "fetch", fake_fetch)
     monkeypatch.setattr(terminal_tui.fetchcheck, "note_fetch", lambda root, ok: None)
 
-    before = "".join(text for _style, text in ui._body_text())
+    before = _plain(ui._body_text())
     assert "behind 5 · not fetched" in before
 
     binding = next(b for b in ui.application.key_bindings.bindings if b.keys == ("g",))
@@ -1271,7 +1341,7 @@ def test_g_key_fetches_the_fleet_and_refreshes_freshness(tmp_path, monkeypatch):
 
     assert fetched == [root], "every registered project is fetched exactly once"
     assert "Fetched 1 project(s)" in ui.status and "all current" in ui.status
-    after = "".join(text for _style, text in ui._body_text())
+    after = _plain(ui._body_text())
     assert "current · just now" in after
 
 
@@ -1322,7 +1392,7 @@ def test_y_fast_forwards_the_selected_project(tmp_path, monkeypatch):
 
     assert ff_calls == [(root, "origin/main")], "fast_forward runs once, on the real upstream"
     assert "synced →" in ui.status
-    assert "current · " in "".join(text for _s, text in ui._body_text())
+    assert "current · " in _plain(ui._body_text())
 
 
 def test_y_refuses_a_dirty_project_without_mutating(tmp_path, monkeypatch):

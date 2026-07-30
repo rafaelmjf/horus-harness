@@ -248,7 +248,7 @@ def test_defaults_screen_offers_every_host_plus_auto_and_persists_the_pick(tmp_p
     assert config.load_terminal_host() == "tmux"
     assert ui.selected == target  # selection tracks the just-set host
     assert "hosted by: tmux" in ui.status
-    rendered = "".join(text for _s, text in ui._body_text() if isinstance(text, str))
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
     assert "Session host" in rendered and "[current] tmux" in rendered
 
 
@@ -261,7 +261,7 @@ def test_defaults_screen_marks_a_host_that_is_not_installed(tmp_path, monkeypatc
     monkeypatch.setattr(herdr_host, "available", lambda: False)
     ui = terminal_tui.TerminalUI()
     ui._show("settings")
-    rendered = "".join(text for _s, text in ui._body_text() if isinstance(text, str))
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
     assert "herdr  (not installed here)" in rendered
 
 
