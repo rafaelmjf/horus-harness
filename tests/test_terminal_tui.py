@@ -1489,3 +1489,49 @@ def test_fmt_age_and_freshness_token_units():
     assert style == "class:warning" and text.startswith("behind 4 ·")
     style, text = terminal_tui._freshness_token(_remote_state(behind=0), None)
     assert style == "class:ok" and text.startswith("current ·")
+
+
+def _vanished_tmux_record():
+    """A vanished session shaped as `reconcile()` actually leaves it.
+
+    `target_ref` is the load-bearing detail: a tmux-hosted session keeps its
+    pane name in the row after the pane is gone, so any check that asks whether
+    the STRING exists still says "attachable" long after there is nothing to
+    attach to.
+    """
+    from horus.registry import SessionRecord
+
+    return SessionRecord(
+        session_id="dddddddd-1111-2222-3333-444444444444",
+        agent="claude",
+        project="/tmp/proj",
+        status="stale",
+        launch_target="tmux",
+        target_ref="horus-dddddddd-111",
+        termination_reason="vanished",
+        agent_session_id="thread-42",
+    )
+
+
+def test_a_vanished_session_offers_restore_even_though_its_target_ref_survives(tmp_path, monkeypatch):
+    """The session screen must offer Restore for a vanished row.
+
+    Found by a live probe on 2026-07-30: the sessions list labelled the row
+    "vanished — restorable" and the detail screen then offered Attach/Close and
+    no Restore, because `is_attachable()` only asks whether a `target_ref`
+    string is present — and a dead tmux session keeps one. The unit fixtures
+    left `target_ref` unset, so they agreed with the code instead of with
+    reality.
+    """
+    ui = _new_ui(tmp_path, monkeypatch)
+    record = _vanished_tmux_record()
+
+    assert terminal_tui.terminal_sessions.is_restorable(record) is True
+
+    ui.screen = "session"
+    ui.selected_session = record
+    ui._refresh_items()
+
+    kinds = [kind for kind, _value in ui.items]
+    assert "restore" in kinds, f"vanished session offered {kinds}, not a restore"
+    assert "attach" not in kinds, "a session that vanished has nothing to attach to"
