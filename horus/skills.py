@@ -34,13 +34,44 @@ TARGET_SUBDIRS = {
 _VERSION_RE = re.compile(r"horus-skill-version:\s*(\d+)")
 
 
+# Who a bundled skill is FOR. Every skill here is projected into managed projects,
+# so an unlabelled one gets read as being for the project it lands in — which is how
+# `product-audit` spent months telling 20 consumer repos to audit Horus (#462).
+AUDIENCE_PROJECT = "project"  # operates on the project it is invoked in (the default)
+AUDIENCE_HORUS = "horus"  # operates on Horus's own source; only valid in this repo
+
+
 class Skill(NamedTuple):
     name: str
     version: int
     content: str
+    audience: str = AUDIENCE_PROJECT
 
     def rel_path(self, *, target: str = "claude") -> str:
         return f"{TARGET_SUBDIRS[target]}/{self.name}/SKILL.md"
+
+
+def is_horus_repo(project_root: Path) -> bool:
+    """True when ``project_root`` is the horus-harness checkout itself.
+
+    Keyed on the skill generator, because that is precisely what an
+    ``AUDIENCE_HORUS`` skill exists to operate on — a consumer project has the
+    projected ``SKILL.md`` copies but never the module that writes them.
+    """
+    return (project_root / "horus" / "skills.py").is_file()
+
+
+def bundled_for(project_root: Path, *, user: bool = False) -> tuple[Skill, ...]:
+    """The bundled skills that belong in this project — the ONE roster.
+
+    Install, staleness and doctor/TUI state all read this, so a skill withheld
+    from a project is never then reported missing from it. User scope is left
+    unfiltered: it is a deliberate machine-wide install by the owner, not a
+    projection into a project that cannot use the skill.
+    """
+    if user or is_horus_repo(project_root):
+        return SKILLS
+    return tuple(s for s in SKILLS if s.audience == AUDIENCE_PROJECT)
 
 
 class SkillAction(NamedTuple):
@@ -1918,9 +1949,15 @@ description: >-
   campaign's execution use `process-retrospective`.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Skill audit — one skill's text vs reality
+
+**Scope: Horus's own bundled skills, in the horus-harness repo.** This audits
+skills whose source is `horus/skills.py`, so it is not installed into managed
+projects — a consumer project has the projected `SKILL.md` copies but not the
+generator that writes them, and a verdict there would have nowhere to land.
+Auditing a target project's *own* skills is not supported yet.
 
 You are auditing the *text* of one skill against how the world and its real
 runs actually behaved. This is distinct from `product-audit` (the whole
@@ -3085,7 +3122,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("backlog-librarian", 1, _BACKLOG_LIBRARIAN_SKILL),
     Skill("product-audit", 4, _PRODUCT_AUDIT_SKILL),
     Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),
-    Skill("skill-audit", 1, _SKILL_AUDIT_SKILL),
+    Skill("skill-audit", 2, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
     Skill("market-scan", 7, _MARKET_SCAN_SKILL),
     Skill("roadmap-branches", 4, _ROADMAP_BRANCHES_SKILL),
     Skill("scope-cards", 7, _SCOPE_CARDS_SKILL),
@@ -3156,14 +3193,14 @@ def install_skills(
     return [
         write_skill(s, project_root, user=user, force=force, target=target)
         for target in targets
-        for s in SKILLS
+        for s in bundled_for(project_root, user=user)
     ]
 
 
 def missing_or_stale(project_root: Path, *, target: str = "claude") -> list[Skill]:
     """Bundled skills not installed at project scope, or installed at an older version."""
     out: list[Skill] = []
-    for skill in SKILLS:
+    for skill in bundled_for(project_root):
         path = skill_path(skill, project_root, target=target)
         if not path.exists():
             out.append(skill)
@@ -3183,7 +3220,7 @@ def skill_states(project_root: Path, *, targets: tuple[str, ...] = ("claude",)) 
     """
     states: list[SkillState] = []
     for target in targets:
-        for skill in SKILLS:
+        for skill in bundled_for(project_root):
             path = skill_path(skill, project_root, target=target)
             if not path.exists():
                 states.append(SkillState(target, skill.name, skill.version, None, SKILL_MISSING))

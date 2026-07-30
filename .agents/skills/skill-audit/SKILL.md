@@ -13,9 +13,15 @@ description: >-
   campaign's execution use `process-retrospective`.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Skill audit — one skill's text vs reality
+
+**Scope: Horus's own bundled skills, in the horus-harness repo.** This audits
+skills whose source is `horus/skills.py`, so it is not installed into managed
+projects — a consumer project has the projected `SKILL.md` copies but not the
+generator that writes them, and a verdict there would have nowhere to land.
+Auditing a target project's *own* skills is not supported yet.
 
 You are auditing the *text* of one skill against how the world and its real
 runs actually behaved. This is distinct from `product-audit` (the whole

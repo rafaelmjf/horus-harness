@@ -465,7 +465,7 @@ def _upgrade_instructions(project_root: Path, *, apply: bool) -> list[UpgradeAct
 def _upgrade_skills(project_root: Path, *, apply: bool, targets: tuple[str, ...]) -> list[UpgradeAction]:
     actions: list[UpgradeAction] = []
     for target in targets:
-        for skill in skills.SKILLS:
+        for skill in skills.bundled_for(project_root):
             if apply:
                 a = skills.write_skill(skill, project_root, target=target)
                 actions.append(UpgradeAction(a.status, a.message, skill.rel_path(target=target)))
