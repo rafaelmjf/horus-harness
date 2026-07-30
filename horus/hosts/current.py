@@ -64,6 +64,8 @@ class CurrentHost:
         rows: int | None = None,
         proxied: bool = False,
         remote_control: bool | None = None,
+        session_id: str | None = None,
+        resume_thread_id: str | None = None,
         reg: registry.Registry | None = None,
     ) -> launch.LaunchResult:
         """Run an attended agent in this TTY, returning after the agent exits.
@@ -82,6 +84,10 @@ class CurrentHost:
             prompt=prompt,
             proxied=proxied,
             remote_control=remote_control,
+            # Reusing the caller's id keeps a RESTORED session in its original
+            # registry row, so its identity and delivery evidence survive.
+            session_id=session_id,
+            resume_thread_id=resume_thread_id,
         )
         root = Path(project_dir).resolve()
         if prepared is None:

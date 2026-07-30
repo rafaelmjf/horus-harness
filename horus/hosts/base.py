@@ -110,6 +110,8 @@ class SessionHost(Protocol):
         rows: int | None = None,
         proxied: bool = False,
         remote_control: bool | None = None,
+        session_id: str | None = None,
+        resume_thread_id: str | None = None,
         reg: registry.Registry | None = None,
     ) -> launch.LaunchResult:
         """Create an attended session, and attend it when ``attach`` is set."""

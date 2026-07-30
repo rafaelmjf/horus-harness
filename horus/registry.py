@@ -57,6 +57,29 @@ class _RunResult:
     returncode: int | None = None
 
 
+def _records_its_own_exit(launch_target: object) -> bool:
+    """Whether a session on ``launch_target`` reports its own clean exit.
+
+    This is what makes ``vanished`` honest rather than a guess. Every launch that
+    goes through a *host* writes a terminal status when the agent quits normally —
+    tmux and herdr via their runner, `current` by waiting on the child in-process —
+    so a row that went stale without one really did disappear.
+
+    A launch that never went through a host (``local``: a plain terminal window, and
+    the only option on Windows) has nothing recording that exit, so a normal quit and
+    a crash are indistinguishable from the registry alone. Those rows are left
+    unlabelled rather than accused of vanishing; a warning that cries wolf on every
+    ordinary exit is worse than no warning.
+
+    Deliberately keyed on the host registry rather than a stored flag: it stays
+    correct for rows written before this existed, and a host added later is covered
+    without a migration.
+    """
+    from horus import hosts
+
+    return hosts.get(str(launch_target or "")) is not None
+
+
 def _jsonl_result(session_id: str) -> _RunResult | None:
     """Terminal status from the structured run-event sidecar, when present."""
     for event in reversed(runlog.read_events(session_id)):
@@ -446,6 +469,12 @@ class Registry:
                 continue
             if not process_alive(row.get("pid")):
                 row["status"] = "stale"
+                if _records_its_own_exit(row.get("launch_target")):
+                    # Name the transition instead of leaving it to be inferred from a
+                    # null. This row's launcher records `exited`/`failed` itself on a
+                    # clean quit, and the check above already found no such result —
+                    # so reaching here means the session went away without one.
+                    row["termination_reason"] = "vanished"
                 _apply_delivery_completion(row, confirmed_exit=False)
                 row["updated_at"] = _now_iso()
                 dirty = True

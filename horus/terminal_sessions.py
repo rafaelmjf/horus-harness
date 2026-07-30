@@ -369,6 +369,119 @@ def stop_session(session_id: str, *, reg: registry.Registry | None = None) -> st
     return None
 
 
+def is_restorable(record: registry.SessionRecord) -> bool:
+    """Whether this session's conversation can be brought back on a live host.
+
+    Three conditions, all necessary:
+
+    - it actually went away (``stale``) rather than being stopped or finishing,
+    - it disappeared without recording an exit (``vanished`` — see
+      ``registry._records_its_own_exit``), so restoring is not second-guessing an
+      ordinary quit,
+    - the agent's own thread id was recorded, which is the thing being reopened.
+
+    The last one is why sessions launched before the id was recorded are not
+    offered: there is nothing to reopen them *with*, and an offer that fails is
+    worse than no offer.
+    """
+    return bool(
+        record.status == "stale"
+        and record.termination_reason == "vanished"
+        and record.agent_session_id
+    )
+
+
+def restorable_sessions(
+    *, project: Path | str | None = None, reg: registry.Registry | None = None,
+) -> list[registry.SessionRecord]:
+    """Vanished sessions that could be restored, newest first.
+
+    ``project`` narrows to one project — what the TUI wants when it is about to
+    launch into that project and should offer to bring back what disappeared there
+    instead of silently starting fresh.
+    """
+    store = reg or registry.Registry.default()
+    root = Path(project).resolve().as_posix() if project is not None else None
+    found = [
+        record for record in store.all()
+        if is_restorable(record) and (root is None or record.project == root)
+    ]
+    return sorted(found, key=lambda r: r.updated_at or "", reverse=True)
+
+
+def restore_session(
+    session_id: str,
+    *,
+    target: str | None = None,
+    reg: registry.Registry | None = None,
+) -> str | None:
+    """Reopen a vanished session's conversation on a live host. Error string or ``None``.
+
+    The row is reused rather than replaced, and via ``update()`` rather than
+    ``upsert()``: a fresh :class:`SessionRecord` would reset the whole delivery block
+    to defaults, which on 2026-07-30 would have silently dropped a PR linkage that was
+    the only record of what a session had delivered.
+
+    This restores the *conversation*, not in-flight work — anything the agent had not
+    written to disk when it died is gone. Say so at the call site rather than implying
+    a rollback.
+    """
+    store = reg or registry.Registry.default()
+    record, error = resolve_session(session_id, reg=store)
+    if record is None:
+        return error
+    if not is_restorable(record):
+        return (
+            f"session {record.session_id[:8]} is not restorable "
+            f"(status={record.status}, reason={record.termination_reason or 'none'}, "
+            f"thread id {'recorded' if record.agent_session_id else 'never recorded'})"
+        )
+
+    host_id = target or record.launch_target
+    host = hosts.get(str(host_id or ""))
+    if host is None or not host.capabilities.persistent:
+        # The original host may be gone (herdr uninstalled, or a Windows machine with
+        # neither), so fall back to whatever this install can actually keep alive
+        # rather than failing on a detail the owner cannot act on.
+        host = next((h for h in hosts.all_hosts() if h.capabilities.persistent and h.available()), None)
+        if host is None:
+            return "no persistent session host is available to restore onto"
+    if (not_ready := host.ensure_ready()) is not None:
+        return not_ready
+
+    # The launch reuses this row via `session_id`, and gets there through `upsert`,
+    # which overwrites every field the dataclass knows — including the delivery block.
+    # Snapshot it first: on 2026-07-30 a careless restore would have dropped the only
+    # record that a session had delivered PR #49.
+    preserved = {
+        name: getattr(record, name)
+        for name in registry.SessionRecord.__dataclass_fields__
+        if name.startswith("delivery_")
+    }
+
+    result = host.launch(
+        agent=record.agent,
+        project_dir=Path(record.project),
+        account=record.account,
+        session_id=record.session_id,
+        resume_thread_id=record.agent_session_id,
+        attach=False,
+        # MUST be forwarded: the host writes the row itself, so without this a caller's
+        # registry is silently ignored and the update lands in the default one. Found
+        # by a live probe, which reported a successful restore while the row it was
+        # given stayed `stale` — and wrote into the real registry instead.
+        reg=store,
+    )
+    if not result.ok:
+        # The row is still the vanished one, so a failed restore is retryable rather
+        # than having consumed its own precondition.
+        store.update(record.session_id, **preserved)
+        return result.error or "the restored session failed to start"
+
+    store.update(record.session_id, termination_reason=None, **preserved)
+    return None
+
+
 def _live_tmux_sessions() -> dict[str, tuple[bool, float]]:
     from horus.hosts import tmux
 

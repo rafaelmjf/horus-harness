@@ -23,6 +23,7 @@ from horus import (
     codex_usage,
     config,
     datums,
+    hosts,
     launch,
     registry,
     run_executor,
@@ -2451,3 +2452,155 @@ def test_reaping_only_considers_hosts_that_can_prove_liveness(tmp_path, monkeypa
     ))
     assert terminal_sessions.reap_orphans(min_idle_seconds=0.0) == []
     assert asked == []
+
+
+def _vanished(tmp_path, monkeypatch, **over):
+    """A row shaped exactly as `reconcile()` leaves a session that disappeared."""
+    _home(tmp_path, monkeypatch)
+    fields = {
+        "session_id": "aaaaaaaa-1111-2222-3333-444444444444", "agent": "claude",
+        "project": str(tmp_path), "status": "stale", "launch_target": "tmux",
+        "termination_reason": "vanished", "agent_session_id": "thread-9",
+    }
+    fields.update(over)
+    record = SessionRecord(**fields)
+    store = Registry.default()
+    store.upsert(record)
+    return record, store
+
+
+def test_reconcile_names_the_vanished_transition_it_already_makes(tmp_path, monkeypatch):
+    """`stale` + no reason already meant "disappeared, nobody recorded why" — it was
+    just never said, so it could not be queried without inferring from a null."""
+    _home(tmp_path, monkeypatch)
+    store = Registry.default()
+    store.upsert(SessionRecord(
+        session_id="bbbbbbbb-1111-2222-3333-444444444444", agent="claude",
+        project=str(tmp_path), status="running", pid=999_999, launch_target="tmux"))
+
+    store.reconcile()
+
+    row = store.get("bbbbbbbb-1111-2222-3333-444444444444")
+    assert row.status == "stale" and row.termination_reason == "vanished"
+
+
+def test_a_runnerless_session_is_not_accused_of_vanishing(tmp_path, monkeypatch):
+    """A `local` session (a plain terminal — the only option on Windows) has nothing
+    recording its clean exit, so a normal quit is indistinguishable from a crash.
+    Labelling it `vanished` would cry wolf on every ordinary exit, which is worse
+    than staying silent."""
+    _home(tmp_path, monkeypatch)
+    store = Registry.default()
+    store.upsert(SessionRecord(
+        session_id="cccccccc-1111-2222-3333-444444444444", agent="claude",
+        project=str(tmp_path), status="running", pid=999_999, launch_target="local"))
+
+    store.reconcile()
+
+    row = store.get("cccccccc-1111-2222-3333-444444444444")
+    assert row.status == "stale" and row.termination_reason is None
+
+
+def test_restorable_requires_a_recorded_thread_id(tmp_path, monkeypatch):
+    """Offering a restore that cannot work is worse than not offering one: sessions
+    from before the id was recorded have nothing to reopen them with."""
+    record, _ = _vanished(tmp_path, monkeypatch, agent_session_id=None)
+    assert terminal_sessions.is_restorable(record) is False
+
+    record, _ = _vanished(tmp_path, monkeypatch)
+    assert terminal_sessions.is_restorable(record) is True
+
+
+def test_a_stopped_session_is_never_offered_for_restore(tmp_path, monkeypatch):
+    """The owner closing a session via the TUI is a decision, not a failure — it is
+    already marked `stopped`, and resurrecting it would undo what they asked for."""
+    record, _ = _vanished(tmp_path, monkeypatch, termination_reason="stopped", status="failed")
+    assert terminal_sessions.is_restorable(record) is False
+
+
+def test_restore_reuses_the_row_and_keeps_its_delivery_evidence(tmp_path, monkeypatch):
+    """The launch goes through `upsert`, which overwrites every dataclass field —
+    so an unguarded restore silently resets the delivery block. On 2026-07-30 that
+    would have dropped the only record that a session delivered PR #49."""
+    record, store = _vanished(tmp_path, monkeypatch)
+    store.update(record.session_id, delivery_expected=True, delivery_pr_number=49)
+
+    launched = {}
+
+    class _Host:
+        id = "tmux"
+        capabilities = type("C", (), {"persistent": True})()
+
+        def available(self): return True
+        def ensure_ready(self): return None
+
+        def launch(self, **kw):
+            launched.update(kw)
+            return launch.LaunchResult(
+                True, "claude", tmp_path, session_id=kw["session_id"],
+                pid=4242, target_ref="horus-aaaa")
+
+    monkeypatch.setattr(hosts, "get", lambda _id: _Host())
+    assert terminal_sessions.restore_session(record.session_id, reg=store) is None
+
+    # The agent's thread is what gets reopened, and the row is reused, not forked.
+    assert launched["resume_thread_id"] == "thread-9"
+    assert launched["session_id"] == record.session_id
+    # The host writes the row itself, so the caller's registry MUST reach it. A live
+    # probe caught this missing: restore reported success while the row it was handed
+    # stayed `stale`, because the host had updated the DEFAULT registry instead.
+    assert launched["reg"] is store
+    row = store.get(record.session_id)
+    assert row.delivery_pr_number == 49 and row.delivery_expected is True
+    assert row.termination_reason is None
+
+
+def test_a_failed_restore_leaves_the_session_still_restorable(tmp_path, monkeypatch):
+    """A restore that could not start must not consume its own precondition, or one
+    transient failure turns a recoverable session into a permanently lost one."""
+    record, store = _vanished(tmp_path, monkeypatch)
+    store.update(record.session_id, delivery_pr_number=49)
+
+    class _Host:
+        id = "tmux"
+        capabilities = type("C", (), {"persistent": True})()
+
+        def available(self): return True
+        def ensure_ready(self): return None
+        def launch(self, **kw):
+            return launch.LaunchResult(False, "claude", tmp_path, error="no host")
+
+    monkeypatch.setattr(hosts, "get", lambda _id: _Host())
+    assert terminal_sessions.restore_session(record.session_id, reg=store) == "no host"
+
+    assert terminal_sessions.is_restorable(store.get(record.session_id)) is True
+    assert store.get(record.session_id).delivery_pr_number == 49
+
+
+def test_a_vanished_session_reaches_the_tui_and_offers_restore(tmp_path, monkeypatch):
+    """The whole point is reachability. A vanished session is NOT `running`, so it
+    would never have appeared in the sessions list at all — and a Restore action on a
+    screen you cannot open is no feature. This walks the real path: list -> select ->
+    the action offered."""
+    record, store = _vanished(tmp_path, monkeypatch)
+    ui = terminal_tui.TerminalUI()
+
+    ui._show("sessions")
+    listed = [value.session_id for kind, value in ui.items if kind == "session"]
+    assert record.session_id in listed, "vanished session never reached the sessions list"
+
+    ui.selected_session = record
+    ui._show("session")
+    assert [kind for kind, _ in ui.items] == ["restore", "back"]
+
+
+def test_a_live_session_is_still_offered_attach_not_restore(tmp_path, monkeypatch):
+    """Guard against the restore branch swallowing the ordinary case."""
+    record, store = _vanished(tmp_path, monkeypatch,
+                              status="running", termination_reason=None)
+    monkeypatch.setattr(terminal_sessions, "is_attachable", lambda _r: True)
+    ui = terminal_tui.TerminalUI()
+    ui.selected_session = record
+    ui._show("session")
+
+    assert [kind for kind, _ in ui.items] == ["attach", "close", "back"]
