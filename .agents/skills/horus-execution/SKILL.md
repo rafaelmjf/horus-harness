@@ -2,17 +2,20 @@
 name: horus-execution
 description: >-
   Supervise a Horus execution plan for work actually delegated/dispatched to one
-  or more other agent sessions. Use this when the project's
-  `execution_recommendation` (in `PRD.md` on a v3 project, `roadmap.md` on a v2
-  project) says `plan-execution` for that worker/supervisor plan, when the user
-  requests workers/subagents, dispatch, handoff, model separation, or
-  supervision, or when resuming an active delegated plan or reviewing an
-  existing worker handoff. It keeps `.horus/execution.md` fluid, uses
+  or more other agent sessions. Use this ONLY when the owner explicitly requested
+  delegation in this conversation — workers/subagents, dispatch, handoff, model
+  separation, or supervision — or when resuming an already-active delegated plan
+  or reviewing an existing worker handoff (their authorization happened when that
+  plan was created). An `execution_recommendation: plan-execution` field is NOT on
+  its own a reason to load this skill: it records an owner-authorized choice, it
+  never grants a new one, and a stale field with no active plan is stale intent.
+  Never infer delegation from a task's breadth, phase count, or number of
+  surfaces. It keeps `.horus/execution.md` fluid, uses
   `.horus/temp/` for fleeting worker notes, and distills durable outcomes back
   into `PRD.md` (v3) or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 15 -->
+<!-- horus-skill-version: 16 -->
 
 # Horus execution supervision
 
@@ -33,15 +36,44 @@ plan whose work is actually delegated or dispatched to other agent sessions. It
 does not denote an ordinary multi-step task; ordinary phased work remains direct
 and needs no `.horus/execution.md`.
 
+**The field is a record, never a fresh authorization.** It says the owner once
+authorized delegation for a specific plan; it cannot authorize the next one. So
+`plan-execution` sitting in frontmatter with **no active execution plan** and no
+explicit owner delegation request in *this* conversation is **stale intent** —
+say so and continue inline, rather than reading it as permission to load this
+skill, run `horus execution prompt`, or propose `.horus/execution.md`.
+
+## Two substrates, and delegation authorization is bounded to the one asked for
+
+A request to delegate authorizes delegation on the substrate the owner named. It
+does **not** authorize changing provider, account, or session topology.
+
+| Substrate | Session / account | Coordination |
+|---|---|---|
+| **Native subagent** (Claude's Task/Agent tool, Codex's own agent spawning) | a child of the current supervising session; normally the same account and runtime | the agent CLI's own collaboration tools — a bounded task and supervisor synthesis. **No `horus run`, no account switching, no `execution.md`, no Horus usage routing, and this skill is not involved.** |
+| **Horus external worker** | a tracked external agent-CLI session that may select another provider/model/account/worktree | `horus run`, the usage/account consent envelope, receipts, and this skill |
+
+"Use a native subagent for this" is therefore **not** permission to launch
+another provider or spend another account's budget. "Dispatch this through Horus
+on the <account> account" is the explicit external-worker case. If the owner says
+"subagent" or asks about "lower models" without naming the substrate, and the
+answer would change provider/account/session topology, **ask one clarification
+question before** reading another account's usage or proposing a dispatch
+envelope. Cost grounding still applies to native fan-out — via the agent CLI's
+own contract, never by manufacturing a Horus worker envelope for it.
+
 ## When to use it
 
-- `PRD.md` or `roadmap.md` has `execution_recommendation: "plan-execution - ..."`
-  for an active delegated worker/supervisor plan.
-- The user is explicitly testing or requesting supervisor/worker model separation.
-- The user requests another agent/worker/subagent, dispatch, handoff, or
-  supervision for bounded work.
-- An already-active delegated execution plan needs to resume.
+- The owner explicitly requests another agent/worker/subagent, dispatch,
+  handoff, model separation, or supervision for bounded work **through Horus**.
+- The owner is explicitly testing or requesting supervisor/worker model separation.
+- An already-active delegated execution plan needs to resume — the authorization
+  happened when the plan was created, so the owner need not restate it each turn.
 - An existing worker handoff under `.horus/temp/` needs supervisor review.
+
+Not on this list, deliberately: an `execution_recommendation` field on its own, a
+broad or multi-surface task, a long phase list, and a native subagent the owner
+asked for inside this session.
 
 ## Confirm delegation already earned its cost
 

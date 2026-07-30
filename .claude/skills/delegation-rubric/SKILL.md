@@ -12,12 +12,12 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 9 -->
+<!-- horus-skill-version: 10 -->
 
 # Delegation rubric — shared calibration + verification logic
 
 Single source of truth for the delegation-decision framework. Both
-`execution-decision` (in-project, subagents substrate) and `dispatch-decision`
+`execution-decision` (in-project — native subagent or Horus worker) and `dispatch-decision`
 (cockpit, multi-project sessions substrate) LOAD this file and apply the steps
 below. They differ only in their substrate and their mode vocabulary; the
 calibration ladder and the verification logic are identical and live *here* — so
@@ -218,9 +218,11 @@ Emit three things for the agent to APPLY (never auto-apply them):
 For a dispatched mode, also emit the complete consent envelope from Step 6 and
 state `awaiting owner approval`; never launch as part of the recommendation.
 
-**When the mode is a dispatched one** (anything that spawns a tracked worker
-rather than staying inline — `dispatched-worker`/`dispatched-plan` in
-`dispatch-decision`'s vocabulary, `subagent-plan` in `execution-decision`'s),
+**When the mode is a dispatched one** (anything that spawns a tracked *external*
+worker rather than staying in this session — `dispatched-worker`/`dispatched-plan`
+in `dispatch-decision`'s vocabulary, `horus-worker` in `execution-decision`'s;
+`native-subagent` is NOT one, since it neither leaves the account nor pays the
+tracked-worker tax),
 also name the expected **dispatch dividend**: the context/detail the overseer
 avoids by not implementing this inline, weighed against the fixed supervisor
 tax every dispatch pays regardless of size — brief + review + gate + merge +

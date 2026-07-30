@@ -102,7 +102,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 15 -->
+<!-- horus-skill-version: 16 -->
 
 # Consolidate Horus continuity
 
@@ -194,10 +194,14 @@ them is stale or empty.
      model can reinterpret, and it contradicts a session launched to work directly.
      A release may be suggested with concrete reasons but never chained as "then
      release": it is its own decision, taken with the owner, after continuity is
-     current. Default
-     `execution_recommendation` to:
-     `"continue-as-is — <why>"`
-     with the direct reason the next work stays inline. **Setting this field is
+     current. **When the owner did not explicitly request delegation in this
+     conversation, write**
+     `execution_recommendation: "continue-as-is — <why>"`
+     **regardless of the next task's breadth, phase count, or number of surfaces.
+     Never infer delegation from how big the work looks** — breadth may shape an
+     inline plan, but it never grants authority to stand up a supervisor/worker
+     workflow. The field records an owner-authorized execution choice; it is not a
+     task-size classifier. **Setting this field is
      not a trigger for `execution-decision`.** Invoke that skill only when the
      owner explicitly asks whether or how to delegate the next task. If invoked,
      apply its need-first rubric and use `"plan-execution — <why>"` only for work
@@ -304,9 +308,13 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      permission posture, not by prose. A release is only a reasoned suggestion and is
      always its own decision with the owner; never write "then release" as an
      instruction.
-   - **Recommend the execution mode for the NEXT.** Default
-     `execution_recommendation` to `"continue-as-is — <why>"` and name the direct
-     reason the next work stays inline. Setting this field is not a trigger for
+   - **Recommend the execution mode for the NEXT.** When the owner did not
+     explicitly request delegation in this conversation, write
+     `execution_recommendation: "continue-as-is — <why>"` and name the direct
+     reason the next work stays inline — **regardless of the next task's breadth,
+     phase count, or number of surfaces. Never infer delegation from how big the
+     work looks.** The field records an owner-authorized execution choice; it is
+     not a task-size classifier. Setting this field is not a trigger for
      `execution-decision`; invoke that skill only when the owner explicitly asks
      whether or how to delegate the next task. If invoked, use
      `"plan-execution — <why>"` only when a concrete context, parallelism, or
@@ -606,17 +614,20 @@ _EXECUTION_SKILL = """\
 name: horus-execution
 description: >-
   Supervise a Horus execution plan for work actually delegated/dispatched to one
-  or more other agent sessions. Use this when the project's
-  `execution_recommendation` (in `PRD.md` on a v3 project, `roadmap.md` on a v2
-  project) says `plan-execution` for that worker/supervisor plan, when the user
-  requests workers/subagents, dispatch, handoff, model separation, or
-  supervision, or when resuming an active delegated plan or reviewing an
-  existing worker handoff. It keeps `.horus/execution.md` fluid, uses
+  or more other agent sessions. Use this ONLY when the owner explicitly requested
+  delegation in this conversation — workers/subagents, dispatch, handoff, model
+  separation, or supervision — or when resuming an already-active delegated plan
+  or reviewing an existing worker handoff (their authorization happened when that
+  plan was created). An `execution_recommendation: plan-execution` field is NOT on
+  its own a reason to load this skill: it records an owner-authorized choice, it
+  never grants a new one, and a stale field with no active plan is stale intent.
+  Never infer delegation from a task's breadth, phase count, or number of
+  surfaces. It keeps `.horus/execution.md` fluid, uses
   `.horus/temp/` for fleeting worker notes, and distills durable outcomes back
   into `PRD.md` (v3) or roadmap/features/decisions/history (v2) at closure.
 ---
 
-<!-- horus-skill-version: 15 -->
+<!-- horus-skill-version: 16 -->
 
 # Horus execution supervision
 
@@ -637,15 +648,44 @@ plan whose work is actually delegated or dispatched to other agent sessions. It
 does not denote an ordinary multi-step task; ordinary phased work remains direct
 and needs no `.horus/execution.md`.
 
+**The field is a record, never a fresh authorization.** It says the owner once
+authorized delegation for a specific plan; it cannot authorize the next one. So
+`plan-execution` sitting in frontmatter with **no active execution plan** and no
+explicit owner delegation request in *this* conversation is **stale intent** —
+say so and continue inline, rather than reading it as permission to load this
+skill, run `horus execution prompt`, or propose `.horus/execution.md`.
+
+## Two substrates, and delegation authorization is bounded to the one asked for
+
+A request to delegate authorizes delegation on the substrate the owner named. It
+does **not** authorize changing provider, account, or session topology.
+
+| Substrate | Session / account | Coordination |
+|---|---|---|
+| **Native subagent** (Claude's Task/Agent tool, Codex's own agent spawning) | a child of the current supervising session; normally the same account and runtime | the agent CLI's own collaboration tools — a bounded task and supervisor synthesis. **No `horus run`, no account switching, no `execution.md`, no Horus usage routing, and this skill is not involved.** |
+| **Horus external worker** | a tracked external agent-CLI session that may select another provider/model/account/worktree | `horus run`, the usage/account consent envelope, receipts, and this skill |
+
+"Use a native subagent for this" is therefore **not** permission to launch
+another provider or spend another account's budget. "Dispatch this through Horus
+on the <account> account" is the explicit external-worker case. If the owner says
+"subagent" or asks about "lower models" without naming the substrate, and the
+answer would change provider/account/session topology, **ask one clarification
+question before** reading another account's usage or proposing a dispatch
+envelope. Cost grounding still applies to native fan-out — via the agent CLI's
+own contract, never by manufacturing a Horus worker envelope for it.
+
 ## When to use it
 
-- `PRD.md` or `roadmap.md` has `execution_recommendation: "plan-execution - ..."`
-  for an active delegated worker/supervisor plan.
-- The user is explicitly testing or requesting supervisor/worker model separation.
-- The user requests another agent/worker/subagent, dispatch, handoff, or
-  supervision for bounded work.
-- An already-active delegated execution plan needs to resume.
+- The owner explicitly requests another agent/worker/subagent, dispatch,
+  handoff, model separation, or supervision for bounded work **through Horus**.
+- The owner is explicitly testing or requesting supervisor/worker model separation.
+- An already-active delegated execution plan needs to resume — the authorization
+  happened when the plan was created, so the owner need not restate it each turn.
 - An existing worker handoff under `.horus/temp/` needs supervisor review.
+
+Not on this list, deliberately: an `execution_recommendation` field on its own, a
+broad or multi-surface task, a long phase list, and a native subagent the owner
+asked for inside this session.
 
 ## Confirm delegation already earned its cost
 
@@ -876,12 +916,12 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 9 -->
+<!-- horus-skill-version: 10 -->
 
 # Delegation rubric — shared calibration + verification logic
 
 Single source of truth for the delegation-decision framework. Both
-`execution-decision` (in-project, subagents substrate) and `dispatch-decision`
+`execution-decision` (in-project — native subagent or Horus worker) and `dispatch-decision`
 (cockpit, multi-project sessions substrate) LOAD this file and apply the steps
 below. They differ only in their substrate and their mode vocabulary; the
 calibration ladder and the verification logic are identical and live *here* — so
@@ -1082,9 +1122,11 @@ Emit three things for the agent to APPLY (never auto-apply them):
 For a dispatched mode, also emit the complete consent envelope from Step 6 and
 state `awaiting owner approval`; never launch as part of the recommendation.
 
-**When the mode is a dispatched one** (anything that spawns a tracked worker
-rather than staying inline — `dispatched-worker`/`dispatched-plan` in
-`dispatch-decision`'s vocabulary, `subagent-plan` in `execution-decision`'s),
+**When the mode is a dispatched one** (anything that spawns a tracked *external*
+worker rather than staying in this session — `dispatched-worker`/`dispatched-plan`
+in `dispatch-decision`'s vocabulary, `horus-worker` in `execution-decision`'s;
+`native-subagent` is NOT one, since it neither leaves the account nor pays the
+tracked-worker tax),
 also name the expected **dispatch dividend**: the context/detail the overseer
 avoids by not implementing this inline, weighed against the fixed supervisor
 tax every dispatch pays regardless of size — brief + review + gate + merge +
@@ -1158,9 +1200,11 @@ _EXECUTION_DECISION_SKILL = """\
 ---
 name: execution-decision
 description: >-
-  Decide HOW to execute an in-project task on the Claude/Codex subagents
-  substrate: recommend `inline` vs `subagent-plan`, a model tier, and a
-  verification depth. Owner-invoked only: use this ONLY when the owner explicitly
+  Decide HOW to execute an in-project task: recommend `inline` vs
+  `native-subagent` (a child of THIS session, same account) vs `horus-worker` (a
+  tracked external agent-CLI session that may use another provider/model/account),
+  plus a model tier and a verification depth. Owner-invoked only: use this ONLY
+  when the owner explicitly
   asks whether or how to delegate, hand work to a worker/subagent, or prepare a
   delegated execution plan. Do not trigger it for ordinary feature/fix planning,
   merely because `execution_recommendation` needs setting, or because the agent
@@ -1171,16 +1215,41 @@ description: >-
   use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
-# Execution decision (in-project, subagents substrate)
+# Execution decision (in-project)
 
-Substrate: one repo, one working session, with native subagents / `horus run`
-workers available. You are choosing how to execute the NEXT in-project unit of
-work. This skill is the thin in-project consumer of the shared rubric — it adds
-the in-project mode vocabulary and one substrate note, nothing else. It pairs
-with `horus-execution`, which supervises the plan once you've decided to
-delegate.
+You are choosing how to execute the NEXT in-project unit of work. This skill is
+the thin in-project consumer of the shared rubric — it adds the in-project mode
+vocabulary and one substrate note, nothing else. It pairs with
+`horus-execution`, which supervises a **Horus worker** plan once you've decided
+to delegate to one.
+
+## Two substrates — decide this BEFORE reading any usage data
+
+"Delegate" is not one thing here. One repo and one working session can reach two
+different substrates, with different costs and different consent requirements:
+
+| | **Native subagent** | **Horus worker** |
+|---|---|---|
+| What it is | a child of THIS session (Claude's Task/Agent tool, Codex's own agent spawning) | a tracked external agent-CLI session (`horus run`) |
+| Provider / account | normally the same runtime and the same account | may be another provider, model, account, or worktree |
+| Coordination | the agent CLI's own collaboration contract; supervisor synthesizes | usage/account consent envelope, receipts, `horus-execution` / `execution.md` |
+| Consent needed | the owner's request to use one | the full model/account/usage envelope, approved before launch |
+
+**Delegation authorization is bounded to the substrate the owner named.** "Use a
+subagent for this" authorizes a child of this session — it is **not** permission
+to launch another provider or spend another account's budget. Only an explicit
+external-worker request ("run this through Horus on the <account> account")
+opens the `horus run` path.
+
+So: if the owner says "subagent", or asks whether "lower models" could do
+something, and has **not** identified the substrate — **ask one clarification
+question first**, before reading another account's usage or drafting a dispatch
+envelope. Answering the wrong substrate is the observed failure (2026-07-29): a
+question about Codex's own agent spawning was answered with a Haiku-on-another-
+account `horus run` proposal, which was internally consistent and still not what
+was asked.
 
 ## Invocation boundary
 
@@ -1205,16 +1274,26 @@ verification by tier-trust lives there — do not restate or fork it here.
   or ambiguous/exploratory, or debugging. On a single-model runtime (no cheaper
   worker tier reachable) inline is also right unless volume would flood the
   context window — delegation then buys only context hygiene.
-- **`subagent-plan`** — delegate to a bounded subagent / `horus run` worker (one
-  phase at a time) via `horus-execution` / `execution.md`. The rubric's
-  "delegate" and "delegate as a phased plan" cases: high-volume, low-ambiguity,
-  fenceable scope, clear gate. Name the tier from the data and set
-  `delegation_basis` to what delegation actually buys here (context hygiene, and
-  on a tiered runtime a cheaper implementation tier).
+- **`native-subagent`** — hand a bounded task to a child of this session, and
+  synthesize its result here. The rubric's "delegate" case when what delegation
+  buys is **context hygiene**: high-volume, low-ambiguity, fenceable scope, clear
+  gate, but no reason to leave this account or runtime. Uses the agent CLI's own
+  collaboration contract — **no `horus run`, no account switching, no
+  `execution.md`, and no Horus usage routing**. Cost grounding still applies, via
+  that native contract rather than a manufactured worker envelope.
+- **`horus-worker`** — delegate to a tracked external agent-CLI session (one
+  phase at a time) via `horus-execution` / `execution.md`. Choose this only when
+  the dividend actually requires *leaving this session*: a cheaper implementation
+  tier, another account's capacity, a separate worktree, or time-shifted
+  unattended work. Name the tier from the data, set `delegation_basis` to what
+  the move buys, and bind the model/account/usage consent envelope before launch.
 
-Feed the recommendation into `execution_recommendation` (`continue-as-is` ≈
-`inline`; `plan-execution` ≈ `subagent-plan`) and, when delegating, into the
-`execution.md` phase's `worker_tier` / `delegation_basis`.
+Feed the recommendation into `execution_recommendation`: **both `inline` and
+`native-subagent` map to `continue-as-is`** — a native child is still this
+session, so it needs no execution plan — and only `horus-worker` maps to
+`plan-execution`, which then carries the `execution.md` phase's `worker_tier` /
+`delegation_basis`. Writing `plan-execution` for a native subagent would invite a
+later session to stand up worker machinery nobody authorized.
 
 ## In-project verification note (the substrate specialization of rubric Step 5)
 
@@ -1229,16 +1308,22 @@ surface still defaults to the owner's eyeball.
 
 ## Emit (advisory — you apply it, nothing here auto-runs)
 
-`mode` (`inline` | `subagent-plan`) + `tier` (a vendor-neutral capability point —
+`mode` (`inline` | `native-subagent` | `horus-worker`) + `tier` (a vendor-neutral capability point —
 `low|medium|high|frontier` — resolved to a concrete provider+model only at the
 consent envelope, from the neutral-tier map + live capacity,
 never defaulted from the label) + `verification depth`
 (observe-only | observe+probe | owner-eyeball,
-with the gate command named). For `subagent-plan`, include the exact agent/model/
+with the gate command named). Name the **substrate** explicitly in the emit, so
+the owner can see which one they are approving.
+
+For `horus-worker`, include the exact agent/model/
 effort/account/usage+reset/task/attempts/dividend-or-owner-override/gate consent
 envelope, mark it awaiting explicit owner approval, and ask again on any
-fallback or extra attempt. Spawning the subagent, selecting the model, and running
-the gate are all YOUR actions — this skill recommends, it does not route.
+fallback or extra attempt. For `native-subagent`, emit the bounded task, the gate
+you will run on its result, and the context dividend — **not** an account/usage
+envelope, because no other account is being spent. Spawning the child, selecting
+the model, and running the gate are all YOUR actions — this skill recommends, it
+does not route.
 
 ## v2 six-lane projects (fallback)
 
@@ -2957,12 +3042,12 @@ Nothing here routes into `PRD.md`, `roadmap.md`, or `decisions.md`.
 """
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 15, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 16, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 6, _INFER_SKILL),
-    Skill("horus-execution", 15, _EXECUTION_SKILL),
-    Skill("delegation-rubric", 9, _DELEGATION_RUBRIC_SKILL),
-    Skill("execution-decision", 5, _EXECUTION_DECISION_SKILL),
+    Skill("horus-execution", 16, _EXECUTION_SKILL),
+    Skill("delegation-rubric", 10, _DELEGATION_RUBRIC_SKILL),
+    Skill("execution-decision", 6, _EXECUTION_DECISION_SKILL),
     Skill("dispatch-decision", 4, _DISPATCH_DECISION_SKILL),
     Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
     Skill("backlog-librarian", 1, _BACKLOG_LIBRARIAN_SKILL),
