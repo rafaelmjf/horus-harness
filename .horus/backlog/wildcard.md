@@ -118,3 +118,35 @@ we get"; grounding decided same session). Related: `pathfinder`, `scope-cards`,
   v0 `SKILL.md` draft now lives at `.claude/skills/wildcard/` (+ `.agents/` parity), NOT yet
   bundled in `horus/skills.py` — the registry/version wiring + install verification is the
   dedicated-session step this card drives.
+
+## Field evidence — recency anchoring beats the frame rules (2026-07-31)
+
+Two consecutive v4 runs produced **zero** branch-advancing ideas; the owner's verdict was
+"fully focused on skills, no actual features but small adjustments and definition changes."
+That is the **fifth** run with this failure — the 2026-07-28 audit already recorded three,
+and v2/v4 were both written to stop it. Diagnosis from the runs themselves:
+
+- **Recency beat the stated grounding.** The skill's default grounding is a pathfinder
+  bundle; both runs used the *live session* as the de facto spine, and that session was
+  entirely skills work (#462-#466). Every "distinct lens" was a lens on what had just been
+  done. Run 2's top-ranked idea was a regression from a PR merged minutes earlier — that is
+  follow-up, not divergence.
+- **The branch umbrellas were never engaged.** Zero proposals from X3/X4/X5/X6 across both
+  runs, despite the Procedure saying to read them. When run 3 pinned frames to the umbrellas
+  and excluded skills/process by construction, it produced five branch-level moves from
+  material that had been sitting there the whole time — including that
+  `autotest-e2e-away-mode-drill`'s "Deferred until after 2026-07-29" trigger had silently
+  expired. So the failure is frame selection, not a shortage of feature material.
+- **The worked example still demonstrates hygiene.** v4's example is a `usage_at_close`
+  frontmatter stamp — plumbing — so the text tells the reader not to do hygiene while
+  showing hygiene. Same defect the 2026-07-28 audit named in v2's example frames.
+- **A structural tension, not just operator error.** X4/X5 are `deferred` and X3 `gated`,
+  and PRD forbids re-raising X5's hold. Wildcard is additive-only and must respect holds, so
+  it drifts to whichever facet has live work. Nothing in the text says that *advancing* a
+  parked branch is in scope while *unparking* it is not — run 3 had to derive that.
+
+Candidate fixes for the dedicated session (not decided): replace the worked example with a
+branch-advancing one; require ≥1 proposal per umbrella or an explicit "nothing here, because
+X"; state that parked branches are valid divergence targets; and make the grounding step
+refuse to fall back to live-session context when a pathfinder bundle exists but is stale —
+say so and offer the refresh instead. Run 3's output: `research/2026-07-31-wildcard-branch-divergence.md`.

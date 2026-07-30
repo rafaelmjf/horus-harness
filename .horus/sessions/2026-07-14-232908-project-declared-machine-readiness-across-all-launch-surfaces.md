@@ -2024,3 +2024,35 @@ as a fourth consumer, without introducing a second parser or probe path.
   retroactively (the anti-ceremony guard would make a retired-contract
   receipt the next run's baseline), and the owed post-release refresh.
   Claude-Session: https://claude.ai/code/session_018NXvmQRf54vgjsN9Repaoa
+
+- `7dcedfa` fix: stop shipping Horus-only skills into managed projects (#466)
+  Every bundled skill is projected identically into every managed project,
+  so an unlabelled one is read as being for the project it lands in. That
+  is how #462 happened: `product-audit` told 20 consumer repos to audit
+  Horus. The owner's call on `skill-audit` is the OPPOSITE fix — it is
+  Horus-only for now, so its text is right and its distribution is wrong.
+  Gives `Skill` an `audience` field (`project` default, `horus`) and one
+  `bundled_for(project_root)` helper that answers "what belongs here",
+  keyed on whether the root contains the skill generator — precisely what
+  an audience=horus skill operates on, and precisely what a consumer
+  project never has.
+  The helper is used by install, missing_or_stale, skill_states and
+  upgrade's refresh loop together, deliberately: filtering only the
+  installer would leave doctor and the TUI nagging for a skill install
+  refuses to write. A test pins that agreement, since it is the part that
+  would rot silently. offboard keeps iterating all SKILLS — removal should
+  clean up whatever is actually on disk, including previously-shipped
+  copies. User scope stays unfiltered: that is a deliberate machine-wide
+  install by the owner, not a projection into a project that cannot use it.
+  `skill-audit` v1 -> v2 also states its own scope in its text, so the copy
+  installed here says who it is for rather than leaving the next reader to
+  infer it — the labelling half of the same lesson.
+  Four existing tests asserted the full roster in a tmp project; they now
+  assert against the roster that belongs there, which is the honest form of
+  what they were checking.
+  Not included: consumer repos that already received `skill-audit` keep it
+  until something removes it, and the cockpit-audience skills
+  (`fleet-curation`, `dispatch-decision`,
+  `cockpit-autonomous-dispatch-contract`) are NOT reclassified here — that
+  is an owner call, not an inference.
+  Claude-Session: https://claude.ai/code/session_018NXvmQRf54vgjsN9Repaoa
