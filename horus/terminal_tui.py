@@ -27,7 +27,7 @@ from prompt_toolkit.layout import (
     ScrollOffsets,
     Window,
 )
-from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
+from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from prompt_toolkit.output import Output
 from prompt_toolkit.styles import Style
 
@@ -703,6 +703,39 @@ class TerminalUI:
             self.application.invalidate()
             return
         self.move(amount)
+
+    def _mouse_activate_handler(self, index: int):
+        """Return a row handler that makes a left-button release behave like Enter.
+
+        Terminals report a click as separate down/up events. Activating only on
+        release prevents a single click from firing twice; wheel events never reach
+        this handler because ``_BodyControl`` consumes them first.
+        """
+
+        def handle(event: MouseEvent):
+            if (
+                event.event_type != MouseEventType.MOUSE_UP
+                or event.button != MouseButton.LEFT
+            ):
+                return NotImplemented
+            if not 0 <= index < len(self.items):
+                return None
+            self.selected = index
+            self.application.invalidate()
+            self.activate()
+            return None
+
+        return handle
+
+    def _make_row_clickable(
+        self, fragments: StyleAndTextTuples, start: int, index: int
+    ) -> None:
+        """Attach one activation handler to every visible fragment of an item row."""
+        handler = self._mouse_activate_handler(index)
+        for position in range(start, len(fragments)):
+            fragment = fragments[position]
+            if len(fragment) == 2 and fragment[1]:
+                fragments[position] = (fragment[0], fragment[1], handler)
 
     def activate(self) -> None:
         if not self.items:
@@ -1447,6 +1480,7 @@ class TerminalUI:
         )
         under_group = False  # backlog: are we rendering cards under a group header?
         for index, (kind, value) in enumerate(self.items):
+            row_start = len(lines)
             selected = index == self.selected
             marker = ">" if selected else " "
             style = "class:selected" if selected else "class:item"
@@ -1693,6 +1727,7 @@ class TerminalUI:
                 suffix = "  (not installed here)" if unavailable else ""
                 lines.append((style, f"\n {marker} [{active}] {host_id}{suffix}\n"))
                 lines.append(("class:muted", f"     {_HOST_LABELS.get(host_id, '')}\n"))
+            self._make_row_clickable(lines, row_start, index)
         return lines
 
     def _wide_home_text(self, width: int) -> StyleAndTextTuples:
@@ -1764,7 +1799,13 @@ class TerminalUI:
                     if line_index == 0 and index == self.selected:
                         fragments.append(("[SetCursorPosition]", ""))
                     style, text = block[line_index]
-                    fragments.append((style, _fit_cell(text, project_width)))
+                    fragments.append(
+                        (
+                            style,
+                            _fit_cell(text, project_width),
+                            self._mouse_activate_handler(index),
+                        )
+                    )
                     if column < len(blocks) - 1:
                         fragments.append(("class:muted", "  "))
                 fragments.append(("", "\n"))
@@ -1778,6 +1819,7 @@ class TerminalUI:
         if remote_items:
             fragments.append(("class:section", " Remote projects\n"))
             for index, project in remote_items:
+                row_start = len(fragments)
                 marker = ">" if index == self.selected else " "
                 style = "class:selected" if index == self.selected else "class:item"
                 badge = "cloned, not registered" if project.is_local else "remote only"
@@ -1786,6 +1828,7 @@ class TerminalUI:
                 fragments.append((style, f" {marker} {project.name} · {badge}\n"))
                 detail = project.current_focus or project.full_name
                 fragments.append(("class:muted", f"   {detail}\n"))
+                self._make_row_clickable(fragments, row_start, index)
             fragments.append(("", "\n"))
         utility_rows = [
             (index, kind)
@@ -1793,6 +1836,7 @@ class TerminalUI:
             if kind in {"projection_sync", "fleet_review", "campaign"}
         ]
         for utility_index, kind in utility_rows:
+            row_start = len(fragments)
             selected = utility_index == self.selected
             if selected:
                 fragments.append(("[SetCursorPosition]", ""))
@@ -1817,6 +1861,7 @@ class TerminalUI:
                 fragments.append(
                     ("class:muted", "   Optional cross-project supervision — asks for outcome + targets\n")
                 )
+            self._make_row_clickable(fragments, row_start, utility_index)
         return fragments
 
     @staticmethod
@@ -1878,11 +1923,11 @@ class TerminalUI:
         frags.append(("", "\n\n"))
 
         # Build each column as a block of (style, text) cells, then interleave rows.
-        blocks: list[list[tuple[str, str]]] = []
+        blocks: list[list[tuple[str, str, int | None]]] = []
         for section in self._board_sections:
             ready = backlog_tree.ready_count(section.children)
             header = _fit_cell(f"{section.label} · {ready} ready", col_w)
-            block: list[tuple[str, str]] = [("class:branch", header)]
+            block: list[tuple[str, str, int | None]] = [("class:branch", header, None)]
             shown = section.children[:max_rows]
             for card in shown:
                 idx = next(
@@ -1893,16 +1938,27 @@ class TerminalUI:
                 marker = "▶" if selected else " "
                 dot_style, dot = self._readiness_dot(card)
                 name = _fit_cell(f"{marker}{dot}{card.name}", col_w)
-                block.append(("class:selected" if selected else dot_style, name))
+                block.append(("class:selected" if selected else dot_style, name, idx))
             if len(section.children) > max_rows:
-                block.append(("class:muted", _fit_cell(f"   … +{len(section.children) - max_rows} more", col_w)))
+                block.append(
+                    (
+                        "class:muted",
+                        _fit_cell(f"   … +{len(section.children) - max_rows} more", col_w),
+                        None,
+                    )
+                )
             blocks.append(block)
 
         height = max((len(b) for b in blocks), default=0)
         for row in range(height):
             for col, block in enumerate(blocks):
-                style, text = block[row] if row < len(block) else ("", " " * col_w)
-                frags.append((style, text))
+                style, text, index = (
+                    block[row] if row < len(block) else ("", " " * col_w, None)
+                )
+                if index is None:
+                    frags.append((style, text))
+                else:
+                    frags.append((style, text, self._mouse_activate_handler(index)))
                 if col < len(blocks) - 1:
                     frags.append(("", " " * gap))
             frags.append(("", "\n"))
@@ -1984,7 +2040,12 @@ class TerminalUI:
                 style = "class:selected"
             else:
                 style = "class:item"
-            fragments.append((style, f" {line}\n"))
+            if index == 4 and self.items:
+                fragments.append(
+                    (style, f" {line}\n", self._mouse_activate_handler(0))
+                )
+            else:
+                fragments.append((style, f" {line}\n"))
         return fragments
 
     def _vision_lines(self) -> list[StyleAndTextTuples]:
@@ -2160,6 +2221,7 @@ class TerminalUI:
             fragments.append(("class:muted", "\n  No tracked projects.\n"))
             return fragments
         for index, (kind, value) in enumerate(self.items):
+            row_start = len(fragments)
             selected = index == self.selected
             marker = ">" if selected else " "
             style = "class:selected" if selected else "class:item"
@@ -2173,8 +2235,10 @@ class TerminalUI:
                         f"     Launch {Path(value).name} with a bounded, dirty-worktree-safe sync prompt\n",
                     )
                 )
+                self._make_row_clickable(fragments, row_start, index)
                 continue
             if kind != "projection_project":
+                self._make_row_clickable(fragments, row_start, index)
                 continue
             project, state = value
             verdict = str(state.get("verdict", "unknown"))
@@ -2188,6 +2252,7 @@ class TerminalUI:
                     f"Codex {_projection_surface_text(state.get('codex'))}\n",
                 )
             )
+            self._make_row_clickable(fragments, row_start, index)
         return fragments
 
     def _fleet_review_body_text(self) -> StyleAndTextTuples:
@@ -2204,6 +2269,7 @@ class TerminalUI:
             ),
         ]
         for index, (kind, value) in enumerate(self.items):
+            row_start = len(fragments)
             selected = index == self.selected
             marker = ">" if selected else " "
             style = "class:selected" if selected else "class:item"
@@ -2214,8 +2280,10 @@ class TerminalUI:
                 fragments.append(
                     ("class:muted", f"     Resume {Path(value).name} as an ordinary project\n")
                 )
+                self._make_row_clickable(fragments, row_start, index)
                 continue
             if kind != "review_project":
+                self._make_row_clickable(fragments, row_start, index)
                 continue
             project = value
             remote = project.remote
@@ -2251,6 +2319,7 @@ class TerminalUI:
                 )
             fragments.append(("class:section", "     LOCAL WORKING STATE\n"))
             fragments.append(("class:muted", f"     {project.local.summary}\n"))
+            self._make_row_clickable(fragments, row_start, index)
         return fragments
 
     def _mission_body_text(self) -> StyleAndTextTuples:
@@ -2317,6 +2386,7 @@ class TerminalUI:
                           "service toggles are inert.\n"))
         frags.append(("class:section", "\n  Machine feature toggles\n"))
         for index, (kind, value) in enumerate(self.items):
+            row_start = len(frags)
             selected = index == self.selected
             marker = ">" if selected else " "
             style = "class:selected" if selected else "class:item"
@@ -2362,6 +2432,7 @@ class TerminalUI:
                 label = backlog_tree.GROUP_BY_LABELS.get(self.control_backlog_group_by, self.control_backlog_group_by)
                 frags.append((style, f"\n {marker}     ⇢ Backlog default group-by: {label}  (Enter cycles)\n"))
                 frags.append(("class:muted", "       what the backlog list opens to; g cycles it live\n"))
+            self._make_row_clickable(frags, row_start, index)
         return frags
 
     def _capabilities_body_text(self) -> StyleAndTextTuples:
@@ -2378,6 +2449,7 @@ class TerminalUI:
             fragments.append(("class:muted", "\n  No shipped capabilities recorded.\n"))
             return fragments
         for index, (_kind, value) in enumerate(self.items):
+            row_start = len(fragments)
             selected = index == self.selected
             marker = ">" if selected else " "
             style = "class:selected" if selected else "class:item"
@@ -2388,6 +2460,7 @@ class TerminalUI:
             commands = value.get("related_commands", [])
             if isinstance(commands, list) and commands:
                 fragments.append(("class:muted", f"     commands: {', '.join(map(str, commands))}\n"))
+            self._make_row_clickable(fragments, row_start, index)
         return fragments
 
     def _skills_body_text(self) -> StyleAndTextTuples:
@@ -2403,6 +2476,7 @@ class TerminalUI:
             return fragments
         current_target: str | None = None
         for index, (_kind, state) in enumerate(self.items):
+            row_start = len(fragments)
             if state.target != current_target:
                 current_target = state.target
                 fragments.append(("class:section", f"\n  {current_target.title()}\n"))
@@ -2415,6 +2489,7 @@ class TerminalUI:
             fragments.append((style, f"\n {marker} {state.name}  —  {label}\n"))
             if detail:
                 fragments.append(("class:muted", f"     {detail}\n"))
+            self._make_row_clickable(fragments, row_start, index)
         return fragments
 
     def _status_text(self) -> StyleAndTextTuples:

@@ -2023,7 +2023,7 @@ def test_terminal_tui_recommended_tag_present_for_tiered_resume_or_card_absent_f
     ui._show("launch_form")
     ui.launch_expanded = "model"
     ui._refresh_items()
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
     assert "sonnet (recommended)" in rendered
     assert "opus (recommended)" not in rendered
 
@@ -2033,7 +2033,7 @@ def test_terminal_tui_recommended_tag_present_for_tiered_resume_or_card_absent_f
     ui._show("launch_form")
     ui.launch_expanded = "model"
     ui._refresh_items()
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
     assert "sonnet (recommended)" in rendered
 
     # Fresh launch: never recommends, even though a tiered card exists.
@@ -2041,7 +2041,7 @@ def test_terminal_tui_recommended_tag_present_for_tiered_resume_or_card_absent_f
     ui._show("launch_form")
     ui.launch_expanded = "model"
     ui._refresh_items()
-    rendered = "".join(text for _style, text in ui._body_text())
+    rendered = "".join(fragment[1] for fragment in ui._body_text())
     assert "(recommended)" not in rendered
 
 
