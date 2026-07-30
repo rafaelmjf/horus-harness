@@ -1,6 +1,6 @@
 ---
 status: open
-priority: medium
+priority: high
 created: 2026-07-30
 created_by: agent
 readiness: shaping
@@ -170,3 +170,9 @@ work. Anything the agent had not written to disk when it was killed is gone. On
 2026-07-30 that cost nothing — the Codex session's uncommitted diff was still on disk and
 both Claude sessions had committed — but that was luck, and it is the argument for
 `horus checkpoint`-style habits rather than something this card can fix.
+
+## Reviews
+
+### 2026-07-30 — Rafael Figueiredo (manual)
+
+2026-07-30 — **priority medium → high** (owner, resume session). Elevated together with [[agent-thread-id-and-interactive-restore]] so the pair is analysed as ONE restore capability rather than two independently-scheduled cards. The owner's reasoning: these are the general improvements that arrived with the herdr incident bugs, they share that context, and splitting them across sessions would force re-deriving it. Priority only — readiness stays `shaping` and the blocking relationship on the thread-id card is unchanged, because both open shape calls are still open.
