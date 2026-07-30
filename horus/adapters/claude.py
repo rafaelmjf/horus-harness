@@ -98,6 +98,9 @@ class ClaudeAdapter(AgentAdapter):
     KNOWN_MODELS = _MODEL_FAMILIES + ("claude-opus-5", "claude-opus-4-8")
     supports_remote_control = True
     identity_label = "login email"
+    # ``interactive_command`` passes ``--session-id <id>``, so Claude's thread id is
+    # Horus's run id by construction — no parsing, and nothing to recover later.
+    assigns_interactive_thread_id = True
 
     def __init__(self, *, executable: str = "claude", config_dirs: dict[str, str] | None = None) -> None:
         """``config_dirs`` maps an account alias to its ``CLAUDE_CONFIG_DIR`` for

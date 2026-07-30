@@ -97,4 +97,5 @@ def new_record(
         status="running",
         launch_target=target,
         target_ref=target_ref,
+        agent_session_id=prepared.agent_session_id,
     )

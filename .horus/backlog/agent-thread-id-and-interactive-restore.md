@@ -3,8 +3,9 @@ status: open
 priority: high
 created: 2026-07-30
 created_by: agent
-readiness: shaping
-readiness_reason: "The gap is proven and both agent CLIs already support what is needed, so the mechanism is not in doubt. The naming question is settled — the Horus-facing verb is 'restore' (owner, 2026-07-30). One shape decision remains: whether recording the thread id is a launch-time parse of the agent's stream or an activity-time backfill from the transcript."
+readiness: ready
+autonomy: attended
+readiness_reason: "No shape decisions remain. Naming settled (the verb is 'restore', owner 2026-07-30) and the recording question settled by the code in #456: there is no stream on the interactive path, so the answer is asymmetric per adapter and is now declared as `assigns_interactive_thread_id`. Step 1 shipped; steps 2 (resume-capable `interactive_command`) and 3 (TUI restore surface) are mechanical against a proven id. Attended because verifying it means launching real agent sessions and reading their history back — a wrong thread id reopens somebody else's conversation, which no deterministic gate catches."
 phase: converge
 type: feature
 tier: high
@@ -109,3 +110,7 @@ Unblocks [[session-restore]], which is unimplementable without step 1.
 ### 2026-07-30 — Rafael Figueiredo (manual)
 
 2026-07-30 — **elevated as the lead of a paired analysis** (owner, resume session). Priority was already `high` and is unchanged; what changed is that [[session-restore]] was raised medium → high to sit alongside it, so the two are analysed together as ONE restore capability in the session that takes them. This card stays the lead because [[session-restore]] is blocked on it for the thread id — recording the id is the prerequisite half, and restoring is the payoff half. Owner's reasoning: these are the general improvements that arrived with the herdr incident bugs, they share that context, and splitting them across sessions would force re-deriving it. Both remain `readiness: shaping`; the two open shape calls (launch-time parse vs activity-time backfill here, runner-vs-adopted there) are unaffected by the priority change and are still what the paired session has to settle.
+
+### 2026-07-30 — Rafael Figueiredo (manual)
+
+2026-07-30 — **step 1 of 3 shipped in #456** (thread id recorded on interactive launches). Two things were settled by the code rather than by discussion, and both narrow what remains. (1) The stated shape decision — launch-time stream parse vs activity-time backfill — was a false dichotomy: **there is no stream on the interactive path** (`claude.py:171` says interactive runs don't stream stream-json back; an attended Codex TUI streams nothing either), so stream parsing is a headless-path capability and was never available here. (2) The answer is **asymmetric per adapter**, now declared as `assigns_interactive_thread_id`: Claude pre-assigns via `--session-id` fed the same id `launch.py:113` uses as Horus's run identity, so its thread id is free and knowable at launch; Codex mints its own into a rollout file and is recovered afterwards by `recover_interactive_thread_id` (correlating cwd + `originator=codex-tui` + a time window, returning None rather than guessing between two candidates). Verified against the owner's real rollout files and by a live isolated tmux launch of a real `claude`. Remaining: step 2 — make `interactive_command` resume-capable (Claude emits `--resume <id>` instead of `--session-id <id>`; Codex forwards the id it currently drops) — and step 3, the TUI restore surface. Owner decided 2026-07-30 that **existing vanished rows are NOT backfilled**: restore applies going forward only.
