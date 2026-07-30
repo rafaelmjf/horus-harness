@@ -103,3 +103,9 @@ own flags stay whatever they are (`claude --resume`, `codex resume`). A fourth s
    match will be wrong exactly half the time.
 
 Unblocks [[session-restore]], which is unimplementable without step 1.
+
+## Reviews
+
+### 2026-07-30 — Rafael Figueiredo (manual)
+
+2026-07-30 — **elevated as the lead of a paired analysis** (owner, resume session). Priority was already `high` and is unchanged; what changed is that [[session-restore]] was raised medium → high to sit alongside it, so the two are analysed together as ONE restore capability in the session that takes them. This card stays the lead because [[session-restore]] is blocked on it for the thread id — recording the id is the prerequisite half, and restoring is the payoff half. Owner's reasoning: these are the general improvements that arrived with the herdr incident bugs, they share that context, and splitting them across sessions would force re-deriving it. Both remain `readiness: shaping`; the two open shape calls (launch-time parse vs activity-time backfill here, runner-vs-adopted there) are unaffected by the priority change and are still what the paired session has to settle.
