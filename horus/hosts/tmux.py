@@ -108,6 +108,8 @@ class TmuxHost:
         rows: int | None = None,
         proxied: bool = False,
         remote_control: bool | None = None,
+        session_id: str | None = None,
+        resume_thread_id: str | None = None,
         reg: registry.Registry | None = None,
     ) -> launch.LaunchResult:
         """Create a unique detached tmux session, then optionally attend it."""
@@ -128,6 +130,10 @@ class TmuxHost:
             prompt=prompt,
             proxied=proxied,
             remote_control=remote_control,
+            # Reusing the caller's id keeps a RESTORED session in its original
+            # registry row, so its identity and delivery evidence survive.
+            session_id=session_id,
+            resume_thread_id=resume_thread_id,
         )
         if prepared is None:
             return launch.LaunchResult(False, agent, root, account=account, error=error)

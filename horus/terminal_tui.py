@@ -107,6 +107,18 @@ class _Stop:
 
 
 @dataclass(frozen=True)
+class _Restore:
+    """Reopen a vanished session's conversation on a live host.
+
+    Distinct from ``_Attach``, which puts this terminal on a session that is still
+    running. A restored session's history comes back; work the agent had not written
+    to disk when it died does not.
+    """
+
+    session_id: str
+
+
+@dataclass(frozen=True)
 class _EditCard:
     project: Path
     card: backlog.Card
@@ -123,7 +135,7 @@ class _Campaign:
     pass
 
 
-_Action = _Launch | _Attach | _Stop | _EditCard | _RemoteStart | _Campaign | str
+_Action = _Launch | _Attach | _Stop | _Restore | _EditCard | _RemoteStart | _Campaign | str
 
 # Labels for the home-level Defaults screen's one setting: the permission
 # posture new TUI launches (fresh/resume/card-resume) start with, until changed
@@ -227,6 +239,10 @@ class TerminalUI:
         }
         self.remote_projects, self.remote_ignored, self.remote_errors = _remote_projects()
         self.running = [record for record in registry.Registry.default().all() if record.status == "running"]
+        # Vanished-but-restorable sessions are kept SEPARATE from `running`, which
+        # feeds the live count and the per-project live list. A restorable session is
+        # not live — merging them would inflate both.
+        self.restorable = terminal_sessions.restorable_sessions()
         self.screen = "projects"
         self.project: Path | None = None
         self.project_filter: Path | None = None
@@ -892,6 +908,8 @@ class TerminalUI:
         elif self.screen == "session":
             if kind == "attach" and self.selected_session is not None:
                 self.application.exit(result=_Attach(self.selected_session.session_id))
+            elif kind == "restore" and self.selected_session is not None:
+                self.application.exit(result=_Restore(self.selected_session.session_id))
             elif kind == "close":
                 self._show("confirm")
             elif kind == "back":
@@ -1193,7 +1211,9 @@ class TerminalUI:
         elif self.screen == "card":
             self.items = [("card_resume", self.card)] if self.card is not None else []
         elif self.screen == "sessions":
-            records = list(self.running)
+            # Vanished sessions belong in this list: they are the ones the owner came
+            # looking for after a crash, and their row is the only route to Restore.
+            records = list(self.running) + list(self.restorable)
             if self.project_filter is not None:
                 records = [
                     record
@@ -1205,6 +1225,11 @@ class TerminalUI:
         elif self.screen == "session":
             if self.selected_session is not None and terminal_sessions.is_attachable(self.selected_session):
                 self.items = [("attach", None), ("close", None), ("back", None)]
+            elif self.selected_session is not None and terminal_sessions.is_restorable(self.selected_session):
+                # A vanished session cannot be attached to — there is nothing live —
+                # but its conversation can be brought back, so offer that instead of
+                # the dead end the `unavailable` branch would otherwise show.
+                self.items = [("restore", None), ("back", None)]
             else:
                 self.items = [("unavailable", None), ("back", None)]
         elif self.screen == "confirm":
@@ -1684,15 +1709,30 @@ class TerminalUI:
                         f"{Path(record.project).name}\n",
                     )
                 )
+                # A vanished row sits in the same list as live ones, so it has to read
+                # as different at a glance — otherwise the owner tries to attach to
+                # something that is not there.
+                detail = (
+                    "vanished — restorable"
+                    if terminal_sessions.is_restorable(record)
+                    else terminal_sessions.access_label(record)
+                )
                 lines.append(
                     (
                         "class:muted",
-                        f"     {terminal_sessions.access_label(record)} · "
+                        f"     {detail} · "
                         f"{record.launch_target} · {record.session_id[:8]}\n",
                     )
                 )
             elif kind in {"attach", "close", "back"}:
                 lines.append((style, f"\n {marker} {kind.title()}\n"))
+            elif kind == "restore":
+                lines.append((style, f"\n {marker} Restore\n"))
+                lines.append((
+                    "class:muted",
+                    "     This session disappeared without exiting. Restore reopens its\n"
+                    "     conversation on a live host; unsaved work is not recovered.\n",
+                ))
             elif kind == "unavailable":
                 lines.append(("class:muted", "\n   This live session remains in its original terminal.\n"))
             elif kind in {"yes", "no"}:
@@ -2724,6 +2764,8 @@ def run() -> int:
         elif isinstance(result, _Attach):
             error = terminal_sessions.attach_session(result.session_id)
             status = error or terminal_sessions.attach_outcome_message(result.session_id)
+        elif isinstance(result, _Restore):
+            error = terminal_sessions.restore_session(result.session_id)
         elif isinstance(result, _Stop):
             error = terminal_sessions.stop_session(result.session_id)
             status = error or f"Closed {result.session_id[:8]}."
