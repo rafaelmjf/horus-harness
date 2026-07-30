@@ -153,3 +153,39 @@ def test_product_audit_staleness_computation(tmp_path):
     prd.write_text("---\nlast_product_audit: whenever\n---\n# P\n", encoding="utf-8")
     line = product_audit.advisory_line(tmp_path, installed="0.0.57", today=today)
     assert line and "unreadable" in line
+
+
+def test_releases_since_survives_a_minor_bump(tmp_path):
+    """The patch counter resets across a minor bump; that must not cancel it.
+
+    Summing signed component deltas made ``0.0.9 -> 0.1.0`` come out as
+    ``+1 minor + -9 patch == 0``, so the first 0.1.x release would have frozen
+    every 0.0.x stamp at "0 releases ago" permanently, killing the release clock.
+    """
+    import datetime
+
+    from horus import product_audit
+
+    # The regression: forward across a minor boundary is never zero.
+    assert product_audit.releases_since("0.0.9", "0.1.0") == 1
+    assert product_audit.releases_since("0.0.73", "0.1.5") >= 1
+    assert product_audit.releases_since("0.9.9", "1.0.0") == 1
+
+    # Still exact within one minor line.
+    assert product_audit.releases_since("0.1.2", "0.1.7") == 5
+
+    # Still never negative, including backwards ACROSS a boundary, where the
+    # patch component alone moves forward (0.1.0 -> 0.0.9 is +9 on patch).
+    assert product_audit.releases_since("0.1.0", "0.0.9") == 0
+    assert product_audit.releases_since("1.0.0", "0.9.9") == 0
+    assert product_audit.releases_since("0.0.35", "0.0.35") == 0
+
+    # The advisory the bug actually silenced: a 0.0.x stamp against a 0.1.x
+    # install still reports a real distance and fires on the age clock.
+    prd = tmp_path / ".horus" / "PRD.md"
+    prd.parent.mkdir(parents=True)
+    prd.write_text("---\nlast_product_audit: 0.0.73 2026-06-01\n---\n# P\n", encoding="utf-8")
+    line = product_audit.advisory_line(
+        tmp_path, installed="0.1.5", today=datetime.date(2026, 7, 16)
+    )
+    assert line and "0 releases" not in line
