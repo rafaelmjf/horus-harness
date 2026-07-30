@@ -12,6 +12,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -317,11 +318,38 @@ def test_unavailable_host_refuses_cleanly(tmp_path, monkeypatch):
 @pytest.mark.skipif(shutil.which("herdr") is None, reason="herdr is not installed")
 def test_live_herdr_server_lifecycle(tmp_path, monkeypatch):
     """Against a real herdr: bring a server up, create a pane, run something in
-    it, read its pid back, then close it. Isolated via a private config dir, and
-    the config dir is kept SHORT because herdr derives its API socket from it and
-    a long path overflows `sun_path` (observed 2026-07-29)."""
+    it, read its pid back, then close it.
+
+    Isolation is MANDATORY here and is asserted, not assumed (PRD Rules; the
+    2026-07-30 incident). This test previously claimed in this very docstring to
+    be "isolated via a private config dir", set no such thing, and then stopped
+    the owner's default server in its `finally` — killing three live agent
+    sessions. Two things were wrong and both are fixed below:
+
+    - The lever is `HERDR_SOCKET_PATH`, which sets the API socket directly.
+      `HERDR_CONFIG_PATH` — what the old docstring implied — moves only the
+      config *file*; measured against herdr v0.7.5 on 2026-07-30, the socket
+      stayed on the real one. `tests/conftest.py` now redirects it suite-wide;
+      this test overrides that with a socket it may actually bind.
+    - Teardown now stops only a server this test started. `ensure_ready()`
+      returns `None` both when it starts one and when it finds one already up,
+      so its result can never answer "is this mine to stop?".
+
+    The socket path is kept SHORT because `sun_path` caps it at 108 bytes on
+    Linux (104 on macOS), and pytest's `tmp_path` alone can exhaust that.
+    """
+    socket_dir = Path(tempfile.mkdtemp(prefix="hz-live-"))
+    monkeypatch.setenv("HERDR_SOCKET_PATH", str(socket_dir / "h.sock"))
+
     host = herdr_host.HerdrHost()
+    # The guard, asserted before anything is started: if the redirection above
+    # ever stops working, fail here rather than operate on the owner's server.
+    assert not host.server_running(), (
+        f"a herdr server is already live on the isolated socket {socket_dir / 'h.sock'} — "
+        "refusing to run, because teardown would stop a server this test does not own"
+    )
     assert host.ensure_ready() is None, "the real herdr server did not start"
+    started_by_this_test = True
     try:
         created = herdr_host._payload(
             herdr_host._run("workspace", "create", "--cwd", str(tmp_path), "--label", "horus-live-test"),
@@ -350,7 +378,12 @@ def test_live_herdr_server_lifecycle(tmp_path, monkeypatch):
             __import__("time").sleep(0.1)
         assert not registry.process_alive(pid), "closing the pane must kill its process"
     finally:
-        herdr_host._run("server", "stop")
+        # Only ever stop a server this test brought up, on this test's own
+        # socket. Both halves matter: the socket keeps the command off the
+        # owner's server, and the flag keeps it off a pre-existing one.
+        if started_by_this_test:
+            herdr_host._run("server", "stop")
+        shutil.rmtree(socket_dir, ignore_errors=True)
 
 
 def test_failures_name_a_stopped_server_rather_than_blaming_the_pane(host, monkeypatch):
