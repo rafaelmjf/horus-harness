@@ -1930,3 +1930,16 @@ as a fourth consumer, without introducing a second parser or probe path.
   predates this change and was written for exactly this defect ("a Restore action
   on a screen you cannot open is no feature"). It had been passing vacuously.
   Claude-Session: https://claude.ai/code/session_01Xu9Kh81gFk1mJJLbeMRq9C
+
+- `383eab4` chore: bump to 0.0.79 (#461)
+  Cut for session restore, which shipped in #456/#457/#458 and was found
+  non-functional by the pre-release sweep (#459) — unreachable from the TUI, and
+  crashing the cockpit once reachable. Both fixed and live-verified before this
+  bump, so the headline feature of this release actually works.
+  Also carried: suite-wide test isolation (#455) after the incident that stopped
+  the owner's herdr server, mouse-click activation across the TUI (#453), the
+  user-facing strings that assumed tmux was the only host (#449), and the
+  delegation-authorization contract (#437) — whose fleet value is gated on exactly
+  this release, since projections only reach other projects through an upgraded
+  CLI.
+  Claude-Session: https://claude.ai/code/session_01Xu9Kh81gFk1mJJLbeMRq9C
