@@ -1,5 +1,6 @@
 """Tests for the bundled agent-skills layer (scaffold, version-aware install, doctor)."""
 
+import re
 from pathlib import Path
 
 from horus import initialize, skills
@@ -412,7 +413,8 @@ def test_execution_decision_skill_is_in_project_subagents():
     assert "does not trigger this skill" in skill.content
     assert "merely to populate `execution_recommendation`" in skill.content
     # Its mode vocabulary + the in-project verification specialization.
-    assert "`inline`" in skill.content and "`subagent-plan`" in skill.content
+    assert "`inline`" in skill.content
+    assert "`native-subagent`" in skill.content and "`horus-worker`" in skill.content
     assert "RUNS the gate at the phase boundary" in skill.content
     assert "TRUSTS the code" in skill.content
     assert "execution_recommendation" in skill.content
@@ -566,10 +568,74 @@ def test_execution_skill_is_delegation_only_and_projects_to_both_agents():
     # `plan-execution` is exclusively a delegated worker/supervisor workflow.
     assert "denotes a worker/supervisor execution" in execution.content
     assert "ordinary phased work remains direct" in execution.content
-    assert "An already-active delegated execution plan needs to resume." in execution.content
+    assert "An already-active delegated execution plan needs to resume" in execution.content
     assert "existing worker handoff" in execution.content
     for root in (".claude/skills", ".agents/skills"):
         assert Path(f"{root}/horus-execution/SKILL.md").read_text(encoding="utf-8") == execution.content
+
+
+def _unwrapped(text: str) -> str:
+    """Skill prose is hard-wrapped, so assert on content, not on line breaks."""
+    return re.sub(r"\s+", " ", text)
+
+
+def test_consolidate_never_infers_delegation_from_task_size():
+    # 2026-07-29 recurrence: a broad multi-surface card made an agent write
+    # `plan-execution` with no owner request, and the field then read as a trigger.
+    # The v15 text already defaulted to `continue-as-is`; a default was not
+    # categorical enough at the point where the field is authored.
+    content = _unwrapped(next(s for s in skills.SKILLS if s.name == "horus-consolidate").content)
+    # Twice each: the v3 (PRD) and the v2 (six-lane) authoring steps both carry it,
+    # because a consumer project on either structure can author the field.
+    assert content.count("Never infer delegation from how big the work looks") == 2
+    assert content.count("regardless of the next task's breadth, phase count, or number of surfaces") == 2
+    assert content.count("did not explicitly request delegation in this conversation") == 2
+    assert content.count("not a task-size classifier") == 2
+
+
+def test_execution_skill_treats_the_field_as_a_record_not_authorization():
+    execution = next(s for s in skills.SKILLS if s.name == "horus-execution")
+    # The description is what an agent reads to decide whether to LOAD the skill,
+    # so the boundary has to live there too — a body-only fix cannot reach an
+    # agent that never opens the body.
+    description = _unwrapped(execution.content.split("---")[1])
+    assert "is NOT on its own a reason to load this skill" in description
+    assert "Never infer delegation from a task's breadth" in description
+    assert "ONLY when the owner explicitly requested" in description
+    # Body: a stale field with no active plan is stale intent, not permission.
+    content = _unwrapped(execution.content)
+    assert "The field is a record, never a fresh authorization." in content
+    assert "stale intent" in content
+    assert "no active execution plan" in content
+    # And the thing it must not do on a bare field.
+    assert "horus execution prompt" in content
+    # The negative list is explicit, so breadth cannot creep back in as a trigger.
+    assert "Not on this list, deliberately" in content
+
+
+def test_native_subagents_and_horus_workers_are_separate_substrates():
+    # An owner asking for Codex's own agent spawning was answered with a
+    # Haiku-on-another-account `horus run` envelope (2026-07-29). Authorization
+    # to delegate is bounded to the substrate the owner actually named.
+    execution = _unwrapped(next(s for s in skills.SKILLS if s.name == "horus-execution").content)
+    decision = _unwrapped(next(s for s in skills.SKILLS if s.name == "execution-decision").content)
+    for name, content in (("horus-execution", execution), ("execution-decision", decision)):
+        assert "Native subagent" in content, name
+        # A native child never reaches the Horus worker machinery.
+        assert "no `horus run`, no account switching, no `execution.md`" in content.lower(), name
+    # Authorization is substrate-bounded, in both skills.
+    assert "bounded to the substrate the owner named" in decision
+    assert "authorization is bounded to the one asked for" in execution
+    assert "not** permission to launch another provider" in decision
+    # One clarification question before changing provider/account/session topology.
+    assert "ask one clarification question first" in decision
+    assert "before reading another account's usage" in decision
+    assert "ask one clarification question before" in execution
+    # The mapping that keeps a native child out of the execution.md machinery.
+    assert "`native-subagent` map to `continue-as-is`" in decision
+    assert "only `horus-worker` maps to `plan-execution`" in decision
+    # A native child needs no account/usage envelope — nobody else's budget moves.
+    assert "not** an account/usage envelope" in decision
 
 
 def test_execution_template_carries_worker_agent_marking():

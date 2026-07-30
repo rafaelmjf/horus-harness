@@ -17,7 +17,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 15 -->
+<!-- horus-skill-version: 16 -->
 
 # Consolidate Horus continuity
 
@@ -109,10 +109,14 @@ them is stale or empty.
      model can reinterpret, and it contradicts a session launched to work directly.
      A release may be suggested with concrete reasons but never chained as "then
      release": it is its own decision, taken with the owner, after continuity is
-     current. Default
-     `execution_recommendation` to:
-     `"continue-as-is — <why>"`
-     with the direct reason the next work stays inline. **Setting this field is
+     current. **When the owner did not explicitly request delegation in this
+     conversation, write**
+     `execution_recommendation: "continue-as-is — <why>"`
+     **regardless of the next task's breadth, phase count, or number of surfaces.
+     Never infer delegation from how big the work looks** — breadth may shape an
+     inline plan, but it never grants authority to stand up a supervisor/worker
+     workflow. The field records an owner-authorized execution choice; it is not a
+     task-size classifier. **Setting this field is
      not a trigger for `execution-decision`.** Invoke that skill only when the
      owner explicitly asks whether or how to delegate the next task. If invoked,
      apply its need-first rubric and use `"plan-execution — <why>"` only for work
@@ -219,9 +223,13 @@ so closure isn't done until it passes. It also backs a pre-merge CI check.
      permission posture, not by prose. A release is only a reasoned suggestion and is
      always its own decision with the owner; never write "then release" as an
      instruction.
-   - **Recommend the execution mode for the NEXT.** Default
-     `execution_recommendation` to `"continue-as-is — <why>"` and name the direct
-     reason the next work stays inline. Setting this field is not a trigger for
+   - **Recommend the execution mode for the NEXT.** When the owner did not
+     explicitly request delegation in this conversation, write
+     `execution_recommendation: "continue-as-is — <why>"` and name the direct
+     reason the next work stays inline — **regardless of the next task's breadth,
+     phase count, or number of surfaces. Never infer delegation from how big the
+     work looks.** The field records an owner-authorized execution choice; it is
+     not a task-size classifier. Setting this field is not a trigger for
      `execution-decision`; invoke that skill only when the owner explicitly asks
      whether or how to delegate the next task. If invoked, use
      `"plan-execution — <why>"` only when a concrete context, parallelism, or
