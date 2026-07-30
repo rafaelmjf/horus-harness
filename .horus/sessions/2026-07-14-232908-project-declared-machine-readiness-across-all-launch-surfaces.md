@@ -1525,3 +1525,362 @@ as a fourth consumer, without introducing a second parser or probe path.
   ---------
 - `82cd600` closure: mark the session complete — #438 merged, both model-selection layers landed
   Claude-Session: https://claude.ai/code/session_013Jqwcdrf9LfmEZPhq5Sipy
+
+- `6eaaf2b` closure: keep recovery buffer unchanged
+- `60a9955` backlog: capture the 2026-07-30 herdr session-loss incident, and a session-restore capability (#452)
+  * backlog: capture the 2026-07-30 herdr session-loss incident
+  Three live agent sessions (two Claude, one Codex) were killed mid-work when
+  the herdr server exited. Root cause was this repo's own test suite:
+  test_live_herdr_server_lifecycle runs `herdr server stop` against the default
+  server in its finally block, despite a docstring claiming it is isolated to a
+  private config dir that the code never sets.
+  Four cards, evidence-led from ~/.config/herdr/herdr-server.log and the Codex
+  rollout transcript:
+  - herdr-live-test-stops-owner-server (bug, high) — the cause, with the log
+    sequence matching the test's steps in order. Same class as the 2026-07-13
+    tmux incident, whose `-S` isolation guard was never extended to herdr.
+  - herdr-server-shutdown-fragility (bug, low) — upstream: PaneDied on an
+    unregistered pane escalates to full server shutdown. Real but NOT the cause
+    here; panes 8 and 9 hit it and the server survived.
+  - agent-thread-id-and-interactive-resume (feature, high) — agent_session_id is
+    never recorded for interactive launches, and prepare_interactive cannot
+    resume a thread on any host, so Horus cannot reopen a session it launched.
+  - session-rehost-recovery (feature, medium) — the recovery done by hand on
+    2026-07-30, as a product capability; host-agnostic, so it also covers
+    reboots and `tmux kill-server`.
+  * backlog: name the capability `restore`, and add vanished-session detection
+  Owner call (2026-07-30): the verb is `restore`, not `resume` — "resume" already
+  meant three things (`horus resume`, the TUI fresh/resume/card-resume launch
+  modes, and `horus run --resume`). Restore stays the Horus-facing verb while the
+  agent CLIs keep their own flags (`claude --resume`, `codex resume`).
+  Renames session-rehost-recovery -> session-restore and
+  agent-thread-id-and-interactive-resume -> agent-thread-id-and-interactive-restore.
+  Adds the detection half the owner asked for, and it needs no new plumbing:
+  `termination_reason` already has a taxonomy (natural / stopped / orphan-reaped /
+  launch-error) with nothing for "vanished", and reconcile() stales a dead-pid row
+  while leaving the reason None. So `status == "stale" and termination_reason is
+  None` already means "disappeared, nobody recorded why" — a clean exit cannot
+  produce it, because the runner records exited/failed with a returncode first.
+  Proposal is to have reconcile() name that transition rather than leave it
+  inferred from a null.
+  Also records the host-level fingerprint (three rows staled within two seconds,
+  all launch_target=herdr, so one host event rather than three session events),
+  the pre-launch offer hook at terminal_tui.py:2607, and the caveat that keeps the
+  signal honest: a runnerless session goes stale on a clean exit too, so `vanished`
+  is only trustworthy once the runner shape question is settled.
+  ---------
+- `dba2506` backlog: card stale-worktree accumulation, pair the restore cards (#454)
+  * backlog: card stale-worktree accumulation, pair the restore cards
+  Two owner calls from the 2026-07-30 resume session, both backlog-only.
+  `stale-worktree-accumulation` [bug, medium] records a measured problem: 5 of
+  6 non-main worktrees on this machine are provably dead, three of them from
+  PRs in the #265-#287 range. It carries the trap that makes the obvious fix
+  wrong — this repo squash-merges, so `git branch --merged` cannot see a merged
+  branch (verified minutes after #452 landed), and `git worktree prune` only
+  removes worktrees whose directory is gone, which is none of them. Detection
+  has to key on PR state instead. The harm is already observed rather than
+  predicted: `gh pr merge 452 --delete-branch` failed its cleanup step because a
+  worktree held the branch, which is the loop that produced the accumulation.
+  The owner explicitly deferred the fix — every worktree is clean, so nothing is
+  at risk — and the card stays `shaping` because where the routine lives (verb,
+  closure advisory, or documented command) is an open question about whether
+  Horus should grow a git-hygiene surface at all.
+  `session-restore` goes medium -> high so it sits alongside
+  `agent-thread-id-and-interactive-restore`, and both cards record the pairing:
+  they are the general improvements that arrived with the herdr incident bugs,
+  they share that context, and analysing them apart would force re-deriving it.
+  Priority only — both stay `shaping`, the blocking relationship is unchanged,
+  and the two open shape calls are still what the paired session must settle.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  * closure: fold the herdr-incident cards and the restore pairing into the PRD
+  Corrects three readiness counts that went stale when #452 added four cards and
+  this branch added a fifth: Ready-Attended 3 -> 4, Shaping 38 -> 41, Gated
+  5 -> 6, with the total moving 69 -> 77. Each new card is placed in its bucket
+  with the reason it sits there rather than only counted.
+  `herdr-live-test-stops-owner-server` is called out as effectively-next in the
+  Ready-Attended queue despite being unsequenced, because it gates something
+  concrete: the local full suite cannot be run with herdr on PATH until it is
+  fixed.
+  The handoff fields carry the diagnosis forward rather than the conclusion, so
+  the next session does not re-derive it: the exact file and line, the fact that
+  `herdr server stop` appears in exactly one place in the repo (which is what
+  makes this a test-isolation defect and not a product one), `HERDR_CONFIG_PATH`
+  as the isolation lever plus the sun_path constraint on it, the existing autouse
+  conftest fixture as the precedent for a suite-wide guard, and the 2026-07-13
+  tmux `-S` precedent that was never extended to the second host. Also records
+  that #437 is still open and conflicting.
+  No `## Shipped` line: both PRs this session were backlog-only, and nothing
+  shipped as a capability.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  ---------
+- `9fa55ae` fix: stop test state escaping into the owner's real environment (#455)
+  * fix: isolate terminal-host sockets suite-wide, not per test
+  On 2026-07-30 `test_live_herdr_server_lifecycle` stopped the owner's default
+  herdr server and killed three live agent sessions mid-work. The test claimed
+  isolation in its own docstring, never implemented it, and ran `herdr server
+  stop` in a `finally` gated only on `shutil.which("herdr")` — so CI skipped it
+  and the owner's machine ran it.
+  The docstring was also wrong about the mechanism, which is why "make the code
+  match the docstring" would not have fixed it. Measured against herdr v0.7.5:
+      HERDR_CONFIG_PATH=<tmp>/config.toml herdr status server
+        -> socket: /home/rafa/.config/herdr/herdr.sock   # the REAL one
+  `HERDR_CONFIG_PATH` moves the config file only. `HERDR_SOCKET_PATH` is the
+  actual lever and is the direct analogue of tmux's `-S`.
+  Rather than fix the one test, the guard moves to `tests/conftest.py` and covers
+  every host, because this is the second time: the 2026-07-13 tmux incident
+  produced a per-test `-S` guard that was never extended to the second host, and
+  a per-test guard protects exactly the test that remembers it. A host added
+  later now inherits isolation instead of re-learning it by breaking something.
+  Each host finds its server differently, so both are handled:
+  - tmux: `TMUX_TMPDIR`, which is only honoured once `$TMUX` is unset (verified —
+    a tmux inside a pane prefers the socket named in `$TMUX`). Both are done.
+  - herdr: `HERDR_SOCKET_PATH` directly.
+  The live test keeps a socket it may actually bind, and gains two guards: it
+  asserts no server is live on its isolated socket BEFORE starting anything (so a
+  future regression in the redirection fails loudly instead of operating on the
+  owner's server), and it stops only a server it started — `ensure_ready()`
+  returns None both when it starts one and when it finds one, so its result can
+  never answer "is this mine to stop?".
+  Verification, with herdr on PATH — previously forbidden:
+  - Full suite: 2403 passed, 1 xfailed, 0 skipped. The count moved 2402 -> 2403
+    and the skip disappeared because the live test now genuinely runs.
+  - The owner's herdr server survived on the SAME pid (673378), and all five tmux
+    sessions — including the two attached ones this session runs in — were intact.
+  - No stray servers and no leftover socket dirs afterwards.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  * fix: give every test a private HOME, so none can reach the real ~/.horus
+  The second half of the same defect, flagged as a secondary leak on the
+  `herdr-live-test-stops-owner-server` card: test state escaping into the
+  owner's real environment. The socket guard keeps tests off the owner's
+  servers; this keeps them out of the owner's config tree.
+  `config.config_dir()` is `Path.home() / ".horus"`, so a test that never fakes
+  HOME reads and WRITES the owner's production registry. Most helpers do fake it
+  — which is precisely the problem, because "most" is a convention, not an
+  invariant, and the exceptions are invisible until they bite.
+  Measured rather than assumed. Bisecting the suite on the mtime of
+  `~/.horus/logs/runs/12345678-....jsonl` found exactly one leaker:
+  `test_an_unknown_launch_target_degrades_instead_of_raising` takes no fixtures
+  at all, so nothing faked HOME for it, and its `_reg_with` helper calls
+  `Registry.default().upsert(...)` — writing a fictional session row plus a real
+  run log straight into `~/.horus`. It had been doing so for at least two days,
+  and did it again during this branch's own verification run.
+  Verification: full suite 2403 passed, 1 xfailed with both guards active; the
+  previously-leaking test no longer changes the real file's mtime; the owner's
+  herdr server stayed on pid 673378 and all five tmux sessions survived.
+  The owner's registry was also cleaned of the five accumulated fixture rows
+  (`agent=fake`, fictional `*-1234-1234-1234-123456789abc` ids, pointing at tmp
+  scratchpad projects that no longer exist) and their five orphaned run logs;
+  242 -> 237 sessions, with a backup taken first and `horus sessions` verified
+  after. Genuine fake-adapter runs against real projects were deliberately left
+  alone.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  * closure: record the isolation fix and the rule it earned twice
+  Adds the Shipped line for #455 and a load-bearing rule the project has now
+  paid for twice: test state must never escape into the owner's real
+  environment, and the guard belongs in conftest rather than in the test,
+  because a per-test guard protects exactly the test that remembers it. The
+  2026-07-13 tmux `-S` guard was never extended to the second host, which is
+  how the herdr live test came to stop the owner's server.
+  Two corollaries are recorded with it, both paid for in this incident: a
+  docstring claiming isolation is not isolation (assert it instead), and verify
+  the lever rather than assuming it — `HERDR_CONFIG_PATH` moves only the config
+  file, so implementing what the old docstring claimed would still have killed
+  the server.
+  The handoff now points at the restore pair with each card's open shape call
+  stated, and warns that conftest's guards are deliberately invisible from the
+  test side, so a new host- or `~/.horus`-touching test should read that file
+  first.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  ---------
+- `3c0f31d` closure: ship herdr-live-test-stops-owner-server — #455 merged as 9fa55ae
+  Archives the card and corrects the Ready—Attended count 4 -> 3, which the
+  deterministic breakdown flagged once the card left the queue.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+- `093027b` feat: record the agent's own thread id on interactive launches (#456)
+  * feat: record the agent's own thread id on interactive launches
+  Step 1 of restore. Horus could not reopen a session it started, because the
+  agent's conversation id was never written down: `agent_session_id` was None on
+  every interactive row ever created (checked against the 237 rows in the live
+  registry). Only headless `horus run` ever filled it, via run_executor.py:227.
+  The two adapters differ in a way that decides the whole design, so it is now
+  declared rather than inferred — `assigns_interactive_thread_id`:
+  - Claude's `interactive_command` passes `--session-id <id>`, and launch.py
+    feeds it the SAME id it uses as Horus's run identity. So Claude's thread id
+    is Horus's id by construction: knowable at launch, no parsing, no recovery.
+  - Codex cannot be told an id. It mints one and writes it to a rollout file, so
+    the id does not exist until after the launch.
+  This also rules out the option the card proposed — parsing the id from the
+  agent's stream at launch. There is no stream: `claude.py:171` says interactive
+  runs don't stream stream-json back, and an attended Codex TUI streams nothing
+  either. Stream parsing is a headless-path capability.
+  `PreparedInteractive` carries the id so the rule lives in one place and every
+  terminal surface inherits it: both hosts (via runnerspec.new_record) and the
+  native-terminal path (launch_interactive).
+  For Codex, `recover_interactive_thread_id` reads it back from the rollout
+  header afterwards, correlating on all three of cwd, `originator == codex-tui`
+  and a time window — none is sufficient alone, since one account runs many
+  projects, `exec` runs are a different session kind, and a project is reopened
+  over time. It returns None rather than guessing when two candidates match:
+  restoring on a wrong id reopens somebody else's conversation, which is worse
+  than not restoring at all.
+  Verified beyond the unit tests:
+  - Against the owner's REAL rollout files, recovery returned the exact thread id
+    of the 2026-07-29 Codex session (019fafb4-...), with wrong-project and
+    outside-window controls both returning None.
+  - A live isolated tmux launch of a real `claude` recorded
+    agent_session_id == session_id, confirming the plumbing end to end rather
+    than only in a stub.
+  - Full suite 2412 passed, 1 xfailed with herdr on PATH; the owner's herdr
+    server, tmux sessions and registry were untouched by the run.
+  Resume and restore are deliberately NOT in this commit: a wrong thread id would
+  reopen the wrong conversation, so the id is proven first.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  * closure: record step 1 of restore, and convert its card to Ready
+  The card's stated shape call — launch-time stream parse vs activity-time
+  backfill — was settled by the code rather than by a decision, so the card
+  converts Shaping -> Ready (attended): there is no stream on the interactive
+  path, and the answer is asymmetric per adapter. Its Review carries what was
+  learned so a later session does not re-derive it, and the handoff repeats the
+  one fact most likely to be got wrong — the two ids are EQUAL for Claude and
+  DIFFER for Codex.
+  Attended rather than eligible because verification means launching real agent
+  sessions and reading their history back; a wrong thread id reopens somebody
+  else's conversation, and no deterministic gate catches that.
+  Counts corrected: Ready—Attended 3 -> 4, Shaping 41 -> 40.
+  No Shipped line yet — step 1 is infrastructure, not a capability the owner can
+  use. That line lands when restore actually restores, at step 3.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  ---------
+- `8b28c93` feat: make interactive launches able to reopen an existing thread (#457)
+  * feat: make interactive launches able to reopen an existing thread
+  Step 2 of restore. Until now `horus run --resume` gave a headless one-shot and
+  the interactive path always started fresh, so there was no interactive
+  thread-resume on any host — the gap that made the 2026-07-30 recovery a manual
+  job.
+  `interactive_command` gains `resume_id`, deliberately distinct from
+  `session_id`, because on this path those two mean opposite things:
+  - claude: `--resume <id>` instead of `--session-id <id>`. They are mutually
+    exclusive by construction — `--session-id` ASSIGNS an id to a new session and
+    collides if it was already used, so passing both asks Claude to create the
+    very conversation it is told to resume.
+  - codex: forwarded as the `resume` subcommand. Note this is the opposite of
+    `session_id`, which Codex drops because it cannot pre-assign one; `resume_id`
+    is Codex's OWN id, which it does accept. Positional order is fixed by
+    `codex resume [OPTIONS] [SESSION_ID] [PROMPT]`.
+  `prepare_interactive` takes `resume_thread_id` and records it as
+  `agent_session_id`. The adapter asymmetry from #456 deliberately does NOT apply
+  here: a restore knows the thread id for BOTH agents, since it is the thing being
+  reopened. Without that, a restored Codex session would come back unrecorded and
+  be unrestorable a second time.
+  Verified live, side by side, through Horus's own argv against a real 2026-07-29
+  conversation:
+  - restored pane: the actual prior history — PRD frontmatter, `last_updated:
+    2026-07-29`, and a real `horus close --commit --push` call with its output.
+  - fresh pane: an empty new session.
+  An earlier attempt at this probe was inconclusive and is worth recording: with
+  an isolated HOME both panes sat on Claude's first-run theme picker, so they were
+  indistinguishable. The probe only calls `prepare_interactive` (pure) plus tmux
+  directly and never writes the registry, so it was re-run against the real
+  config — confirmed afterwards at 237 sessions, unchanged.
+  Full suite 2418 passed, 1 xfailed with herdr on PATH.
+  The TUI restore surface is step 3 and is not in this commit.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  * closure: record step 2 of restore
+  Interactive thread-resume works and is proven live; the TUI surface is all that
+  remains before the capability is usable. The card Review carries the probe
+  method, because the obvious way to run it produces a false negative: an
+  isolated HOME leaves both panes on the first-run theme picker.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  ---------
+- `531313d` feat: restore vanished sessions from the TUI (#458)
+  * feat: restore vanished sessions from the TUI
+  Step 3 of restore, and the one that makes it usable. A session that disappeared
+  — herdr server death, a closed terminal, a reboot — can now be reopened from
+  `horus tui` with its conversation intact.
+  Detection first. `reconcile()` now NAMES the transition it was already making:
+  a row whose pid is gone, with no recorded exit, becomes
+  `termination_reason="vanished"` instead of leaving that meaning to be inferred
+  from a null. It is gated on whether the launcher records its own exit at all
+  (`_records_its_own_exit`, keyed on the host registry so old rows and future
+  hosts are both covered): tmux and herdr do via their runner, `current` by
+  waiting in-process, and `local` — a plain terminal, the only option on Windows
+  — does not. A local row is left unlabelled rather than accused of vanishing,
+  because a warning that fires on every ordinary quit is worse than none.
+  The owner's TUI close stays distinguishable throughout: it already writes
+  `stopped`, so a deliberate close is never offered for restore.
+  `restore_session` reuses the ORIGINAL registry row rather than forking a new
+  one, which is what preserves a session's identity and its delivery evidence.
+  That needed care in two places:
+  - The host reaches the row through `upsert`, which overwrites every dataclass
+    field including the delivery block, so it is snapshotted and written back.
+    Without it a restore would silently drop the record of what a session had
+    delivered — on 2026-07-30 that was a PR linkage.
+  - A failed restore restores the snapshot and leaves the row restorable, so one
+    transient failure cannot turn a recoverable session into a lost one.
+  `session_id`/`resume_thread_id` are threaded through the host protocol so all
+  three hosts can relaunch into an existing row.
+  A live end-to-end probe caught a bug the unit tests could not, because the fake
+  host in them ignored the argument: `restore_session` was not forwarding `reg`
+  to `host.launch`, so a caller's registry was silently ignored and the host
+  wrote to the default one. The probe reported a successful restore while the row
+  it was handed stayed `stale`. Fixed, and now asserted.
+  Full suite 2426 passed, 1 xfailed with herdr on PATH.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  * closure: session restore complete, and the lesson its bug taught
+  Records restore as shipped and folds in what the build settled, so a later
+  session does not re-derive it. Both cards' stated shape calls turned out to be
+  false dichotomies resolved by reading the code rather than by deciding:
+  - There is no stream to parse on the interactive path, so thread-id recording
+    is asymmetric per adapter rather than one mechanism for both.
+  - Restore needs no `adopted` session state: both hosts already write a
+    runnerspec for ordinary interactive launches, so restore inherits the runner
+    by being an ordinary launch with one flag swapped. The three hand-restored
+    sessions lacked runners only because they were repaired outside Horus.
+  New Rule, earned by a real defect: a mock that ignores an argument agrees with
+  the code instead of checking it. `restore_session` silently failed to forward
+  `reg` to `host.launch` and reported success while writing to the wrong
+  registry; the tests passed because their fake host accepted `**kw` and never
+  asserted on it. A live probe found it in one run.
+  The handoff records the one deliberate gap — history was visually confirmed for
+  a direct `--resume` launch, not for a TUI-initiated restore — so it is a known
+  narrow risk rather than an unexamined one.
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+  ---------
+- `1ad2517` closure: ship the restore pair — #458 merged as 531313d
+  Both cards are complete and archived; counts corrected (Ready-Attended 4 -> 3,
+  Shaping 40 -> 39).
+  Claude-Session: https://claude.ai/code/session_01WYG6zEtdDPFwpBSTgcU8QE
+- `240075e` fix: delegation authorization and its substrate must both be explicit (#437)
+  * docs: card explicit delegation-only execution
+  * docs: surface delegation trigger bug in backlog
+  * docs: distinguish native subagents from Horus workers
+  * fix: make delegation authorization and its substrate both explicit
+  The card this lands with recorded two live false triggers on 2026-07-29.
+  Neither was fixed by the v15 text that was already in place, so this
+  implements the contract rather than only documenting it.
+  Authorization. `horus-consolidate` merely *defaulted* to `continue-as-is`,
+  which an agent overrode by inferring `plan-execution` from a card's breadth.
+  Both authoring steps (v3 PRD and v2 six-lane) now say categorically: when the
+  owner did not request delegation in this conversation, write `continue-as-is`
+  regardless of breadth, phase count, or number of surfaces — the field records
+  an owner-authorized choice, it is not a task-size classifier.
+  `horus-execution`'s body already held a good invocation boundary, but its
+  *description* — the text an agent reads to decide whether to load it at all —
+  still led with "use this when `execution_recommendation` says plan-execution".
+  A body-only fix cannot reach an agent that never opens the body. The field is
+  now stated to be a record, never a fresh authorization; a stale one with no
+  active plan is stale intent.
+  Substrate. `execution-decision` described one substrate holding both native
+  subagents and `horus run` workers, with a single delegated mode, so a question
+  about Codex's own agent spawning was answered with a Haiku-on-another-account
+  dispatch envelope. `subagent-plan` splits into `native-subagent` (a child of
+  this session, same account, no `execution.md`, no usage routing) and
+  `horus-worker` (tracked external session, full consent envelope). Both map
+  deliberately: native and inline alike are `continue-as-is`, so a native child
+  never invites worker machinery nobody authorized. When the owner names neither
+  substrate and the answer would change provider/account/session topology, ask
+  one clarification question first.
+  horus-consolidate 15→16, horus-execution 15→16, delegation-rubric 9→10,
+  execution-decision 5→6; projections regenerated from source, never hand-edited.
+  Claude-Session: https://claude.ai/code/session_01Xu9Kh81gFk1mJJLbeMRq9C
+  ---------

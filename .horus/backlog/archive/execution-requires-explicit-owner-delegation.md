@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: ready
 autonomy: attended
@@ -12,6 +12,8 @@ type: bug
 parallel: safe
 phase: converge
 surface: "horus/skills.py (execution-decision, horus-consolidate, horus-execution), tests/test_skills.py, projected Claude/Codex skills; native Codex collaboration boundary; related artifact-refresh lifecycle"
+shipped_pr: 437
+shipped_sha: 240075e
 ---
 
 # execution-requires-explicit-owner-delegation — authorization and substrate must both be explicit
