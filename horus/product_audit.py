@@ -46,13 +46,28 @@ def releases_since(stamp_version: str, installed: str) -> int:
 
     Sums the component-wise forward distance so ``0.0.30 → 0.0.35`` is 5 and a
     minor bump counts at least 1; never negative.
+
+    Each component is clamped at zero *individually* rather than summed signed,
+    because the patch counter RESETS across a minor bump: ``0.0.9 → 0.1.0`` is
+    ``(+1 minor, -9 patch)``, and letting those cancel returned 0 — so once a
+    0.1.x shipped, every 0.0.x stamp would have read "0 releases ago" forever
+    and the release clock would have silently died.
+
+    Exact within one minor line, and a documented LOWER BOUND across a minor or
+    major boundary: the number of patches the previous line ended on is not
+    recoverable from two version strings, so ``0.0.73 → 0.1.5`` reports 1. That
+    under-reports rather than over-reports, which keeps the advisory's prose
+    honest; tightening the boundary case belongs with the threshold work in
+    `audit-advisory-interval`, not here.
     """
     a = version_tuple(stamp_version)
     b = version_tuple(installed)
     width = max(len(a), len(b))
     a = a + (0,) * (width - len(a))
     b = b + (0,) * (width - len(b))
-    return max(0, sum(y - x for x, y in zip(a, b)))
+    if b <= a:
+        return 0
+    return sum(max(0, y - x) for x, y in zip(a, b))
 
 
 def advisory_line(
