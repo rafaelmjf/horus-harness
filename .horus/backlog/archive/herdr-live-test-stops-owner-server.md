@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-30
 created_by: agent
@@ -12,6 +12,8 @@ tier: high
 parallel: safe
 vision_facet: "Distribution"
 surface: tests/test_hosts_herdr.py (test_live_herdr_server_lifecycle:317-352), horus/hosts/herdr.py (_run:89 — no socket override), tests/test_terminal_sessions.py (the 2026-07-13 tmux precedent, :297-315)
+shipped_pr: 455
+shipped_sha: 9fa55ae
 ---
 
 # herdr-live-test-stops-owner-server — the live host test kills the owner's real agent sessions
