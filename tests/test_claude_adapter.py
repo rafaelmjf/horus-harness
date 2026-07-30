@@ -300,3 +300,25 @@ def test_spawn_guard_refuses_account_mismatch(tmp_path, monkeypatch):
     # The guard runs before any subprocess, so this raises without launching claude.
     with pytest.raises(AccountMismatch):
         adapter.spawn(_spec(account="personal"))
+
+
+def test_interactive_resume_reopens_a_thread_instead_of_assigning_one():
+    """`--session-id` ASSIGNS an id to a new session and collides if that id was
+    already used, so a restore must emit `--resume` instead. Passing both would ask
+    Claude to create the very conversation it is being told to reopen."""
+    argv = ClaudeAdapter().interactive_command(_spec(), session_id="horus-run-id", resume_id="thread-9")
+
+    assert ["--resume", "thread-9"] == [argv[argv.index("--resume")], argv[argv.index("--resume") + 1]]
+    assert "--session-id" not in argv
+    assert "horus-run-id" not in argv
+
+
+def test_interactive_resume_keeps_the_other_flags():
+    """Restore is an ordinary interactive launch with one flag swapped — model,
+    effort and posture must survive, or a restored session silently changes shape."""
+    argv = ClaudeAdapter().interactive_command(
+        _spec(model="haiku", effort="xhigh"), session_id="s1", resume_id="thread-9")
+
+    assert ["--model", "haiku"] == [argv[argv.index("--model")], argv[argv.index("--model") + 1]]
+    assert ["--effort", "xhigh"] == [argv[argv.index("--effort")], argv[argv.index("--effort") + 1]]
+    assert "-p" not in argv  # still interactive, not headless

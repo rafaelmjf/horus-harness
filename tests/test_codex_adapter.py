@@ -544,3 +544,22 @@ def test_codex_thread_recovery_compares_utc_against_a_local_looking_stamp(tmp_pa
     assert adapter.recover_interactive_thread_id(
         project="/proj", account="work",
         started_at=datetime(2026, 7, 29, 21, 8, tzinfo=timezone.utc)) == "utc-normalised"
+
+
+def test_interactive_resume_forwards_the_id_codex_will_actually_accept():
+    """Codex drops `session_id` because it cannot pre-assign one — but `resume_id` is
+    Codex's OWN thread id, which it does accept, so unlike the former it is forwarded.
+    Positional order is fixed by `codex resume [OPTIONS] [SESSION_ID] [PROMPT]`."""
+    argv = CodexAdapter().interactive_command(
+        _spec(model="gpt-5"), session_id="horus-run-id", resume_id="thread-9")
+
+    assert argv[0:2] == ["codex", "resume"]
+    assert "horus-run-id" not in argv          # Horus's id is still never forwarded
+    assert argv.index("thread-9") > argv.index("gpt-5")   # after the options
+    assert argv.index("thread-9") < argv.index("do the thing")  # before the prompt
+
+
+def test_interactive_without_resume_is_unchanged():
+    """The fresh-launch path must not grow a `resume` subcommand by accident."""
+    argv = CodexAdapter().interactive_command(_spec(), session_id="horus-run-id")
+    assert "resume" not in argv and "horus-run-id" not in argv

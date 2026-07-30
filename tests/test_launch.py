@@ -179,3 +179,30 @@ def test_the_two_ids_are_never_assumed_equal(tmp_path, monkeypatch):
     assert error is None and prepared.agent_session_id is None
     # ...and the id Codex is handed is still dropped from its argv, as before.
     assert prepared.session_id not in prepared.argv
+
+
+def test_restore_records_the_thread_id_for_both_adapters(tmp_path, monkeypatch):
+    """A fresh launch only knows the thread id for Claude, but a RESTORE knows it for
+    both — it is the very thing being reopened. So the adapter asymmetry must not leak
+    into the resume path and leave a restored Codex session unrecorded (and therefore
+    unrestorable a second time)."""
+    _home(tmp_path, monkeypatch)
+    for agent in ("claude", "codex"):
+        prepared, error = launch.prepare_interactive(
+            agent=agent, project_dir=tmp_path, resume_thread_id="thread-9")
+        assert error is None
+        assert prepared.agent_session_id == "thread-9", agent
+        assert "thread-9" in prepared.argv, agent
+
+
+def test_restore_does_not_assign_horus_run_id_as_the_thread(tmp_path, monkeypatch):
+    """The failure this guards is silent: Claude would happily start a BRAND NEW
+    conversation under the resumed id, and the owner would see an empty session where
+    their history should be."""
+    _home(tmp_path, monkeypatch)
+    prepared, error = launch.prepare_interactive(
+        agent="claude", project_dir=tmp_path, resume_thread_id="thread-9")
+
+    assert error is None
+    assert "--session-id" not in prepared.argv
+    assert prepared.session_id not in prepared.argv
