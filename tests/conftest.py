@@ -12,6 +12,14 @@ does not move tmux's or herdr's default server socket, so any test that reaches
 a real host binary talks to the owner's live server and its real agent
 sessions. That is not hypothetical — it happened twice (see
 ``isolate_session_host_sockets``).
+
+And it exists one layer *up* as well: faking ``HOME`` is a convention here, not
+an invariant, so a test that simply forgets writes to the owner's real
+``~/.horus`` (see ``isolate_home``).
+
+The through-line for all three fixtures: **test state must never escape into
+the owner's real environment**, and the guard belongs here rather than in the
+tests, because a per-test guard protects only the test that remembers it.
 """
 
 import shutil
@@ -51,6 +59,39 @@ def isolate_ambient_agent_env(monkeypatch):
     """
     for name in AMBIENT_AGENT_ENV:
         monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def isolate_home(monkeypatch, tmp_path_factory):
+    """Give every test a private ``HOME``, so none can reach the real
+    ``~/.horus``.
+
+    ``config.config_dir()`` is ``Path.home() / ".horus"``, so a test that never
+    fakes ``HOME`` reads and **writes** the owner's production registry. Most
+    helpers do fake it — which is exactly the problem, because "most" is not an
+    invariant and the exceptions are invisible.
+
+    Measured on 2026-07-30, not theorised.
+    ``test_an_unknown_launch_target_degrades_instead_of_raising`` takes no
+    fixtures at all, so nothing faked ``HOME`` for it; its ``_reg_with`` helper
+    calls ``Registry.default().upsert(...)`` and wrote the fictional session
+    ``12345678-1234-1234-1234-123456789abc`` — plus a real
+    ``~/.horus/logs/runs/<id>.jsonl`` — straight into the owner's tree. It was
+    the only leaker in the suite, found by bisecting on that file's mtime, and
+    it had been landing rows there for at least two days.
+
+    This is the same defect as ``isolate_session_host_sockets`` one layer up:
+    test state escaping into the owner's real environment. The socket fixture
+    keeps tests off the owner's *servers*; this keeps them out of the owner's
+    *config tree*. Both are suite-wide for the same reason — a per-test guard
+    protects only the test that remembers it.
+
+    A test that wants a differently-shaped home still sets one; this runs
+    first, so its ``setenv`` wins.
+    """
+    home = tmp_path_factory.mktemp("home")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
 
 
 @pytest.fixture(scope="session")
