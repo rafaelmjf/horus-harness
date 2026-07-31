@@ -252,6 +252,26 @@ def load_active_cards(root: Path) -> list[Card]:
     return [card for card in load_cards(root) if card.status not in _INACTIVE_STATUSES]
 
 
+def load_archived_cards(root: Path) -> list[Card]:
+    """Shipped cards from `backlog/archive/`, newest delivery first.
+
+    The archive was write-only: `ship` moved cards in (see `ship_card`) and no
+    read path existed, so the delivery record — which carries `shipped_pr` and
+    `shipped_sha` per card — could only be reached by opening files by hand. That
+    is why the shipped ledger got re-typed as prose into PRD.md, where it drifts
+    and cannot be reconciled.
+
+    Ordered by `created` descending as a stand-in for delivery order: an archived
+    card has no delivery timestamp, only a PR and a SHA, and asking git for each
+    card's merge date would make a read path shell out once per card. Cards with
+    no `created` sort last, filename-stable within a tie."""
+    adir = archive_dir(root)
+    if not adir.is_dir():
+        return []
+    cards = [_card_from_path(p) for p in sorted(adir.glob("*.md")) if p.is_file()]
+    return sorted(cards, key=lambda c: (c.created != "", c.created), reverse=True)
+
+
 def find_card(root: Path, name: str) -> Card | None:
     """Look up a card by its filename stem, with or without a trailing `.md`."""
     key = name[:-3] if name.endswith(".md") else name
@@ -499,65 +519,16 @@ def hygiene_findings(root: Path) -> list[Finding]:
                 f"backlog card '{card.name}' has shipped provenance but status is "
                 f"'{card.status}' — run `horus backlog ship {card.name} --pr … --sha …`",
             ))
-    findings.extend(prd_readiness_count_findings(root))
     return findings
 
 
-# Queues whose parenthetical count is stated in PRD.md's "Readiness breakdown"
-# line; Unclassified is deliberately not summarised there.
-_PRD_COUNTED_QUEUES = (
-    QUEUE_READY_ELIGIBLE,
-    QUEUE_READY_ATTENDED,
-    QUEUE_SHAPING,
-    QUEUE_GATED,
-    QUEUE_DEFERRED,
-)
-
-
-def _readiness_breakdown_line(prd_text: str) -> str | None:
-    for line in prd_text.splitlines():
-        if line.lstrip().startswith("Readiness breakdown"):
-            return line
-    return None
-
-
-def _stated_count(line: str, label: str) -> int | None:
-    """The first ``(N)`` following ``label`` on the breakdown line, or None."""
-    match = re.search(re.escape(label) + r"\s*\((\d+)\)", line)
-    return int(match.group(1)) if match else None
-
-
-def prd_readiness_count_findings(root: Path) -> list[Finding]:
-    """Compare the parenthetical counts in PRD.md's "Readiness breakdown" line
-    against the computed queue sizes, so a stale hand-edited count is caught at
-    the consolidate/close gate instead of relying on the owner noticing.
-
-    Advisory only — it reports a mismatch, never rewrites. A queue the line does
-    not mention is skipped (no false alarm), and a project without the line or
-    without a PRD produces nothing."""
-    prd = backlog_dir(root).parent / frontmatter.PRD_FILE
-    try:
-        text = prd.read_text(encoding="utf-8")
-    except OSError:
-        return []
-    line = _readiness_breakdown_line(text)
-    if line is None:
-        return []
-    counts = readiness_counts(load_active_cards(root))
-    findings: list[Finding] = []
-    for queue in _PRD_COUNTED_QUEUES:
-        label = READINESS_QUEUE_LABELS[queue]
-        stated = _stated_count(line, label)
-        if stated is None:
-            continue
-        actual = counts[queue]
-        if stated != actual:
-            findings.append(Finding(
-                "warn",
-                f"PRD readiness breakdown says {label} ({stated}) but {actual} "
-                f"card(s) are in that queue — update the count",
-            ))
-    return findings
+# `prd_readiness_count_findings` lived here until 2026-07-31. It reconciled the
+# parenthetical counts hand-written into PRD.md's "Readiness breakdown" line
+# against `readiness_counts()` — a check whose whole existence was owed to PRD
+# prose caching what `horus backlog list` already computes exactly. The cache was
+# removed rather than policed: a deterministic command is the authority on what
+# exists now, so prose must not restate it and no check is needed to keep a
+# restatement honest.
 
 
 def _pair_overlaps(a: str, b: str) -> bool:
