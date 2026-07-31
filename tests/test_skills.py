@@ -137,7 +137,7 @@ def test_pathfinder_skill_registered_and_orchestrates():
     assert "shipped-vs-used" in pf.content
     # Step 0 triages backlog-POLISH out to the grooming pass instead of running
     # the five-step chain for a grooming need.
-    assert "is it a re-baseline at all?" in pf.content
+    assert "Is this a re-baseline at all, and what for?" in pf.content
     assert "scope-cards" in pf.content and "backlog-refine" in pf.content
     assert "execution readiness" in pf.content
     # Renamed from horus-kickstart: age-agnostic name, no old slug lingering.
@@ -203,9 +203,18 @@ def test_roadmap_branches_skill_registered_divergence_tree():
     assert ".horus/research/" in rb.content
     assert "No new web research" in rb.content
     # Re-justifies the existing backlog with explicit push-back; inherits nothing.
-    assert "inherit nothing" in rb.content.lower() or "inherits" in rb.content
-    assert "Re-justify the existing backlog" in rb.content
+    assert "inherits" in rb.content
     assert "push-back" in rb.content
+    # v5: branches come from facet-DoD gaps / owner friction / receipts — NEVER the
+    # backlog, which is dispositioned only after the branches exist. The 2026-07-31
+    # tree was rejected because all four branches were assembled from cards.
+    # Whitespace-normalized: hard wrapping otherwise breaks these on reflow rather
+    # than on meaning (PRD rule, 2026-07-30).
+    flat = " ".join(rb.content.split())
+    assert "Where BRANCHES come from — never the backlog" in flat
+    assert "Disposition the backlog AFTER the branches exist" in flat
+    assert "grooming pass wearing a branch's clothes" in flat
+    assert "route the owner to `backlog-refine`" in flat
     # Claims discipline + no-repetition template rules.
     assert "comparison baseline" in rb.content
     assert "State each fact exactly once" in rb.content
@@ -929,3 +938,77 @@ def test_every_skill_version_matches_the_marker_in_its_own_text():
         if match is None or int(match.group(1)) != skill.version:
             mismatched.append((skill.name, skill.version, match.group(1) if match else None))
     assert mismatched == [], f"Skill.version disagrees with its own marker: {mismatched}"
+
+
+def test_roadmap_branches_requires_problem_and_solution_before_mechanism():
+    """v6: the owner picks a DIRECTION, so each branch opens with the problem and the
+    proposed solution in plain terms, before any thesis or mechanism.
+
+    The v5 tree was rejected for exactly this — "I have very little info of what is
+    proposed" — because the branch depth requirements are written for `scope-cards`,
+    which needs mechanism, and that had crowded out legibility for the decider.
+    Whitespace-normalized per the PRD rule on skill-prose assertions.
+    """
+    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
+    flat = " ".join(rb.content.split())
+    assert "The legibility bar — problem and solution before mechanism" in flat
+    assert "**The problem** — REQUIRED, and written FIRST" in flat
+    assert "**The proposed solution** — REQUIRED, second" in flat
+    # The reader test is the operative check, not the section headings.
+    assert "could a reader who has never opened this codebase say what hurts today" in flat
+
+
+def test_pathfinder_step_table_covers_every_step_including_hand_off():
+    """v10: the step table is the contract a model reads before running the chain, so
+    every step in the flow must appear in it.
+
+    Step 7 (hand off) previously existed ONLY in the prose flow, and the 2026-07-31 run
+    skipped it: the chain went 0->4, was rejected twice, and trailed into tooling work
+    without ever stating what landed and what stayed unapplied. A step listed only in
+    prose is a step that gets skipped.
+    """
+    pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
+    import re
+    steps = sorted(
+        int(m.group(1))
+        for ln in pf.content.splitlines()
+        if ln.startswith("| ")
+        for m in [re.match(r"\|\s*\*\*(\d+)\s*—", ln)]
+        if m
+    )
+    assert steps == [0, 1, 2, 3, 4, 5, 6, 7], steps
+
+    flat = " ".join(pf.content.split())
+    # The table explains what each step DOES, not just who owns it.
+    assert "What happens, in detail" in flat
+    # Three columns: the question, the skill it runs, the detailed summary.
+    header = next(ln for ln in pf.content.splitlines() if ln.startswith("| The owner's question"))
+    assert header.count("|") == 4, header  # 3 cells => 4 pipes
+    # Step 7's two load-bearing facts (bold markers stripped, so wording tweaks in
+    # emphasis do not break the assertion — only the meaning is pinned).
+    plain = flat.replace("**", "")
+    assert "deferred as explicitly not applied" in plain
+    assert "is a SEPARATE session" in plain and "never chained off the end" in plain
+
+
+def test_roadmap_branches_tree_is_facet_spine_plus_exploration():
+    """v7: the facet table is the SPINE — one branch per facet worth advancing —
+    with exploration branches layered on top, not instead.
+
+    Both 2026-07-31 runs departed from this in opposite directions: v4 grouped
+    backlog cards under facet headings (grooming), v5 dropped the facet spine and
+    produced only exploration directions. Owner: "before I was just getting backlog
+    rework, now it seems I will get just explorative branches." The shape that worked
+    is the 2026-07-17 tree that produced the X1/X2/X3 umbrellas.
+    """
+    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
+    flat = " ".join(rb.content.split()).replace("**", "")
+    assert "The Vision's facet table is the SPINE of the tree" in flat
+    assert "facet branches are the body; the exploration branches are the alternatives" in flat
+    # Shrinking a facet is a legitimate way to advance it — the original tree carried
+    # two rescoped branches — but the tree proposes, convergence decides.
+    assert "Advancing a facet includes SHRINKING it" in flat
+    assert "defer/retire candidates routed to the convergence pass" in flat
+    assert 'not a synonym for "add work to this facet"' in flat
+    # The tree section enforces the ordering.
+    assert "facet branches first, in facet-table order" in flat
