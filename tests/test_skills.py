@@ -468,7 +468,7 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     consolidate = next(s for s in skills.SKILLS if s.name == "horus-consolidate")
     assert "PRD.md" in consolidate.content
     assert "no lane-routing/overlap warnings" in consolidate.content
-    assert "~250-line cap" in consolidate.content
+    assert "~60,000-char budget" in consolidate.content
     assert "Stale frontmatter" in consolidate.content
     assert "Undistilled recovery notes" in consolidate.content
     assert "Duplicate backlog titles" in consolidate.content
@@ -910,3 +910,22 @@ def test_wildcard_does_not_source_ideas_from_the_backlog():
     assert "`decision` and `evidence read` are not emittable kinds" in text
     # The self-sufficiency bar is the gate the run-3 failure demanded.
     assert "a fresh agent could build it without asking the owner anything" in text
+
+
+def test_every_skill_version_matches_the_marker_in_its_own_text():
+    """`Skill(name, N, text)` and the `horus-skill-version: N` marker inside `text`
+    must agree.
+
+    They are two hand-maintained copies of one number. When they disagree the
+    bundled version says N while `installed_version()` reads the marker as N-1, so
+    every `upgrade-project` run reports "updated to vN" and the next one reports it
+    again — a refresh loop that never converges and a doctor that never goes green.
+    Hit for real on 2026-07-31 bumping `horus-consolidate` 16 -> 17.
+    """
+    import re
+    mismatched = []
+    for skill in skills.SKILLS:
+        match = re.search(r"horus-skill-version:\s*(\d+)", skill.content)
+        if match is None or int(match.group(1)) != skill.version:
+            mismatched.append((skill.name, skill.version, match.group(1) if match else None))
+    assert mismatched == [], f"Skill.version disagrees with its own marker: {mismatched}"

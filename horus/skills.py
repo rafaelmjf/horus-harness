@@ -119,7 +119,7 @@ name: horus-consolidate
 description: >-
   Consolidate a project's Horus continuity (`.horus/`). On a PRD-structure (v3)
   project this is a light backlog-hygiene pass over the single `PRD.md` file
-  (line-count vs the cap, stale frontmatter, undistilled optional recovery notes,
+  (size vs the character budget, stale frontmatter, undistilled optional recovery notes,
   duplicate or lingering-done backlog items). On a six-lane (v2) project it
   routes shipped work into the features ledger, prunes done/stale roadmap
   items, distills session notes into the durable files, and de-duplicates
@@ -133,7 +133,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 16 -->
+<!-- horus-skill-version: 17 -->
 
 # Consolidate Horus continuity
 
@@ -175,9 +175,14 @@ them is stale or empty.
    `--path <repo>`). On a v3 project it reports **backlog-hygiene signals
    only** — no lane-routing/overlap warnings, because there are no lanes to
    route between:
-   - **Line count vs the ~250-line cap** — warns past 235, more urgently past
-     250. Fix by trimming: one-line `## Shipped` entries, deleted done backlog
-     items (git remembers them, no need to keep them around).
+   - **Size vs the ~60,000-char budget** — warns past 45,000, more urgently past
+     60,000, and names the driving section by characters. Characters, not lines:
+     a line count measures shape, not what a fresh agent pays to read the file.
+     Per-section entry contracts fire alongside it — `## Shipped` entries over
+     ~400 chars (one line per capability, details in git history) and `## Rules`
+     entries over ~600 (concise rules, NOT a log; route dated incident narratives
+     to `.horus/archive/history.md`). Fix by trimming, never by unwrapping
+     hard-wrapped bullets: that reclaims lines while removing nothing.
    - **Stale frontmatter** — when a recovery note exists, `last_updated` older than
      its date means the note may still contain undistilled context. Refresh the
      content and bump the date.
@@ -524,7 +529,7 @@ description: >-
   Runs `horus infer` first to find canonical docs and empty/placeholder sections.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -578,7 +583,7 @@ With no useful source truth and no concrete user request, leave the scaffold bla
 
 4. **Don't duplicate.** Where a canonical doc stays the deep reference (e.g. a
    detailed architecture doc), point at it from `PRD.md` instead of copying it
-   wholesale. Keep the whole file well under the ~250-line cap — `horus
+   wholesale. Keep the whole file well under the ~60,000-char budget — `horus
    consolidate` will start warning past 235.
 
 5. **Mark superseded docs — only when truly superseded.** If a doc's "current
@@ -3111,9 +3116,9 @@ Nothing here routes into `PRD.md`, `roadmap.md`, or `decisions.md`.
 """
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 16, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 17, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
-    Skill("horus-infer", 6, _INFER_SKILL),
+    Skill("horus-infer", 7, _INFER_SKILL),
     Skill("horus-execution", 16, _EXECUTION_SKILL),
     Skill("delegation-rubric", 10, _DELEGATION_RUBRIC_SKILL),
     Skill("execution-decision", 6, _EXECUTION_DECISION_SKILL),

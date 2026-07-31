@@ -293,21 +293,21 @@ def _prd_dashboard_data(prd_path: Path) -> dict[str, Any]:
 
     shipped_count, shipped_latest = markdown.shipped_summary(routines._section(body, "Shipped"))
 
-    line_count = len(prd_text.splitlines())
-    if line_count > routines._PRD_HARD_CAP:
-        line_class = "over"
-    elif line_count > routines._PRD_SOFT_CAP:
-        line_class = "warn"
+    size_chars = len(prd_text)
+    if size_chars > routines._PRD_HARD_CHARS:
+        size_class = "over"
+    elif size_chars > routines._PRD_SOFT_CHARS:
+        size_class = "warn"
     else:
-        line_class = "ok"
+        size_class = "ok"
 
     return {
         "backlog_now": _prd_backlog_now_items(now_body)[:10],
         "backlog_other_counts": other_counts,
         "shipped_count": shipped_count,
         "shipped_latest": shipped_latest,
-        "line_count": line_count,
-        "line_class": line_class,
+        "size_chars": size_chars,
+        "size_class": size_class,
     }
 
 
@@ -2353,17 +2353,20 @@ def _projection_sync_badge_html(p: dict[str, Any]) -> str:
     return "<span class='muted' style='font-size:12px'>sync unknown</span>"
 
 
-_PRD_LINE_BUDGET_CLASS = {"ok": "health-ok", "warn": "health-warn", "over": "health-fail"}
+_PRD_SIZE_BUDGET_CLASS = {"ok": "health-ok", "warn": "health-warn", "over": "health-fail"}
 
 
-def _prd_line_budget_html(prd: dict[str, Any]) -> str:
-    """Header badge: PRD.md line count vs the ~250-line cap (routines' soft/hard caps)."""
+def _prd_size_budget_html(prd: dict[str, Any]) -> str:
+    """Header badge: PRD.md size vs the character budget (routines' soft/hard caps).
+
+    Characters, not lines: a line count measures shape rather than the cost of
+    reading the file, and the two came apart badly (91,252 chars at 210 lines)."""
     if not prd:
         return ""
-    cls = _PRD_LINE_BUDGET_CLASS.get(prd.get("line_class", "ok"), "health-ok")
+    cls = _PRD_SIZE_BUDGET_CLASS.get(prd.get("size_class", "ok"), "health-ok")
     return (
         f"<span class='badge'><span class='{cls}'>&#9679;</span> "
-        f"PRD {prd.get('line_count', 0)}/{routines._PRD_HARD_CAP} lines</span>"
+        f"PRD {prd.get('size_chars', 0):,}/{routines._PRD_HARD_CHARS:,} chars</span>"
     )
 
 
@@ -2450,7 +2453,7 @@ def render_project(
         f"<span class='badge'>status {html.escape(p['status']) or 'unknown'}</span>"
         f"<span class='badge'><b class='mono'>{len(p['sessions'])}</b>&nbsp;sessions</span>"
         f"{_projection_sync_badge_html(p)}"
-        f"{_prd_line_budget_html(prd)}"
+        f"{_prd_size_budget_html(prd)}"
         f"{_machine_readiness_badge_html(p)}"
     )
     refresh = _upgrade_button(idx) if p.get("artifacts_stale") and index is not None else ""

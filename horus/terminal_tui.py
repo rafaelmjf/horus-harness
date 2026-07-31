@@ -3052,8 +3052,8 @@ def _receipts(root: Path) -> list[backlog_tree.Receipt]:
 def _backlog_metrics(root: Path, cards: list[backlog.Card]) -> tuple[int, int]:
     if backlog.backlog_dir(root).is_dir():
         return len(cards), sum(card.type == "bug" for card in cards)
-    inline_count = backlog_migrate.inline_backlog_item_count(root)
-    return (inline_count or 0, 0)
+    insize_chars = backlog_migrate.inline_backlog_item_count(root)
+    return (insize_chars or 0, 0)
 
 
 def _ambient_alias(agent: str) -> str | None:

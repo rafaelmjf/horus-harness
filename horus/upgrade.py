@@ -281,7 +281,7 @@ def _build_prd(project_name: str, hdir: Path) -> str:
         "## Rules (load-bearing)\n\n"
         f"{rules}\n\n"
         "## Structure contract\n\n"
-        "- **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines.\n"
+        "- **This file** carries vision, backlog, shipped, rules. Keep it under ~60,000 chars.\n"
         "- **Archive:** the pre-migration six-lane files live under `.horus/archive/` verbatim.\n"
         "- **Closure:** update PRD frontmatter + backlog/shipped + a session note, then `horus close --commit --push`.\n"
     )

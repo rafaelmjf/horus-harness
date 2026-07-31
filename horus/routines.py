@@ -288,8 +288,19 @@ _MAX_OVERLAP_LINES = 8
 # lane-purity/overlap warnings (there are no lanes to route between).
 # --------------------------------------------------------------------------- #
 
-_PRD_SOFT_CAP = 235
-_PRD_HARD_CAP = 250
+# The whole-file budget is in CHARACTERS, not lines. A line cap measures shape, not
+# cost, and the two came apart badly here: this file hit 91,252 characters while
+# reporting 210 lines, so the cap stayed silent through the entire drift — and the
+# only remedy it offered (unwrap bullets) lowered the line count while removing
+# nothing. Worse, the metrics pull opposite ways: separating run-together entries is
+# a real improvement that ADDS lines, so a line cap penalises the fix.
+#
+# Thresholds set from measurement, not taste. After #470's trim the file is ~64,500
+# characters and Rules alone is 66% of the body; routing its dated narratives to
+# `.horus/archive/history.md` lands it near 40,000. So 45,000/60,000 fires on today's
+# real state and goes quiet once the known remaining work is done.
+_PRD_SOFT_CHARS = 45_000
+_PRD_HARD_CHARS = 60_000
 _MAX_UNDISTILLED_SESSIONS = 12
 
 # PRD.md's own contract is "Shipped — one line per capability; details live in git
@@ -632,13 +643,17 @@ def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
     prd_text = _read(hdir, frontmatter.PRD_FILE) or ""
     doc = frontmatter.parse(prd_text)
 
-    # 1. PRD size vs the ~250-line cap. When over, name the section driving the size
-    #    (and the hard-wrap lever) so the distill aims at the actual bloat.
-    line_count = len(prd_text.splitlines())
-    if line_count > _PRD_SOFT_CAP:
+    # 1. PRD size vs the character budget — what a fresh agent actually pays to read
+    #    it. When over, name the section driving the size so a distill aims at the
+    #    actual bloat rather than the section the message happens to mention.
+    char_count = len(prd_text)
+    if char_count > _PRD_SOFT_CHARS:
         hint = _prd_size_hint(doc.body)
-        band = "over" if line_count > _PRD_HARD_CAP else "approaching"
-        message = f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {line_count} lines — {band} the ~250-line cap"
+        band = "over" if char_count > _PRD_HARD_CHARS else "approaching"
+        message = (
+            f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {char_count:,} chars — {band} the "
+            f"~{_PRD_HARD_CHARS:,}-char budget"
+        )
         if hint:
             message += f": {hint}"
         findings.append(Finding("warn", message))

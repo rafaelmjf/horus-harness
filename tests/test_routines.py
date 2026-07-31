@@ -539,7 +539,7 @@ _PRD_BACKLOG = "## Backlog\n\n{backlog}\n\n"
 _PRD_TAIL = "## Shipped\n\nOne line per capability shipped.\n\n## Rules\n\n- A real rule.\n"
 
 
-def _mk_prd_v3(root: Path, *, last_updated="2026-07-01", backlog="1. **Task one.** Do it.\n", extra_lines=0):
+def _mk_prd_v3(root: Path, *, last_updated="2026-07-01", backlog="1. **Task one.** Do it.\n", extra_lines=0, extra_chars=0):
     hdir = root / ".horus"
     hdir.mkdir(parents=True, exist_ok=True)
     body = (
@@ -547,6 +547,7 @@ def _mk_prd_v3(root: Path, *, last_updated="2026-07-01", backlog="1. **Task one.
         + _PRD_BACKLOG.format(backlog=backlog)
         + _PRD_TAIL
         + ("\n" * extra_lines)
+        + ("filler prose. " * (extra_chars // 14))
     )
     (hdir / "PRD.md").write_text(body, encoding="utf-8")
     return hdir
@@ -601,17 +602,17 @@ def test_consolidate_v3_no_lane_routing_warnings(tmp_path):
     assert "roadmap↔features" not in msgs
 
 
-def test_consolidate_v3_warns_approaching_line_cap(tmp_path):
-    _mk_prd_v3(tmp_path, extra_lines=220)
+def test_consolidate_v3_warns_approaching_char_budget(tmp_path):
+    _mk_prd_v3(tmp_path, extra_chars=50_000)
     msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
-    assert any("approaching the ~250-line cap" in m for m in msgs)
-    assert not any("over the ~250-line cap" in m for m in msgs)
+    assert any("approaching the ~60,000-char budget" in m for m in msgs)
+    assert not any("over the ~60,000-char budget" in m for m in msgs)
 
 
-def test_consolidate_v3_warns_over_line_cap(tmp_path):
-    _mk_prd_v3(tmp_path, extra_lines=260)
+def test_consolidate_v3_warns_over_char_budget(tmp_path):
+    _mk_prd_v3(tmp_path, extra_chars=70_000)
     msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
-    assert any("over the ~250-line cap" in m for m in msgs)
+    assert any("over the ~60,000-char budget" in m for m in msgs)
 
 
 def test_consolidate_v3_cap_warning_names_the_driving_section(tmp_path):
@@ -623,7 +624,7 @@ def test_consolidate_v3_cap_warning_names_the_driving_section(tmp_path):
     hdir = tmp_path / ".horus"
     hdir.mkdir(parents=True)
     rules = "## Rules\n\n- A wrapped rule that\n  spills onto a\n  second and third line.\n" + (
-        "- Another one-line rule.\n" * 260
+        "- Another one-line rule with enough prose to carry real weight here.\n" * 900
     )
     (hdir / "PRD.md").write_text(
         _PRD_HEADER.format(last_updated="2026-07-01")
@@ -632,7 +633,7 @@ def test_consolidate_v3_cap_warning_names_the_driving_section(tmp_path):
         + rules,
         encoding="utf-8",
     )
-    cap = next(m for m in _warn_msgs(routines.consolidate_signals(tmp_path)) if "~250-line cap" in m)
+    cap = next(m for m in _warn_msgs(routines.consolidate_signals(tmp_path)) if "-char budget" in m)
     assert "largest section is 'Rules'" in cap and "chars" in cap
     assert "hard-wrapped" not in cap and "unwrapping" not in cap
 
@@ -939,13 +940,13 @@ def _prd_with_shipped(root: Path, shipped: str) -> None:
 
 
 def test_shipped_entry_warning_catches_what_the_line_cap_cannot(tmp_path):
-    # The whole point: a 2,000-char entry written as ONE line is invisible to the
-    # line cap (the file stays short), and the cap's own remedy — unwrapping —
-    # makes the line count better while removing nothing.
+    # The whole point: a per-entry contract catches what a whole-file budget cannot.
+    # This file is far under the budget, so only the entry check should fire — the
+    # section is breaking a specific promise, not merely being large.
     _prd_with_shipped(tmp_path, "**A big capability** " + ("detail " * 300))
     msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
 
-    assert not any("~250-line cap" in m for m in msgs)  # line cap silent
+    assert not any("-char budget" in m for m in msgs)  # whole-file budget silent
     shipped = next(m for m in msgs if "'## Shipped'" in m)
     assert "1 '## Shipped' entry exceed" in shipped
     assert "A big capability" in shipped  # names the offender, not just a count
