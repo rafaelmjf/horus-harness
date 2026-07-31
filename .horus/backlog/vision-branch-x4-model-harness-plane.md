@@ -148,6 +148,24 @@ and continuity prove valuable in repeated real use. **Drop** if the work remains
 thin wrapper over commoditized plumbing, hidden account/usage ambiguity cannot be
 made honest, or Horus must own gateway/orchestration runtime.
 
+## Reviews
+
+- 2026-07-31 — **Statusline leak RESOLVED; the v0.0.65 revert consequence does NOT
+  fire.** The 2026-07-18 trial left an open question with a pre-decided outcome
+  (*"if it does not revert … this is grounds to revert the proxy implementation
+  (v0.0.65) entirely"*). Measured this session: **no leak persists.** Owner confirmed
+  a clean Opus/Claude-Code session renders its statusline correctly, and the config
+  side agrees — no `ANTHROPIC_BASE_URL` or any proxy env in a clean session, and no
+  proxy residue in either isolated account dir, `~/.claude/settings.json`, or
+  `~/.horus/config.toml`. Note the reported symptom could never have come from
+  `statusline.sh`: that script emits **no context-window percentage at all** on the
+  row that was said to show only one, so the breakage was the agent CLI's own
+  rendering during the proxied session, not a mutated config. **Untoggling the proxy
+  did revert it, as expected.** So this defect is off the X4 ledger; the branch's
+  postponement still rests on its other two findings (slowness, and ~20% of *weekly*
+  Codex capacity for almost no delivery), which are unmeasured and still need a real
+  trial. One defect settled, not the verdict.
+
 ## Branch acceptance
 
 - The owner can choose and later audit the actual harness/profile/model/credential
