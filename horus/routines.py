@@ -580,13 +580,24 @@ def _prd_skeleton_gaps(prd_body: str) -> list[str]:
 
 
 def _vision_facets(prd_body: str) -> list[str]:
-    """Facet names from the markdown table under `## Vision` — the bold text of each
-    row's first column. Header/separator rows carry no bold and are skipped."""
+    """Facet names from the FIRST markdown table under `## Vision` — the bold text of
+    each row's first column. Header/separator rows carry no bold and are skipped.
+
+    Scoped to the first table on purpose. `## Vision` grew a second one — the
+    surfaces-and-audiences table (2026-07-28) — and scanning every row made its one
+    bolded cell, ``**`.horus/` files**``, a phantom ninth facet: reported as
+    "converged, no open cards" by the consolidate read-out, counted by
+    `facet_standings`, rendered in the TUI Direction view, and accepted as a valid
+    `vision_facet` on a card. A surface is not a facet."""
     facets: list[str] = []
+    started = False
     for line in _section(prd_body, "Vision").splitlines():
         line = line.strip()
         if not line.startswith("|"):
+            if started:
+                break  # end of the first table
             continue
+        started = True
         first = line.strip("|").split("|", 1)[0].strip()
         m = _BOLD_TITLE_RE.match(first)
         if m:

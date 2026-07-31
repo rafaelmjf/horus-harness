@@ -1096,3 +1096,26 @@ def test_handoff_budget_is_independent_of_the_whole_file_budget(tmp_path):
 
     assert any("'next_prompt'" in m for m in msgs)
     assert not any("-char budget:" in m for m in msgs)  # whole-file signal silent
+
+
+def test_vision_facets_ignores_a_second_table_in_the_vision_section():
+    # `## Vision` grew a surfaces-and-audiences table (2026-07-28). Scanning every
+    # row made its one bolded cell a phantom facet: reported as "converged, no open
+    # cards", counted by facet_standings, and rendered in the TUI Direction view.
+    body = (
+        "## Vision\n\nprose\n\n"
+        "| Facet | Definition of done |\n|---|---|\n"
+        "| **Continuity core** | resumes from durable state |\n"
+        "| **Distribution** | installs cleanly |\n\n"
+        "More prose about surfaces.\n\n"
+        "| Surface | Serves | Contract? |\n|---|---|---|\n"
+        "| **`.horus/` files** | agents | YES |\n"
+        "| `horus` CLI | operator | No |\n\n"
+        "## Backlog\n"
+    )
+    assert routines._vision_facets(body) == ["Continuity core", "Distribution"]
+
+
+def test_vision_facets_still_reads_a_lone_table():
+    body = "## Vision\n\n| Facet | DoD |\n|---|---|\n| **Only one** | done |\n\n## Backlog\n"
+    assert routines._vision_facets(body) == ["Only one"]
