@@ -8,7 +8,7 @@ display by pointing each account's ``settings.json`` at ``horus statusline``:
     "statusLine": { "type": "command", "command": "horus statusline" }
 
 Rows (a row that would be empty is skipped, so it degrades cleanly):
-  1. ``user@host:cwd`` (``~`` for ``$HOME``) │ model
+  1. ``user@host:cwd`` (``~`` for ``$HOME``) │ account │ model
   2. ``ctx`` / ``5h`` / ``7d`` meters — bar + percent + ``↻ reset``
   3. ``⎇ branch`` │ ``PR #<n> <review_state>``
 
@@ -33,6 +33,7 @@ _BLUE = "\033[01;34m"
 _CYAN = "\033[00;36m"
 _YELLOW_B = "\033[00;33m"
 _MAGENTA = "\033[00;35m"
+_MAGENTA_B = "\033[01;35m"
 _SEP = f"{_DIM}│{_RESET}"
 
 BAR_WIDTH = 8
@@ -127,7 +128,7 @@ def git_branch(work_dir: str) -> str | None:
     return branch or None
 
 
-def _row1(payload: dict, *, home: Path, user: str, host: str) -> str | None:
+def _row1(payload: dict, *, home: Path, user: str, host: str, account: str = "") -> str | None:
     cwd = _dget(payload, "cwd")
     if not isinstance(cwd, str) or not cwd:
         cwd = str(home)
@@ -136,6 +137,12 @@ def _row1(payload: dict, *, home: Path, user: str, host: str) -> str | None:
     except (TypeError, ValueError):
         shown = cwd
     row = f"{_GREEN}{user}@{host}{_RESET}:{_BLUE}{shown}{_RESET}"
+    # Which account this session spends, before the model it spends it on: with two
+    # accounts on one machine the wrong-account mistake is the expensive one, and the
+    # payload names no account at all (the caller resolves it from the ambient config
+    # dir). Its own colour so it reads as identity, not as another model field.
+    if account:
+        row += f" {_SEP} {_MAGENTA_B}{account}{_RESET}"
     model = _dget(payload, "model", "display_name")
     if isinstance(model, str) and model:
         row += f" {_SEP} {_CYAN}{model}{_RESET}"
@@ -187,9 +194,16 @@ def render(
     home: Path | None = None,
     user: str = "",
     host: str = "",
+    account: str = "",
     branch_of: Callable[[str], str | None] = git_branch,
 ) -> str:
     """Render the (up to) three status rows for a statusline payload.
+
+    ``account`` is the account this session spends, injected by the caller like
+    ``user``/``host`` — the payload never carries it, and resolving it needs the
+    ambient config dir plus Horus's own account mapping, neither of which belongs
+    in a pure renderer. Empty means "unknown", which renders nothing rather than a
+    placeholder: a wrong account label is worse than no label.
 
     Returns the rows joined by newlines — each row Claude Code renders as its own
     line. Any row that would be empty is omitted. Returns ``""`` for a payload that
@@ -198,7 +212,7 @@ def render(
         return ""
     home = home or Path.home()
     rows = [
-        _row1(payload, home=home, user=user, host=host),
+        _row1(payload, home=home, user=user, host=host, account=account),
         _row2(payload),
         _row3(payload, branch_of=branch_of),
     ]
