@@ -158,3 +158,69 @@ def test_usage_level_bands():
     assert statusline.usage_level(79) == "warn"
     assert statusline.usage_level(80) == "high"
     assert statusline.usage_level(100) == "high"
+
+
+def test_account_renders_on_row_one_before_the_model():
+    # Ordering is deliberate: with two accounts on one machine, "which account am I
+    # spending" is the costlier thing to get wrong, so it precedes the model.
+    row1 = _render(_payload(), account="personal").split("\n")[0]
+    assert "personal" in row1
+    assert row1.index("personal") < row1.index("Opus 4.8")
+
+
+def test_unknown_account_renders_nothing_rather_than_a_placeholder():
+    # A wrong or filler account label is worse than none: the whole point is that
+    # glancing at it is trustworthy. Empty must also not leave a dangling separator.
+    row1 = _render(_payload(), account="").split("\n")[0]
+    assert "rafa@box" in row1 and "Opus 4.8" in row1
+    assert row1.count("│") == 1  # only the model separator
+
+
+def test_account_label_prefers_the_alias_under_isolation(monkeypatch, tmp_path):
+    # The alias comes from the same mapping `--account` uses, so the status line
+    # names the account exactly as every other horus command does.
+    from horus import cli, config
+    acct = tmp_path / "claude-personal"
+    acct.mkdir()
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(acct))
+    monkeypatch.setattr(config, "load_account_config_dirs", lambda: {"personal": str(acct)})
+    assert cli._statusline_account_label() == "personal"
+
+
+def test_account_label_falls_back_to_the_authenticated_email(monkeypatch, tmp_path):
+    # No alias to be authoritative about outside isolation — a fresh install with no
+    # accounts configured still gets a true answer from the agent CLI's own state.
+    import json
+    from horus import cli, config
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".claude.json").write_text(
+        json.dumps({"oauthAccount": {"emailAddress": "someone@example.com"}}), encoding="utf-8"
+    )
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.setattr(config, "load_account_config_dirs", lambda: {})
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    assert cli._statusline_account_label() == "someone@example.com"
+
+
+def test_account_label_is_empty_when_nothing_resolves(monkeypatch, tmp_path):
+    # Never raises: this runs inside the owner's status line, where an exception
+    # would corrupt the display it is meant to enrich.
+    from horus import cli, config
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.setattr(config, "load_account_config_dirs", lambda: {})
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "nowhere"))
+    assert cli._statusline_account_label() == ""
+
+
+def test_cmd_statusline_shows_the_resolved_account(monkeypatch, capsys):
+    # End-to-end: the label the resolver produces actually reaches the rendered row.
+    import argparse
+    import io
+    import json
+    from horus import cli, usage_snapshot
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(_payload(pr={}, rate_limits={}))))
+    monkeypatch.setattr(usage_snapshot, "record_snapshot", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "_statusline_account_label", lambda: "work")
+    rc = cli.cmd_statusline(argparse.Namespace(install=False, account=None))
+    assert rc == 0 and "work" in capsys.readouterr().out

@@ -2036,7 +2036,9 @@ def cmd_statusline(args: argparse.Namespace) -> int:
         host = ""
 
     try:
-        text = statusline.render(payload, user=user, host=host)
+        text = statusline.render(
+            payload, user=user, host=host, account=_statusline_account_label()
+        )
     except Exception:  # noqa: BLE001 - a render bug must never corrupt the status line
         return 0
     if text:
@@ -3461,6 +3463,35 @@ def _account_for_ambient_config_dir(agent: str) -> str | None:
         except OSError:
             continue
     return None
+
+
+def _statusline_account_label() -> str:
+    """The account label for the status line: the alias when isolated, else the email.
+
+    Two tiers, deliberately. Under isolation the alias is authoritative because it
+    comes from the same mapping ``--account`` uses, so the status line calls the
+    account exactly what every other Horus command calls it. Outside isolation
+    there is no alias to be authoritative about, so it falls back to the identity
+    the agent CLI itself authenticated — the only account fact that exists there,
+    and what a fresh install with no accounts configured would see.
+
+    Returns ``""`` on any failure, which renders nothing: an unlabelled status line
+    is a small loss, a status line naming the wrong account is a costly one.
+    """
+    try:
+        alias = _account_for_ambient_config_dir("claude")
+    except Exception:  # noqa: BLE001 - identity must never break the display
+        alias = None
+    if alias:
+        return alias
+    try:
+        env = os.environ.get("CLAUDE_CONFIG_DIR")
+        base = Path(env) if env else Path.home()
+        data = json.loads((base / ".claude.json").read_text(encoding="utf-8"))
+        email = data.get("oauthAccount", {}).get("emailAddress")
+        return email if isinstance(email, str) else ""
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def cmd_usage_record(args: argparse.Namespace) -> int:
