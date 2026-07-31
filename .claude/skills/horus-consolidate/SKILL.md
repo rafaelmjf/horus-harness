@@ -3,7 +3,7 @@ name: horus-consolidate
 description: >-
   Consolidate a project's Horus continuity (`.horus/`). On a PRD-structure (v3)
   project this is a light backlog-hygiene pass over the single `PRD.md` file
-  (line-count vs the cap, stale frontmatter, undistilled optional recovery notes,
+  (size vs the character budget, stale frontmatter, undistilled optional recovery notes,
   duplicate or lingering-done backlog items). On a six-lane (v2) project it
   routes shipped work into the features ledger, prunes done/stale roadmap
   items, distills session notes into the durable files, and de-duplicates

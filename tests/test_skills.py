@@ -1012,3 +1012,24 @@ def test_roadmap_branches_tree_is_facet_spine_plus_exploration():
     assert 'not a synonym for "add work to this facet"' in flat
     # The tree section enforces the ordering.
     assert "facet branches first, in facet-table order" in flat
+
+
+def test_every_bundled_skill_projection_matches_its_source():
+    """EVERY skill's projected copies must equal `Skill.content`, not just a named few.
+
+    Coverage was 8 of 19 (the pathfinder-step and dispatch-consent groups), so the
+    other 11 could drift silently — and `horus-consolidate` did: #472 changed its
+    frontmatter description and the projected copies on main kept the old text,
+    because the regeneration ran before that edit and nothing re-checked it. A
+    generated file that no test compares to its generator is not generated, it is
+    hand-maintained by accident.
+    """
+    mismatched = []
+    for skill in skills.SKILLS:
+        for root in (".claude/skills", ".agents/skills"):
+            path = Path(f"{root}/{skill.name}/SKILL.md")
+            if not path.is_file():
+                mismatched.append(f"{path} missing")
+            elif path.read_text(encoding="utf-8") != skill.content:
+                mismatched.append(str(path))
+    assert mismatched == [], f"projection drifted from source: {mismatched}"
