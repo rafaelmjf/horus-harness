@@ -1043,3 +1043,56 @@ def test_rules_entries_found_under_either_heading_form():
     long_rule = "- **R** " + "y" * 800 + "\n"
     for heading in ("## Rules\n\n", "## Rules (load-bearing)\n\n"):
         assert routines._rules_entries(heading + long_rule), heading
+
+
+def _prd_with_frontmatter(root: Path, **fields) -> None:
+    hdir = root / ".horus"
+    hdir.mkdir(parents=True, exist_ok=True)
+    fm = "\n".join(f'{k}: "{v}"' for k, v in fields.items())
+    (hdir / "PRD.md").write_text(
+        f"---\nstatus: active\nlast_updated: 2026-07-01\n{fm}\n---\n\n"
+        "# P\n\n## Vision\n\nv\n\n## Backlog\n\n### Now / next candidates\n\n"
+        "1. **Task one.** Do it.\n\n## Shipped\n\n**A thing** (PR #1): done.\n\n"
+        "## Rules\n\n- **A rule.** Short.\n",
+        encoding="utf-8",
+    )
+
+
+def test_handoff_field_over_budget_is_named(tmp_path):
+    # These fields are read by resume, the dashboard, the TUI and the merge gate on
+    # EVERY launch — a fat next_prompt is a tax on orientation, not just file bloat.
+    _prd_with_frontmatter(tmp_path, current_focus="x" * 1200, next_action="short")
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+
+    focus = next(m for m in msgs if "'current_focus'" in m)
+    assert "1,200 chars" in focus and "800-char handoff budget" in focus
+    assert not any("'next_action'" in m for m in msgs)
+
+
+def test_handoff_field_carrying_a_previous_state_is_flagged(tmp_path):
+    # The real instance: current_focus held a literal "OLD (2026-07-30): ..." clause —
+    # a log inside the field whose whole job is to say what is true now.
+    _prd_with_frontmatter(tmp_path, current_focus="Doing the thing. OLD (2026-07-30): did another thing.")
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+
+    prior = next(m for m in msgs if "previous state" in m)
+    assert "'current_focus'" in prior
+    # Short enough to clear the size budget — the two checks are independent.
+    assert not any("handoff budget" in m for m in msgs)
+
+
+def test_handoff_prior_state_pattern_does_not_fire_on_ordinary_prose(tmp_path):
+    _prd_with_frontmatter(
+        tmp_path,
+        current_focus="Replacing the old cap with a budget; the older behaviour is gone. Bold and untold.",
+    )
+    assert not any("previous state" in m for m in _warn_msgs(routines.consolidate_signals(tmp_path)))
+
+
+def test_handoff_budget_is_independent_of_the_whole_file_budget(tmp_path):
+    # A small file can still have a bloated handoff, and vice versa.
+    _prd_with_frontmatter(tmp_path, next_prompt="y" * 2000)
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+
+    assert any("'next_prompt'" in m for m in msgs)
+    assert not any("-char budget:" in m for m in msgs)  # whole-file signal silent
