@@ -2056,3 +2056,265 @@ as a fourth consumer, without introducing a second parser or probe path.
   `cockpit-autonomous-dispatch-contract`) are NOT reclassified here — that
   is an owner call, not an inference.
   Claude-Session: https://claude.ai/code/session_018NXvmQRf54vgjsN9Repaoa
+
+- `2f7cdef` feat: show the spending account on the status line (#467)
+  The status line named the model but never the account, so on a machine with
+  two authenticated accounts nothing on screen distinguished a session spending
+  personal capacity from one spending work capacity — the costlier of the two
+  mistakes, and the one with no undo.
+  Row 1 becomes `user@host:cwd | account | model`, account before model because
+  it is the more expensive thing to get wrong. `render()` takes it as an injected
+  string like `user`/`host`: the payload never carries an account, and resolving
+  one needs the ambient config dir plus Horus's account mapping, neither of which
+  belongs in a pure renderer.
+  Resolution is two-tier. Under isolation the alias comes from
+  `_account_for_ambient_config_dir`, the same mapping `--account` uses, so the
+  status line names the account exactly as every other horus command does.
+  Outside isolation there is no alias to be authoritative about, so it falls back
+  to the email the agent CLI itself authenticated — the only account fact that
+  exists there, and what a fresh install with no accounts configured sees. Any
+  failure yields "", which renders nothing: an unlabelled status line is a small
+  loss, one naming the wrong account is a costly one.
+  Found because the owner asked for this on their local `~/.claude/statusline.sh`
+  reference and the shipped `horus statusline` — the portable cross-OS default the
+  fleet actually gets — was one feature behind. The owner's own accounts point at
+  the reference script, so the shipped surface is the one nobody looks at.
+  Verified live on all three paths (personal alias, work alias, email fallback)
+  and each new test confirmed failing without the change. Suite 2440.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+- `e86d132` feat: wildcard v5 — fix where ideas come from, not how they are formatted (#468)
+  Run 3 produced five items of backlog triage, which the owner judged "not
+  wildcard worthy … scraping the backlog for undecided or stale cards, not novel
+  features and ideas". That is the third consecutive failed fix.
+  The diagnosis is that all four prior revisions fixed the FORM of the output and
+  none touched idea provenance. Meanwhile §Procedure step 1 still said "diverge
+  over the branches" and §Grounding's documented fallback was "the live session's
+  context plus the backlog" — the recency-anchoring failure mode from runs 1-2,
+  written in as an approved path. Card-shaped output was not a drift from the
+  text; the text mandated it.
+  By the skill's own Kind taxonomy, run 3 emitted three `decision`, one
+  `evidence read`, one `probe` — and zero code or prose changes. Nothing was
+  executable, which is also why none could serve as away-mode drill legs.
+  v5:
+  - Replaces the grounding with facet-DoD-vs-delivered-code (never stale, so a run
+    is always possible), the owner's real friction, and outside evidence. The
+    backlog is demoted to a duplication check and is explicitly not an idea source.
+  - Adds the SELF-SUFFICIENCY BAR as the primary gate, on the owner's framing that
+    an idea should be "ready to build without extra decisions rather than a 'go
+    ahead'". If execution depends on a choice, the idea makes it and states why.
+  - Makes `decision` and `evidence read` non-emittable kinds, with a routed line
+    for items that genuinely need the owner.
+  - Adds `Choices already made` to the scope block, and a second worked BAD example
+    using run 3's own text — the shape that passes every earlier check and still
+    fails, because accepting it produces a meeting rather than a commit.
+  - Declines a staleness threshold, on the owner's call that staleness is
+    subjective and better disclosed than enforced. Consistent with the PRD controls
+    ladder: no preemptive gate where nothing has been shown to fail.
+  Also adds the parity guard this skill never had. wildcard has no generator yet
+  (`bundle-test-phase-skills`), so both copies are hand-edited and only a `cp` kept
+  them in sync — a reviewer noticing a missing copy is not a guard. Confirmed
+  failing with the copies diverged before being restored.
+  Suite 2436.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+- `e4568e9` feat: make the CLI the authority for shipped state, not PRD prose (#469)
+  * feat: make the CLI the authority for shipped state, not PRD prose
+  PRD.md is ~54,000 tokens, of which 82% is retrospective: Rules 42%, Shipped
+  40%. The Vision — what a fresh agent actually needs — is 9%. The structure's
+  stated purpose is minimum sufficient orientation, and it had drifted into
+  carrying the record as well.
+  Three changes, all in service of one rule: if a deterministic command can
+  produce it, prose must not cache it.
+  1. `horus backlog list --archived` opens a read path onto the archive.
+     `ship_card` moved cards into backlog/archive/ and `load_cards` documented
+     that "archived cards are never loaded" — so 132 shipped cards carrying
+     shipped_pr/shipped_sha were reachable only by opening files by hand. That is
+     why the ledger got re-typed as prose into PRD.md in the first place.
+  2. Retires `prd_readiness_count_findings`. It reconciled the parenthetical
+     counts hand-written into PRD.md's "Readiness breakdown" line against
+     readiness_counts() — a check that existed solely because PRD prose cached
+     what `horus backlog list` computes exactly. The cache goes, so the check
+     policing it goes with it. Removing a duplication removes its guard too.
+  3. Adds a per-entry Shipped size signal. The existing ~250-line cap is
+     structurally blind to this: an 11,712-character entry written as one line is
+     still one line, and the cap's own remedy (unwrap hard-wrapped bullets)
+     LOWERS the line count while removing nothing — PRD went 257→210 lines that
+     way on 2026-07-29 and got no smaller. The new signal measures where the
+     contract actually is ("one line per capability; details live in git
+     history"), in characters, per entry, and names the worst three rather than
+     only counting them.
+  Threshold 400 chars is generous for one line and set from measurement, not in
+  advance: on this repo's 22 entries the median is 1,002 and the max 11,712, so it
+  fires on real drift. Live-probed — the signal names the 11,712-char v0.0.75
+  entry, and --archived lists 132 previously unreachable cards newest-first with
+  PR and SHA.
+  6 of the 7 new tests confirmed failing with the source stashed (the seventh is a
+  negative assertion). Suite 2445.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+  * fix: split Shipped entries on bold titles, not blank lines
+  Self-review of the previous commit against the real PRD.md: the reported
+  "11,712-character entry" was not one entry. Entries in this ledger are
+  routinely written on CONSECUTIVE lines with no blank between them, so the
+  blank-line split lumped eleven capabilities (v0.0.75 through Distribution) into
+  one block — attaching a correct warning to the wrong label, and implying the fix
+  was to trim that capability when it was to separate them.
+  An entry now starts at a bold title on its own line start and runs to the next.
+  On this repo that changes the reading from "22 entries, largest 11,712 chars" to
+  "32 entries, largest 2,445 chars" — the same total, honestly attributed.
+  Suite 2446.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+  ---------
+- `0f9c702` chore: trim PRD.md to orientation; stop caching command output in prose (#470)
+  PRD.md was ~52,400 tokens with 82% retrospective and the Vision — what a fresh
+  agent needs to orient — at 9%. This applies the rule #469 built the meter for.
+  Shipped: 34,180 -> 7,721 chars, one line per capability as its own contract
+  always said. Nothing is lost: all 32 entries were checked first and every one
+  carries a PR, tag or SHA, so the detail is retrievable from git, and
+  `horus backlog list --archived` now lists the delivered cards directly.
+  Three lessons were NOT retrievable and are promoted to Rules rather than cut —
+  they existed only inside Shipped prose:
+    - prose in one artifact has no effect on another artifact's machine-readable
+      state (the rule this whole change rests on)
+    - a card's `surface:` list can be incomplete, and a worker scoped to it will
+      faithfully leave the rest
+    - a passing test is not evidence against a network-dependent theory
+  A fourth ("process corrections must live in the process") was already covered by
+  the managed block, so it was not duplicated.
+  Backlog: the 3,134-char readiness breakdown becomes a 516-char pointer at
+  `horus backlog list`, which computes those counts exactly. #469 already retired
+  the check that existed only to catch this copy drifting.
+  Also records the X4 statusline-leak resolution measured this session: no leak
+  persists, so the pre-decided v0.0.65 revert consequence does not fire.
+  Verified by the meter, not by assertion: `horus consolidate` reports 35 Shipped
+  entries, 0 over the 400-char threshold, where it previously named 31 offenders.
+  PRD.md 91,252 -> 63,766 chars (~52,400 -> ~36,600 tokens).
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+- `b7c53f3` fix: stop projecting this repo's war stories into every managed project (#471)
+  * fix: stop projecting this repo's war stories into every managed project
+  The managed block ships to all 20 managed projects, and `Working discipline` —
+  48% of it — carried two of THIS repo's dated incidents as universal
+  instruction: the 2026-07-27 `gh`-flag polling loops that cost ~30 minutes, and
+  the 2026-07-27 accidental PR stack. Consumer projects were reading
+  horus-harness's failures as if they were their own.
+  Same defect class as #462/#466, one surface over. The rule already accepted
+  there — a skill bundled into every project is a product surface FOR those
+  projects — was written for skills only; it covers anything projected.
+  Block v16 -> v17 keeps the rules, which are general, and drops the narratives.
+  They are preserved in `.horus/archive/history.md`, where this repo's bumps in
+  the road belong — not in PRD Rules, which is already 65% of the file.
+  Adds the deterministic guard, because a rule was the instruction rung here and
+  the instruction rung is what failed: the projected block must contain no
+  `Observed <date>` narrative. Confirmed to fire against the simulated v16 text.
+  Suite 2447.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+  * chore: pick up the Codex hook status-message refresh
+  Incidental, not part of the audience fix: `upgrade-project --apply` regenerated
+  this repo's own projections while refreshing the managed block, and the Codex
+  host/worker guard hook's statusMessage had drifted from the generator
+  ("host safety" -> "shell safety"). Committed so the tree is clean rather than
+  left dangling or split into a trivial PR.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+  ---------
+- `c7f4971` feat: PRD size signal measures cost, not shape (#472)
+  * fix: measure PRD size by cost, and give Rules its own contract
+  Two defects in the size signal, both found by running it after #470's trim.
+  1. The hint recommended the drift. `_prd_size_hint` said hard-wrapped bullets
+     should be unwrapped because it "reclaims lines with no loss" — true for
+     lines, and exactly the mechanism that let this file reach 91,252 characters
+     while reporting 210 lines and a silent cap. 2026-07-29 followed that advice:
+     PRD went 257 -> 210 lines and got no smaller. A remedy that improves the
+     metric without removing content is not a remedy. Clause deleted.
+     `_section_breakdown` now measures characters, not physical lines, because the
+     two rankings disagree about the file's shape: immediately after the trim it
+     read Rules 40% / Shipped 33% by lines but Rules 66% / Shipped 13% by
+     characters — so the hint was pointing the next distill pass at the section
+     that had just been cut to a tenth of the other one.
+  2. `## Rules` had no contract enforced. It promises "concise current rules,
+     grouped by topic (NOT a log)" and had drifted exactly as Shipped did: 71
+     entries, median 507 chars, max 1,229, and 18 carrying dated incident
+     narratives. `_shipped_entries` is generalised to `_section_entries(...)` and
+     Rules gets the same per-entry check, with the finding naming
+     `.horus/archive/history.md` as the destination for narratives — the routing
+     already used for the managed block in #471.
+     Rules' threshold is 600, not Shipped's 400, because the contracts differ: a
+     shipped entry points at a PR that holds the detail, while a rule must carry
+     enough evidence to be believed. At 600 the reading is 22 of 71 (real drift);
+     at 400 it would be 50 of 71, which is noise nobody acts on.
+  Live-probed: the hint now reads "largest section is 'Rules (load-bearing)'
+  (38,528 chars, 66% of the body)" with no unwrap advice, and the Rules check
+  names the three worst entries. Suite 2451.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+  * feat: replace the PRD line cap with a character budget
+  The line cap measured shape, not cost, and the two came apart badly: this file
+  reached 91,252 characters while reporting 210 lines, so the cap stayed silent
+  through the entire drift. Worse, the metrics pull opposite ways — separating
+  run-together entries is a real improvement that ADDS lines, so after #470's trim
+  PRD sat at exactly 235 lines (the soft cap) having just gotten 30% smaller. A
+  budget that penalises the fix is not a budget.
+  45,000 soft / 60,000 hard, set from measurement: the file is ~64,500 chars
+  today and Rules alone is 66% of the body, so routing its dated narratives to
+  `.horus/archive/history.md` lands it near 40,000. Fires on today's real state,
+  goes quiet once the known remaining work is done.
+  The cap number was cached as prose in six places — the same defect one level up
+  — so all of them move together: the dashboard badge, `init` scaffolding in
+  upgrade.py and templates.py (x3), and the `horus-consolidate` skill text and its
+  DESCRIPTION, since the description is what a reader sees before deciding to load
+  the body. Skills bumped: horus-consolidate 16->17, horus-infer 6->7.
+  Renames the dashboard's `line_count`/`line_class` to `size_chars`/`size_class`.
+  A field named `line_count` holding characters is the same lie in miniature.
+  Adds a guard for a real defect hit while doing this: `Skill(name, N, text)` and
+  the `horus-skill-version: N` marker inside `text` are two hand-maintained copies
+  of one number, and when they disagree every `upgrade-project` run reports
+  "updated to vN" forever while doctor never goes green. Confirmed failing against
+  the simulated mismatch.
+  Live: `PRD.md is 64,548 chars — over the ~60,000-char budget: largest section is
+  'Rules (load-bearing)' (38,528 chars, 66% of the body)`, and the dashboard badge
+  reads 64,548/60,000 chars. Suite 2452.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+  ---------
+- `b61a6c8` feat: budget the PRD handoff fields, and flag a retained previous state (#473)
+  Point 3 of the cap review. The handoff fields are read by `horus resume`, the
+  dashboard, the TUI and the merge freshness gate — every PRD-first surface, on
+  every launch — so they are paid on a different schedule from the body, which one
+  session reads when it needs it. A fat `next_prompt` is a tax on orientation, not
+  just file bloat. Hence a separate budget rather than folding them into the
+  whole-file one.
+  Measured 2026-07-31: current_focus 1,957 / next_action 2,134 / next_prompt 1,707
+  chars, telling substantially the same story three times. 800 is a long paragraph
+  and ample for an orientation handoff, so all three fire on real evidence.
+  Also flags a previous state retained inside a current-state field: `current_focus`
+  carried a literal "OLD (2026-07-30): ..." clause — a log inside the field whose
+  whole job is to say what is true NOW, while git history holds what was. The
+  pattern is narrow on purpose (bare uppercase OLD followed by `(` or `:`), with a
+  test that ordinary prose containing "old"/"older"/"bold"/"untold" does not trip it.
+  The two checks are independent: a small file can still carry a bloated handoff,
+  and a short field can still carry a stale clause.
+  3 of the 4 new tests confirmed failing with the source stashed (the fourth is a
+  negative assertion). Suite 2456.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
+- `72e2862` chore: route Rules narratives to history.md; split the spec rules (#474)
+  Acts on the Rules signal from #472: 22 of 71 entries were over the 600-char
+  contract and 18 carried dated incident narratives, in a section promising
+  "concise current rules, grouped by topic (NOT a log)".
+  The 22 split into two kinds, and treating them alike would have been wrong:
+  - NARRATIVE-heavy (15) — condensed to rule plus one line of evidence, with the
+    story routed to `.horus/archive/history.md`, where `horus-distill-history`
+    already says this repo's bumps in the road belong. Five new entries there
+    cover the PRD-as-cache drift, the cap that measured shape, the hand-written
+    fixture that hid an unreachable feature, the live test that stopped the
+    owner's herdr server, and the ~10-line fix that cost six days by being carded.
+  - SPECIFICATION (7) — long because they encode many constraints, not because
+    they tell a story. `Accounts:`, `Terminal persistence`, `Delegation is
+    need-first`, and the notify channel were SPLIT into separate rules so every
+    constraint survives and each entry states one thing. Rules went 71 -> 77;
+    that is the point, not a regression.
+  Result: 22 over-budget entries -> 0. PRD.md 64,548 -> 59,641 chars.
+  Honest correction to my own projection: I estimated ~40,000 after this pass. It
+  landed at 59,641 because that estimate assumed all 22 were narrative. About a
+  third were specification whose content is contract, so splitting preserved it
+  rather than removing it. Rules is still 62% of the body; the remaining bulk is
+  genuine invariants, not prose bloat.
+  The splice truncated `## Structure contract (prototype)`, which sits AFTER Rules
+  in the file — caught by diffing section headings before/after, and restored.
+  Recorded because the same splice pattern will be used again.
+  Suite 2456.
+  Claude-Session: https://claude.ai/code/session_01Sosc4B77cfponRxt9tmLoU
