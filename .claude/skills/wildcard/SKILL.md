@@ -2,14 +2,14 @@
 name: wildcard
 description: >-
   Owner-invoked (or scheduled) AUTONOMOUS divergence skill that proposes NEW MOVES to
-  advance the vision — the safe autonomous sibling of pathfinder. Grounded on a pathfinder
-  run's saved evidence (position brief, product-audit, market-scan, roadmap-branches), it
-  reads the Vision facets and `vision-branch-*` umbrellas and asks what would make each
-  demonstrably further along, then emits ALL valid moves RANKED high→low — each led by an
-  imperative action and the concrete before→after change it performs, so the owner sees
-  exactly what accepting it does. Strictly ADDITIVE: it never proposes dropping,
-  archiving, pruning or deferring anything — those are backlog-refine and convergence
-  decisions.
+  advance the vision — the safe autonomous sibling of pathfinder. It draws ideas from the
+  gap between each Vision facet's definition of done and the code that actually exists,
+  from the owner's real friction in recent use, and from outside the project — never from
+  the backlog, which it reads only to avoid duplicating. It emits ALL valid moves RANKED
+  high→low, each one BUILDABLE and SELF-SUFFICIENT: a fresh agent could start it without
+  asking the owner anything, because every execution choice it depends on has already been
+  made and stated. Strictly ADDITIVE: it never proposes dropping, archiving, pruning or
+  deferring anything — those are backlog-refine and convergence decisions.
   Safe to run unattended because every output is a proposal the owner disposes of — it
   never sets direction, never implements, never edits the backlog.
   Use when the owner says "run wildcard", "surprise me with an opportunity", "what am I
@@ -18,15 +18,14 @@ description: >-
   request, for ideas the owner picks).
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
-# wildcard — autonomous divergence → ranked, actionable vision-advancing moves
+# wildcard — autonomous divergence → ranked, buildable vision-advancing moves
 
-**Status: v4 (audited 2026-07-28; two same-day revisions from live runs; not yet bundled).** This SKILL.md and its `.agents/`
+**Status: v5 (2026-07-31, from the run-3 failure).** This SKILL.md and its `.agents/`
 twin ARE the source — there is no generator for this skill yet, so they are edited
 directly and kept byte-identical. Registering it in `horus/skills.py` (version wiring +
 install verification) is the dedicated-session step the `wildcard` backlog card drives.
-The "previous run" grounding depends on `pathfinder-structured-outcome`.
 
 ## Purpose — move the vision FORWARD
 
@@ -34,9 +33,15 @@ The "previous run" grounding depends on `pathfinder-structured-outcome`.
 definition of done, or a `vision-branch-*` direction closer to being promoted into a facet.
 Divergence here means *finding the next thing worth building or proving*.
 
-Read the Vision facet table and the branch umbrellas — thesis, exists-vs-gaps map, ordered
-children, convergence criterion — and ask: **what would make this facet or branch
-demonstrably further along, and what is the smallest next piece of work that gets there?**
+Two properties make an idea worth emitting, and they are the whole skill:
+
+- **BUILDABLE** — its substance is a change to code or prose, or a fully specified probe.
+  Something an agent could execute.
+- **SELF-SUFFICIENT** — a fresh agent could start it without asking the owner anything,
+  because every choice its execution depends on has already been made *inside the idea*.
+
+Anything failing either property is not an idea, it is an agenda item. See the
+self-sufficiency bar below — it is the primary gate, and the one this version exists for.
 
 **Never propose dropping, archiving, deprioritising, pruning, retiring, or deferring
 anything.** Those are subtractive decisions and they belong to `backlog-refine` (per-card
@@ -45,12 +50,43 @@ output is mostly "stop doing X" has failed, however well-evidenced: it spent a d
 pass on work another skill owns. If a subtraction is genuinely the obvious move, note it in
 one line at the end and route it, then get back to proposing forward moves.
 
-Frames are lenses on the forward question. Vary them deliberately — an unmet gap in the
-exists-vs-gaps map, a capability the branch would unlock, a cheaper route to the evidence a
-convergence criterion demands, a probe that would settle an open hypothesis, an adjacent
-facet the same work would also serve. Operational-hygiene findings are in scope only when
-they **block** forward movement; a hygiene idea with nothing to advance belongs to
-`backlog-librarian` or `product-audit`.
+## Grounding — where ideas come from (NEVER the backlog)
+
+Four sources, in this order. **The backlog is not one of them.** Existing cards and
+`vision-branch-*` umbrellas are read for ONE purpose: to avoid duplicating something already
+carded. They are never the well ideas are drawn from.
+
+This is the correction v5 exists for. Four consecutive revisions fixed the *shape* of the
+output while the procedure still said "diverge over the branches" — so every run obediently
+produced backlog triage, and the fallback grounding ("the live session's context plus the
+backlog") was the recency-anchoring failure mode written in as an approved path. Ideas do
+not come from the project's own bookkeeping. If an idea can be traced to a card, it is
+almost certainly triage wearing an idea's clothes.
+
+1. **Facet DoD vs delivered code — always available, never stale.** Take each Vision facet's
+   definition of done and go read what actually exists in the repo. The gap between the two
+   is the richest source there is, it needs no external evidence, and it cannot go out of
+   date. Start here on every run.
+2. **The owner's real friction — highest signal when present.** What was slow, manual,
+   surprising, repeated by hand, or annoying in recent actual use of the product? Session
+   context and recent continuity are legitimate evidence *of friction*; the move is the
+   capability that removes it, not a note about the friction. (The one output this skill
+   ever produced that the owner judged good — the `backlog-librarian` capability — has this
+   shape.)
+3. **Outside the project — opt-in, scope-confirmed.** What do comparable tools, agent-CLI
+   changelogs, or the wider ecosystem now make possible that this project has not absorbed?
+   This costs web work: confirm the scope with the owner before spending it, and skip it
+   silently in an unattended run rather than escalating.
+4. **A previous pathfinder run's artifacts — context, not the well.** Position brief,
+   product-audit receipt, market-scan receipt, roadmap-branches tree. Useful for what the
+   project already concluded; they are background, and never the thing being paraphrased.
+
+**Disclose dates; never refuse on age.** State the date of every artifact you leaned on and
+let the reader judge what that is worth. Do NOT add a freshness threshold and do NOT refuse
+to run because an artifact looks old: staleness here is subjective and hard to pin down, so
+it is left to the reader's interpretation (owner, 2026-07-31) — and a preemptive gate where
+nothing has been shown to fail contradicts the PRD's controls ladder. Source 1 never goes
+stale, so a run is always possible.
 
 ## What it is / hard boundaries
 
@@ -64,28 +100,51 @@ they **block** forward movement; a hygiene idea with nothing to advance belongs 
   archiving, pruning, deprioritising and deferring are `backlog-refine` and convergence
   decisions; proposing them here is out of contract, not merely low-value.
 
-## Grounding — a pathfinder run (never free-roaming)
+## The self-sufficiency bar — the primary gate
 
-- **Previous run (default):** load the last pathfinder run's artifacts — position brief,
-  product-audit receipt, market-scan receipt, roadmap-branches divergence tree (see
-  `pathfinder-structured-outcome` for the run bundle/manifest). Cheap; if the run is old,
-  say so and cite the artifact dates.
-- **Fresh run:** if the owner wants current evidence, run pathfinder's evidence steps
-  (product-audit / market-scan) first, then proceed. More costly.
-- **Fallback:** if no pathfinder run exists, ground on the live session's accumulated
-  context plus the backlog — and SAY that is the grounding. Every emitted idea cites the
-  specific artifacts/signals it was grounded in.
+**An idea is ready to emit only if a fresh agent could build it without asking the owner
+anything.**
+
+If the idea's execution depends on a choice — where something lives, which of two shapes it
+takes, what the field is called, what the threshold is — **make the choice, state it, and
+give the one-line reason.** Do not hand the choice back.
+
+This is not a style preference, it is the difference between a proposal and a meeting. The
+owner disagreeing with a stated choice is a cheap and useful conversation, and it happens
+*before* building. The owner being asked to settle three questions before anything can start
+is the failure this bar exists to stop. **"Decide X, then build Y" is not an idea.** Neither
+is anything whose real ask is a go-ahead.
+
+Concretely, an idea fails this bar if:
+
+- its `Do this` contains "decide", "settle", "define", "determine", "choose", or "agree";
+- its substance is unblocking a card that is blocked *on owner decisions*;
+- its `Change performed if accepted` describes an outcome ("a verdict recorded", "clarity
+  on X", "the card becomes writable") rather than a named change to named things;
+- a fresh agent reading it would have to come back with a question before writing anything.
+
+When an idea is genuinely worth doing but genuinely needs the owner to choose first, that is
+a real finding — write it as ONE routed line at the end (`needs an owner decision:` …), not
+as a ranked proposal.
 
 ## Procedure
 
-1. **Diverge — one lens at a time, over the branches.** Generate ~5-7 candidate moves,
-   each from a DISTINCT lens on the forward question above. Vary the frame
-   deliberately and do not let one frame's result shape the next. True branch isolation
-   would need parallel subagents; that is a token-intensive fan-out requiring owner
-   authorization under the delegation rule, so it is not the default. (Prior art for the
-   isolated-frames + separate-critic structure: github.com/uditakhourii/adhd.)
+1. **Diverge — one lens at a time, over the GROUNDING SOURCES.** Generate ~5-7 candidate
+   moves, each from a DISTINCT lens, working the sources above — facet-DoD gaps first, then
+   friction, then outside. Vary the frame deliberately and do not let one frame's result
+   shape the next. **Do not iterate over the backlog or the branch umbrellas**: that is what
+   produced triage in every prior run. True branch isolation would need parallel subagents;
+   that is a token-intensive fan-out requiring owner authorization under the delegation
+   rule, so it is not the default. (Prior art for the isolated-frames + separate-critic
+   structure: github.com/uditakhourii/adhd.)
 
-2. **Critique and RANK — every valid idea survives.** Score each candidate and order them
+2. **Make each candidate self-sufficient BEFORE ranking it.** For every candidate, list the
+   choices its execution depends on and settle them now, with a reason each. A candidate you
+   cannot settle is not ready — either do the reading that settles it, or drop it to the
+   routed-line list. This step is where a triage item reveals itself: if settling the choices
+   IS the whole idea, it was never a move.
+
+3. **Critique and RANK — every valid idea survives.** Score each candidate and order them
    high→low. Do not discard a valid idea to manufacture a single winner. Drop a candidate
    only if it is genuinely invalid: already covered by an existing card or skill, factually
    wrong, or outside this project's scope. Say so in one line and move on — a long reject
@@ -96,7 +155,9 @@ they **block** forward movement; a hygiene idea with nothing to advance belongs 
    substance is a drop, archive, deprioritise or defer is **invalid here** — route it to
    `backlog-refine` in one line and rank it nowhere.
 
-   **Two mandatory checks before ranking, both learned from failed runs:**
+   **Three mandatory checks before ranking, all learned from failed runs:**
+   - **Self-sufficiency check.** Apply the bar above to every candidate. This is the one
+     that would have emptied run 3.
    - **Rules check.** Read `## Rules` in PRD.md and reject anything that contradicts one.
      A candidate proposing a new control where nothing has failed in the field violates the
      controls ladder ("never enforce preemptively") and is invalid, not merely low-ranked.
@@ -104,7 +165,7 @@ they **block** forward movement; a hygiene idea with nothing to advance belongs 
      what it *actually* means to the owner before building on it. A dated field may be a
      floor ("not before"), not a due date ("act on").
 
-3. **Emit the ranked set — index first, then a scope block per idea.** A ranked table is an
+4. **Emit the ranked set — index first, then a scope block per idea.** A ranked table is an
    index, not the proposal: on its own it makes a decision, an experiment and a code change
    look like the same size of thing. Every idea therefore carries a scope block, so the
    owner can judge what they are agreeing to without asking a follow-up question.
@@ -116,17 +177,22 @@ they **block** forward movement; a hygiene idea with nothing to advance belongs 
    actually needs, and keep them concrete:**
 
    - **Do this** — ONE imperative sentence naming the work. "Add X to Y so Z" or "Run A
-     against B and record C". Not a topic, not a question, never "explore" or "consider".
+     against B and record C". Not a topic, not a question, never "explore", "consider", or
+     any of the decision verbs listed in the self-sufficiency bar.
    - **Change performed if accepted** — the concrete before→after. Name the files,
      commands, or behaviour that differ afterward, in terms someone could verify. This is
      the field that answers "what am I agreeing to", so it must survive one test: *could a
      fresh agent start work from this line alone?* If not, rewrite it.
+   - **Choices already made** — the execution decisions this idea settles on the owner's
+     behalf, one line each with its reason. This is what makes it buildable rather than a
+     request for a go-ahead, and it is where the owner pushes back if they disagree.
    - **Why this advances the vision** — the named facet or branch, and which clause of its
      definition of done or convergence criterion moves. One sentence, cited.
-   - **Size** — `kind` + effort. Kind is one of: `code change` · `prose change` (docs,
-     skills, continuity text) · `probe` (a bounded experiment that spends real resources) ·
-     `evidence read` (answer a question from what already exists) · `decision` (owner
-     judgement, no build).
+   - **Size** — `kind` + effort. Kind must be one of: `code change` · `prose change` (docs,
+     skills, continuity text) · `probe` (a bounded experiment, fully specified: the exact
+     commands, what gets recorded, what it settles). **`decision` and `evidence read` are
+     not emittable kinds** — an idea whose substance is either belongs in the routed line
+     at the end.
    - **Not included** — one line, concrete. Name the adjacent thing a reader would assume
      comes along and does not ("does not touch the scheduler", never "out of scope: broader
      concerns").
@@ -139,9 +205,9 @@ they **block** forward movement; a hygiene idea with nothing to advance belongs 
    now; fix what you will" says do it now and skip the card. State per idea whether it wants
    a new card, belongs to an existing card (name it), or is a fix-now candidate.
 
-### Worked example — the shape, and the failure to avoid
+### Worked example — the shape, and the failures to avoid
 
-**Good** — concrete enough that work could start from it:
+**Good** — buildable, and every execution choice already settled:
 
 > **1 — Stamp per-card usage at dispatch close so `explore` cards can be judged on real
 > use** · advances PO lifecycle · `code change` · one session
@@ -152,6 +218,10 @@ they **block** forward movement; a hygiene idea with nothing to advance belongs 
 >   `usage_at_close` write to the delivered card's frontmatter; `horus/backlog.py` tolerates
 >   and exposes the field; `explore`-phase cards start accumulating a real usage signal
 >   where today they have none.
+> - **Choices already made:** field name `usage_at_close` (mirrors the existing
+>   `shipped_sha` naming); written at ship-stamp rather than a new hook (that path already
+>   opens the card for write); stored as the raw reading, not a delta (deltas need a
+>   same-window pair, which dispatch cannot guarantee).
 > - **Why this advances the vision:** PO lifecycle's open frontier is
 >   convergence-driven-by-usage, and `explore-converge-lifecycle` is Deferred *specifically*
 >   waiting on "a real per-card usage signal" — this produces exactly that signal.
@@ -161,35 +231,54 @@ they **block** forward movement; a hygiene idea with nothing to advance belongs 
 > - **Risk:** dispatch is rare right now, so the signal accumulates slowly and may stay too
 >   thin to judge anything for weeks.
 
-**Bad** — every line is a topic rather than an action, and no fresh agent could start from
-it. This skill has actually produced all three; do not:
+**Bad — abstract.** Every line is a topic rather than an action, and no fresh agent could
+start from it. This skill has produced all three; do not:
 
 > - ~~**In scope:** clarify the branch's direction and gather the relevant evidence.~~
 > - ~~**Deliverable:** a verdict recorded in the umbrella's Reviews.~~
 > - ~~**Consequence:** the review becomes a short question; card count drops.~~
 
+**Bad — the run-3 shape: a to-do list for the owner.** Every line here is concrete, cited
+and honest, and it is still not an idea, because the work it names is the owner's:
+
+> - ~~**Do this:** decide where the contract is declared (docs vs code constants vs README),
+>   the exact field list per tier, and how tier names surface to users.~~
+> - ~~**Change if accepted:** the card leaves `shaping` and becomes writable.~~
+
+Three of run 3's five proposals had this shape. It passes every earlier check in this file —
+it is specific, it cites its grounding, its scope block is fillable — and it fails the only
+one that matters, because accepting it produces a meeting rather than a commit. The fix is
+not to delete the idea: it is to **make the three choices, state them with reasons, and
+propose the declaration itself.**
+
 ## Output
 
-- A ranked index table of every valid idea (typically 3-6), plus a six-field scope block
-  for each, each citing its grounding and the branch it advances.
+- A ranked index table of every valid idea (typically 3-6), plus the scope block for each,
+  each citing its grounding and the facet or branch it advances.
+- One routed line per item that is real but owner-gated (`needs an owner decision:` …),
+  after the ranked set, never inside it.
 - Full card drafts only on request, for the ideas the owner picks.
 - If nothing clears the bar, say so and emit nothing — that is a valid result.
 
 ## Quality bar
 
+- **A run that emits zero buildable ideas has failed.** Say so plainly rather than filling
+  the set: an all-`decision` output is the exact failure of run 3, where three of five
+  proposals asked the owner to choose something and none named a change an agent could make.
 - Every emitted idea must be defensible on its own; ranking replaces rejection.
 - **The action test: if `Change performed if accepted` would not let a fresh agent start
   work, the idea is not ready to emit.** An abstract deliverable ("a verdict recorded", "a
-  finding", "clarity on X") means the idea is a topic, not a move — either sharpen it into
-  a named change, or say plainly that it is a direction needing its own session. Vagueness
-  is the failure this skill was audited for twice; do not fill the block with placeholders.
+  finding", "clarity on X") means the idea is a topic, not a move.
+- **The self-sufficiency test outranks all of the above** — see the bar above. An idea that
+  is specific, cited and well-scoped still fails if building it requires the owner to decide
+  something first.
 - **Every idea must be additive.** If the ranked set is mostly subtraction, the run has
   failed and should be redone against the forward question.
-- Cite grounding per idea. Check each against the open backlog for duplication.
+- Cite grounding per idea, with the date of any artifact leaned on. Check each against the
+  open backlog for duplication — that is the backlog's only role here.
 - Obviousness **lowers a rank, it never excludes** — an obvious idea the owner has not
   acted on may simply be the right next move.
-- Prefer ideas whose evidence already exists over ideas needing new investigation, and say
-  so in `Kind`: an `evidence read` outranks a `probe` that would settle the same question.
+- Prefer ideas whose evidence already exists over ideas needing new investigation.
 
 ## Non-goals
 
@@ -197,14 +286,19 @@ it. This skill has actually produced all three; do not:
 - Not autonomous implementation — a picked idea follows refine → approve → implement.
 - **Not a pruning pass.** No drops, archives, retires, deprioritisations or deferrals;
   those are `backlog-refine`'s and convergence's authority.
+- **Not a backlog triage pass.** Surfacing undecided, stale or blocked cards is
+  `backlog-librarian` and `backlog-refine`; a run whose output could have been produced by
+  reading the backlog alone has failed regardless of how good the items are.
 - Not a card factory: ideas are ranked proposals; cards are drafted only on request.
 
 ## References
 
 - Backlog: `wildcard` (refinement driver + the registration step), the four
-  `vision-branch-*` umbrellas (the subject matter), `pathfinder-structured-outcome`
-  (grounding substrate), `pathfinder` / `scope-cards` / `market-scan` (divergence machinery
-  reused), `autotest-e2e-away-mode-drill` (safe autonomous-loop food).
+  `vision-branch-*` umbrellas (duplication check only — not the idea source),
+  `pathfinder-structured-outcome` (grounding substrate), `pathfinder` / `scope-cards` /
+  `market-scan` (divergence machinery reused), `autotest-e2e-away-mode-drill` (safe
+  autonomous-loop food — buildable wildcard ideas are candidate drill legs, which is only
+  possible once ideas are executable work rather than owner decisions).
 - Prior art: github.com/uditakhourii/adhd (isolated N-frame divergence + separate critic).
 - Calibration: 2026-07-21 dry-run produced the `backlog-librarian` card (owner judged it
   good → v0/v1). **2026-07-28 audit (`.horus/audits/2026-07-28-skill-wildcard.md`) → v2:**
@@ -223,4 +317,20 @@ it. This skill has actually produced all three; do not:
   and the In-scope/Out-of-scope/Deliverable fields were abstract enough that the owner could
   not tell what any idea would actually change. v4 makes the skill strictly additive and
   replaces the scope block with an action-first one led by `Do this` and `Change performed if
-  accepted`, gated by the action test.
+  accepted`, gated by the action test. **v4 → v5, 2026-07-31, from the run-3 failure
+  (`.horus/research/2026-07-31-wildcard-branch-divergence.md`):** run 3 was pinned to the
+  branch umbrellas — the fix for runs 1-2's recency anchoring — and produced five items of
+  backlog triage, which the owner judged "not wildcard worthy … scraping the backlog for
+  undecided or stale cards, not novel features and ideas". **The diagnosis is that all four
+  prior revisions fixed the FORM of the output and none touched where ideas come from**,
+  while the procedure still said "diverge over the branches" and the documented fallback was
+  "the session's context plus the backlog". By this skill's own `Kind` taxonomy run 3 emitted
+  three `decision`, one `evidence read`, one `probe` — and zero code or prose changes, so
+  nothing was executable, which is also why none could serve as away-mode drill legs. v5
+  therefore (a) replaces the grounding with facet-DoD-vs-code, owner friction, and outside
+  evidence, with the backlog demoted to a duplication check; (b) adds the **self-sufficiency
+  bar** as the primary gate, on the owner's framing that an idea should be "ready to build
+  without extra decisions rather than a 'go ahead'"; (c) makes `decision` and `evidence read`
+  non-emittable kinds with a routed line for genuine owner-gated items; (d) adds
+  `Choices already made` to the scope block; and (e) declines a staleness threshold on the
+  owner's call that staleness is subjective and better disclosed than enforced.

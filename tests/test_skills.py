@@ -876,3 +876,37 @@ def test_backlog_refine_projections_match_the_bumped_source():
         assert "`surface` is a HINT, never a boundary" in text, target
         version = next(s.version for s in skills.SKILLS if s.name == "backlog-refine")
         assert f"horus-skill-version: {version}" in text, target
+
+
+def test_wildcard_copies_stay_byte_identical():
+    """`wildcard` has no generator yet, so both copies are hand-edited.
+
+    Every other bundled skill is projected from `skills.SKILLS`, which makes drift
+    between the two agent roots impossible. Until `bundle-test-phase-skills` wires
+    this one into the generator, nothing but a copy step keeps them in sync — and a
+    reviewer noticing a missing `cp` is not a guard. Pin it here so the divergence
+    fails a test instead of shipping two different skills to two agents.
+    """
+    claude = Path(".claude/skills/wildcard/SKILL.md").read_text(encoding="utf-8")
+    agents = Path(".agents/skills/wildcard/SKILL.md").read_text(encoding="utf-8")
+    assert claude == agents
+    # The version marker is how install/upgrade decides a refresh is due; a text
+    # edit that forgets to bump it ships silently.
+    assert "<!-- horus-skill-version: 5 -->" in claude
+
+
+def test_wildcard_does_not_source_ideas_from_the_backlog():
+    """The v5 correction, pinned: ideas come from facet gaps/friction/outside.
+
+    Four revisions fixed the shape of wildcard's output while its procedure still
+    said to diverge over the branch umbrellas, so every run produced backlog triage.
+    Asserted on whitespace-normalized text, per the PRD rule that raw-substring
+    assertions over skill prose break on reflow rather than on meaning.
+    """
+    text = " ".join(Path(".claude/skills/wildcard/SKILL.md").read_text(encoding="utf-8").split())
+    assert "NEVER the backlog" in text
+    assert "The backlog is not one of them" in text
+    # `decision` must not be an emittable kind — three of run 3's five ideas were.
+    assert "`decision` and `evidence read` are not emittable kinds" in text
+    # The self-sufficiency bar is the gate the run-3 failure demanded.
+    assert "a fresh agent could build it without asking the owner anything" in text
