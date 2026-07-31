@@ -292,6 +292,19 @@ _PRD_SOFT_CAP = 235
 _PRD_HARD_CAP = 250
 _MAX_UNDISTILLED_SESSIONS = 12
 
+# PRD.md's own contract is "Shipped — one line per capability; details live in git
+# history". The line cap cannot see a violation of it: an entry written as one
+# 11,700-character paragraph is still one line, and the cap's own remedy (unwrap
+# hard-wrapped bullets) *lowers* the line count without removing a word. So the
+# ledger is measured where the contract actually is — per entry, in characters.
+#
+# 400 is deliberately generous for "one line": a capability plus its PR link and a
+# clause of why. Measured 2026-07-31 on this repo, 22 entries had a median of 1,002
+# and a maximum of 11,712 characters, so the threshold fires on real drift rather
+# than being set preemptively.
+_SHIPPED_ENTRY_CHARS = 400
+_SHIPPED_ENTRY_REPORT_MAX = 3
+
 # A top-level markdown list item: "- text", "* text", or "1. text".
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*]|\d+\.)\s+(.*)$")
 _CHECKBOX_RE = re.compile(r"^\[([ xX])\]\s*(.*)$")
@@ -356,6 +369,57 @@ def _hard_wrapped_bullets(section_body: str) -> int:
         else:
             i += 1
     return count
+
+
+def _shipped_entries(body: str) -> list[tuple[str, int]]:
+    """`(label, chars)` for each `## Shipped` entry, in file order.
+
+    An entry starts at a **bold title on its own line start** and runs until the
+    next one. Splitting on blank lines instead would be wrong: entries in this
+    ledger are frequently written on consecutive lines with no blank between
+    them, and a blank-line split then reports eleven capabilities as one
+    11,712-character blob — the right warning attached to the wrong label, and
+    pointing at trimming when the fix is to separate them."""
+    section = _section(body, "Shipped")
+    entries: list[tuple[str, int]] = []
+    current: list[str] = []
+
+    def flush() -> None:
+        if not current:
+            return
+        block = "\n".join(current).strip()
+        match = _BOLD_TITLE_RE.match(block)
+        entries.append((match.group(1) if match else block[:60], len(block)))
+
+    for line in section.splitlines():
+        if line.startswith("**"):
+            flush()
+            current = [line]
+        elif current:
+            current.append(line)
+    flush()
+    return entries
+
+
+def _shipped_entry_findings(body: str) -> list[str]:
+    """Warn when Shipped entries exceed the one-line-per-capability contract.
+
+    Names the worst offenders rather than only counting them, because "Shipped is
+    too long" is not actionable while "this entry is 11,712 characters" is. Caps
+    the naming at three so a ledger that drifted everywhere still yields a
+    readable finding."""
+    over = [(label, n) for label, n in _shipped_entries(body) if n > _SHIPPED_ENTRY_CHARS]
+    if not over:
+        return []
+    over.sort(key=lambda pair: pair[1], reverse=True)
+    total = sum(n for _label, n in _shipped_entries(body))
+    named = "; ".join(f"'{label[:48]}' ({n:,} chars)" for label, n in over[:_SHIPPED_ENTRY_REPORT_MAX])
+    more = f" and {len(over) - _SHIPPED_ENTRY_REPORT_MAX} more" if len(over) > _SHIPPED_ENTRY_REPORT_MAX else ""
+    return [
+        f"{len(over)} '## Shipped' entr{'y' if len(over) == 1 else 'ies'} exceed "
+        f"~{_SHIPPED_ENTRY_CHARS} chars (section is {total:,} chars) — the contract is one line "
+        f"per capability, details in git history: {named}{more}"
+    ]
 
 
 def _prd_size_hint(body: str) -> str:
@@ -522,6 +586,11 @@ def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
         message = f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {line_count} lines — {band} the ~250-line cap"
         if hint:
             message += f": {hint}"
+        findings.append(Finding("warn", message))
+
+    # 1b. Shipped entries vs the "one line per capability" contract. Independent of
+    #     the line cap above, which is structurally blind to this.
+    for message in _shipped_entry_findings(doc.body):
         findings.append(Finding("warn", message))
 
     # 2. Stale frontmatter: PRD last_updated older than the newest session note.

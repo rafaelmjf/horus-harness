@@ -924,3 +924,73 @@ def test_facet_standings_none_without_a_facet_table(tmp_path):
     hdir = _mk_prd_facets(tmp_path, vision_table=False)
     _facet_card(hdir, "a", facet="Continuity core")
     assert routines.facet_standings(tmp_path, _prd_body(hdir)) is None
+
+
+def _prd_with_shipped(root: Path, shipped: str) -> None:
+    hdir = root / ".horus"
+    hdir.mkdir(parents=True, exist_ok=True)
+    (hdir / "PRD.md").write_text(
+        _PRD_HEADER.format(last_updated="2026-07-01")
+        + _PRD_BACKLOG.format(backlog="1. **Task one.** Do it.\n")
+        + f"## Shipped\n\n{shipped}\n\n## Rules\n\n- One rule.\n",
+        encoding="utf-8",
+    )
+
+
+def test_shipped_entry_warning_catches_what_the_line_cap_cannot(tmp_path):
+    # The whole point: a 2,000-char entry written as ONE line is invisible to the
+    # line cap (the file stays short), and the cap's own remedy — unwrapping —
+    # makes the line count better while removing nothing.
+    _prd_with_shipped(tmp_path, "**A big capability** " + ("detail " * 300))
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+
+    assert not any("~250-line cap" in m for m in msgs)  # line cap silent
+    shipped = next(m for m in msgs if "'## Shipped'" in m)
+    assert "1 '## Shipped' entry exceed" in shipped
+    assert "A big capability" in shipped  # names the offender, not just a count
+    assert "one line per capability" in shipped
+
+
+def test_shipped_entry_warning_silent_on_conforming_entries(tmp_path):
+    _prd_with_shipped(
+        tmp_path,
+        "**Thing one** (2026-07-01, PR #1): what it does.\n\n"
+        "**Thing two** (2026-07-02, PR #2): what it does.",
+    )
+    assert not any("'## Shipped'" in m for m in _warn_msgs(routines.consolidate_signals(tmp_path)))
+
+
+def test_shipped_entry_warning_names_worst_first_and_caps_the_list(tmp_path):
+    entries = "\n\n".join(f"**Entry {i}** " + ("x" * (500 + i * 100)) for i in range(6))
+    _prd_with_shipped(tmp_path, entries)
+    shipped = next(m for m in _warn_msgs(routines.consolidate_signals(tmp_path)) if "'## Shipped'" in m)
+
+    assert "6 '## Shipped' entries exceed" in shipped
+    assert "Entry 5" in shipped          # largest named first
+    assert "and 3 more" in shipped       # naming capped at 3
+    assert "Entry 0" not in shipped      # smallest not named
+
+
+def test_shipped_entries_ignores_blocks_that_are_not_entries(tmp_path):
+    # Section prose that is not a bold-titled entry must not be measured as one.
+    body = "## Shipped\n\nSome introductory prose that is quite long " + ("y" * 900) + "\n"
+    assert routines._shipped_entries(body) == []
+
+
+def test_shipped_entries_split_on_bold_titles_not_blank_lines(tmp_path):
+    # Entries in this ledger are routinely written on CONSECUTIVE lines with no
+    # blank between them. A blank-line split reports them as one huge blob, which
+    # names the wrong capability and implies "trim this" when the fix is to
+    # separate them. Found on the real PRD.md: 11 entries read as one 11,712-char
+    # entry labelled with only the first one's title.
+    run_on = (
+        "**Alpha capability** " + "a" * 500 + "\n"
+        "**Beta capability** " + "b" * 500 + "\n"
+        "**Gamma capability** " + "c" * 500 + "\n"
+    )
+    entries = routines._shipped_entries("## Shipped\n\n" + run_on)
+
+    assert [label for label, _n in entries] == [
+        "Alpha capability", "Beta capability", "Gamma capability",
+    ]
+    assert all(n < 700 for _label, n in entries)  # not one 1,500+ char blob

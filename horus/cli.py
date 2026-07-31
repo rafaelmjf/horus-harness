@@ -2669,6 +2669,31 @@ def cmd_backlog(args: argparse.Namespace) -> int:
         print("error: pass a backlog subcommand (list|migrate|claim|ship|review|refine) or --tree")
         return 2
 
+    if args.backlog_cmd == "list" and getattr(args, "archived", False):
+        # The delivery ledger, read from the cards themselves. Grouping by
+        # readiness is meaningless here (everything shipped), so this prints a
+        # flat newest-first list with the provenance `ship` stamped on.
+        cards = backlog.load_archived_cards(root)
+        if args.type:
+            cards = [c for c in cards if c.type == args.type]
+        if not cards:
+            scope = f" with type={args.type}" if args.type else ""
+            print(f"No archived cards in {HORUS_DIR}/{backlog.BACKLOG_DIR}/archive/{scope}.")
+            return 0
+        print(f"Shipped ({len(cards)})")
+        for c in cards:
+            prov = " ".join(
+                part for part in (
+                    f"pr=#{c.shipped_pr}" if c.shipped_pr else "",
+                    f"sha={c.shipped_sha[:9]}" if c.shipped_sha else "",
+                    c.created or "",
+                ) if part
+            )
+            print(f"   {c.name}  [{c.status}]  {prov}".rstrip())
+            if c.title and c.title != c.name:
+                print(f"      {c.title}")
+        return 0
+
     if args.backlog_cmd == "list":
         cards = backlog.load_active_cards(root)
         if args.type:
@@ -5406,6 +5431,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_backlog_list.add_argument(
         "--type", choices=backlog.CARD_TYPES, default="",
         help="filter to one card type (bug|feature|chore|task); default: no filter",
+    )
+    p_backlog_list.add_argument(
+        "--archived", action="store_true",
+        help="list SHIPPED cards from backlog/archive/ with their PR and SHA, newest first",
     )
     p_backlog_list.set_defaults(func=cmd_backlog)
 

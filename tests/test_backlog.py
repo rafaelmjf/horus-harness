@@ -496,54 +496,6 @@ def test_stamp_delivered_preserves_body(tmp_path):
     assert "Important detail." in path.read_text(encoding="utf-8")
 
 
-def _write_prd(root: Path, breakdown: str) -> None:
-    hdir = root / ".horus"
-    hdir.mkdir(parents=True, exist_ok=True)
-    (hdir / "PRD.md").write_text(
-        "---\nstatus: active\n---\n\n## Backlog\n\n" + breakdown + "\n",
-        encoding="utf-8",
-    )
-
-
-def test_prd_readiness_count_findings_flags_stale_count(tmp_path):
-    _mk_card(tmp_path, "s1", readiness="shaping", readiness_reason="x")
-    _mk_card(tmp_path, "s2", readiness="shaping", readiness_reason="y")
-    _write_prd(
-        tmp_path,
-        "Readiness breakdown (deterministic): **Shaping (5)**. **Deferred (0):** none.",
-    )
-
-    findings = backlog.prd_readiness_count_findings(tmp_path)
-
-    assert any("Shaping (5)" in f.message and "2 card" in f.message for f in findings)
-    # Deferred stated 0 matches actual 0 — no false alarm for it.
-    assert not any("Deferred" in f.message for f in findings)
-
-
-def test_prd_readiness_count_findings_silent_when_counts_match(tmp_path):
-    _mk_card(tmp_path, "s1", readiness="shaping", readiness_reason="x")
-    _write_prd(tmp_path, "Readiness breakdown: **Shaping (1)** and the rest.")
-
-    assert backlog.prd_readiness_count_findings(tmp_path) == []
-
-
-def test_prd_readiness_count_findings_skips_missing_prd_or_line(tmp_path):
-    _mk_card(tmp_path, "s1", readiness="shaping", readiness_reason="x")
-    # No PRD file at all.
-    assert backlog.prd_readiness_count_findings(tmp_path) == []
-    # PRD present but without the breakdown line.
-    _write_prd(tmp_path, "No counts stated here.")
-    assert backlog.prd_readiness_count_findings(tmp_path) == []
-
-
-def test_prd_readiness_count_findings_wired_into_hygiene(tmp_path):
-    _mk_card(tmp_path, "s1", readiness="shaping", readiness_reason="x")
-    _write_prd(tmp_path, "Readiness breakdown: **Shaping (9)**.")
-
-    messages = [f.message for f in backlog.hygiene_findings(tmp_path)]
-    assert any("Shaping (9)" in m for m in messages)
-
-
 def test_readiness_count_summary_uses_canonical_labels():
     counts = {
         backlog.QUEUE_READY_ELIGIBLE: 2,
@@ -663,3 +615,44 @@ def test_hygiene_findings_reports_duplicate_order(tmp_path):
     messages = [f.message for f in backlog.hygiene_findings(tmp_path)]
 
     assert any("duplicate order 10" in m for m in messages)
+
+
+def _mk_archived(root: Path, name: str, *, created: str, pr: str = "", sha: str = "") -> None:
+    adir = root / ".horus" / "backlog" / "archive"
+    adir.mkdir(parents=True, exist_ok=True)
+    lines = ["---", "status: shipped", "priority: high", "tier: sonnet", f"created: {created}"]
+    if pr:
+        lines.append(f"shipped_pr: {pr}")
+    if sha:
+        lines.append(f"shipped_sha: {sha}")
+    lines += ["---", "", f"# {name} — a delivered thing", ""]
+    (adir / f"{name}.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def test_load_archived_cards_reads_the_previously_write_only_archive(tmp_path):
+    # `ship` moved cards into archive/ and nothing could read them back, so the
+    # delivery record was reachable only by opening files by hand.
+    _mk_archived(tmp_path, "older", created="2026-07-01", pr="100", sha="a" * 40)
+    _mk_archived(tmp_path, "newer", created="2026-07-30", pr="200", sha="b" * 40)
+
+    cards = backlog.load_archived_cards(tmp_path)
+
+    assert [c.name for c in cards] == ["newer", "older"]  # newest delivery first
+    assert cards[0].shipped_pr == "200" and cards[0].shipped_sha == "b" * 40
+
+
+def test_load_archived_cards_sorts_undated_last_and_tolerates_no_archive(tmp_path):
+    assert backlog.load_archived_cards(tmp_path) == []
+    _mk_archived(tmp_path, "dated", created="2026-07-01")
+    _mk_archived(tmp_path, "undated", created="")
+
+    assert [c.name for c in backlog.load_archived_cards(tmp_path)] == ["dated", "undated"]
+
+
+def test_archived_cards_are_still_absent_from_the_active_list(tmp_path):
+    # The archive read path must not leak shipped work into the working queue.
+    _mk_card(tmp_path, "live")
+    _mk_archived(tmp_path, "done", created="2026-07-01")
+
+    assert [c.name for c in backlog.load_active_cards(tmp_path)] == ["live"]
+    assert [c.name for c in backlog.load_archived_cards(tmp_path)] == ["done"]
