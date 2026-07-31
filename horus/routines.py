@@ -327,6 +327,23 @@ _SHIPPED_ENTRY_REPORT_MAX = 3
 # which is noise nobody acts on.
 _RULES_ENTRY_CHARS = 600
 
+# The handoff fields are read by `horus resume`, the dashboard, the TUI and the merge
+# freshness gate — every PRD-first surface, every session. They are also the fields
+# most prone to becoming a log, because each consolidation is tempted to keep the
+# previous one "for context" rather than replace it.
+#
+# 800 chars is a long paragraph and ample for an orientation handoff. Measured
+# 2026-07-31: current_focus 1,957 / next_action 2,134 / next_prompt 1,707 — all far
+# over, and telling substantially the same story three times.
+_HANDOFF_FIELD_CHARS = 800
+_HANDOFF_FIELDS = ("current_focus", "next_action", "next_prompt", "execution_recommendation")
+
+# A previous state retained inside a current-state field. `current_focus` carried a
+# literal "OLD (2026-07-30): ..." clause — a log inside the field whose entire job is
+# to say what is true NOW. Narrow on purpose: bare uppercase OLD followed by `(` or
+# `:` is not something ordinary prose produces.
+_PRIOR_STATE_RE = re.compile(r"\bOLD\b\s*[(:]")
+
 # A top-level markdown list item: "- text", "* text", or "1. text".
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*]|\d+\.)\s+(.*)$")
 _CHECKBOX_RE = re.compile(r"^\[([ xX])\]\s*(.*)$")
@@ -463,6 +480,30 @@ def _entry_findings(
         f"{len(over)} '## {heading}' entr{'y' if len(over) == 1 else 'ies'} exceed "
         f"~{limit} chars (section is {total:,} chars) — {contract}: {named}{more}"
     ]
+
+
+def _handoff_field_findings(front_matter: dict) -> list[str]:
+    """Warn when a handoff field is oversized, or has kept a previous state inside it.
+
+    Separate from the whole-file budget because these fields are paid on a different
+    schedule: the body is read once by a session that needs it, while these are read
+    by every PRD-first surface on every launch. A fat `next_prompt` is not merely
+    file bloat, it is a tax on orientation."""
+    findings: list[str] = []
+    for field in _HANDOFF_FIELDS:
+        value = str(front_matter.get(field) or "")
+        if len(value) > _HANDOFF_FIELD_CHARS:
+            findings.append(
+                f"PRD frontmatter '{field}' is {len(value):,} chars — over the "
+                f"~{_HANDOFF_FIELD_CHARS}-char handoff budget; it is an orientation "
+                f"handoff, not a session log"
+            )
+        if _PRIOR_STATE_RE.search(value):
+            findings.append(
+                f"PRD frontmatter '{field}' still carries a previous state (an 'OLD:' "
+                f"clause) — this field states what is true now; git history holds what was"
+            )
+    return findings
 
 
 def _shipped_entry_findings(body: str) -> list[str]:
@@ -661,6 +702,10 @@ def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
     # 1b. Per-section entry contracts. Independent of the whole-file cap above, which
     #     says the file is big without saying which promise it is breaking.
     for message in _shipped_entry_findings(doc.body) + _rules_entry_findings(doc.body):
+        findings.append(Finding("warn", message))
+
+    # 1c. The handoff fields, budgeted separately — see `_handoff_field_findings`.
+    for message in _handoff_field_findings(doc.front_matter):
         findings.append(Finding("warn", message))
 
     # 2. Stale frontmatter: PRD last_updated older than the newest session note.
