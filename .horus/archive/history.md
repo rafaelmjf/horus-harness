@@ -483,3 +483,49 @@ The non-obvious *why* behind rules in `decisions.md` that aren't already a bump 
   the accident cost a PR. **Lesson:** cut each branch from the synced default branch, not
   from wherever the checkout happens to be sitting. Rule in the managed block; narrative
   moved here 2026-07-31 for the same reason as above.
+- **PRD.md became a cache of its own tooling (2026-07-31).** The file reached ~54,000
+  tokens with 82% retrospective — Rules 42%, Shipped 40% — while the Vision, the part
+  a fresh agent actually needs, was 9%. Two mechanisms did it. The `## Backlog`
+  readiness counts were a hand-typed copy of what `horus backlog list` computes
+  exactly, and Horus had shipped a *check* (`prd_readiness_count_findings`) purely to
+  catch that copy drifting. And `## Shipped` had drifted from its own stated contract
+  ("one line per capability; details live in git history") to 32 forensic entries
+  totalling 34,124 characters, the largest 11,712. **Lesson:** if a deterministic
+  command can produce it, prose must not cache it — and a duplication's guard is
+  cheaper to remove than to maintain. The trim was checked for losses first: all 32
+  entries carried a PR/tag/SHA, but three *lessons* existed only in Shipped prose and
+  had to be promoted to Rules rather than cut. (#469/#470.)
+- **The size cap measured shape, not cost, and its own remedy hid the drift
+  (2026-07-31).** The cap counted physical lines against ~250, so a 91,252-character
+  file reported 210 lines and stayed silent throughout. Worse, `_prd_size_hint`
+  actively recommended unwrapping hard-wrapped bullets because it "reclaims lines with
+  no loss" — true for lines, and precisely the mechanism that hid the growth; a
+  2026-07-29 pass followed it, taking PRD from 257 to 210 lines without removing a
+  word. The metrics also pulled opposite ways: separating run-together entries is a
+  real improvement that ADDS lines. **Lesson:** a remedy that improves the metric
+  without removing content is not a remedy, it is the drift; measure what the reader
+  pays. Replaced with a character budget plus per-section entry contracts. (#472.)
+- **A hand-written fixture hid an unreachable feature from 2,400 green tests
+  (2026-07-30).** `_vanished()` claimed to be "a row shaped exactly as `reconcile()`
+  leaves a session" and omitted `target_ref`, which every real tmux row carries — so
+  `is_attachable()` answered False in tests and True in life, and TUI Restore was
+  unreachable. The test written for that exact defect passed vacuously until the
+  fixture became real. **Lesson:** the tell is a fixture whose docstring names a
+  producer it does not call; build the pre-state, run the producer, then override.
+  (#460.)
+- **A live test stopped the owner's herdr server and killed three agent sessions
+  (2026-07-30).** The 2026-07-13 tmux incident had produced a per-test `-S` socket
+  guard, but it was never extended to the second host, and a per-test guard protects
+  exactly the test that remembers it. The herdr test's docstring also promised a
+  private config dir it never created — and even implementing that promise would not
+  have helped, because `HERDR_CONFIG_PATH` moves only the config file while
+  `HERDR_SOCKET_PATH` moves the socket. **Lesson:** isolation belongs in
+  `conftest.py`, so a host added later inherits it; a docstring claiming isolation is
+  not isolation; and verify the lever rather than assuming it. (#455.)
+- **A ~10-line fix cost six days and a full delivery pipeline because it was carded
+  (2026-07-26).** `backlog-default-list` was an argparse default. Carded, it waited six
+  days and then consumed a refinement exchange, a dispatch, a supervisor review cycle,
+  a PR, a merge and a ship stamp. It also removed itself as an away-mode drill leg by
+  shipping. **Lesson:** a card's only job is carrying work across a context boundary —
+  size is not the test, surviving the boundary is. Fix small things now, in their own
+  commit, so "just fix it" cannot smuggle unrelated changes into an open PR.
