@@ -2216,7 +2216,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -2259,6 +2259,23 @@ Draw branches from these, in this order:
 branch's clothes.** If every branch reads that way, say so plainly and route the owner
 to `backlog-refine` instead of shipping the tree.
 
+## The legibility bar — problem and solution before mechanism
+
+The owner is choosing a DIRECTION, not reviewing an implementation. Every branch and
+every speculative candidate therefore opens with **the problem** and **the proposed
+solution** in plain terms, before any thesis, protocol, module or command appears.
+
+The test: *could a reader who has never opened this codebase say what hurts today and
+what would be different afterwards?* If not, the branch is unreadable as a choice
+however precise its mechanism is.
+
+This is a real failure, not a style note. The 2026-07-31 v5 re-run was rejected on
+exactly this: *"I have very little info of what is proposed, we need a better
+description of the problem it is trying to solve and the proposed solution."* The
+branch depth requirements below are written for `scope-cards`, which needs mechanism to
+populate a card — but mechanism is the WRONG level for the pick gate, and depth for the
+downstream consumer had crowded out legibility for the decider.
+
 ## Inputs (gather, do not re-derive)
 
 - **The pinned intent** — deepen-own-use | broaden-adoption | both. If it was not
@@ -2298,6 +2315,14 @@ sections, then STOP for the owner to pick:
    one-word posture tag (primary/secondary/filler/park is the *recommendation*,
    not a decision).
 4. **The branches.** For EACH branch:
+   - **The problem** — REQUIRED, and written FIRST. What actually goes wrong today,
+     described as the owner experiences it, with the concrete observation that proves
+     it. No mechanism, no module names, no jargon. "You open the cockpit and 36 rows
+     say FAILED in red; those were you closing sessions normally" — not "the registry
+     derives status from an incomplete terminal vocabulary".
+   - **The proposed solution** — REQUIRED, second. What is DIFFERENT afterwards, again
+     as the owner would experience it, not how it is built. "Closed sessions look
+     closed, and each running one shows what it is doing right now."
    - **Thesis** — why this direction, argued through the pinned intent.
    - **Market position** — the required line: "*this exists already but misses X;
      you already have Y but still miss Z; therefore these items*". Market evidence
@@ -3163,7 +3188,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),
     Skill("skill-audit", 2, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
     Skill("market-scan", 7, _MARKET_SCAN_SKILL),
-    Skill("roadmap-branches", 5, _ROADMAP_BRANCHES_SKILL),
+    Skill("roadmap-branches", 6, _ROADMAP_BRANCHES_SKILL),
     Skill("scope-cards", 7, _SCOPE_CARDS_SKILL),
     Skill("backlog-refine", 6, _BACKLOG_REFINE_SKILL),
     Skill("pathfinder", 9, _PATHFINDER_SKILL),

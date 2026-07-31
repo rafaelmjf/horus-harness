@@ -938,3 +938,21 @@ def test_every_skill_version_matches_the_marker_in_its_own_text():
         if match is None or int(match.group(1)) != skill.version:
             mismatched.append((skill.name, skill.version, match.group(1) if match else None))
     assert mismatched == [], f"Skill.version disagrees with its own marker: {mismatched}"
+
+
+def test_roadmap_branches_requires_problem_and_solution_before_mechanism():
+    """v6: the owner picks a DIRECTION, so each branch opens with the problem and the
+    proposed solution in plain terms, before any thesis or mechanism.
+
+    The v5 tree was rejected for exactly this — "I have very little info of what is
+    proposed" — because the branch depth requirements are written for `scope-cards`,
+    which needs mechanism, and that had crowded out legibility for the decider.
+    Whitespace-normalized per the PRD rule on skill-prose assertions.
+    """
+    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
+    flat = " ".join(rb.content.split())
+    assert "The legibility bar — problem and solution before mechanism" in flat
+    assert "**The problem** — REQUIRED, and written FIRST" in flat
+    assert "**The proposed solution** — REQUIRED, second" in flat
+    # The reader test is the operative check, not the section headings.
+    assert "could a reader who has never opened this codebase say what hurts today" in flat
