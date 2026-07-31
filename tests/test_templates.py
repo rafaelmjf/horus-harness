@@ -53,3 +53,20 @@ def test_process_not_memory_discipline_stays_one_bullet():
     body = PROCESS_NOT_MEMORY.split("\n")
     assert len(body) == 4, "keep the rung short — it is loaded by every session"
     assert sum(1 for line in body if line.startswith("- ")) == 1
+
+
+def test_projected_block_carries_no_repo_specific_incident_narrative():
+    """The managed block ships to every managed project, so it must read as
+    general instruction — not as horus-harness's war stories.
+
+    Block v16 carried two dated incidents from this repo (the 2026-07-27
+    `gh`-flag polling loops and the accidental PR stack) inside rules that are
+    otherwise universal, so 20 consumer projects were told about failures that
+    happened here. The rules stayed; the narratives moved to
+    `.horus/archive/history.md`. A rule alone was the instruction rung and it is
+    what failed, so this is the deterministic one.
+    """
+    import re
+    block = templates.shared_block("AGENTS.md")
+    dated = re.findall(r"[Oo]bserved (?:once, )?\d{4}-\d{2}-\d{2}", block)
+    assert dated == [], f"repo-specific incident narrative in the projected block: {dated}"

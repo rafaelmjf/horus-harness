@@ -58,7 +58,7 @@
             "command": "horus guard-host --hook || exit 0",
             "commandWindows": "if (Get-Command horus -ErrorAction SilentlyContinue) { horus guard-host --hook }; exit 0",
             "timeout": 30,
-            "statusMessage": "Checking Horus host safety"
+            "statusMessage": "Checking Horus shell safety"
           }
         ]
       },

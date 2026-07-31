@@ -8,7 +8,7 @@
 > restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 16 -->
+<!-- horus-block-version: 17 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -111,10 +111,7 @@ Working discipline (every session, whether or not the work is delegated):
   wrong condition turns a one-second error into a wait that never ends. Run any wait's
   exit condition once in the foreground and see it produce output before backgrounding
   it. Then close the loop: a backgrounded wait either reported or you stop it — do not
-  assume its timeout bounds it. (Observed 2026-07-27: three loops on a `gh` flag that
-  did not exist, with its `unknown flag` error discarded, cost ~30 minutes; a fourth was
-  still polling a deleted PR an hour later, past its stated timeout, and only the owner
-  noticing a task indicator surfaced it.)
+  assume its timeout bounds it.
 - **Bound each step to a green, committed-and-pushed checkpoint**, so there is always a
   clean resume point and nothing half-finished stranded only on this machine.
 - **Put safety in the code, not the reviewer.** Guards and invariants prevent the
@@ -140,9 +137,7 @@ Working discipline (every session, whether or not the work is delegated):
   branching off the previous task's branch creates a dependent PR out of two
   independent changes, and a stack is markedly more expensive than two siblings: no
   CI while it targets a non-default base, and merging the parent can destroy it (see
-  the stacked-PR rule above). Observed 2026-07-27: two changesets sharing one file
-  and touching different functions in it were stacked purely because the checkout was
-  standing on the earlier branch; that accident cost a PR.
+  the stacked-PR rule above).
 - **Authorize the exact worker envelope before spending.** Agent-initiated delegation
   first proves a concrete context, parallelism, or lower-tier dividend exceeds the
   brief/review/gate/merge/closure tax; default inline when unclear. An owner may instead

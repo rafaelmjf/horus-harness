@@ -467,3 +467,19 @@ The non-obvious *why* behind rules in `decisions.md` that aren't already a bump 
   against a real transcript. **Lesson:** the brief's "read these sibling modules first"
   pointer is what kept the worker from inventing a second slug/matching convention;
   worktree isolation let direct supervisor work continue in parallel without conflicts.
+- **The wait that could not fail loudly (2026-07-27).** Three polling loops were built on
+  a `gh` flag that did not exist, with its `unknown flag` error sent to `/dev/null`, and
+  cost ~30 minutes; a fourth was still polling a *deleted* PR an hour later, past its own
+  stated timeout, and only the owner noticing a task indicator surfaced it. **Lesson:**
+  never silence stderr on a command whose output drives a loop condition or a gate — the
+  discarded line is usually the one explaining the hang — and account for a backgrounded
+  wait before the turn ends rather than trusting its timeout. The rule survives in the
+  managed block; this narrative moved here 2026-07-31 because it is *this repo's*
+  incident, and the block projects into every managed project.
+- **Two independent changesets stacked by accident (2026-07-27).** They shared one file and
+  touched different functions in it, and were stacked purely because the checkout was
+  standing on the earlier branch. A stack is markedly more expensive than two siblings —
+  no CI while it targets a non-default base, and merging the parent can destroy it — and
+  the accident cost a PR. **Lesson:** cut each branch from the synced default branch, not
+  from wherever the checkout happens to be sitting. Rule in the managed block; narrative
+  moved here 2026-07-31 for the same reason as above.
