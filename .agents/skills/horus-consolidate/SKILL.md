@@ -17,7 +17,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 16 -->
+<!-- horus-skill-version: 17 -->
 
 # Consolidate Horus continuity
 
@@ -59,9 +59,14 @@ them is stale or empty.
    `--path <repo>`). On a v3 project it reports **backlog-hygiene signals
    only** — no lane-routing/overlap warnings, because there are no lanes to
    route between:
-   - **Line count vs the ~250-line cap** — warns past 235, more urgently past
-     250. Fix by trimming: one-line `## Shipped` entries, deleted done backlog
-     items (git remembers them, no need to keep them around).
+   - **Size vs the ~60,000-char budget** — warns past 45,000, more urgently past
+     60,000, and names the driving section by characters. Characters, not lines:
+     a line count measures shape, not what a fresh agent pays to read the file.
+     Per-section entry contracts fire alongside it — `## Shipped` entries over
+     ~400 chars (one line per capability, details in git history) and `## Rules`
+     entries over ~600 (concise rules, NOT a log; route dated incident narratives
+     to `.horus/archive/history.md`). Fix by trimming, never by unwrapping
+     hard-wrapped bullets: that reclaims lines while removing nothing.
    - **Stale frontmatter** — when a recovery note exists, `last_updated` older than
      its date means the note may still contain undistilled context. Refresh the
      content and bump the date.

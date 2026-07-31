@@ -12,7 +12,7 @@ description: >-
   Runs `horus infer` first to find canonical docs and empty/placeholder sections.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -66,7 +66,7 @@ With no useful source truth and no concrete user request, leave the scaffold bla
 
 4. **Don't duplicate.** Where a canonical doc stays the deep reference (e.g. a
    detailed architecture doc), point at it from `PRD.md` instead of copying it
-   wholesale. Keep the whole file well under the ~250-line cap — `horus
+   wholesale. Keep the whole file well under the ~60,000-char budget — `horus
    consolidate` will start warning past 235.
 
 5. **Mark superseded docs — only when truly superseded.** If a doc's "current

@@ -3237,39 +3237,40 @@ def test_load_project_v3_parses_prd_backlog_and_shipped(tmp_path, monkeypatch):
     assert prd["backlog_other_counts"] == {"Open, unscheduled": 3, "Deferred": 1}
     assert prd["shipped_count"] == 2
     assert prd["shipped_latest"] == "Gadget engine shipped in 0.2."
-    assert prd["line_count"] == len(_PRD_BACKLOG_SHIPPED_FIXTURE.splitlines())
-    assert prd["line_class"] == "ok"
+    assert prd["size_chars"] == len(_PRD_BACKLOG_SHIPPED_FIXTURE)
+    assert prd["size_class"] == "ok"
 
 
-def _prd_padded_to(total_lines: int) -> str:
-    header = [
+def _prd_padded_to(total_chars: int) -> str:
+    """A v3 PRD padded to an exact character count — the budget is now in chars."""
+    header = "\n".join([
         "---", "status: active", "last_updated: 2026-07-03", "---",
         "# Demo - PRD", "", "## Backlog", "", "### Now / next candidates", "",
         "## Shipped", "", "## Rules (load-bearing)", "",
-    ]
-    filler = [f"filler line {i}" for i in range(max(0, total_lines - len(header)))]
-    return "\n".join((header + filler)[:total_lines]) + "\n"
+    ]) + "\n"
+    pad = max(0, total_chars - len(header))
+    return header + ("x" * pad)
 
 
-def test_prd_line_budget_thresholds_match_routines_caps(tmp_path, monkeypatch):
+def test_prd_size_budget_thresholds_match_routines_caps(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)
     prd_path = tmp_path / ".horus" / "PRD.md"
 
-    prd_path.write_text(_prd_padded_to(235), encoding="utf-8")
-    assert dashboard.load_project(str(tmp_path))["prd"]["line_class"] == "ok"
+    prd_path.write_text(_prd_padded_to(routines._PRD_SOFT_CHARS), encoding="utf-8")
+    assert dashboard.load_project(str(tmp_path))["prd"]["size_class"] == "ok"
 
-    prd_path.write_text(_prd_padded_to(236), encoding="utf-8")
-    assert dashboard.load_project(str(tmp_path))["prd"]["line_class"] == "warn"
+    prd_path.write_text(_prd_padded_to(routines._PRD_SOFT_CHARS + 1), encoding="utf-8")
+    assert dashboard.load_project(str(tmp_path))["prd"]["size_class"] == "warn"
 
-    prd_path.write_text(_prd_padded_to(250), encoding="utf-8")
-    assert dashboard.load_project(str(tmp_path))["prd"]["line_class"] == "warn"
+    prd_path.write_text(_prd_padded_to(routines._PRD_HARD_CHARS), encoding="utf-8")
+    assert dashboard.load_project(str(tmp_path))["prd"]["size_class"] == "warn"
 
-    prd_path.write_text(_prd_padded_to(251), encoding="utf-8")
-    assert dashboard.load_project(str(tmp_path))["prd"]["line_class"] == "over"
+    prd_path.write_text(_prd_padded_to(routines._PRD_HARD_CHARS + 1), encoding="utf-8")
+    assert dashboard.load_project(str(tmp_path))["prd"]["size_class"] == "over"
 
 
-def test_project_detail_renders_prd_backlog_shipped_and_line_meter(tmp_path, monkeypatch):
+def test_project_detail_renders_prd_backlog_shipped_and_size_meter(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     initialize.init_project(tmp_path, assume_yes=True)
     (tmp_path / ".horus" / "PRD.md").write_text(_PRD_BACKLOG_SHIPPED_FIXTURE, encoding="utf-8")
@@ -3282,7 +3283,7 @@ def test_project_detail_renders_prd_backlog_shipped_and_line_meter(tmp_path, mon
     assert "Open, unscheduled (3)" in det and "Deferred (1)" in det
     assert "<b>2</b> capabilities shipped" in det
     assert "Gadget engine shipped in 0.2." in det
-    assert "/250 lines" in det  # line-budget badge in the detail header
+    assert "chars</span>" in det  # size-budget badge in the detail header
     assert "id='features'" not in det  # no legacy features.md in a pure v3 project
 
 

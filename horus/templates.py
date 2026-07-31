@@ -319,7 +319,7 @@ The invariants that constrain new work.
 ## Structure contract
 
 - **This file** carries vision, shipped, rules, and a thin pointer to the backlog.
-  Keep it under ~250 lines: new shipped items are one line; shipped backlog cards
+  Keep it under ~60,000 chars: new shipped items are one line; shipped backlog cards
   move to `.horus/backlog/archive/` with `status: shipped` plus PR/SHA provenance;
   new work (including bugs) gets its own card in `.horus/backlog/`.
 - **`sessions/`**: optional local recovery notes (`horus session new`), used only
@@ -791,7 +791,7 @@ installed. Read this first.
   (worker/subagent handoffs, review gates). Fluid: replaced when the next
   substantial item starts, not preserved as a timeline.
 
-Keep PRD.md under ~250 lines: shipped ledger items are one line; card-backed work
+Keep PRD.md under ~60,000 chars: shipped ledger items are one line; card-backed work
 is moved to `backlog/archive/` with `status: shipped` and PR/SHA provenance. At the
 configured continuity boundary, closure = update PRD.md (frontmatter +
 backlog/shipped), add a local recovery note only when durable state is insufficient,
@@ -1093,7 +1093,7 @@ CONSOLIDATE_PROMPT_V3 = """Consolidation routine (PRD structure) - a light backl
 Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.md).
 Never invent status, dates, or versions; when intent is unclear, leave it and flag it.
 
-1. Size: keep PRD.md under the ~250-line cap - shipped entries are one line each.
+1. Size: keep PRD.md under the ~60,000-char budget - shipped entries are one line each.
    For card-backed work, run `horus backlog ship <name> --pr N --sha SHA`; it
    preserves the card under `backlog/archive/`. Delete only stale legacy/inline done items.
 2. Freshness: refresh the frontmatter handoff fields (current_focus / next_action /

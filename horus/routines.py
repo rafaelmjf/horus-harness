@@ -288,8 +288,19 @@ _MAX_OVERLAP_LINES = 8
 # lane-purity/overlap warnings (there are no lanes to route between).
 # --------------------------------------------------------------------------- #
 
-_PRD_SOFT_CAP = 235
-_PRD_HARD_CAP = 250
+# The whole-file budget is in CHARACTERS, not lines. A line cap measures shape, not
+# cost, and the two came apart badly here: this file hit 91,252 characters while
+# reporting 210 lines, so the cap stayed silent through the entire drift — and the
+# only remedy it offered (unwrap bullets) lowered the line count while removing
+# nothing. Worse, the metrics pull opposite ways: separating run-together entries is
+# a real improvement that ADDS lines, so a line cap penalises the fix.
+#
+# Thresholds set from measurement, not taste. After #470's trim the file is ~64,500
+# characters and Rules alone is 66% of the body; routing its dated narratives to
+# `.horus/archive/history.md` lands it near 40,000. So 45,000/60,000 fires on today's
+# real state and goes quiet once the known remaining work is done.
+_PRD_SOFT_CHARS = 45_000
+_PRD_HARD_CHARS = 60_000
 _MAX_UNDISTILLED_SESSIONS = 12
 
 # PRD.md's own contract is "Shipped — one line per capability; details live in git
@@ -304,6 +315,17 @@ _MAX_UNDISTILLED_SESSIONS = 12
 # than being set preemptively.
 _SHIPPED_ENTRY_CHARS = 400
 _SHIPPED_ENTRY_REPORT_MAX = 3
+
+# `## Rules` has its own stated contract — "concise current rules, grouped by topic
+# (NOT a log)" — and the same failure mode: entries grow into dated incident
+# narratives that belong in `.horus/archive/history.md`. Measured 2026-07-31: 71
+# entries, median 507 chars, max 1,229, and 18 carrying a dated incident.
+#
+# 600 rather than Shipped's 400 because the contracts differ: a shipped entry points
+# at a PR that holds the detail, while a rule has to carry enough evidence to be
+# believed. At 600 the reading is 22 of 71 — real drift; at 400 it would be 50 of 71,
+# which is noise nobody acts on.
+_RULES_ENTRY_CHARS = 600
 
 # A top-level markdown list item: "- text", "* text", or "1. text".
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*]|\d+\.)\s+(.*)$")
@@ -334,15 +356,21 @@ def _section(body: str, heading: str) -> str:
 
 
 def _section_breakdown(body: str) -> list[tuple[str, int]]:
-    """(heading, physical-line-count) for every top-level `## ` section, largest first.
+    """(heading, CHARACTER count) for every top-level `## ` section, largest first.
 
     Turns "the PRD is over the cap" into "which section is the driver", so a distill
     pass aims at the actual bloat instead of the section the cap message happens to name.
+
+    Characters, not physical lines: this file's prose is routinely written as very long
+    single lines, so the two rankings disagree about the shape of the file. Measured
+    2026-07-31 right after a trim — by lines it read Rules 40% / Shipped 33%, by
+    characters Rules 66% / Shipped 13% — so the line view would have sent the next
+    distill pass at the section that had just been cut to a tenth of the other one.
     """
     lines = body.splitlines()
     heads = [(i, ln[3:].strip()) for i, ln in enumerate(lines) if ln.startswith("## ")]
     out = [
-        (name, (heads[k + 1][0] if k + 1 < len(heads) else len(lines)) - i)
+        (name, sum(len(x) + 1 for x in lines[i:(heads[k + 1][0] if k + 1 < len(heads) else len(lines))]))
         for k, (i, name) in enumerate(heads)
     ]
     return sorted(out, key=lambda t: t[1], reverse=True)
@@ -371,16 +399,16 @@ def _hard_wrapped_bullets(section_body: str) -> int:
     return count
 
 
-def _shipped_entries(body: str) -> list[tuple[str, int]]:
-    """`(label, chars)` for each `## Shipped` entry, in file order.
+def _section_entries(body: str, heading: str, *, marker: str) -> list[tuple[str, int]]:
+    """`(label, chars)` for each entry in a `## ` section, in file order.
 
-    An entry starts at a **bold title on its own line start** and runs until the
-    next one. Splitting on blank lines instead would be wrong: entries in this
-    ledger are frequently written on consecutive lines with no blank between
-    them, and a blank-line split then reports eleven capabilities as one
-    11,712-character blob — the right warning attached to the wrong label, and
+    An entry starts at a line beginning with ``marker`` (a bold title for Shipped,
+    a bolded bullet for Rules) and runs until the next one. Splitting on blank lines
+    instead would be wrong: entries are frequently written on consecutive lines with
+    no blank between them, and a blank-line split then reports eleven capabilities as
+    one 11,712-character blob — the right warning attached to the wrong label, and
     pointing at trimming when the fix is to separate them."""
-    section = _section(body, "Shipped")
+    section = _section(body, heading)
     entries: list[tuple[str, int]] = []
     current: list[str] = []
 
@@ -388,11 +416,11 @@ def _shipped_entries(body: str) -> list[tuple[str, int]]:
         if not current:
             return
         block = "\n".join(current).strip()
-        match = _BOLD_TITLE_RE.match(block)
+        match = _BOLD_TITLE_RE.match(block.lstrip("- "))
         entries.append((match.group(1) if match else block[:60], len(block)))
 
     for line in section.splitlines():
-        if line.startswith("**"):
+        if line.startswith(marker):
             flush()
             current = [line]
         elif current:
@@ -401,43 +429,81 @@ def _shipped_entries(body: str) -> list[tuple[str, int]]:
     return entries
 
 
-def _shipped_entry_findings(body: str) -> list[str]:
-    """Warn when Shipped entries exceed the one-line-per-capability contract.
+def _shipped_entries(body: str) -> list[tuple[str, int]]:
+    """`(label, chars)` for each `## Shipped` entry — one line per capability."""
+    return _section_entries(body, "Shipped", marker="**")
+
+
+def _rules_entries(body: str) -> list[tuple[str, int]]:
+    """`(label, chars)` for each `## Rules` entry, whichever heading form is used."""
+    for heading in ("Rules (load-bearing)", "Rules"):
+        entries = _section_entries(body, heading, marker="- **")
+        if entries:
+            return entries
+    return []
+
+
+def _entry_findings(
+    entries: list[tuple[str, int]], *, heading: str, limit: int, contract: str
+) -> list[str]:
+    """Warn when a section's entries exceed that section's stated contract.
 
     Names the worst offenders rather than only counting them, because "Shipped is
     too long" is not actionable while "this entry is 11,712 characters" is. Caps
-    the naming at three so a ledger that drifted everywhere still yields a
+    the naming at three so a section that drifted everywhere still yields a
     readable finding."""
-    over = [(label, n) for label, n in _shipped_entries(body) if n > _SHIPPED_ENTRY_CHARS]
+    over = [(label, n) for label, n in entries if n > limit]
     if not over:
         return []
     over.sort(key=lambda pair: pair[1], reverse=True)
-    total = sum(n for _label, n in _shipped_entries(body))
+    total = sum(n for _label, n in entries)
     named = "; ".join(f"'{label[:48]}' ({n:,} chars)" for label, n in over[:_SHIPPED_ENTRY_REPORT_MAX])
     more = f" and {len(over) - _SHIPPED_ENTRY_REPORT_MAX} more" if len(over) > _SHIPPED_ENTRY_REPORT_MAX else ""
     return [
-        f"{len(over)} '## Shipped' entr{'y' if len(over) == 1 else 'ies'} exceed "
-        f"~{_SHIPPED_ENTRY_CHARS} chars (section is {total:,} chars) — the contract is one line "
-        f"per capability, details in git history: {named}{more}"
+        f"{len(over)} '## {heading}' entr{'y' if len(over) == 1 else 'ies'} exceed "
+        f"~{limit} chars (section is {total:,} chars) — {contract}: {named}{more}"
     ]
 
 
+def _shipped_entry_findings(body: str) -> list[str]:
+    return _entry_findings(
+        _shipped_entries(body),
+        heading="Shipped",
+        limit=_SHIPPED_ENTRY_CHARS,
+        contract="the contract is one line per capability, details in git history",
+    )
+
+
+def _rules_entry_findings(body: str) -> list[str]:
+    return _entry_findings(
+        _rules_entries(body),
+        heading="Rules",
+        limit=_RULES_ENTRY_CHARS,
+        contract=(
+            "the contract is concise current rules, NOT a log — route dated incident "
+            "narratives to .horus/archive/history.md and keep the rule plus one line of evidence"
+        ),
+    )
+
+
 def _prd_size_hint(body: str) -> str:
-    """Name the section driving PRD size, and — when the driver has hard-wrapped
-    bullets — point at unwrapping as the cheapest trim. Empty when there is no body."""
+    """Name the section driving PRD size, by characters. Empty when there is no body.
+
+    This deliberately no longer suggests unwrapping hard-wrapped bullets. That advice
+    used to read "reclaims lines with no loss" — true for lines, and precisely the
+    mechanism that let this file reach 91,252 characters while reporting 210 lines and
+    a silent cap. A remedy that improves the metric without removing content is not a
+    remedy; it is the drift. (2026-07-29 followed it: PRD 257 -> 210 lines, no smaller.)
+    """
     breakdown = _section_breakdown(body)
     if not breakdown:
         return ""
-    top_name, top_lines = breakdown[0]
+    top_name, top_chars = breakdown[0]
     total = sum(n for _n, n in breakdown) or 1
-    hint = f"largest section is '{top_name}' ({top_lines} lines, {round(100 * top_lines / total)}%)"
-    wrapped = _hard_wrapped_bullets(_section(body, top_name))
-    if wrapped:
-        hint += (
-            f"; {wrapped} of its bullet(s) are hard-wrapped — unwrapping to one line "
-            "each reclaims lines with no loss"
-        )
-    return hint
+    return (
+        f"largest section is '{top_name}' ({top_chars:,} chars, "
+        f"{round(100 * top_chars / total)}% of the body)"
+    )
 
 
 def _backlog_item_texts(section_body: str) -> list[str]:
@@ -577,20 +643,24 @@ def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
     prd_text = _read(hdir, frontmatter.PRD_FILE) or ""
     doc = frontmatter.parse(prd_text)
 
-    # 1. PRD size vs the ~250-line cap. When over, name the section driving the size
-    #    (and the hard-wrap lever) so the distill aims at the actual bloat.
-    line_count = len(prd_text.splitlines())
-    if line_count > _PRD_SOFT_CAP:
+    # 1. PRD size vs the character budget — what a fresh agent actually pays to read
+    #    it. When over, name the section driving the size so a distill aims at the
+    #    actual bloat rather than the section the message happens to mention.
+    char_count = len(prd_text)
+    if char_count > _PRD_SOFT_CHARS:
         hint = _prd_size_hint(doc.body)
-        band = "over" if line_count > _PRD_HARD_CAP else "approaching"
-        message = f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {line_count} lines — {band} the ~250-line cap"
+        band = "over" if char_count > _PRD_HARD_CHARS else "approaching"
+        message = (
+            f"{HORUS_DIR}/{frontmatter.PRD_FILE} is {char_count:,} chars — {band} the "
+            f"~{_PRD_HARD_CHARS:,}-char budget"
+        )
         if hint:
             message += f": {hint}"
         findings.append(Finding("warn", message))
 
-    # 1b. Shipped entries vs the "one line per capability" contract. Independent of
-    #     the line cap above, which is structurally blind to this.
-    for message in _shipped_entry_findings(doc.body):
+    # 1b. Per-section entry contracts. Independent of the whole-file cap above, which
+    #     says the file is big without saying which promise it is breaking.
+    for message in _shipped_entry_findings(doc.body) + _rules_entry_findings(doc.body):
         findings.append(Finding("warn", message))
 
     # 2. Stale frontmatter: PRD last_updated older than the newest session note.
