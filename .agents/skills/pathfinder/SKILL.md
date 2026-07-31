@@ -23,7 +23,7 @@ description: >-
   depth rather than assuming it. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 9 -->
+<!-- horus-skill-version: 10 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -50,15 +50,21 @@ direction/card judgment inline and unstructured, and its output quality drifted;
 the depth requirements now live in the step skills, where `skill-audit` can hold
 each one against reality separately.)
 
-| Step | Owner's question | Owned by |
-|---|---|---|
-| 0 | what is this re-baseline FOR — and is it a re-baseline at all? | pathfinder (intent + triage gate) |
-| 1 | where are we? | `horus consolidate` read-out → pinned brief |
-| 2 | what actually earned its keep? | inward audit: `product-audit` where the project has one, else shipped-vs-used with the owner |
-| 3 | where is the world? | `market-scan` (shallow sweep; deeper only if the owner asks) |
-| 4 | which directions could we take? | `roadmap-branches` (the divergence tree) |
-| 5 | what high-level work does the chosen branch imply? | `scope-cards` (aligned Shaping drafts) |
-| 6 | what is genuinely ready, waiting, or still undecided? | `backlog-refine` (interactive readiness + execution contract) |
+This table is the contract: read it before running anything, so you know what each
+step does and what it hands the next one. **Steps 0-2 spend nothing; step 3 goes to the
+web; every step gates on the owner.** A step listed only in the prose below is a step
+that gets skipped — that is how step 7 was missed on 2026-07-31.
+
+| Step | Owner's question | What the step actually does, and produces | Owned by |
+|---|---|---|---|
+| 0 | Is this a re-baseline at all, and what for? | **Triage first:** direction-in-question ⇒ this chain; backlog needs grooming ⇒ route straight to `backlog-refine` and say so. Then pin the intent (deepen-own-use / broaden-adoption / both) *interactively* — an intent arriving in args or a stored prompt is a proposal, not a confirmation. Produces no artifact; nothing else runs until the intent is confirmed. | pathfinder (intent + triage gate) |
+| 1 | Where are we? | Reads `## Vision` (or notes the facet table's absence), the active cards with their `vision_facet`/`phase`, `## Shipped`, and the deterministic `horus consolidate` convergence read-out. Produces the **pinned position brief**, which is a HARD CONSTRAINT on every later step. No spend. | `horus consolidate` read-out → pinned brief |
+| 2 | What actually earned its keep? | Gathers **inward** evidence — real usage, overlap with declared upstreams, ceremony that is skipped or rubber-stamped — against the project's own Vision units. **Analysis only: it never issues demote/defer/retire verdicts**; those belong to convergence. Produces a dated receipt in `.horus/audits/`. No spend. | inward audit: `product-audit` where the project has one, else shipped-vs-used with the owner |
+| 3 | Where is the world? | Gathers **outward** evidence, read through the pinned intent: build-vs-adopt per capability under deepen-own-use, market-gap under broaden-adoption. Shallow sweep by default, deeper only if the owner asks. Produces a dated receipt in `.horus/research/`. **This is the only step that spends web budget.** | `market-scan` (shallow sweep; deeper only if the owner asks) |
+| 4 | Which directions could we take? | Turns the brief + both receipts into a **tree of alternative roadmaps — never one merged plan**. Branches are DIRECTIONS drawn from facet-DoD gaps, owner friction and the receipts; the backlog is dispositioned only *after* branches exist, never used to build them. Produces a receipt in `.horus/research/`; **the owner picks**. | `roadmap-branches` (the divergence tree) |
+| 5 | What high-level work does the chosen branch imply? | Shapes the **picked** branch into aligned high-level Shaping drafts plus the branch's Vision facet diff. Deliberately NOT execution-ready cards. Only owner-approved drafts are written. | `scope-cards` (aligned Shaping drafts) |
+| 6 | What is genuinely ready, waiting, or still undecided? | Interactive, card-by-card: readiness, autonomy, the concrete execution contract, disposition, and owner-approved order. Only Ready cards pass its single execution-ready contract. Also the **standalone door** when the owner wants grooming without the chain. | `backlog-refine` (interactive readiness + execution contract) |
+| 7 | What landed, and what stays unapplied? | **Closes the run.** States what was actually written through the normal paths, and names everything the owner deferred as explicitly NOT applied. Then stops: **convergence — trimming the fat on accumulated usage evidence — is a SEPARATE session**, never chained here, and pathfinder re-runs only when a real re-baseline is needed again. | pathfinder (hand off) |
 
 **Receipts are the interfaces**: the market receipt and the branch-tree receipt
 live under `.horus/research/`, and the card drafts land as files — so the chain

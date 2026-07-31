@@ -137,7 +137,7 @@ def test_pathfinder_skill_registered_and_orchestrates():
     assert "shipped-vs-used" in pf.content
     # Step 0 triages backlog-POLISH out to the grooming pass instead of running
     # the five-step chain for a grooming need.
-    assert "is it a re-baseline at all?" in pf.content
+    assert "Is this a re-baseline at all, and what for?" in pf.content
     assert "scope-cards" in pf.content and "backlog-refine" in pf.content
     assert "execution readiness" in pf.content
     # Renamed from horus-kickstart: age-agnostic name, no old slug lingering.
@@ -956,3 +956,26 @@ def test_roadmap_branches_requires_problem_and_solution_before_mechanism():
     assert "**The proposed solution** — REQUIRED, second" in flat
     # The reader test is the operative check, not the section headings.
     assert "could a reader who has never opened this codebase say what hurts today" in flat
+
+
+def test_pathfinder_step_table_covers_every_step_including_hand_off():
+    """v10: the step table is the contract a model reads before running the chain, so
+    every step in the flow must appear in it.
+
+    Step 7 (hand off) previously existed ONLY in the prose flow, and the 2026-07-31 run
+    skipped it: the chain went 0->4, was rejected twice, and trailed into tooling work
+    without ever stating what landed and what stayed unapplied. A step listed only in
+    prose is a step that gets skipped.
+    """
+    pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
+    rows = [ln for ln in pf.content.splitlines() if ln.startswith("| ")]
+    numbered = [ln for ln in rows if ln.lstrip("| ")[:1].isdigit()]
+    steps = sorted(int(ln.split("|")[1].strip()) for ln in numbered)
+    assert steps == [0, 1, 2, 3, 4, 5, 6, 7], steps
+
+    flat = " ".join(pf.content.split())
+    # The table explains what each step DOES, not just who owns it.
+    assert "What the step actually does, and produces" in flat
+    # Step 7's two load-bearing facts.
+    assert "names everything the owner deferred as explicitly NOT applied" in flat
+    assert "convergence — trimming the fat on accumulated usage evidence — is a SEPARATE session" in flat
