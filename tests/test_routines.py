@@ -615,9 +615,11 @@ def test_consolidate_v3_warns_over_line_cap(tmp_path):
 
 
 def test_consolidate_v3_cap_warning_names_the_driving_section(tmp_path):
-    # A Rules section carrying a hard-wrapped bullet drives the size; the warning must
-    # name Rules and point at unwrapping — not just "the file is big" (the finding that
-    # cost a hand-measured investigation, 2026-07-29).
+    # The warning must name the driving section, not just "the file is big" (the
+    # finding that cost a hand-measured investigation, 2026-07-29) — and must name it
+    # by CHARACTERS, since that is what a reader pays. It must NOT suggest unwrapping:
+    # that reclaims lines without removing content, which is how this file reached
+    # 91,252 chars while reporting 210 lines and a silent cap.
     hdir = tmp_path / ".horus"
     hdir.mkdir(parents=True)
     rules = "## Rules\n\n- A wrapped rule that\n  spills onto a\n  second and third line.\n" + (
@@ -631,18 +633,17 @@ def test_consolidate_v3_cap_warning_names_the_driving_section(tmp_path):
         encoding="utf-8",
     )
     cap = next(m for m in _warn_msgs(routines.consolidate_signals(tmp_path)) if "~250-line cap" in m)
-    assert "largest section is 'Rules'" in cap
-    assert "hard-wrapped" in cap and "unwrapping" in cap
+    assert "largest section is 'Rules'" in cap and "chars" in cap
+    assert "hard-wrapped" not in cap and "unwrapping" not in cap
 
 
 def test_prd_size_hint_and_helpers_units():
     body = "## Vision\nshort\n## Rules\n- one liner\n- wrapped bullet that\n  keeps going\n  and going\n"
     assert routines._section_breakdown(body)[0][0] == "Rules"  # largest first
-    assert routines._hard_wrapped_bullets(routines._section(body, "Rules")) == 1
     hint = routines._prd_size_hint(body)
-    assert "largest section is 'Rules'" in hint and "1 of its bullet(s) are hard-wrapped" in hint
-    # No wrapped bullets in the driver → the unwrap clause is omitted.
-    assert "hard-wrapped" not in routines._prd_size_hint("## Rules\n- a\n- b\n## Vision\nx\n")
+    assert "largest section is 'Rules'" in hint and "chars" in hint
+    # The unwrap suggestion is gone for good: it improved the metric, not the file.
+    assert "hard-wrapped" not in hint and "unwrapping" not in hint
     assert routines._prd_size_hint("") == ""
 
 
@@ -994,3 +995,50 @@ def test_shipped_entries_split_on_bold_titles_not_blank_lines(tmp_path):
         "Alpha capability", "Beta capability", "Gamma capability",
     ]
     assert all(n < 700 for _label, n in entries)  # not one 1,500+ char blob
+
+
+def test_section_breakdown_ranks_by_cost_not_by_line_count():
+    # The two rankings genuinely disagree on this file's real shape: one long-line
+    # section outweighs a many-short-line one. Measured on the real PRD.md on
+    # 2026-07-31, by lines it read Rules 40% / Shipped 33%; by characters Rules 66% /
+    # Shipped 13% — so the line view would aim a distill pass at the wrong section.
+    body = (
+        "## Shipped\n" + "- short\n" * 40
+        + "## Rules\n- " + "x" * 2000 + "\n"
+    )
+    assert routines._section_breakdown(body)[0][0] == "Rules"
+
+
+def test_rules_entries_get_their_own_contract_and_threshold(tmp_path):
+    # `## Rules` promises "concise current rules ... (not a log)" and drifts the same
+    # way Shipped did. Its threshold is higher than Shipped's on purpose: a shipped
+    # entry points at a PR holding the detail, a rule must carry its own evidence.
+    hdir = tmp_path / ".horus"
+    hdir.mkdir(parents=True)
+    (hdir / "PRD.md").write_text(
+        _PRD_HEADER.format(last_updated="2026-07-01")
+        + _PRD_BACKLOG.format(backlog="1. **Task one.** Do it.\n")
+        + "## Shipped\n\n**A thing** (PR #1): done.\n\n"
+        + "## Rules\n\n- **A rule that became a log** " + ("narrative " * 90) + "\n"
+        + "- **A concise rule.** Short and to the point.\n",
+        encoding="utf-8",
+    )
+    msgs = _warn_msgs(routines.consolidate_signals(tmp_path))
+    rules = next(m for m in msgs if "'## Rules'" in m)
+
+    assert "1 '## Rules' entry exceed" in rules
+    assert "A rule that became a log" in rules
+    assert "archive/history.md" in rules      # names where the narrative should go
+    assert "NOT a log" in rules
+    assert not any("'## Shipped'" in m for m in msgs)  # conforming Shipped stays quiet
+
+
+def test_rules_threshold_is_looser_than_shipped():
+    assert routines._RULES_ENTRY_CHARS > routines._SHIPPED_ENTRY_CHARS
+
+
+def test_rules_entries_found_under_either_heading_form():
+    # This repo writes "## Rules (load-bearing)"; the template writes "## Rules".
+    long_rule = "- **R** " + "y" * 800 + "\n"
+    for heading in ("## Rules\n\n", "## Rules (load-bearing)\n\n"):
+        assert routines._rules_entries(heading + long_rule), heading
