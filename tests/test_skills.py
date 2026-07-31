@@ -968,14 +968,24 @@ def test_pathfinder_step_table_covers_every_step_including_hand_off():
     prose is a step that gets skipped.
     """
     pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    rows = [ln for ln in pf.content.splitlines() if ln.startswith("| ")]
-    numbered = [ln for ln in rows if ln.lstrip("| ")[:1].isdigit()]
-    steps = sorted(int(ln.split("|")[1].strip()) for ln in numbered)
+    import re
+    steps = sorted(
+        int(m.group(1))
+        for ln in pf.content.splitlines()
+        if ln.startswith("| ")
+        for m in [re.match(r"\|\s*\*\*(\d+)\s*—", ln)]
+        if m
+    )
     assert steps == [0, 1, 2, 3, 4, 5, 6, 7], steps
 
     flat = " ".join(pf.content.split())
     # The table explains what each step DOES, not just who owns it.
-    assert "What the step actually does, and produces" in flat
-    # Step 7's two load-bearing facts.
-    assert "names everything the owner deferred as explicitly NOT applied" in flat
-    assert "convergence — trimming the fat on accumulated usage evidence — is a SEPARATE session" in flat
+    assert "What happens, in detail" in flat
+    # Three columns: the question, the skill it runs, the detailed summary.
+    header = next(ln for ln in pf.content.splitlines() if ln.startswith("| The owner's question"))
+    assert header.count("|") == 4, header  # 3 cells => 4 pipes
+    # Step 7's two load-bearing facts (bold markers stripped, so wording tweaks in
+    # emphasis do not break the assertion — only the meaning is pinned).
+    plain = flat.replace("**", "")
+    assert "deferred as explicitly not applied" in plain
+    assert "is a SEPARATE session" in plain and "never chained off the end" in plain
