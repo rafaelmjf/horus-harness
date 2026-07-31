@@ -838,3 +838,47 @@ def test_unmerged_branches_survive_an_unusable_git(tmp_path, monkeypatch):
     # Contract for every closure signal: best-effort, never raise, never false-alarm.
     monkeypatch.setattr(closure, "_git", lambda root, *a: None)
     assert closure.unmerged_branch_findings(tmp_path) == []
+
+
+def _mk_repo_with_note(tmp_path, *, track: bool):
+    """A repo whose .horus/.gitignore disclaims recovery notes, with one note on disk."""
+    import subprocess
+    hdir = tmp_path / ".horus"
+    (hdir / "sessions").mkdir(parents=True)
+    (hdir / ".gitignore").write_text("sessions/*.md\n!sessions/.gitkeep\n", encoding="utf-8")
+    note = hdir / "sessions" / "2026-07-31-note.md"
+    note.write_text("# note\n", encoding="utf-8")
+    run = lambda *a: subprocess.run(["git", *a], cwd=tmp_path, capture_output=True, check=True)
+    run("init", "-q")
+    run("config", "user.email", "t@t")
+    run("config", "user.name", "t")
+    run("add", "-A")
+    if track:
+        # An ignored path needs -f, which is exactly how the real violation happened.
+        run("add", "-f", "--", str(note.relative_to(tmp_path)))
+    run("commit", "-qm", "init")
+    return tmp_path
+
+
+def test_tracked_recovery_note_is_named(tmp_path):
+    # `.horus/.gitignore` disclaims these and the checkpoint harvest assumes they are
+    # disposable and machine-local; tracking one inverts both silently.
+    root = _mk_repo_with_note(tmp_path, track=True)
+    findings = closure.tracked_recovery_note_findings(root)
+
+    assert len(findings) == 1
+    assert findings[0].level == "info"  # never flips a fresh verdict to stale
+    assert "2026-07-31-note.md" in findings[0].message
+    assert "git rm --cached" in findings[0].message  # names the remedy
+    assert "stay on disk" in findings[0].message     # and that nothing is lost
+
+
+def test_untracked_recovery_note_is_silent(tmp_path):
+    root = _mk_repo_with_note(tmp_path, track=False)
+    assert closure.tracked_recovery_note_findings(root) == []
+
+
+def test_tracked_recovery_note_check_is_wired_into_closure_status(tmp_path):
+    root = _mk_repo_with_note(tmp_path, track=True)
+    messages = [f.message for f in closure.closure_status(root)]
+    assert any("are TRACKED by git" in m for m in messages)

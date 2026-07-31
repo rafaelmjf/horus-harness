@@ -296,6 +296,40 @@ def parallel_deliveries(
 UNMERGED_BRANCH_STALE_DAYS = 3
 
 
+def tracked_recovery_note_findings(root: Path) -> list[Finding]:
+    """Warn when a local recovery note is tracked by git.
+
+    `.horus/.gitignore` has carried `sessions/*.md` since the repo's first commit,
+    and the contract says recovery notes are local and do not travel between
+    machines — the checkpoint harvest is built on that assumption, appending commit
+    messages to the newest note "for zero LLM tokens" because the target is
+    disposable and machine-local.
+
+    Tracking one silently inverts all of it: git keeps a file its own ignore rule
+    disclaims, the harvest's append lands in every clone, and the note grows without
+    bound because nothing ever measured it. Observed 2026-07-31 on this repo — five
+    notes force-added by feature PRs on 2026-07-14 (an ignored path needs `git add
+    -f`, so this cannot happen by accident), one of which had reached 164,300 chars
+    across 26 commits, nearly three times the PRD it sits beside.
+
+    Rendered at ``info``: untracking is a deliberate act with history implications,
+    so this names the condition rather than flipping a fresh verdict to stale.
+    """
+    listed = _git(root, "ls-files", "--", ".horus/sessions/*.md")
+    tracked = [line.strip() for line in (listed or "").splitlines() if line.strip()]
+    if not tracked:
+        return []
+    shown = ", ".join(Path(p).name for p in tracked[:3])
+    more = f" and {len(tracked) - 3} more" if len(tracked) > 3 else ""
+    return [Finding(
+        "info",
+        f"{len(tracked)} local recovery note(s) are TRACKED by git despite "
+        f"`sessions/*.md` in .horus/.gitignore — they travel between machines and "
+        f"collect harvested commit messages in every clone; untrack with "
+        f"`git rm --cached` (the files stay on disk): {shown}{more}",
+    )]
+
+
 def unmerged_branch_findings(root: Path) -> list[Finding]:
     """Name remote branches that are not merged into the default branch.
 
@@ -628,6 +662,7 @@ def closure_status(root: Path, *, usage_threshold: float = 90.0) -> list[Finding
     # this session before closure is "done" (the drift that motivated this check).
     findings.extend(routines.freshness_signals(root))
     findings.extend(pending_delivery_findings(root))
+    findings.extend(tracked_recovery_note_findings(root))
     findings.extend(codex_usage.usage_findings(root, threshold=usage_threshold))
 
     agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
