@@ -203,9 +203,18 @@ def test_roadmap_branches_skill_registered_divergence_tree():
     assert ".horus/research/" in rb.content
     assert "No new web research" in rb.content
     # Re-justifies the existing backlog with explicit push-back; inherits nothing.
-    assert "inherit nothing" in rb.content.lower() or "inherits" in rb.content
-    assert "Re-justify the existing backlog" in rb.content
+    assert "inherits" in rb.content
     assert "push-back" in rb.content
+    # v5: branches come from facet-DoD gaps / owner friction / receipts — NEVER the
+    # backlog, which is dispositioned only after the branches exist. The 2026-07-31
+    # tree was rejected because all four branches were assembled from cards.
+    # Whitespace-normalized: hard wrapping otherwise breaks these on reflow rather
+    # than on meaning (PRD rule, 2026-07-30).
+    flat = " ".join(rb.content.split())
+    assert "Where BRANCHES come from — never the backlog" in flat
+    assert "Disposition the backlog AFTER the branches exist" in flat
+    assert "grooming pass wearing a branch's clothes" in flat
+    assert "route the owner to `backlog-refine`" in flat
     # Claims discipline + no-repetition template rules.
     assert "comparison baseline" in rb.content
     assert "State each fact exactly once" in rb.content

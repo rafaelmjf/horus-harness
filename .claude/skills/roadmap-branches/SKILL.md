@@ -14,7 +14,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -23,6 +23,39 @@ alternative roadmaps the owner chooses between. The single most important rule:
 **never collapse the tree into one merged roadmap** — merging is the owner's
 convergence decision, and pre-merging it destroys exactly the choice this skill
 exists to surface.
+
+## Where BRANCHES come from — never the backlog
+
+A branch is a DIRECTION, and directions do not come from the card list. The backlog
+is read for exactly one purpose: to disposition it against the branches once they
+exist (section 6). It is never the material branches are built from.
+
+This is the failure this version exists for. v4 already warned that "merely ordering
+the inherited backlog is this skill's known failure mode" — and it happened anyway,
+because section 6 requires every open card to land in a branch or be pushed back,
+which creates gravity pulling branches into card containers. The 2026-07-31 run built
+all four branches from facets that already had open cards; the owner rejected the
+tree, and the direction they actually wanted (customising the session host to fit
+daily use) was structurally invisible because it had almost no cards. Their words:
+*"Pathfinder is meant to explore new ideas and audit if we are going in the right
+direction, not a way to refine our backlog. If I want to reorganize existing work I'd
+go directly to backlog-refine."* Same defect as `wildcard` v1-v4, one skill over.
+
+Draw branches from these, in this order:
+
+1. **Facet definition-of-done vs delivered code** — read what a facet promises against
+   what exists. Never stale, needs no external evidence, and is the richest source.
+2. **The owner's real friction** — what is slow, manual, repeated by hand, or annoying
+   in recent actual use. A direction here often has ZERO cards; that is a signal it
+   was invisible to the backlog, not that it is unimportant.
+3. **The audit's and market receipt's findings** — especially adopt/compose verdicts
+   and anything the evidence contradicts.
+4. **The Vision's out-of-scope list and boundaries** — hypotheses, re-testable
+   against fresh usage.
+
+**A branch whose roadmap is mostly existing cards is a grooming pass wearing a
+branch's clothes.** If every branch reads that way, say so plainly and route the owner
+to `backlog-refine` instead of shipping the tree.
 
 ## Inputs (gather, do not re-derive)
 
@@ -104,10 +137,11 @@ where the load genuinely fits, and say so if it stops fitting.
 
 ## Three disciplines that make the tree trustworthy
 
-- **Re-justify the existing backlog — inherit nothing.** Every open card either
-  earns its place inside some branch or gets explicit push-back (demote / defer /
-  retire candidate, with the reason argued through the intent). Merely ordering the
-  inherited backlog is this skill's known failure mode.
+- **Disposition the backlog AFTER the branches exist, never before.** Every open
+  card either earns its place inside an already-formed branch or gets explicit
+  push-back (demote / defer / retire candidate, argued through the intent). Build the
+  branches first, from the sources above; only then walk the cards. Doing it the other
+  way round is how this skill produces grooming — see "Where BRANCHES come from".
 - **Claims discipline.** Every "X is missing / weak / better" names its
   comparison baseline: what exists today, and why it is insufficient for the
   intent. No claim without its baseline.
