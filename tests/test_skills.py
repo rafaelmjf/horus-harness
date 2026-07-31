@@ -989,3 +989,26 @@ def test_pathfinder_step_table_covers_every_step_including_hand_off():
     plain = flat.replace("**", "")
     assert "deferred as explicitly not applied" in plain
     assert "is a SEPARATE session" in plain and "never chained off the end" in plain
+
+
+def test_roadmap_branches_tree_is_facet_spine_plus_exploration():
+    """v7: the facet table is the SPINE — one branch per facet worth advancing —
+    with exploration branches layered on top, not instead.
+
+    Both 2026-07-31 runs departed from this in opposite directions: v4 grouped
+    backlog cards under facet headings (grooming), v5 dropped the facet spine and
+    produced only exploration directions. Owner: "before I was just getting backlog
+    rework, now it seems I will get just explorative branches." The shape that worked
+    is the 2026-07-17 tree that produced the X1/X2/X3 umbrellas.
+    """
+    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
+    flat = " ".join(rb.content.split()).replace("**", "")
+    assert "The Vision's facet table is the SPINE of the tree" in flat
+    assert "facet branches are the body; the exploration branches are the alternatives" in flat
+    # Shrinking a facet is a legitimate way to advance it — the original tree carried
+    # two rescoped branches — but the tree proposes, convergence decides.
+    assert "Advancing a facet includes SHRINKING it" in flat
+    assert "defer/retire candidates routed to the convergence pass" in flat
+    assert 'not a synonym for "add work to this facet"' in flat
+    # The tree section enforces the ordering.
+    assert "facet branches first, in facet-table order" in flat

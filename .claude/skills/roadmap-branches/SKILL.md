@@ -14,7 +14,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -41,10 +41,45 @@ daily use) was structurally invisible because it had almost no cards. Their word
 direction, not a way to refine our backlog. If I want to reorganize existing work I'd
 go directly to backlog-refine."* Same defect as `wildcard` v1-v4, one skill over.
 
-Draw branches from these, in this order:
+### The shape: facet branches first, then exploration branches
 
-1. **Facet definition-of-done vs delivered code** — read what a facet promises against
-   what exists. Never stale, needs no external evidence, and is the richest source.
+**The Vision's facet table is the SPINE of the tree, not one input among several.**
+Walk it, and for each facet where there is something real to say, produce ONE branch
+proposing how to move *that* facet forward. Then add the exploration branches — the
+alternatives with no facet yet — on top. That is the structure the first successful
+run used (`2026-07-17-pathfinder-branch-tree.md`), and it is what produced the X1/X2/X3
+vision-branch umbrellas that still organise this project:
+
+```
+├── A. "One state, any agent"      → Continuity core (rescoped)   [primary]
+├── B. "The loop earns its keep"   → PO lifecycle                 [secondary]
+├── C. "Dispatch you can trust"    → Delegation calib. (rescoped) [reduced to 2 items]
+├── D. "Cockpit polish"            → Dashboard                    [filler]
+├── X1. "Fleet knowledge plane"    → speculative, no facet yet    [strongest new thought]
+└── X2. "Cross-agent deliberation" → speculative, no facet yet    [park]
+```
+
+Both failure modes are departures from that shape, in opposite directions. The
+2026-07-31 v4 run grouped BACKLOG CARDS under facet headings and produced grooming.
+The v5 re-run dropped the facet spine entirely and produced only exploration
+directions — the owner's verdict: *"before I was just getting backlog rework, now it
+seems I will get just explorative branches."* **Neither is the tree.** The facet
+branches are the body; the exploration branches are the alternatives.
+
+**Advancing a facet includes SHRINKING it.** A facet branch may propose rescoping a
+facet, retiring an unused feature, or reducing its scope to what is proven — the
+original tree carried two branches marked `(rescoped)` and one whose convergence
+criterion was that *"a pass kills or rescopes something real"*. Name such items as
+**defer/retire candidates routed to the convergence pass**; the branch proposes, the
+convergence session decides. "Move this facet forward" is not a synonym for "add work
+to this facet".
+
+### Where the CONTENT of a branch comes from — never the backlog
+
+Having chosen a facet, the items inside its branch come from:
+
+1. **Facet definition-of-done vs delivered code** — read what the facet promises
+   against what exists. Never stale, needs no external evidence, richest source.
 2. **The owner's real friction** — what is slow, manual, repeated by hand, or annoying
    in recent actual use. A direction here often has ZERO cards; that is a signal it
    was invisible to the backlog, not that it is unimportant.
@@ -108,10 +143,12 @@ sections, then STOP for the owner to pick:
    shells, then ONE verdict, then the risks. **State each fact exactly once** — if
    a point appears in two sections, delete one; if the scan receipt already
    argues it, cite instead of restating.
-3. **The tree.** A small ASCII tree: root = the position in two lines, one child
-   per branch (including the speculative ones), each with its facet target and a
-   one-word posture tag (primary/secondary/filler/park is the *recommendation*,
-   not a decision).
+3. **The tree.** A small ASCII tree: root = the position in two lines, then the
+   **facet branches first, in facet-table order**, then the speculative ones below
+   them. Every child names its facet target — or `speculative, no facet yet` — plus a
+   one-word posture tag (primary/secondary/filler/park is the *recommendation*, not a
+   decision). A tree with no facet branches, or with only facet branches, is the wrong
+   shape; see "The shape" above.
 4. **The branches.** For EACH branch:
    - **The problem** — REQUIRED, and written FIRST. What actually goes wrong today,
      described as the owner experiences it, with the concrete observation that proves
