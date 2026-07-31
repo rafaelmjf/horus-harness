@@ -975,3 +975,22 @@ def test_shipped_entries_ignores_blocks_that_are_not_entries(tmp_path):
     # Section prose that is not a bold-titled entry must not be measured as one.
     body = "## Shipped\n\nSome introductory prose that is quite long " + ("y" * 900) + "\n"
     assert routines._shipped_entries(body) == []
+
+
+def test_shipped_entries_split_on_bold_titles_not_blank_lines(tmp_path):
+    # Entries in this ledger are routinely written on CONSECUTIVE lines with no
+    # blank between them. A blank-line split reports them as one huge blob, which
+    # names the wrong capability and implies "trim this" when the fix is to
+    # separate them. Found on the real PRD.md: 11 entries read as one 11,712-char
+    # entry labelled with only the first one's title.
+    run_on = (
+        "**Alpha capability** " + "a" * 500 + "\n"
+        "**Beta capability** " + "b" * 500 + "\n"
+        "**Gamma capability** " + "c" * 500 + "\n"
+    )
+    entries = routines._shipped_entries("## Shipped\n\n" + run_on)
+
+    assert [label for label, _n in entries] == [
+        "Alpha capability", "Beta capability", "Gamma capability",
+    ]
+    assert all(n < 700 for _label, n in entries)  # not one 1,500+ char blob

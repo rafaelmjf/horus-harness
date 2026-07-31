@@ -374,18 +374,30 @@ def _hard_wrapped_bullets(section_body: str) -> int:
 def _shipped_entries(body: str) -> list[tuple[str, int]]:
     """`(label, chars)` for each `## Shipped` entry, in file order.
 
-    An entry is a blank-line-separated block that opens with a bold title, which
-    is how every entry in this ledger is written. Blocks that do not (stray prose,
-    a trailing note) are ignored rather than guessed at."""
+    An entry starts at a **bold title on its own line start** and runs until the
+    next one. Splitting on blank lines instead would be wrong: entries in this
+    ledger are frequently written on consecutive lines with no blank between
+    them, and a blank-line split then reports eleven capabilities as one
+    11,712-character blob — the right warning attached to the wrong label, and
+    pointing at trimming when the fix is to separate them."""
     section = _section(body, "Shipped")
     entries: list[tuple[str, int]] = []
-    for block in section.split("\n\n"):
-        stripped = block.strip()
-        if not stripped.startswith("**"):
-            continue
-        match = _BOLD_TITLE_RE.match(stripped)
-        label = match.group(1) if match else stripped[:60]
-        entries.append((label, len(stripped)))
+    current: list[str] = []
+
+    def flush() -> None:
+        if not current:
+            return
+        block = "\n".join(current).strip()
+        match = _BOLD_TITLE_RE.match(block)
+        entries.append((match.group(1) if match else block[:60], len(block)))
+
+    for line in section.splitlines():
+        if line.startswith("**"):
+            flush()
+            current = [line]
+        elif current:
+            current.append(line)
+    flush()
     return entries
 
 
