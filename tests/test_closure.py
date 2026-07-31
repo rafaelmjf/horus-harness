@@ -882,3 +882,58 @@ def test_tracked_recovery_note_check_is_wired_into_closure_status(tmp_path):
     root = _mk_repo_with_note(tmp_path, track=True)
     messages = [f.message for f in closure.closure_status(root)]
     assert any("are TRACKED by git" in m for m in messages)
+
+
+def _note(root, name: str, status, body="notes\n"):
+    sessions = root / ".horus" / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    fm = f"---\ndate: 2026-07-15T10:00:00\n" + (f"status: {status}\n" if status else "") + "---\n\n"
+    p = sessions / name
+    p.write_text(fm + body, encoding="utf-8")
+    return p
+
+
+def test_harvest_refuses_a_note_that_declares_itself_finished(tmp_path):
+    # The real defect: `recent_sessions` orders by mtime and appending updates
+    # mtime, so a harvested note can never age out of being the target. One note
+    # took 174 commits and became 98% auto-harvested content under a title
+    # describing work finished weeks earlier. The gate is the note's own declared
+    # lifecycle, which appending cannot change.
+    _note(tmp_path, "2026-07-15-old.md", "complete")
+    target, reason = closure.harvest_target(tmp_path)
+
+    assert target is None
+    assert "status: complete" in reason
+    assert "horus session new" in reason  # names the remedy
+
+
+def test_harvest_accepts_an_open_note(tmp_path):
+    open_note = _note(tmp_path, "2026-07-15-live.md", "in-progress")
+    target, reason = closure.harvest_target(tmp_path)
+
+    assert target == open_note and reason == ""
+
+
+def test_harvest_accepts_a_note_with_no_status(tmp_path):
+    # Never block a hand-written or older-format note that simply omits the field.
+    legacy = _note(tmp_path, "2026-07-15-legacy.md", None)
+    target, _reason = closure.harvest_target(tmp_path)
+
+    assert target == legacy
+
+
+def test_harvest_refuses_every_terminal_status_spelling(tmp_path):
+    for status in ("done", "closed", "complete", "completed", "archived"):
+        root = tmp_path / status
+        _note(root, "2026-07-15-n.md", status)
+        target, reason = closure.harvest_target(root)
+        assert target is None, status
+        assert status in reason
+
+
+def test_harvest_reports_when_no_note_exists_at_all(tmp_path):
+    (tmp_path / ".horus").mkdir()
+    target, reason = closure.harvest_target(tmp_path)
+
+    assert target is None
+    assert "never creates one" in reason

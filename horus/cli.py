@@ -3714,7 +3714,14 @@ def cmd_checkpoint(args: argparse.Namespace) -> int:
         except Exception:  # noqa: BLE001 (guard invariant: a harvest must never wedge a commit)
             return 0
         if not getattr(args, "hook", False):
-            print(f"Harvested {n} commit(s) into {note}" if n else "No new commits to harvest.")
+            if n:
+                print(f"Harvested {n} commit(s) into {note}")
+            else:
+                # Say WHY nothing landed. "No new commits" was wrong whenever there
+                # were commits but no note willing to take them, which is how 174 of
+                # them ended up in a note that had declared itself finished.
+                _target, reason = closure.harvest_target(root)
+                print(f"Nothing harvested: {reason}" if reason else "No new commits to harvest.")
         return 0
     if getattr(args, "hook", False):
         return _checkpoint_hook(root, block=getattr(args, "block", False))

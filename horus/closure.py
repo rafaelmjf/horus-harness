@@ -13,6 +13,7 @@ the printed ritual. No agent is spawned here.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -615,6 +616,49 @@ def _latest_session_note(root: Path) -> Path | None:
     return recent[0] if recent else None
 
 
+# A note whose frontmatter declares it finished is not this session's recovery
+# buffer. `horus session new` scaffolds `status: in-progress`; these are the
+# terminal values observed in the field once a note is closed out.
+_TERMINAL_NOTE_STATUSES = frozenset({"done", "closed", "complete", "completed", "archived"})
+_NOTE_STATUS_RE = re.compile(r"^status:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def _note_status(note: Path) -> str:
+    try:
+        head = note.read_text(encoding="utf-8")[:2000]
+    except OSError:
+        return ""
+    match = _NOTE_STATUS_RE.search(head)
+    return match.group(1).strip().strip('"').lower() if match else ""
+
+
+def harvest_target(root: Path) -> tuple[Path | None, str]:
+    """The recovery note the checkpoint harvest may append to, and why not when None.
+
+    Selecting "the newest note" alone is a trap, and it is the one this repo fell
+    into: `recent_sessions` orders by mtime, and appending updates mtime — so once a
+    note has been harvested it can never age out of being the target. One note took
+    174 commits that way and ended up 98% auto-harvested content (136,752 of 138,477
+    chars) under a title describing work finished weeks earlier.
+
+    So the gate is the note's own declared lifecycle rather than any inferred
+    freshness: a note whose `status` is terminal has said it is finished, and
+    finished notes do not accumulate future work. `session new` scaffolds
+    `status: in-progress`, and a note with no status at all still qualifies, so this
+    never blocks a hand-written or older-format note."""
+    note = _latest_session_note(root)
+    if note is None:
+        return None, "no recovery note exists (harvest never creates one)"
+    status = _note_status(note)
+    if status in _TERMINAL_NOTE_STATUSES:
+        return None, (
+            f"newest recovery note '{note.name}' is marked `status: {status}` — a "
+            f"finished note does not collect further checkpoints; scaffold a new one "
+            f"with `horus session new` if this session needs one"
+        )
+    return note, ""
+
+
 _TRAILER_PREFIXES = ("co-authored-by:", "signed-off-by:", "co-committed-by:")
 
 
@@ -648,10 +692,13 @@ def harvest_checkpoint(root: Path) -> tuple[int, Path | None]:
     records = _harvest_records(root, since)
     note: Path | None = None
     if records:
-        note = _latest_session_note(root)
+        note, _reason = harvest_target(root)
     if records and note is not None:
         _append_checkpoints(note, records)
-    marker.write_text(head + "\n", encoding="utf-8")  # advance even if empty, to avoid rescan
+    # Advance even when nothing was appended: git already holds every commit
+    # message, so an unharvested window is not a backlog to replay later — it is
+    # simply a window where no open note wanted a copy.
+    marker.write_text(head + "\n", encoding="utf-8")
     return (len(records), note) if note is not None else (0, None)
 
 
