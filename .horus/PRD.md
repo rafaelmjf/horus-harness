@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "2026-07-31 — two arcs, 21 commits unreleased on v0.0.79. (1) A continuity-cost rework: committed continuity 276,884 -> ~71,000 chars, driven by one rule — if a deterministic command can produce it, prose must not cache it. Size signals now measure characters after the line cap proved blind (91,252 chars read as 210 lines) and its own remedy turned out to BE the drift. (2) A full pathfinder run whose divergence step was rejected THREE times: v4 produced backlog rework, v5/v6 produced only exploration, and the owner named the fix from memory of the first successful run — the Vision facet table is the tree's SPINE, one branch per facet (shrinking a facet counts as advancing it), with exploration branches layered on top. That is v7, unrun."
-next_action: "RUN `roadmap-branches` v7 and check the shape. Same inputs as the two rejected runs — audit `.horus/audits/2026-07-31-product.md`, scan `.horus/research/2026-07-31-market-scan-build-vs-adopt.md`, intent deepen-own-use — so any difference is the skill. EXPECT: one branch per Vision facet with something real to say, named for the facet, each free to propose retiring or rescoping (routed as defer/retire candidates to convergence, never decided in the tree), THEN exploration branches marked `no facet yet`. A tree with only facet branches, or only exploration branches, is still wrong. Read `.horus/research/2026-07-17-pathfinder-branch-tree.md` first — it is the shape that worked and produced the X1/X2/X3 umbrellas."
-next_prompt: "Resume horus-harness; `git fetch --all --prune` first. Main is clean, 21 commits ahead of v0.0.79. The open task is one run of `roadmap-branches` v7 to see whether the tree comes back to the right shape — three earlier runs today were rejected, so read the owner verdicts in `.horus/research/2026-07-31-roadmap-branches-rebaseline.md` §8 and the shape section in the skill before starting. Two owner constraints bind anything that follows: never make a critical function depend on one session host, and the cockpit's session-status column is a deletion candidate rather than a repair job (card `session-close-ux-and-truthful-end-state` carries both). Convergence — trimming 47 explore vs 27 converge cards, 26 Deferred — has never run and may matter more than another divergence pass."
-execution_recommendation: "continue-as-is — no delegation was requested; the next step is one interactive skill run with an owner gate at its end, which cannot be delegated and carries no context, parallelism or price dividend."
-last_updated: 2026-07-31
+current_focus: "2026-08-01 — a convergence day, not a feature day. The backlog went 75 open -> 7 active + 64 shelved, and the driver was one measured finding: `converge` cards ship at 77% and `explore` cards at 16%, so work that starts as a PROBLEM gets done and work that starts as an IDEA accumulates. `shelved` is the new status for declining to decide (distinct from `retired` and from `deferred`, which failed at 26 cards screened twice with none moving); bugs are barred from it by a `fail`-level gate. Separately, one defect shape appeared four times and is now fixed at the root: a display aggregating over states it does not distinguish, caused by the inactive-status list existing in three places. 7 PRs merged; 30+ commits unreleased."
+next_action: "Decide the release. 30+ commits sit unreleased on v0.0.79, and that now includes `shelved` itself — so the installed CLI still counts all 69 shelved cards as open and the TUI shows pre-sweep numbers. Today's display work is invisible where the owner actually reads it until a release ships. This is the owner's decision, not a chained step. After that, the two non-bug active cards are `session-close-ux-and-truthful-end-state` (the registry calls 73 owner-initiated closes `failed`; the host-agnostic TERMINAL-vocabulary fix comes first, because herdr state is Claude-only) and `windows-native-horus-setup`."
+next_prompt: "Resume horus-harness; `git fetch --all --prune` first. Main is clean at 7eb8fb5 with 30+ commits unreleased on v0.0.79. The backlog is deliberately small now: 7 active (5 bugs + `session-close-ux-and-truthful-end-state` + `windows-native-horus-setup`), 64 shelved — read `horus backlog list` and `--shelved`, not the directory listing. Note the installed `horus` binary predates `shelved`, so its counts disagree with the repo until a release; prefer `python3 -m horus` for accurate signals. The away-mode drill was retired after answering its own question (unattended merge is unevidenced: every gate passed while both legs corrupted continuity), and herdr's agent_status does not populate for Codex panes."
+execution_recommendation: "continue-as-is — no delegation was requested. The next step is a release decision with the owner, then one bounded fix in the session-status vocabulary; neither carries a context, parallelism or price dividend over the supervisor tax."
+last_updated: 2026-08-01
 last_product_audit: 0.0.79 2026-07-31
 horus_min_version: 0.0.26
 ---
@@ -66,6 +66,16 @@ Counts and per-card state are NOT restated here — `horus backlog list` compute
 One line per capability. Details live in git history — every entry carries its PR, tag or
 SHA — and `horus backlog list --archived` lists the delivered cards with their provenance.
 
+**The backlog got a box, and the counts stopped lying** (2026-08-01, #485 + #486 + #487): `shelved` is a status for declining to DECIDE, distinct from `retired` and from `deferred`; 69 of 71 cards swept into it, `--shelved` is the read path, and a bug can never be shelved (`fail`-level). Fleet rows report `active N · bugs M` from the one status definition.
+
+**The archive is the closed ledger, not the delivery ledger** (2026-08-01, #481): `--archived` headed all 132 cards "Shipped" when 22 had never been built, which misled this session into recording a retired card as delivered; `partition_archived` splits them and gives the graveyard its first read path.
+
+**`roadmap-branches` v8 — the narrative read-out restored** (2026-08-01, #480): four runs failed to reproduce the 2026-07-17 convergence-test receipt because a 2026-07-20 calibration turned section 1 from prose into a citation, relocating facet coverage into the branch list where it forced padding. 246 -> 180 lines.
+
+**Two settled cards, each with a defect its card had not foreseen** (2026-08-01, #484): the audit advisory needs 10 releases AND 14 days, the AND applying only within a minor line because `releases_since` is a lower bound across one; `wildcard` became the 20th bundled skill, exposing a missing v2 fallback.
+
+**Long-running services are verified by signal, not by starting** (2026-08-01, #483, managed block v18): a service/daemon is verified when it reaches `active`/running AND emits its expected journal or health signal. Delivered by the away-mode drill's one real leg.
+
 **Bundled skills declare an audience** (2026-07-31, #466 `7dcedfa`, from #462): `Skill` gains `audience`, so Horus-only skills stop projecting into managed projects; install, staleness, doctor and upgrade all read it together.
 
 **Status line names the spending account** (2026-07-31, #467): row 1 becomes `user@host:cwd │ account │ model`, alias under isolation and the authenticated email outside it.
@@ -100,57 +110,19 @@ SHA — and `horus backlog list --archived` lists the delivered cards with their
 
 **Suite-wide isolation of test state from the owner's environment** (2026-07-30, #455): autouse private `HOME`, `TMUX_TMPDIR` and `HERDR_SOCKET_PATH`, after a test stopped the owner's herdr server.
 
-**Mouse-click activation throughout the terminal TUI** (2026-07-30, #453): left-button release selects and activates across list, wide-grid and priority-board layouts.
-
-**v0.0.78 released, deployed and verified** (2026-07-29, tag `v0.0.78`, bump #448): `horus sync`, cockpit remote-freshness, the consolidate cap signal, and the three-host session layer.
-
-**herdr layout — `Horus` and `Agents` spaces, one tab per project** (2026-07-29, #447): the tab strip is the status bar; shell-only tabs are reused so a server restart stops adding duplicates.
-
-**Pre-release host-selection sweep — seven bugs** (2026-07-29, #446): all reachable only once a machine opts into a non-default host; guards now ask about persistence rather than matching a literal host string.
-
-**`horus tui <host>` cockpit front door + persisted session-host default** (2026-07-29, #443): idempotent and never nesting; `hosts.enclosing()` stops a cockpit in one host launching agents into another.
-
-**The herdr session host — three hosts, one protocol** (2026-07-29, #442): ~370 lines and no caller change; declares `liveness=False` and `reports_exit_code=False`, and adds the `state` capability tmux lacks.
-
-**Session-host protocol — `current` · `tmux` · herdr** (2026-07-29, #441): six declared capabilities replace every `"tmux"` string match; registering a host makes it launchable everywhere via `launch_on()`.
-
-**herdr evaluated as a third session host** (2026-07-29, #440): probe answered all four feasibility questions; no attached-flag or activity clock exists, so a herdr host declares no liveness and never reaps.
-
-**`horus tui` works inside tmux — switch the client, don't refuse** (2026-07-29, #439): Horus and its sessions share one server, so the client is moved with `switch-client` instead of nesting a second one.
-
-**Launchable pinned/older models + a vendor-docs refresh skill** (2026-07-29, #438): a managed `[launch_models]` table the launch form reads, plus `launch-model-refresh` researching vendor deprecation docs.
-
-**`consolidate` cap warning names the driving section** (2026-07-29, #436): names the largest section and its share instead of blaming Shipped.
-
-**Cockpit remote-freshness + inbound Sync, and a CI de-rot** (2026-07-29, #434 `c916d70` + #435 `1af2fbf`): per-project freshness on home rows with `g`/`y`/`Y`; Sync = project state IN, Horus Assets Refresh = assets OUT.
-
-**`horus sync` + the wildcard skill retargeted** (2026-07-28, #433 `4c346846`): fast-forwards only when unambiguously safe and otherwise refuses with the reason; wildcard v1→v4 after five live runs and an audit.
-
-**v0.0.77 — the drill-readiness release** (2026-07-27, tag `v0.0.77`, #425/#426/#428/#429/#430/#431, bump #432): sparse `order:` joins `readiness_sort_key`; `--resume` accepts either id form; managed block v14→v16.
-
-**v0.0.75 — the seeded-prompt regression and a bug-clearing campaign** (2026-07-26, tag `v0.0.75`, #403–#414): `claude --remote-control` consumed the positional prompt, silently unseeding every interactive launch; twelve PRs.
-
-**Post-release: Codex usage made trustworthy** (2026-07-26, #415–#418): rate-limit lanes were classified positionally, so every worker datum recorded a weekly percentage as `pct_5h`, corrupting calibration rather than only the display.
-
-**Three autonomous continuity checks** (2026-07-24, #396 `2c28d3b`): canonical cockpit readiness labels and `autonomy_block_reason` in list; the PRD readiness reconciliation shipped here was retired in #469.
-
-**Autonomous backlog librarian** (2026-07-23, #392 `2d7c4be`): one dated advisory receipt after deterministic and bounded semantic hygiene checks; no card or PRD mutations, no delivery authority.
-
-**v0.0.74 — TUI backlog-visualisation arc + Remote Control on launch** (2026-07-21, #386–#389): grouped list, priority board with readiness filter, and a read-only Direction view over a shared `facet_standings`.
-
-**Pathfinder-loop skills recalibrated from the live run** (2026-07-20, #373 `dd28fe8`): product-audit v3 became analysis-only; backlog-refine v2 encodes the owner-designed pass; scope-cards v7; market-scan v7.
-
-**v0.0.73 — session-control axis deleted, closure exemption enforced** (2026-07-19, #368–#371): a launch decides only what context loads, consent moved to the launch permission posture, and `direct_push_violations` makes the closure exemption enforceable.
-
-**Curation pipeline: shaping/refinement split** (2026-07-19, #351–#356 then #364–#367): `scope-cards` owns the dispatchable-card contract; `backlog-refine` alone owns the picture-first interactive flow.
-
-**Autonomous away-mode dispatch, built and validated end-to-end** (2026-07-17→19, #293/#294/#298–#302 then #344–#349): standing envelopes, `horus schedule`, `horus notify`, `horus supervise`; proven by a real full-loop drill.
-
-**Usage + account truthfulness** (2026-07-17, #295–#297): usage reads the `rate_limits` Claude Code pushes to every statusline render instead of polling an endpoint that 429s; account names resolve to exactly one account or refuse.
+**Everything shipped before 2026-07-30 lives in the archive, not here** — `horus backlog list --archived` lists all 113 delivered cards with PR and SHA, and since #481 separates them from the 23 closed without shipping. Nineteen dated entries were removed 2026-08-01: if a command can produce it, prose must not cache it.
 
 **Distribution (current v0.0.79):** PyPI trusted publishing; three-OS install smoke; hosted pinned-install deployment; Apache-2.0. **Invariant: publishing a version does NOT update the hosted app — `scripts/deploy-hosted.sh` is the last step of every release.**
 
 ## Rules (load-bearing)
+
+- **The shelf holds undecided work; a bug never enters it (2026-08-01, #485/#487).** `shelved` means the owner declined to DECIDE — distinct from `retired` (decided dead) and `deferred` (queued, which failed: 26 cards screened twice, none moved). Measured on this repo: `converge` cards ship at 77%, `explore` at 16%, bugs at ~86%. A bug is a problem that already arrived, so boxing one hides a known defect where no view can surface it; the close gate `fail`s on the combination. A bug judged unreal is `retire`d with a reason.
+
+- **One status list, imported everywhere (2026-08-01, #481/#485/#486).** Three copies of the inactive-status set existed and each lied differently: the archive read-out headed 22 killed cards "Shipped", `fleet_review` kept a hand-copy, and the TUI's `{"done", "shipped"}` literal counted 69 shelved cards as open. `backlog.INACTIVE_STATUSES` is the one definition. The recurring defect shape is a display aggregating over states it does not distinguish.
+
+- **Unattended merge is unevidenced; verify-and-escalate is the posture (2026-08-01).** The away-mode drill ran two legs and answered its own readiness question: every required check passed on both while both overwrote PRD continuity, in a surface no card named — the #404 shape. `--allow-merge` was correctly withheld and the drill is retired. A worker records delivery facts; the supervisor owns canonical continuity.
+
+- **SSH into this machine is Tailscale SSH, not `sshd` (2026-08-01).** `openssh-server` is not installed and nothing listens on 22 *by design* — `tailscaled` intercepts at the TUN layer. So `ss -ltn | grep :22` finds nothing on a working setup, and dialing your own tailnet IP is a false negative because it bypasses that interception. Confirm with `journalctl -u tailscaled | grep -i ssh`. Any standard client works: Termius on iOS, native OpenSSH on Windows.
 
 - **Never make a critical function depend on one session host (owner, 2026-07-31).** tmux is the most stable option, the native terminal is the Windows path, and herdr is one host among three — adopted (11 of 26 sessions since v0.0.78) but not a foundation. A capability that only works under herdr is not delivered. This caps how far host-native adoption can go: read from a host opportunistically, never require it.
 
