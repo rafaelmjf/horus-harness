@@ -887,21 +887,17 @@ def test_backlog_refine_projections_match_the_bumped_source():
         assert f"horus-skill-version: {version}" in text, target
 
 
-def test_wildcard_copies_stay_byte_identical():
-    """`wildcard` has no generator yet, so both copies are hand-edited.
-
-    Every other bundled skill is projected from `skills.SKILLS`, which makes drift
-    between the two agent roots impossible. Until `bundle-test-phase-skills` wires
-    this one into the generator, nothing but a copy step keeps them in sync — and a
-    reviewer noticing a missing `cp` is not a guard. Pin it here so the divergence
-    fails a test instead of shipping two different skills to two agents.
-    """
-    claude = Path(".claude/skills/wildcard/SKILL.md").read_text(encoding="utf-8")
-    agents = Path(".agents/skills/wildcard/SKILL.md").read_text(encoding="utf-8")
-    assert claude == agents
-    # The version marker is how install/upgrade decides a refresh is due; a text
-    # edit that forgets to bump it ships silently.
-    assert "<!-- horus-skill-version: 5 -->" in claude
+# `test_wildcard_copies_stay_byte_identical` lived here until 2026-08-01. It was a
+# hand-written stand-in for the generator, pinning the two projections against each
+# other and hardcoding the version marker, and its own docstring scoped it "until
+# `bundle-test-phase-skills` wires this one into the generator". That card shipped,
+# so both of its assertions are now covered generically and for every skill:
+# `test_every_bundled_skill_projection_matches_its_source` compares each root to
+# `skills.SKILLS` (a stronger claim than the two roots matching each other, which
+# two identically-stale copies also satisfy), and
+# `test_bundled_skills_have_version_markers` checks the marker against the declared
+# version instead of a literal. Keeping it would have meant editing a hardcoded
+# version on every wildcard revision — the exact manual step registering it removed.
 
 
 def test_wildcard_does_not_source_ideas_from_the_backlog():

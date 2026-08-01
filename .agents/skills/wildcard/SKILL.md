@@ -18,7 +18,7 @@ description: >-
   request, for ideas the owner picks).
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # wildcard — autonomous divergence → ranked, buildable vision-advancing moves
 
@@ -334,3 +334,13 @@ propose the declaration itself.**
   non-emittable kinds with a routed line for genuine owner-gated items; (d) adds
   `Choices already made` to the scope block; and (e) declines a staleness threshold on the
   owner's call that staleness is subjective and better disclosed than enforced.
+## v2 six-lane projects (fallback)
+
+No `.horus/PRD.md`, so there is no facet table to walk. The grounding is
+unchanged in kind, only in source: `project.md`'s vision prose stands in for the
+facet definitions of done, and the gap is read against the delivered code the
+same way. `roadmap.md` becomes the duplication check that the backlog performs on
+a v3 project — read to avoid re-proposing what is already queued, never as a
+source of ideas. Proposals are emitted as candidate `roadmap.md` entries. The
+self-sufficiency bar, the ranking, the non-emittable kinds and the
+strictly-additive boundary all hold exactly as written.

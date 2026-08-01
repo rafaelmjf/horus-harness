@@ -135,19 +135,40 @@ def test_product_audit_staleness_computation(tmp_path):
     prd.write_text("---\nstatus: active\n---\n# P\n", encoding="utf-8")
     assert product_audit.advisory_line(tmp_path, installed="0.0.57", today=today) is None
 
-    # Fresh stamp (<5 releases, <30 days): silent.
+    # Fresh stamp (<10 releases, <14 days): silent.
     prd.write_text("---\nlast_product_audit: 0.0.55 2026-07-10\n---\n# P\n", encoding="utf-8")
     assert product_audit.advisory_line(tmp_path, installed="0.0.57", today=today) is None
 
-    # 5 releases stale: advisory fires, never blocks.
-    prd.write_text("---\nlast_product_audit: 0.0.52 2026-07-10\n---\n# P\n", encoding="utf-8")
-    line = product_audit.advisory_line(tmp_path, installed="0.0.57", today=today)
-    assert line and "5 releases" in line and "product-audit" in line
+    # A RELEASE BURST is not staleness: 12 releases but only 6 days old, so the
+    # advisory stays silent. This is the case that made it nag repeatedly inside
+    # four days when releases were the only clock (15 shipped in that window).
+    prd.write_text("---\nlast_product_audit: 0.0.45 2026-07-10\n---\n# P\n", encoding="utf-8")
+    assert product_audit.advisory_line(tmp_path, installed="0.0.57", today=today) is None
 
-    # 30 days stale on the same version: advisory fires.
+    # An IDLE STRETCH is not staleness either: 45 days old but nothing shipped,
+    # so there is no new product to audit and the advisory stays silent.
     prd.write_text("---\nlast_product_audit: 0.0.57 2026-06-01\n---\n# P\n", encoding="utf-8")
+    assert product_audit.advisory_line(tmp_path, installed="0.0.57", today=today) is None
+
+    # BOTH clocks passed (12 releases AND 45 days): advisory fires, never blocks.
+    prd.write_text("---\nlast_product_audit: 0.0.45 2026-06-01\n---\n# P\n", encoding="utf-8")
     line = product_audit.advisory_line(tmp_path, installed="0.0.57", today=today)
-    assert line and "45 days" in line
+    assert line and "12 releases" in line and "45 days" in line and "product-audit" in line
+
+    # Exactly on both thresholds (10 releases, 14 days) still fires — the
+    # comparison is `<`, so the boundary is inclusive.
+    prd.write_text("---\nlast_product_audit: 0.0.47 2026-07-02\n---\n# P\n", encoding="utf-8")
+    line = product_audit.advisory_line(tmp_path, installed="0.0.57", today=today)
+    assert line and "10 releases" in line and "14 days" in line
+
+    # ACROSS a minor line the release count is only a lower bound, so requiring it
+    # to clear the threshold would silence the advisory forever after the first
+    # minor bump. There the age clock alone decides: fires when old enough...
+    prd.write_text("---\nlast_product_audit: 0.0.73 2026-07-01\n---\n# P\n", encoding="utf-8")
+    assert product_audit.advisory_line(tmp_path, installed="0.1.5", today=today)
+    # ...and stays silent when it is not, so the fallback is not a free pass.
+    prd.write_text("---\nlast_product_audit: 0.0.73 2026-07-14\n---\n# P\n", encoding="utf-8")
+    assert product_audit.advisory_line(tmp_path, installed="0.1.5", today=today) is None
 
     # Unreadable stamp: advisory, still non-blocking.
     prd.write_text("---\nlast_product_audit: whenever\n---\n# P\n", encoding="utf-8")
