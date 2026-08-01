@@ -697,7 +697,8 @@ def test_attach_and_stop_use_horus_generated_tmux_name(tmp_path, monkeypatch):
         ["tmux", "kill-session", "-t", "horus-123456781234"],
     ]
     stopped = Registry.default().get(sid)
-    assert stopped.status == "failed" and stopped.termination_reason == "stopped"
+    # `stopped`, not `failed`: the owner ending a session is not a failure.
+    assert stopped.status == "stopped" and stopped.termination_reason == "stopped"
 
 
 def _fake_list_sessions(rows):
@@ -790,7 +791,10 @@ def test_reap_orphans_kills_provably_orphaned_session(tmp_path, monkeypatch):
     assert terminal_sessions.reap_orphans() == ["horus-abc123456789"]
     assert calls == ["horus-abc123456789"]
     reaped = Registry.default().get(sid)
-    assert reaped.status == "failed" and reaped.termination_reason == "orphan-reaped"
+    # `orphaned`, not `failed`. That status was already in TERMINAL and nothing ever
+    # wrote it — `companion` and the dashboard only read it, and the live registry
+    # held zero such rows — so reaping fell into `failed` beside real failures.
+    assert reaped.status == "orphaned" and reaped.termination_reason == "orphan-reaped"
 
 
 def test_reap_orphans_never_touches_a_session_with_no_registry_record(tmp_path, monkeypatch):
@@ -832,7 +836,10 @@ def test_reap_orphans_kills_a_running_record_whose_tracked_pid_is_dead(tmp_path,
     assert terminal_sessions.reap_orphans() == ["horus-abc123456789"]
     assert calls == ["horus-abc123456789"]
     reaped = Registry.default().get(sid)
-    assert reaped.status == "failed" and reaped.termination_reason == "orphan-reaped"
+    # `orphaned`, not `failed`. That status was already in TERMINAL and nothing ever
+    # wrote it — `companion` and the dashboard only read it, and the live registry
+    # held zero such rows — so reaping fell into `failed` beside real failures.
+    assert reaped.status == "orphaned" and reaped.termination_reason == "orphan-reaped"
 
 
 def test_cmd_reap_reports_what_it_killed(monkeypatch, capsys):
@@ -2696,3 +2703,56 @@ def test_a_restore_that_cannot_start_returns_a_message_instead_of_crashing_the_t
     assert error is not None and "host went away mid-restore" in error
     # Still restorable: a failure must not consume its own precondition.
     assert terminal_sessions.is_restorable(store.get(record.session_id)) is True
+
+
+def test_stopping_a_session_is_not_recorded_as_a_failure(tmp_path, monkeypatch):
+    """The owner closing a session must not land in the failure bucket.
+
+    `registry.TERMINAL` had no word for a deliberate close, so `stop_session`
+    recorded the intent in `termination_reason="stopped"` and then fell back to
+    `failed` for the status. On this machine that made 73 of 246 rows — 88% of
+    every `failed` row ever written — the owner closing normally, rendered red on
+    the surface they check daily.
+    """
+    from horus import registry
+
+    assert registry.STOPPED in registry.TERMINAL
+    # Terminal in the vocabulary, so reconcile skips it and prune reclaims it —
+    # membership is tested in three places and a miss there loops the reaper.
+    assert registry.STOPPED != "failed"
+
+
+def test_is_deliberate_close_reads_the_pair_so_old_rows_need_no_backfill():
+    """Historical rows say `failed`; only the reason distinguishes them.
+
+    Every row `stop_session` ever wrote carries `termination_reason="stopped"`,
+    and nothing else sets it, so reading the pair makes pre-`STOPPED` rows correct
+    without rewriting any data.
+    """
+    from horus import registry
+
+    assert registry.is_deliberate_close("stopped", "stopped")      # written today
+    assert registry.is_deliberate_close("failed", "stopped")       # written before
+    assert not registry.is_deliberate_close("failed", "natural")   # a real failure
+    assert not registry.is_deliberate_close("exited", "natural")   # a clean exit
+    assert not registry.is_deliberate_close(None, None)
+
+
+def test_nonclean_statuses_match_registry():
+    """`delivery` cannot import `registry` (registry imports delivery), so the
+    `stopped` literal is duplicated there. Pin it, or the receipt silently stops
+    covering deliberate closes the moment the name changes."""
+    from horus import delivery, registry
+
+    assert registry.STOPPED in delivery.NONCLEAN_STATUSES
+    assert "failed" in delivery.NONCLEAN_STATUSES  # a real failure still qualifies
+
+
+def test_stopped_renders_neutrally_not_as_a_failure():
+    """The dashboard mapped `failed` to health-fail, which is why closed sessions
+    showed red. A deliberate close gets the same muted treatment as a clean exit."""
+    from horus import dashboard, registry
+
+    assert dashboard._SESSION_STATUS_CLASS[registry.STOPPED] == "muted"
+    assert dashboard._SESSION_STATUS_CLASS["exited"] == "muted"
+    assert dashboard._SESSION_STATUS_CLASS["failed"] == "health-fail"

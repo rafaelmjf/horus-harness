@@ -26,7 +26,28 @@ from horus.config import config_dir
 from horus import datums, delivery, runlog
 
 # Terminal statuses never get liveness-reconciled.
-TERMINAL = frozenset({"exited", "failed", "orphaned", "stale"})
+#
+# `stopped` is the owner ending a session deliberately. It exists because the
+# vocabulary had no word for it: `stop_session` recorded the intent in
+# `termination_reason="stopped"` and then had nowhere to put the status except
+# `failed`, so 73 of 246 rows on this machine — 88% of every `failed` row ever
+# written — were the owner closing normally. The cockpit rendered them red.
+STOPPED = "stopped"
+TERMINAL = frozenset({"exited", "failed", "orphaned", "stale", STOPPED})
+
+
+def is_deliberate_close(status: str | None, termination_reason: str | None) -> bool:
+    """Whether this row is the owner ending the session, not a failure.
+
+    Reads the pair rather than the status alone so historical rows are correct
+    without a backfill: every row `stop_session` ever wrote carries
+    `termination_reason="stopped"`, and only that path sets it. A surface asking
+    this question gets the same answer for rows written before and after
+    `STOPPED` existed.
+    """
+    if status == STOPPED:
+        return True
+    return status == "failed" and termination_reason == STOPPED
 
 _RESULT_RE = re.compile(r"^(?P<status>exited|failed) — session (?P<session_id>\S+)", re.MULTILINE)
 
