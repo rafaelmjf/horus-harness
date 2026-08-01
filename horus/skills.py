@@ -2216,7 +2216,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -2226,90 +2226,29 @@ alternative roadmaps the owner chooses between. The single most important rule:
 convergence decision, and pre-merging it destroys exactly the choice this skill
 exists to surface.
 
+**The worked example of a good run is
+`.horus/research/2026-07-17-roadmap-branches-convergence-test.md`** (this repo).
+Read it before writing. It is the shape to reproduce: a flowing position read-out,
+four real branches over eight facets, and push-back that names cards.
+
 ## Where BRANCHES come from — never the backlog
 
-A branch is a DIRECTION, and directions do not come from the card list. The backlog
-is read for exactly one purpose: to disposition it against the branches once they
-exist (section 6). It is never the material branches are built from.
+A branch is a DIRECTION, and directions do not come from the card list. Build them
+from:
 
-This is the failure this version exists for. v4 already warned that "merely ordering
-the inherited backlog is this skill's known failure mode" — and it happened anyway,
-because section 6 requires every open card to land in a branch or be pushed back,
-which creates gravity pulling branches into card containers. The 2026-07-31 run built
-all four branches from facets that already had open cards; the owner rejected the
-tree, and the direction they actually wanted (customising the session host to fit
-daily use) was structurally invisible because it had almost no cards. Their words:
-*"Pathfinder is meant to explore new ideas and audit if we are going in the right
-direction, not a way to refine our backlog. If I want to reorganize existing work I'd
-go directly to backlog-refine."* Same defect as `wildcard` v1-v4, one skill over.
+1. **Facet definition-of-done vs delivered code** — what the facet promises against
+   what exists. Never stale, needs no external evidence, richest source.
+2. **The owner's real friction** — what is slow, manual, or repeated by hand in
+   recent actual use. A direction here often has ZERO cards; that means it was
+   invisible to the backlog, not that it is unimportant.
+3. **The audit and market receipts** — especially adopt/compose verdicts and
+   anything the evidence contradicts.
+4. **The Vision's out-of-scope list** — hypotheses, re-testable against fresh usage.
 
-### The shape: facet branches first, then exploration branches
-
-**The Vision's facet table is the SPINE of the tree, not one input among several.**
-Walk it, and for each facet where there is something real to say, produce ONE branch
-proposing how to move *that* facet forward. Then add the exploration branches — the
-alternatives with no facet yet — on top. That is the structure the first successful
-run used (`2026-07-17-pathfinder-branch-tree.md`), and it is what produced the X1/X2/X3
-vision-branch umbrellas that still organise this project:
-
-```
-├── A. "One state, any agent"      → Continuity core (rescoped)   [primary]
-├── B. "The loop earns its keep"   → PO lifecycle                 [secondary]
-├── C. "Dispatch you can trust"    → Delegation calib. (rescoped) [reduced to 2 items]
-├── D. "Cockpit polish"            → Dashboard                    [filler]
-├── X1. "Fleet knowledge plane"    → speculative, no facet yet    [strongest new thought]
-└── X2. "Cross-agent deliberation" → speculative, no facet yet    [park]
-```
-
-Both failure modes are departures from that shape, in opposite directions. The
-2026-07-31 v4 run grouped BACKLOG CARDS under facet headings and produced grooming.
-The v5 re-run dropped the facet spine entirely and produced only exploration
-directions — the owner's verdict: *"before I was just getting backlog rework, now it
-seems I will get just explorative branches."* **Neither is the tree.** The facet
-branches are the body; the exploration branches are the alternatives.
-
-**Advancing a facet includes SHRINKING it.** A facet branch may propose rescoping a
-facet, retiring an unused feature, or reducing its scope to what is proven — the
-original tree carried two branches marked `(rescoped)` and one whose convergence
-criterion was that *"a pass kills or rescopes something real"*. Name such items as
-**defer/retire candidates routed to the convergence pass**; the branch proposes, the
-convergence session decides. "Move this facet forward" is not a synonym for "add work
-to this facet".
-
-### Where the CONTENT of a branch comes from — never the backlog
-
-Having chosen a facet, the items inside its branch come from:
-
-1. **Facet definition-of-done vs delivered code** — read what the facet promises
-   against what exists. Never stale, needs no external evidence, richest source.
-2. **The owner's real friction** — what is slow, manual, repeated by hand, or annoying
-   in recent actual use. A direction here often has ZERO cards; that is a signal it
-   was invisible to the backlog, not that it is unimportant.
-3. **The audit's and market receipt's findings** — especially adopt/compose verdicts
-   and anything the evidence contradicts.
-4. **The Vision's out-of-scope list and boundaries** — hypotheses, re-testable
-   against fresh usage.
-
-**A branch whose roadmap is mostly existing cards is a grooming pass wearing a
-branch's clothes.** If every branch reads that way, say so plainly and route the owner
-to `backlog-refine` instead of shipping the tree.
-
-## The legibility bar — problem and solution before mechanism
-
-The owner is choosing a DIRECTION, not reviewing an implementation. Every branch and
-every speculative candidate therefore opens with **the problem** and **the proposed
-solution** in plain terms, before any thesis, protocol, module or command appears.
-
-The test: *could a reader who has never opened this codebase say what hurts today and
-what would be different afterwards?* If not, the branch is unreadable as a choice
-however precise its mechanism is.
-
-This is a real failure, not a style note. The 2026-07-31 v5 re-run was rejected on
-exactly this: *"I have very little info of what is proposed, we need a better
-description of the problem it is trying to solve and the proposed solution."* The
-branch depth requirements below are written for `scope-cards`, which needs mechanism to
-populate a card — but mechanism is the WRONG level for the pick gate, and depth for the
-downstream consumer had crowded out legibility for the decider.
+The backlog is read for exactly one purpose: to disposition it against the branches
+once they exist (section 6). **A branch whose roadmap is mostly existing cards is a
+grooming pass wearing a branch's clothes**; if every branch reads that way, say so
+and route the owner to `backlog-refine` instead of shipping the tree.
 
 ## Inputs (gather, do not re-derive)
 
@@ -2322,98 +2261,93 @@ downstream consumer had crowded out legibility for the decider.
 - **The market-scan receipt** (`.horus/research/`) — the outward evidence. If none
   exists, say the tree is inward-only and offer to run `market-scan` first; do not
   quietly substitute your own untested market beliefs.
-- **Prior branch-tree receipts** (earlier trees under `.horus/research/`) — a
-  re-baseline consumes its predecessors: carry forward unresolved branches,
-  unscoped imports, and owner verdicts recorded there, re-justified against the
-  CURRENT intent — never blindly inherited, never silently dropped. (Calibration
-  2026-07-17: an owner rescope lived only in a prior receipt and a fresh run
-  missed it entirely.)
+- **Prior branch-tree receipts** — a re-baseline consumes its predecessors: carry
+  forward unresolved branches, unscoped imports, and owner verdicts recorded there,
+  re-justified against the CURRENT intent. Never blindly inherited, never silently
+  dropped, and never re-derived as if fresh.
 
 ## The deliverable — one dated receipt, fixed template
 
 Write `.horus/research/<YYYY-MM-DD>-roadmap-branches-<slug>.md` with exactly these
 sections, then STOP for the owner to pick:
 
-1. **Where we are.** When a fresh product-audit receipt exists, CITE its
-   standings table and add ONLY what the tree needs on top: the per-facet
-   life-stage judgment — converged (DoD met) / built-but-unproven / active
-   frontier / steady-state — and an honest one-line overall position. Do not
-   restate facet detail the audit already carries (owner calibration
-   2026-07-20: sections 1–2 read as a repeat of the audit). Only when no
-   audit receipt exists do you build the narrative from scratch.
+1. **Where we are.** **Narrative prose, walking every facet**, each with a
+   life-stage judgment — converged (DoD met) / built-but-unproven / active frontier
+   / steady-state — and an honest one-line overall position at the end. **Not
+   bullets, not a table; a fresh reader must understand the project's situation
+   without the conversation.** This section is where full facet coverage lives, and
+   it is why the tree itself does not need a branch per facet. Cite a fresh
+   product-audit for the underlying evidence rather than re-deriving its numbers,
+   but write the position in your own prose — a citation is not a read-out.
 2. **Where the market is.** Distilled FROM the receipt (cite it): the landscape in
    shells, then ONE verdict, then the risks. **State each fact exactly once** — if
-   a point appears in two sections, delete one; if the scan receipt already
-   argues it, cite instead of restating.
-3. **The tree.** A small ASCII tree: root = the position in two lines, then the
-   **facet branches first, in facet-table order**, then the speculative ones below
-   them. Every child names its facet target — or `speculative, no facet yet` — plus a
-   one-word posture tag (primary/secondary/filler/park is the *recommendation*, not a
-   decision). A tree with no facet branches, or with only facet branches, is the wrong
-   shape; see "The shape" above.
+   a point appears in two sections, delete one.
+3. **The tree.** A small ASCII tree: root = the position in two lines, one child per
+   branch (speculative ones last), each naming its facet target — or `no facet yet`
+   — plus a one-word posture tag (primary/secondary/filler/park is the
+   *recommendation*, not a decision).
+   **Produce a branch only where there is a real direction.** Branches carry a facet
+   target; facets do not generate branches. Fewer branches than facets is normal and
+   correct: a converged or steady-state facet needs no branch (say so in section 1),
+   and two facets sharing one direction share one branch. Four branches over eight
+   facets is a good tree; eight branches padded to cover the table is not.
 4. **The branches.** For EACH branch:
-   - **The problem** — REQUIRED, and written FIRST. What actually goes wrong today,
-     described as the owner experiences it, with the concrete observation that proves
-     it. No mechanism, no module names, no jargon. "You open the cockpit and 36 rows
-     say FAILED in red; those were you closing sessions normally" — not "the registry
-     derives status from an incomplete terminal vocabulary".
-   - **The proposed solution** — REQUIRED, second. What is DIFFERENT afterwards, again
-     as the owner would experience it, not how it is built. "Closed sessions look
-     closed, and each running one shows what it is doing right now."
-   - **Thesis** — why this direction, argued through the pinned intent.
+   - **Thesis** — why this direction, argued through the pinned intent. **Open it in
+     plain terms**: what actually goes wrong today as the owner experiences it, and
+     what is different afterwards, before any module, protocol or command appears.
+     A reader who has never opened the codebase must be able to say what hurts and
+     what would change. Mechanism belongs in the roadmap items below, not here.
    - **Market position** — the required line: "*this exists already but misses X;
      you already have Y but still miss Z; therefore these items*". Market evidence
      appears INSIDE every branch, not only in section 2.
-   - **Numbered roadmap** — ordered items mixing existing cards and new proposals.
-     Every item carries enough depth that `scope-cards` can populate a card without
-     new thinking: why, the concrete how (a protocol, a first step), suspected weak
+   - **Numbered roadmap** — ordered items mixing existing cards and new proposals,
+     each naming whether it is an existing card (with its readiness) or new. Every
+     item carries enough depth that `scope-cards` can populate a card without new
+     thinking: why, the concrete how (a protocol, a first step), suspected weak
      points, and non-goals. A second-order item (work that depends on findings that
      do not exist yet) is named as such: "findings become their own cards".
    - **Convergence criterion** — when is this branch done, plus a rough cost.
    - **Implied Vision edits** — the facet DIFF this branch entails:
      add / rename / retire / promote-proven-exploration against a NAMED existing
      facet, with draft definition-of-done text for adds/rescopes. Never a
-     wholesale table rewrite.
+     wholesale table rewrite. **Advancing a facet includes shrinking it** — a branch
+     may propose rescoping, retiring an unused feature, or reducing scope to what is
+     proven; name these as defer/retire candidates routed to the convergence pass,
+     which decides them. This skill never does.
 5. **Speculative branches / wildcards (1-2, more when the owner asks).**
    Directions with NO current facet, derived from position + market + intent:
    the gap it names, the idea, the cheapest PoC, why it fits the intent, the
-   risk — and, as prominently as the promise, the EXPLICIT converge/drop
-   criterion ("converges if …; dropped if …", where dying cheap is a valid
-   success). These are the diverge half the owner explicitly wants visible
-   (calibration 2026-07-20: a proposal set without wildcards was flagged
-   incomplete). The tree is incomplete without at least one, and at least one
-   candidate must RE-TEST the Vision's out-of-scope list against fresh usage
-   evidence — an out-of-scope line is a hypothesis too. (Calibration: both
-   2026-07-17 runs missed the owner's strongest live direction, scheduled
-   autonomous dispatch, because it sat behind an out-of-scope declaration
-   neither run questioned.)
+   risk — and, as prominently as the promise, the EXPLICIT converge/drop criterion
+   ("converges if …; dropped if …", where dying cheap is a valid success). The tree
+   is incomplete without at least one, and **at least one candidate must RE-TEST the
+   Vision's out-of-scope list** — an out-of-scope line is a hypothesis too. When a
+   candidate's drop criterion is a single cheap read-only check, RUN IT and report
+   the answer rather than proposing it.
 6. **Recommendation, held loosely.** Primary / secondary / filler / park across the
-   branches, one paragraph of reasoning. The owner reorders freely.
+   branches, one paragraph of reasoning, then the existing-card push-backs
+   summarized — each named card with its disposition and reason. The owner reorders
+   freely.
 
-Format rules (owner calibration 2026-07-20): no-context-reader prose;
-consolidated proper tables for enumerable material (the backlog-disposition
-section is a table with existing cards grouped by disposition, every card
-named — nothing inherited silently); in an interactive session paste the
+Format rules: no-context-reader prose; consolidated tables only for genuinely
+enumerable material (the backlog disposition); in an interactive session paste the
 receipt content into the terminal; end with the owner pick gate PLUS a
-dive-deeper-into-one-named-topic-or-proceed offer. Owner metaphors and
-analogies are examples to test against, never canon to echo — reuse one only
-where the load genuinely fits, and say so if it stops fitting.
+dive-deeper-into-one-named-topic-or-proceed offer. Owner metaphors are examples to
+test against, never canon to echo. **Length is not a proxy for depth** — the worked
+example is ~330 lines and says more than twice that would.
 
 ## Three disciplines that make the tree trustworthy
 
 - **Disposition the backlog AFTER the branches exist, never before.** Every open
   card either earns its place inside an already-formed branch or gets explicit
-  push-back (demote / defer / retire candidate, argued through the intent). Build the
-  branches first, from the sources above; only then walk the cards. Doing it the other
-  way round is how this skill produces grooming — see "Where BRANCHES come from".
+  push-back (demote / defer / retire candidate, argued through the intent). Doing
+  this first is how this skill produces grooming instead of directions.
 - **Claims discipline.** Every "X is missing / weak / better" names its
   comparison baseline: what exists today, and why it is insufficient for the
-  intent. No claim without its baseline.
-- **Every candidate exits with a disposition.** Anything considered — market-
-  receipt candidate items, prior-tree branches, existing cards — either lands in
-  a branch or is dropped WITH the stated reason. Silent omission is the failure
-  mode (calibration 2026-07-17: one run silently omitted a receipt candidate the
-  sibling run had dropped with a reason).
+  intent. No claim without its baseline. Verify a card still exists and a number is
+  still true before repeating it from a prior receipt.
+- **Every candidate exits with a disposition.** Anything considered — market-receipt
+  candidates, prior-tree branches, existing cards — either lands in a branch or is
+  dropped WITH the stated reason. Silent omission is the failure mode.
 
 ## Onboarding fork
 
@@ -2843,7 +2777,7 @@ what had landed.
 | **1 — Where are we?** | `horus consolidate` (read-out) | **Builds the pinned position brief, which every later step treats as a hard constraint.** Reads `## Vision` — or notes the facet table's absence, which switches the chain into its onboarding fork — plus the active backlog cards with their `vision_facet` and `phase` stamps, `## Shipped`, and the deterministic convergence read-out that maps cards onto facets. The brief states three things: what has shipped, what the Vision claims and for whom, and where facet coverage is open or thin. Its job is to stop later steps drifting into research about a project this is not. Costs nothing — no web, no fan-out. Gate: the owner confirms the brief before the chain continues. |
 | **2 — What actually earned its keep?** | `product-audit` (or a shipped-vs-used pass with the owner) | **Gathers the inward half of the evidence base.** Drift is an inward symptom, so this runs before looking outward. Three evidence lines: which surfaces the owner *demonstrably* used since the last audit (from `.horus/` artifacts, git history, machine-local state, and grepping the project's own reference surfaces — never telemetry); what the declared upstream sources shipped that overlaps something this project delivers; and which rituals were skipped, rubber-stamped or nagged past, because a step everyone bypasses is evidence against the step. **It is analysis only — it never issues demote, defer or retire verdicts**, which belong to the convergence session; suggestions are routed to the step that owns each decision. Produces a dated receipt under `.horus/audits/`. Costs nothing. Gate: stop with the owner when the audit *changes* the brief; say so and proceed when it merely confirms it. |
 | **3 — Where is the world?** | `market-scan` | **Gathers the outward half, read through the pinned intent.** Under `deepen-own-use` the yardstick is build / adopt / compose **per capability** — is something external more valuable than maintaining this ourselves — and a market-saturation verdict is explicitly the *wrong* instrument. Under `broaden-adoption` it is the classic prior-art and differentiation read. Produces a JTBD hypothesis (labelled a hypothesis, never a finding — a skill cannot run interviews), a competitive teardown of 3-6 named products with a fetched URL behind every row, a PR-FAQ vision paragraph, and a one-line market-size sanity check that is hard-capped. **This is the only step that spends web budget**, it runs a shallow sweep by default, and it offers more depth rather than escalating on its own. A fresh, still-valid receipt may be reused instead. Produces a dated receipt under `.horus/research/`. Gate: the owner reacts to the evidence. |
-| **4 — Which directions could we take?** | `roadmap-branches` | **Produces the divergence tree — multiple alternative roadmaps, never one merged plan**, because merging is the owner's convergence decision and pre-merging destroys the choice this step exists to surface. Branches are DIRECTIONS, drawn from the gap between a facet's definition of done and the delivered code, from the owner's real friction (a direction with zero cards is a signal it was invisible to the backlog, not that it is unimportant), from the audit and market receipts, and from the Vision's out-of-scope lines treated as re-testable hypotheses. **The backlog is never the material branches are built from** — it is dispositioned against the branches once they exist, every card either earning a place or getting argued push-back. Each branch opens with the problem and the proposed solution in plain terms before any mechanism, then carries a market-position line, a numbered roadmap deep enough for `scope-cards` to work from, a convergence criterion, and the facet diff it implies. Includes 1-2 speculative branches, at least one re-testing an out-of-scope declaration. Produces a dated receipt under `.horus/research/`. Gate: **the owner picks**, amends, or rejects the tree. |
+| **4 — Which directions could we take?** | `roadmap-branches` | **Produces the divergence tree — multiple alternative roadmaps, never one merged plan**, because merging is the owner's convergence decision and pre-merging destroys the choice this step exists to surface. Branches are DIRECTIONS, drawn from the gap between a facet's definition of done and the delivered code, from the owner's real friction (a direction with zero cards is a signal it was invisible to the backlog, not that it is unimportant), from the audit and market receipts, and from the Vision's out-of-scope lines treated as re-testable hypotheses. **The backlog is never the material branches are built from** — it is dispositioned against the branches once they exist, every card either earning a place or getting argued push-back. Full facet coverage lives in the receipt's narrative position read-out, **not in the branch list**: a branch is produced only where there is a real direction, so fewer branches than facets is normal and a converged facet needs none. Each branch's thesis opens in plain terms — what goes wrong today, what is different afterwards — before any mechanism, then carries a market-position line, a numbered roadmap deep enough for `scope-cards` to work from, a convergence criterion, and the facet diff it implies (which may propose shrinking a facet). Includes 1-2 speculative branches, at least one re-testing an out-of-scope declaration. Produces a dated receipt under `.horus/research/`. Gate: **the owner picks**, amends, or rejects the tree. |
 | **5 — What high-level work does the chosen branch imply?** | `scope-cards` | **Shapes the picked branch into aligned high-level Shaping drafts** — enough context preserved that a later refinement session does not re-think the direction, but deliberately *not* execution-ready cards. Marks each draft as existing or new, carries the branch's Vision facet diff and any push-back diffs against existing cards, and requires wildcards to state their converge-or-drop criteria. Owner verdicts from step 4 that rescope or demote an existing card are written into that card's `## Reviews` here, because a verdict living only in a receipt does not bind future planning runs. Gate: the owner approves per item, and only approved drafts are written. |
 | **6 — What is genuinely ready, waiting, or still undecided?** | `backlog-refine` | **The only step that makes a card execution-ready.** Runs picture-first and interactively: a walkthrough per card — problem background, proposed solution, verdict — with decisions taken strictly one at a time. Sets final readiness and autonomy, writes the concrete execution contract, records disposition for what is not proceeding, and applies the owner-approved order. Only cards passing its single execution-ready contract come out Ready. This is also the **standalone door**: an owner who wants grooming without a direction change invokes this directly and skips the chain entirely. Gate: interactive throughout; nothing is silently rewritten. |
 | **7 — What landed, and what stays unapplied?** | pathfinder itself | **Closes the run — the step most likely to be skipped, because it produces no artifact of its own.** State what was actually written through the normal paths (approved cards, card edits, Vision diffs), and name everything the owner deferred as **explicitly not applied**, so nothing is left ambiguously half-decided. Then stop. **Convergence — trimming the fat once usage evidence has accumulated — is a SEPARATE session**, driven by the `horus consolidate` read-out, and is never chained off the end of this one. Re-run pathfinder only when a real re-baseline is needed again, not on a schedule and not because a bundle looks stale. |
@@ -3233,7 +3167,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),
     Skill("skill-audit", 2, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
     Skill("market-scan", 7, _MARKET_SCAN_SKILL),
-    Skill("roadmap-branches", 7, _ROADMAP_BRANCHES_SKILL),
+    Skill("roadmap-branches", 8, _ROADMAP_BRANCHES_SKILL),
     Skill("scope-cards", 7, _SCOPE_CARDS_SKILL),
     Skill("backlog-refine", 6, _BACKLOG_REFINE_SKILL),
     Skill("pathfinder", 10, _PATHFINDER_SKILL),

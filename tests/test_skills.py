@@ -940,22 +940,29 @@ def test_every_skill_version_matches_the_marker_in_its_own_text():
     assert mismatched == [], f"Skill.version disagrees with its own marker: {mismatched}"
 
 
-def test_roadmap_branches_requires_problem_and_solution_before_mechanism():
-    """v6: the owner picks a DIRECTION, so each branch opens with the problem and the
-    proposed solution in plain terms, before any thesis or mechanism.
+def test_roadmap_branches_thesis_opens_in_plain_terms():
+    """v8: the owner picks a DIRECTION, so every branch opens in plain terms — what
+    goes wrong today, what is different afterwards — before any mechanism.
 
-    The v5 tree was rejected for exactly this — "I have very little info of what is
-    proposed" — because the branch depth requirements are written for `scope-cards`,
-    which needs mechanism, and that had crowded out legibility for the decider.
-    Whitespace-normalized per the PRD rule on skill-prose assertions.
+    History: v6 enforced this as two REQUIRED sections ("The problem" first, "The
+    proposed solution" second) ahead of the thesis. That fixed the v5 complaint ("I
+    have very little info of what is proposed") but over-corrected: Problem, Solution
+    and Thesis then restated each other, and branches roughly doubled in length. The
+    2026-07-17 convergence-test receipt — the run the owner holds up as correct —
+    carries no such sections; its Thesis does that work in one paragraph. So v8 keeps
+    the READER TEST, which is the operative requirement, and drops the section
+    scaffolding that was only ever a proxy for it.
     """
     rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
     flat = " ".join(rb.content.split())
-    assert "The legibility bar — problem and solution before mechanism" in flat
-    assert "**The problem** — REQUIRED, and written FIRST" in flat
-    assert "**The proposed solution** — REQUIRED, second" in flat
-    # The reader test is the operative check, not the section headings.
-    assert "could a reader who has never opened this codebase say what hurts today" in flat
+    # The requirement lives on the thesis now, not in extra sections ahead of it.
+    assert "**Open it in plain terms**" in flat
+    assert "what actually goes wrong today as the owner experiences it" in flat
+    assert "before any module, protocol or command appears" in flat
+    # The reader test is the operative check, and it survives the refactor.
+    assert "must be able to say what hurts and what would change" in flat
+    # Mechanism still belongs downstream, where `scope-cards` needs it.
+    assert "Mechanism belongs in the roadmap items below, not here" in flat
 
 
 def test_pathfinder_step_table_covers_every_step_including_hand_off():
@@ -991,27 +998,61 @@ def test_pathfinder_step_table_covers_every_step_including_hand_off():
     assert "is a SEPARATE session" in plain and "never chained off the end" in plain
 
 
-def test_roadmap_branches_tree_is_facet_spine_plus_exploration():
-    """v7: the facet table is the SPINE — one branch per facet worth advancing —
-    with exploration branches layered on top, not instead.
+def test_roadmap_branches_facet_coverage_lives_in_the_readout_not_the_tree():
+    """v8: full facet coverage belongs to the narrative position read-out (section 1);
+    the tree carries a branch only where a real DIRECTION exists.
 
-    Both 2026-07-31 runs departed from this in opposite directions: v4 grouped
-    backlog cards under facet headings (grooming), v5 dropped the facet spine and
-    produced only exploration directions. Owner: "before I was just getting backlog
-    rework, now it seems I will get just explorative branches." The shape that worked
-    is the 2026-07-17 tree that produced the X1/X2/X3 umbrellas.
+    History, and the reason this test was inverted. v7 read the facet table as the
+    tree's spine and required one branch per facet. That was an over-correction to two
+    rejected 2026-07-31 runs, and it made the 2026-08-01 run worse: it forced eight
+    branches over eight facets, four of them filler, including a "cut the release"
+    branch that is not a direction at all. The run the owner holds up as correct
+    (`.horus/research/2026-07-17-roadmap-branches-convergence-test.md`) does the
+    opposite — it walks all eight facets in section 1's PROSE and then produces four
+    branches, one of which covers two facets while two facets get none.
+
+    Root cause of the regression: a 2026-07-20 calibration ("sections 1-2 read as a
+    repeat of the audit") turned section 1 from narrative into a citation. Facet
+    coverage lost its home, and v7 relocated it into the branch list, where it forces
+    padding. v8 puts it back.
     """
     rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
     flat = " ".join(rb.content.split()).replace("**", "")
-    assert "The Vision's facet table is the SPINE of the tree" in flat
-    assert "facet branches are the body; the exploration branches are the alternatives" in flat
-    # Shrinking a facet is a legitimate way to advance it — the original tree carried
-    # two rescoped branches — but the tree proposes, convergence decides.
-    assert "Advancing a facet includes SHRINKING it" in flat
+    # Section 1 is narrative and walks every facet — this is the load-bearing fix.
+    assert "Narrative prose, walking every facet" in flat
+    assert "Not bullets, not a table" in flat
+    assert "a fresh reader must understand the project's situation without the conversation" in flat
+    assert "This section is where full facet coverage lives" in flat
+    # A citation is not a read-out: cite the audit's evidence, write the position.
+    assert "a citation is not a read-out" in flat
+    # The tree does NOT get one branch per facet.
+    assert "Produce a branch only where there is a real direction" in flat
+    assert "Branches carry a facet target; facets do not generate branches" in flat
+    assert "Fewer branches than facets is normal and correct" in flat
+    assert "Four branches over eight facets is a good tree" in flat
+    # Shrinking a facet remains a legitimate way to advance it; tree proposes,
+    # convergence decides. (Kept from v7 — this part was right.)
+    assert "Advancing a facet includes shrinking it" in flat
     assert "defer/retire candidates routed to the convergence pass" in flat
-    assert 'not a synonym for "add work to this facet"' in flat
-    # The tree section enforces the ordering.
-    assert "facet branches first, in facet-table order" in flat
+    # Length is not depth — the guard against the bloat v7 produced.
+    assert "Length is not a proxy for depth" in flat
+
+
+def test_roadmap_branches_points_at_the_worked_example():
+    """v8: the skill names the receipt that is the shape to reproduce.
+
+    v7 cited `2026-07-17-pathfinder-branch-tree.md` as "the shape that worked". That
+    is the wrong file: it is the FIRST run and its own header records that it was
+    deliberately HELD OUT of the convergence test. The independent re-run —
+    `2026-07-17-roadmap-branches-convergence-test.md`, twice the size — is the one the
+    owner holds up as correct, and it is what the skill must point at.
+    """
+    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
+    flat = " ".join(rb.content.split())
+    assert "2026-07-17-roadmap-branches-convergence-test.md" in flat
+    assert "Read it before writing" in flat
+    # The superseded exemplar must not be cited as the shape to copy.
+    assert "2026-07-17-pathfinder-branch-tree.md" not in flat
 
 
 def test_every_bundled_skill_projection_matches_its_source():
