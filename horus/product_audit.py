@@ -2,9 +2,16 @@
 
 The PRD frontmatter stamp ``last_product_audit: <version> <YYYY-MM-DD>`` records
 when the owner last ran the bundled ``product-audit`` skill. ``horus close`` /
-``horus consolidate`` print one advisory line when that stamp is ≥5 releases or
-≥30 days old. Advisory only — no hook, no gate, never blocks; the judgment
+``horus consolidate`` print one advisory line when that stamp is ≥10 releases
+**and** ≥14 days old. Advisory only — no hook, no gate, never blocks; the judgment
 (which surfaces to demote/defer/retire) lives in the skill, not here.
+
+Both clocks must pass, because either alone is wrong in one direction: the
+advisory once fired repeatedly inside four days because releases were the only
+clock and this project shipped 15 of them in that window, while elapsed time
+alone would nag through a long idle stretch where nothing shipped to audit.
+Requiring both keeps it quiet during a release burst *and* during a quiet spell,
+which is the only state in which the reminder means anything.
 """
 
 from __future__ import annotations
@@ -17,8 +24,8 @@ from horus import frontmatter
 from horus.versioning import version_tuple
 
 STAMP_KEY = "last_product_audit"
-RELEASE_THRESHOLD = 5
-AGE_THRESHOLD_DAYS = 30
+RELEASE_THRESHOLD = 10
+AGE_THRESHOLD_DAYS = 14
 
 
 class Stamp(NamedTuple):
@@ -57,8 +64,9 @@ def releases_since(stamp_version: str, installed: str) -> int:
     major boundary: the number of patches the previous line ended on is not
     recoverable from two version strings, so ``0.0.73 → 0.1.5`` reports 1. That
     under-reports rather than over-reports, which keeps the advisory's prose
-    honest; tightening the boundary case belongs with the threshold work in
-    `audit-advisory-interval`, not here.
+    honest. Tightening the boundary case was explicitly left out of the
+    threshold work (`audit-advisory-interval`, shipped 2026-08-01) and stays
+    open until a real minor bump makes it matter.
     """
     a = version_tuple(stamp_version)
     b = version_tuple(installed)
@@ -68,6 +76,18 @@ def releases_since(stamp_version: str, installed: str) -> int:
     if b <= a:
         return 0
     return sum(max(0, y - x) for x, y in zip(a, b))
+
+
+def _same_minor_line(stamp_version: str, installed: str) -> bool:
+    """True when both versions share a ``(major, minor)`` line.
+
+    Within one line the patch counter is monotonic, so `releases_since` is exact
+    and can be compared against a threshold. Across a line it is a lower bound
+    and cannot be.
+    """
+    a = version_tuple(stamp_version)
+    b = version_tuple(installed)
+    return a[:2] == b[:2]
 
 
 def advisory_line(
@@ -96,7 +116,17 @@ def advisory_line(
     today = today or _dt.date.today()
     releases = releases_since(stamp.version, installed)
     age_days = (today - stamp.date).days
-    if releases < RELEASE_THRESHOLD and age_days < AGE_THRESHOLD_DAYS:
+    # AND, not OR: silent unless BOTH clocks have passed (see module docstring) —
+    # EXCEPT when the two versions sit on different minor lines, where
+    # `releases_since` is only a lower bound (the previous line's final patch
+    # count is not recoverable from two version strings). Requiring a lower bound
+    # to clear a threshold it structurally cannot reach would silence the advisory
+    # permanently after the first minor bump, which is the same class of bug the
+    # signed-delta cancellation once caused. There, fall back to the age clock.
+    if _same_minor_line(stamp.version, installed):
+        if releases < RELEASE_THRESHOLD or age_days < AGE_THRESHOLD_DAYS:
+            return None
+    elif age_days < AGE_THRESHOLD_DAYS:
         return None
     return (
         f"last product audit: v{stamp.version}, {releases} releases and {age_days} days ago "
