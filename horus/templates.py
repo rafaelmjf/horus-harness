@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 17
+BLOCK_VERSION = 18
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -114,6 +114,8 @@ Working discipline (every session, whether or not the work is delegated):
   check go green on the exact commit — `horus merge-watch <pr|sha>` does exactly that
   (bounded `--interval`/`--timeout`, prints each check as it resolves), so do not
   hand-roll a polling loop for it — plus one live probe of the changed surface.
+  For a long-running service/daemon, verify it reaches `active`/running **and** emits
+  its expected journal or health signal; installation or start alone is not verification.
   A confident "tests pass" in prose is not evidence, whoever wrote it.
 - **A wait must be able to fail loudly, and must be accounted for before the turn ends.**
   Never send stderr to `/dev/null` on a command whose output drives a loop condition or
