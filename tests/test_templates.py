@@ -32,6 +32,15 @@ def test_managed_block_and_infer_routine_include_vision_intent_and_audiences():
     assert "rather than distilling it from inherited docs" in templates.INFER_PROMPT_V3
 
 
+def test_managed_block_requires_service_signal_beyond_startup():
+    block = templates.shared_block("AGENTS.md")
+
+    assert "long-running service/daemon" in block
+    assert "reaches `active`/running" in block
+    assert "emits its expected journal/health signal" in block
+    assert "installation or startup alone is not" in block
+
+
 PROCESS_NOT_MEMORY = """- **Fix a process error in the process, never only in agent memory** — a private memory
   is invisible to other agents, accounts, and machines, so the correction must land in a
   skill, managed block, PRD rule, or card. Concretely: render and confirm a format or
