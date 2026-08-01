@@ -372,8 +372,8 @@ def stop_session(session_id: str, *, reg: registry.Registry | None = None) -> st
     stopped = host.stop(record)
     if stopped is not None:
         return stopped
-    store.update(record.session_id, termination_reason="stopped")
-    store.set_status(record.session_id, "failed")
+    store.update(record.session_id, termination_reason=registry.STOPPED)
+    store.set_status(record.session_id, registry.STOPPED)
     return None
 
 
@@ -552,7 +552,7 @@ def reap_orphans(
                 continue
             host.stop(record)
             store.update(record.session_id, termination_reason="orphan-reaped")
-            store.set_status(record.session_id, "failed")
+            store.set_status(record.session_id, "orphaned")
             reaped.append(name)
     return reaped
 

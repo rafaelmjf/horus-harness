@@ -1942,6 +1942,8 @@ _SESSION_STATUS_CLASS = {
     "orphaned": "health-warn",
     "stale": "health-warn",
     "exited": "muted",
+    # A deliberate close is not a failure: same neutral treatment as a clean exit.
+    registry.STOPPED: "muted",
 }
 
 

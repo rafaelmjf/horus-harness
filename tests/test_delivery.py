@@ -411,8 +411,17 @@ def test_render_receipt_empty_for_none_or_no_signal():
     assert delivery.render_receipt("stale", delivery.DeliveryReceipt(branch="x")) == ""
 
 
-def test_nonclean_statuses_are_failed_and_stale_only():
-    assert delivery.NONCLEAN_STATUSES == frozenset({"failed", "stale"})
+def test_nonclean_statuses_cover_every_end_that_may_hide_delivered_work():
+    """`exited` is a clean zero-code finish, so a receipt would reveal nothing.
+
+    `stopped` joined this set when it became a real status (2026-08-01). Choosing
+    to close a session says nothing about whether its work landed, and that is
+    exactly what the receipt answers — before `stopped` existed those rows were
+    recorded as `failed` and got one, so leaving it out would have quietly
+    dropped a signal while making the status more honest.
+    """
+    assert delivery.NONCLEAN_STATUSES == frozenset({"failed", "stale", "stopped"})
+    assert "exited" not in delivery.NONCLEAN_STATUSES
 
 
 # --- dispatch-base gating (a branch resting at base delivered nothing) ---------

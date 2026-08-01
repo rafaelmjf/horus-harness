@@ -32,7 +32,17 @@ _NO_WINDOW = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if sy
 # Statuses a delivery receipt is worth checking for — a process outcome that
 # might be hiding real delivered work. Deliberately narrow: "exited" already
 # means a clean zero-code finish, nothing to reveal.
-NONCLEAN_STATUSES = frozenset({"failed", "stale"})
+#
+# `stopped` belongs here even though the owner ended it on purpose: choosing to
+# close a session says nothing about whether its work landed, and that is exactly
+# the question the receipt answers. Before `stopped` existed these rows were
+# recorded as `failed` and got the receipt; omitting it now would quietly drop a
+# signal while making the status more honest.
+#
+# Spelled literally rather than as `registry.STOPPED`: `registry` imports this
+# module, so importing it back is circular. `test_nonclean_statuses_match_registry`
+# pins the two together so the duplicate cannot drift.
+NONCLEAN_STATUSES = frozenset({"failed", "stale", "stopped"})
 
 # Matches this repo's own closure-commit convention (`closure.commit_continuity`'s
 # default message, and every closure commit observed in git log), e.g. "Update
@@ -99,7 +109,7 @@ def classify_delivery(
         if local:
             return "blocked"
         return "no-op"
-    if status in {"failed", "stale"}:
+    if status in NONCLEAN_STATUSES:
         if remote or local:
             return "blocked"
         return "failed"
