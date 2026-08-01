@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: deferred
 readiness_reason: "Owner hold continues (2026-07-26). The 2026-07-21→2026-07-26 observation window yielded NO evidence: #386 swallowed the seeded prompt, so resume sessions received no handoff either and both modes were indistinguishable. The window genuinely starts 2026-07-26, now that #403 makes the resume path deliver."

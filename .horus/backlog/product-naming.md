@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: deferred
 readiness_reason: "A strong front-runner emerged (horus-builder, 2026-07-21 — see Candidates/Reviews). The rename itself stays deferred until first external distribution (cost unchanged); the name is effectively pre-decided pending that + a PyPI-availability check + confirming the slight identity rebroadening it implies."

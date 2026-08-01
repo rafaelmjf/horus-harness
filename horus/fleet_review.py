@@ -17,10 +17,11 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from horus import capabilities, fetchcheck, frontmatter, gitstate
+from horus import backlog, capabilities, fetchcheck, frontmatter, gitstate
 
 SCHEMA_VERSION = 1
-_INACTIVE_STATUSES = {"done", "folded-in", "retired", "shipped"}
+# One definition, imported — see the note on `backlog.INACTIVE_STATUSES`.
+_INACTIVE_STATUSES = frozenset(backlog.INACTIVE_STATUSES)
 _NO_WINDOW = (
     {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
     if sys.platform == "win32"

@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: high
 readiness: gated
 readiness_reason: "Depends on the full away-mode drill; only Ready—Eligible cards may arm. The refinement/order half of this gate is SATISFIED — `tui-backlog-refine-and-order` shipped (sparse `order:` joined `readiness_sort_key` in #425) and was removed from `depends-on` on 2026-07-28. Still correctly Gated: arming cards for unattended execution before the drill answers its readiness question is precisely what the drill exists to prevent, so #425 did not free this card."

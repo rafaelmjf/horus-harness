@@ -657,6 +657,40 @@ def test_load_archived_cards_sorts_undated_last_and_tolerates_no_archive(tmp_pat
     assert [c.name for c in backlog.load_archived_cards(tmp_path)] == ["dated", "undated"]
 
 
+def test_shelved_cards_leave_the_working_queue_but_stay_retrievable(tmp_path):
+    """Shelving is not closing, and not deleting.
+
+    `deferred` failed as the set-aside state: 26 cards carried it, all were screened
+    twice on 2026-07-28, and none moved — "we'll get to it" is a queue that never
+    drains. `shelved` says the owner declined to DECIDE, so the card leaves every
+    working view while its file and text stay exactly where they were.
+    """
+    _mk_card(tmp_path, "live")
+    _mk_card(tmp_path, "boxed", status=backlog.SHELVED_STATUS)
+
+    # Gone from the working queue...
+    assert [c.name for c in backlog.load_active_cards(tmp_path)] == ["live"]
+    # ...but still on disk, unmoved, and readable on demand.
+    assert (tmp_path / ".horus" / "backlog" / "boxed.md").is_file()
+    assert [c.name for c in backlog.load_shelved_cards(tmp_path)] == ["boxed"]
+    # And NOT in the archive: shelving is not an outcome, so it never enters the
+    # closed ledger where it would be counted as decided.
+    assert backlog.load_archived_cards(tmp_path) == []
+
+
+def test_inactive_statuses_have_exactly_one_definition(tmp_path):
+    """`fleet_review` kept a hand-copied duplicate of this list until 2026-08-01.
+
+    A second copy is how a status gets added in one place and silently ignored in
+    the other — the fleet digest would have gone on showing shelved cards as live
+    work forever, and nothing would have failed.
+    """
+    from horus import fleet_review
+
+    assert backlog.SHELVED_STATUS in backlog.INACTIVE_STATUSES
+    assert set(fleet_review._INACTIVE_STATUSES) == set(backlog.INACTIVE_STATUSES)
+
+
 def test_partition_archived_separates_delivered_from_killed(tmp_path):
     """The archive is the CLOSED ledger, not the delivery ledger.
 

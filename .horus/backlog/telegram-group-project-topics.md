@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: ready
 autonomy: attended

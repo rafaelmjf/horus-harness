@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: deferred
 readiness_reason: "DEFERRED until 2026-07-29 by owner instruction (extended 2026-07-28): implementing and verifying this requires performing a real interactive agent login, which was still not available on 2026-07-28. The card itself is fully specified and needs no further shaping — it was Ready/attended and returns straight to that state on 2026-07-29, no re-refinement needed."

@@ -61,7 +61,29 @@ REVIEW_SOURCES = ("manual", "agent")
 # In-progress for claim-overlap purposes. Cards otherwise use "open" (default)
 # and move to `backlog/archive/` when shipped (see PRD's structure contract).
 _IN_PROGRESS_STATUSES = ("claimed",)
-_INACTIVE_STATUSES = ("done", "folded-in", "retired", "shipped")
+SHELVED_STATUS = "shelved"
+
+# Every status that takes a card out of the working queue. Two kinds live here and
+# the difference is deliberate:
+#
+#   shipped / retired / folded-in / done  — CLOSED. A decision was made and the card
+#       moved to `archive/`. It is over.
+#   shelved                               — NOT closed, and NOT queued. The owner
+#       declined to decide. The card stays in `backlog/` with its text intact and
+#       comes back only when a real problem summons it.
+#
+# `shelved` exists because `deferred` did not work: 26 cards carried it, all were
+# screened twice on 2026-07-28, and none moved — "we'll get to it" is a queue that
+# never drains. Shelving makes not-deciding explicit and cheap instead of a backlog
+# entry that costs attention on every pass. The measured case for it: cards stamped
+# `phase: explore` shipped at 16% while `converge` cards shipped at 77%, so the
+# speculative pool is where work goes to accumulate, not to get done.
+#
+# This tuple is the ONE definition. `fleet_review` imported a hand-copied duplicate
+# until 2026-08-01; a second copy of a status list is how a status gets added in one
+# place and silently ignored in the other.
+INACTIVE_STATUSES = ("done", "folded-in", "retired", "shipped", SHELVED_STATUS)
+_INACTIVE_STATUSES = INACTIVE_STATUSES
 
 # `type` is a free-form-but-conventional field: one `backlog/` dir instead of a
 # separate `bugs/` folder, with visibility coming from tooling (this list + the
@@ -250,6 +272,16 @@ def load_cards(root: Path) -> list[Card]:
 def load_active_cards(root: Path) -> list[Card]:
     """Only active backlog-root cards; terminal lifecycle states stay hidden."""
     return [card for card in load_cards(root) if card.status not in _INACTIVE_STATUSES]
+
+
+def load_shelved_cards(root: Path) -> list[Card]:
+    """Shelved backlog-root cards — the box, readable on demand.
+
+    Shelved cards are deliberately invisible to every working view, so without a
+    read path they would be indistinguishable from deleted. That is the difference
+    between shelving and losing, and it is the whole reason shelving is safe.
+    """
+    return [card for card in load_cards(root) if card.status == SHELVED_STATUS]
 
 
 # The archive is the CLOSED ledger, not the delivery ledger. `ship` moves in work

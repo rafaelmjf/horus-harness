@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: deferred
 readiness_reason: "Await an onboarded content project that demonstrates a concrete override need."

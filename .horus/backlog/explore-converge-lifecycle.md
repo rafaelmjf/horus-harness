@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: deferred
 readiness_reason: "Resume when Horus has a real per-card usage signal for the remaining usage-ripeness flag. (Its former `depends-on: roadmap-convergence` was removed 2026-07-26 — that card shipped — but this stays DEFERRED because the usage-signal gate above is a different, unmet one; librarian receipt L2.)"

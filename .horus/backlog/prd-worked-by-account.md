@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: shaping
 readiness_reason: "The launch-defaulting use is well-motivated, but the field's second consumer (fleet alias discovery) is worth less than it first appeared, and the auto-stamp point needs picking. Shape before building."

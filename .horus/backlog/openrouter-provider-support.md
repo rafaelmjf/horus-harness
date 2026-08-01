@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: deferred
 readiness_reason: "Park until the X3 kit ships and a real provider-roster need appears."

@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: high
 readiness: deferred
 readiness_reason: "Defer the whole X5 branch until an owner branch review decides preserve, narrow, split, or drop."
