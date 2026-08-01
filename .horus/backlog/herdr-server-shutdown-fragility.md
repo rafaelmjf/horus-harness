@@ -1,6 +1,5 @@
 ---
-status: shelved
-shelved_on: 2026-08-01
+status: open
 priority: low
 created: 2026-07-30
 created_by: agent
