@@ -252,8 +252,32 @@ def load_active_cards(root: Path) -> list[Card]:
     return [card for card in load_cards(root) if card.status not in _INACTIVE_STATUSES]
 
 
+# The archive is the CLOSED ledger, not the delivery ledger. `ship` moves in work
+# that merged; a convergence pass moves in work that was killed. Both are terminal
+# and both belong here, but counting them together overstates delivery: on this
+# repo 22 of 132 archived cards had never shipped (19 retired, 2 folded-in, 1 done)
+# while the read-out headed all 132 with "Shipped". That miscount is load-bearing —
+# it misled a planning session on 2026-08-01 into recording a retired card as
+# delivered, because presence in the archive reads as delivery.
+DELIVERED_STATUSES = ("shipped",)
+
+
+def partition_archived(cards: list[Card]) -> tuple[list[Card], list[Card]]:
+    """Split archived cards into (delivered, closed-without-shipping).
+
+    Delivery is keyed on `status`, not on the presence of `shipped_pr`/`shipped_sha`:
+    a card that merged always carries the shipped status (`validate` enforces the
+    converse at `check_cards`), while a retired card may legitimately carry neither.
+    """
+    delivered = [c for c in cards if c.status in DELIVERED_STATUSES]
+    closed = [c for c in cards if c.status not in DELIVERED_STATUSES]
+    return delivered, closed
+
+
 def load_archived_cards(root: Path) -> list[Card]:
-    """Shipped cards from `backlog/archive/`, newest delivery first.
+    """Every closed card in `backlog/archive/` — delivered or killed — newest first.
+
+    Use `partition_archived` before counting: the archive is not a delivery ledger.
 
     The archive was write-only: `ship` moved cards in (see `ship_card`) and no
     read path existed, so the delivery record — which carries `shipped_pr` and
