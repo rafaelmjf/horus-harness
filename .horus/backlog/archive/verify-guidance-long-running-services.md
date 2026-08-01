@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: low
 readiness: deferred
 readiness_reason: "Reserved as `autotest-e2e-away-mode-drill` payload. Decision-complete and implementable — that is exactly why it must stay undone: the drill needs a real always-green leg, and implementing it early destroys the experiment (the drill card records that a session nearly took it). TRIGGER: released to Ready—eligible when the drill is armed and this leg is either used or dropped, or when the drill is abandoned. Deferred, not Gated: nothing is missing, it is deliberately inactive until that trigger."
@@ -13,6 +13,8 @@ type: feature
 parallel: safe
 created_by: agent
 surface: shared verification guidance — the managed-block "reproduce the gate" discipline (CLAUDE.md/AGENTS.md) and/or the bundled verify/horus-execution skill
+shipped_pr: 483
+shipped_sha: 146d20981ef724ac503c150337af7438ed2bab0c
 ---
 
 # verify-guidance-long-running-services — "active + emits its signal", not "it installed"

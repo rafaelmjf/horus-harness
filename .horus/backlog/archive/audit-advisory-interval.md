@@ -1,15 +1,17 @@
 ---
-status: open
+status: shipped
 priority: low
 created: 2026-07-20
 created_by: agent
 last_refined: 2026-07-28
 refine_passes: 2
-readiness: deferred
-readiness_reason: "RESERVED as `autotest-e2e-away-mode-drill` payload — leg 2 of 3 (owner, 2026-07-28). Decision-complete: the interval formula is confirmed below as 10 releases AND 14 days, so this is deliberately inactive rather than unshaped. TRIGGER: released to Ready—eligible when the drill is armed and this leg is either used or dropped, or when the drill is abandoned. Deferred, not Gated: nothing is missing. Reserving this way is the mechanism the 2026-07-27 wildcard run established — deferred cards are already excluded from `is_autonomous_candidate()`, so a reserved leg simply stops being selectable, with no new field or state."
+readiness: shaping
+readiness_reason: "RELEASED 2026-08-01 — the reservation is void: it was payload for `autotest-e2e-away-mode-drill`, which was retired today, and this card's own trigger said it releases when the drill is abandoned. Decision-complete and implementable: the interval formula is confirmed below as 10 releases AND 14 days."
 phase: converge
 type: chore
 vision_facet: "Introspection & self-improvement"
+shipped_pr: 484
+shipped_sha: 464427c76f7603a9985f0faa99d8cfe9864fa7c9
 ---
 
 # audit-advisory-interval — count releases AND days, not releases alone

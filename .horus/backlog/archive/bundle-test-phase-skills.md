@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 readiness: ready
 autonomy: attended
@@ -13,6 +13,8 @@ type: chore
 parallel: safe
 phase: converge
 surface: "horus/skills.py (add a `_WILDCARD_SKILL` text constant + `Skill(\"wildcard\", 2, _WILDCARD_SKILL)` in the SKILLS list, ~line 2876), tests/test_skills.py, .claude/skills/wildcard/SKILL.md + .agents/skills/wildcard/SKILL.md (become GENERATED output — stop hand-editing them). Report any file touched beyond this list and why."
+shipped_pr: 484
+shipped_sha: 464427c76f7603a9985f0faa99d8cfe9864fa7c9
 ---
 
 # bundle-test-phase-skills — a skill in test phase lives outside the generator, unprotected

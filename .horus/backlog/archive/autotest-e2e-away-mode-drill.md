@@ -1,8 +1,8 @@
 ---
-status: open
+status: retired
 priority: high
 readiness: deferred
-readiness_reason: "Deferred until after 2026-07-29 (owner, 2026-07-21) — run then as the attended away-mode drill, when weekly account capacity supports the multi-account run. Leg roster in Reviews."
+readiness_reason: "RETIRED 2026-08-01 — see Reviews. The drill ran in scoped form, answered its readiness question (no: every gate passed while both legs carried a continuity defect), and the owner is routing worker dispatch via a native supervisor instead."
 created: 2026-07-19
 last_refined: 2026-07-28
 refine_passes: 2
@@ -180,3 +180,16 @@ runnable once its two `depends-on` gaps land.
   that partial. If it cannot, the honest posture stays verify-and-escalate rather than
   granting `--allow-merge` — and that answer is upstream of `fleet-sourced-autonomous-batch`'s
   envelope bounds, which is why that card was ordered after this drill in the same pass.
+
+### 2026-08-01 — owner (manual)
+Verdict: retired — drill ran, question answered
+
+RETIRED 2026-08-01 by owner decision. A scoped variant of this drill ran today: 2 legs, same card (`verify-guidance-long-running-services`), same base f3d3369, codex/gpt-5.6-luna, effort high vs max, worktree-isolated, envelope `drill-luna-effort-ab` with merge NOT authorized.
+
+WHAT IT ANSWERED — the readiness question from the 2026-07-26 review ('can the loop detect work that passes every gate but is incomplete?'): NO. Every required check passed on BOTH legs (freshness, pytest 3.12, pytest 3.13) with honest self-reports and accurate test counts, and BOTH carried the same defect no gate catches — each overwrote PRD current_focus/next_action/next_prompt with its own PR status, which the managed block they were editing explicitly forbids ('workers record delivery facts, never a verdict on their own work; the supervisor owns canonical continuity'). Had --allow-merge been granted, both would have merged and corrupted continuity. This is the #404 shape reproducing exactly. Verify-and-escalate therefore stays the honest posture; --allow-merge is not evidenced as safe.
+
+ALSO ANSWERED, incidentally — X1 (does host-native state generalise to Codex?): NO. In one herdr snapshot, both Codex panes reported agent_status=idle with a bare shell prompt as terminal_title while their pids were demonstrably alive and editing files; Claude panes in the same snapshot carried real states and task titles. herdr scrapes Claude's UI strings. Consequence: reading herdr state is Claude-only (189 of 246 sessions), and the host-agnostic TERMINAL-vocabulary fix matters more, not less.
+
+CALIBRATION DATUM (the first unconfounded one): high 331s / max 481s (+45%). Max produced a regression test, better sentence integration and a correct docs: commit type, all unprompted; high produced none of those. #483 (max) merged after its PRD commit was dropped; #482 (high) closed.
+
+WHY RETIRED, not deferred: the owner is not pursuing further drill runs until unattended dispatch becomes a felt problem, and intends to route worker dispatches via a native supervisor (opus/sol) instead. Its reserved leg `audit-advisory-interval` is hereby RELEASED — it was payload for this drill and the drill is gone. `verify-guidance-long-running-services` shipped as this drill's one real leg (PR #483).
