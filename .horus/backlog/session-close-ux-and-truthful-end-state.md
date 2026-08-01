@@ -4,7 +4,7 @@ priority: high
 created: 2026-07-31
 created_by: owner
 readiness: shaping
-readiness_reason: "The defect and the evidence are settled, but the design is not: closure arrives by four different paths with four different fidelities, and it is undecided how much the native-host paths should be instrumented versus simply left honest-but-vague. Needs a working session to settle that, plus the Codex/herdr state read."
+readiness_reason: "PARTIALLY DELIVERED by #489 (v0.0.81): the one path that had a signal and discarded it now records `stopped`. What remains is undecided, not unshaped — the two native paths where no signal ever existed (a tmux kill is indistinguishable from a crash by exit code; herdr reports none), and above them the owner's standing question of whether the Sessions status column should be RETIRED rather than repaired. Needs a working session, plus the Codex/herdr state read."
 phase: converge
 type: feature
 tier: medium
@@ -92,6 +92,20 @@ recorded intent, not the keystrokes); no screen-scraping of agent UI to infer in
   owner prefers otherwise.
 
 ## Reviews
+
+- 2026-08-01 — **Partially delivered, deliberately left open.** #489 (shipped in
+  v0.0.81) took the best-instrumented path only: `registry.STOPPED` joins `TERMINAL`,
+  `stop_session` writes it, `is_deliberate_close(status, reason)` reads the *pair* so
+  the 73 historical rows became correct with no backfill, the dashboard renders it
+  muted, and `delivery.NONCLEAN_STATUSES` gained it so closing a session still yields a
+  delivery receipt. One hunk went beyond the card and stands unless vetoed:
+  `reap_orphans` now writes `orphaned`, which was in `TERMINAL` and written by nothing
+  (zero such rows across 250 sessions) — the same defect shape.
+  **Still open, and both `[session]`:** the two native paths, where the signal never
+  existed rather than being discarded. **Still open and prior to them:** the owner's
+  2026-07-31 verdict below — if nothing depends on the status column, retiring the
+  Sessions section beats repairing it, and #489 does not settle that question. Do not
+  read "the status is honest now" as the card being done.
 
 - 2026-07-31 (owner verdict, roadmap-branches gate) — **The scope may be DELETION, not
   repair.** Owner: *"no one really looks at that, not even the agents probably (unless

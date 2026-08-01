@@ -402,6 +402,38 @@ cross-platform is not just avoiding Windows-only imports — hook command string
 environment, process launch semantics, test runners, and GUI dependencies all need live Linux
 smokes before calling a feature portable.
 
+## The cockpit called 88% of the owner's own closes failures (2026-08-01)
+
+`registry.TERMINAL` had no word for "the owner ended this deliberately", so
+`stop_session` recorded the intent in `termination_reason="stopped"` and then fell
+back to `failed` for the status. Measured on this machine: 83 rows at `status=failed`,
+of which 73 were deliberate closes and 10 were real failures — and the hosted
+dashboard maps `failed` → `health-fail`, so the surface the owner checks daily
+rendered 88% of its red rows for work they closed on purpose. This was the **fourth**
+appearance in one release of the same shape: a display aggregating over states it does
+not distinguish. Two things made the fix cheap. The truth was never lost, only
+unnamed, so `is_deliberate_close(status, reason)` reading the *pair* corrected all 73
+historical rows with **no backfill**. And checking `TERMINAL` for other lies found
+`orphaned` — a member written by nothing, across 250 sessions, while `reap_orphans`
+wrote `failed`. **Lesson:** when a status vocabulary is missing a word, look for where
+the truth is already being recorded and discarded; and audit the whole enum, because
+an unwritten member is the same defect standing still. (#489, v0.0.81.)
+
+## The worker that left `.horus/` alone (2026-08-01)
+
+Both legs of the away-mode drill overwrote PRD continuity unprompted — the reason
+`--allow-merge` was withheld and the drill retired. Hours later the same model at the
+same effort (gpt-5.6-luna@max) ran the entire v0.0.81 release chain — bump PR, CI,
+squash-merge, tag, GitHub release, PyPI publish, `deploy-hosted.sh` — in 362s, touched
+exactly three files, and did not touch `.horus/`. The only difference was a brief that
+named `.horus/` as a hard constraint. The counterfactual is unusually clean: v0.0.80
+was cut by hand an hour earlier, so it is the same task, the same day, both ways.
+**Lesson:** the drill's failure was an unstated expectation, not worker unreliability —
+but one clean run proves this model can follow this runbook once, not that unattended
+release is safe, and the irreversible steps were delegated on the owner's explicit
+instruction after a recommendation to split there. Also noted: runtime is a weak proxy
+for task size (362s for ten steps vs 481s for a two-line guidance edit).
+
 ## Decision rationale
 
 The non-obvious *why* behind rules in `decisions.md` that aren't already a bump above.
