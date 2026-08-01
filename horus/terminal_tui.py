@@ -205,7 +205,7 @@ class TerminalUI:
         self.projects = _projects()
         self.accounts = _launch_accounts()
         self.account_usage = _account_usage(self.accounts)
-        self.project_cards = {project: _open_cards(project) for project in self.projects}
+        self.project_cards = {project: _active_cards(project) for project in self.projects}
         self.project_metrics = {
             project: _backlog_metrics(project, self.project_cards[project]) for project in self.projects
         }
@@ -698,7 +698,7 @@ class TerminalUI:
     def _reload_project_backlog(self, project: Path) -> None:
         """Re-read one project's cards, tree, and metrics after an in-place card
         edit (e.g. a priority change) so the backlog re-renders immediately."""
-        self.project_cards[project] = _open_cards(project)
+        self.project_cards[project] = _active_cards(project)
         self.project_metrics[project] = _backlog_metrics(project, self.project_cards[project])
         self.project_trees[project] = _project_tree(project)
 
@@ -1524,7 +1524,7 @@ class TerminalUI:
                 card_count, bug_count = self.project_metrics.get(root, (0, 0))
                 pending = self.project_pending.get(root, 0)
                 continuity = f" · continuity {pending} pending" if pending else ""
-                base = f"     backlog {card_count} · bugs {bug_count}{continuity}"
+                base = f"     active {card_count} · bugs {bug_count}{continuity}"
                 token = _freshness_token(
                     self.project_freshness.get(root), self.project_fetch_at.get(root)
                 )
@@ -1824,7 +1824,7 @@ class TerminalUI:
                             ("class:session", f"   {session_labels}" if session_labels else ""),
                             (
                                 "class:muted",
-                                f"   backlog {card_count} · bugs {bug_count}"
+                                f"   active {card_count} · bugs {bug_count}"
                                 + (
                                     f" · continuity {self.project_pending.get(root, 0)} pending"
                                     if self.project_pending.get(root, 0)
@@ -3027,9 +3027,17 @@ def _card_field_detail(field: str, cards: list[backlog.Card]) -> str:
     return f"on {len(values)} of {len(cards)} cards · e.g. {sample}"
 
 
-def _open_cards(root: Path) -> list[backlog.Card]:
+def _active_cards(root: Path) -> list[backlog.Card]:
+    """Cards that are actually actionable — the number the fleet rows report.
+
+    This used to filter a hand-written ``{"done", "shipped"}`` literal, which was
+    the third copy of the inactive-status list in the codebase and the least
+    complete: it let `retired`, `folded-in` and (once it existed) `shelved` cards
+    count as open work. That is what made a project row read "75" when two cards
+    were actionable — the row was counting the box along with the queue.
+    """
     try:
-        cards = [card for card in backlog.load_cards(root) if card.status not in {"done", "shipped"}]
+        cards = backlog.load_active_cards(root)
     except (OSError, ValueError):
         return []
     return sorted(cards, key=backlog.readiness_sort_key)
