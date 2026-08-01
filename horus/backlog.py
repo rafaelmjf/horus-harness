@@ -569,6 +569,20 @@ def hygiene_findings(root: Path) -> list[Finding]:
                 f"backlog card '{card.name}' is lingering done — mark it shipped with "
                 "`horus backlog ship` (or remove stale data)",
             ))
+        # A bug is a problem that ALREADY ARRIVED, so it is never a candidate for
+        # the shelf, which exists for work whose problem may never come. This is
+        # not a preference: on this repo's own ledger bugs shipped 32-of-37 (~86%)
+        # while `phase: explore` cards shipped 9-of-57 (16%). Shelving a bug boxes
+        # a known real defect and — because the shelf is invisible to every working
+        # view — makes the fleet row's bug count structurally unable to surface it.
+        # `fail`, not `warn`: the whole point is that it cannot be done quietly.
+        if card.type == "bug" and card.status == SHELVED_STATUS:
+            findings.append(Finding(
+                "fail",
+                f"backlog card '{card.name}' is a bug and cannot be shelved — a bug is a "
+                "problem that already arrived. Fix it, or decide it is not real and "
+                "`retire` it with the reason",
+            ))
         if card.status != "shipped" and (card.shipped_pr or card.shipped_sha or card.shipped):
             findings.append(Finding(
                 "warn",

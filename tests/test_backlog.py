@@ -734,3 +734,43 @@ def test_archived_cards_are_still_absent_from_the_active_list(tmp_path):
 
     assert [c.name for c in backlog.load_active_cards(tmp_path)] == ["live"]
     assert [c.name for c in backlog.load_archived_cards(tmp_path)] == ["done"]
+
+
+def test_a_bug_can_never_be_shelved(tmp_path):
+    """The shelf is for work whose problem may never come; a bug's already did.
+
+    Measured on this repo when the rule was added: bugs shipped 32-of-37 (~86%)
+    while `phase: explore` cards shipped 9-of-57 (16%). Shelving a bug boxes a
+    known real defect, and because the shelf is invisible to every working view
+    the fleet row's bug count then cannot surface it — the count reads a
+    reassuring zero while the defect is still there.
+    """
+    _mk_card(tmp_path, "boxed-bug", status=backlog.SHELVED_STATUS, type="bug")
+
+    findings = backlog.hygiene_findings(tmp_path)
+    offending = [f for f in findings if "cannot be shelved" in f.message]
+
+    assert offending, "shelving a bug must be reported"
+    # `fail`, not `warn`: `close_check_healthy` treats fail as blocking, so the
+    # combination cannot reach main quietly.
+    assert offending[0].level == "fail"
+    assert "retire" in offending[0].message  # the legitimate alternative is named
+
+
+def test_shelving_a_non_bug_is_silent(tmp_path):
+    """The guard is about bugs specifically, not about shelving."""
+    _mk_card(tmp_path, "boxed-idea", status=backlog.SHELVED_STATUS, type="feature")
+    _mk_card(tmp_path, "boxed-spike", status=backlog.SHELVED_STATUS, type="chore")
+
+    assert not [f for f in backlog.hygiene_findings(tmp_path) if "cannot be shelved" in f.message]
+
+
+def test_a_shelved_bug_fails_the_close_gate(tmp_path):
+    """End to end: the guard actually blocks, rather than printing into the void."""
+    from horus import closure
+
+    _mk_card(tmp_path, "live")
+    assert closure.close_check_healthy(tmp_path, backlog.hygiene_findings(tmp_path))
+
+    _mk_card(tmp_path, "boxed-bug", status=backlog.SHELVED_STATUS, type="bug")
+    assert not closure.close_check_healthy(tmp_path, backlog.hygiene_findings(tmp_path))
