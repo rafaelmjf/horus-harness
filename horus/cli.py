@@ -2670,9 +2670,10 @@ def cmd_backlog(args: argparse.Namespace) -> int:
         return 2
 
     if args.backlog_cmd == "list" and getattr(args, "archived", False):
-        # The delivery ledger, read from the cards themselves. Grouping by
-        # readiness is meaningless here (everything shipped), so this prints a
-        # flat newest-first list with the provenance `ship` stamped on.
+        # The CLOSED ledger, read from the cards themselves. Grouping by readiness
+        # is meaningless here, but grouping by OUTCOME is not: work that merged and
+        # work that was killed are both terminal and both live in `archive/`, and
+        # printing one count over both overstates delivery.
         cards = backlog.load_archived_cards(root)
         if args.type:
             cards = [c for c in cards if c.type == args.type]
@@ -2680,18 +2681,31 @@ def cmd_backlog(args: argparse.Namespace) -> int:
             scope = f" with type={args.type}" if args.type else ""
             print(f"No archived cards in {HORUS_DIR}/{backlog.BACKLOG_DIR}/archive/{scope}.")
             return 0
-        print(f"Shipped ({len(cards)})")
-        for c in cards:
-            prov = " ".join(
-                part for part in (
-                    f"pr=#{c.shipped_pr}" if c.shipped_pr else "",
-                    f"sha={c.shipped_sha[:9]}" if c.shipped_sha else "",
-                    c.created or "",
-                ) if part
-            )
-            print(f"   {c.name}  [{c.status}]  {prov}".rstrip())
-            if c.title and c.title != c.name:
-                print(f"      {c.title}")
+
+        def _print_group(heading: str, group: list[backlog.Card]) -> None:
+            if not group:
+                return
+            print(f"{heading} ({len(group)})")
+            for c in group:
+                prov = " ".join(
+                    part for part in (
+                        f"pr=#{c.shipped_pr}" if c.shipped_pr else "",
+                        f"sha={c.shipped_sha[:9]}" if c.shipped_sha else "",
+                        c.created or "",
+                    ) if part
+                )
+                print(f"   {c.name}  [{c.status}]  {prov}".rstrip())
+                if c.title and c.title != c.name:
+                    print(f"      {c.title}")
+
+        delivered, closed = backlog.partition_archived(cards)
+        _print_group("Shipped", delivered)
+        if closed:
+            if delivered:
+                print()
+            # Named for what it is: closed without ever being built. This is the
+            # graveyard read-path — `retired` / `folded-in` / a legacy `done`.
+            _print_group("Closed without shipping", closed)
         return 0
 
     if args.backlog_cmd == "list":

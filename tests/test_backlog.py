@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from horus import backlog
+from horus import backlog, cli
 
 
 def _mk_card(
@@ -617,10 +617,18 @@ def test_hygiene_findings_reports_duplicate_order(tmp_path):
     assert any("duplicate order 10" in m for m in messages)
 
 
-def _mk_archived(root: Path, name: str, *, created: str, pr: str = "", sha: str = "") -> None:
+def _mk_archived(
+    root: Path,
+    name: str,
+    *,
+    created: str,
+    pr: str = "",
+    sha: str = "",
+    status: str = "shipped",
+) -> None:
     adir = root / ".horus" / "backlog" / "archive"
     adir.mkdir(parents=True, exist_ok=True)
-    lines = ["---", "status: shipped", "priority: high", "tier: sonnet", f"created: {created}"]
+    lines = ["---", f"status: {status}", "priority: high", "tier: sonnet", f"created: {created}"]
     if pr:
         lines.append(f"shipped_pr: {pr}")
     if sha:
@@ -647,6 +655,42 @@ def test_load_archived_cards_sorts_undated_last_and_tolerates_no_archive(tmp_pat
     _mk_archived(tmp_path, "undated", created="")
 
     assert [c.name for c in backlog.load_archived_cards(tmp_path)] == ["dated", "undated"]
+
+
+def test_partition_archived_separates_delivered_from_killed(tmp_path):
+    """The archive is the CLOSED ledger, not the delivery ledger.
+
+    `ship` moves in work that merged; a convergence pass moves in work that was
+    killed. Counting them together overstates delivery — on this repo 22 of 132
+    archived cards had never shipped while the read-out headed all 132 "Shipped",
+    which misled a planning session on 2026-08-01 into recording a retired card
+    as delivered.
+    """
+    _mk_archived(tmp_path, "merged", created="2026-07-30", pr="200", sha="b" * 40)
+    _mk_archived(tmp_path, "killed", created="2026-07-20", status="retired")
+    _mk_archived(tmp_path, "absorbed", created="2026-07-10", status="folded-in")
+
+    delivered, closed = backlog.partition_archived(backlog.load_archived_cards(tmp_path))
+
+    assert [c.name for c in delivered] == ["merged"]
+    assert sorted(c.name for c in closed) == ["absorbed", "killed"]
+    # A killed card legitimately carries no delivery provenance, so delivery must
+    # key on status rather than on shipped_pr/shipped_sha being present.
+    assert all(not c.shipped_pr and not c.shipped_sha for c in closed)
+
+
+def test_archived_listing_does_not_count_killed_cards_as_shipped(tmp_path, capsys):
+    _mk_archived(tmp_path, "merged", created="2026-07-30", pr="200", sha="b" * 40)
+    _mk_archived(tmp_path, "killed", created="2026-07-20", status="retired")
+
+    rc = cli.main(["backlog", "list", "--archived", "--path", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "Shipped (1)" in out
+    assert "Closed without shipping (1)" in out
+    assert "Shipped (2)" not in out  # the defect this test exists for
+    assert "killed" in out and "[retired]" in out
 
 
 def test_archived_cards_are_still_absent_from_the_active_list(tmp_path):
