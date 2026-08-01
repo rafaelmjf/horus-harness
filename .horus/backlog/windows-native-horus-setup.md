@@ -133,3 +133,73 @@ in `.horus/PRD.md`.
   WSL+tmux (already installed per the 2026-07-20 Findings) is the path for that. First
   step reframed to *validate* the TUI under WSL+tmux — not "upgrade a stale install,"
   which the Findings had already disproven (install was current at 0.0.73).
+
+### 2026-08-01 — owner + agent (manual)
+Verdict: reference — native confirmed for PBI; SSH measured; skew is the real risk
+
+REFERENCE, measured live this session rather than inferred.
+
+**Corrects this card's premise.** horus is ALREADY installed native on the Windows box —
+`horus 0.0.73` at `C:\Users\Rafa\.local\bin\horus.exe`, with `horus-harness`,
+`fabric-metadata-driven-medallion` and `pbi-ecosystem` registered under
+`workspace_root = "C:/Users/Rafa/projects"`. So "whether to install" is settled. The live
+question is **native vs WSL for work already being done there**.
+
+**State.** WSL2 Ubuntu is installed and **Stopped** (alongside a `docker-desktop` distro) —
+native is already what actually gets used.
+
+**The SSH bridge now works in both directions.** Windows→Linux is Tailscale SSH (see the
+PRD rule). Linux→Windows is a real OpenSSH Server on the Windows box, key-authed via the
+`~/.ssh/config` alias `pbi-win` (100.65.119.44). Tailscale SSH does **not** serve Windows
+hosts, so that direction requires sshd; it was already running.
+
+**What the bridge proved.** From Linux, `tools/query-model.ps1` ran end to end against a
+model open in Desktop: ADOMD resolved, `msmdsrv` port auto-discovered (53105), DAX returned
+rows in 32 ms, exit 0. The verification loop *can* be driven remotely.
+
+**What it costs — three frictions, all sshd artifacts rather than anything inherent:**
+
+1. **Quoting.** bash → ssh → PowerShell mangles nested quotes; every non-trivial call needs
+   `-EncodedCommand` with base64 UTF-16LE.
+2. **Exit codes flatten to 1.** The sshd `DefaultShell` there is PowerShell, which reports
+   `$?` rather than the command's code: `exit 2`, `exit 3` and `exit 7` all came back as 1.
+   This is the dangerous one — `query-model.ps1`'s contract is *"2 = usage/environment,
+   1 = query error"*, so over SSH **"Desktop is not open" becomes indistinguishable from
+   "your DAX is wrong"**, destroying exactly the signal `vision-deterministic-tooling`
+   exists to give a weaker model. **Fix:** append `; exit $LASTEXITCODE` at BOTH shell
+   levels — the login shell AND the inner `powershell -NoProfile -EncodedCommand`. Verified:
+   0 / 1 / 2 then propagate correctly. Miss either level and it silently degrades to 0-or-1.
+3. **Window-station isolation.** `MainWindowTitle` is empty for every `PBIDesktop` process
+   over SSH, so there is no GUI introspection — which is what makes multi-instance
+   disambiguation harder remotely than locally.
+
+**A native install removes all three** (local invocation, no login shell in the chain, same
+window station). That, plus report authoring being irreducibly visual, is why native stands
+for PBI work.
+
+**WSL is the wrong trade here.** What it buys — tmux persistence, cross-viewer attach,
+`horus schedule` via systemd — is precisely what PBI authoring does not use, and the
+autonomous-dispatch facet was shelved 2026-08-01 anyway. What it costs is a filesystem
+boundary in the middle of the actual workflow: either the repos sit on `/mnt/c` (slow git
+and file watching) or in the WSL filesystem where Desktop must reach them over `\\wsl$\`.
+It also does not fix the window-title problem. Native keeps files, the PowerShell/ADOMD
+tooling and the GUI on one side of every boundary.
+
+**The real risk is not native-vs-WSL, it is VERSION SKEW — and neither option fixes it.**
+Windows is on 0.0.73 while the Linux box is 0.0.79 plus 30 unreleased commits: six releases
+behind. Skew bit twice on a SINGLE machine on 2026-08-01 (a retired line-cap signal read as
+current; the entire shelve sweep invisible to the TUI). Two installs double that surface and
+nothing gates it. Any recommendation ending in "keep horus on both machines" needs an
+upgrade discipline attached, which this card does not yet propose.
+
+**Scope, refined.** The card's open decision reads as a global "native vs WSL vs app". The
+measured answer is narrower and is a third option: **native, scoped to Windows-bound
+projects** (PBI, where both the GUI and the ADOMD tooling are Windows-native), with
+Linux-native projects staying on Linux. Windows becomes a first-class host for a subset of
+the fleet, not a second copy of everything.
+
+**Still open.** The upgrade discipline for two installs; whether interactive Entra/Fabric
+auth works over the bridge at all (untested — no TTY, so `publish-pbip-to-fabric-skill` may
+not be remotable); and `pbi-ecosystem`'s `multi-instance-port-pick`, reproduced live here —
+with two workbooks open, auto-discovery silently returned the FIRST model (13 tables vs the
+second's 32) with exit 0 and no warning.
