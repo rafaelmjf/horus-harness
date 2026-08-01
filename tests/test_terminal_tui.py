@@ -7,7 +7,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from prompt_toolkit.output import DummyOutput
 
-from horus import config, github_catalog, remote_start, terminal_tui
+from horus import backlog, config, github_catalog, remote_start, terminal_tui
 from horus.cli import main
 
 
@@ -1535,3 +1535,51 @@ def test_a_vanished_session_offers_restore_even_though_its_target_ref_survives(t
     kinds = [kind for kind, _value in ui.items]
     assert "restore" in kinds, f"vanished session offered {kinds}, not a restore"
     assert "attach" not in kinds, "a session that vanished has nothing to attach to"
+
+
+def _card(root: Path, name: str, *, status: str = "open", type: str = "feature") -> None:
+    d = root / ".horus" / "backlog"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{name}.md").write_text(
+        f"---\nstatus: {status}\npriority: medium\ntype: {type}\n---\n# {name}\n",
+        encoding="utf-8",
+    )
+
+
+def test_fleet_row_counts_actionable_work_not_the_whole_backlog(tmp_path):
+    """A project row reports what is ACTIONABLE, not every non-shipped card.
+
+    This filtered a hand-written ``{"done", "shipped"}`` literal — the third and
+    least complete copy of the inactive-status list — so `retired`, `folded-in`
+    and `shelved` cards all counted as open work. On this repo that rendered
+    "75" while two cards were actually actionable: the row was counting the box
+    along with the queue, which is the impression the number is supposed to give
+    correctly.
+    """
+    _card(tmp_path, "live-one")
+    _card(tmp_path, "live-bug", type="bug")
+    _card(tmp_path, "boxed", status=backlog.SHELVED_STATUS)
+    _card(tmp_path, "killed", status="retired")
+    _card(tmp_path, "absorbed", status="folded-in")
+    _card(tmp_path, "delivered", status="shipped")
+
+    cards = terminal_tui._active_cards(tmp_path)
+    assert sorted(c.name for c in cards) == ["live-bug", "live-one"]
+
+    count, bugs = terminal_tui._backlog_metrics(tmp_path, cards)
+    assert (count, bugs) == (2, 1)
+
+
+def test_active_card_filter_has_no_status_list_of_its_own(tmp_path):
+    """The TUI must not re-derive which statuses are inactive.
+
+    Three copies of this list existed on 2026-08-01 (`backlog`, `fleet_review`,
+    here) and only one was complete. Adding a status to `backlog` must change
+    every surface at once, or a card silently counts as open in one view and not
+    another.
+    """
+    for status in backlog.INACTIVE_STATUSES:
+        _card(tmp_path, f"x-{status}", status=status)
+    _card(tmp_path, "the-only-live-one")
+
+    assert [c.name for c in terminal_tui._active_cards(tmp_path)] == ["the-only-live-one"]

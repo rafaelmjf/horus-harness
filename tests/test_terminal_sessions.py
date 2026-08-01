@@ -2064,7 +2064,7 @@ def test_terminal_tui_project_kpis_and_backlog_card_resume(tmp_path, monkeypatch
     ui = terminal_tui.TerminalUI()
 
     rendered = "".join(fragment[1] for fragment in ui._body_text())
-    assert "backlog 2 · bugs 1" in rendered
+    assert "active 2 · bugs 1" in rendered  # row reports actionable work, not the whole list
     ui.activate()
     ui.move(2)
     ui.activate()
