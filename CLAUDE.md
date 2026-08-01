@@ -8,7 +8,7 @@
 > restore the six-lane split.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 17 -->
+<!-- horus-block-version: 18 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -104,6 +104,9 @@ Working discipline (every session, whether or not the work is delegated):
   check go green on the exact commit — `horus merge-watch <pr|sha>` does exactly that
   (bounded `--interval`/`--timeout`, prints each check as it resolves), so do not
   hand-roll a polling loop for it — plus one live probe of the changed surface.
+  For a long-running service/daemon, the probe must confirm it reaches `active`/running
+  and emits its expected journal/health signal; installation or startup alone is not
+  verification.
   A confident "tests pass" in prose is not evidence, whoever wrote it.
 - **A wait must be able to fail loudly, and must be accounted for before the turn ends.**
   Never send stderr to `/dev/null` on a command whose output drives a loop condition or
