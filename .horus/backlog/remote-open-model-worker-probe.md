@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: shaping
 readiness_reason: "Needs an attended owner envelope and bounded probe design before any remote-model execution."

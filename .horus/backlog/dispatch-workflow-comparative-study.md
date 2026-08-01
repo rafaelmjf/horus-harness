@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: shaping
 readiness_reason: "Focus sharpened (owner, 2026-07-23): the capability + use case are settled; the live question is how to make continuity PROPORTIONAL so it isn't expensive ceremony under concurrent dispatch. Starting-point findings recorded below; still needs the external comparison sweep."

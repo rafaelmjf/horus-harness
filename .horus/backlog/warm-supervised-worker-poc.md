@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: shaping
 readiness_reason: "Needs an attended owner envelope and evidence run before an adopt, revise, or drop verdict."

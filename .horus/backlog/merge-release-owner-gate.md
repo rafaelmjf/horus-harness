@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: high
 readiness: shaping
 readiness_reason: "Held for a DEDICATED DESIGN SESSION (owner, 2026-07-28), not a refinement exchange. All four open questions are architectural: a hard gate on merge/release/deploy is a control every session lives with, and getting the envelope pass-through wrong either blocks legitimate autonomous dispatch or opens a hole. The strongest candidate answer is recorded below (reuse the existing PreToolUse chokepoint) but was deliberately not adopted in a screening pass."

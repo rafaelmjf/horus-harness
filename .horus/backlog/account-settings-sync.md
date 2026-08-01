@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: gated
 readiness_reason: "Keep for the next-machine installation, whose real settings drift will provide shaping evidence."

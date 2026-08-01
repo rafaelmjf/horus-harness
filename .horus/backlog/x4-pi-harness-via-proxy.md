@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: high
 readiness: shaping
 readiness_reason: "Gate narrowed 2026-07-28: the ATTENDED probe is unblocked, because this card's own body scopes the X5 dependency to \"anything unattended\" and an owner-present probe needs no containment (the host-freeze was survived via tty3). Anything UNATTENDED remains gated on the X5 branch review, which is deferred with no date by deliberate owner choice. Still Shaping rather than Ready: the card does not yet know what PI is as a launchable harness, how it takes a base-URL + credential, or whether it integrates as a first-class adapter or a thinner launch profile — and its own Notes ask for the plan to be redrafted in a fresh session."

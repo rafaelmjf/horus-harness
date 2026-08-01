@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: shaping
 readiness_reason: "Narrowed 2026-07-28: three of the five lifecycle steps are answered by the card's own field evidence, so the dedicated brainstorm is now scoped to the two that are not — SELECTION (which projects AND which skill classes) and INTEGRATE (nothing drives the commit/PR after the write). Both are [session]-class design questions, which is why this stays Shaping."

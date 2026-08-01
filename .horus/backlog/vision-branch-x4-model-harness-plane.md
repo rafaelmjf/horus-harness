@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: deferred
 readiness_reason: "Branch on hold after the net-negative 2026-07-18 trial; reopen only for an owner-approved low-risk re-test."

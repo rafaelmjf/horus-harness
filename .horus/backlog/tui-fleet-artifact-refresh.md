@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: gated
 readiness_reason: "Wait for the unified skill/artifact refresh brainstorm verdict before fixing this card's workflow."

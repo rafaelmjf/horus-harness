@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: gated
 readiness_reason: "Archive only after autotest-e2e-away-mode-drill passes and confirms the promoted branch end to end."

@@ -2669,6 +2669,24 @@ def cmd_backlog(args: argparse.Namespace) -> int:
         print("error: pass a backlog subcommand (list|migrate|claim|ship|review|refine) or --tree")
         return 2
 
+    if args.backlog_cmd == "list" and getattr(args, "shelved", False):
+        # The box. Shelved cards are hidden from every working view by design, so
+        # this read path is what separates "set aside" from "lost".
+        cards = backlog.load_shelved_cards(root)
+        if args.type:
+            cards = [c for c in cards if c.type == args.type]
+        if not cards:
+            scope = f" with type={args.type}" if args.type else ""
+            print(f"No shelved cards in {HORUS_DIR}/{backlog.BACKLOG_DIR}/{scope}.")
+            return 0
+        print(f"Shelved ({len(cards)})")
+        for c in cards:
+            facet = f"  {c.vision_facet}" if c.vision_facet else ""
+            print(f"   {c.name}  [{c.type}]{facet}")
+            if c.title and c.title != c.name:
+                print(f"      {c.title}")
+        return 0
+
     if args.backlog_cmd == "list" and getattr(args, "archived", False):
         # The CLOSED ledger, read from the cards themselves. Grouping by readiness
         # is meaningless here, but grouping by OUTCOME is not: work that merged and
@@ -5455,7 +5473,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_backlog_list.add_argument(
         "--archived", action="store_true",
-        help="list SHIPPED cards from backlog/archive/ with their PR and SHA, newest first",
+        help="list CLOSED cards from backlog/archive/, grouped by outcome (shipped vs "
+             "closed without shipping) with PR and SHA, newest first",
+    )
+    p_backlog_list.add_argument(
+        "--shelved", action="store_true",
+        help="list SHELVED cards — set aside without a decision, still in backlog/ and "
+             "retrievable; the box, not the graveyard",
     )
     p_backlog_list.set_defaults(func=cmd_backlog)
 

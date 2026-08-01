@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: shaping
 readiness_reason: "Needs an owner design pass on the receipt's shape and where it binds in the envelope/supervise flow."

@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: deferred
 readiness_reason: "X4 branch remains on hold under the 2026-07-18 owner verdict."

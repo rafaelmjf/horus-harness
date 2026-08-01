@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: medium
 readiness: deferred
 readiness_reason: "Defer trigger (a real project requirement declaration) is now satisfied by fabric; whether it un-defers is the 2026-07-20 refinement pass's call."

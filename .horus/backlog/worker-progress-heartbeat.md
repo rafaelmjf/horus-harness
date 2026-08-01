@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-01
 priority: low
 readiness: deferred
 readiness_reason: "Await stall-frequency evidence and native CLI progress signals; see the 2026-07-16 review."
