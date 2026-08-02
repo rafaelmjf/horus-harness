@@ -434,6 +434,26 @@ release is safe, and the irreversible steps were delegated on the owner's explic
 instruction after a recommendation to split there. Also noted: runtime is a weak proxy
 for task size (362s for ten steps vs 481s for a two-line guidance edit).
 
+## Settled operating decisions, retired from PRD Rules (2026-08-02)
+
+Kept here because they are real and not derivable from code — just no longer worth a
+session's launch budget. From the rules-routing pass (`.horus/audits/2026-08-02-rules-routing.md`).
+
+- **Mobile entry is Termius → connect → `horus tui`, deliberately simple.** Native iOS
+  Termius SSH over the private Tailscale network into the TUI is the reliable
+  Claude/Codex control path; managed tmux makes app- and TUI-launched sessions
+  attachable from either surface. `claude-work-phone` selects the isolated work
+  account. No shortcut or forced-command machinery — revisit only if Termius adds a
+  free one-tap saved-host action. Claude in the 39-column browser/xterm viewer is
+  best-effort; do not resume narrow-grid patching without new upstream renderer
+  evidence.
+- **"Released to Ready—eligible" in a `readiness_reason` means the card becomes
+  selectable — it is NOT a software release** (misread twice, 2026-07-29). The two
+  reserved drill legs read "TRIGGER: released to Ready—eligible when the drill is
+  armed…" and cutting v0.0.78 changed nothing for them. **Lesson:** when a card's
+  trigger genuinely is a version being published, say "when a version ships" and name
+  it. The drill legs are archived, so the phrasing no longer appears in the backlog.
+
 ## Decision rationale
 
 The non-obvious *why* behind rules in `decisions.md` that aren't already a bump above.

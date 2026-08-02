@@ -18,7 +18,7 @@ description: >-
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -83,6 +83,17 @@ it never selects the card, account, or model. Show the owner the exact envelope
 (agent + model + account + effort + bounded task + usage evidence + acceptance gate +
 dividend) and get approval before creating it. `horus envelope revoke <name>` grounds
 pending work instantly.
+
+**Why the default is verify+escalate, and what a brief must name.** The away-mode
+drill ran two legs and answered its own readiness question: every required check
+passed on both while both overwrote PRD continuity, in a surface no card named.
+`--allow-merge` was correctly withheld. A worker records delivery facts — the SHA,
+the PR, what the gate emitted — never a verdict on its own work; the supervisor
+owns canonical continuity. That failure mode is addressable by instruction: the same
+model and effort left `.horus/` untouched across a ten-step release once the brief
+named it a hard constraint. **So name the off-limits surfaces explicitly in every
+brief.** An unstated expectation is not a worker defect — but one clean run shows a
+model can follow a runbook once, not that unattended release is safe.
 
 ### 6. Dispatch or schedule
 Launch now, or schedule a one-shot on THIS machine (never cloud, never recurring):

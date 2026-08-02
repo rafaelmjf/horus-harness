@@ -13,7 +13,7 @@ description: >-
   campaign's execution use `process-retrospective`.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Skill audit — one skill's text vs reality
 
@@ -80,6 +80,21 @@ they are regenerated and the edit would be silently overwritten.
   bump (or its pending state).
 - This skill audits itself under exactly the same rules — when its own
   instructions needed improvising around, that is a finding here.
+
+## Two invariants an audit must check first
+
+- **A skill's DESCRIPTION is where an invocation boundary lives.** The body is read
+  only after the load decision is already made, so a correct boundary section in the
+  body cannot stop a false trigger. Corollary for tests over skill prose: assert on
+  **whitespace-normalized** content, since hard-wrapping breaks a raw-substring
+  assertion on reflow rather than on meaning.
+- **Any edit bumps the skill version, always.** The version-aware install skips
+  same-version content, so an unbumped text change leaves committed projections
+  silently stale. `Skill(name, N, text)` and the `horus-skill-version: N` marker
+  inside that text are two copies of one number; when they disagree every
+  `upgrade-project` reports "updated" forever while doctor never goes green. Resync
+  with `horus skill install --force` (from working-tree source); never hand-edit a
+  projected `SKILL.md`.
 
 ## Boundaries
 
