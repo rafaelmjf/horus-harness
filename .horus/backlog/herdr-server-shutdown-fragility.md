@@ -1,12 +1,13 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-02
 priority: low
 created: 2026-07-30
 created_by: agent
 readiness: gated
 readiness_reason: "The defect is upstream in herdr, so Horus cannot fix it — this card exists to record the measurement and to decide what Horus does defensively. Gated on an owner call: report upstream, or accept herdr sessions as losable and lean on session recovery instead."
 phase: explore
-type: bug
+type: spike
 tier: low
 parallel: safe
 vision_facet: "Dashboard / cockpit"
@@ -77,3 +78,9 @@ losable in a way tmux-hosted ones are not.**
    owner picks a target, so choosing herdr is an informed trade rather than a surprise.
 
 Option 2 is the one with value independent of herdr; 1 is cheap and worth doing anyway.
+
+## Reviews
+
+### 2026-08-02 — Rafael Figueiredo (manual)
+
+2026-08-02 — Reclassified bug -> spike, then shelved, on explicit owner decision. The defect is UPSTREAM in herdr and Horus cannot fix it; the card's actual content is a decision (report upstream vs accept herdr sessions as losable and lean on session recovery), not a Horus defect that arrived. `type: bug` was therefore the wrong classification, and correcting it is what makes the shelf legitimate here rather than a way around the shelved-bug gate. The 2026-07-29 measurements it preserves stay in the card. Reopen by unshelving if herdr session loss starts costing real work — the PRD rule that no critical function may depend on one session host already caps the exposure.

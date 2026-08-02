@@ -129,3 +129,7 @@ Hand-executed setup run, owner-attended, 2026-07-20.
 ### 2026-08-02 — Rafael Figueiredo (manual)
 
 2026-08-02 — Gate repaired. This card sat Gated on `account-login-verb` while that blocker was `shelved`, so nothing could ever lift it; three consecutive continuity closes carried the broken gate unnoticed. The blocker is reactivated to Ready/attended, so this gate is reachable again — it is now waiting on real work rather than on nothing. `backlog.unreachable_gate_findings` now warns on this shape so it cannot recur silently.
+
+### 2026-08-02 — Rafael Figueiredo (manual)
+
+2026-08-02 — Deliberately NOT shelved in the same pass that shelved its neighbours. This is a real defect that already arrived: an isolated Codex account still points at the ambient home because `isolate_account` copies a `config.toml` carrying absolute paths. Boxing it would hide a known defect where no working view can surface it, which is the exact case `hygiene_findings` fails on (#487). It stays a Gated bug, and its gate is now LIVE rather than dead: `account-login-verb` was reactivated to Ready/attended this morning, so building that lifts this. That chain is the only one in the backlog where finishing one card unblocks another.

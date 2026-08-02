@@ -581,3 +581,19 @@ The non-obvious *why* behind rules in `decisions.md` that aren't already a bump 
   shipping. **Lesson:** a card's only job is carrying work across a context boundary —
   size is not the test, surviving the boundary is. Fix small things now, in their own
   commit, so "just fix it" cannot smuggle unrelated changes into an open PR.
+
+## Rules grew to 51% of everything a session loads (2026-08-02)
+
+PRD Rule 80 evicted orchestration prose from `## Rules` in 2026-07 on the principle
+that *PRD is state, not behaviour* — and was then never applied again. By 2026-08-02
+`## Rules` held 84 entries and 37,519 chars, **51% of the ~73,800-char eager tier** a
+session loads before doing anything. The per-entry contract was being met (1 of 84 over
+its cap) while the section as a whole was the problem, so trimming entries could not fix
+a count problem. The cost was not mainly reading: a PRD sitting at 2,550 chars under its
+budget turned every ordinary close into a ~10-turn edit loop clawing back under the cap,
+and in an agentic loop each turn re-sends the whole context. **Lesson:** the tell is a
+principle applied once and never enforced; and when routing behavioural text out, expect
+DELETION — 13 of the first 19 rules were already in their destination skill, stated more
+fully, because the skills were written from the same knowledge. (#491/#492; the trigger
+was Anthropic's Claude-5 context-engineering guidance, but the case rests on the
+measurement and on the unenforced rule, not on the article.)

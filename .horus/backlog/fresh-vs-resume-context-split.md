@@ -1,5 +1,6 @@
 ---
-status: open
+status: shelved
+shelved_on: 2026-08-02
 priority: low
 readiness: deferred
 readiness_reason: "Owner hold continues (2026-07-26). The 2026-07-21→2026-07-26 observation window yielded NO evidence: #386 swallowed the seeded prompt, so resume sessions received no handoff either and both modes were indistinguishable. The window genuinely starts 2026-07-26, now that #403 makes the resume path deliver."
@@ -9,7 +10,7 @@ refine_passes: 2
 vision_facet: "Continuity core"
 phase: explore
 tier: medium
-type: bug
+type: spike
 parallel: safe
 created_by: owner
 surface: horus/routines.py (resume_prompt / resume_context), horus/terminal_tui.py (launch-mode branch ~2573), horus/templates.py (PRD template + managed block), CLAUDE.md + AGENTS.md managed block, .horus/PRD.md frontmatter layout
@@ -162,3 +163,7 @@ enforced via our launch options."
   `pathfinder/SKILL.md:76` into the managed block. It is cheap, broad, and independent of
   the routing design; it was left unsplit deliberately to avoid a second concurrent
   managed-block change alongside `process-fixes-live-in-process-not-memory`.
+
+### 2026-08-02 — Rafael Figueiredo (manual)
+
+2026-08-02 — Reclassified bug -> spike, then shelved, on explicit owner decision. This is a design refinement awaiting evidence, not a defect that already arrived: the resume directive reaching fresh sessions is untidy, not broken. Two observation windows have now produced nothing — the 2026-07-21->07-26 window was void because #386 swallowed the seeded prompt, and the window restarted 2026-07-26 has yielded no reported friction since. A card that cannot be advanced without evidence nobody is gathering is exactly what the shelf is for. Unshelve if a resume session is ever observed acting on fresh-session guidance.

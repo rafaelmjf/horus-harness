@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-08-01
 created_by: agent
@@ -11,6 +11,8 @@ tier: medium
 parallel: safe
 vision_facet: "Continuity core"
 surface: .horus/PRD.md (## Rules), .horus/archive/history.md (the sanctioned destination), horus/consolidate.py (the budget + per-entry signals that keep firing)
+shipped_pr: 492
+shipped_sha: bc32140
 ---
 
 # prd-rules-section-outgrew-its-budget — 84 rules, 66% of the file, and every close now fights the cap
@@ -75,3 +77,7 @@ agent pays to read the file — and 59,480 chars genuinely is a lot to load at e
   this survives the boundary and was actively costing the close it was found in. Not
   attempted inline, deliberately — deciding which of 84 rules are dead is an owner call,
   and an agent that has read them once is the worst reader for it.
+
+### 2026-08-02 — Rafael Figueiredo (manual)
+
+2026-08-02 — DELIVERED across #491 (pilot) and #492 (batch), and closed here with the numbers. Acceptance line was 'finishing an ordinary continuity close should not require deleting someone else's rules'; that now holds. Measured: `## Rules` 84 -> 61 entries and 37,519 -> 26,756 chars; PRD.md 59,480 -> 48,656; budget headroom 2,550 -> 11,344, which is the figure that matters — at 2,550 a normal close went straight over the cap and the last one spent ~10 of its ~20 turns clawing back. The finding that reshaped the work: routing is DELETION-dominant, not migration-dominant. 13 of the first 19 rules were already stated in their destination skill, usually more fully, because the skills were written from the same knowledge — so the rules were duplicated, not homeless. That also means the article's conflicting-instruction failure mode was literally present: one instruction, two wordings, both loaded. Two open decisions were resolved: the five general-engineering entries were KEPT (cheap, and their failures were recent and repeated), and the C group (30 rules -> code docstrings) was declined as deletion-with-extra-steps at migration cost — if those are worth keeping the code should already say it, as `datums.py:1019` did. Rules 51/52 had no destination until `horus-release` was created in #496, which absorbed them and the two duplicate prose copies.

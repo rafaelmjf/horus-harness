@@ -1,5 +1,6 @@
 ---
-status: open
+status: retired
+retired_on: 2026-08-02
 priority: medium
 created: 2026-07-23
 last_refined: 2026-07-28
@@ -73,3 +74,9 @@ and `backlog-librarian` versus the current `horus run --unattended` envelope,
 active-card, worker, and worktree requirements. Owner accepted the proposal on
 2026-07-23. Related: `wildcard`, `backlog-librarian`,
 `autotest-e2e-away-mode-drill`, `dispatch-receipt-seam`.
+
+## Reviews
+
+### 2026-08-02 — Rafael Figueiredo (manual)
+
+2026-08-02 — RETIRED: the premise does not hold. Every blocker the card names is real but applies ONLY to `--unattended`, and nothing forces an advisory run through it. Verified live this session: `horus schedule run --at '+55m' -- '/wildcard' --detach` scheduled cleanly with no envelope, no card, no worktree and no delivery claim (a real systemd --user timer; cancelled after). `--expect-delivery` is opt-in and per its own help 'never inferred from prompt text'. The gap I then expected — an unguarded usage burn — is also absent: `_run_usage_preflight` gates EVERY run (refuses >=95%, warns >=80%, `--refuse-on-unknown` for a critical launch). So an advisory run needs no new dispatch intent: it holds no branch/commit/PR/merge authority to bound, and what it may do is its launch permission posture, per the PRD rule 'a launch chooses context; the posture chooses authority'. Wrapping it in an envelope would misstate what was authorized — the card's own opening complaint, one level up. Retired per the rule that a bug judged unreal is retired with a reason.
