@@ -1059,3 +1059,32 @@ def test_every_bundled_skill_projection_matches_its_source():
             elif path.read_text(encoding="utf-8") != skill.content:
                 mismatched.append(str(path))
     assert mismatched == [], f"projection drifted from source: {mismatched}"
+
+
+def test_horus_release_skill_carries_the_deploy_invariant():
+    """The runbook lived in three places (PRD Rules, CLAUDE.md, AGENTS.md) and in
+    none of them could `skill-audit` reach it. The one clause that must survive
+    consolidation is the one no other step implies."""
+    rel = next(s for s in skills.SKILLS if s.name == "horus-release")
+    content = _unwrapped(rel.content)
+
+    assert rel.audience == skills.AUDIENCE_HORUS, "releasing horus-harness is not a fleet procedure"
+    assert "does NOT update the hosted app" in content
+    assert "scripts/deploy-hosted.sh" in content
+    # The traps are the reason this is a skill rather than a one-liner.
+    assert "--force --refresh" in content and "uv tool upgrade --reinstall" in content
+    assert "--python 3.12" in content
+    assert "`0.1` is reserved" in content
+
+
+def test_release_runbook_is_not_duplicated_back_into_the_eager_tier():
+    """PRD Rules and the agent instruction files keep the INVARIANT and point at the
+    skill; restating the steps there is the duplication this consolidation removed."""
+    from pathlib import Path
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        text = Path(name).read_text(encoding="utf-8")
+        assert "horus-release" in text, f"{name} must point at the skill"
+        assert "three-file bump" not in text.replace("the three-file bump, required checks", "")
+    prd = Path(".horus/PRD.md").read_text(encoding="utf-8")
+    assert "horus-release" in prd
+    assert "bump `pyproject.toml` + `horus/__init__.py` + `uv.lock`" not in prd
