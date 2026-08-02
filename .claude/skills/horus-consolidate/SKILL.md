@@ -17,7 +17,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 17 -->
+<!-- horus-skill-version: 18 -->
 
 # Consolidate Horus continuity
 
@@ -142,7 +142,10 @@ them is stale or empty.
    small enough to fold into the same close — don't let the file blow the cap
    before acting on the warning.
 
-5. **Verify.** Run `horus close --check` — it must pass. One `consolidate`
+5. **Verify.** Run `horus close --check` — it must pass. **A green PR is not a landed
+   PR** — that output names your own unmerged remote branches; read that line rather
+   than skimming it. A branch left open goes stale enough that merging it later
+   reverts work. One `consolidate`
    pass at most per close; don't chase every signal to zero (a duplicate title
    you've deliberately kept apart, for instance, is fine to leave).
 

@@ -9,7 +9,7 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
@@ -124,6 +124,15 @@ approval at the end — never demotes, defers, retires, rescopes, acceptance
 rewrites, or mints.
 
 ## 3. Readiness and autonomy contract
+
+**`shelved` is a status, and a bug can never take it.** `shelved` means the owner
+declined to DECIDE — distinct from `retired` (decided dead) and from `deferred`
+(queued, which failed: 26 cards screened twice, none moved). A bug is a problem that
+already arrived, so boxing one hides a known defect where no view surfaces it; the
+close gate `fail`s on that combination. A bug judged unreal is `retire`d with a
+reason. Read shelved cards with `horus backlog list --shelved`, never a directory
+listing.
+
 
 `status` remains lifecycle state. Readiness is orthogonal:
 

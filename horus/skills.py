@@ -133,7 +133,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 17 -->
+<!-- horus-skill-version: 18 -->
 
 # Consolidate Horus continuity
 
@@ -258,7 +258,10 @@ them is stale or empty.
    small enough to fold into the same close — don't let the file blow the cap
    before acting on the warning.
 
-5. **Verify.** Run `horus close --check` — it must pass. One `consolidate`
+5. **Verify.** Run `horus close --check` — it must pass. **A green PR is not a landed
+   PR** — that output names your own unmerged remote branches; read that line rather
+   than skimming it. A branch left open goes stale enough that merging it later
+   reverts work. One `consolidate`
    pass at most per close; don't chase every signal to zero (a duplicate title
    you've deliberately kept apart, for instance, is fine to leave).
 
@@ -1963,7 +1966,7 @@ description: >-
   campaign's execution use `process-retrospective`.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Skill audit — one skill's text vs reality
 
@@ -2030,6 +2033,21 @@ they are regenerated and the edit would be silently overwritten.
   bump (or its pending state).
 - This skill audits itself under exactly the same rules — when its own
   instructions needed improvising around, that is a finding here.
+
+## Two invariants an audit must check first
+
+- **A skill's DESCRIPTION is where an invocation boundary lives.** The body is read
+  only after the load decision is already made, so a correct boundary section in the
+  body cannot stop a false trigger. Corollary for tests over skill prose: assert on
+  **whitespace-normalized** content, since hard-wrapping breaks a raw-substring
+  assertion on reflow rather than on meaning.
+- **Any edit bumps the skill version, always.** The version-aware install skips
+  same-version content, so an unbumped text change leaves committed projections
+  silently stale. `Skill(name, N, text)` and the `horus-skill-version: N` marker
+  inside that text are two copies of one number; when they disagree every
+  `upgrade-project` reports "updated" forever while doctor never goes green. Resync
+  with `horus skill install --force` (from working-tree source); never hand-edit a
+  projected `SKILL.md`.
 
 ## Boundaries
 
@@ -2510,7 +2528,7 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
@@ -2625,6 +2643,15 @@ approval at the end — never demotes, defers, retires, rescopes, acceptance
 rewrites, or mints.
 
 ## 3. Readiness and autonomy contract
+
+**`shelved` is a status, and a bug can never take it.** `shelved` means the owner
+declined to DECIDE — distinct from `retired` (decided dead) and from `deferred`
+(queued, which failed: 26 cards screened twice, none moved). A bug is a problem that
+already arrived, so boxing one hides a known defect where no view surfaces it; the
+close gate `fail`s on that combination. A bug judged unreal is `retire`d with a
+reason. Read shelved cards with `horus backlog list --shelved`, never a directory
+listing.
+
 
 `status` remains lifecycle state. Readiness is orthogonal:
 
@@ -2945,7 +2972,7 @@ description: >-
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -3010,6 +3037,17 @@ it never selects the card, account, or model. Show the owner the exact envelope
 (agent + model + account + effort + bounded task + usage evidence + acceptance gate +
 dividend) and get approval before creating it. `horus envelope revoke <name>` grounds
 pending work instantly.
+
+**Why the default is verify+escalate, and what a brief must name.** The away-mode
+drill ran two legs and answered its own readiness question: every required check
+passed on both while both overwrote PRD continuity, in a surface no card named.
+`--allow-merge` was correctly withheld. A worker records delivery facts — the SHA,
+the PR, what the gate emitted — never a verdict on its own work; the supervisor
+owns canonical continuity. That failure mode is addressable by instruction: the same
+model and effort left `.horus/` untouched across a ten-step release once the brief
+named it a hard constraint. **So name the off-limits surfaces explicitly in every
+brief.** An unstated expectation is not a worker defect — but one clean run shows a
+model can follow a runbook once, not that unattended release is safe.
 
 ### 6. Dispatch or schedule
 Launch now, or schedule a one-shot on THIS machine (never cloud, never recurring):
@@ -3513,7 +3551,7 @@ strictly-additive boundary all hold exactly as written.
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 17, _CONSOLIDATE_SKILL),
+    Skill("horus-consolidate", 18, _CONSOLIDATE_SKILL),
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 7, _INFER_SKILL),
     Skill("horus-execution", 16, _EXECUTION_SKILL),
@@ -3524,13 +3562,13 @@ SKILLS: tuple[Skill, ...] = (
     Skill("backlog-librarian", 1, _BACKLOG_LIBRARIAN_SKILL),
     Skill("product-audit", 4, _PRODUCT_AUDIT_SKILL),
     Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),
-    Skill("skill-audit", 2, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
+    Skill("skill-audit", 3, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
     Skill("market-scan", 7, _MARKET_SCAN_SKILL),
     Skill("roadmap-branches", 8, _ROADMAP_BRANCHES_SKILL),
     Skill("scope-cards", 7, _SCOPE_CARDS_SKILL),
-    Skill("backlog-refine", 6, _BACKLOG_REFINE_SKILL),
+    Skill("backlog-refine", 7, _BACKLOG_REFINE_SKILL),
     Skill("pathfinder", 10, _PATHFINDER_SKILL),
-    Skill("cockpit-autonomous-dispatch-contract", 3, _COCKPIT_DISPATCH_SKILL),
+    Skill("cockpit-autonomous-dispatch-contract", 4, _COCKPIT_DISPATCH_SKILL),
     Skill("launch-model-refresh", 1, _LAUNCH_MODEL_REFRESH_SKILL),
     Skill("wildcard", 6, _WILDCARD_SKILL),
 )
