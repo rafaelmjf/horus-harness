@@ -140,6 +140,85 @@ class WorktreeRemoval:
     detail: str
 
 
+@dataclass(frozen=True)
+class WorktreeCandidate:
+    """One linked worktree, classified for reclaim. ``reason`` is shown either way."""
+    path: Path
+    branch: str | None
+    reclaimable: bool
+    reason: str
+    commits: int = 0
+
+
+def _looks_merged(primary: Path, worktree_path: Path, branch: str, *, timeout: float = 30.0) -> bool:
+    """The two signals Horus already trusts, in cost order.
+
+    ``[gone]`` is the load-bearing one on a squash-merging repo, and the card
+    that requested the sweep assumed it was unavailable — it reasoned that
+    detection "has to come from PR state" because `git branch --merged` cannot
+    see a squash. That is true of *ancestry* and false of the upstream: `gh pr
+    merge --delete-branch` deletes the REMOTE branch successfully (only the
+    local delete fails when a worktree holds it), so after a prune-fetch the
+    branch reads ``[gone]``. Measured on this repo 2026-08-02: 4 of 5 dead
+    worktrees detected this way, the 5th by the ancestor check below because it
+    was never pushed at all. So no `gh`, no network, and no PR lookup.
+    """
+    track = _git(worktree_path, "for-each-ref", "--format=%(upstream:track)", f"refs/heads/{branch}", timeout=timeout)
+    if track.returncode == 0 and "[gone]" in track.stdout:
+        return True
+    default = _git(primary, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD", timeout=timeout)
+    default_branch = default.stdout.strip().rsplit("/", 1)[-1] if default.returncode == 0 and default.stdout.strip() else None
+    if not default_branch:
+        return False
+    return _git(primary, "merge-base", "--is-ancestor", branch, f"origin/{default_branch}", timeout=timeout).returncode == 0
+
+
+def survey(primary: Path, *, timeout: float = 30.0) -> list[WorktreeCandidate]:
+    """Classify every LINKED worktree of ``primary`` — read-only, never removes.
+
+    The primary checkout is excluded by construction: ``git worktree list``
+    always reports it first. Nothing here shells out to the network, so the
+    survey is the same offline.
+
+    A dirty worktree is reported as kept rather than filtered out, because the
+    interesting case for a human is "this looks dead but is holding edits".
+    ``git worktree remove`` also refuses a dirty tree on its own, so the guard
+    is doubled deliberately: the message here explains, and git enforces.
+    """
+    listing = _git(primary, "worktree", "list", "--porcelain", timeout=timeout)
+    if listing.returncode != 0:
+        return []
+    paths = [
+        Path(line[len("worktree "):].strip())
+        for line in listing.stdout.splitlines()
+        if line.startswith("worktree ")
+    ][1:]  # [0] is always the primary checkout
+
+    out: list[WorktreeCandidate] = []
+    for path in paths:
+        branch_result = _git(path, "rev-parse", "--abbrev-ref", "HEAD", timeout=timeout)
+        branch = branch_result.stdout.strip() if branch_result.returncode == 0 else ""
+        if not branch or branch == "HEAD":
+            out.append(WorktreeCandidate(path, None, False, "detached HEAD — refusing to classify"))
+            continue
+        dirty = _git(path, "status", "--porcelain", timeout=timeout)
+        if dirty.returncode != 0 or dirty.stdout.strip():
+            n = len([ln for ln in dirty.stdout.splitlines() if ln.strip()])
+            out.append(WorktreeCandidate(path, branch, False, f"{n} uncommitted change(s) — never reclaimed"))
+            continue
+        if not _looks_merged(primary, path, branch, timeout=timeout):
+            out.append(WorktreeCandidate(path, branch, False, "branch is not merged — still live work"))
+            continue
+        # Count what `git branch -D` would discard. On a squash-merging repo this
+        # is normally non-zero for a MERGED branch (the squash creates no ancestry),
+        # so it is shown, never used as a veto — the number is there so a human
+        # reading the dry-run can notice one that looks wrong.
+        count = _git(primary, "rev-list", "--count", f"origin/HEAD..{branch}", timeout=timeout)
+        commits = int(count.stdout.strip()) if count.returncode == 0 and count.stdout.strip().isdigit() else 0
+        out.append(WorktreeCandidate(path, branch, True, "merged — reclaimable", commits))
+    return out
+
+
 def remove_if_merged(primary: Path, worktree_path: Path, *, timeout: float = 30.0) -> WorktreeRemoval:
     """Remove a linked worktree + its branch, but ONLY when the branch looks
     merged — never a destructive default.
@@ -162,17 +241,7 @@ def remove_if_merged(primary: Path, worktree_path: Path, *, timeout: float = 30.
             detail=f"{worktree_path} is not on a branch (detached HEAD) — refusing to remove",
         )
 
-    track = _git(worktree_path, "for-each-ref", "--format=%(upstream:track)", f"refs/heads/{branch}", timeout=timeout)
-    merged = track.returncode == 0 and "[gone]" in track.stdout
-
-    if not merged:
-        default = _git(primary, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD", timeout=timeout)
-        default_branch = default.stdout.strip().rsplit("/", 1)[-1] if default.returncode == 0 and default.stdout.strip() else None
-        if default_branch:
-            check = _git(primary, "merge-base", "--is-ancestor", branch, f"origin/{default_branch}", timeout=timeout)
-            merged = check.returncode == 0
-
-    if not merged:
+    if not _looks_merged(primary, worktree_path, branch, timeout=timeout):
         return WorktreeRemoval(
             removed=False,
             detail=f"branch {branch!r} at {worktree_path} does not look merged yet — leaving the worktree in place",
