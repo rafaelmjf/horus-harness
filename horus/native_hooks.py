@@ -408,6 +408,35 @@ def _claude_usage_guard_hook_command() -> dict[str, Any]:
     }
 
 
+def _claude_skill_usage_hook_command() -> dict[str, Any]:
+    # PreToolUse on the `Skill` tool. Verified live 2026-08-02: the matcher fires for
+    # Skill exactly as it does for Bash, and a newly written hook takes effect without
+    # a session restart. Records a name only — never arguments or prompt text.
+    return {
+        "type": "command",
+        "command": _guard_posix("horus hook skill-invoked"),
+    }
+
+
+def _is_horus_skill_usage_hook(handler: dict[str, Any]) -> bool:
+    return "hook skill-invoked" in str(handler.get("command", ""))
+
+
+def install_claude_skill_usage_hook(project_root: Path) -> HookAction:
+    """Record which bundled skills actually get invoked, for `skill-audit`.
+
+    Measurement, not enforcement: it never blocks, never advises, and its absence
+    changes nothing except that audit verdicts stay based on recall.
+    """
+    path, data, hooks = _claude_hooks_dict(project_root)
+    _merge_event_hook(
+        hooks, "PreToolUse", _claude_skill_usage_hook_command(),
+        matcher="Skill", is_mine=_is_horus_skill_usage_hook,
+    )
+    data["hooks"] = hooks
+    return _persist_hook(path, data, "Claude skill-usage hook")
+
+
 def _claude_checkpoint_hook_command() -> dict[str, Any]:
     # Stop-event gate. On session end it warns (default) when the working tree is dirty
     # or has unpushed commits — the committed-and-pushed checkpoint discipline as an

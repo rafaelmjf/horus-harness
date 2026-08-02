@@ -1698,7 +1698,7 @@ description: >-
   campaign's execution use `process-retrospective`.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Skill audit — one skill's text vs reality
 
@@ -1730,6 +1730,12 @@ Name the skill under audit before reading anything. Do not widen into a
 sweep of the whole bundled set — that is a series of audits, each bounded.
 
 ## Questions (evidence, not recall)
+
+**Start with the invocation count.** `horus skill usage [--since YYYY-MM-DD]` reports
+how often every bundled skill was actually invoked, zeroes included. A zero is a
+finding, not a gap in the data — but read it honestly: it means *this owner, on this
+machine, since the recorder was installed*, so a recently-installed recorder proves
+nothing yet. It is evidence to weigh, never a verdict on its own.
 
 1. **Fidelity.** Check every claim the skill's text makes against the live
    surface: commands and flags against `horus --help` / `horus <cmd> --help`,
@@ -3302,7 +3308,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("backlog-librarian", 2, _BACKLOG_LIBRARIAN_SKILL),
     Skill("product-audit", 5, _PRODUCT_AUDIT_SKILL),
     Skill("process-retrospective", 2, _PROCESS_RETROSPECTIVE_SKILL),
-    Skill("skill-audit", 4, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
+    Skill("skill-audit", 5, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
     Skill("market-scan", 8, _MARKET_SCAN_SKILL),
     Skill("roadmap-branches", 9, _ROADMAP_BRANCHES_SKILL),
     Skill("scope-cards", 8, _SCOPE_CARDS_SKILL),

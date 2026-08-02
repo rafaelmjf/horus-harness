@@ -16,6 +16,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from horus import (
+    skill_usage,
     __version__,
     activity,
     adapters,
@@ -3845,6 +3846,49 @@ def cmd_fetch_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_skill_usage(args: argparse.Namespace) -> int:
+    """Report how often each bundled skill was actually invoked.
+
+    Reports EVERY known skill including zeroes — a skill absent from the log is the
+    case `skill-audit` most needs to see, and filtering it out would turn "never
+    used" into "not shown".
+    """
+    rows = skill_usage.summary([s.name for s in skills.SKILLS], since=args.since)
+    total = sum(count for _, count in rows)
+    if total == 0:
+        print("No skill invocations recorded yet.")
+        print("Install the recorder with `horus hook install --target claude --kind skill-usage`.")
+        return 0
+    window = f" since {args.since}" if args.since else ""
+    print(f"Skill invocations{window} — {total} across {sum(1 for _, c in rows if c)} of {len(rows)} skills\n")
+    width = max(len(name) for name, _ in rows)
+    for name, count in rows:
+        print(f"  {name:<{width}}  {count if count else '-'}")
+    print("\nEvidence for `skill-audit`; a zero is a finding, not a gap in the data.")
+    return 0
+
+
+def cmd_hook_skill_invoked(args: argparse.Namespace) -> int:
+    """PreToolUse(Skill) recorder — name + project + day, nothing else.
+
+    Always exits 0. This sits on the agent's critical path, so a telemetry failure
+    must never surface as a failed tool call; the installed command also carries the
+    standard `|| exit 0` guard, making the guarantee doubled on purpose.
+    """
+    payload = _read_hook_stdin() or {}
+    tool_input = payload.get("tool_input") or payload.get("toolInput") or {}
+    name = ""
+    if isinstance(tool_input, dict):
+        name = str(tool_input.get("skill") or tool_input.get("name") or "")
+    if not name:
+        return 0
+    project = payload.get("cwd") or payload.get("project_dir") or None
+    if project:
+        project = Path(str(project)).name
+    skill_usage.record(name, project)
+    return 0
+
+
 def cmd_hook_install(args: argparse.Namespace) -> int:
     root = _resolve_dir(args.path)
     if root is None:
@@ -3900,6 +3944,12 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
             print(f"[{action.status}] {action.message}")
             print("SessionStart hook: fetches (TTL-cached) and injects a behind-origin")
             print("warning into the session context — the fetch-first rule as a signal.")
+        if kind in ("skill-usage", "all"):
+            action = native_hooks.install_claude_skill_usage_hook(root)
+            print(f"[{action.status}] {action.message}")
+            print("PreToolUse(Skill) recorder: counts which bundled skills are actually")
+            print("invoked, so `skill-audit` verdicts rest on evidence rather than recall.")
+            print("Machine-local, name only — never arguments or prompt text.")
         return 0
     print(f"unsupported hook target: {args.target}")
     return 2
@@ -5826,16 +5876,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_hook = sub.add_parser("hook", help="install native app hooks")
     hook_sub = p_hook.add_subparsers(dest="hook_cmd", required=True)
+    p_hook_skill = hook_sub.add_parser(
+        "skill-invoked",
+        help="record a Skill invocation from PreToolUse (machine-local; always exits 0)",
+    )
+    p_hook_skill.set_defaults(func=cmd_hook_skill_invoked)
+
     p_hook_install = hook_sub.add_parser("install", help="install a native app hook")
     p_hook_install.add_argument("--path", default=".", help="project root (default: cwd)")
     p_hook_install.add_argument("--target", choices=("codex", "claude"), required=True, help="native app target")
     p_hook_install.add_argument(
-        "--kind", choices=("usage", "merge", "guard", "checkpoint", "fetch-check", "all"), default="usage",
+        "--kind", choices=("usage", "merge", "guard", "checkpoint", "fetch-check", "skill-usage", "all"), default="usage",
         help="which hook(s): usage = quota→closure (default); merge = PreToolUse gate on "
              "`gh pr merge`; guard = PreToolUse gate that stops a hosted session "
              "restarting/killing its own host; checkpoint = Stop hook that warns on a "
              "dirty tree / unpushed commits; fetch-check = SessionStart behind-origin "
-             "warning (claude only); all = every applicable hook.",
+             "warning (claude only); skill-usage = PreToolUse(Skill) recorder for "
+             "`skill-audit` evidence (claude only); all = every applicable hook.",
     )
     p_hook_install.add_argument(
         "--threshold",
@@ -5871,6 +5928,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_skill = sub.add_parser("skill", help="manage Horus agent skills (.claude/skills/ and .agents/skills/)")
     skill_sub = p_skill.add_subparsers(dest="skill_cmd", required=True)
+    p_skill_usage = skill_sub.add_parser(
+        "usage", help="how often each bundled skill was actually invoked (machine-local)"
+    )
+    p_skill_usage.add_argument("--since", help="only count invocations on/after this ISO day")
+    p_skill_usage.set_defaults(func=cmd_skill_usage)
+
     p_skill_install = skill_sub.add_parser("install", help="install/update the bundled skills")
     p_skill_install.add_argument("--path", default=".", help="project root (default: cwd)")
     p_skill_install.add_argument("--user", action="store_true", help="install to the user-scope skills directory instead of the project")

@@ -1088,3 +1088,98 @@ def test_release_runbook_is_not_duplicated_back_into_the_eager_tier():
     prd = Path(".horus/PRD.md").read_text(encoding="utf-8")
     assert "horus-release" in prd
     assert "bump `pyproject.toml` + `horus/__init__.py` + `uv.lock`" not in prd
+
+
+from datetime import date as _date
+
+
+class _Stdin:
+    """`_read_hook_stdin` checks isatty() first — a fake without it is not the
+    object the code actually reads, which is how a fixture passes vacuously."""
+    def __init__(self, raw): self._raw = raw
+    def read(self): return self._raw
+    def isatty(self): return False
+
+
+class _Args:
+    pass
+
+
+# --- skill invocation telemetry -------------------------------------------
+
+def test_skill_usage_records_and_counts(tmp_path, monkeypatch):
+    from horus import skill_usage
+    monkeypatch.setattr(skill_usage.config, "config_dir", lambda: tmp_path)
+
+    assert skill_usage.record("wildcard", "horus-harness", today=_date(2026, 8, 1))
+    assert skill_usage.record("wildcard", "horus-harness", today=_date(2026, 8, 2))
+    assert skill_usage.record("pathfinder", "other-proj", today=_date(2026, 8, 2))
+
+    assert skill_usage.counts()["wildcard"] == 2
+    assert skill_usage.counts(since="2026-08-02")["wildcard"] == 1
+    assert skill_usage.counts(project="other-proj") == {"pathfinder": 1}
+
+
+def test_skill_usage_summary_reports_zeroes(tmp_path, monkeypatch):
+    """A skill absent from the log is the case `skill-audit` most needs to see;
+    filtering it out would turn 'never used' into 'not shown'."""
+    from horus import skill_usage
+    monkeypatch.setattr(skill_usage.config, "config_dir", lambda: tmp_path)
+    skill_usage.record("wildcard", today=_date(2026, 8, 2))
+
+    rows = skill_usage.summary(["wildcard", "pathfinder", "market-scan"])
+
+    assert rows[0] == ("wildcard", 1)
+    assert ("pathfinder", 0) in rows and ("market-scan", 0) in rows
+
+
+def test_skill_usage_never_raises_on_a_broken_log(tmp_path, monkeypatch):
+    """It sits on the agent's critical path: a telemetry failure must degrade to
+    'no telemetry', never to a failed tool call."""
+    from horus import skill_usage
+    monkeypatch.setattr(skill_usage.config, "config_dir", lambda: tmp_path)
+    (tmp_path / skill_usage.LOG_NAME).write_text(
+        'not json\n{"skill":"wildcard","day":"2026-08-02"}\n{"partial":\n', encoding="utf-8"
+    )
+
+    assert skill_usage.counts()["wildcard"] == 1  # the readable line survives
+    assert skill_usage.record("", None) is False  # an empty name is not an invocation
+
+
+def test_skill_usage_hook_records_name_only(tmp_path, monkeypatch, capsys):
+    """The no-transcripts rule: a name, a project and a day — never arguments."""
+    from horus import cli, skill_usage
+    monkeypatch.setattr(skill_usage.config, "config_dir", lambda: tmp_path)
+    payload = (
+        '{"tool_name":"Skill","tool_input":{"skill":"wildcard","args":"secret prompt text"},'
+        '"cwd":"/home/x/horus-harness"}'
+    )
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin(payload))
+
+    rc = cli.cmd_hook_skill_invoked(_Args())
+
+    assert rc == 0
+    body = (tmp_path / skill_usage.LOG_NAME).read_text(encoding="utf-8")
+    assert '"skill":"wildcard"' in body and '"project":"horus-harness"' in body
+    assert "secret prompt text" not in body, "hook must never record tool arguments"
+
+
+def test_skill_usage_hook_exits_zero_on_garbage(tmp_path, monkeypatch):
+    """`|| exit 0` guards the shell side; this guards the Python side. Doubled on
+    purpose — a recorder that can break a tool call is worse than no telemetry."""
+    from horus import cli, skill_usage
+    monkeypatch.setattr(skill_usage.config, "config_dir", lambda: tmp_path)
+    for raw in ("not json", "", "{}", '{"tool_input":{}}'):
+        monkeypatch.setattr(cli.sys, "stdin", _Stdin(raw))
+        assert cli.cmd_hook_skill_invoked(_Args()) == 0
+    assert not (tmp_path / skill_usage.LOG_NAME).exists()
+
+
+def test_skill_usage_hook_is_pretooluse_on_the_skill_tool():
+    """Verified live 2026-08-02: PreToolUse fires for the `Skill` tool exactly as it
+    does for Bash. PreToolUse rather than PostToolUse because 'was it invoked' needs
+    no result, and Horus already installs PreToolUse hooks and none on PostToolUse."""
+    from horus import native_hooks
+    cmd = native_hooks._claude_skill_usage_hook_command()
+    assert "horus hook skill-invoked" in cmd["command"]
+    assert cmd["command"].endswith("|| exit 0")
