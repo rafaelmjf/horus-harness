@@ -20,6 +20,7 @@ def _mk_card(
     readiness_reason="",
     autonomy="",
     last_refined="",
+    depends_on="",
     order="",
     priority="later",
     body="Card body.\n",
@@ -43,6 +44,8 @@ def _mk_card(
         lines.append(f"autonomy: {autonomy}")
     if last_refined:
         lines.append(f"last_refined: {last_refined}")
+    if depends_on:
+        lines.append(f"depends-on: {depends_on}")
     lines.append("---")
     text = "\n".join(lines) + f"\n# {name.replace('-', ' ').title()}\n\n{body}"
     (hdir / f"{name}.md").write_text(text, encoding="utf-8")
@@ -774,3 +777,66 @@ def test_a_shelved_bug_fails_the_close_gate(tmp_path):
 
     _mk_card(tmp_path, "boxed-bug", status=backlog.SHELVED_STATUS, type="bug")
     assert not closure.close_check_healthy(tmp_path, backlog.hygiene_findings(tmp_path))
+
+
+def test_an_active_card_gated_on_a_shelved_blocker_is_reported(tmp_path):
+    """A gate that can never lift is worse than either state on its own.
+
+    `depends-on` only means something while the blocker can still move. When the
+    2026-08-01 sweep shelved `account-login-verb`, the active bug
+    `codex-isolated-config-leak` kept listing as open work that nothing could ever
+    make schedulable — and three consecutive continuity closes carried it with no
+    surface naming it. The sweep could not have shelved the bug itself
+    (`test_a_bug_can_never_be_shelved`), so the defect entered one level up.
+    """
+    _mk_card(tmp_path, "blocker", status=backlog.SHELVED_STATUS, type="feature")
+    _mk_card(tmp_path, "dependent", type="bug", depends_on="blocker")
+
+    offending = [f for f in backlog.hygiene_findings(tmp_path) if "can never lift" in f.message]
+
+    assert offending, "an active card gated on a shelved blocker must be reported"
+    assert "dependent" in offending[0].message and "blocker" in offending[0].message
+    # `warn`, not `fail`: first deterministic signal for this class, and a fail
+    # would reach the required PR check, which never blocks a merge on prose.
+    assert offending[0].level == "warn"
+
+
+def test_a_retired_blocker_strands_a_dependent_too(tmp_path):
+    """`retired` is decided-dead, which strands a dependent exactly like the shelf."""
+    _mk_card(tmp_path, "blocker", status="retired", type="feature")
+    _mk_card(tmp_path, "dependent", type="bug", depends_on="blocker")
+
+    assert [f for f in backlog.hygiene_findings(tmp_path) if "can never lift" in f.message]
+
+
+def test_a_delivered_blocker_satisfies_the_gate(tmp_path):
+    """The opposite case: a shipped blocker LIFTED the gate — never report it."""
+    _mk_card(tmp_path, "blocker", status="shipped", type="feature")
+    _mk_card(tmp_path, "dependent", type="bug", depends_on="blocker")
+
+    assert not [f for f in backlog.hygiene_findings(tmp_path) if "can never lift" in f.message]
+
+
+def test_a_dangling_dependency_is_reported_but_an_archived_one_is_not(tmp_path):
+    """A name that never existed is a typo; a name in the archive is delivered."""
+    _mk_card(tmp_path, "typo-dep", type="bug", depends_on="no-such-card")
+    _mk_card(tmp_path, "archived-dep", type="bug", depends_on="was-shipped")
+    adir = tmp_path / ".horus" / "backlog" / "archive"
+    adir.mkdir(parents=True, exist_ok=True)
+    (adir / "was-shipped.md").write_text(
+        "---\nstatus: shipped\npriority: later\ntier: sonnet\ncreated: 2026-07-11\n---\n# Was Shipped\n",
+        encoding="utf-8",
+    )
+
+    dangling = [f for f in backlog.hygiene_findings(tmp_path) if "does not exist" in f.message]
+
+    assert [f for f in dangling if "typo-dep" in f.message]
+    assert not [f for f in dangling if "archived-dep" in f.message]
+
+
+def test_an_inactive_card_gated_on_a_shelved_blocker_is_silent(tmp_path):
+    """The defect is a card that still READS as open. A shelved dependent does not."""
+    _mk_card(tmp_path, "blocker", status=backlog.SHELVED_STATUS, type="feature")
+    _mk_card(tmp_path, "dependent", status=backlog.SHELVED_STATUS, type="feature", depends_on="blocker")
+
+    assert not [f for f in backlog.hygiene_findings(tmp_path) if "can never lift" in f.message]

@@ -549,11 +549,68 @@ def _lines_outside_reviews(body: str) -> list[str]:
     return lines[:start] + lines[end:]
 
 
+# Statuses that SATISFY a `depends-on` rather than blocking it: the blocker was
+# delivered or deliberately folded in, so the gate has lifted. `retired` is NOT
+# here — a retired blocker was decided dead, which leaves the dependent stranded
+# exactly like a shelved one does.
+_DEPENDENCY_SATISFIED = ("shipped", "done", "folded-in")
+
+
+def unreachable_gate_findings(cards: list[Card], root: Path) -> list[Finding]:
+    """An ACTIVE card gated on a blocker nobody intends to deliver.
+
+    `depends-on` only means something while the blocker can still move. A blocker
+    that is `shelved` or `retired` is one the owner has declined to do, so the
+    dependent's gate can NEVER lift: the card still lists as open, and nothing can
+    ever make it schedulable. That is worse than either state alone, because every
+    working view keeps showing it as live work.
+
+    Observed on this repo: the 2026-08-01 sweep shelved `account-login-verb` while
+    the active bug `codex-isolated-config-leak` was gated on it — and three
+    consecutive continuity closes carried the broken gate with no surface naming
+    it. Note the sweep could not have shelved the *bug* (`hygiene_findings` fails
+    on that), so the defect entered one level up, through its blocker.
+
+    `warn`, not `fail`: this is the first deterministic signal for a class that has
+    only ever had instructions, and the ladder says promote a rung only after a
+    signal has been observed to fail. A `fail` here would also reach the required
+    PR check, which must never block a merge on backlog prose.
+    """
+    findings: list[Finding] = []
+    by_name = {card.name: card for card in cards}
+    archived = archive_dir(root)
+    for card in cards:
+        if card.status in _INACTIVE_STATUSES:
+            continue
+        raw = card.field_value("depends-on") or card.field_value("depends_on")
+        for dep in (p.strip() for p in re.split(r"[,\n]", raw) if p.strip()):
+            target = by_name.get(dep)
+            if target is None:
+                # Not in the backlog root: archived (terminal, so satisfied) or a
+                # name that never existed. Only the latter is worth reporting.
+                if not (archived / f"{dep}.md").is_file():
+                    findings.append(Finding(
+                        "warn",
+                        f"backlog card '{card.name}' depends-on '{dep}', which does not "
+                        "exist — fix the name or drop the dependency",
+                    ))
+                continue
+            if target.status in _INACTIVE_STATUSES and target.status not in _DEPENDENCY_SATISFIED:
+                findings.append(Finding(
+                    "warn",
+                    f"backlog card '{card.name}' is gated on '{dep}', which is "
+                    f"'{target.status}' — that gate can never lift. Reactivate the "
+                    "blocker, re-point the dependency, or close the dependent",
+                ))
+    return findings
+
+
 def hygiene_findings(root: Path) -> list[Finding]:
     """Report card lifecycle drift for consolidate and the recurring close gate."""
     findings: list[Finding] = []
     cards = load_cards(root)
     findings.extend(order_findings(cards))
+    findings.extend(unreachable_gate_findings(cards, root))
     for card in cards:
         findings.extend(readiness_findings(card))
         body = frontmatter.parse(card.path.read_text(encoding="utf-8")).body

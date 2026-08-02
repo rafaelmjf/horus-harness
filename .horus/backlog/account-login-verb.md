@@ -1,10 +1,8 @@
 ---
-status: shelved
-shelved_on: 2026-08-01
+status: open
 priority: medium
-readiness: deferred
-readiness_reason: "DEFERRED until 2026-07-29 by owner instruction (extended 2026-07-28): implementing and verifying this requires performing a real interactive agent login, which was still not available on 2026-07-28. The card itself is fully specified and needs no further shaping — it was Ready/attended and returns straight to that state on 2026-07-29, no re-refinement needed."
-reactivate_after: 2026-07-29
+readiness: ready
+autonomy: attended
 created: 2026-07-20
 created_by: owner
 last_refined: 2026-07-28
@@ -135,3 +133,7 @@ Live friction report + hand-executed setup run, owner-attended, 2026-07-20.
   specified and returns to **Ready / attended** on 2026-07-29 with no re-refinement pass.
   Note the knock-on: `codex-isolated-config-leak` is Gated on this card and its
   `reactivate_after` moved with it, so this one-day extension moves both.
+
+### 2026-08-02 — Rafael Figueiredo (manual)
+
+2026-08-02 — Reactivated. The card was swept into `shelved` on 2026-08-01 as collateral of the 69-card sweep, but its own deferral had already expired: `reactivate_after: 2026-07-29`, with the card recorded as fully specified and needing no re-refinement. Shelving it also stranded `codex-isolated-config-leak` — an active BUG whose owner-chosen remedy (re-login instead of copying, 2026-07-26) depends on this verb existing, so its gate could never lift. Restored to Ready/attended, the state its own readiness_reason said it returns to.
