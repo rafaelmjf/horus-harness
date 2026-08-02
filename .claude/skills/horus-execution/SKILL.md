@@ -12,10 +12,10 @@ description: >-
   Never infer delegation from a task's breadth, phase count, or number of
   surfaces. It keeps `.horus/execution.md` fluid, uses
   `.horus/temp/` for fleeting worker notes, and distills durable outcomes back
-  into `PRD.md` (v3) or roadmap/features/decisions/history (v2) at closure.
+  into `PRD.md` at closure.
 ---
 
-<!-- horus-skill-version: 16 -->
+<!-- horus-skill-version: 17 -->
 
 # Horus execution supervision
 
@@ -172,12 +172,9 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
 
 ## Steps
 
-1. **Read the continuity.** On a PRD-structure (v3) project, read `.horus/PRD.md`
-   (vision/backlog/shipped/rules + the frontmatter handoff fields) and
-   `execution.md`. On a six-lane (v2) project, read `.horus/project.md`,
-   `roadmap.md`, `features.md`, `decisions.md`, `history.md`, and `execution.md`.
-   Either way, review relevant `.horus/temp/*.md` handoff notes only when an
-   execution plan is active — that directory is unchanged across both structures.
+1. **Read the continuity.** Read `.horus/PRD.md` (vision/backlog/shipped/rules +
+   the frontmatter handoff fields) and `execution.md`. Review relevant
+   `.horus/temp/*.md` handoff notes only when an execution plan is active.
 
 2. **Get the native prompt.** Run:
 
@@ -265,17 +262,6 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
 When the goal is to validate the workflow itself, "delegated" means a distinct worker
 agent/session/model actually did the implementation and left a handoff note. A handoff
 note written by the supervisor after doing the work does not satisfy the workflow test.
-
-## v2 six-lane projects (fallback)
-
-Everything above is structure-agnostic — phases, delegation judgment, handoff notes,
-and `execution.md` itself work the same regardless of whether the project uses
-`PRD.md` or the six lanes. The one structure-dependent step is reading the
-continuity at the start (Step 1): a v2 project has no `PRD.md`, so read
-`.horus/project.md`, `roadmap.md`, `features.md`, `decisions.md`, `history.md`, and
-`execution.md` instead — the original six-lane reading list, unchanged. Distilling
-durable results at closure (Step 6) likewise goes back to those lanes via
-`horus-consolidate`'s v2 path rather than into `PRD.md`.
 
 ## Boundaries
 

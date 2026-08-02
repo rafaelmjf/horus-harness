@@ -23,7 +23,7 @@ description: >-
   depth rather than assuming it. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 10 -->
+<!-- horus-skill-version: 11 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -189,12 +189,3 @@ inward-only.
   fan-out, and it defaults to a shallow sweep before offering more depth.
 - No continuous monitoring (that always-on category is out of scope).
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — the same sequence over the six-lane files: the brief comes
-from `project.md`/`roadmap.md`/`features.md`, `roadmap-branches` states direction
-changes against `project.md`'s vision prose, `scope-cards` writes approved shaping
-entries, and `backlog-refine` deepens selected entries inline under that project's
-rules. The Step 0
-intent gate, the pinned brief, and the advisory gate-at-every-step boundary are
-unchanged.

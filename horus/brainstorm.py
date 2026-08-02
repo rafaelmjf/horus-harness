@@ -64,7 +64,7 @@ def build_prompt(project_dir: Path | str, topic: str) -> str:
     """Seed prompt: minimal PRD context (vision/backlog/rules) + topic + contract.
 
     Reads only ``.horus/PRD.md`` — never sessions or the archive. On a project with
-    no PRD (six-lane / uninitialized), the sections degrade to explicit "(not
+    no PRD (uninitialized), the sections degrade to explicit "(not
     recorded)" markers rather than pulling in other lanes.
     """
     root = Path(project_dir).resolve()

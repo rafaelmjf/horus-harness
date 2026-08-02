@@ -1376,117 +1376,6 @@ def test_upgrade_project_all_dry_run_reports_pending_across_projects(tmp_path, m
     assert not (proj_a / ".codex" / "hooks.json").exists()
 
 
-def test_upgrade_project_structure_prd_dry_run_does_not_write(tmp_path, monkeypatch, capsys):
-    _home(tmp_path, monkeypatch)
-    _write_v2_horus(tmp_path)
-    before = (tmp_path / ".horus" / "project.md").read_bytes()
-
-    rc = main(["upgrade-project", "--path", str(tmp_path), "--structure", "prd"])
-
-    assert rc == 1
-    out = capsys.readouterr().out
-    assert "Dry run only" in out
-    assert "would create .horus/PRD.md" in out
-    assert not (tmp_path / ".horus" / "PRD.md").exists()
-    assert (tmp_path / ".horus" / "project.md").read_bytes() == before
-
-
-def test_upgrade_project_structure_prd_apply_archives_verbatim_and_maps_prd(tmp_path, monkeypatch, capsys):
-    _home(tmp_path, monkeypatch)
-    _write_v2_horus(tmp_path)
-    originals = {p.name: p.read_bytes() for p in (tmp_path / ".horus").glob("*.md")}
-
-    rc = main(["upgrade-project", "--path", str(tmp_path), "--structure", "prd", "--apply"])
-
-    assert rc == 0
-    out = capsys.readouterr().out
-    assert "Applying Horus structure migration to PRD" in out
-    hdir = tmp_path / ".horus"
-    prd = (hdir / "PRD.md").read_text(encoding="utf-8")
-    assert 'current_focus: "Roadmap focus"' in prd
-    assert 'next_action: "Do next"' in prd
-    assert "A focused project vision." in prd
-    assert "Open task" in prd and "Later task" in prd and "Done task" not in prd
-    assert "Done continuation" not in prd
-    assert "- **Dashboard** — v1 — Shows state" in prd
-    assert "**Repo-local memory**" in prd
-    assert "Agent-polish TODO" in prd
-    for name, content in originals.items():
-        assert not (hdir / name).exists()
-        assert (hdir / "archive" / name).read_bytes() == content
-    assert (hdir / "sessions").is_dir()
-    assert (hdir / "temp").is_dir()
-
-
-def test_upgrade_project_structure_prd_is_noop_for_v3(tmp_path, monkeypatch, capsys):
-    _home(tmp_path, monkeypatch)
-    from horus import initialize
-
-    initialize.init_project(tmp_path, assume_yes=True, with_skills=False, with_hooks=False)
-
-    rc = main(["upgrade-project", "--path", str(tmp_path), "--structure", "prd", "--apply"])
-
-    assert rc == 0
-    assert "already present" in capsys.readouterr().out
-    assert (tmp_path / ".horus" / "PRD.md").exists()
-
-
-def test_upgrade_project_structure_prd_apply_refuses_dirty_git_tree(tmp_path, monkeypatch, capsys):
-    _home(tmp_path, monkeypatch)
-    _git(tmp_path, "init")
-    _git(tmp_path, "config", "user.email", "t@example.com")
-    _git(tmp_path, "config", "user.name", "Tester")
-    _write_v2_horus(tmp_path)
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-m", "v2")
-    (tmp_path / "README.md").write_text("dirty\n", encoding="utf-8")
-
-    rc = main(["upgrade-project", "--path", str(tmp_path), "--structure", "prd", "--apply"])
-
-    assert rc == 2
-    assert "working tree is dirty" in capsys.readouterr().out
-    assert not (tmp_path / ".horus" / "PRD.md").exists()
-    assert (tmp_path / ".horus" / "project.md").exists()
-
-
-def test_upgrade_project_structure_prd_apply_refuses_behind_origin(tmp_path, monkeypatch, capsys):
-    _home(tmp_path, monkeypatch)
-    origin = tmp_path / "origin.git"
-    a = tmp_path / "a"
-    b = tmp_path / "b"
-    subprocess.run(["git", "init", "--bare", str(origin)], check=True, capture_output=True)
-    subprocess.run(["git", "clone", str(origin), str(a)], check=True, capture_output=True)
-    subprocess.run(["git", "clone", str(origin), str(b)], check=True, capture_output=True)
-    for clone in (a, b):
-        _git(clone, "config", "user.email", "t@example.com")
-        _git(clone, "config", "user.name", "Tester")
-    _write_v2_horus(a)
-    _git(a, "add", "-A")
-    _git(a, "commit", "-m", "v2")
-    _git(a, "push", "-u", "origin", "HEAD")
-    _git(b, "pull", "--ff-only")
-    (a / "README.md").write_text("remote newer\n", encoding="utf-8")
-    _git(a, "add", "README.md")
-    _git(a, "commit", "-m", "remote newer")
-    _git(a, "push")
-
-    rc = main(["upgrade-project", "--path", str(b), "--structure", "prd", "--apply"])
-
-    assert rc == 2
-    assert "branch is behind" in capsys.readouterr().out
-    assert not (b / ".horus" / "PRD.md").exists()
-    assert (b / ".horus" / "project.md").exists()
-
-
-def test_upgrade_project_structure_prd_rejects_all(tmp_path, monkeypatch, capsys):
-    _home(tmp_path, monkeypatch)
-
-    rc = main(["upgrade-project", "--all", "--structure", "prd"])
-
-    assert rc == 2
-    assert "cannot be combined" in capsys.readouterr().out
-
-
 def test_app_cli_dispatches_to_companion(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     calls = []
@@ -1736,17 +1625,6 @@ def test_consolidate_cli_prd_project_gets_v3_trailer(tmp_path, monkeypatch, caps
     assert "each lane stays in its lane" not in out
 
 
-def test_consolidate_cli_six_lane_trailer_unchanged(tmp_path, monkeypatch, capsys):
-    _home(tmp_path, monkeypatch)
-    hdir = tmp_path / ".horus"
-    hdir.mkdir()
-    (hdir / "roadmap.md").write_text("---\nstatus: active\n---\n# R\n", encoding="utf-8")
-    assert main(["consolidate", "--path", str(tmp_path)]) == 0
-    out = capsys.readouterr().out
-    assert "each lane stays in its lane" in out
-    assert "PRD structure" not in out
-
-
 def test_distill_history_cli_runs(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes"])
@@ -1772,15 +1650,6 @@ def test_infer_cli_uses_prd_structure_prompt(tmp_path, monkeypatch, capsys):
     assert "PRD-structure continuity" in out
     assert ".horus/backlog/<slug>.md" in out
     assert "project.md - what it is" not in out
-
-
-def test_infer_cli_keeps_six_lane_prompt_for_v2(tmp_path, monkeypatch, capsys):
-    _home(tmp_path, monkeypatch)
-    _write_v2_horus(tmp_path)
-    assert main(["infer", "--path", str(tmp_path)]) == 0
-    out = capsys.readouterr().out
-    assert "project.md - what it is" in out
-    assert "PRD-structure continuity" not in out
 
 
 def test_routine_commands_reject_nonexistent_path(tmp_path, monkeypatch):

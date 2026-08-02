@@ -1,7 +1,7 @@
 """Tests for the experimental `horus capabilities` fleet capability catalog.
 
 Covers: Shipped-ledger extraction from imperfect PRD markdown (bullet, numbered,
-bold-paragraph shapes, qualified headings), the six-lane `features.md` fallback,
+bold-paragraph shapes, qualified headings),
 the argparse CLI-surface walker on a small fixture parser, cheap cross-reference
 matching, and the read-only/idempotence invariants against an on-disk fixture
 fleet.
@@ -55,25 +55,6 @@ status: active
 - Another plain bullet.
 """
 
-FEATURES_SIX_LANE = """# Features
-
-## Shipped
-
-| Capability | Notes |
-| --- | --- |
-| Widget import | CSV only |
-| Widget export | JSON only |
-
-## In progress
-
-| Capability | Notes |
-| --- | --- |
-| Widget sync | not yet |
-"""
-
-# A PRD with a `## Vision` section, modeled on the agentic-ttrpg orientation gap:
-# the runtime fact ("Claude Code as the runtime, no app to deploy") lives only
-# here, not in any Shipped bullet.
 DELTA_PRD = """---
 status: active
 ---
@@ -161,15 +142,6 @@ def test_shipped_lines_wrapped_bullets_regression():
     )
 
 
-def test_six_lane_shipped_lines_from_features_table():
-    assert capabilities.six_lane_shipped_lines(FEATURES_SIX_LANE) == ["Widget import", "Widget export"]
-
-
-# ---------------------------------------------------------------------------
-# Vision extraction — the "what IS it?" one-liner, not the whole section.
-# ---------------------------------------------------------------------------
-
-
 def test_vision_lead_extracts_lead_sentence_not_whole_section():
     body = capabilities.frontmatter.parse(DELTA_PRD).body
     assert capabilities.vision_lead(body) == (
@@ -240,7 +212,7 @@ def test_related_commands_matches_whole_phrase_only():
 
 
 def test_build_project_catalog_prd_layer_with_cross_reference():
-    catalog = capabilities.build_project_catalog("horus-harness", "/x/horus-harness", ALPHA_PRD, None)
+    catalog = capabilities.build_project_catalog("horus-harness", "/x/horus-harness", ALPHA_PRD)
     assert catalog.layer == "prd"
     assert catalog.vision is None  # ALPHA_PRD has no `## Vision` section
     assert len(catalog.capabilities) == 2
@@ -250,29 +222,15 @@ def test_build_project_catalog_prd_layer_with_cross_reference():
 
 
 def test_build_project_catalog_extracts_vision_one_liner():
-    catalog = capabilities.build_project_catalog("delta", "/x/delta", DELTA_PRD, None)
+    catalog = capabilities.build_project_catalog("delta", "/x/delta", DELTA_PRD)
     assert catalog.vision == (
         "A tabletop RPG engine that runs entirely inside Claude Code as the runtime "
         "— no app to deploy, no API keys."
     )
 
 
-def test_build_project_catalog_six_lane_layer():
-    catalog = capabilities.build_project_catalog("widget", "/x/widget", None, FEATURES_SIX_LANE)
-    assert catalog.layer == "six-lane"
-    assert catalog.vision is None  # this fixture's features.md has no `## Vision` section
-    assert [c.text for c in catalog.capabilities] == ["Widget import", "Widget export"]
-    assert catalog.cli_surface is None  # no extractor registered for "widget"
-
-
-def test_build_project_catalog_six_lane_vision_best_effort():
-    features_with_vision = "## Vision\n\nA best-effort six-lane vision line. More detail follows.\n"
-    catalog = capabilities.build_project_catalog("widget", "/x/widget", None, features_with_vision)
-    assert catalog.vision == "A best-effort six-lane vision line."
-
-
 def test_build_project_catalog_no_ledger_found():
-    catalog = capabilities.build_project_catalog("widget", "/x/widget", None, None)
+    catalog = capabilities.build_project_catalog("widget", "/x/widget", None)
     assert catalog.layer == "none"
     assert catalog.vision is None
     assert catalog.capabilities == []
@@ -351,16 +309,6 @@ def test_load_project_catalog_reads_live_sources(tmp_path):
     assert len(catalog.capabilities) == 2
 
 
-def test_load_project_catalog_six_lane_fallback(tmp_path):
-    project = tmp_path / "widget"
-    (project / ".horus").mkdir(parents=True)
-    (project / ".horus" / "features.md").write_text(FEATURES_SIX_LANE, encoding="utf-8")
-
-    catalog = capabilities.load_project_catalog(str(project))
-    assert catalog.layer == "six-lane"
-    assert [c.text for c in catalog.capabilities] == ["Widget import", "Widget export"]
-
-
 def test_load_project_catalog_no_horus_dir_yields_none_layer(tmp_path):
     project = tmp_path / "bare"
     catalog = capabilities.load_project_catalog(str(project))
@@ -370,7 +318,7 @@ def test_load_project_catalog_no_horus_dir_yields_none_layer(tmp_path):
 
 
 def test_render_project_json_carries_stamp_and_payload():
-    catalog = capabilities.build_project_catalog("alpha-proj", "/x/alpha-proj", ALPHA_PRD, None)
+    catalog = capabilities.build_project_catalog("alpha-proj", "/x/alpha-proj", ALPHA_PRD)
     text = capabilities.render_project_json(catalog)
     data = json.loads(text)
     assert data["schema_version"] == 1

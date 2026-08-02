@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 created: 2026-07-30
 created_by: owner
@@ -11,6 +11,8 @@ tier: low
 parallel: safe
 vision_facet: "Distribution"
 surface: "git worktree (no Horus code owns this today), horus/cli.py (if it becomes a verb), the closure/consolidate advisory path (if it becomes a signal)"
+shipped_pr: 494
+shipped_sha: 036ee67
 ---
 
 # stale-worktree-accumulation — merged worktrees are never reclaimed, and `git worktree prune` cannot find them

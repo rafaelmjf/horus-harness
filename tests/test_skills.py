@@ -172,8 +172,6 @@ def test_pathfinder_skill_registered_and_orchestrates():
     # Step 1 emits a pinned shipped+vision+audience brief passed into every step.
     assert "pinned brief" in pf.content.lower() or "pin a ground-truth brief" in pf.content
     assert "HARD CONSTRAINT" in pf.content
-    # v2 fallback present (asserted for all skills elsewhere, checked explicitly here too).
-    assert "## v2 six-lane projects (fallback)" in pf.content
     # v3: Step 0 confirms the intent interactively even when pre-declared in args.
     assert "Confirm interactively, even when the intent arrives pre-declared" in pf.content
     # v4: a reused receipt's envelope nod replaces the Step 2 gate; prior trees feed step 3.
@@ -223,7 +221,6 @@ def test_roadmap_branches_skill_registered_divergence_tree():
     assert "Onboarding fork" in rb.content and "stamp existing cards" in rb.content
     # Advisory: owner picks; the skill never edits Vision or creates cards.
     assert "never edits the Vision" in rb.content
-    assert "## v2 six-lane projects (fallback)" in rb.content
 
 
 def test_scope_cards_skill_registered_as_high_level_shaping():
@@ -240,7 +237,6 @@ def test_scope_cards_skill_registered_as_high_level_shaping():
     assert "Vision facet diff" in sc.content
     assert "demote / defer / retire" in sc.content
     assert "approve, amend, or drop each" in sc.content
-    assert "## v2 six-lane projects (fallback)" in sc.content
 
 
 def test_backlog_refine_owns_interactive_flow_and_ready_contract():
@@ -452,13 +448,6 @@ def test_dispatch_decision_skill_is_cockpit_multiproject():
     assert "Do NOT re-run" in skill.content
 
 
-def test_all_bundled_skills_keep_a_marked_v2_fallback_section():
-    # Phase 3 (v3-tooling): every rewritten skill keeps the six-lane guidance
-    # reachable under an explicit, clearly-marked fallback heading.
-    for s in skills.SKILLS:
-        assert "## v2 six-lane projects (fallback)" in s.content, s.name
-
-
 def test_launch_model_refresh_skill_names_its_mechanism_and_sources():
     s = next(sk for sk in skills.SKILLS if sk.name == "launch-model-refresh")
     # The write mechanism it must drive.
@@ -497,7 +486,9 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     assert "its own decision, taken with the owner" in consolidate.content
     assert "ask permission before editing" not in consolidate.content
     assert "resume-consent contract" not in consolidate.content
-    assert "Setting this field is not a trigger" in consolidate.content
+    # Whitespace-normalized: the surviving copy hard-wraps mid-phrase, and a raw
+    # substring assertion would fail on reflow rather than on meaning.
+    assert "Setting this field is not a trigger" in _unwrapped(consolidate.content)
     assert "owner explicitly asks whether or how to delegate" in consolidate.content
     # sessions/ and temp/ handoff notes stay unchanged in v3.
     assert "temp/" in consolidate.content
@@ -594,12 +585,11 @@ def test_consolidate_never_infers_delegation_from_task_size():
     # The v15 text already defaulted to `continue-as-is`; a default was not
     # categorical enough at the point where the field is authored.
     content = _unwrapped(next(s for s in skills.SKILLS if s.name == "horus-consolidate").content)
-    # Twice each: the v3 (PRD) and the v2 (six-lane) authoring steps both carry it,
-    # because a consumer project on either structure can author the field.
-    assert content.count("Never infer delegation from how big the work looks") == 2
-    assert content.count("regardless of the next task's breadth, phase count, or number of surfaces") == 2
-    assert content.count("did not explicitly request delegation in this conversation") == 2
-    assert content.count("not a task-size classifier") == 2
+    # Once each: there is one authoring step now that the six-lane fallback is gone.
+    assert content.count("Never infer delegation from how big the work looks") == 1
+    assert content.count("regardless of the next task's breadth, phase count, or number of surfaces") == 1
+    assert content.count("did not explicitly request delegation in this conversation") == 1
+    assert content.count("not a task-size classifier") == 1
 
 
 def test_execution_skill_treats_the_field_as_a_record_not_authorization():
@@ -840,7 +830,6 @@ def test_process_retrospective_skill_registered_and_projected():
     # Distinguished from the periodic product audit and continuity closure.
     assert "product-audit" in skill.content
     assert "horus-consolidate" in skill.content
-    assert "## v2 six-lane projects (fallback)" in skill.content
     for root in (".claude/skills", ".agents/skills"):
         assert Path(f"{root}/process-retrospective/SKILL.md").read_text(encoding="utf-8") == skill.content
 

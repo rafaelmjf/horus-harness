@@ -9,7 +9,7 @@ description: >-
   owner approval before changing target-project continuity.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Fleet curation
 
@@ -44,14 +44,6 @@ ordinary delivery. Direct project sessions remain the default.
 4. Keep each repository at a green committed-and-pushed checkpoint. Do not make a
    cross-repo mega-commit, auto-dispatch work, or change external infrastructure
    without separate owner authority.
-
-## v2 six-lane projects (fallback)
-
-The fleet-review command may report remote continuity unavailable for a project
-that has no PRD yet. If that project is selected, read its remote
-`project.md`/`roadmap.md`/`features.md` lanes explicitly and apply the same
-remote-vs-local separation. Any approved cleanup follows that project's six-lane
-closure rules; migration to PRD structure is separate and opt-in.
 
 ## Close
 

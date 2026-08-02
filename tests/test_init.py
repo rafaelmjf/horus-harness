@@ -110,31 +110,6 @@ def test_init_fresh_prd_scaffold_passes_close_check(tmp_path, monkeypatch):
     assert not any(f.level in ("warn", "fail") for f in findings)
 
 
-def test_init_on_existing_v2_project_unchanged(tmp_path, monkeypatch):
-    """`init` on a project already carrying the six v2 lanes (marked by project.md,
-    no PRD.md) must keep scaffolding those lanes, never switch it to v3."""
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
-
-    hdir = tmp_path / ".horus"
-    hdir.mkdir(parents=True)
-    (hdir / "project.md").write_text(
-        '---\nproject: demo\nstatus: planning\ncurrent_focus: "hand-authored"\n---\n# demo\n',
-        encoding="utf-8",
-    )
-
-    initialize.init_project(tmp_path, assume_yes=True)
-
-    assert not (hdir / "PRD.md").exists()
-    assert (hdir / "roadmap.md").exists()
-    assert (hdir / "features.md").exists()
-    assert (hdir / "decisions.md").exists()
-    assert (hdir / "history.md").exists()
-    assert (hdir / "execution.md").exists()
-    # never-clobber: the hand-authored project.md is untouched.
-    assert "hand-authored" in (hdir / "project.md").read_text(encoding="utf-8")
-
-
 def test_init_on_existing_v3_project_never_creates_six_lanes(tmp_path, monkeypatch):
     """`init` on a project already carrying PRD.md must never overwrite it and
     must never scaffold the six v2 lanes alongside it."""

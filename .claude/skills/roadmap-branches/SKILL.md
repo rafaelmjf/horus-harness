@@ -14,7 +14,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -171,10 +171,3 @@ the Vision, never create cards, never reorder the backlog yourself.
   stale, say so and offer the scan instead of improvising evidence.
 - No execution planning (that is `execution-decision` / `horus-execution`).
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — build the brief from `project.md` (vision) + `roadmap.md`
-(open items) + `features.md` (shipped). There is no facet table, so branches state
-their implied direction changes against `project.md`'s vision prose, and roadmap
-items become proposed `roadmap.md` entries. The receipt, the tree, the re-justify
-and claims disciplines, and the advisory boundary are unchanged.

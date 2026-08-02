@@ -9,7 +9,7 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
@@ -217,11 +217,3 @@ End with the updated picture and the exact remaining pending decisions. Do not
 dispatch, schedule, implement, or invoke pathfinder unless the product direction
 itself became the unresolved question.
 
-## v2 six-lane projects (fallback)
-
-Read `project.md`, `roadmap.md`, `features.md`, `decisions.md`, and `history.md` in
-their existing lanes. Present the same picture and interactive decisions, then
-deepen approved roadmap entries inline. The readiness words remain an advisory
-classification when the legacy roadmap has no frontmatter; do not migrate the
-project or invent card files. Owner gating and the execution-ready content bar are
-unchanged.

@@ -6,8 +6,7 @@ GENERATES a structured, queryable index from sources the fleet already
 maintains as truth — no second source of truth, no hand-authored prose:
 
 - each registered project's ``.horus/PRD.md`` ``## Shipped`` ledger (one line
-  per capability, per the PRD skeleton contract) — best-effort for the older
-  six-lane ``features.md`` layout too;
+  per capability, per the PRD skeleton contract);
 - that same PRD's ``## Shipped`` answers "what can it do?" but nothing captures
   "what IS it?" — a ``vision`` field carries a one-line frame reduced from the
   ``## Vision`` section's lead sentence (see ``vision_lead``), so an
@@ -94,7 +93,7 @@ class CliCommand:
 class ProjectCatalog:
     name: str
     path: str
-    layer: str  # "prd" | "six-lane" | "none"
+    layer: str  # "prd" | "none"
     vision: str | None = None  # one-line "what IS it" frame from `## Vision`; None if absent
     capabilities: list[Capability] = field(default_factory=list)
     cli_surface: list[CliCommand] | None = None  # None: no extractor for this project
@@ -223,11 +222,6 @@ def shipped_lines(prd_body: str) -> list[str]:
     return _top_level_items(_section(prd_body, "Shipped"))
 
 
-def six_lane_shipped_lines(features_text: str) -> list[str]:
-    """Best-effort Shipped-equivalent entries from an older six-lane ``features.md``."""
-    return routines.feature_items(features_text)["shipped"]
-
-
 def vision_lead(body: str) -> str | None:
     """A short one-line "what IS it" frame from a ``## Vision`` section: its lead
     sentence (or opening bold lead line), markdown-stripped — NOT the whole
@@ -306,13 +300,11 @@ def _related_commands(text: str, commands: list[CliCommand]) -> list[str]:
 
 
 def build_project_catalog(
-    name: str, path: str, prd_text: str | None, features_text: str | None
+    name: str, path: str, prd_text: str | None
 ) -> ProjectCatalog:
     """Build one project's catalog entry from its already-read source text.
 
-    ``prd_text`` wins when present (v3 layout); otherwise ``features_text`` is
-    used best-effort (v2 six-lane layout); otherwise the project is recorded
-    with no extracted capabilities.
+    With no ``prd_text`` the project is recorded with no extracted capabilities.
     """
     commands = cli_surface_for(name)
     if prd_text is not None:
@@ -320,10 +312,6 @@ def build_project_catalog(
         lines = shipped_lines(body)
         vision = vision_lead(body)
         layer = "prd"
-    elif features_text is not None:
-        lines = six_lane_shipped_lines(features_text)
-        vision = vision_lead(features_text)  # best-effort; six-lane rarely has `## Vision`
-        layer = "six-lane"
     else:
         lines = []
         vision = None
@@ -337,18 +325,10 @@ def build_project_catalog(
     )
 
 
-def _read_project_sources(root: Path) -> tuple[str | None, str | None]:
-    """The already-read PRD / six-lane ``features.md`` text for ``root``, or
-    ``(None, None)`` when neither is present."""
+def _read_project_sources(root: Path) -> str | None:
+    """The already-read ``.horus/PRD.md`` text for ``root``, or ``None``."""
     prd_path = frontmatter.prd_path(root)
-    prd_text = prd_path.read_text(encoding="utf-8") if prd_path.is_file() else None
-    features_path = root / ".horus" / "features.md"
-    features_text = (
-        features_path.read_text(encoding="utf-8")
-        if prd_text is None and features_path.is_file()
-        else None
-    )
-    return prd_text, features_text
+    return prd_path.read_text(encoding="utf-8") if prd_path.is_file() else None
 
 
 def load_catalog(project_paths: list[str]) -> list[ProjectCatalog]:
@@ -359,8 +339,8 @@ def load_catalog(project_paths: list[str]) -> list[ProjectCatalog]:
         root = Path(path_str)
         if not (root / ".horus").is_dir():
             continue
-        prd_text, features_text = _read_project_sources(root)
-        catalogs.append(build_project_catalog(root.name, root.as_posix(), prd_text, features_text))
+        prd_text = _read_project_sources(root)
+        catalogs.append(build_project_catalog(root.name, root.as_posix(), prd_text))
     catalogs.sort(key=lambda c: c.name.casefold())
     return catalogs
 
@@ -374,10 +354,10 @@ def load_project_catalog(path_str: str) -> ProjectCatalog:
     one project, not an entry in a fleet-wide list.
     """
     root = Path(path_str)
-    prd_text = features_text = None
+    prd_text = None
     if (root / ".horus").is_dir():
-        prd_text, features_text = _read_project_sources(root)
-    return build_project_catalog(root.name, root.as_posix(), prd_text, features_text)
+        prd_text = _read_project_sources(root)
+    return build_project_catalog(root.name, root.as_posix(), prd_text)
 
 
 # ---------------------------------------------------------------------------

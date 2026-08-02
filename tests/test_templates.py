@@ -26,10 +26,10 @@ def test_managed_block_and_infer_routine_include_vision_intent_and_audiences():
 
     assert "**Why this exists.** The originating problem, who it was built for" in block
     assert "**Surfaces and audiences.** Once a project has more than one entry point" in block
-    assert "**Why this exists.** The originating problem, who it was built for" in templates.INFER_PROMPT_V3
-    assert "**Surfaces and audiences.** Once a project has more than one entry point" in templates.INFER_PROMPT_V3
-    assert 'ask the owner for "why this exists"' in templates.INFER_PROMPT_V3
-    assert "rather than distilling it from inherited docs" in templates.INFER_PROMPT_V3
+    assert "**Why this exists.** The originating problem, who it was built for" in templates.INFER_PROMPT
+    assert "**Surfaces and audiences.** Once a project has more than one entry point" in templates.INFER_PROMPT
+    assert 'ask the owner for "why this exists"' in templates.INFER_PROMPT
+    assert "rather than distilling it from inherited docs" in templates.INFER_PROMPT
 
 
 def test_managed_block_requires_service_signal_beyond_startup():

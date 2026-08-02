@@ -79,13 +79,9 @@ def init_project(
     (hdir / SESSIONS_DIR).mkdir(parents=True, exist_ok=True)
     (hdir / TEMP_DIR).mkdir(parents=True, exist_ok=True)
 
-    # Structure detection, never-clobber: a project that already carries PRD.md
-    # (structure v3) never gets the six lanes; a project already on the six lanes
-    # (structure v2, marked by project.md) keeps scaffolding those, unchanged; a
-    # truly fresh project gets the v3 PRD.md + sessions/ shape. Migrating an
-    # existing v2 project to v3 is a separate, opt-in step (not `init`'s job).
+    # Never-clobber: a project that already carries PRD.md keeps it; a fresh
+    # project gets the PRD.md + sessions/ shape.
     is_v3 = (hdir / frontmatter.PRD_FILE).is_file()
-    is_v2 = not is_v3 and (hdir / "project.md").is_file()
 
     if is_v3:
         actions.append(
@@ -95,52 +91,6 @@ def init_project(
             _write_if_missing(hdir / "README.md", templates.readme_md_v3(), f"{HORUS_DIR}/README.md")
         )
         actions.append(_ensure_backlog_dir(hdir))
-    elif is_v2:
-        actions.append(
-            _write_if_missing(hdir / "README.md", templates.readme_md(), f"{HORUS_DIR}/README.md")
-        )
-        actions.append(
-            _write_if_missing(
-                hdir / "project.md",
-                templates.project_md(project_root.name, today),
-                f"{HORUS_DIR}/project.md",
-            )
-        )
-        actions.append(
-            _write_if_missing(
-                hdir / "roadmap.md",
-                templates.roadmap_md(today),
-                f"{HORUS_DIR}/roadmap.md",
-            )
-        )
-        actions.append(
-            _write_if_missing(
-                hdir / "features.md",
-                templates.features_md(today),
-                f"{HORUS_DIR}/features.md",
-            )
-        )
-        actions.append(
-            _write_if_missing(
-                hdir / "execution.md",
-                templates.execution_md(today),
-                f"{HORUS_DIR}/execution.md",
-            )
-        )
-        actions.append(
-            _write_if_missing(
-                hdir / "decisions.md",
-                templates.decisions_md(),
-                f"{HORUS_DIR}/decisions.md",
-            )
-        )
-        actions.append(
-            _write_if_missing(
-                hdir / "history.md",
-                templates.history_md(today),
-                f"{HORUS_DIR}/history.md",
-            )
-        )
     else:
         actions.append(
             _write_if_missing(hdir / "README.md", templates.readme_md_v3(), f"{HORUS_DIR}/README.md")

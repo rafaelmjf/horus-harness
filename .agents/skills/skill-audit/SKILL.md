@@ -13,7 +13,7 @@ description: >-
   campaign's execution use `process-retrospective`.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Skill audit — one skill's text vs reality
 
@@ -102,10 +102,3 @@ they are regenerated and the edit would be silently overwritten.
   approval of the specific diff or proposal.
 - One skill per invocation; no telemetry; no new trigger machinery.
 
-## v2 six-lane projects (fallback)
-
-Structure-agnostic: the receipt still lands in `.horus/audits/` (the
-directory is independent of PRD structure), and the fidelity check compares
-each skill's v2 fallback section against the six-lane layout the project
-actually uses — a skill whose fallback describes lanes the project no longer
-has is a revise finding.

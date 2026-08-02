@@ -14,7 +14,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -149,9 +149,3 @@ interview JTBD (label it a hypothesis instead); continuous monitoring / scraping
 (the always-on SaaS category, out of scope); any mandatory-invocation or
 red-flags ceremony.
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — run the scan the same way and write the same receipt under
-`.horus/research/`. Feed the Vision draft into `project.md` and candidate items
-into `roadmap.md` at the owner's discretion, following that project's six-lane
-closure rules.

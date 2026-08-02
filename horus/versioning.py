@@ -71,8 +71,8 @@ def enforce(project_root: Path, installed: str) -> str | None:
         return None
     return (
         f"This project's .horus/ requires horus-harness >= {floor}, but the installed "
-        f"CLI is {installed}. An older CLI can silently regress the continuity structure "
-        f"(e.g. back to the retired six-lane layout). Upgrade first:\n"
+        f"CLI is {installed}. An older CLI can silently regress the continuity structure. "
+        f"Upgrade first:\n"
         f"    uv tool install --force --python 3.12 horus-harness\n"
         f"then re-run. (Override with HORUS_IGNORE_VERSION_FLOOR=1 only if you know why.)"
     )

@@ -3287,53 +3287,21 @@ def test_project_detail_renders_prd_backlog_shipped_and_size_meter(tmp_path, mon
     assert "id='features'" not in det  # no legacy features.md in a pure v3 project
 
 
-def test_project_detail_v2_project_unchanged(tmp_path, monkeypatch):
-    """A v2 (six-lane) project must render exactly as before phase 4: no PRD
-    backlog/shipped/meter panels, legacy Features ledger panel intact."""
-    _init(tmp_path, monkeypatch)
-    hdir = tmp_path / ".horus"
-    hdir.mkdir(parents=True)
-    (hdir / "project.md").write_text(
-        '---\nproject: demo\nstatus: active\ncurrent_focus: "v2 focus"\n---\n# demo\n\nNarrative.\n',
-        encoding="utf-8",
-    )
-    initialize.init_project(tmp_path, assume_yes=True)  # scaffolds the rest of the six lanes
-
-    data = dashboard.load_project(str(tmp_path))
-    assert data["prd"] == {}
-
-    det = dashboard.render_project(data, index=0)
-    assert "id='backlog'" not in det and "id='shipped'" not in det
-    assert "/250 lines" not in det  # no PRD line-budget badge
-    assert "id='features'" in det  # legacy Features ledger panel still renders
-    assert "id='roadmap'" in det
-    assert ".horus/project.md" in det  # current-focus caption unchanged
-    assert ".horus/roadmap.md" in det  # roadmap-next caption unchanged
-    assert "v2 focus" in det
-
-
-def test_projects_grid_fragment_renders_v3_and_v2_projects(tmp_path, monkeypatch):
+def test_projects_grid_fragment_renders_projects(tmp_path, monkeypatch):
     _init(tmp_path, monkeypatch)
     v3 = tmp_path / "v3"
     initialize.init_project(v3, assume_yes=True)
     (v3 / ".horus" / "PRD.md").write_text(_PRD_BACKLOG_SHIPPED_FIXTURE, encoding="utf-8")
 
-    v2 = tmp_path / "v2"
-    hdir = v2 / ".horus"
-    hdir.mkdir(parents=True)
-    (hdir / "project.md").write_text(
-        '---\nproject: demo\nstatus: active\ncurrent_focus: "v2 focus"\n---\n# demo\n\nNarrative.\n',
-        encoding="utf-8",
-    )
-    initialize.init_project(v2, assume_yes=True)
+    second = tmp_path / "second"
+    initialize.init_project(second, assume_yes=True)
 
     response = _get("/projects-grid")
 
     assert response["status"] == 200
     body = response["body"].decode("utf-8")
     assert "2 projects under watch" in body
-    assert "v3" in body and "v2" in body
-    assert "v2 focus" in body
+    assert "v3" in body and "second" in body
     assert "NEXT ACTION" in body and ">y<" in body
     assert "id='backlog'" not in body
     assert "/250 lines" not in body

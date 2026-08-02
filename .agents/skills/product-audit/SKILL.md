@@ -14,7 +14,7 @@ description: >-
   The receipt lands dated under `.horus/audits/`.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Product audit — the inward evidence step (analysis, never verdicts)
 
@@ -118,9 +118,3 @@ offering: dive deeper into ONE named topic from the receipt, or proceed.
   interval — and note that the interval should weigh releases AND elapsed
   days (releases alone nag during rapid iteration).
 
-## v2 six-lane projects (fallback)
-
-The staleness advisory reads `PRD.md` frontmatter, so it never fires on a
-six-lane project. The analysis still applies: same evidence, same spine with
-`project.md` prose standing in for the facet table; record the stamp in
-`project.md` frontmatter so it carries over on migration.

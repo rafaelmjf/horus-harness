@@ -17,7 +17,7 @@ BLOCK_END = "<!-- HORUS:END shared-instructions -->"
 # parse as None and count as older than any versioned block, so `upgrade-project`
 # refreshes them; a block *newer* than the installed CLI is left alone (the CLI is
 # what's outdated — never offer a downgrade as a "refresh").
-BLOCK_VERSION = 18
+BLOCK_VERSION = 19
 
 _SHARED_BODY = """## Horus Project Continuity
 
@@ -58,11 +58,6 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
   contain context that is not yet durable elsewhere.
 - Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
   is active; distill only the durable results upward.
-- If this project instead has `project.md` / `roadmap.md` / `features.md` /
-  `decisions.md` / `history.md` and no `PRD.md`, it is on the older six-lane
-  structure — read those lanes directly (each stays in its lane); migrating to
-  `PRD.md` is a separate, opt-in step and does not happen automatically.
-
 Continuity is a checkpoint at context boundaries, not a transaction log for every card.
 One universal rule, with no granularity setting to configure per machine, per project, or
 per session: git branches, commits, pushed refs, and PRs preserve every delivery between
@@ -177,7 +172,7 @@ Working discipline (every session, whether or not the work is delegated):
 
 Version floor (check before writing `.horus/`):
 
-- **An outdated `horus` CLI can silently regress this project to the retired six-lane
+- **An outdated `horus` CLI can silently regress this project's `.horus/`
   structure.** Before running any state-mutating `horus` command (`init`,
   `upgrade-project`, `consolidate`, `close`, `reconcile`, `session new`, `infer`,
   `distill-history`), confirm the installed CLI is new enough: run `horus --version`
@@ -459,7 +454,7 @@ finishes. Keep it factual and reviewable:
 
 No proof narratives — the gate command and the CI check speak; prose claims are not
 reviewed. The supervisor reviews the diff and the handoff, then updates the durable
-continuity (`PRD.md` on a PRD-structure project; the lanes on six-lane).
+continuity in `PRD.md`.
 
 Useful commands:
 
@@ -535,8 +530,8 @@ Current feature: {current_feature or "(not set)"}
 
 Supervisor workflow:
 
-1. Confirm whether the project's `execution_recommendation` (PRD.md frontmatter on a
-   PRD-structure project, roadmap.md on six-lane) still applies.
+1. Confirm whether the project's `execution_recommendation` (PRD.md frontmatter)
+   still applies.
 2. If it says `plan-execution`, first decide whether execution planning is actually
    warranted for this agent/runtime. Decide on implementation volume × ambiguity:
    delegate high-volume/low-ambiguity/clear-gate work; stay inline for small,
@@ -559,8 +554,7 @@ Supervisor workflow:
    worker's exact commit (rerun the gate locally only when no required check covers
    it) plus one runtime probe you drive yourself. Review the diff and handoff note
    for scope, not as evidence that the work works.
-7. Distill durable outcomes into PRD.md (PRD-structure) or
-   roadmap/features/decisions/history (six-lane) at closure; keep
+7. Distill durable outcomes into PRD.md at closure; keep
    `.horus/execution.md` fluid and replace it for the next substantial item.
 
 Native projection:
@@ -588,7 +582,7 @@ def brainstorm_prompt(
     """Seed prompt for a scoped brainstorm session.
 
     Minimal context by design: the PRD's vision/backlog/rules and the topic — no
-    session notes, no archive, no six-lane lanes. The output contract writes a
+    session notes, no archive. The output contract writes a
     structured implementation-plan draft to ``note_path`` under ``.horus/temp/``
     and never edits PRD.md (the orchestrator/consolidate owns continuity).
     """
@@ -893,48 +887,7 @@ What this session set out to do and what happened.
 """
 
 
-CLOSURE_PROMPT = """Closure ritual - make the dashboard reflect THIS session before ending it.
-(For the full context-aware version, run the `horus-consolidate` skill — it sees this
-conversation. This is the file-level checklist.)
-
-The dashboard renders these fields as the project's *current* state and never infers
-them — keep each current at every close:
-
-1. Recovery test: if durable lanes + git/PR state cannot resume incomplete work,
-   write a local note under .horus/sessions/ (`horus session new "<title>"
-   --agent <claude|codex>`). Otherwise skip it.
-2. project.md `current_focus` (frontmatter): refresh the one-line "where things are now".
-3. roadmap.md, the two agent-authored fields + the checkboxes:
-   - `next_action`: the single best next step, one imperative line.
-   - `next_prompt`: a paste-into-a-fresh-session orientation prompt (cold reader: name
-     the proposed step + point at .horus/), ending with a request for permission before
-     execution. It may suggest a release with reasons, but must never order or chain one;
-     require separate explicit release confirmation.
-   - `execution_recommendation`: judge the NEXT on volume × ambiguity — `continue-as-is`
-     for small/ambiguous/exploratory/debugging work, `plan-execution` for high-volume,
-     low-ambiguity work with a clear gate. State what delegation buys on this runtime
-     (context hygiene, and a cheaper tier only if the runtime has one); don't sell
-     supervisor review as the safeguard.
-   - tick the roadmap checkboxes for what this session did.
-4. execution.md: when `execution_recommendation` is `plan-execution`, create/update
-   the active phased plan before starting implementation, including a per-phase
-   `delegation_basis`; otherwise leave it idle/unchanged.
-5. features.md: add a Shipped row for any capability shipped this session.
-6. execution.md: if there is an active phased plan, update phase/review status from
-   accepted worker handoff notes in .horus/temp/.
-7. decisions.md: record a durable decision as a concise rule under its topic (drop any
-   rule it supersedes); put the rationale/dead-ends in history.md. Bump `last_updated`
-   on lanes you touched.
-8. Instructions: keep the AGENTS.md / CLAUDE.md shared blocks aligned
-   (`horus doctor instructions` / `horus reconcile instructions`). Don't edit source as part of closure.
-
-Verify: `horus close --check` must pass (it fails while any dashboard field above is stale).
-Backlog cleanup (distilling old sessions, pruning historical done items, splitting overlaps)
-is a SEPARATE pass — only when asked, not every close.
-"""
-
-
-CLOSURE_PROMPT_V3 = """Continuity boundary - fold the campaign once, when context is about to change.
+CLOSURE_PROMPT = """Continuity boundary - fold the campaign once, when context is about to change.
 
 1. Update PRD.md frontmatter, Backlog/Shipped, and any newly load-bearing rule.
 2. Write a concise local recovery note under .horus/sessions/ only if PRD/backlog +
@@ -1066,33 +1019,7 @@ WORKER_GLOBAL_STATE_INSTRUCTION = (
 )
 
 
-CONSOLIDATE_PROMPT = """Consolidation routine - reshape .horus/ so each lane stays in its lane.
-Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.md).
-Never invent status, dates, or versions; when intent is unclear, leave it and flag it.
-
-1. Ship -> ledger: for each done roadmap action point that completed a shippable
-   capability, close it in roadmap.md and add/update the matching row in features.md
-   (Planned/In-progress -> Shipped; stamp the version if the repo records one, else blank).
-2. De-duplicate across lanes: where the same item sits in both roadmap.md and
-   features.md, keep the *action points* in roadmap.md and the *capability status* in
-   features.md, each pointing at the other. No fact maintained in two places.
-3. Prune: drop done/obsolete roadmap items (they live in features/history/git now).
-   Keep roadmap focused on top/open action points; condense or archive long completed
-   lists rather than letting them grow.
-4. Distill sessions: fold durable content from sessions/*.md into the lanes, then
-   move the distilled summary into sessions/archive/ (kept local, excluded from
-   the to-distill count) rather than deleting it.
-5. Decisions discipline: decisions.md is concise current rules grouped by topic — NOT
-   a dated log. Collapse superseded decisions to the rule that won, and move the
-   narrative rationale / dead ends to history.md (a "Decision rationale" section).
-6. Keep lanes pure: no tasks in features.md; no shipped packages lingering in
-   roadmap.md; no open issues in history.md; no changelog in project.md.
-
-Re-run `horus consolidate` afterward; the candidates above should be resolved.
-"""
-
-
-CONSOLIDATE_PROMPT_V3 = """Consolidation routine (PRD structure) - a light backlog-hygiene pass over PRD.md.
+CONSOLIDATE_PROMPT = """Consolidation routine (PRD structure) - a light backlog-hygiene pass over PRD.md.
 Act on the signals above. Edit .horus/** ONLY (not source, not AGENTS.md/CLAUDE.md).
 Never invent status, dates, or versions; when intent is unclear, leave it and flag it.
 
@@ -1118,23 +1045,7 @@ One pass at most - act on the signals above, do not iterate warnings to zero.
 """
 
 
-DISTILL_HISTORY_PROMPT = """Distill-history routine - compress a large log into the curated history.md subset.
-Act on the signals above. Edit .horus/history.md (and freeze the source log); never
-invent incidents - only compress what the log already records.
-
-Signal test for each entry:
-- KEEP: a real problem the project hit + the durable lesson/design change it forced.
-- DROP: routine changelog/version-bump noise, resolved-and-irrelevant incidents,
-  anything already captured as a rule in decisions.md (cross-reference instead).
-- history.md is carried-forward context: NOT a timeline, NOT open issues (those are roadmap.md).
-
-1. Read the source log identified above.
-2. Write the high-signal "bumps in the road" into history.md (curated, deduplicated).
-3. Mark the source log as superseded/frozen at the top - do not delete it.
-"""
-
-
-DISTILL_HISTORY_PROMPT_V3 = """Distill-history routine (PRD structure) - compress a large log into the curated .horus/archive/history.md subset.
+DISTILL_HISTORY_PROMPT = """Distill-history routine (PRD structure) - compress a large log into the curated .horus/archive/history.md subset.
 Act on the signals above. Edit .horus/archive/history.md (and freeze the source log);
 never invent incidents - only compress what the log already records.
 
@@ -1154,7 +1065,7 @@ Signal test for each entry:
 """
 
 
-INFER_PROMPT_V3 = """Infer routine - bootstrap/refresh PRD-structure continuity from the project's own docs.
+INFER_PROMPT = """Infer routine - bootstrap/refresh PRD-structure continuity from the project's own docs.
 Act on the signals above only when the repository already contains useful project
 truth or the user explicitly asked for inference. A fresh blank scaffold is valid;
 do not manufacture work merely to fill placeholders.
@@ -1194,31 +1105,3 @@ one-line pointer atop a genuinely superseded source doc).
 """
 
 
-INFER_PROMPT_V2 = """Infer routine - bootstrap/refresh .horus/ by distilling the project's own docs.
-Act on the signals above. The goal is a single concise source of "what is this and
-what's next", distilled FROM the canonical docs - not a second copy of them.
-
-1. If .horus/ doesn't exist yet, run `horus init` to scaffold the lanes first.
-2. Read the canonical docs found above and follow their pointers (README -> status/
-   roadmap -> CLAUDE.md -> linked docs like docs/*.md). Build a model of the project.
-3. Distill into the lanes, each in its lane:
-   - project.md - what it is, current shape, boundaries, current focus.
-   - roadmap.md - open action points (what's next), grouped.
-   - features.md - shipped / in-progress / planned capabilities.
-   - decisions.md - durable decisions + reasoning, dated.
-   - history.md - curated lessons / bumps in the road.
-4. Don't duplicate: where a canonical doc stays the deep reference, point at it from
-   .horus/ instead of copying it wholesale. Distill the essentials.
-5. Mark superseded docs: if a doc's "current state / next steps" role now lives in
-   .horus/, add a one-line pointer at its top (e.g. "Current state: see .horus/").
-   Ask before substantially rewriting any source doc.
-6. When intent is genuinely unclear (status, priorities), ask the user rather than
-   guess. Never invent decisions, dates, or versions.
-
-Edit scope: .horus/** (plus, with care and consent, a one-line pointer atop a
-superseded source doc).
-"""
-
-
-# Backward-compatible name for callers that mean the retired six-lane prompt.
-INFER_PROMPT = INFER_PROMPT_V2
