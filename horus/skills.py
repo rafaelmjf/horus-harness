@@ -952,7 +952,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 10 -->
+<!-- horus-skill-version: 11 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -979,6 +979,13 @@ Before reading the model roster, define the bounded work unit and name what a
 separate worker actually buys: context the current session avoids loading, useful
 parallelism, or lower-tier savings. Compare that with the fixed tax of briefing,
 reviewing, observing the gate, merging, and closing continuity.
+
+**Delegation raises total cost — it is a time/capacity/parallelism lever, never a
+cost saver** (measured 2026-07-17, `research/2026-07-17-delegation-cost-finding.md`).
+A cheaper worker does not mean cheaper work: a fresh worker re-pays cold-start
+context on every card while an inline session amortizes one compounding context,
+verification runs twice, and a single account captures no parallelism. That is why
+the tax above is fixed rather than proportional to the task.
 
 - If the benefit is unclear or does not plausibly exceed that tax, stay inline and
   stop the routing analysis before selecting a model.
@@ -1140,7 +1147,9 @@ Do not predict a per-task usage percentage. At completion, use the mechanically
 captured start/end readings and `horus datum report`; show a delta only when Horus
 labels fresh same-window isolated readings unconfounded. Otherwise report the actual
 readings as unknown or confounded. Do not poll continuously or make another model call
-for accounting.
+for accounting. Runtime is a weak proxy for task size — 362s for a ten-step release
+chain versus 481s for a two-line guidance edit, same model and effort (2026-08-01) —
+so never read wall-clock as a measure of how much work a dispatch did.
 
 Parallel workers on the same provider account trade attribution for throughput. State
 that trade-off in the consent envelope: serialize or use isolated account aliases when
@@ -3508,7 +3517,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
     Skill("horus-infer", 7, _INFER_SKILL),
     Skill("horus-execution", 16, _EXECUTION_SKILL),
-    Skill("delegation-rubric", 10, _DELEGATION_RUBRIC_SKILL),
+    Skill("delegation-rubric", 11, _DELEGATION_RUBRIC_SKILL),
     Skill("execution-decision", 6, _EXECUTION_DECISION_SKILL),
     Skill("dispatch-decision", 4, _DISPATCH_DECISION_SKILL),
     Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
