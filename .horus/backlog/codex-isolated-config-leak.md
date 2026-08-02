@@ -125,3 +125,7 @@ Hand-executed setup run, owner-attended, 2026-07-20.
   and holds a clean `auth.json` copy for the personal account. Under remedy 3 it is not
   needed as a promotion target, so it becomes ordinary housekeeping (delete or ignore),
   not part of this card's scope.
+
+### 2026-08-02 — Rafael Figueiredo (manual)
+
+2026-08-02 — Gate repaired. This card sat Gated on `account-login-verb` while that blocker was `shelved`, so nothing could ever lift it; three consecutive continuity closes carried the broken gate unnoticed. The blocker is reactivated to Ready/attended, so this gate is reachable again — it is now waiting on real work rather than on nothing. `backlog.unreachable_gate_findings` now warns on this shape so it cannot recur silently.
