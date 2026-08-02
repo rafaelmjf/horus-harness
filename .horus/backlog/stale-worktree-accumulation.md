@@ -110,3 +110,9 @@ Observed live during the 2026-07-30 resume session, after `gh pr merge 452
 session and explicitly deferred the fix, judging the accumulation non-urgent
 because every worktree was clean. Related: [[herdr-live-test-stops-owner-server]]
 (the same session's "isolation the code claims but does not enforce" theme).
+
+## Reviews
+
+### 2026-08-02 — Rafael Figueiredo (manual)
+
+2026-08-02 — Built, and the card's central premise was WRONG in a useful way. It concluded 'detection has to come from PR state, not from git topology' because `git branch --merged` cannot see a squash. True of ancestry, false of the upstream: `gh pr merge --delete-branch` DOES delete the remote branch (only the local delete fails when a worktree holds it), so after a prune-fetch the branch reads `[gone]`. Measured live: 4 of 5 detected that way, the 5th by the ancestor check because it was never pushed. So no `gh`, no network, works offline. Second finding: `worktree.remove_if_merged` already existed with exactly the right detection and one narrow caller — the gap was never detection, only that nothing swept. Owner decision: extend `horus prune --worktrees [--apply]` rather than a new verb, since `horus prune` is already the reclaim-dead-local-state command. Deliberately never automatic — it owns `git branch -D`, so it gets orphan-reaping treatment: positive confirmation only, owner-invoked.

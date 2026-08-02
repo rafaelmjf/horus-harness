@@ -180,3 +180,116 @@ def test_remove_if_merged_missing_path_is_a_noop(tmp_path):
     result = remove_if_merged(repo, missing)
     assert result.removed is False
     assert "does not exist" in result.detail
+
+
+# --- survey: classify every linked worktree, read-only ----------------------
+
+def _repo_with_origin(tmp_path: Path) -> Path:
+    """A repo whose `origin/HEAD` actually resolves.
+
+    `_looks_merged` needs it for the ancestor fallback, so a fixture without an
+    origin makes every branch read "not merged" — which quietly turns an
+    unmerged-guard test into a vacuous pass. Build the real precondition.
+    """
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", "-b", "main", str(remote)], check=True, capture_output=True, text=True)
+    repo = _init_repo(tmp_path / "repo")
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-u", "origin", "main")
+    _git(repo, "fetch", "origin")
+    _git(repo, "remote", "set-head", "origin", "-a")
+    return repo
+
+
+def test_survey_excludes_the_primary_checkout(tmp_path):
+    """`git worktree list` always reports the primary first — never a candidate."""
+    repo = _repo_with_origin(tmp_path)
+    ensure_worktree(repo, "feat/x")
+
+    found = worktree.survey(repo)
+
+    assert [c.branch for c in found] == ["feat/x"]
+    assert repo.resolve() not in {c.path.resolve() for c in found}
+
+
+def test_survey_keeps_an_unmerged_worktree(tmp_path):
+    """The guardrail the live run cannot prove: an OPEN PR looks exactly like
+    this — branch still on the remote, not an ancestor of the default."""
+    repo = _repo_with_origin(tmp_path)
+    wt = ensure_worktree(repo, "bug/live-work")
+    (wt.path / "new.txt").write_text("work\n", encoding="utf-8")
+    _git(wt.path, "add", "-A")
+    _git(wt.path, "commit", "-m", "ahead of main")
+    _git(wt.path, "push", "-u", "origin", "bug/live-work")  # upstream exists: not [gone]
+
+    (found,) = worktree.survey(repo)
+
+    assert found.reclaimable is False
+    assert "not merged" in found.reason
+
+
+def test_survey_never_reclaims_a_dirty_worktree(tmp_path):
+    """Dirty beats merged. Reclaiming is a convenience; losing edits is not
+    recoverable from continuity prose, so this reports rather than filters."""
+    repo = _repo_with_origin(tmp_path)
+    wt = ensure_worktree(repo, "feat/dirty")
+    (wt.path / "scratch.txt").write_text("uncommitted\n", encoding="utf-8")
+
+    (found,) = worktree.survey(repo)
+
+    assert found.reclaimable is False  # its tip IS origin/main, so merged=True
+    assert "uncommitted" in found.reason
+
+
+def test_survey_reports_a_detached_head_rather_than_guessing(tmp_path):
+    repo = _repo_with_origin(tmp_path)
+    wt = ensure_worktree(repo, "feat/detached")
+    _git(wt.path, "checkout", "--detach")
+
+    (found,) = worktree.survey(repo)
+
+    assert found.reclaimable is False and found.branch is None
+    assert "detached" in found.reason
+
+
+def test_survey_marks_a_merged_worktree_reclaimable(tmp_path):
+    repo = _repo_with_origin(tmp_path)
+    ensure_worktree(repo, "feat/merged")  # tip is origin/main: an ancestor
+
+    (found,) = worktree.survey(repo)
+
+    assert found.reclaimable is True and "reclaimable" in found.reason
+
+
+def test_survey_detects_a_squash_merged_branch_by_its_gone_upstream(tmp_path):
+    """The case the card said needed `gh`. A squash-merge leaves no ancestry, so
+    the branch stays AHEAD of main forever — but `--delete-branch` removes the
+    remote ref, and after a prune-fetch the upstream reads `[gone]`."""
+    repo = _repo_with_origin(tmp_path)
+    wt = ensure_worktree(repo, "feat/squashed")
+    (wt.path / "f.txt").write_text("x\n", encoding="utf-8")
+    _git(wt.path, "add", "-A")
+    _git(wt.path, "commit", "-m", "work")
+    _git(wt.path, "push", "-u", "origin", "feat/squashed")
+    _git(repo, "push", "origin", "--delete", "feat/squashed")  # what --delete-branch does
+    _git(repo, "fetch", "--prune", "origin")
+
+    (found,) = worktree.survey(repo)
+
+    ahead = _git(repo, "rev-list", "--count", "origin/main..feat/squashed").stdout.strip()
+    assert ahead == "1", "precondition: a squash-merged branch stays ahead of main"
+    assert found.reclaimable is True
+    assert found.commits == 1, "the dry-run shows what `git branch -D` would discard"
+
+
+def test_survey_is_read_only(tmp_path):
+    """It classifies; only `remove_if_merged` removes. A survey that quietly
+    reclaimed would make the dry-run default a lie."""
+    repo = _repo_with_origin(tmp_path)
+    wt = ensure_worktree(repo, "feat/merged")
+
+    assert worktree.survey(repo)[0].reclaimable is True
+    worktree.survey(repo)
+
+    assert wt.path.exists()
+    assert len(worktree.survey(repo)) == 1

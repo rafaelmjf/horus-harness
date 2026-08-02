@@ -2517,7 +2517,50 @@ def cmd_forget(args: argparse.Namespace) -> int:
     return 1
 
 
+def _prune_worktrees(apply: bool) -> int:
+    """Reclaim linked worktrees whose branch is merged — report unless --apply.
+
+    Deliberately owner-invoked and never wired into closure or a schedule: this
+    owns `git branch -D`, and a destructive routine gets the same treatment as
+    orphan reaping — it acts only on positive confirmation, never on the absence
+    of a signal.
+    """
+    primary = worktree.primary_checkout(Path.cwd())
+    candidates = worktree.survey(primary)
+    if not candidates:
+        print("No linked worktrees.")
+        return 0
+    reclaimable = [c for c in candidates if c.reclaimable]
+    kept = [c for c in candidates if not c.reclaimable]
+
+    if reclaimable:
+        header = f"Reclaimable ({len(reclaimable)})" + ("" if apply else " — nothing removed, pass --apply")
+        print(f"{header}:")
+        for c in reclaimable:
+            commits = f", {c.commits} commit(s) discarded" if c.commits else ""
+            print(f"  {c.branch}  [{c.reason}{commits}]")
+            print(f"    {c.path}")
+    else:
+        print("Nothing reclaimable.")
+    if kept:
+        print(f"\nKept ({len(kept)}):")
+        for c in kept:
+            print(f"  {c.branch or '(detached)'}  [{c.reason}]")
+
+    if not apply:
+        return 0
+    print()
+    failed = 0
+    for c in reclaimable:
+        removal = worktree.remove_if_merged(primary, c.path)
+        print(f"  {'removed' if removal.removed else 'FAILED'}: {removal.detail}")
+        failed += 0 if removal.removed else 1
+    return 1 if failed else 0
+
+
 def cmd_prune(args: argparse.Namespace) -> int:
+    if getattr(args, "worktrees", False):
+        return _prune_worktrees(getattr(args, "apply", False))
     removed = config.prune_projects()
     if not removed:
         print("Nothing to prune; all registered projects still have a .horus/ directory.")
@@ -5148,6 +5191,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_forget.set_defaults(func=cmd_forget)
 
     p_prune = sub.add_parser("prune", help="drop registered projects whose .horus/ is gone")
+    p_prune.add_argument(
+        "--worktrees",
+        action="store_true",
+        help="instead: report linked git worktrees whose branch is merged (reclaimable)",
+    )
+    p_prune.add_argument(
+        "--apply",
+        action="store_true",
+        help="with --worktrees: actually remove them (default is report-only)",
+    )
     p_prune.set_defaults(func=cmd_prune)
 
     p_sessions = sub.add_parser("sessions", help="list tracked agent sessions (reconciles live state)")
