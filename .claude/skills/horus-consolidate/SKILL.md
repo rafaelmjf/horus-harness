@@ -1,13 +1,10 @@
 ---
 name: horus-consolidate
 description: >-
-  Consolidate a project's Horus continuity (`.horus/`). On a PRD-structure (v3)
-  project this is a light backlog-hygiene pass over the single `PRD.md` file
+  Consolidate a project's Horus continuity (`.horus/`) — a light backlog-hygiene
+  pass over the single `PRD.md` file
   (size vs the character budget, stale frontmatter, undistilled optional recovery notes,
-  duplicate or lingering-done backlog items). On a six-lane (v2) project it
-  routes shipped work into the features ledger, prunes done/stale roadmap
-  items, distills session notes into the durable files, and de-duplicates
-  facts that drifted across roadmap.md and features.md. Use this whenever
+  duplicate or lingering-done backlog items). Use this whenever
   reaching a real continuity boundary in a repo that has a `.horus/`
   directory; when the user says "consolidate", "wrap up", "update continuity",
   "tidy the roadmap"/"tidy the backlog", or "close out"; before an
@@ -17,7 +14,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 18 -->
+<!-- horus-skill-version: 19 -->
 
 # Consolidate Horus continuity
 
@@ -159,129 +156,3 @@ them is stale or empty.
 - Recovery notes are gitignored and never substitute for durable state before a
   machine change; push the branch and put required context in PRD/cards/a brief.
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — the project still uses the six lanes (`project.md`,
-`roadmap.md`, `features.md`, `decisions.md`, `history.md`) plus `sessions/`
-and `temp/`. `horus consolidate` reports lane-routing signals for this
-structure unchanged from before.
-
-### Two jobs — do not conflate them
-
-This skill spans two sizes of work. **Do the continuity close at real boundaries; do the
-backlog pass only when the user asks for it.** Conflating them is why lanes drift:
-the per-session part gets half-done because the backlog looks huge.
-
-- **Continuity close (bounded):** capture the campaign delta and make the
-  dashboard reflect it. Small and complete — only this session's delta plus the
-  dashboard fields below. Steps 3–4.
-- **Backlog consolidation (occasional, opt-in):** distill the *accumulated* old
-  sessions, move historical done-items into features, split long-standing overlaps.
-  A large, separate pass — run it only on an explicit "pay down continuity debt" /
-  "consolidate the backlog" request. Step 5. The signals will report a big backlog
-  (many done items / undistilled sessions); that pressure is for *this* job, not the
-  continuity close — **do not try to clear it every time.**
-
-### The dashboard contract — keep these current at EVERY close
-
-The dashboard renders exactly these as the project's *current* state and never
-infers them. If this session moved the project, each must reflect it before you
-finish:
-
-- `project.md` → `current_focus` (frontmatter): the one-line "where things are now".
-- `roadmap.md` → `next_action` (the single NEXT) and `next_prompt` (the resume prompt).
-- `roadmap.md` → `execution_recommendation`: analyze the NEXT and say whether to
-  continue directly or prepare `execution.md` + worker/subagents.
-- `roadmap.md` → the checkbox states behind the progress bar (mark what this session did).
-- `features.md` → a row for anything **shipped this session** (Planned/In-progress → Shipped).
-- `execution.md` → active phase status and supervisor/worker handoff state, when this
-  session was part of a phased execution plan.
-- `last_updated` frontmatter on every lane you touched (bump to today).
-
-`horus close --check` is the gate: it fails (non-zero) while any of these is stale,
-so closure isn't done until it passes. It also backs a pre-merge CI check.
-
-### Steps
-
-1. **Get the deterministic signals.** Run `horus consolidate` (optionally
-   `--path <repo>`). It reports file-only candidates: roadmap↔features overlaps,
-   done-but-unshipped items, optional recovery notes to distill, missing lanes. Leads, not
-   gospel — and most belong to the backlog job (Step 5), not this close.
-
-2. **Read the lanes.** Read `.horus/project.md`, `roadmap.md`, `features.md`,
-   `decisions.md`, `history.md`, optional `execution.md`, relevant `temp/*.md`
-   handoffs, and the newest `sessions/*.md` recovery note only when one exists. If
-   `docs/routines.md` exists it holds the full routing contract; otherwise this skill
-   is authoritative.
-
-3. **Continuity close — record the campaign delta** (`.horus/**` only; never source,
-   `AGENTS.md`, or `CLAUDE.md`):
-
-   - **Record fresh context.** Decisions, lessons/dead-ends, and capabilities shipped
-     *this session* that aren't on disk yet. A decision splits in two: the **rule**
-     (concise, under its topic) goes in `decisions.md`, dropping any rule it supersedes;
-     the ***why*** and dead ends go in `history.md` ("Decision rationale"). Capabilities
-     → a Shipped row in `features.md`. This is the content only you can supply — it's in
-     the conversation, not the files.
-   - **Update the dashboard contract** (the checklist above): refresh `current_focus`,
-     `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
-     `last_updated` on touched lanes. Author the proposed next step for a *cold*
-     reader — name it and point at `.horus/`. Keep it orientation only; do not write
-     consent instructions into it, because what a session may do is set by its launch
-     permission posture, not by prose. A release is only a reasoned suggestion and is
-     always its own decision with the owner; never write "then release" as an
-     instruction.
-   - **Recommend the execution mode for the NEXT.** When the owner did not
-     explicitly request delegation in this conversation, write
-     `execution_recommendation: "continue-as-is — <why>"` and name the direct
-     reason the next work stays inline — **regardless of the next task's breadth,
-     phase count, or number of surfaces. Never infer delegation from how big the
-     work looks.** The field records an owner-authorized execution choice; it is
-     not a task-size classifier. Setting this field is not a trigger for
-     `execution-decision`; invoke that skill only when the owner explicitly asks
-     whether or how to delegate the next task. If invoked, use
-     `"plan-execution — <why>"` only when a concrete context, parallelism, or
-     lower-tier dividend exceeds the fixed supervisor tax (and create/update
-     `execution.md` before implementation). Cross-project scope, multiple phases,
-     and calibration goals are not dividends by themselves. Do not sell supervisor
-     review as the safeguard (reproduce the gate / bound checkpoints / safety-in-code
-     are the durable ones).
-   - **When a worker handoff exists** in `.horus/temp/`, use it as evidence, not as
-     truth: the supervisor reviews the diff/tests, then distills accepted facts into
-     durable lanes and updates `execution.md`.
-   - **Use a recovery note only when needed.** If durable lanes + git/PR state cannot
-     resume incomplete work, a dirty tree, an unresolved investigation, or a handoff,
-     write a local `sessions/` note. Otherwise skip it.
-
-4. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
-   `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`.
-   `decisions.md` is **concise current rules grouped by topic, not a dated log** — if
-   it has drifted into long dated entries, collapse superseded ones to the rule that
-   won and move the rationale to `history.md` (backlog pass, Step 5). Keep `roadmap.md`
-   on top/open action points; condense long completed lists. If `history.md` has grown
-   into a verbatim log, that's a `horus-distill-history` job — flag it, don't fix it
-   here. `execution.md` is fluid active coordination; archive or replace it when the
-   roadmap item is done.
-
-5. **Backlog consolidation — ONLY when explicitly asked.** Distill old `sessions/*.md`
-   into the lanes then move them to `sessions/archive/` (local-only, excluded from the
-   to-distill count — don't delete); remove stale `temp/*.md` handoff notes once
-   reviewed; move historical done items into `features.md` and
-   **prune** them from `roadmap.md`; **de-duplicate** roadmap↔features overlaps by
-   keeping action points in `roadmap.md` and status in `features.md`, with a literal
-   `→ features.md` / `action points → roadmap.md` cross-reference each way (that
-   pointer is how `horus consolidate` knows a shared name is an *intentional* split,
-   not a duplicate). Skip this entirely during a normal close.
-
-6. **Verify.** Run `horus close --check` — it must pass (the dashboard is fresh). For
-   a backlog pass, also re-run `horus consolidate`: an overlap clears only once split
-   *and* cross-referenced; in-progress/planned items that legitimately live in both
-   lanes keep appearing until they carry the pointer — **do not delete ledger rows or
-   roadmap actions chasing zero.**
-
-### Boundaries
-
-- **Never invent** status, dates, versions, or decisions. When intent is unclear,
-  leave the content and flag it for the user rather than guessing.
-- Edits are confined to `.horus/**`. This is continuity maintenance, not a coding task.
-- Bump `last_updated` front matter on lanes you change (if it isn't already today).

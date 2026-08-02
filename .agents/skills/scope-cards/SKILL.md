@@ -10,7 +10,7 @@ description: >-
   owner-gated; only approved drafts and Vision/card diffs are written.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # scope-cards — from a chosen branch to aligned shaping drafts
 
@@ -94,9 +94,3 @@ unapproved stays unwritten.
 - No new receipt — the branch receipt plus the written cards are the trace.
 - No detailed fields invented merely to make a shaping draft look complete.
 
-## v2 six-lane projects (fallback)
-
-No card files — each approved item becomes a high-level `roadmap.md` entry carrying
-the same shaping context inline, and Vision edits go to `project.md` prose at the
-owner's discretion. `backlog-refine` later deepens selected entries under the
-six-lane project's rules. The per-item owner gate is unchanged.

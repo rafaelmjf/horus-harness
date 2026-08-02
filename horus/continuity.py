@@ -87,7 +87,7 @@ def check_project(project_root: Path, *, include_registration: bool = False) -> 
 
     findings.append(Finding("ok", f"{HORUS_DIR}/ present"))
 
-    # Structure v3 (PRD.md + sessions/): the six lanes are not required; the PRD
+    # Structure v3 (PRD.md + sessions/): the PRD
     # carries vision/backlog/shipped/rules and the focus fields live in its
     # frontmatter (transitional shims still win per-field via the resolver).
     prd = hdir / frontmatter.PRD_FILE

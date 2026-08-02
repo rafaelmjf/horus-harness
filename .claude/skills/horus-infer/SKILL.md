@@ -4,15 +4,14 @@ description: >-
   Bootstrap or refresh a project's Horus continuity (`.horus/`) by distilling the
   project's own canonical docs — README, status/roadmap files, CLAUDE.md/AGENTS.md,
   and linked docs — into `.horus/`: the PRD-structure `PRD.md` skeleton (Vision /
-  Backlog / Shipped / Rules) on a v3 project, or the six-lane structure on a v2
-  project. Use this when setting Horus up in an existing repo that already has useful docs;
+  Backlog / Shipped / Rules). Use this when setting Horus up in an existing repo that already has useful docs;
   when the user says "set up horus here", "bootstrap the .horus files", "populate
   the continuity", "infer the project state", or "fill in the backlog/roadmap from
   our docs". A blank scaffold is valid until a real use case or evidenced docs exist.
   Runs `horus infer` first to find canonical docs and empty/placeholder sections.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -86,42 +85,3 @@ With no useful source truth and no concrete user request, leave the scaffold bla
 - Edit scope is `.horus/PRD.md`, plus — with care and consent — a one-line
   pointer atop a superseded source doc.
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — infer into the six lanes as before.
-
-1. **Get the signals.** Run `horus infer` (optionally `--path <repo>`). It lists the
-   canonical docs to distill from and which `.horus/` lanes are missing or still hold
-   `horus init` placeholders. If `.horus/` doesn't exist yet, run `horus init` first.
-
-2. **Read the canonical docs and follow their pointers** — README → status/roadmap →
-   CLAUDE.md → linked docs like `docs/*.md`. Build a real model of the project before
-   writing anything.
-
-3. **Distill into the lanes**, each in its lane:
-   - `project.md` — what it is, current shape, boundaries, current focus.
-   - `roadmap.md` — open action points (what's next), grouped.
-   - `features.md` — shipped / in-progress / planned capabilities.
-   - `decisions.md` — durable decisions + reasoning, dated.
-   - `history.md` — curated lessons / bumps in the road (use `horus-distill-history`
-     if there's a big log).
-   - `execution.md` — optional active execution plan only if the canonical docs
-     describe current phased/subagent work.
-
-4. **Don't duplicate.** Where a canonical doc stays the deep reference, point at it
-   from `.horus/` instead of copying it wholesale. The lanes are concise.
-
-5. **Mark superseded docs — only when truly superseded.** If a doc's "current state /
-   next steps" role now lives in `.horus/`, add a one-line pointer at its top. But if
-   `.horus/` merely *distills* a doc that stays the canonical deep reference, add no
-   pointer — just point at the doc from `.horus/`. Ask before substantially rewriting
-   any source doc.
-
-### Boundaries
-
-- When intent is genuinely unclear (real status, priorities, what shipped vs planned),
-  **ask the user** rather than guess. Never invent decisions, dates, or versions —
-  `decisions.md` in particular: only record a decision the docs actually state with
-  reasoning; leave it empty rather than manufacturing one.
-- Edit scope is `.horus/**`, plus — with care and consent — a one-line pointer atop a
-  superseded source doc.

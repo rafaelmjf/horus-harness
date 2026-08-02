@@ -18,7 +18,7 @@ description: >-
   telemetry stream.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Process retrospective — bounded, evidence-first
 
@@ -122,11 +122,3 @@ actually new — not a restatement of generic reasoning — and cheaper than the
 overhead of running it. If not, recommend demoting or retiring it via
 `product-audit`.
 
-## v2 six-lane projects (fallback)
-
-Structure-agnostic: the "check existing coverage" step reads whichever
-continuity structure the project uses (`.horus/PRD.md` Rules/backlog on v3,
-`decisions.md`/`roadmap.md` on v2), and the accepted outcome lands in that
-project's live lanes instead of `PRD.md`. Scoping, lazy evidence load, the
-six-bucket attribution, and the capped cheapest-rung recommendations apply
-unchanged.

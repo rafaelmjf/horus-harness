@@ -14,7 +14,7 @@ description: >-
   single repo use `execution-decision` instead.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Dispatch decision (cockpit / multi-project, sessions substrate)
 
@@ -92,8 +92,3 @@ approval; provider errors never authorize fallback. Selecting the account, spawn
 the worker, and observing CI are all YOUR actions — this skill recommends; `horus`
 never auto-routes a dispatch (the hard boundary: `research/omnigent.md`).
 
-## v2 six-lane projects (fallback)
-
-Structure-agnostic: this skill operates at the cockpit level across projects and
-reads live `horus` data + the task shape, not any `.horus/` lane file. v2 and v3
-projects are dispatched identically.

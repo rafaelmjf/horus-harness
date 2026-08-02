@@ -16,7 +16,7 @@ description: >-
   use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Execution decision (in-project)
 
@@ -126,9 +126,3 @@ envelope, because no other account is being spent. Spawning the child, selecting
 the model, and running the gate are all YOUR actions — this skill recommends, it
 does not route.
 
-## v2 six-lane projects (fallback)
-
-Structure-agnostic except where the recommendation lands: on a v3 project the
-`execution_recommendation` field is in `PRD.md` frontmatter; on a v2 (six-lane)
-project it's in `roadmap.md`. The decision logic, the shared rubric, and the
-modes are identical.

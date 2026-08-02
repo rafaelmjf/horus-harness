@@ -117,13 +117,10 @@ _CONSOLIDATE_SKILL = """\
 ---
 name: horus-consolidate
 description: >-
-  Consolidate a project's Horus continuity (`.horus/`). On a PRD-structure (v3)
-  project this is a light backlog-hygiene pass over the single `PRD.md` file
+  Consolidate a project's Horus continuity (`.horus/`) — a light backlog-hygiene
+  pass over the single `PRD.md` file
   (size vs the character budget, stale frontmatter, undistilled optional recovery notes,
-  duplicate or lingering-done backlog items). On a six-lane (v2) project it
-  routes shipped work into the features ledger, prunes done/stale roadmap
-  items, distills session notes into the durable files, and de-duplicates
-  facts that drifted across roadmap.md and features.md. Use this whenever
+  duplicate or lingering-done backlog items). Use this whenever
   reaching a real continuity boundary in a repo that has a `.horus/`
   directory; when the user says "consolidate", "wrap up", "update continuity",
   "tidy the roadmap"/"tidy the backlog", or "close out"; before an
@@ -133,7 +130,7 @@ description: >-
   signals first and applies consistent routing rules.
 ---
 
-<!-- horus-skill-version: 18 -->
+<!-- horus-skill-version: 19 -->
 
 # Consolidate Horus continuity
 
@@ -275,132 +272,6 @@ them is stale or empty.
 - Recovery notes are gitignored and never substitute for durable state before a
   machine change; push the branch and put required context in PRD/cards/a brief.
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — the project still uses the six lanes (`project.md`,
-`roadmap.md`, `features.md`, `decisions.md`, `history.md`) plus `sessions/`
-and `temp/`. `horus consolidate` reports lane-routing signals for this
-structure unchanged from before.
-
-### Two jobs — do not conflate them
-
-This skill spans two sizes of work. **Do the continuity close at real boundaries; do the
-backlog pass only when the user asks for it.** Conflating them is why lanes drift:
-the per-session part gets half-done because the backlog looks huge.
-
-- **Continuity close (bounded):** capture the campaign delta and make the
-  dashboard reflect it. Small and complete — only this session's delta plus the
-  dashboard fields below. Steps 3–4.
-- **Backlog consolidation (occasional, opt-in):** distill the *accumulated* old
-  sessions, move historical done-items into features, split long-standing overlaps.
-  A large, separate pass — run it only on an explicit "pay down continuity debt" /
-  "consolidate the backlog" request. Step 5. The signals will report a big backlog
-  (many done items / undistilled sessions); that pressure is for *this* job, not the
-  continuity close — **do not try to clear it every time.**
-
-### The dashboard contract — keep these current at EVERY close
-
-The dashboard renders exactly these as the project's *current* state and never
-infers them. If this session moved the project, each must reflect it before you
-finish:
-
-- `project.md` → `current_focus` (frontmatter): the one-line "where things are now".
-- `roadmap.md` → `next_action` (the single NEXT) and `next_prompt` (the resume prompt).
-- `roadmap.md` → `execution_recommendation`: analyze the NEXT and say whether to
-  continue directly or prepare `execution.md` + worker/subagents.
-- `roadmap.md` → the checkbox states behind the progress bar (mark what this session did).
-- `features.md` → a row for anything **shipped this session** (Planned/In-progress → Shipped).
-- `execution.md` → active phase status and supervisor/worker handoff state, when this
-  session was part of a phased execution plan.
-- `last_updated` frontmatter on every lane you touched (bump to today).
-
-`horus close --check` is the gate: it fails (non-zero) while any of these is stale,
-so closure isn't done until it passes. It also backs a pre-merge CI check.
-
-### Steps
-
-1. **Get the deterministic signals.** Run `horus consolidate` (optionally
-   `--path <repo>`). It reports file-only candidates: roadmap↔features overlaps,
-   done-but-unshipped items, optional recovery notes to distill, missing lanes. Leads, not
-   gospel — and most belong to the backlog job (Step 5), not this close.
-
-2. **Read the lanes.** Read `.horus/project.md`, `roadmap.md`, `features.md`,
-   `decisions.md`, `history.md`, optional `execution.md`, relevant `temp/*.md`
-   handoffs, and the newest `sessions/*.md` recovery note only when one exists. If
-   `docs/routines.md` exists it holds the full routing contract; otherwise this skill
-   is authoritative.
-
-3. **Continuity close — record the campaign delta** (`.horus/**` only; never source,
-   `AGENTS.md`, or `CLAUDE.md`):
-
-   - **Record fresh context.** Decisions, lessons/dead-ends, and capabilities shipped
-     *this session* that aren't on disk yet. A decision splits in two: the **rule**
-     (concise, under its topic) goes in `decisions.md`, dropping any rule it supersedes;
-     the ***why*** and dead ends go in `history.md` ("Decision rationale"). Capabilities
-     → a Shipped row in `features.md`. This is the content only you can supply — it's in
-     the conversation, not the files.
-   - **Update the dashboard contract** (the checklist above): refresh `current_focus`,
-     `next_action`, `next_prompt`, the roadmap checkboxes for what you did, and bump
-     `last_updated` on touched lanes. Author the proposed next step for a *cold*
-     reader — name it and point at `.horus/`. Keep it orientation only; do not write
-     consent instructions into it, because what a session may do is set by its launch
-     permission posture, not by prose. A release is only a reasoned suggestion and is
-     always its own decision with the owner; never write "then release" as an
-     instruction.
-   - **Recommend the execution mode for the NEXT.** When the owner did not
-     explicitly request delegation in this conversation, write
-     `execution_recommendation: "continue-as-is — <why>"` and name the direct
-     reason the next work stays inline — **regardless of the next task's breadth,
-     phase count, or number of surfaces. Never infer delegation from how big the
-     work looks.** The field records an owner-authorized execution choice; it is
-     not a task-size classifier. Setting this field is not a trigger for
-     `execution-decision`; invoke that skill only when the owner explicitly asks
-     whether or how to delegate the next task. If invoked, use
-     `"plan-execution — <why>"` only when a concrete context, parallelism, or
-     lower-tier dividend exceeds the fixed supervisor tax (and create/update
-     `execution.md` before implementation). Cross-project scope, multiple phases,
-     and calibration goals are not dividends by themselves. Do not sell supervisor
-     review as the safeguard (reproduce the gate / bound checkpoints / safety-in-code
-     are the durable ones).
-   - **When a worker handoff exists** in `.horus/temp/`, use it as evidence, not as
-     truth: the supervisor reviews the diff/tests, then distills accepted facts into
-     durable lanes and updates `execution.md`.
-   - **Use a recovery note only when needed.** If durable lanes + git/PR state cannot
-     resume incomplete work, a dirty tree, an unresolved investigation, or a handoff,
-     write a local `sessions/` note. Otherwise skip it.
-
-4. **Keep lanes pure.** No tasks in `features.md`; no shipped packages lingering in
-   `roadmap.md`; no open issues in `history.md`; no changelog in `project.md`.
-   `decisions.md` is **concise current rules grouped by topic, not a dated log** — if
-   it has drifted into long dated entries, collapse superseded ones to the rule that
-   won and move the rationale to `history.md` (backlog pass, Step 5). Keep `roadmap.md`
-   on top/open action points; condense long completed lists. If `history.md` has grown
-   into a verbatim log, that's a `horus-distill-history` job — flag it, don't fix it
-   here. `execution.md` is fluid active coordination; archive or replace it when the
-   roadmap item is done.
-
-5. **Backlog consolidation — ONLY when explicitly asked.** Distill old `sessions/*.md`
-   into the lanes then move them to `sessions/archive/` (local-only, excluded from the
-   to-distill count — don't delete); remove stale `temp/*.md` handoff notes once
-   reviewed; move historical done items into `features.md` and
-   **prune** them from `roadmap.md`; **de-duplicate** roadmap↔features overlaps by
-   keeping action points in `roadmap.md` and status in `features.md`, with a literal
-   `→ features.md` / `action points → roadmap.md` cross-reference each way (that
-   pointer is how `horus consolidate` knows a shared name is an *intentional* split,
-   not a duplicate). Skip this entirely during a normal close.
-
-6. **Verify.** Run `horus close --check` — it must pass (the dashboard is fresh). For
-   a backlog pass, also re-run `horus consolidate`: an overlap clears only once split
-   *and* cross-referenced; in-progress/planned items that legitimately live in both
-   lanes keep appearing until they carry the pointer — **do not delete ledger rows or
-   roadmap actions chasing zero.**
-
-### Boundaries
-
-- **Never invent** status, dates, versions, or decisions. When intent is unclear,
-  leave the content and flag it for the user rather than guessing.
-- Edits are confined to `.horus/**`. This is continuity maintenance, not a coding task.
-- Bump `last_updated` front matter on lanes you change (if it isn't already today).
 """
 
 
@@ -411,9 +282,9 @@ description: >-
   Compress a large, raw project log (a long `docs/HISTORY.md`, `CHANGELOG.md`, or an
   oversized history archive) down to the curated "bumps in the road" worth carrying
   forward — the problems that bit the project and the durable lessons they forced.
-  On a PRD-structure (v3) project the curated result lives in
+  The curated result lives in
   `.horus/archive/history.md`, with any still-load-bearing rule folded into `PRD.md`'s
-  `## Rules`; on a six-lane (v2) project it's `.horus/history.md` directly. Use this
+  `## Rules`. Use this
   whenever onboarding Horus into a long-running project with a big changelog; when
   the user says "distill the history", "compress the changelog", "the history file
   is too long", or "summarize the project log"; or when the curated history has grown
@@ -421,7 +292,7 @@ description: >-
   source-log location and size.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Distill project history
 
@@ -444,7 +315,7 @@ is the *current*-state surface; this archive is the *why* behind it, same idea a
 
 2. **Read the source log** in full (or in chunks if very large).
 
-3. **Apply the signal test** to every entry — same test as v2 below: keep a real
+3. **Apply the signal test** to every entry: keep a real
    problem plus the durable lesson/design change it forced; drop routine noise,
    version bumps, and anything already captured as a `PRD.md` `## Rules` entry
    (cross-reference instead of duplicating).
@@ -474,46 +345,6 @@ is the *current*-state surface; this archive is the *why* behind it, same idea a
 - Edit `.horus/archive/history.md`, at most a one-line addition to `PRD.md`'s
   `## Rules`, and the one-line pointer on the source log; nothing else.
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — the curated target is `.horus/history.md` directly, as before.
-
-1. **Locate + size the source.** Run `horus distill-history` (optionally
-   `--path <repo>` / `--source <file>`). It reports the source log it found and the
-   current `history.md` size, so the compression target is explicit.
-
-2. **Read the source log** in full (or in chunks if very large).
-
-3. **Apply the signal test** to every entry:
-   - **Keep** — a real problem the project hit *and* the durable lesson or design
-     change it forced. The kind of thing that prevents a repeat mistake.
-   - **Drop** — routine changelog noise, version-bump entries, resolved-and-now-
-     irrelevant incidents, and anything already captured as a rule in `decisions.md`
-     (cross-reference it instead of duplicating).
-
-   - If the source *already* contains a curated/highlights section plus a raw
-     archive, treat the highlights as just more input — re-derive across the whole
-     log and merge, rather than copying the existing summary verbatim.
-
-4. **Write the curated subset** into `.horus/history.md`: short, deduplicated
-   "bumps in the road", each pairing the problem with the lesson. Aim for a scannable
-   set (roughly a dozen or two high-signal entries), not a line-for-line rewrite —
-   if you're keeping most of the log, you're not distilling. Not a timeline, not open
-   issues.
-
-5. **Forward open work, don't drop it.** If the log contains roadmap-shaped material
-   (backlog, "next session", planned-but-not-done), that's not history — note it for
-   the user to fold into `roadmap.md` rather than silently dropping it. (This skill
-   edits `history.md`, so flag it; don't edit `roadmap.md` here.)
-
-6. **Freeze the source**, don't delete it: add a one-line "superseded — curated in
-   `.horus/history.md`" pointer at the top of its body (just below any YAML front
-   matter, so the front matter stays first) so the two don't drift.
-
-### Boundaries
-
-- Only compress what the log records — **never invent** incidents, dates, or causes.
-- Edit `.horus/history.md` (and the one-line pointer on the source log); nothing else.
 """
 
 
@@ -524,15 +355,14 @@ description: >-
   Bootstrap or refresh a project's Horus continuity (`.horus/`) by distilling the
   project's own canonical docs — README, status/roadmap files, CLAUDE.md/AGENTS.md,
   and linked docs — into `.horus/`: the PRD-structure `PRD.md` skeleton (Vision /
-  Backlog / Shipped / Rules) on a v3 project, or the six-lane structure on a v2
-  project. Use this when setting Horus up in an existing repo that already has useful docs;
+  Backlog / Shipped / Rules). Use this when setting Horus up in an existing repo that already has useful docs;
   when the user says "set up horus here", "bootstrap the .horus files", "populate
   the continuity", "infer the project state", or "fill in the backlog/roadmap from
   our docs". A blank scaffold is valid until a real use case or evidenced docs exist.
   Runs `horus infer` first to find canonical docs and empty/placeholder sections.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # Infer Horus continuity from the project's docs
 
@@ -606,45 +436,6 @@ With no useful source truth and no concrete user request, leave the scaffold bla
 - Edit scope is `.horus/PRD.md`, plus — with care and consent — a one-line
   pointer atop a superseded source doc.
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — infer into the six lanes as before.
-
-1. **Get the signals.** Run `horus infer` (optionally `--path <repo>`). It lists the
-   canonical docs to distill from and which `.horus/` lanes are missing or still hold
-   `horus init` placeholders. If `.horus/` doesn't exist yet, run `horus init` first.
-
-2. **Read the canonical docs and follow their pointers** — README → status/roadmap →
-   CLAUDE.md → linked docs like `docs/*.md`. Build a real model of the project before
-   writing anything.
-
-3. **Distill into the lanes**, each in its lane:
-   - `project.md` — what it is, current shape, boundaries, current focus.
-   - `roadmap.md` — open action points (what's next), grouped.
-   - `features.md` — shipped / in-progress / planned capabilities.
-   - `decisions.md` — durable decisions + reasoning, dated.
-   - `history.md` — curated lessons / bumps in the road (use `horus-distill-history`
-     if there's a big log).
-   - `execution.md` — optional active execution plan only if the canonical docs
-     describe current phased/subagent work.
-
-4. **Don't duplicate.** Where a canonical doc stays the deep reference, point at it
-   from `.horus/` instead of copying it wholesale. The lanes are concise.
-
-5. **Mark superseded docs — only when truly superseded.** If a doc's "current state /
-   next steps" role now lives in `.horus/`, add a one-line pointer at its top. But if
-   `.horus/` merely *distills* a doc that stays the canonical deep reference, add no
-   pointer — just point at the doc from `.horus/`. Ask before substantially rewriting
-   any source doc.
-
-### Boundaries
-
-- When intent is genuinely unclear (real status, priorities, what shipped vs planned),
-  **ask the user** rather than guess. Never invent decisions, dates, or versions —
-  `decisions.md` in particular: only record a decision the docs actually state with
-  reasoning; leave it empty rather than manufacturing one.
-- Edit scope is `.horus/**`, plus — with care and consent — a one-line pointer atop a
-  superseded source doc.
 """
 
 
@@ -663,10 +454,10 @@ description: >-
   Never infer delegation from a task's breadth, phase count, or number of
   surfaces. It keeps `.horus/execution.md` fluid, uses
   `.horus/temp/` for fleeting worker notes, and distills durable outcomes back
-  into `PRD.md` (v3) or roadmap/features/decisions/history (v2) at closure.
+  into `PRD.md` at closure.
 ---
 
-<!-- horus-skill-version: 16 -->
+<!-- horus-skill-version: 17 -->
 
 # Horus execution supervision
 
@@ -823,12 +614,9 @@ two vendors, two cheap bounces, orchestrator wrote no feature code):
 
 ## Steps
 
-1. **Read the continuity.** On a PRD-structure (v3) project, read `.horus/PRD.md`
-   (vision/backlog/shipped/rules + the frontmatter handoff fields) and
-   `execution.md`. On a six-lane (v2) project, read `.horus/project.md`,
-   `roadmap.md`, `features.md`, `decisions.md`, `history.md`, and `execution.md`.
-   Either way, review relevant `.horus/temp/*.md` handoff notes only when an
-   execution plan is active — that directory is unchanged across both structures.
+1. **Read the continuity.** Read `.horus/PRD.md` (vision/backlog/shipped/rules +
+   the frontmatter handoff fields) and `execution.md`. Review relevant
+   `.horus/temp/*.md` handoff notes only when an execution plan is active.
 
 2. **Get the native prompt.** Run:
 
@@ -917,17 +705,6 @@ When the goal is to validate the workflow itself, "delegated" means a distinct w
 agent/session/model actually did the implementation and left a handoff note. A handoff
 note written by the supervisor after doing the work does not satisfy the workflow test.
 
-## v2 six-lane projects (fallback)
-
-Everything above is structure-agnostic — phases, delegation judgment, handoff notes,
-and `execution.md` itself work the same regardless of whether the project uses
-`PRD.md` or the six lanes. The one structure-dependent step is reading the
-continuity at the start (Step 1): a v2 project has no `PRD.md`, so read
-`.horus/project.md`, `roadmap.md`, `features.md`, `decisions.md`, `history.md`, and
-`execution.md` instead — the original six-lane reading list, unchanged. Distilling
-durable results at closure (Step 6) likewise goes back to those lanes via
-`horus-consolidate`'s v2 path rather than into `PRD.md`.
-
 ## Boundaries
 
 - Do not force `execution.md` onto small single-agent tasks.
@@ -955,7 +732,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 11 -->
+<!-- horus-skill-version: 12 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -1193,12 +970,6 @@ it never predicts or picks one up front.
 Always show the live data and owner evidence that drove it, clearly labelled. The
 agent decides and acts; you advise.
 
-## v2 six-lane projects (fallback)
-
-This rubric is **structure-agnostic** — it reads live `horus capabilities
---models` data and the task shape, not any `.horus/` lane file — so v2
-(six-lane) and v3 (`PRD.md`) projects consume it identically. Nothing here
-changes with the continuity structure.
 """
 
 # Shape -> tier-role mapping (the rubric's Step 3/4 essence) and tier-trust ->
@@ -1263,7 +1034,7 @@ description: >-
   use `dispatch-decision` instead.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Execution decision (in-project)
 
@@ -1373,12 +1144,6 @@ envelope, because no other account is being spent. Spawning the child, selecting
 the model, and running the gate are all YOUR actions — this skill recommends, it
 does not route.
 
-## v2 six-lane projects (fallback)
-
-Structure-agnostic except where the recommendation lands: on a v3 project the
-`execution_recommendation` field is in `PRD.md` frontmatter; on a v2 (six-lane)
-project it's in `roadmap.md`. The decision logic, the shared rubric, and the
-modes are identical.
 """
 
 
@@ -1399,7 +1164,7 @@ description: >-
   single repo use `execution-decision` instead.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Dispatch decision (cockpit / multi-project, sessions substrate)
 
@@ -1477,11 +1242,6 @@ approval; provider errors never authorize fallback. Selecting the account, spawn
 the worker, and observing CI are all YOUR actions — this skill recommends; `horus`
 never auto-routes a dispatch (the hard boundary: `research/omnigent.md`).
 
-## v2 six-lane projects (fallback)
-
-Structure-agnostic: this skill operates at the cockpit level across projects and
-reads live `horus` data + the task shape, not any `.horus/` lane file. v2 and v3
-projects are dispatched identically.
 """
 
 
@@ -1497,7 +1257,7 @@ description: >-
   owner approval before changing target-project continuity.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Fleet curation
 
@@ -1533,14 +1293,6 @@ ordinary delivery. Direct project sessions remain the default.
    cross-repo mega-commit, auto-dispatch work, or change external infrastructure
    without separate owner authority.
 
-## v2 six-lane projects (fallback)
-
-The fleet-review command may report remote continuity unavailable for a project
-that has no PRD yet. If that project is selected, read its remote
-`project.md`/`roadmap.md`/`features.md` lanes explicitly and apply the same
-remote-vs-local separation. Any approved cleanup follows that project's six-lane
-closure rules; migration to PRD structure is separate and opt-in.
-
 ## Close
 
 Record only durable fleet-level decisions in the curator workspace. Do not copy
@@ -1563,7 +1315,7 @@ description: >-
   and never edits, archives, claims, reprioritizes, or ships cards.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Backlog librarian — one advisory hygiene digest
 
@@ -1675,12 +1427,6 @@ authorized work product. Do not add a daemon, recurrence engine, or librarian-
 specific scheduler. Four weeks is guidance for the owner when arming a one-shot
 run, not authority for this skill to arm the next one.
 
-## v2 six-lane projects (fallback)
-
-This workflow requires the v3 card-backed `.horus/backlog/` structure. If the
-project has only `roadmap.md` and the retired six-lane files, stop with an
-unsupported-structure explanation and write no receipt. Do not migrate the
-project or reinterpret roadmap bullets as cards.
 """
 
 
@@ -1701,7 +1447,7 @@ description: >-
   The receipt lands dated under `.horus/audits/`.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Product audit — the inward evidence step (analysis, never verdicts)
 
@@ -1805,12 +1551,6 @@ offering: dive deeper into ONE named topic from the receipt, or proceed.
   interval — and note that the interval should weigh releases AND elapsed
   days (releases alone nag during rapid iteration).
 
-## v2 six-lane projects (fallback)
-
-The staleness advisory reads `PRD.md` frontmatter, so it never fires on a
-six-lane project. The analysis still applies: same evidence, same spine with
-`project.md` prose standing in for the facet table; record the stamp in
-`project.md` frontmatter so it carries over on migration.
 """
 
 
@@ -1835,7 +1575,7 @@ description: >-
   telemetry stream.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Process retrospective — bounded, evidence-first
 
@@ -1939,14 +1679,6 @@ actually new — not a restatement of generic reasoning — and cheaper than the
 overhead of running it. If not, recommend demoting or retiring it via
 `product-audit`.
 
-## v2 six-lane projects (fallback)
-
-Structure-agnostic: the "check existing coverage" step reads whichever
-continuity structure the project uses (`.horus/PRD.md` Rules/backlog on v3,
-`decisions.md`/`roadmap.md` on v2), and the accepted outcome lands in that
-project's live lanes instead of `PRD.md`. Scoping, lazy evidence load, the
-six-bucket attribution, and the capped cheapest-rung recommendations apply
-unchanged.
 """
 
 
@@ -1966,7 +1698,7 @@ description: >-
   campaign's execution use `process-retrospective`.
 ---
 
-<!-- horus-skill-version: 3 -->
+<!-- horus-skill-version: 4 -->
 
 # Skill audit — one skill's text vs reality
 
@@ -2055,13 +1787,6 @@ they are regenerated and the edit would be silently overwritten.
   approval of the specific diff or proposal.
 - One skill per invocation; no telemetry; no new trigger machinery.
 
-## v2 six-lane projects (fallback)
-
-Structure-agnostic: the receipt still lands in `.horus/audits/` (the
-directory is independent of PRD structure), and the fidelity check compares
-each skill's v2 fallback section against the six-lane layout the project
-actually uses — a skill whose fallback describes lanes the project no longer
-has is a revise finding.
 """
 
 
@@ -2082,7 +1807,7 @@ description: >-
   auto-writes the Vision or auto-creates cards. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # Market scan — look outward, propose, never auto-apply
 
@@ -2217,12 +1942,6 @@ interview JTBD (label it a hypothesis instead); continuous monitoring / scraping
 (the always-on SaaS category, out of scope); any mandatory-invocation or
 red-flags ceremony.
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — run the scan the same way and write the same receipt under
-`.horus/research/`. Feed the Vision draft into `project.md` and candidate items
-into `roadmap.md` at the owner's discretion, following that project's six-lane
-closure rules.
 """
 
 
@@ -2243,7 +1962,7 @@ description: >-
   creates cards, never reorders the backlog.
 ---
 
-<!-- horus-skill-version: 8 -->
+<!-- horus-skill-version: 9 -->
 
 # roadmap-branches — the divergence tree, not a merged roadmap
 
@@ -2400,13 +2119,6 @@ the Vision, never create cards, never reorder the backlog yourself.
   stale, say so and offer the scan instead of improvising evidence.
 - No execution planning (that is `execution-decision` / `horus-execution`).
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — build the brief from `project.md` (vision) + `roadmap.md`
-(open items) + `features.md` (shipped). There is no facet table, so branches state
-their implied direction changes against `project.md`'s vision prose, and roadmap
-items become proposed `roadmap.md` entries. The receipt, the tree, the re-justify
-and claims disciplines, and the advisory boundary are unchanged.
 """
 
 
@@ -2423,7 +2135,7 @@ description: >-
   owner-gated; only approved drafts and Vision/card diffs are written.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # scope-cards — from a chosen branch to aligned shaping drafts
 
@@ -2507,12 +2219,6 @@ unapproved stays unwritten.
 - No new receipt — the branch receipt plus the written cards are the trace.
 - No detailed fields invented merely to make a shaping draft look complete.
 
-## v2 six-lane projects (fallback)
-
-No card files — each approved item becomes a high-level `roadmap.md` entry carrying
-the same shaping context inline, and Vision edits go to `project.md` prose at the
-owner's discretion. `backlog-refine` later deepens selected entries under the
-six-lane project's rules. The per-item owner gate is unchanged.
 """
 
 
@@ -2528,7 +2234,7 @@ description: >-
   never silently rewrites cards.
 ---
 
-<!-- horus-skill-version: 7 -->
+<!-- horus-skill-version: 8 -->
 
 # backlog-refine — picture first, decisions second, Ready last
 
@@ -2736,14 +2442,6 @@ End with the updated picture and the exact remaining pending decisions. Do not
 dispatch, schedule, implement, or invoke pathfinder unless the product direction
 itself became the unresolved question.
 
-## v2 six-lane projects (fallback)
-
-Read `project.md`, `roadmap.md`, `features.md`, `decisions.md`, and `history.md` in
-their existing lanes. Present the same picture and interactive decisions, then
-deepen approved roadmap entries inline. The readiness words remain an advisory
-classification when the legacy roadmap has no frontmatter; do not migrate the
-project or invent card files. Owner gating and the execution-ready content bar are
-unchanged.
 """
 
 
@@ -2773,7 +2471,7 @@ description: >-
   depth rather than assuming it. Not continuous monitoring.
 ---
 
-<!-- horus-skill-version: 10 -->
+<!-- horus-skill-version: 11 -->
 
 # pathfinder — the re-baseline workflow (thin by design)
 
@@ -2939,15 +2637,6 @@ inward-only.
   fan-out, and it defaults to a shallow sweep before offering more depth.
 - No continuous monitoring (that always-on category is out of scope).
 
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md` — the same sequence over the six-lane files: the brief comes
-from `project.md`/`roadmap.md`/`features.md`, `roadmap-branches` states direction
-changes against `project.md`'s vision prose, `scope-cards` writes approved shaping
-entries, and `backlog-refine` deepens selected entries inline under that project's
-rules. The Step 0
-intent gate, the pinned brief, and the advisory gate-at-every-step boundary are
-unchanged.
 """
 
 
@@ -2972,7 +2661,7 @@ description: >-
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -3095,16 +2784,6 @@ stay the work surface.
 - **Merge is opt-in** (`--allow-merge` on the envelope) and always gated behind a live
   probe; the default posture is verify + escalate only.
 
-## v2 six-lane projects (fallback)
-
-The contract is structure-agnostic — it dispatches into a *target* repo whatever that
-repo's continuity shape. On a v2 six-lane target the only differences are in steps 1
-and 3: discovery reads the target's `roadmap.md` open action points instead of
-`backlog/` cards, and the ready-gate judges a roadmap item's scope (does it name a
-concrete surface + acceptance?) rather than a card's readiness frontmatter —
-routing a thin one through `backlog-refine`, which deepens the `roadmap.md` entry
-under that project's rules. Envelope, schedule, dispatch, supervise,
-notify, and the owner-gated-at-every-step boundary are identical.
 """
 
 
@@ -3127,7 +2806,7 @@ description: >-
   and sources, kept separate.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # launch-model-refresh — keep the TUI's launchable model list current from vendor docs
 
@@ -3192,12 +2871,6 @@ touched; the TUI picks up the new list on its next launch.
   concern; do not touch `horus/datums.py` priors here.
 - The list is the owner's curated subset for launching, not a mirror of every Active model.
 
-## v2 six-lane projects (fallback)
-
-Structure-independent: this skill reads vendor model docs and writes machine-local
-`~/.horus/config.toml` (`[launch_models]`), never a project's continuity lanes — so it
-works identically whether a project is on the v3 `PRD.md` structure or the v2 six lanes.
-Nothing here routes into `PRD.md`, `roadmap.md`, or `decisions.md`.
 """
 
 _WILDCARD_SKILL = """\
@@ -3221,7 +2894,7 @@ description: >-
   request, for ideas the owner picks).
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # wildcard — autonomous divergence → ranked, buildable vision-advancing moves
 
@@ -3537,40 +3210,30 @@ propose the declaration itself.**
   non-emittable kinds with a routed line for genuine owner-gated items; (d) adds
   `Choices already made` to the scope block; and (e) declines a staleness threshold on the
   owner's call that staleness is subjective and better disclosed than enforced.
-## v2 six-lane projects (fallback)
-
-No `.horus/PRD.md`, so there is no facet table to walk. The grounding is
-unchanged in kind, only in source: `project.md`'s vision prose stands in for the
-facet definitions of done, and the gap is read against the delivered code the
-same way. `roadmap.md` becomes the duplication check that the backlog performs on
-a v3 project — read to avoid re-proposing what is already queued, never as a
-source of ideas. Proposals are emitted as candidate `roadmap.md` entries. The
-self-sufficiency bar, the ranking, the non-emittable kinds and the
-strictly-additive boundary all hold exactly as written.
 """
 
 
 SKILLS: tuple[Skill, ...] = (
-    Skill("horus-consolidate", 18, _CONSOLIDATE_SKILL),
-    Skill("horus-distill-history", 3, _DISTILL_HISTORY_SKILL),
-    Skill("horus-infer", 7, _INFER_SKILL),
-    Skill("horus-execution", 16, _EXECUTION_SKILL),
-    Skill("delegation-rubric", 11, _DELEGATION_RUBRIC_SKILL),
-    Skill("execution-decision", 6, _EXECUTION_DECISION_SKILL),
-    Skill("dispatch-decision", 4, _DISPATCH_DECISION_SKILL),
-    Skill("fleet-curation", 1, _FLEET_CURATION_SKILL),
-    Skill("backlog-librarian", 1, _BACKLOG_LIBRARIAN_SKILL),
-    Skill("product-audit", 4, _PRODUCT_AUDIT_SKILL),
-    Skill("process-retrospective", 1, _PROCESS_RETROSPECTIVE_SKILL),
-    Skill("skill-audit", 3, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
-    Skill("market-scan", 7, _MARKET_SCAN_SKILL),
-    Skill("roadmap-branches", 8, _ROADMAP_BRANCHES_SKILL),
-    Skill("scope-cards", 7, _SCOPE_CARDS_SKILL),
-    Skill("backlog-refine", 7, _BACKLOG_REFINE_SKILL),
-    Skill("pathfinder", 10, _PATHFINDER_SKILL),
-    Skill("cockpit-autonomous-dispatch-contract", 4, _COCKPIT_DISPATCH_SKILL),
-    Skill("launch-model-refresh", 1, _LAUNCH_MODEL_REFRESH_SKILL),
-    Skill("wildcard", 6, _WILDCARD_SKILL),
+    Skill("horus-consolidate", 19, _CONSOLIDATE_SKILL),
+    Skill("horus-distill-history", 4, _DISTILL_HISTORY_SKILL),
+    Skill("horus-infer", 8, _INFER_SKILL),
+    Skill("horus-execution", 17, _EXECUTION_SKILL),
+    Skill("delegation-rubric", 12, _DELEGATION_RUBRIC_SKILL),
+    Skill("execution-decision", 7, _EXECUTION_DECISION_SKILL),
+    Skill("dispatch-decision", 5, _DISPATCH_DECISION_SKILL),
+    Skill("fleet-curation", 2, _FLEET_CURATION_SKILL),
+    Skill("backlog-librarian", 2, _BACKLOG_LIBRARIAN_SKILL),
+    Skill("product-audit", 5, _PRODUCT_AUDIT_SKILL),
+    Skill("process-retrospective", 2, _PROCESS_RETROSPECTIVE_SKILL),
+    Skill("skill-audit", 4, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
+    Skill("market-scan", 8, _MARKET_SCAN_SKILL),
+    Skill("roadmap-branches", 9, _ROADMAP_BRANCHES_SKILL),
+    Skill("scope-cards", 8, _SCOPE_CARDS_SKILL),
+    Skill("backlog-refine", 8, _BACKLOG_REFINE_SKILL),
+    Skill("pathfinder", 11, _PATHFINDER_SKILL),
+    Skill("cockpit-autonomous-dispatch-contract", 5, _COCKPIT_DISPATCH_SKILL),
+    Skill("launch-model-refresh", 2, _LAUNCH_MODEL_REFRESH_SKILL),
+    Skill("wildcard", 7, _WILDCARD_SKILL),
 )
 
 

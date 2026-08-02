@@ -18,7 +18,7 @@ description: >-
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 4 -->
+<!-- horus-skill-version: 5 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -141,13 +141,3 @@ stay the work surface.
 - **Merge is opt-in** (`--allow-merge` on the envelope) and always gated behind a live
   probe; the default posture is verify + escalate only.
 
-## v2 six-lane projects (fallback)
-
-The contract is structure-agnostic — it dispatches into a *target* repo whatever that
-repo's continuity shape. On a v2 six-lane target the only differences are in steps 1
-and 3: discovery reads the target's `roadmap.md` open action points instead of
-`backlog/` cards, and the ready-gate judges a roadmap item's scope (does it name a
-concrete surface + acceptance?) rather than a card's readiness frontmatter —
-routing a thin one through `backlog-refine`, which deepens the `roadmap.md` entry
-under that project's rules. Envelope, schedule, dispatch, supervise,
-notify, and the owner-gated-at-every-step boundary are identical.

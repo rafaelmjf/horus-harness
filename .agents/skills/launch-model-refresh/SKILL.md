@@ -16,7 +16,7 @@ description: >-
   and sources, kept separate.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # launch-model-refresh — keep the TUI's launchable model list current from vendor docs
 
@@ -81,9 +81,3 @@ touched; the TUI picks up the new list on its next launch.
   concern; do not touch `horus/datums.py` priors here.
 - The list is the owner's curated subset for launching, not a mirror of every Active model.
 
-## v2 six-lane projects (fallback)
-
-Structure-independent: this skill reads vendor model docs and writes machine-local
-`~/.horus/config.toml` (`[launch_models]`), never a project's continuity lanes — so it
-works identically whether a project is on the v3 `PRD.md` structure or the v2 six lanes.
-Nothing here routes into `PRD.md`, `roadmap.md`, or `decisions.md`.

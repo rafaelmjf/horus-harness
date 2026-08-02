@@ -1,14 +1,14 @@
 # Agent Instructions
 
-> **PRD structure v3 (2026-07-15).** This repo's durable continuity is `PRD.md` +
-> card-backed `.horus/backlog/`; retired lanes live in `.horus/archive/`. Local
-> `sessions/` notes are optional recovery buffers, not required closure output.
-> Closure = update durable PRD/card state, add a note only if that state plus git/PR
-> cannot resume the work, then `horus close --commit --push`. Run `horus consolidate`
-> at most once and do not restore the six-lane split.
+> **Continuity structure.** This repo's durable continuity is `PRD.md` +
+> card-backed `.horus/backlog/`. Files from the retired multi-lane layout are
+> preserved in `.horus/archive/` as history; product support for that layout was
+> removed on 2026-08-02. Local `sessions/` notes are optional recovery buffers,
+> not required closure output. The managed block below carries its version in its
+> own `horus-block-version` marker.
 
 <!-- HORUS:BEGIN shared-instructions -->
-<!-- horus-block-version: 18 -->
+<!-- horus-block-version: 19 -->
 ## Horus Project Continuity
 
 This repository uses `.horus/` for project continuity.
@@ -48,11 +48,6 @@ Before substantial work, read `.horus/PRD.md` — the one maintained continuity 
   contain context that is not yet durable elsewhere.
 - Review fleeting worker/subagent notes in `.horus/temp/` when an execution plan
   is active; distill only the durable results upward.
-- If this project instead has `project.md` / `roadmap.md` / `features.md` /
-  `decisions.md` / `history.md` and no `PRD.md`, it is on the older six-lane
-  structure — read those lanes directly (each stays in its lane); migrating to
-  `PRD.md` is a separate, opt-in step and does not happen automatically.
-
 Continuity is a checkpoint at context boundaries, not a transaction log for every card.
 One universal rule, with no granularity setting to configure per machine, per project, or
 per session: git branches, commits, pushed refs, and PRs preserve every delivery between
@@ -167,7 +162,7 @@ Working discipline (every session, whether or not the work is delegated):
 
 Version floor (check before writing `.horus/`):
 
-- **An outdated `horus` CLI can silently regress this project to the retired six-lane
+- **An outdated `horus` CLI can silently regress this project's `.horus/`
   structure.** Before running any state-mutating `horus` command (`init`,
   `upgrade-project`, `consolidate`, `close`, `reconcile`, `session new`, `infer`,
   `distill-history`), confirm the installed CLI is new enough: run `horus --version`

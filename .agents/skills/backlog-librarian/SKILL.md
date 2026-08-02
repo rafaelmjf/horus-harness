@@ -10,7 +10,7 @@ description: >-
   and never edits, archives, claims, reprioritizes, or ships cards.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # Backlog librarian — one advisory hygiene digest
 
@@ -122,9 +122,3 @@ authorized work product. Do not add a daemon, recurrence engine, or librarian-
 specific scheduler. Four weeks is guidance for the owner when arming a one-shot
 run, not authority for this skill to arm the next one.
 
-## v2 six-lane projects (fallback)
-
-This workflow requires the v3 card-backed `.horus/backlog/` structure. If the
-project has only `roadmap.md` and the retired six-lane files, stop with an
-unsupported-structure explanation and write no receipt. Do not migrate the
-project or reinterpret roadmap bullets as cards.

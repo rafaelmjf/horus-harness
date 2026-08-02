@@ -3192,7 +3192,7 @@ def cmd_close(args: argparse.Namespace) -> int:
         print("\nContinuity captured — boundary checkpoint committed and ready to resume anywhere.")
         return 0
 
-    prompt = templates.CLOSURE_PROMPT_V3 if frontmatter.has_prd(root) else templates.CLOSURE_PROMPT
+    prompt = templates.CLOSURE_PROMPT
     print("\n" + prompt)
     if healthy:
         print("Continuity captured — ready to start a fresh session from `.horus/`.")
@@ -3906,25 +3906,6 @@ def cmd_hook_install(args: argparse.Namespace) -> int:
 
 
 def cmd_upgrade_project(args: argparse.Namespace) -> int:
-    if args.structure == "prd":
-        if args.all:
-            print("error: --structure prd cannot be combined with --all")
-            return 2
-        root = _resolve_dir(args.path)
-        if root is None:
-            return 2
-        actions = upgrade.upgrade_structure_prd(root, apply=args.apply)
-        mode = "Applying" if args.apply else "Checking"
-        print(f"{mode} Horus structure migration to PRD in {root}\n")
-        for action in actions:
-            print(f"  [{action.status}] {action.message}")
-        if any(a.status == "error" for a in actions):
-            return 2
-        if not args.apply and any(a.status == "would-update" for a in actions):
-            print("\nDry run only. Re-run with `--apply` to migrate this project to PRD structure.")
-            return 1
-        return 0
-
     if args.all:
         if args.path != ".":
             print("error: --all cannot be combined with --path")
@@ -4312,17 +4293,9 @@ def cmd_consolidate(args: argparse.Namespace) -> int:
     findings = routines.consolidate_signals(root)
     healthy = _print_findings(findings)
     _print_product_audit_advisory(root)
-    if frontmatter.has_prd(root):
-        print("\n" + templates.CONSOLIDATE_PROMPT_V3)
-        if healthy:
-            print("PRD backlog already consolidated — nothing to trim or distill.")
-        else:
-            print("Consolidation candidates above — the in-loop agent applies the routine.")
-        _skill_nudge(root)
-        return 0
     print("\n" + templates.CONSOLIDATE_PROMPT)
     if healthy:
-        print("Lanes already consolidated — nothing to route or prune.")
+        print("PRD backlog already consolidated — nothing to trim or distill.")
     else:
         print("Consolidation candidates above — the in-loop agent applies the routine.")
     _skill_nudge(root)
@@ -4338,10 +4311,7 @@ def cmd_distill_history(args: argparse.Namespace) -> int:
     source = routines.find_source_log(root, args.source)
     print(f"Distill-history check: {root}\n")
     _print_findings(routines.distill_signals(root, source))
-    if frontmatter.has_prd(root):
-        print("\n" + templates.DISTILL_HISTORY_PROMPT_V3)
-    else:
-        print("\n" + templates.DISTILL_HISTORY_PROMPT)
+    print("\n" + templates.DISTILL_HISTORY_PROMPT)
     return 0
 
 
@@ -4353,7 +4323,7 @@ def cmd_infer(args: argparse.Namespace) -> int:
         return 2
     print(f"Infer check: {root}\n")
     _print_findings(routines.infer_signals(root))
-    prompt = templates.INFER_PROMPT_V3 if frontmatter.has_prd(root) else templates.INFER_PROMPT_V2
+    prompt = templates.INFER_PROMPT
     print("\n" + prompt)
     _skill_nudge(root)
     return 0
@@ -4495,11 +4465,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_upgrade = sub.add_parser("upgrade-project", help="refresh repo-local Horus projected artifacts")
     p_upgrade.add_argument("--path", default=".", help="project root (default: cwd)")
     p_upgrade.add_argument("--apply", action="store_true", help="write updates (default is dry-run/report)")
-    p_upgrade.add_argument(
-        "--structure",
-        choices=("prd",),
-        help="opt-in continuity structure migration (currently: prd)",
-    )
     p_upgrade.add_argument(
         "--all",
         action="store_true",

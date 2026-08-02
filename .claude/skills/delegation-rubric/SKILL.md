@@ -12,7 +12,7 @@ description: >-
   auto-selects a model or auto-routes a dispatch.
 ---
 
-<!-- horus-skill-version: 11 -->
+<!-- horus-skill-version: 12 -->
 
 # Delegation rubric — shared calibration + verification logic
 
@@ -250,9 +250,3 @@ it never predicts or picks one up front.
 Always show the live data and owner evidence that drove it, clearly labelled. The
 agent decides and acts; you advise.
 
-## v2 six-lane projects (fallback)
-
-This rubric is **structure-agnostic** — it reads live `horus capabilities
---models` data and the task shape, not any `.horus/` lane file — so v2
-(six-lane) and v3 (`PRD.md`) projects consume it identically. Nothing here
-changes with the continuity structure.
