@@ -58,6 +58,15 @@
             "command": "horus guard-host --hook || exit 0"
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "horus hook skill-invoked || exit 0"
+          }
+        ]
       }
     ],
     "SessionStart": [
