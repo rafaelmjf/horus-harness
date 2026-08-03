@@ -66,6 +66,8 @@ Counts and per-card state are NOT restated here — `horus backlog list` compute
 One line per capability. Details live in git history — every entry carries its PR, tag or
 SHA — and `horus backlog list --archived` lists the delivered cards with their provenance.
 
+**A closed session reads as closed on the surface actually in use** (2026-08-03, #498): `registry.display_status` gives #489's `is_deliberate_close` its first production caller — it had none, so 74 of 252 rows still read `failed` while a green unit test recorded the fix as delivered. Rescoped to `horus sessions` only; retiring the Sessions section was refuted (`is_attachable`/`is_restorable` gate on `status`) and would have cost more than repair.
+
 **Six-lane (v2) continuity support removed entirely** (2026-08-02, #495, block v18->v19): the fleet had zero v2 projects, so 19,036 chars of fallback across 20 skills, the v2 prompt variants, the one-way migration command and the `features.md` capability layer all went; `.horus/archive/` keeps this repo's own lane files as history.
 
 **`## Rules` cut 84 -> 61 by enforcing Rule 80** (2026-08-02, #491 + #492): behavioural text routed into the skill that performs each activity; deletion-dominant, because 13 of the first 19 were already stated there. PRD 59,480 -> 48,656 chars, budget headroom 2,550 -> 11,344.

@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 created: 2026-07-31
 created_by: owner
@@ -11,6 +11,8 @@ tier: medium
 parallel: safe
 vision_facet: "Dashboard / cockpit"
 surface: horus/registry.py (TERMINAL + status vocabulary), horus/terminal_sessions.py (stop_session, reap_orphans, reconcile), horus/terminal_tui.py (Sessions view rendering), horus/dashboard.py (_SESSION_STATUS_CLASS, session rows)
+shipped_pr: 498
+shipped_sha: 3f0812d
 ---
 
 # session-close-ux-and-truthful-end-state — a closed session must not read as a failed one
@@ -126,3 +128,22 @@ recorded intent, not the keystrokes); no screen-scraping of agent UI to infer in
   needed, and checking showed native shortcuts already exist while *none* of the
   native paths records intent. Related: `session-agent-state-awareness` (live states,
   same surfaces), `herdr-server-shutdown-fragility` (Gated, same host).
+
+### 2026-08-03 — Rafael Figueiredo (agent)
+Verdict: shipped-rescoped
+
+**Shipped RESCOPED, #498 (`3f0812d`) — the CLI only, and the retire question is answered NO.**
+
+The card's top decision was the owner's standing verdict: retire the Sessions section rather than repair the states, *if nothing depends on the status column*. Settled by evidence, and the condition is refuted — `restore` and `attach`, the two candidates the owner named to check, both gate on it: `is_attachable` returns False on the literal `status == "stale"` (`terminal_sessions.py:133`), and `is_restorable` requires `stale` + `vanished` + `agent_session_id`. Add `Registry.snapshot/reconcile/prune`, `delivery.classify_delivery`, `datums.classify_exit` and the TUI live list. The field cannot be retired.
+
+Deletion also turned out to be the MOST expensive option, inverting the card's assumption that it was the cheap way out: the dashboard section carries the in-app PTY tabs, the `/session-dismiss` route, the `?tab=` post-launch redirect, the nav live count and the xterm attach JS, and removing it would take the phone terminal with it.
+
+**Two findings moved the scope.** (1) The local TUI never had a status column — it renders derived labels (`attachable` / `original terminal only` / `vanished — restorable`), so the misreport was never there and the pattern to copy already existed. (2) **#489 did not deliver its headline.** `registry.is_deliberate_close` had ZERO production callers — its definition and one test. The predicate answered correctly while every surface kept mapping the raw `status`, so all 74 deliberate closes still read as failures. The prior Review here recorded "the dashboard renders it muted" and "the 73 historical rows became correct with no backfill"; the first was false and the second was true only of the predicate, not of any surface. An isolated probe (fake persistent host, private `$HOME`) confirmed 0.0.81's `stop_session` does write `stopped` — the write path was fine, only the read path was missing.
+
+**What shipped.** `registry.display_status(status, reason)` is that missing consumer, reading the pair in one place. `horus sessions` uses it for the status column, the `NONCLEAN_STATUSES` membership check and the receipt's word. Live probe on the real 252-row registry: **74 rows corrected**, the 10 genuine failures still `failed`, `exited`/`stale`/`running` untouched. The row that changed is the previous session — the one that pushed closure commit `96c8863` — which the default three-row view shows at the start of every new session. Stored state untouched, no backfill.
+
+**Left out deliberately, owner's call (2026-08-03): the dashboard is not in use**, so its two `_SESSION_STATUS_CLASS` call sites keep the raw mapping and get the same helper if it returns to use. That is the only remaining work on this card's original scope, and it is worth a fresh card rather than reopening this one.
+
+**Both `[session]` decisions are dissolved, not answered.** A derived label says `stopped` only where intent was recorded and leaves a tmux kill honestly indistinguishable from a crash — which was the honest answer the card asked whether to chase. No pre-kill hook, no screen-scraping, and no herdr dependency, so the owner's 2026-07-31 constraint holds. The two `[refine]` items lapse with the card: `orphaned`/`stale` were left alone, and the vocabulary stayed `stopped`.
+
+**Lesson worth carrying:** a helper with a green unit test and no production caller reads as delivered. #489's test asserted the predicate, never a surface — so the defect it was written for survived the fix that cited it.
