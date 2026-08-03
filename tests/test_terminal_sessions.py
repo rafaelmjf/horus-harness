@@ -699,6 +699,9 @@ def test_attach_and_stop_use_horus_generated_tmux_name(tmp_path, monkeypatch):
     stopped = Registry.default().get(sid)
     # `stopped`, not `failed`: the owner ending a session is not a failure.
     assert stopped.status == "stopped" and stopped.termination_reason == "stopped"
+    # Derived from the row this writer really produced, so the display and the
+    # writer cannot drift apart: what a surface shows is what a close records.
+    assert registry.display_status(stopped.status, stopped.termination_reason) == "stopped"
 
 
 def _fake_list_sessions(rows):
@@ -2736,6 +2739,42 @@ def test_is_deliberate_close_reads_the_pair_so_old_rows_need_no_backfill():
     assert not registry.is_deliberate_close("failed", "natural")   # a real failure
     assert not registry.is_deliberate_close("exited", "natural")   # a clean exit
     assert not registry.is_deliberate_close(None, None)
+
+
+def test_display_status_gives_the_predicate_a_consumer():
+    """`is_deliberate_close` shipped in #489 with no production caller.
+
+    The predicate answered correctly while every surface kept mapping the raw
+    `status`, so all 74 deliberate closes on this machine still read as failures
+    — the fix was recorded as delivered because a unit test passed. Surfaces call
+    `display_status`, so a green predicate test now implies a corrected display.
+    """
+    from horus import registry
+
+    # The legacy shape: no live writer produces this any more (`stop_session`
+    # writes `stopped` since #489), so it cannot be derived from its producer.
+    assert registry.display_status("failed", "stopped") == "stopped"
+    assert registry.display_status("stopped", "stopped") == "stopped"
+    # Everything else is passed through untouched — this renames nothing else.
+    assert registry.display_status("failed", "natural") == "failed"
+    assert registry.display_status("failed", None) == "failed"
+    assert registry.display_status("stale", "vanished") == "stale"
+    assert registry.display_status("exited", None) == "exited"
+    assert registry.display_status(None, None) == ""
+
+
+def test_display_status_never_changes_what_is_stored():
+    """Stored `status` stays the process outcome: liveness, reconciliation and
+    restorability all read it, and `is_attachable`/`is_restorable` gate on the
+    literal `stale`. A display rename that leaked into storage would break both."""
+    from horus import registry
+
+    record = registry.SessionRecord(
+        session_id="s1", agent="claude", project="/tmp/x",
+        status="failed", termination_reason="stopped",
+    )
+    assert registry.display_status(record.status, record.termination_reason) == "stopped"
+    assert record.status == "failed"
 
 
 def test_nonclean_statuses_match_registry():

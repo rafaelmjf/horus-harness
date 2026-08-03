@@ -49,6 +49,26 @@ def is_deliberate_close(status: str | None, termination_reason: str | None) -> b
         return True
     return status == "failed" and termination_reason == STOPPED
 
+
+def display_status(status: str | None, termination_reason: str | None) -> str:
+    """The status to SHOW, which is not always the status stored.
+
+    Every surface that prints the raw `status` reports a deliberate close as
+    `failed`, because the intent lives in the other half of the pair. #489 added
+    `is_deliberate_close` to answer that and wired no caller to it, so the
+    predicate was correct while all 74 such rows on this machine still read as
+    failures — a helper with a green test and no consumer reads as delivered.
+    Surfaces call THIS, so the pair is read in one place instead of each display
+    re-deriving it.
+
+    Stored state is untouched: `status` remains the process outcome, and callers
+    that ask about liveness or reconciliation must keep using it.
+    """
+    if is_deliberate_close(status, termination_reason):
+        return STOPPED
+    return status or ""
+
+
 _RESULT_RE = re.compile(r"^(?P<status>exited|failed) — session (?P<session_id>\S+)", re.MULTILINE)
 
 

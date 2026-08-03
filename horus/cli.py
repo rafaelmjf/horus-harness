@@ -869,17 +869,21 @@ def cmd_sessions(args: argparse.Namespace) -> int:
     for r in records:
         proj = Path(r.project).name
         rc = "" if r.returncode is None else f" rc={r.returncode}"
+        # Shown, not stored: a row the owner closed carries `status="failed"` when it
+        # predates `STOPPED`, and the default view is three rows deep — so the one
+        # misreported line is usually the previous session, read at every launch.
+        shown = registry.display_status(r.status, r.termination_reason)
         line = (
-            f"{r.status:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} "
+            f"{shown:<8} {r.agent:<7} {r.account or '-':<14} {proj:<24} "
             f"pid={r.pid or '-'} {r.session_id}{rc} delivery={r.delivery_status}"
         )
-        if r.status in delivery.NONCLEAN_STATUSES:
+        if shown in delivery.NONCLEAN_STATUSES:
             try:
                 session_end = datetime.fromisoformat(r.updated_at) if r.updated_at else None
             except ValueError:
                 session_end = None
             suffix = delivery.render_receipt(
-                r.status,
+                shown,
                 delivery.delivery_receipt(
                     r.project, dispatch_base_sha=r.dispatch_base_sha, session_end=session_end
                 ),
