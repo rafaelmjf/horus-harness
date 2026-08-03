@@ -524,6 +524,56 @@ def test_sessions_plain_failure_when_nothing_delivered(tmp_path, monkeypatch, ca
     assert "but-delivered" not in out
 
 
+def test_sessions_shows_a_deliberate_close_as_stopped_not_failed(tmp_path, monkeypatch, capsys):
+    """The complaint this card was carded for, on the surface actually in use.
+
+    A row the owner closed before #489 stores `status="failed"` with the intent in
+    `termination_reason`. `horus sessions` printed the raw status, and its default
+    view is three rows deep — so the one misreported line was usually the previous
+    session, read at the start of every new one.
+    """
+    _home(tmp_path, monkeypatch)
+    _patch_gh(monkeypatch, "[]")
+    reg = Registry.default()
+    reg.upsert(SessionRecord(
+        session_id="closed1", agent="claude", project=str(tmp_path / "gone"), pid=None,
+        status="failed", termination_reason="stopped",
+    ))
+
+    assert main(["sessions"]) == 0
+    out = capsys.readouterr().out
+    assert "closed1" in out
+    assert "stopped" in out
+    assert "failed" not in out
+
+
+def test_sessions_keeps_the_delivery_receipt_on_a_deliberate_close(tmp_path, monkeypatch, capsys):
+    """Closing a session says nothing about whether its work landed, which is what
+    the receipt answers — so the honest status must not cost the signal. Both
+    `failed` and `stopped` are in `NONCLEAN_STATUSES`, and the receipt's own word
+    follows the shown status."""
+    _home(tmp_path, monkeypatch)
+    worker = _bare_origin_and_worker_clone(tmp_path)
+    _git(worker, "checkout", "-b", "worker/feature")
+    (worker / "f.txt").write_text("work", encoding="utf-8")
+    _git(worker, "add", "-A")
+    _git(worker, "commit", "-m", "do work")
+    _git(worker, "push", "-u", "origin", "worker/feature")
+    _patch_gh(monkeypatch, "[]")
+
+    reg = Registry.default()
+    reg.upsert(SessionRecord(
+        session_id="closed2", agent="claude", project=str(worker), pid=None,
+        status="failed", termination_reason="stopped",
+    ))
+
+    assert main(["sessions"]) == 0
+    out = capsys.readouterr().out
+    assert "stopped-but-delivered" in out
+    assert "pushed " in out
+    assert "failed-but-delivered" not in out
+
+
 def test_session_new_records_alias_not_email(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     from horus import claude_usage
