@@ -336,6 +336,102 @@ def test_checkpoint_gate_silent_outside_repo(tmp_path):
     assert closure.checkpoint_gate(tmp_path) == []
 
 
+# --------------------------------------------------------------------------- #
+# Canonical continuity vs. a pushed-but-unmerged branch
+# --------------------------------------------------------------------------- #
+
+def _feature_branch_clone(tmp_path, monkeypatch, *, touch_continuity=True):
+    """A clone with a known remote HEAD, sitting on a pushed feature branch.
+
+    With ``touch_continuity`` the branch carries a continuity commit that
+    ``origin/<default>`` does not have — the fabric-build 2026-08-03 state where every
+    checkpoint line was true of the branch and none was true of `origin/main`."""
+    a, _ = _setup_two_clones(tmp_path, monkeypatch)
+    _run(a, "remote", "set-head", "origin", "-a")  # clone of an empty repo has no origin/HEAD
+    default = closure.default_branch(a)
+    assert default, "the scenario needs a resolvable origin/HEAD"
+    _run(a, "checkout", "-b", "feature/x")
+    if touch_continuity:
+        target = ".horus/PRD.md"
+        prd = a / target
+        prd.write_text(prd.read_text(encoding="utf-8") + "\nbranch work\n", encoding="utf-8")
+    else:
+        target = "work.py"
+        (a / target).write_text("y = 2\n", encoding="utf-8")
+    _run(a, "add", target)
+    _run(a, "commit", "-m", "work on the branch")
+    _run(a, "push", "-u", "origin", "feature/x")
+    return a, default
+
+
+def test_checkpoint_gate_notes_continuity_the_default_branch_does_not_carry(tmp_path, monkeypatch):
+    """The 2026-08-03 regression: committed + pushed to `origin/<branch>` satisfies the
+    push check, but `origin/<default>` still has the previous session's continuity. The
+    gate must say so — and must stay green, because batching capture on an unmerged
+    branch is deliberate (`session-process-cadence`)."""
+    a, default = _feature_branch_clone(tmp_path, monkeypatch)
+
+    assert closure.continuity_off_default(a) == ("feature/x", default)
+    msgs = _checkpoint_msgs(a)
+    assert any(
+        level == "info" and f"origin/{default} does not carry it yet" in m
+        for level, m in msgs
+    )
+    # Truthfulness fix, not a new gate: nothing here may block a close.
+    assert not any(level in ("warn", "fail") for level, _ in msgs)
+    # And the push finding now names the upstream it actually verified.
+    assert any(level == "ok" and "pushed to origin/feature/x" in m for level, m in msgs)
+
+
+def test_continuity_off_default_silent_on_the_default_branch(tmp_path, monkeypatch):
+    """A close performed directly on the default branch reports exactly as before."""
+    a, _ = _setup_two_clones(tmp_path, monkeypatch)
+    _run(a, "remote", "set-head", "origin", "-a")
+
+    assert closure.continuity_off_default(a) is None
+    assert not any(level == "info" for level, _ in _checkpoint_msgs(a))
+
+
+def test_continuity_off_default_silent_once_the_default_branch_carries_it(tmp_path, monkeypatch):
+    a, default = _feature_branch_clone(tmp_path, monkeypatch)
+    _run(a, "checkout", default)
+    _run(a, "merge", "--ff-only", "feature/x")
+    _run(a, "push", "origin", default)
+    _run(a, "checkout", "feature/x")
+
+    assert closure.continuity_off_default(a) is None
+
+
+def test_continuity_off_default_silent_for_a_product_only_branch(tmp_path, monkeypatch):
+    """A branch that never touched continuity has nothing canonical pending — the
+    advisory must not fire on every ordinary code PR."""
+    a, _ = _feature_branch_clone(tmp_path, monkeypatch, touch_continuity=False)
+
+    assert closure.continuity_off_default(a) is None
+
+
+def test_continuity_off_default_silent_when_push_is_opted_out(tmp_path, monkeypatch):
+    """`enforce_push: false` repos are unaffected: they never push to a shared origin,
+    so there is no canonical-vs-local gap to report."""
+    a, _ = _feature_branch_clone(tmp_path, monkeypatch)
+    prd = a / ".horus" / "PRD.md"
+    prd.write_text("---\nenforce_push: false\n---\n# PRD\n", encoding="utf-8")
+    _run(a, "commit", "-am", "opt out of push enforcement")
+
+    assert closure.continuity_off_default(a) is None
+
+
+def test_continuity_off_default_silent_without_an_upstream(tmp_path, monkeypatch):
+    a, _ = _feature_branch_clone(tmp_path, monkeypatch)
+    _run(a, "checkout", "-b", "feature/no-upstream")
+
+    assert closure.continuity_off_default(a) is None
+
+
+def test_continuity_off_default_silent_outside_repo(tmp_path):
+    assert closure.continuity_off_default(tmp_path) is None
+
+
 def _setup_two_clones(tmp_path, monkeypatch):
     """A bare origin with two clones — the one-person-two-machines scenario."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))

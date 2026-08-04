@@ -537,6 +537,46 @@ def _enforce_push(root: Path) -> bool:
     return True
 
 
+def continuity_off_default(root: Path) -> tuple[str, str] | None:
+    """``(branch, default)`` when canonical continuity lives on a branch that
+    ``origin/<default>`` does not carry; ``None`` otherwise.
+
+    The push half of :func:`checkpoint_gate` compares HEAD to ``@{upstream}``, which on
+    a feature branch is ``origin/<branch>`` — so pushing the branch satisfies it. That
+    is deliberate (the agent decides whether to push a protected default), but it means
+    a green checkpoint proves only that nothing is stranded on this machine, *not* that
+    the state `horus fleet`, `horus resume` and the merge freshness gate read has moved.
+    This is the missing half, so neither the finding nor the summary can claim
+    *canonical* continuity while the default branch still has the previous session's.
+
+    ``None`` covers every undeterminable and every inapplicable case — not a repo, no
+    ``origin/HEAD``, no continuity commit, HEAD already on the default branch, git
+    trouble, and any repo that does not push to a shared origin at all
+    (``enforce_push: false``, or a branch with no upstream), which has no canonical-vs-
+    local gap to report. The condition lives here rather than at each call site so the
+    finding and the summary line cannot drift apart. A misfiring advisory on an ordinary
+    close is worse than a missing one.
+
+    Compares against the local ``origin/<default>`` ref without fetching (a gate does no
+    network I/O), so a not-yet-fetched merge reads as not-carried: a nudge to fetch, and
+    true of what this machine can see."""
+    if not is_git_repo(root) or not _enforce_push(root):
+        return None
+    if not _git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"):
+        return None
+    branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    default = default_branch(root)
+    if not branch or not default or branch == default:
+        return None
+    checkpoint = _canonical_checkpoint(root)
+    if not checkpoint:
+        return None
+    ahead = _git(root, "rev-list", "--count", f"origin/{default}..{checkpoint}")
+    if not (ahead and ahead.isdigit() and int(ahead) > 0):
+        return None
+    return branch, default
+
+
 def checkpoint_gate(root: Path) -> list[Finding]:
     """Git-checkpoint signal for `close --check` / the Stop hook: is the working tree
     committed and are local commits pushed?
@@ -550,6 +590,9 @@ def checkpoint_gate(root: Path) -> list[Finding]:
     - **Unpushed commits** — local commits the branch's upstream doesn't have. Skipped
       when the repo opts out (``enforce_push: false``) or has no upstream to push to
       (nowhere to push, and no protected-branch footgun to guard against).
+    - **Continuity off the default branch** — an ``info`` note (never blocking) when the
+      pushed branch carries canonical continuity that ``origin/<default>`` does not, so
+      "pushed" is not misread as "canonical". See :func:`continuity_off_default`.
 
     Reports only — never pushes — so the branch-first rule is respected by construction
     (an agent decides whether to push to a protected default). Errs toward silence on
@@ -585,7 +628,15 @@ def checkpoint_gate(root: Path) -> list[Finding]:
                     "closing (`git push`, or `horus close --commit --push` for continuity)",
                 ))
             else:
-                findings.append(Finding("ok", "local commits pushed to upstream"))
+                findings.append(Finding("ok", f"local commits pushed to {upstream}"))
+
+    if off_default := continuity_off_default(root):
+        branch, default = off_default
+        findings.append(Finding(
+            "info",
+            f"continuity is on {branch}; origin/{default} does not carry it yet — "
+            "canonical continuity lands when it merges",
+        ))
     return findings
 
 

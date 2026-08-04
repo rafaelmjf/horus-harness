@@ -3172,6 +3172,14 @@ def cmd_close(args: argparse.Namespace) -> int:
                 "\nDelivery accepted — git evidence is durable; canonical continuity may remain "
                 "pending until the next real boundary."
             )
+        elif healthy and (off_default := closure.continuity_off_default(root)):
+            # Green proves the work is committed and pushed — not that the branch
+            # everything downstream reads has it. Only claim what was verified.
+            branch, default = off_default
+            print(
+                f"\nFresh — continuity and work are committed and pushed on {branch}; "
+                f"canonical continuity lands when origin/{default} carries it."
+            )
         elif healthy:
             print("\nFresh — canonical continuity and work are checkpointed.")
         else:

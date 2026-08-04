@@ -1101,6 +1101,33 @@ def test_close_check_gates_on_freshness(tmp_path, monkeypatch, capsys):
     assert "Stale" in capsys.readouterr().out
 
 
+def test_close_check_summary_does_not_claim_canonical_while_unmerged(tmp_path, monkeypatch, capsys):
+    """The 2026-08-03 fabric-build finding: a green close on a pushed-but-unmerged
+    branch printed "canonical continuity ... checkpointed", and the agent read green as
+    done and stopped with the PR open. `canonical` is a defined term here — what
+    `horus fleet`, `horus resume` and the merge gate read from `origin/<default>` — so
+    the summary may only claim what the gate actually verified. The git plumbing behind
+    the condition is covered in test_closure.py; this pins the wording."""
+    from horus import closure as _closure
+    from tests.test_routines import _mk_fresh
+
+    _home(tmp_path, monkeypatch)
+    _mk_fresh(tmp_path)
+    monkeypatch.setattr(_closure, "continuity_off_default", lambda root: ("feature/x", "main"))
+
+    assert main(["close", "--check", "--path", str(tmp_path)]) == 0  # still green, not a gate
+    out = capsys.readouterr().out
+    assert "Fresh" in out
+    assert "canonical continuity and work are checkpointed" not in out
+    assert "committed and pushed on feature/x" in out
+    assert "canonical continuity lands when origin/main carries it" in out
+
+    # On the default branch — or once it carries the branch — the claim is true again.
+    monkeypatch.setattr(_closure, "continuity_off_default", lambda root: None)
+    assert main(["close", "--check", "--path", str(tmp_path)]) == 0
+    assert "Fresh — canonical continuity and work are checkpointed." in capsys.readouterr().out
+
+
 def test_close_check_keeps_unclassified_cards_advisory(tmp_path, monkeypatch, capsys):
     _home(tmp_path, monkeypatch)
     from tests.test_routines import _mk_fresh
