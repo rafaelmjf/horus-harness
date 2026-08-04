@@ -336,6 +336,115 @@ def test_checkpoint_gate_silent_outside_repo(tmp_path):
     assert closure.checkpoint_gate(tmp_path) == []
 
 
+# --------------------------------------------------------------------------- #
+# Canonical continuity vs. a pushed-but-unmerged branch
+# --------------------------------------------------------------------------- #
+
+def _feature_branch_clone(tmp_path, monkeypatch, *, touch_continuity=True):
+    """A clone with a known remote HEAD, sitting on a pushed feature branch.
+
+    With ``touch_continuity`` the branch carries a continuity commit that
+    ``origin/<default>`` does not have — the fabric-build 2026-08-03 state where every
+    checkpoint line was true of the branch and none was true of `origin/main`."""
+    a, _ = _setup_two_clones(tmp_path, monkeypatch)
+    _run(a, "remote", "set-head", "origin", "-a")  # clone of an empty repo has no origin/HEAD
+    default = closure.default_branch(a)
+    assert default, "the scenario needs a resolvable origin/HEAD"
+    _run(a, "checkout", "-b", "feature/x")
+    if touch_continuity:
+        target = ".horus/PRD.md"
+        prd = a / target
+        prd.write_text(prd.read_text(encoding="utf-8") + "\nbranch work\n", encoding="utf-8")
+    else:
+        target = "work.py"
+        (a / target).write_text("y = 2\n", encoding="utf-8")
+    _run(a, "add", target)
+    _run(a, "commit", "-m", "work on the branch")
+    _run(a, "push", "-u", "origin", "feature/x")
+    return a, default
+
+
+def test_unmerged_branch_line_marks_the_one_carrying_continuity(tmp_path, monkeypatch):
+    """The 2026-08-03 regression: committed + pushed to `origin/<branch>` satisfies the
+    push check, but `origin/<default>` still has the previous session's continuity. It is
+    named on the existing unmerged-branch line (one line per branch, not a second
+    finding) and must stay green, because batching capture on an unmerged branch is
+    deliberate (`session-process-cadence`)."""
+    a, default = _feature_branch_clone(tmp_path, monkeypatch)
+
+    assert closure.continuity_off_default(a) == ("feature/x", default)
+    findings = closure.unmerged_branch_findings(a)
+    assert len(findings) == 1 and findings[0].level == "info"
+    assert f"origin/feature/x (0d, carries continuity origin/{default} lacks)" in findings[0].message
+
+    msgs = _checkpoint_msgs(a)
+    # The checkpoint gate stays a pure "nothing stranded on this machine" signal — it
+    # does not repeat the branch fact — but its push finding now names the upstream it
+    # actually verified, which is what was being read as a claim about the default.
+    assert any(level == "ok" and "pushed to origin/feature/x" in m for level, m in msgs)
+    assert not any(level == "info" for level, _ in msgs)
+    # Truthfulness fix, not a new gate: nothing here may block a close.
+    assert not any(level in ("warn", "fail") for level, _ in msgs)
+
+
+def test_continuity_off_default_silent_on_the_default_branch(tmp_path, monkeypatch):
+    """A close performed directly on the default branch reports exactly as before."""
+    a, _ = _setup_two_clones(tmp_path, monkeypatch)
+    _run(a, "remote", "set-head", "origin", "-a")
+
+    assert closure.continuity_off_default(a) is None
+    assert not any(level == "info" for level, _ in _checkpoint_msgs(a))
+
+
+def test_unmerged_branch_line_unannotated_when_continuity_is_not_at_stake(tmp_path, monkeypatch):
+    """The pre-existing line is unchanged for a branch that carries no continuity."""
+    a, _ = _feature_branch_clone(tmp_path, monkeypatch, touch_continuity=False)
+
+    message = closure.unmerged_branch_findings(a)[0].message
+    assert "origin/feature/x (0d)" in message
+    assert "carries continuity" not in message
+
+
+def test_continuity_off_default_silent_once_the_default_branch_carries_it(tmp_path, monkeypatch):
+    a, default = _feature_branch_clone(tmp_path, monkeypatch)
+    _run(a, "checkout", default)
+    _run(a, "merge", "--ff-only", "feature/x")
+    _run(a, "push", "origin", default)
+    _run(a, "checkout", "feature/x")
+
+    assert closure.continuity_off_default(a) is None
+
+
+def test_continuity_off_default_silent_for_a_product_only_branch(tmp_path, monkeypatch):
+    """A branch that never touched continuity has nothing canonical pending — the
+    advisory must not fire on every ordinary code PR."""
+    a, _ = _feature_branch_clone(tmp_path, monkeypatch, touch_continuity=False)
+
+    assert closure.continuity_off_default(a) is None
+
+
+def test_continuity_off_default_silent_when_push_is_opted_out(tmp_path, monkeypatch):
+    """`enforce_push: false` repos are unaffected: they never push to a shared origin,
+    so there is no canonical-vs-local gap to report."""
+    a, _ = _feature_branch_clone(tmp_path, monkeypatch)
+    prd = a / ".horus" / "PRD.md"
+    prd.write_text("---\nenforce_push: false\n---\n# PRD\n", encoding="utf-8")
+    _run(a, "commit", "-am", "opt out of push enforcement")
+
+    assert closure.continuity_off_default(a) is None
+
+
+def test_continuity_off_default_silent_without_an_upstream(tmp_path, monkeypatch):
+    a, _ = _feature_branch_clone(tmp_path, monkeypatch)
+    _run(a, "checkout", "-b", "feature/no-upstream")
+
+    assert closure.continuity_off_default(a) is None
+
+
+def test_continuity_off_default_silent_outside_repo(tmp_path):
+    assert closure.continuity_off_default(tmp_path) is None
+
+
 def _setup_two_clones(tmp_path, monkeypatch):
     """A bare origin with two clones — the one-person-two-machines scenario."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
@@ -818,6 +927,25 @@ def test_unmerged_branches_name_the_oldest_and_advise_once_stale(tmp_path, monke
     assert "origin/bug/ancient (9d)" in message          # oldest first
     assert message.index("ancient") < message.index("mid")
     assert "invisible to `gh pr list`" in message
+
+
+def test_unmerged_branches_hoist_the_continuity_carrier_past_the_cap(tmp_path, monkeypatch):
+    # The carrier is usually the newest branch, so the age sort plus the three-branch
+    # cap would hide exactly the one the reader needs; and the staleness advisory must
+    # still be driven by the genuinely oldest branch, not by whatever got hoisted.
+    monkeypatch.setattr(closure, "_git", lambda root, *a: _branch_lines(
+        ("origin/bug/ancient", 9), ("origin/spike/mid", 4),
+        ("origin/feat/other", 2), ("origin/close/today", 0)))
+    monkeypatch.setattr(closure, "continuity_off_default", lambda root: ("close/today", "main"))
+
+    message = closure.unmerged_branch_findings(tmp_path)[0].message
+
+    assert message.startswith(
+        "4 unmerged remote branch(es): origin/close/today (0d, carries continuity origin/main lacks)"
+    )
+    assert "origin/bug/ancient (9d), origin/spike/mid (4d)" in message
+    assert "+1 more" in message
+    assert "oldest is 9d" in message
 
 
 def test_unmerged_branches_stay_quiet_about_todays_work(tmp_path, monkeypatch):

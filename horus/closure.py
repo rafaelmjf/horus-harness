@@ -345,6 +345,11 @@ def unmerged_branch_findings(root: Path) -> list[Finding]:
     Rendered at ``info`` for the same reason as parallel deliveries: it must be
     seen, but a supervisor legitimately closes while branches are in flight, so it
     must never flip a fresh verdict to stale.
+
+    When one of those branches is the one carrying canonical continuity the default
+    branch does not have yet (:func:`continuity_off_default`), it is annotated here
+    rather than reported separately — the reader needs one line per branch, and this is
+    already the line that answers "what is still living on a ref".
     """
     listed = _git(root, "branch", "-r", "--no-merged", "origin/HEAD", "--format=%(refname:short)|%(committerdate:unix)")
     if listed is None:
@@ -367,7 +372,19 @@ def unmerged_branch_findings(root: Path) -> list[Finding]:
         return []
     stale.sort(key=lambda pair: pair[1], reverse=True)
     oldest_name, oldest_days = stale[0]
-    detail = ", ".join(f"{n} ({d}d)" for n, d in stale[:3])
+
+    off_default = continuity_off_default(root)
+    carrier = f"origin/{off_default[0]}" if off_default else None
+    if carrier and any(name == carrier for name, _ in stale):
+        # Hoist it above the age sort (stable, so the rest keeps that order): the branch
+        # holding not-yet-canonical continuity is the one a reader most needs to see, and
+        # it is usually the newest, so the three-branch cap would otherwise hide it.
+        stale.sort(key=lambda pair: pair[0] != carrier)
+    shown = []
+    for name, days in stale[:3]:
+        note = f", carries continuity origin/{off_default[1]} lacks" if name == carrier else ""
+        shown.append(f"{name} ({days}d{note})")
+    detail = ", ".join(shown)
     if len(stale) > 3:
         detail += f", +{len(stale) - 3} more"
     level = "info"
@@ -537,6 +554,46 @@ def _enforce_push(root: Path) -> bool:
     return True
 
 
+def continuity_off_default(root: Path) -> tuple[str, str] | None:
+    """``(branch, default)`` when canonical continuity lives on a branch that
+    ``origin/<default>`` does not carry; ``None`` otherwise.
+
+    The push half of :func:`checkpoint_gate` compares HEAD to ``@{upstream}``, which on
+    a feature branch is ``origin/<branch>`` — so pushing the branch satisfies it. That
+    is deliberate (the agent decides whether to push a protected default), but it means
+    a green checkpoint proves only that nothing is stranded on this machine, *not* that
+    the state `horus fleet`, `horus resume` and the merge freshness gate read has moved.
+    This is the missing half, so neither the finding nor the summary can claim
+    *canonical* continuity while the default branch still has the previous session's.
+
+    ``None`` covers every undeterminable and every inapplicable case — not a repo, no
+    ``origin/HEAD``, no continuity commit, HEAD already on the default branch, git
+    trouble, and any repo that does not push to a shared origin at all
+    (``enforce_push: false``, or a branch with no upstream), which has no canonical-vs-
+    local gap to report. The condition lives here rather than at each call site so the
+    finding and the summary line cannot drift apart. A misfiring advisory on an ordinary
+    close is worse than a missing one.
+
+    Compares against the local ``origin/<default>`` ref without fetching (a gate does no
+    network I/O), so a not-yet-fetched merge reads as not-carried: a nudge to fetch, and
+    true of what this machine can see."""
+    if not is_git_repo(root) or not _enforce_push(root):
+        return None
+    if not _git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"):
+        return None
+    branch = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    default = default_branch(root)
+    if not branch or not default or branch == default:
+        return None
+    checkpoint = _canonical_checkpoint(root)
+    if not checkpoint:
+        return None
+    ahead = _git(root, "rev-list", "--count", f"origin/{default}..{checkpoint}")
+    if not (ahead and ahead.isdigit() and int(ahead) > 0):
+        return None
+    return branch, default
+
+
 def checkpoint_gate(root: Path) -> list[Finding]:
     """Git-checkpoint signal for `close --check` / the Stop hook: is the working tree
     committed and are local commits pushed?
@@ -550,6 +607,10 @@ def checkpoint_gate(root: Path) -> list[Finding]:
     - **Unpushed commits** — local commits the branch's upstream doesn't have. Skipped
       when the repo opts out (``enforce_push: false``) or has no upstream to push to
       (nowhere to push, and no protected-branch footgun to guard against).
+    The push finding names the upstream it actually verified (``origin/<branch>`` on a
+    feature branch), because "pushed to upstream" was being read as a claim about the
+    default branch; that a branch's continuity is not canonical yet is reported by
+    :func:`unmerged_branch_findings`, one line per branch.
 
     Reports only — never pushes — so the branch-first rule is respected by construction
     (an agent decides whether to push to a protected default). Errs toward silence on
@@ -585,7 +646,7 @@ def checkpoint_gate(root: Path) -> list[Finding]:
                     "closing (`git push`, or `horus close --commit --push` for continuity)",
                 ))
             else:
-                findings.append(Finding("ok", "local commits pushed to upstream"))
+                findings.append(Finding("ok", f"local commits pushed to {upstream}"))
     return findings
 
 
