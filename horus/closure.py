@@ -345,6 +345,11 @@ def unmerged_branch_findings(root: Path) -> list[Finding]:
     Rendered at ``info`` for the same reason as parallel deliveries: it must be
     seen, but a supervisor legitimately closes while branches are in flight, so it
     must never flip a fresh verdict to stale.
+
+    When one of those branches is the one carrying canonical continuity the default
+    branch does not have yet (:func:`continuity_off_default`), it is annotated here
+    rather than reported separately — the reader needs one line per branch, and this is
+    already the line that answers "what is still living on a ref".
     """
     listed = _git(root, "branch", "-r", "--no-merged", "origin/HEAD", "--format=%(refname:short)|%(committerdate:unix)")
     if listed is None:
@@ -367,7 +372,19 @@ def unmerged_branch_findings(root: Path) -> list[Finding]:
         return []
     stale.sort(key=lambda pair: pair[1], reverse=True)
     oldest_name, oldest_days = stale[0]
-    detail = ", ".join(f"{n} ({d}d)" for n, d in stale[:3])
+
+    off_default = continuity_off_default(root)
+    carrier = f"origin/{off_default[0]}" if off_default else None
+    if carrier and any(name == carrier for name, _ in stale):
+        # Hoist it above the age sort (stable, so the rest keeps that order): the branch
+        # holding not-yet-canonical continuity is the one a reader most needs to see, and
+        # it is usually the newest, so the three-branch cap would otherwise hide it.
+        stale.sort(key=lambda pair: pair[0] != carrier)
+    shown = []
+    for name, days in stale[:3]:
+        note = f", carries continuity origin/{off_default[1]} lacks" if name == carrier else ""
+        shown.append(f"{name} ({days}d{note})")
+    detail = ", ".join(shown)
     if len(stale) > 3:
         detail += f", +{len(stale) - 3} more"
     level = "info"
@@ -590,9 +607,10 @@ def checkpoint_gate(root: Path) -> list[Finding]:
     - **Unpushed commits** — local commits the branch's upstream doesn't have. Skipped
       when the repo opts out (``enforce_push: false``) or has no upstream to push to
       (nowhere to push, and no protected-branch footgun to guard against).
-    - **Continuity off the default branch** — an ``info`` note (never blocking) when the
-      pushed branch carries canonical continuity that ``origin/<default>`` does not, so
-      "pushed" is not misread as "canonical". See :func:`continuity_off_default`.
+    The push finding names the upstream it actually verified (``origin/<branch>`` on a
+    feature branch), because "pushed to upstream" was being read as a claim about the
+    default branch; that a branch's continuity is not canonical yet is reported by
+    :func:`unmerged_branch_findings`, one line per branch.
 
     Reports only — never pushes — so the branch-first rule is respected by construction
     (an agent decides whether to push to a protected default). Errs toward silence on
@@ -629,14 +647,6 @@ def checkpoint_gate(root: Path) -> list[Finding]:
                 ))
             else:
                 findings.append(Finding("ok", f"local commits pushed to {upstream}"))
-
-    if off_default := continuity_off_default(root):
-        branch, default = off_default
-        findings.append(Finding(
-            "info",
-            f"continuity is on {branch}; origin/{default} does not carry it yet — "
-            "canonical continuity lands when it merges",
-        ))
     return findings
 
 

@@ -364,23 +364,27 @@ def _feature_branch_clone(tmp_path, monkeypatch, *, touch_continuity=True):
     return a, default
 
 
-def test_checkpoint_gate_notes_continuity_the_default_branch_does_not_carry(tmp_path, monkeypatch):
+def test_unmerged_branch_line_marks_the_one_carrying_continuity(tmp_path, monkeypatch):
     """The 2026-08-03 regression: committed + pushed to `origin/<branch>` satisfies the
-    push check, but `origin/<default>` still has the previous session's continuity. The
-    gate must say so — and must stay green, because batching capture on an unmerged
-    branch is deliberate (`session-process-cadence`)."""
+    push check, but `origin/<default>` still has the previous session's continuity. It is
+    named on the existing unmerged-branch line (one line per branch, not a second
+    finding) and must stay green, because batching capture on an unmerged branch is
+    deliberate (`session-process-cadence`)."""
     a, default = _feature_branch_clone(tmp_path, monkeypatch)
 
     assert closure.continuity_off_default(a) == ("feature/x", default)
+    findings = closure.unmerged_branch_findings(a)
+    assert len(findings) == 1 and findings[0].level == "info"
+    assert f"origin/feature/x (0d, carries continuity origin/{default} lacks)" in findings[0].message
+
     msgs = _checkpoint_msgs(a)
-    assert any(
-        level == "info" and f"origin/{default} does not carry it yet" in m
-        for level, m in msgs
-    )
+    # The checkpoint gate stays a pure "nothing stranded on this machine" signal — it
+    # does not repeat the branch fact — but its push finding now names the upstream it
+    # actually verified, which is what was being read as a claim about the default.
+    assert any(level == "ok" and "pushed to origin/feature/x" in m for level, m in msgs)
+    assert not any(level == "info" for level, _ in msgs)
     # Truthfulness fix, not a new gate: nothing here may block a close.
     assert not any(level in ("warn", "fail") for level, _ in msgs)
-    # And the push finding now names the upstream it actually verified.
-    assert any(level == "ok" and "pushed to origin/feature/x" in m for level, m in msgs)
 
 
 def test_continuity_off_default_silent_on_the_default_branch(tmp_path, monkeypatch):
@@ -390,6 +394,15 @@ def test_continuity_off_default_silent_on_the_default_branch(tmp_path, monkeypat
 
     assert closure.continuity_off_default(a) is None
     assert not any(level == "info" for level, _ in _checkpoint_msgs(a))
+
+
+def test_unmerged_branch_line_unannotated_when_continuity_is_not_at_stake(tmp_path, monkeypatch):
+    """The pre-existing line is unchanged for a branch that carries no continuity."""
+    a, _ = _feature_branch_clone(tmp_path, monkeypatch, touch_continuity=False)
+
+    message = closure.unmerged_branch_findings(a)[0].message
+    assert "origin/feature/x (0d)" in message
+    assert "carries continuity" not in message
 
 
 def test_continuity_off_default_silent_once_the_default_branch_carries_it(tmp_path, monkeypatch):
@@ -914,6 +927,25 @@ def test_unmerged_branches_name_the_oldest_and_advise_once_stale(tmp_path, monke
     assert "origin/bug/ancient (9d)" in message          # oldest first
     assert message.index("ancient") < message.index("mid")
     assert "invisible to `gh pr list`" in message
+
+
+def test_unmerged_branches_hoist_the_continuity_carrier_past_the_cap(tmp_path, monkeypatch):
+    # The carrier is usually the newest branch, so the age sort plus the three-branch
+    # cap would hide exactly the one the reader needs; and the staleness advisory must
+    # still be driven by the genuinely oldest branch, not by whatever got hoisted.
+    monkeypatch.setattr(closure, "_git", lambda root, *a: _branch_lines(
+        ("origin/bug/ancient", 9), ("origin/spike/mid", 4),
+        ("origin/feat/other", 2), ("origin/close/today", 0)))
+    monkeypatch.setattr(closure, "continuity_off_default", lambda root: ("close/today", "main"))
+
+    message = closure.unmerged_branch_findings(tmp_path)[0].message
+
+    assert message.startswith(
+        "4 unmerged remote branch(es): origin/close/today (0d, carries continuity origin/main lacks)"
+    )
+    assert "origin/bug/ancient (9d), origin/spike/mid (4d)" in message
+    assert "+1 more" in message
+    assert "oldest is 9d" in message
 
 
 def test_unmerged_branches_stay_quiet_about_todays_work(tmp_path, monkeypatch):
