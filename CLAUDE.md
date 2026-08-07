@@ -196,3 +196,16 @@ dashboard runs a pinned install that advances only on an explicit upgrade +
 The full runbook — the three-file bump, required checks, tag, PyPI proof, the
 deploy verification, and the uv/projection traps that have actually bitten — is the
 **`horus-release`** skill. Invoke it rather than working from memory.
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+This repository has a generated `openwiki/` evidence index. It is optional just-in-time context, not required startup reading.
+
+- Treat source code and tests as authoritative. A brief's unknowns and review items are verification gaps, not automatic requirements.
+- Prefer the narrowest quiet validation that proves the changed behavior. Preserve complete failure output.
+
+The optional OpenWiki GitHub Actions workflow can refresh the repository wiki. It is manual-only until its inference-provider secret is configured. Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
+
+<!-- OPENWIKI:END -->

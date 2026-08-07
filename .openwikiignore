@@ -1,0 +1,4 @@
+# Historical and machine-local recovery material are not current product input.
+.horus/archive/
+.horus/sessions/
+.horus/temp/
