@@ -196,3 +196,15 @@ dashboard runs a pinned install that advances only on an explicit upgrade +
 The full runbook — the three-file bump, required checks, tag, PyPI proof, the
 deploy verification, and the uv/projection traps that have actually bitten — is the
 **`horus-release`** skill. Invoke it rather than working from memory.
+
+## Graphify experiment
+
+This branch carries a generated code graph under `graphify-out/` as optional,
+just-in-time context. Source code and tests remain authoritative.
+
+- Prefer `graphify explain "<symbol>"` for a focused caller/callee view and
+  `graphify affected "<symbol>"` or `graphify path "<A>" "<B>"` for impact and
+  relationship questions.
+- Natural-language `graphify query "<question>"` can be broad; use it as a
+  navigation hint, then verify the relevant source.
+- After changing code on this experiment branch, run `graphify update .`.
