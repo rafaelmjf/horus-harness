@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "2026-08-07 — The owner judged Graphify's published aggregate visualizer unhelpful for humans, so `horus-graph.rafaelfigueiredo.com` was removed: origin stopped, unit deleted, deploy checkout trashed, tunnel ingress removed, and the dedicated DNS record plus Access app deleted. The shared tunnel and private OpenWiki site remain healthy. Graphify's branch artifacts remain available for an agent-utility comparison."
-next_action: "Decide whether to run a controlled baseline-vs-OpenWiki-vs-Graphify pilot on identical source SHAs and fresh sessions, starting with the existing 4.1k/24.9k/86.5k-line portfolio ladder. Compare task correctness, time/tokens, false claims, and regeneration cost before deciding whether either experiment merits maintenance."
-next_prompt: "Resume `experiment/graphify`; fetch first. The Graphify publication is fully removed, while `horus-wiki.rafaelfigueiredo.com` remains active and Access-gated. Keep generated experiment branches available but compare them only after regenerating both tools from the same pinned source SHA. The first useful evidence is a small fresh-session A/B/C task set, not visual appeal or a synthetic graph benchmark."
-execution_recommendation: "continue-as-is — no delegation was requested; the next decision is whether the owner wants to spend on a bounded comparison pilot."
+current_focus: "2026-08-07 — OpenWiki and Graphify were trialed on Horus. OpenWiki remains privately published; Graphify's human visualizer was judged unhelpful and its service, route, DNS, Access app, and deploy checkout were removed. Focus now moves to the owner-approved `openwiki-graphify-value-benchmark` exploratory card: test both against the repo-native baseline before retaining or merging either experiment."
+next_action: "Refine `.horus/backlog/openwiki-graphify-value-benchmark.md`: pin one shared source SHA, choose three Horus tasks with source/test ground truth, and bound the nine-fresh-session baseline-vs-OpenWiki-vs-Graphify pilot before running it."
+next_prompt: "Start from the shaping card `openwiki-graphify-value-benchmark`; fetch first and read its comparison contract. The Graphify publication is fully removed, OpenWiki remains private and Access-gated, and both experiment branches remain pushed. Refine the pilot tasks, ground truth, tool-use posture, and spend cap before regenerating either artifact from the same exact SHA."
+execution_recommendation: "continue-as-is — no delegation was requested; the benchmark is shaping and first needs one bounded owner-attended refinement."
 last_updated: 2026-08-07
 last_product_audit: 0.0.79 2026-07-31
 horus_min_version: 0.0.26
