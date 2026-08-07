@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "2026-08-07 — `publish-openwiki-site` v1 merged as #501 (`31d5f75`) and its first live trial published the pushed `experiment/openwiki` SHA `7cda166` at `horus-wiki.rafaelfigueiredo.com`. The isolated systemd origin is active on exact loopback port 8790 (OpenWiki 0.3.1; 20 pages/44 links); Cloudflare Access app `Horus OpenWiki` cloned Tabi's two-email `family` allow policy before DNS, the tunnel enforces the Access audience and is healthy, and a clean request gets Access 302. Only the owner-authenticated browser/render pass remains."
-next_action: "Owner opens `https://horus-wiki.rafaelfigueiredo.com`, authenticates, and confirms the graph, one Markdown page, and a Mermaid diagram render. If green, the first publication trial is complete; if not, inspect the browser failure while the local origin/tunnel receipts are still current. Separately decide whether the OpenWiki experiment branch should merge. Main's earlier `account-login-verb` and release choices remain open; fleet propagation of the new skill still needs its own release decision."
-next_prompt: "Resume horus-harness; `git fetch --all --prune` first. PR #501 is merged on main. The OpenWiki trial serves remote branch `experiment/openwiki` at SHA `7cda166` from `/home/rafa/deploy/openwiki-sites/horus-harness/src`; service `openwiki-horus-harness` is active on 127.0.0.1:8790 and the shared tunnel route is Access-gated with origin JWT validation. Local graph/API/SSE and unauthenticated Access redirect passed; wait for the owner's authenticated visual verdict. The Cloudflare management token file was tightened from mode 664 to 600."
-execution_recommendation: "continue-as-is — no delegation was requested; the remaining authenticated visual probe is one bounded owner-attended check."
+current_focus: "2026-08-07 — OpenWiki and Graphify were trialed on Horus. OpenWiki remains privately published; Graphify's human visualizer was judged unhelpful and its service, route, DNS, Access app, and deploy checkout were removed. Focus now moves to the owner-approved `openwiki-graphify-value-benchmark` exploratory card: test both against the repo-native baseline before retaining or merging either experiment."
+next_action: "Refine `.horus/backlog/openwiki-graphify-value-benchmark.md`: pin one shared source SHA, choose three Horus tasks with source/test ground truth, and bound the nine-fresh-session baseline-vs-OpenWiki-vs-Graphify pilot before running it."
+next_prompt: "Start from the shaping card `openwiki-graphify-value-benchmark`; fetch first and read its comparison contract. The Graphify publication is fully removed, OpenWiki remains private and Access-gated, and both experiment branches remain pushed. Refine the pilot tasks, ground truth, tool-use posture, and spend cap before regenerating either artifact from the same exact SHA."
+execution_recommendation: "continue-as-is — no delegation was requested; the benchmark is shaping and first needs one bounded owner-attended refinement."
 last_updated: 2026-08-07
 last_product_audit: 0.0.79 2026-07-31
 horus_min_version: 0.0.26
@@ -68,7 +68,7 @@ Counts and per-card state are NOT restated here — `horus backlog list` compute
 One line per capability. Details live in git history — every entry carries its PR, tag or
 SHA — and `horus backlog list --archived` lists the delivered cards with their provenance.
 
-**Repeatable private OpenWiki publication** (2026-08-07, #501, `31d5f75`): bundled project skill v1 projects identically to Claude/Codex and encodes Access-before-DNS, loopback/exact-port/exact-SHA service deployment, verification, update, rollback and removal; first live trial reached the Access gate, with owner-authenticated rendering pending.
+**Repeatable private OpenWiki publication** (2026-08-07, #501, `31d5f75`): bundled project skill v1 projects identically to Claude/Codex and encodes Access-before-DNS, loopback/exact-port/exact-SHA service deployment, verification, update, rollback and removal; first live trial passed owner-authenticated rendering.
 
 **A closed session reads as closed on the surface in use** (2026-08-03, #498): `registry.display_status` gives #489's `is_deliberate_close` its first production caller — it had none, so 74 of 252 rows still read `failed` under a green test. Scoped to `horus sessions`; retiring the Sessions section was refuted (`is_attachable`/`is_restorable` gate on `status`).
 
