@@ -100,6 +100,32 @@ def test_cockpit_dispatch_contract_skill_registered_and_sequences():
     assert "horus usage check" in ct.content
 
 
+def test_publish_openwiki_site_skill_is_secure_repeatable_and_project_scoped():
+    skill = next(s for s in skills.SKILLS if s.name == "publish-openwiki-site")
+    flat = " ".join(skill.content.split())
+
+    assert skill.audience == skills.AUDIENCE_PROJECT
+    for marker in (
+        "Access before exposure",
+        "Never patch it to `0.0.0.0`",
+        "openwiki/.last-update.json",
+        "status` is `complete`",
+        "OpenWiki tries later ports on collision",
+        "ExecStart=<absolute openwiki binary>",
+        "--no-open",
+        "GET /api/graph",
+        "text/event-stream",
+        "cloudflared tunnel ingress validate",
+        "fast-forward-only",
+        "exact deployed SHA",
+    ):
+        assert marker in flat
+
+    assert "Never create the DNS/tunnel route first" in flat
+    assert "never a `200` OpenWiki page" in flat
+    assert "owner actually reports it" in flat
+
+
 def test_backlog_librarian_skill_is_bounded_actionable_and_projected():
     librarian = next(s for s in skills.SKILLS if s.name == "backlog-librarian")
     for marker in (
