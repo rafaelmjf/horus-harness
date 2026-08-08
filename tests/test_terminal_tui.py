@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -7,7 +8,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from prompt_toolkit.output import DummyOutput
 
-from horus import backlog, config, github_catalog, remote_start, terminal_tui
+from horus import backlog, config, github_catalog, remote_start, terminal_tui, usage_snapshot
 from horus.cli import main
 
 
@@ -1583,3 +1584,150 @@ def test_active_card_filter_has_no_status_list_of_its_own(tmp_path):
     _card(tmp_path, "the-only-live-one")
 
     assert [c.name for c in terminal_tui._active_cards(tmp_path)] == ["the-only-live-one"]
+
+
+# --------------------------------------------------------------------------- #
+# Live all-accounts usage refresh (`U`)
+# --------------------------------------------------------------------------- #
+
+def _usage_accounts() -> list:
+    return [
+        terminal_tui.LaunchAccount("claude", "work", None),
+        terminal_tui.LaunchAccount("claude", "personal", None),
+        terminal_tui.LaunchAccount("codex", "personal", None),
+    ]
+
+
+def test_live_usage_refresh_reads_every_account_not_just_the_selected_one(monkeypatch):
+    """`U` exists because usage is spent on other machines and the native apps.
+
+    A refresh that only covered the highlighted row would leave exactly the stale
+    readings the key was added to fix, so assert every configured account is hit.
+    """
+    seen = []
+    monkeypatch.setattr(
+        terminal_tui.usage_snapshot, "refresh_usage",
+        lambda agent, account, **kw: seen.append((agent, account)),
+    )
+    monkeypatch.setattr(terminal_tui, "_account_usage", lambda accounts: {})
+
+    terminal_tui._refresh_all_account_usage(_usage_accounts())
+
+    assert sorted(seen) == [
+        ("claude", "personal"), ("claude", "work"), ("codex", "personal"),
+    ]
+
+
+def test_live_usage_refresh_survives_one_account_failing(monkeypatch):
+    """One unreachable account must not cost the other accounts their refresh.
+
+    `refresh_usage` is best-effort per target; a raising target is reported as
+    "kept its cached reading", never propagated into the frame.
+    """
+    def _flaky(agent, account, **kw):
+        if account == "work":
+            raise RuntimeError("network down")
+        return usage_snapshot.UsageSnapshot(10.0, None)
+
+    monkeypatch.setattr(terminal_tui.usage_snapshot, "refresh_usage", _flaky)
+    monkeypatch.setattr(terminal_tui, "_account_usage", lambda accounts: {})
+
+    _usage, fresh, stale = terminal_tui._refresh_all_account_usage(_usage_accounts())
+
+    assert (fresh, stale) == (2, 0)  # the two that answered; the raiser is absorbed
+
+
+def test_live_usage_refresh_reports_partial_success_honestly(tmp_path, monkeypatch):
+    """A partial refresh must not read as a full one.
+
+    The whole point of the key is trusting the number on screen, so a run where
+    only some accounts answered has to say so rather than claiming success.
+    """
+    ui = _new_ui(tmp_path, monkeypatch)
+    monkeypatch.setattr(terminal_tui, "_launch_accounts", _usage_accounts)
+    monkeypatch.setattr(
+        terminal_tui, "_refresh_all_account_usage", lambda accounts, **kw: ({}, 2, 0)
+    )
+
+    ui.refresh_account_usage_live()
+
+    assert "2 current" in ui.status
+    assert "1 kept cached" in ui.status
+
+
+def test_cheap_usage_key_still_never_touches_the_network(tmp_path, monkeypatch):
+    """`u` stays cache-only; only `U` is allowed to fetch.
+
+    They are one keystroke apart, so a refactor that quietly promoted `u` to a
+    network read would add an unexpected stall to a key pressed constantly.
+    """
+    ui = _new_ui(tmp_path, monkeypatch)
+    monkeypatch.setattr(terminal_tui, "_launch_accounts", _usage_accounts)
+
+    def _forbidden(*a, **kw):
+        raise AssertionError("`u` must not perform a live usage read")
+
+    monkeypatch.setattr(terminal_tui.usage_snapshot, "refresh_usage", _forbidden)
+
+    ui.refresh_account_usage()
+
+    assert "cache" in ui.status
+
+
+def test_shift_u_binding_dispatches_the_live_refresh_from_any_screen(tmp_path, monkeypatch):
+    """The binding itself must be wired, and must work off the accounts screen.
+
+    The direct-method tests above would all still pass if `U` were never bound,
+    and usage staleness is noticed from wherever the owner happens to be — so
+    unlike `g`, this key is deliberately not screen-gated.
+    """
+    ui = _new_ui(tmp_path, monkeypatch)
+    monkeypatch.setattr(terminal_tui, "_launch_accounts", _usage_accounts)
+    called = []
+    monkeypatch.setattr(
+        terminal_tui, "_refresh_all_account_usage",
+        lambda accounts, **kw: called.append(len(accounts)) or ({}, len(accounts), 0),
+    )
+    ui._show("sessions")
+
+    _drive(ui, "U")
+
+    assert called == [3], "U must refresh all three accounts from the sessions screen"
+    assert "3 account(s)" in ui.status
+
+
+def test_an_idle_codex_reading_is_not_reported_as_current(monkeypatch):
+    """A refresh that returns a stale capture must be counted apart from a live one.
+
+    Refreshing Claude is an OAuth read; refreshing Codex only re-reads the newest
+    local rollout, which is hours old whenever that account has been idle and is
+    blind to other machines. Calling both "refreshed" is what let a stale reading
+    hard-refuse a valid dispatch (2026-07-23) — the bug this split exists to avoid.
+    """
+    old = time.time() - 3 * 3600  # older than REFUSAL_MAX_READING_AGE (2h)
+
+    def _by_agent(agent, account, **kw):
+        if agent == "codex":
+            return usage_snapshot.UsageSnapshot(80.0, None, None, None, old)
+        return usage_snapshot.UsageSnapshot(10.0, None)  # no capture stamp = live read
+
+    monkeypatch.setattr(terminal_tui.usage_snapshot, "refresh_usage", _by_agent)
+    monkeypatch.setattr(terminal_tui, "_account_usage", lambda accounts: {})
+
+    _usage, fresh, stale = terminal_tui._refresh_all_account_usage(_usage_accounts())
+
+    assert (fresh, stale) == (2, 1), "the idle Codex capture must not count as current"
+
+
+def test_status_names_the_older_capture_instead_of_claiming_success(tmp_path, monkeypatch):
+    """The owner reads this line to decide whether to trust the numbers on screen."""
+    ui = _new_ui(tmp_path, monkeypatch)
+    monkeypatch.setattr(terminal_tui, "_launch_accounts", _usage_accounts)
+    monkeypatch.setattr(
+        terminal_tui, "_refresh_all_account_usage", lambda accounts, **kw: ({}, 2, 1)
+    )
+
+    ui.refresh_account_usage_live()
+
+    assert "2 current" in ui.status
+    assert "older capture" in ui.status

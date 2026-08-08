@@ -390,6 +390,12 @@ class TerminalUI:
             else:
                 self.refresh_account_usage()
 
+        @keys.add("U")
+        def _refresh_usage_live(event) -> None:
+            # Shift-U mirrors y/Y: lowercase is the cheap local read, uppercase is
+            # the explicit all-accounts network refresh.
+            self.refresh_account_usage_live()
+
         @keys.add("g")
         def _fetch_freshness(event) -> None:
             # Explicit fleet fetch → refresh remote-freshness. Projects screen only;
@@ -501,6 +507,39 @@ class TerminalUI:
             self._refresh_items()
             self.selected = min(selected, max(0, len(self.items) - 1))
         self.status = "Account usage refreshed from cache."
+        self.application.invalidate()
+
+    def refresh_account_usage_live(self) -> None:
+        """Explicit live usage refresh for every account at once (network).
+
+        The cached reading goes stale whenever usage is spent somewhere this TUI
+        cannot see — another machine, or the native desktop apps — and `u` only
+        re-reads that same stale cache. This is the deliberate network path: one
+        live read per account, bounded, on an explicit keypress.
+        """
+        selected = self.selected
+        self.accounts = _launch_accounts()
+        self.status = f"Refreshing usage for {len(self.accounts)} account(s)…"
+        self.application.invalidate()
+        self.account_usage, fresh, stale = _refresh_all_account_usage(self.accounts)
+        if self.screen == "accounts":
+            self._refresh_items()
+            self.selected = min(selected, max(0, len(self.items) - 1))
+        total = len(self.accounts)
+        parts = []
+        if fresh:
+            parts.append(f"{fresh} current")
+        if stale:
+            # Named, not hidden: a Codex account that has not taken a turn cannot
+            # report anything newer, so "refreshed" alone would read as a lie.
+            parts.append(f"{stale} still reporting an older capture")
+        if missed := total - fresh - stale:
+            parts.append(f"{missed} kept cached")
+        self.status = (
+            f"Usage refreshed for {total} account(s): " + " · ".join(parts)
+            if parts
+            else "No usage reading available; showing cached values."
+        )
         self.application.invalidate()
 
     def refresh_git_freshness(self) -> None:
@@ -2654,9 +2693,9 @@ class TerminalUI:
             return [("class:footer", text)]
         if self.screen == "accounts":
             text = (
-                " ↑↓ · f fleet · u refresh · m mission · t settings · q"
+                " ↑↓ · f fleet · u/U refresh · m mission · t settings · q"
                 if narrow
-                else " ↑↓/swipe · Enter · f fleet · u refresh · Esc · s sessions · d defaults · m mission · t settings · q quit"
+                else " ↑↓/swipe · Enter · f fleet · u cached · U live all · Esc · s sessions · d defaults · m mission · t settings · q quit"
             )
             return [("class:footer", text)]
         text = (
@@ -3128,6 +3167,54 @@ def _account_usage(accounts: list[LaunchAccount]) -> dict[tuple[str, str], usage
         )
         for account in accounts
     }
+
+
+def _refresh_all_account_usage(
+    accounts: list[LaunchAccount], *, deadline: float = 20.0
+) -> tuple[dict[tuple[str, str], usage_snapshot.UsageSnapshot | None], int, int]:
+    """Live-refresh every account's usage concurrently, bounded by one global
+    deadline, then re-read what actually landed in the cache.
+
+    The only place the TUI touches the network for usage, and only on an explicit
+    keypress — the cheap `u` path stays cache-only. Mirrors `_fetch_fleet_freshness`:
+    a target unresolved when the deadline hits keeps whatever the cache already holds
+    rather than stalling the frame. A failed refresh never overwrites a good entry,
+    because `refresh_usage` writes only on success. Never raises.
+
+    Returns the redisplayed usage map, how many targets answered with a reading the
+    provider captured recently, and how many answered with one already too old to
+    call current. That split is not pedantry: refreshing a Claude account is a live
+    OAuth read, but refreshing a Codex account only re-reads the newest local
+    rollout, which is hours old whenever that account has been idle — and is blind to
+    other machines entirely. Reporting both as "refreshed" would recreate the stale
+    reading that hard-refused a valid dispatch (2026-07-23, reproduced 2026-07-26).
+    Freshness is judged by `is_authoritative_for_refusal`, so this never becomes a
+    second, drifting definition of "current".
+    """
+    fresh = stale = 0
+    if accounts:
+        executor = ThreadPoolExecutor(max_workers=min(8, len(accounts)))
+        futures = [
+            executor.submit(usage_snapshot.refresh_usage, account.agent, account.alias)
+            for account in accounts
+        ]
+        try:
+            for future in as_completed(futures, timeout=deadline):
+                try:
+                    snapshot = future.result()
+                except Exception:  # noqa: BLE001 (best-effort: a failed target keeps its cache)
+                    continue
+                if snapshot is None:
+                    continue
+                if snapshot.is_authoritative_for_refusal():
+                    fresh += 1
+                else:
+                    stale += 1
+        except _FuturesTimeout:
+            pass  # global deadline reached; unresolved targets fall through to cache
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+    return _account_usage(accounts), fresh, stale
 
 
 def _int_pct(value: float | None) -> int | None:
