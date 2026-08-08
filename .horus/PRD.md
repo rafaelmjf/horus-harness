@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "2026-08-07 — OpenWiki and Graphify were trialed on Horus. OpenWiki remains privately published; Graphify's human visualizer was judged unhelpful and its service, route, DNS, Access app, and deploy checkout were removed. Focus now moves to the owner-approved `openwiki-graphify-value-benchmark` exploratory card: test both against the repo-native baseline before retaining or merging either experiment."
-next_action: "Refine `.horus/backlog/openwiki-graphify-value-benchmark.md`: pin one shared source SHA, choose three Horus tasks with source/test ground truth, and bound the nine-fresh-session baseline-vs-OpenWiki-vs-Graphify pilot before running it."
-next_prompt: "Start from the shaping card `openwiki-graphify-value-benchmark`; fetch first and read its comparison contract. The Graphify publication is fully removed, OpenWiki remains private and Access-gated, and both experiment branches remain pushed. Refine the pilot tasks, ground truth, tool-use posture, and spend cap before regenerating either artifact from the same exact SHA."
-execution_recommendation: "continue-as-is — no delegation was requested; the benchmark is shaping and first needs one bounded owner-attended refinement."
-last_updated: 2026-08-07
+current_focus: "2026-08-08 — the benchmark's continuity was found stranded on `experiment/graphify` (a branch carrying 306k lines the card forbids merging) and lifted onto main (#502), then the card was refined (#503) with the owner's reframed questions: agent accuracy first, human understanding second, maintenance cost third. Run design, pilot tasks and tool-use posture are pinned; the answer key and spend cap are not. Separately, PR #504 (TUI `U` = live all-accounts usage refresh) is open with green checks awaiting the owner's merge decision."
+next_action: "Decide whether to merge PR #504. Then, on the benchmark: establish and pin the per-task answer key on the shared SHA, and set the session/token ceiling for the nine runs — the last two items blocking `openwiki-graphify-value-benchmark`."
+next_prompt: "Resume horus-harness; `git fetch --all --prune` first. Read `.horus/backlog/openwiki-graphify-value-benchmark.md` — it is now canonical on main and carries the pinned run design (one SHA, three worktrees, batched by task, correctness gates the verdict), the test-as-shipped posture with its named instruction-layer confound, and the owner's three pilot tasks. Two items remain open on it: the per-task answer key and the spend ceiling. PR #504 is open with all checks green on `5e984f0`; it adds the TUI `U` key and is unmerged, so it is NOT in Shipped. Note the benchmark's pinned SHA should be chosen deliberately relative to #504, which touches `terminal_tui.py` near pilot task 3. `graphify-out/` sits untracked in the working tree (9.4 MB, preserved on `origin/experiment/graphify`) pending an owner call to remove or ignore it."
+execution_recommendation: "continue-as-is — no delegation was requested; the remaining benchmark work is one owner-attended decision plus a bounded answer-key pass."
+last_updated: 2026-08-08
 last_product_audit: 0.0.79 2026-07-31
 horus_min_version: 0.0.26
 ---
