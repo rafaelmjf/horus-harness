@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 readiness: ready
 readiness_reason: "Observed concretely on 2026-08-03 in fabric-build: `close --check` printed 'Fresh — canonical continuity and work are checkpointed' with the continuity commit on a pushed but unmerged branch, and the agent read green as done and stopped. The surface is two known lines (`closure.py:588`, `cli.py:3176`) and the check's own docstring already states the intended semantics, so no design question is open — only which of two remedies to apply."
@@ -13,6 +13,8 @@ type: bug
 parallel: safe
 phase: converge
 surface: "horus/closure.py:580-588 (_enforce_push upstream comparison, ok finding text), horus/cli.py:3176 (the 'Fresh — canonical continuity and work are checkpointed' summary)"
+shipped_pr: 500
+shipped_sha: 538ab39
 ---
 
 # close-check-claims-canonical-while-unmerged — a green gate that the default branch does not back

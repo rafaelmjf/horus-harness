@@ -4,7 +4,7 @@ priority: high
 created: 2026-08-07
 created_by: owner
 readiness: shaping
-readiness_reason: "Primary questions, pilot tasks, run topology and tool-use posture are pinned (2026-08-08). Two items remain before runs begin: the per-task answer key must be established and pinned on the shared SHA, and the owner must set the session/token ceiling for the nine runs."
+readiness_reason: "ANSWERED 2026-08-09 — see `## Verdict`. Six runs over two of the three pilot tasks (task 2 skipped as the same shape as task 1) on pinned SHA e600407: no accuracy difference in either task, zero false claims in any condition, baseline cheapest both times. Both tools DROP for agent-facing use; the owner closed question 2 by reviewing the live site and rejecting its form. Nothing remains to run — the card is complete and awaits only the owner's archive."
 phase: explore
 type: spike
 vision_facet: "Introspection & self-improvement"
@@ -201,3 +201,65 @@ Owner decision, 2026-08-07, after the live `experiment/openwiki` (`7cda166`) and
 `experiment/graphify` (`c22c79d`, visualizer `c670c7c`) trials. The Graphify publication
 was removed; the OpenWiki publication remains private and Access-gated. Run design,
 tool-use posture, primary questions and pilot tasks pinned by the owner 2026-08-08.
+
+## Verdict — 2026-08-09: DROP both for agent-facing use
+
+Six runs executed (two of the three pilot tasks; task 2 deliberately skipped as the same
+shape as task 1). One pinned SHA `e600407` — chosen after merging #504 because it touches
+`terminal_tui.py`, pilot task 3's surface. Three condition branches built from it,
+regenerated rather than ported (the prior `experiment/*` artifacts predated #504, so a
+stale graph would have carried wrong line numbers for a scored task). Verified: zero `.py`
+files differ between conditions; no graphify skill in `~/.claude/skills` or any isolated
+account dir. Answer keys pinned to files BEFORE each launch (`95ec9e87…`, `8a932bbe…`).
+All runs: Opus 5, account `work`, `full-auto`, tmux, prompts byte-identical per task.
+
+| | Baseline | Graphify | OpenWiki |
+|---|---|---|---|
+| Task 1 — root cause, localization, the upstream/adapter trap | correct | correct | correct |
+| Task 1 — false claims | 0 | 0 | 0 |
+| Task 1 — output tokens | 38,521 | 48,134 (+25%) | 27,538 (−29%) |
+| Task 3 — coverage of the 4 breakage surfaces | 4/4 | 4/4 | 4/4 |
+| Task 3 — output tokens | 32,631 | 42,091 (+29%) | 43,079 (+32%) |
+| Artifact actually used | n/a | yes (4 calls; 12 then 28 hook injections) | **no** on task 1, yes on task 3 |
+
+**No accuracy difference in either task.** Both traps caught by all three conditions; zero
+false claims anywhere. Baseline cheapest in both. The "task was too easy" objection dies on
+task 3: task 1's answer sat verbatim in a stale docstring, but task 3 was a four-file
+traversal with nothing confessing, and plain `grep`/`Read` still scored 4/4.
+
+**Noise floor.** Task 1's baseline and openwiki were behavioural replicates (openwiki never
+opened its wiki) yet differed 29% in output tokens. So effects of that size are not
+resolvable at n=1 — graphify's +25%/+29% is *suggestive, not established*. The accuracy null
+is the robust finding.
+
+**As-shipped was more than this card recorded.** `graphify install --project` today also adds
+PreToolUse hooks (`hook-guard` on `Bash|Grep` and `Read|Glob`) injecting *"MANDATORY … You
+MUST run graphify before reading source files"* on every read and search, auto-writes its own
+directive `CLAUDE.md` block ("first run graphify query", "instead of raw source browsing"),
+and creates `.claude/CLAUDE.md`. None of that was committed on `experiment/graphify`. Kept
+as-shipped because adoption is the question; recorded as a third asymmetry. So the Graphify
+arm tested graph + coercion, not a graph.
+
+**Maintenance (question 3).** Graphify: 20.0s, no LLM, no API cost, but 12.2 MB tracked,
++355k diff lines, an MCP server, 19-platform self-install, a silent edit to Horus-managed
+`.claude/settings.json`, and **no declared licence**. `horus doctor` did not flag the foreign
+skill — the predicted drift noise never came; the real collision is silent. OpenWiki: MIT
+(LangChain), 148 KB / 25 files, but each refresh is a ~19.4-min agent run on the owner's
+ChatGPT Plus quota, and its generated `openwiki-update.yml` would make that a **daily** paid
+run. Its deployment also carries a hidden dependency on Hermes's bundled Node
+(`~/.hermes/node/bin/node`, hardcoded in the systemd unit).
+
+**Question 2 (human) — closed by the owner, 2026-08-09.** Owner reviewed the live published
+site and rejected the *form*, not the idea. That closes OpenWiki's last audience.
+
+**Per the card's own convergence criterion — "drop it when the baseline matches it on
+accuracy" — both drop.** Graphify has no remaining audience (visualization credit is
+forbidden by this card). The normalized-pointer follow-up is moot: it never won. The size
+ladder is NOT extended, per this card's own instruction. `experiment/graphify` and
+`experiment/openwiki` retired 2026-08-09; `bench/baseline|graphify|openwiki` kept as the
+reproducible evidence (graphify's is free to rebuild, openwiki's costs a paid run).
+
+**Two answer keys were beaten by the runs, both times** — they found `herdr tab focus`
+crosses workspaces and `pane get` already returns `tab_id`, and that no `account` row exists
+among the home screen's selectable rows. Keys authored by the same model under-specify
+relative to bounded runs, the inverse of this card's stated worry.
