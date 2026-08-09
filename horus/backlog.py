@@ -179,6 +179,10 @@ class Card:
     # without re-reading the file per render. Pairs, not a dict, to keep Card frozen
     # *and* hashable.
     fields: tuple[tuple[str, str], ...] = ()
+    # The `.horus/topics/` grouping this card belongs to ("" when ungrouped — a
+    # topic is never required). Appended last so any positional construction and
+    # every card predating the field stays valid.
+    topic: str = ""
 
     def field_value(self, key: str) -> str:
         """The card's raw frontmatter value for ``key``, or "" when it has none."""
@@ -258,6 +262,7 @@ def _card_from_path(path: Path) -> Card:
         title=_title(doc.body, path.stem),
         order=_parse_order(fm.get("order", "")),
         fields=tuple((key, str(value).strip()) for key, value in fm.items()),
+        topic=str(fm.get("topic", "")).strip().strip("'\"").strip(),
     )
 
 

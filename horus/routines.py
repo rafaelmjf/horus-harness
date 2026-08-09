@@ -686,6 +686,10 @@ def convergence_findings(root: Path, prd_body: str) -> list[Finding]:
             + ", ".join(standings.explore),
         ))
     findings.extend(Finding("warn", f"convergence: {msg}") for msg in standings.drift)
+    # Additive: topics report alongside the facet read-out, and stay silent on a
+    # project that uses neither. Facet logic above is deliberately untouched.
+    from horus import topics as _topics
+    findings = list(findings) + _topics.findings(root, backlog.load_cards(root))
     return findings
 
 

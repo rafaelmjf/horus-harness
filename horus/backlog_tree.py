@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from horus import backlog, frontmatter
@@ -55,10 +55,21 @@ class FacetGroup:
 
 
 @dataclass(frozen=True)
+class TopicGroup:
+    """A `.horus/topics/` grouping and its member cards. Rendered even when empty —
+    a stated direction with nothing carded yet is information, not noise."""
+    topic: str
+    purpose: str
+    state: str
+    children: tuple[backlog.Card, ...] = ()
+
+
+@dataclass(frozen=True)
 class Tree:
     branches: tuple[BranchGroup, ...] = field(default_factory=tuple)
     facets: tuple[FacetGroup, ...] = field(default_factory=tuple)
     readiness: tuple[backlog.ReadinessGroup, ...] = field(default_factory=tuple)
+    topics: tuple[TopicGroup, ...] = field(default_factory=tuple)
 
 
 # --- configurable group-by lens (TUI grouped-list view) --------------------
@@ -67,10 +78,11 @@ class Tree:
 # shape". A group-by lens folds the same cards into collapsible, counted sections
 # on a chosen dimension. `none` is the flat list (and the universal fallback when
 # a lens yields no real structure — e.g. a new project with no facets/branches).
-GROUP_BY_LENSES: tuple[str, ...] = ("none", "readiness", "facet", "status", "priority")
+GROUP_BY_LENSES: tuple[str, ...] = ("none", "readiness", "topic", "facet", "status", "priority")
 GROUP_BY_LABELS: dict[str, str] = {
     "none": "None (flat)",
     "readiness": "Readiness",
+    "topic": "Topic",
     "facet": "Facet / branch",
     "status": "Status",
     "priority": "Priority",
@@ -157,7 +169,38 @@ def _sections_by_field(cards, keyfn, order: tuple[str, ...], prefix: str) -> lis
     return sections
 
 
-def sections_for(cards, lens: str, tree: "Tree | None" = None) -> list[GroupSection]:
+def _topic_sections(cards, root: "Path | None") -> list[GroupSection]:
+    """Sections keyed by `.horus/topics/`, each subtitled with its own problem
+    statement. A topic with no members still renders — an empty column is the
+    honest picture of a direction stated but not yet broken down, and dropping it
+    would hide exactly what the reader needs. Cards naming no topic, or one with
+    no file, collect under "Ungrouped" so nothing disappears."""
+    from horus import topics as topics_mod
+
+    cards = list(cards)
+    loaded = topics_mod.load_topics(root) if root is not None else []
+    sections: list[GroupSection] = []
+    claimed: set[str] = set()
+    for topic in sorted(loaded, key=topics_mod.sort_key):
+        children = topics_mod.members(cards, topic.name)
+        claimed.update(c.name for c in children)
+        suffix = " · settled" if topic.state == topics_mod.STATE_SETTLED else ""
+        sections.append(GroupSection(
+            key=f"topic:{topic.name}",
+            label=f"{topic.name}{suffix}",
+            subtitle=topic.purpose,
+            children=children,
+        ))
+    rest = [c for c in cards if c.name not in claimed]
+    if rest:
+        sections.append(GroupSection(
+            key="topic:", label="Ungrouped", subtitle="", children=rest,
+        ))
+    return sections
+
+
+def sections_for(cards, lens: str, tree: "Tree | None" = None,
+                 root: Path | None = None) -> list[GroupSection]:
     """Project ``cards`` into ordered, counted sections for ``lens``.
 
     ``none`` returns no sections (the caller renders a flat list). ``facet`` reuses
@@ -189,6 +232,8 @@ def sections_for(cards, lens: str, tree: "Tree | None" = None) -> list[GroupSect
                 key=f"facet:{f.facet}", label=f.facet or "Unsorted", subtitle="", children=f.children,
             ))
         return [s for s in sections if s.children]
+    if lens == "topic":
+        return _topic_sections(cards, root)
     if lens == "status":
         return _sections_by_field(cards, lambda c: c.status or "", ("open", "claimed"), "status")
     if lens == "priority":
@@ -231,7 +276,17 @@ def _convergence_line(card: backlog.Card) -> str:
 def build_tree(root: Path) -> Tree:
     """Read `.horus/backlog/` fresh and project it into branch umbrellas (with
     their children) plus facet groups for everything left over."""
-    return build_tree_from_cards(backlog.load_active_cards(root))
+    from horus import topics as topics_mod
+    cards = backlog.load_active_cards(root)
+    base = build_tree_from_cards(cards)
+    groups = tuple(
+        TopicGroup(
+            topic=t.name, purpose=t.purpose, state=t.state,
+            children=tuple(topics_mod.members(cards, t.name)),
+        )
+        for t in sorted(topics_mod.load_topics(root), key=topics_mod.sort_key)
+    )
+    return replace(base, topics=groups)
 
 
 def build_tree_from_cards(cards: list[backlog.Card]) -> Tree:
@@ -313,6 +368,15 @@ def to_dict(tree: Tree) -> dict:
             }
             for group in tree.readiness
         ],
+        "topics": [
+            {
+                "topic": group.topic,
+                "state": group.state,
+                "purpose": group.purpose,
+                "cards": [_card_to_dict(card) for card in group.children],
+            }
+            for group in tree.topics
+        ],
         "branches": [
             {
                 "branch": group.branch,
@@ -359,6 +423,19 @@ def render_text(tree: Tree) -> str:
     lines: list[str] = ["Readiness queues"]
     lines.extend(f"  {group.label}: {len(group.cards)}" for group in tree.readiness)
     lines.append("")
+    for group in tree.topics:
+        mark = " · settled" if group.state == "settled" else ""
+        lines.append(f"{group.topic}{mark} ({len(group.children)} open)")
+        if group.purpose:
+            # Truncated for the tree line only; `to_dict` keeps the full prose, and
+            # the topic file is where a reader goes for the whole thesis.
+            blurb = group.purpose if len(group.purpose) <= 150 else group.purpose[:149].rstrip() + "…"
+            lines.append(f"  {blurb}")
+        for card in group.children:
+            lines.append(_format_child(card))
+        if not group.children:
+            lines.append("    (no member cards yet)")
+        lines.append("")
     for group in tree.branches:
         note = "" if group.resolved else " (no matching umbrella card)"
         lines.append(f"{group.title} ({len(group.children)} open){note}")
