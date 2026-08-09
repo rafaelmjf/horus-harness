@@ -31,3 +31,39 @@ Two arguments settled it. A detector nobody feeds protects nothing, and five of 
 Deliberately not added: a third kind for recorded decisions. A topic with no members already is one, and the extra type only announced what the structure shows.
 
 Still open: whether the facet field is eventually dropped from cards, whether topics may span projects (`account-isolation` is genuinely fleet-wide), and how a settled topic differs on screen from one merely awaiting cards.
+
+## Rollout baseline — 2026-08-09
+
+Seeded across five projects so the structure has real data to be judged on. **This is
+the baseline, not evidence.** Seeding is prompted by definition; the pinned criterion
+measures what happens *after* — on a project other than horus-harness, topics get
+created or updated without being asked for, and at least one accumulates a second
+member card.
+
+| Project | Topics | Active cards linked | Ungrouped |
+|---|---|---|---|
+| agentic-travel-guide | 6 | 18 | 0 |
+| agentic-gym-coach | 5 | 9 | 1 |
+| horus-harness | 5 | 7 | 0 |
+| fabric-utils | 4 | 12 | 0 |
+| pbi-ecosystem | 3 | 16 | 2 |
+| **total** | **23** | **62** | **3** |
+
+`fabric-metadata-driven-medallion` was in the intended set and was **not seeded**: it
+has zero cards, so it can produce no evidence either way.
+
+Three independent projects were already grouping work informally before any of this,
+which is the strongest support for the model: `agentic-travel-guide` and
+`pbi-ecosystem` filled `vision_facet` with descriptive labels their own vision never
+defines, and `agentic-gym-coach` encoded groups as *"track D"*, *"track G"*, *"track J"*
+inside card titles because no field existed. The change is giving that a name and a
+place, not introducing it.
+
+One honest limit on the rollout: those repos run the installed CLI (0.0.81), which
+predates `horus/topics.py`. Their topic files are readable by any agent and by the
+planned page, but no `--tree` or `consolidate` read-out will show topics there until a
+release ships. The evidence window therefore starts at that release, not today.
+
+Also recorded because it is a live finding: `tooling` in pbi-ecosystem holds 11 of 18
+active cards. An emergent tag can be too broad to state a single honest thesis for, and
+that is a librarian problem, not something to silently split.
