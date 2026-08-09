@@ -11,3 +11,7 @@ venv/
 # Real-project example fixtures kept local until curated for public sharing.
 examples/
 .claude/launch.json
+# Graphify's reproducible local extraction cache is not project state.
+graphify-out/cache/
+graphify-out/.graphify_root
+graphify-out/.graphify_python

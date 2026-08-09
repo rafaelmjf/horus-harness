@@ -67,6 +67,24 @@
             "command": "horus hook skill-invoked || exit 0"
           }
         ]
+      },
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/rafa/.local/bin/graphify hook-guard search"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/rafa/.local/bin/graphify hook-guard read"
+          }
+        ]
       }
     ],
     "SessionStart": [

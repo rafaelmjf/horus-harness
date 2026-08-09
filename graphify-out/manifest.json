@@ -1,0 +1,2752 @@
+{
+  ".claude/settings.json": {
+    "mtime": 1786267166.7745385,
+    "ast_hash": "87765cadfe17fc591a63be669f69083d",
+    "semantic_hash": ""
+  },
+  ".codex/hooks.json": {
+    "mtime": 1786267166.5152392,
+    "ast_hash": "f4d326cf175dd9dfa641b9ce1cb76199",
+    "semantic_hash": ""
+  },
+  ".vscode/tasks.json": {
+    "mtime": 1786267166.5772383,
+    "ast_hash": "b0a338154d405d0df7244970936361f2",
+    "semantic_hash": ""
+  },
+  "horus/__init__.py": {
+    "mtime": 1786267166.5842383,
+    "ast_hash": "bf5960df5dd6eed31d7a52a361c98557",
+    "semantic_hash": ""
+  },
+  "horus/__main__.py": {
+    "mtime": 1786267166.5842383,
+    "ast_hash": "45af59b575fb193b45a3f233bbb951b5",
+    "semantic_hash": ""
+  },
+  "horus/access_gate.py": {
+    "mtime": 1786267166.5842383,
+    "ast_hash": "5393ec35aa0ecffa2098decde4911d3d",
+    "semantic_hash": ""
+  },
+  "horus/activity.py": {
+    "mtime": 1786267166.5842383,
+    "ast_hash": "751e4d265fe4bff6cdc478c4ee62b449",
+    "semantic_hash": ""
+  },
+  "horus/adapters/__init__.py": {
+    "mtime": 1786267166.5852382,
+    "ast_hash": "96fb16766455c16eaf0a436af03ed2f2",
+    "semantic_hash": ""
+  },
+  "horus/adapters/base.py": {
+    "mtime": 1786267166.5852382,
+    "ast_hash": "086ad94d38ee5474ff2c8e708281e0c0",
+    "semantic_hash": ""
+  },
+  "horus/adapters/claude.py": {
+    "mtime": 1786267166.5852382,
+    "ast_hash": "47ba5fda6638d91982c70ab4d6de8aef",
+    "semantic_hash": ""
+  },
+  "horus/adapters/codex.py": {
+    "mtime": 1786267166.5862381,
+    "ast_hash": "f99499b106d5d9f174db8c08e73ac6b5",
+    "semantic_hash": ""
+  },
+  "horus/adapters/fake.py": {
+    "mtime": 1786267166.5862381,
+    "ast_hash": "d071ff11161abf2e8be2c4167ff32bec",
+    "semantic_hash": ""
+  },
+  "horus/backend.py": {
+    "mtime": 1786267166.6232376,
+    "ast_hash": "29fded9b13e328616902ae7408197dab",
+    "semantic_hash": ""
+  },
+  "horus/backlog.py": {
+    "mtime": 1786267166.6242375,
+    "ast_hash": "13f49df5f0855b3a1f7139464e1a0406",
+    "semantic_hash": ""
+  },
+  "horus/backlog_migrate.py": {
+    "mtime": 1786267166.6242375,
+    "ast_hash": "e7588e490d15b73c51ed4de8f73048c0",
+    "semantic_hash": ""
+  },
+  "horus/backlog_refine.py": {
+    "mtime": 1786267166.6242375,
+    "ast_hash": "1611fa2a86ca7977248c09569a48d208",
+    "semantic_hash": ""
+  },
+  "horus/backlog_tree.py": {
+    "mtime": 1786267166.6242375,
+    "ast_hash": "4b44d31d48e5bf9d02066352c68d9291",
+    "semantic_hash": ""
+  },
+  "horus/batch.py": {
+    "mtime": 1786267166.6252377,
+    "ast_hash": "18fc7a0b9bdd40897c91f1ff11fd0cb2",
+    "semantic_hash": ""
+  },
+  "horus/brainstorm.py": {
+    "mtime": 1786267166.6252377,
+    "ast_hash": "4be69818804dc09b6f7ff4df19af579f",
+    "semantic_hash": ""
+  },
+  "horus/cache_status.py": {
+    "mtime": 1786267166.6252377,
+    "ast_hash": "e1331e429207f6e1c988fcfc8033b678",
+    "semantic_hash": ""
+  },
+  "horus/capabilities.py": {
+    "mtime": 1786267166.6252377,
+    "ast_hash": "d8db513faff620ffa4a5621b590bb40e",
+    "semantic_hash": ""
+  },
+  "horus/claude_usage.py": {
+    "mtime": 1786267166.6252377,
+    "ast_hash": "09b0604a551146ac22b95a314cf2ec88",
+    "semantic_hash": ""
+  },
+  "horus/cli.py": {
+    "mtime": 1786267166.6272376,
+    "ast_hash": "8168f82e1c7a4452f5885e3ac325ce81",
+    "semantic_hash": ""
+  },
+  "horus/closure.py": {
+    "mtime": 1786267166.6282375,
+    "ast_hash": "a36025879daa59e8ab7278d4724e0d57",
+    "semantic_hash": ""
+  },
+  "horus/cockpit.py": {
+    "mtime": 1786267166.6282375,
+    "ast_hash": "c28c233eb29d3474c6f8fe5d83d59390",
+    "semantic_hash": ""
+  },
+  "horus/codex_usage.py": {
+    "mtime": 1786267166.6282375,
+    "ast_hash": "4f85a79e0553b8fa6d13404a1320c0d1",
+    "semantic_hash": ""
+  },
+  "horus/companion.py": {
+    "mtime": 1786267166.6282375,
+    "ast_hash": "9e0f1a73f246951c992cc7af133ef23a",
+    "semantic_hash": ""
+  },
+  "horus/config.py": {
+    "mtime": 1786267166.6292377,
+    "ast_hash": "fc198deedaa6fb1990eff12bf4191862",
+    "semantic_hash": ""
+  },
+  "horus/continuity.py": {
+    "mtime": 1786267166.6292377,
+    "ast_hash": "06d5142e96fe0a73ae2e393d94303310",
+    "semantic_hash": ""
+  },
+  "horus/dashboard.py": {
+    "mtime": 1786267166.6312375,
+    "ast_hash": "5cc38518af5af342bfd7752e241529ce",
+    "semantic_hash": ""
+  },
+  "horus/datums.py": {
+    "mtime": 1786267166.6312375,
+    "ast_hash": "63ac74d30de1cdfebed5fe67cbc87267",
+    "semantic_hash": ""
+  },
+  "horus/delivery.py": {
+    "mtime": 1786267166.6322374,
+    "ast_hash": "f3471b36a0cc6c517bb7ccbe425658f4",
+    "semantic_hash": ""
+  },
+  "horus/doctor_machine.py": {
+    "mtime": 1786267166.6322374,
+    "ast_hash": "fee102800408266ff17bd2475f5ed8f5",
+    "semantic_hash": ""
+  },
+  "horus/envelope.py": {
+    "mtime": 1786267166.6322374,
+    "ast_hash": "7ca3a9b03d7a63d1732d767a877a5c23",
+    "semantic_hash": ""
+  },
+  "horus/fetchcheck.py": {
+    "mtime": 1786267166.6332376,
+    "ast_hash": "abfbcd825598ea36e612282d1c9053af",
+    "semantic_hash": ""
+  },
+  "horus/fleet_backlog.py": {
+    "mtime": 1786267166.6332376,
+    "ast_hash": "61ba4700aff2cfd26563d62f59e55ef1",
+    "semantic_hash": ""
+  },
+  "horus/fleet_review.py": {
+    "mtime": 1786267166.6332376,
+    "ast_hash": "1296a8b28bc4eb0fffb9ef4f5adbb339",
+    "semantic_hash": ""
+  },
+  "horus/frontmatter.py": {
+    "mtime": 1786267166.6332376,
+    "ast_hash": "1bafdb35b70e212cf6517601be36b35f",
+    "semantic_hash": ""
+  },
+  "horus/github_catalog.py": {
+    "mtime": 1786267166.6332376,
+    "ast_hash": "5ec0298999a07ebccb1f395632ce3a4f",
+    "semantic_hash": ""
+  },
+  "horus/gitstate.py": {
+    "mtime": 1786267166.6332376,
+    "ast_hash": "843986967e1cb9f836456295e3bd77ec",
+    "semantic_hash": ""
+  },
+  "horus/hosts/__init__.py": {
+    "mtime": 1786267166.6342375,
+    "ast_hash": "3f47c3456731f47467528805f6f4eff3",
+    "semantic_hash": ""
+  },
+  "horus/hosts/base.py": {
+    "mtime": 1786267166.6342375,
+    "ast_hash": "4392535f390bf746712569b2b25b7e25",
+    "semantic_hash": ""
+  },
+  "horus/hosts/current.py": {
+    "mtime": 1786267166.6342375,
+    "ast_hash": "59fd509114eae9928d80a744123e963a",
+    "semantic_hash": ""
+  },
+  "horus/hosts/herdr.py": {
+    "mtime": 1786267166.6352375,
+    "ast_hash": "067920dc72442f49e98242394632e127",
+    "semantic_hash": ""
+  },
+  "horus/hosts/runnerspec.py": {
+    "mtime": 1786267166.6352375,
+    "ast_hash": "7ce1132e1b51ee4ef832fe18f1db979f",
+    "semantic_hash": ""
+  },
+  "horus/hosts/tmux.py": {
+    "mtime": 1786267166.6362374,
+    "ast_hash": "b5dea41aab76880bf00af0cd5d2faf03",
+    "semantic_hash": ""
+  },
+  "horus/initialize.py": {
+    "mtime": 1786267166.6362374,
+    "ast_hash": "8deccda534709763d9af3949ea6a6def",
+    "semantic_hash": ""
+  },
+  "horus/input_bridge.py": {
+    "mtime": 1786267166.6362374,
+    "ast_hash": "560d5530e9a23f191591bb5a34ac3e74",
+    "semantic_hash": ""
+  },
+  "horus/instructions.py": {
+    "mtime": 1786267166.6362374,
+    "ast_hash": "2df5573cfd5005f2f6afb9cb6146a532",
+    "semantic_hash": ""
+  },
+  "horus/integration.py": {
+    "mtime": 1786267166.6372375,
+    "ast_hash": "b168973dbc6297504802917ad5f12e76",
+    "semantic_hash": ""
+  },
+  "horus/keepwarm.py": {
+    "mtime": 1786267166.6372375,
+    "ast_hash": "c0b0173c2b2bcb4763a377e3cb5049ab",
+    "semantic_hash": ""
+  },
+  "horus/launch.py": {
+    "mtime": 1786267166.6372375,
+    "ast_hash": "a0fcb80ea9e3cc1110a150f8eca0106d",
+    "semantic_hash": ""
+  },
+  "horus/launcher.py": {
+    "mtime": 1786267166.6372375,
+    "ast_hash": "efa345cb93b84b44d1772e7637735296",
+    "semantic_hash": ""
+  },
+  "horus/machine_requirements.py": {
+    "mtime": 1786267166.6372375,
+    "ast_hash": "54b113012784df2ec6d03b5f4f0dee95",
+    "semantic_hash": ""
+  },
+  "horus/markdown.py": {
+    "mtime": 1786267166.6372375,
+    "ast_hash": "1091e7f0336a0c4dfc71fa745c9dbccd",
+    "semantic_hash": ""
+  },
+  "horus/mergewatch.py": {
+    "mtime": 1786267166.6382375,
+    "ast_hash": "deb9998d724b264c58f31da5d5c1fcb4",
+    "semantic_hash": ""
+  },
+  "horus/native_hooks.py": {
+    "mtime": 1786267166.6382375,
+    "ast_hash": "8e6cbb7a7e5541973a2076a676aae6c6",
+    "semantic_hash": ""
+  },
+  "horus/notify.py": {
+    "mtime": 1786267166.6382375,
+    "ast_hash": "0384143628e1c2ed4a2de0fdca66d8c9",
+    "semantic_hash": ""
+  },
+  "horus/notify_listen.py": {
+    "mtime": 1786267166.6382375,
+    "ast_hash": "defb40dcdcbe79b3a6fcc4274f7441fe",
+    "semantic_hash": ""
+  },
+  "horus/offboard.py": {
+    "mtime": 1786267166.6382375,
+    "ast_hash": "1b4db11cdfc93b82d00414e5719b680e",
+    "semantic_hash": ""
+  },
+  "horus/overhead.py": {
+    "mtime": 1786267166.6382375,
+    "ast_hash": "a78cad249d0f6924236dce85a77b52ec",
+    "semantic_hash": ""
+  },
+  "horus/product_audit.py": {
+    "mtime": 1786267166.6392374,
+    "ast_hash": "374fb8023126793a7b2c4227033097cc",
+    "semantic_hash": ""
+  },
+  "horus/projection_sync.py": {
+    "mtime": 1786267166.6392374,
+    "ast_hash": "82f45f5409a5f2cef68f825e0fad9329",
+    "semantic_hash": ""
+  },
+  "horus/proxy.py": {
+    "mtime": 1786267166.6392374,
+    "ast_hash": "329ceb0446c7609945983b1ae7d1d0fa",
+    "semantic_hash": ""
+  },
+  "horus/pty_host.py": {
+    "mtime": 1786267166.6392374,
+    "ast_hash": "9c0a1611a9ec9dc23335ad686a3cde68",
+    "semantic_hash": ""
+  },
+  "horus/pty_session.py": {
+    "mtime": 1786267166.6392374,
+    "ast_hash": "03da460d132e9e5947d24eae93c74e4f",
+    "semantic_hash": ""
+  },
+  "horus/registry.py": {
+    "mtime": 1786267166.6402373,
+    "ast_hash": "91b1142302aa024e29b448472a7dab8f",
+    "semantic_hash": ""
+  },
+  "horus/reinstall.py": {
+    "mtime": 1786267166.6402373,
+    "ast_hash": "f0462b0e28255ad718c2f3484c86be32",
+    "semantic_hash": ""
+  },
+  "horus/remote_start.py": {
+    "mtime": 1786267166.6402373,
+    "ast_hash": "cb60173c2348bde987a7a41bfc049f63",
+    "semantic_hash": ""
+  },
+  "horus/rescue.py": {
+    "mtime": 1786267166.6402373,
+    "ast_hash": "6d48d7f7b0657b9503b1e480bc1871a5",
+    "semantic_hash": ""
+  },
+  "horus/resume_preflight.py": {
+    "mtime": 1786267166.6402373,
+    "ast_hash": "22a2a5bb5c328715a68d6bf69be8f9fb",
+    "semantic_hash": ""
+  },
+  "horus/roadmap.py": {
+    "mtime": 1786267166.6402373,
+    "ast_hash": "29b6ebe2862198cc85e11e7e8e1f85eb",
+    "semantic_hash": ""
+  },
+  "horus/routines.py": {
+    "mtime": 1786267166.6412375,
+    "ast_hash": "bc3ff2ab76e149b6cc707f447fefde90",
+    "semantic_hash": ""
+  },
+  "horus/run_executor.py": {
+    "mtime": 1786267166.6412375,
+    "ast_hash": "31e25cbedab648a6fd0381ff356fd240",
+    "semantic_hash": ""
+  },
+  "horus/runlog.py": {
+    "mtime": 1786267166.6412375,
+    "ast_hash": "327e647181ae74e707cac46b24151cb9",
+    "semantic_hash": ""
+  },
+  "horus/schedule.py": {
+    "mtime": 1786267166.6412375,
+    "ast_hash": "785df32166151197da7af7f50ff0f0ee",
+    "semantic_hash": ""
+  },
+  "horus/selfupdate.py": {
+    "mtime": 1786267166.6412375,
+    "ast_hash": "dffc651ef2ec716cd196f87b2b548104",
+    "semantic_hash": ""
+  },
+  "horus/session_discovery.py": {
+    "mtime": 1786267166.6412375,
+    "ast_hash": "5b1765bddb8bd4570f225d1541dcf2c2",
+    "semantic_hash": ""
+  },
+  "horus/skill_usage.py": {
+    "mtime": 1786267166.6422374,
+    "ast_hash": "f1a8f76fd91191663285b2dd5c651dad",
+    "semantic_hash": ""
+  },
+  "horus/skillmap.py": {
+    "mtime": 1786267166.6422374,
+    "ast_hash": "15c4b37b58e96e94fa4defcaa1a809c3",
+    "semantic_hash": ""
+  },
+  "horus/skills.py": {
+    "mtime": 1786267166.6432374,
+    "ast_hash": "3200f13455311967909036cf1ef8293b",
+    "semantic_hash": ""
+  },
+  "horus/statusline.py": {
+    "mtime": 1786267166.6442373,
+    "ast_hash": "5801549f1a1f00a91cdcf7bab113a224",
+    "semantic_hash": ""
+  },
+  "horus/supervise.py": {
+    "mtime": 1786267166.6442373,
+    "ast_hash": "bdf0b3b97e48471cace1c172c5c20a72",
+    "semantic_hash": ""
+  },
+  "horus/sync.py": {
+    "mtime": 1786267166.6442373,
+    "ast_hash": "1999203e5c414a806edbb0121454f6a0",
+    "semantic_hash": ""
+  },
+  "horus/templates.py": {
+    "mtime": 1786267166.6442373,
+    "ast_hash": "358a16abc4e8846b06bf1f33ac2f11ef",
+    "semantic_hash": ""
+  },
+  "horus/terminal_app.py": {
+    "mtime": 1786267166.6452372,
+    "ast_hash": "6cc4f5abb81e40dbe4ca73955e6a2226",
+    "semantic_hash": ""
+  },
+  "horus/terminal_sessions.py": {
+    "mtime": 1786267166.6452372,
+    "ast_hash": "6d2c0d2bf3194254455890ebd3732506",
+    "semantic_hash": ""
+  },
+  "horus/terminal_tui.py": {
+    "mtime": 1786267166.6462374,
+    "ast_hash": "f33036a77613157b84abe10e5c03b5a6",
+    "semantic_hash": ""
+  },
+  "horus/tmux_runner.py": {
+    "mtime": 1786267166.6472373,
+    "ast_hash": "7cbe470e38b8346dc3437cda8c9fb5d1",
+    "semantic_hash": ""
+  },
+  "horus/upgrade.py": {
+    "mtime": 1786267166.6472373,
+    "ast_hash": "dc37d129cfbffb94a0d9f70d0c62346a",
+    "semantic_hash": ""
+  },
+  "horus/usage_snapshot.py": {
+    "mtime": 1786267166.6482372,
+    "ast_hash": "2c5f685ccc00133cf8a590caa9688732",
+    "semantic_hash": ""
+  },
+  "horus/verify_inventory.py": {
+    "mtime": 1786267166.6482372,
+    "ast_hash": "adfe3e12b3cd3a0b71ab719bd3667a3e",
+    "semantic_hash": ""
+  },
+  "horus/versioning.py": {
+    "mtime": 1786267166.6482372,
+    "ast_hash": "8d3c0dfe0bf4c61a92f31fb26ae0f8d2",
+    "semantic_hash": ""
+  },
+  "horus/vscode.py": {
+    "mtime": 1786267166.6482372,
+    "ast_hash": "b8fdb28ca79804dbd608f09063714461",
+    "semantic_hash": ""
+  },
+  "horus/warmup.py": {
+    "mtime": 1786267166.6482372,
+    "ast_hash": "2ba99c272335d6e4e8669e57f92a30b4",
+    "semantic_hash": ""
+  },
+  "horus/worktree.py": {
+    "mtime": 1786267166.6492372,
+    "ast_hash": "b761c37aabf426feac14b088d43af51c",
+    "semantic_hash": ""
+  },
+  "pyproject.toml": {
+    "mtime": 1786267166.6492372,
+    "ast_hash": "97b09707a918ebb367191a19f2db3588",
+    "semantic_hash": ""
+  },
+  "scripts/deploy-hosted.sh": {
+    "mtime": 1786267166.6512372,
+    "ast_hash": "1fea193f0d13db3312316b9342027db5",
+    "semantic_hash": ""
+  },
+  "scripts/regen_mascot.py": {
+    "mtime": 1786267166.6512372,
+    "ast_hash": "419e638958b373e41245ac3c3980f830",
+    "semantic_hash": ""
+  },
+  "scripts/terminal-repro/repro.mjs": {
+    "mtime": 1786267166.6512372,
+    "ast_hash": "215348db5e4e7fd1f823b9170b74e58e",
+    "semantic_hash": ""
+  },
+  "scripts/terminal-repro/server.py": {
+    "mtime": 1786267166.6517782,
+    "ast_hash": "76f18353f8755464df6420ed1c79b8a8",
+    "semantic_hash": ""
+  },
+  "tests/__init__.py": {
+    "mtime": 1786267166.6517782,
+    "ast_hash": "77e6dfbd7a29716dc6695a4d9c277987",
+    "semantic_hash": ""
+  },
+  "tests/access_fixtures.py": {
+    "mtime": 1786267166.651968,
+    "ast_hash": "1a8af6bfef600d12a424ed3c4f619ad5",
+    "semantic_hash": ""
+  },
+  "tests/conftest.py": {
+    "mtime": 1786267166.6522372,
+    "ast_hash": "3462f07cc1e9b53490adbde17beb618f",
+    "semantic_hash": ""
+  },
+  "tests/test_access_gate.py": {
+    "mtime": 1786267166.6522372,
+    "ast_hash": "babab6a769b186e48b1729ef48442791",
+    "semantic_hash": ""
+  },
+  "tests/test_account_isolation.py": {
+    "mtime": 1786267166.6522372,
+    "ast_hash": "546614ffd7bd48e3db04d3b70f4d87e8",
+    "semantic_hash": ""
+  },
+  "tests/test_account_resolution.py": {
+    "mtime": 1786267166.6522372,
+    "ast_hash": "34bf460bdc0d5aefd2ebf66385737381",
+    "semantic_hash": ""
+  },
+  "tests/test_activity.py": {
+    "mtime": 1786267166.6522372,
+    "ast_hash": "8ed624be3b1827504f967df6410d793f",
+    "semantic_hash": ""
+  },
+  "tests/test_adapters.py": {
+    "mtime": 1786267166.6522372,
+    "ast_hash": "1e8754e5ece384e3eb1b03e0f9f8c3e3",
+    "semantic_hash": ""
+  },
+  "tests/test_backend.py": {
+    "mtime": 1786267166.6522372,
+    "ast_hash": "fd88d56f0dd7b4534f15ad5542aa6b69",
+    "semantic_hash": ""
+  },
+  "tests/test_backlog.py": {
+    "mtime": 1786267166.6522372,
+    "ast_hash": "6c13a2accbab9e28e16e968d8f12fc0e",
+    "semantic_hash": ""
+  },
+  "tests/test_backlog_migrate.py": {
+    "mtime": 1786267166.653237,
+    "ast_hash": "38e59d98d7a74a7c66f77f34227698ac",
+    "semantic_hash": ""
+  },
+  "tests/test_backlog_refine.py": {
+    "mtime": 1786267166.653237,
+    "ast_hash": "5bf8ba95300e0b2f6580b3872246b0bf",
+    "semantic_hash": ""
+  },
+  "tests/test_backlog_tree.py": {
+    "mtime": 1786267166.653237,
+    "ast_hash": "e5e089f2cfc0b44a15c5dff5ddb9f911",
+    "semantic_hash": ""
+  },
+  "tests/test_batch.py": {
+    "mtime": 1786267166.653237,
+    "ast_hash": "46f6f5dbc1f4ef1b54b377e1590b8783",
+    "semantic_hash": ""
+  },
+  "tests/test_brainstorm.py": {
+    "mtime": 1786267166.653237,
+    "ast_hash": "1f83cbc900d93c33eaef202be37f3f50",
+    "semantic_hash": ""
+  },
+  "tests/test_cache_status.py": {
+    "mtime": 1786267166.653237,
+    "ast_hash": "9d424630df6f510a995336674687e32c",
+    "semantic_hash": ""
+  },
+  "tests/test_capabilities.py": {
+    "mtime": 1786267166.6542373,
+    "ast_hash": "9639655c486d552028faf7a66ec60b1f",
+    "semantic_hash": ""
+  },
+  "tests/test_checkpoint_hook.py": {
+    "mtime": 1786267166.6542373,
+    "ast_hash": "3935e52eebc80341cca0b2161f8a7a9b",
+    "semantic_hash": ""
+  },
+  "tests/test_claude_adapter.py": {
+    "mtime": 1786267166.6542373,
+    "ast_hash": "94a41ef7de537b6be2d4cf229c991933",
+    "semantic_hash": ""
+  },
+  "tests/test_claude_usage.py": {
+    "mtime": 1786267166.6542373,
+    "ast_hash": "680344da8c2f1bf91b1b2080bf4a36ea",
+    "semantic_hash": ""
+  },
+  "tests/test_cli.py": {
+    "mtime": 1786267166.6552372,
+    "ast_hash": "c5976d904cbe9c9e8e754c0acd6e60eb",
+    "semantic_hash": ""
+  },
+  "tests/test_closure.py": {
+    "mtime": 1786267166.6552372,
+    "ast_hash": "54178125717d85785447bd8fc05b12f9",
+    "semantic_hash": ""
+  },
+  "tests/test_cockpit.py": {
+    "mtime": 1786267166.6562371,
+    "ast_hash": "a55c1c5c7bbd54ed17bbf7740929a9c7",
+    "semantic_hash": ""
+  },
+  "tests/test_codex_adapter.py": {
+    "mtime": 1786267166.6562371,
+    "ast_hash": "0028f7dbd4207bccce11be5ca7ae7068",
+    "semantic_hash": ""
+  },
+  "tests/test_codex_usage.py": {
+    "mtime": 1786267166.6562371,
+    "ast_hash": "b6a48acbf93e342cd433bac72ddfd93f",
+    "semantic_hash": ""
+  },
+  "tests/test_companion.py": {
+    "mtime": 1786267166.657237,
+    "ast_hash": "e19f348958e4330c8ec9c9949ca369f0",
+    "semantic_hash": ""
+  },
+  "tests/test_config.py": {
+    "mtime": 1786267166.657237,
+    "ast_hash": "5fe6b390d155970b38dce29459ece061",
+    "semantic_hash": ""
+  },
+  "tests/test_config_dir_guard.py": {
+    "mtime": 1786267166.657237,
+    "ast_hash": "9f5e11fc0c49fa2e994bd64f990b6e6b",
+    "semantic_hash": ""
+  },
+  "tests/test_continuity_workflow.py": {
+    "mtime": 1786267166.657237,
+    "ast_hash": "75bc045c608aff30d28c1e3b3e8d188a",
+    "semantic_hash": ""
+  },
+  "tests/test_dashboard.py": {
+    "mtime": 1786267166.6582372,
+    "ast_hash": "36c0a0d1dc20bdc070efc53112cfcf00",
+    "semantic_hash": ""
+  },
+  "tests/test_dashboard_access.py": {
+    "mtime": 1786267166.6582372,
+    "ast_hash": "a47eae63df0d75797592313c471e5301",
+    "semantic_hash": ""
+  },
+  "tests/test_datums.py": {
+    "mtime": 1786267166.6592371,
+    "ast_hash": "fe26c47dbf36a94de7659979803bcecf",
+    "semantic_hash": ""
+  },
+  "tests/test_delivery.py": {
+    "mtime": 1786267166.6592371,
+    "ast_hash": "3636f927e69eaae7fe13a90b88b8eb57",
+    "semantic_hash": ""
+  },
+  "tests/test_deploy_hosted.py": {
+    "mtime": 1786267166.6592371,
+    "ast_hash": "789754787e8b41528be4a5e03f7cbcf3",
+    "semantic_hash": ""
+  },
+  "tests/test_doctor_advisories.py": {
+    "mtime": 1786267166.6592371,
+    "ast_hash": "7c08bd7ff882123cbbbb69caa8230424",
+    "semantic_hash": ""
+  },
+  "tests/test_doctor_machine.py": {
+    "mtime": 1786267166.6592371,
+    "ast_hash": "378d8259d3e1ca9c6a36810866a14622",
+    "semantic_hash": ""
+  },
+  "tests/test_envelope.py": {
+    "mtime": 1786267166.660237,
+    "ast_hash": "c8118f357125f363f3e808c5ceac61ce",
+    "semantic_hash": ""
+  },
+  "tests/test_fetchcheck.py": {
+    "mtime": 1786267166.660237,
+    "ast_hash": "30ef43aecee5080627018318ffaa6801",
+    "semantic_hash": ""
+  },
+  "tests/test_fleet_backlog.py": {
+    "mtime": 1786267166.660237,
+    "ast_hash": "a71ed89a10672cbdeefc5ac02c34dd79",
+    "semantic_hash": ""
+  },
+  "tests/test_fleet_review.py": {
+    "mtime": 1786267166.660237,
+    "ast_hash": "aca295b7adf6c6488e6493782f02e456",
+    "semantic_hash": ""
+  },
+  "tests/test_frontmatter.py": {
+    "mtime": 1786267166.660237,
+    "ast_hash": "416f708c305358e04e4b2b88a21bc9c7",
+    "semantic_hash": ""
+  },
+  "tests/test_github_catalog.py": {
+    "mtime": 1786267166.660237,
+    "ast_hash": "587d837ed5461b3a2c092695d0a98a72",
+    "semantic_hash": ""
+  },
+  "tests/test_gitstate.py": {
+    "mtime": 1786267166.660237,
+    "ast_hash": "3a7d9f9987fb96cb091c79fc258e0097",
+    "semantic_hash": ""
+  },
+  "tests/test_hosts_herdr.py": {
+    "mtime": 1786267166.661237,
+    "ast_hash": "b5d7a300fac3522a88a22b9ed34072aa",
+    "semantic_hash": ""
+  },
+  "tests/test_ignore.py": {
+    "mtime": 1786267166.663237,
+    "ast_hash": "e6b7323f18e789d930dbbb437a7f3e9f",
+    "semantic_hash": ""
+  },
+  "tests/test_init.py": {
+    "mtime": 1786267166.664237,
+    "ast_hash": "ee36cdabebc6ba616854097edf859901",
+    "semantic_hash": ""
+  },
+  "tests/test_input_bridge.py": {
+    "mtime": 1786267166.664237,
+    "ast_hash": "872777c7659e360fa0c1c4debe911863",
+    "semantic_hash": ""
+  },
+  "tests/test_instructions.py": {
+    "mtime": 1786267166.664237,
+    "ast_hash": "f58127b587e3fd201637983b5f5eaf99",
+    "semantic_hash": ""
+  },
+  "tests/test_integration.py": {
+    "mtime": 1786267166.664237,
+    "ast_hash": "9ce04a9fb2d799a612e96c4c9b256b28",
+    "semantic_hash": ""
+  },
+  "tests/test_keepwarm.py": {
+    "mtime": 1786267166.664237,
+    "ast_hash": "80d53a69897223fcab72fb25d93cc17d",
+    "semantic_hash": ""
+  },
+  "tests/test_launch.py": {
+    "mtime": 1786267166.665237,
+    "ast_hash": "4d5bb1d2dbd497dc614cdfbe935edfb7",
+    "semantic_hash": ""
+  },
+  "tests/test_launch_targets.py": {
+    "mtime": 1786267166.665237,
+    "ast_hash": "881004aaa7e6ef50cdb7d0e26405d4a6",
+    "semantic_hash": ""
+  },
+  "tests/test_launcher.py": {
+    "mtime": 1786267166.665237,
+    "ast_hash": "eb2731c433ef7d7068ee3f9ffc8c349f",
+    "semantic_hash": ""
+  },
+  "tests/test_machine_requirements.py": {
+    "mtime": 1786267166.665237,
+    "ast_hash": "957923a5183128a9eb0ec52042e10425",
+    "semantic_hash": ""
+  },
+  "tests/test_markdown.py": {
+    "mtime": 1786267166.665237,
+    "ast_hash": "9c24ff8202f4a3e97c978c4508eb0b86",
+    "semantic_hash": ""
+  },
+  "tests/test_mergewatch.py": {
+    "mtime": 1786267166.665237,
+    "ast_hash": "a817606b9bdfed589875b1ab04811fc5",
+    "semantic_hash": ""
+  },
+  "tests/test_native_hooks.py": {
+    "mtime": 1786267166.665237,
+    "ast_hash": "756a738da4b58b1b569048ab19f3aa39",
+    "semantic_hash": ""
+  },
+  "tests/test_notify.py": {
+    "mtime": 1786267166.665237,
+    "ast_hash": "e399162da8080d84660b78ccce174df6",
+    "semantic_hash": ""
+  },
+  "tests/test_notify_listen.py": {
+    "mtime": 1786267166.665237,
+    "ast_hash": "e6cb2b4d95e573018d8afde46dec5bb8",
+    "semantic_hash": ""
+  },
+  "tests/test_offboard.py": {
+    "mtime": 1786267166.666237,
+    "ast_hash": "df8545e39d76da3c81d00db0ce44c8b3",
+    "semantic_hash": ""
+  },
+  "tests/test_onboard.py": {
+    "mtime": 1786267166.666237,
+    "ast_hash": "7d67d8870ef5a17dd826277ea7406406",
+    "semantic_hash": ""
+  },
+  "tests/test_overhead.py": {
+    "mtime": 1786267166.666237,
+    "ast_hash": "59670d55ab554f9498dea3a6970ebe9b",
+    "semantic_hash": ""
+  },
+  "tests/test_projection_sync.py": {
+    "mtime": 1786267166.666237,
+    "ast_hash": "b2acd4ee5b57dd09ce2b561e9a710984",
+    "semantic_hash": ""
+  },
+  "tests/test_proxy.py": {
+    "mtime": 1786267166.666237,
+    "ast_hash": "962981f6b915445f164cff22450b8919",
+    "semantic_hash": ""
+  },
+  "tests/test_pty_host.py": {
+    "mtime": 1786267166.667237,
+    "ast_hash": "de58abeb35ba27675c799ed57d57654a",
+    "semantic_hash": ""
+  },
+  "tests/test_reconcile.py": {
+    "mtime": 1786267166.667237,
+    "ast_hash": "a8bcc29bf1da0989a265c01803ec0e8a",
+    "semantic_hash": ""
+  },
+  "tests/test_registry.py": {
+    "mtime": 1786267166.667237,
+    "ast_hash": "27a5d494c5f22bd4b7ec398e18da70d5",
+    "semantic_hash": ""
+  },
+  "tests/test_reinstall.py": {
+    "mtime": 1786267166.667237,
+    "ast_hash": "976400abd67c1bc5342b12f72f2f7ce8",
+    "semantic_hash": ""
+  },
+  "tests/test_remote_start.py": {
+    "mtime": 1786267166.668237,
+    "ast_hash": "7c5bb996ab7f7bbdfcfb3f721ab100d3",
+    "semantic_hash": ""
+  },
+  "tests/test_rescue.py": {
+    "mtime": 1786267166.668237,
+    "ast_hash": "90de7f487b93ac78adce2e82247a98e0",
+    "semantic_hash": ""
+  },
+  "tests/test_resume_preflight.py": {
+    "mtime": 1786267166.668237,
+    "ast_hash": "42be26b2bb1fe51e5fb16a1fec77740e",
+    "semantic_hash": ""
+  },
+  "tests/test_roadmap.py": {
+    "mtime": 1786267166.668237,
+    "ast_hash": "9f7df6408deab5b848b5f6519944ca09",
+    "semantic_hash": ""
+  },
+  "tests/test_routines.py": {
+    "mtime": 1786267166.668237,
+    "ast_hash": "314ca5cacc741b337b41ab01fa44a4e2",
+    "semantic_hash": ""
+  },
+  "tests/test_runlog.py": {
+    "mtime": 1786267166.668237,
+    "ast_hash": "6fc9087fb5a82730684645a248681f1d",
+    "semantic_hash": ""
+  },
+  "tests/test_schedule.py": {
+    "mtime": 1786267166.669237,
+    "ast_hash": "731aa9e4c6c491d179cc049df3382bf5",
+    "semantic_hash": ""
+  },
+  "tests/test_selfupdate.py": {
+    "mtime": 1786267166.669237,
+    "ast_hash": "7a1e78830ecc4c288b8af8a8550f61c3",
+    "semantic_hash": ""
+  },
+  "tests/test_session_discovery.py": {
+    "mtime": 1786267166.669237,
+    "ast_hash": "5999f9d0720e8685286b0c1fd210a934",
+    "semantic_hash": ""
+  },
+  "tests/test_skillmap.py": {
+    "mtime": 1786267166.669237,
+    "ast_hash": "0e0e890157c827f6556954463f601cc0",
+    "semantic_hash": ""
+  },
+  "tests/test_skills.py": {
+    "mtime": 1786267166.6702368,
+    "ast_hash": "f48c09a6dbf5233fc3264ac93aedfa11",
+    "semantic_hash": ""
+  },
+  "tests/test_statusline.py": {
+    "mtime": 1786267166.6702368,
+    "ast_hash": "34ccc2ae181b661d6798a0a610294f7e",
+    "semantic_hash": ""
+  },
+  "tests/test_supervise.py": {
+    "mtime": 1786267166.6702368,
+    "ast_hash": "ca8d61e271a3ea36dc412ce3e185f143",
+    "semantic_hash": ""
+  },
+  "tests/test_sync.py": {
+    "mtime": 1786267166.6702368,
+    "ast_hash": "6d16251c882f1318c060795058fce938",
+    "semantic_hash": ""
+  },
+  "tests/test_templates.py": {
+    "mtime": 1786267166.671237,
+    "ast_hash": "0ea11a465f7b621d153e7436a423d5de",
+    "semantic_hash": ""
+  },
+  "tests/test_terminal_sessions.py": {
+    "mtime": 1786267166.672237,
+    "ast_hash": "333591c340d707a558bc30e9f24e7b3c",
+    "semantic_hash": ""
+  },
+  "tests/test_terminal_tui.py": {
+    "mtime": 1786267166.672237,
+    "ast_hash": "6a00420d52b0e31664453011d226a139",
+    "semantic_hash": ""
+  },
+  "tests/test_upgrade.py": {
+    "mtime": 1786267166.672237,
+    "ast_hash": "74c9794694ba1110217cf22d3938cf63",
+    "semantic_hash": ""
+  },
+  "tests/test_usage_account_check.py": {
+    "mtime": 1786267166.672237,
+    "ast_hash": "55c4ca70bb8f1eb36a3d25c56c8c9fbd",
+    "semantic_hash": ""
+  },
+  "tests/test_usage_guard.py": {
+    "mtime": 1786267166.6732368,
+    "ast_hash": "870b14ab8593fc54ffa0dc13028e8780",
+    "semantic_hash": ""
+  },
+  "tests/test_usage_preflight.py": {
+    "mtime": 1786267166.6732368,
+    "ast_hash": "1ca46aa8caa1f6803d6cb2a189025376",
+    "semantic_hash": ""
+  },
+  "tests/test_usage_record.py": {
+    "mtime": 1786267166.6732368,
+    "ast_hash": "d8b48e52f2dcb043ecc4e1b20312b5be",
+    "semantic_hash": ""
+  },
+  "tests/test_usage_snapshot.py": {
+    "mtime": 1786267166.6742368,
+    "ast_hash": "6ffb3270937660f14d318a18f9ff2c2a",
+    "semantic_hash": ""
+  },
+  "tests/test_verify_inventory.py": {
+    "mtime": 1786267166.6742368,
+    "ast_hash": "d82bdb8a0e404537355de415c45fee2d",
+    "semantic_hash": ""
+  },
+  "tests/test_versioning.py": {
+    "mtime": 1786267166.6742368,
+    "ast_hash": "ba57529c910aa7fa9009d58d24771b22",
+    "semantic_hash": ""
+  },
+  "tests/test_vscode.py": {
+    "mtime": 1786267166.6742368,
+    "ast_hash": "70c2565854c7fe10c9612da28568d799",
+    "semantic_hash": ""
+  },
+  "tests/test_warmup.py": {
+    "mtime": 1786267166.6742368,
+    "ast_hash": "ff72eb605d10e82e650e7564f48d68c6",
+    "semantic_hash": ""
+  },
+  "tests/test_workflow_policy.py": {
+    "mtime": 1786267166.6742368,
+    "ast_hash": "3d8abc58f14cfda25b34cf333a1e9d8f",
+    "semantic_hash": ""
+  },
+  "tests/test_worktree.py": {
+    "mtime": 1786267166.6742368,
+    "ast_hash": "6b24ea175cff8421abb4e5644584eb61",
+    "semantic_hash": ""
+  },
+  ".agents/skills/backlog-librarian/SKILL.md": {
+    "mtime": 1786267166.5002396,
+    "ast_hash": "38ea5ac647d2db14a53e96344bd8621e",
+    "semantic_hash": ""
+  },
+  ".agents/skills/backlog-refine/SKILL.md": {
+    "mtime": 1786267166.5002396,
+    "ast_hash": "43d1ac11933aeb19c6ed52dabd5e53be",
+    "semantic_hash": ""
+  },
+  ".agents/skills/cockpit-autonomous-dispatch-contract/SKILL.md": {
+    "mtime": 1786267166.5002396,
+    "ast_hash": "c49ca0598432d2581e9b102fd1ba8bfa",
+    "semantic_hash": ""
+  },
+  ".agents/skills/delegation-rubric/SKILL.md": {
+    "mtime": 1786267166.5012395,
+    "ast_hash": "f996dda3468c03aceb1bfc22db4f2166",
+    "semantic_hash": ""
+  },
+  ".agents/skills/dispatch-decision/SKILL.md": {
+    "mtime": 1786267166.5012395,
+    "ast_hash": "961f5743a9abeda88be9ff622319762b",
+    "semantic_hash": ""
+  },
+  ".agents/skills/execution-decision/SKILL.md": {
+    "mtime": 1786267166.5022395,
+    "ast_hash": "be2fbb1dda604f2b627629941f2f50c7",
+    "semantic_hash": ""
+  },
+  ".agents/skills/fleet-curation/SKILL.md": {
+    "mtime": 1786267166.5032396,
+    "ast_hash": "e9575fab39ef1d6dad23e908ddf75da3",
+    "semantic_hash": ""
+  },
+  ".agents/skills/graphify/SKILL.md": {
+    "mtime": 1786267166.8665996,
+    "ast_hash": "dba74c369280d68f436b6d06c6dc5984",
+    "semantic_hash": ""
+  },
+  ".agents/skills/graphify/references/add-watch.md": {
+    "mtime": 1786130218.1688213,
+    "ast_hash": "d59d027fe449f06aa03905a01184e779",
+    "semantic_hash": ""
+  },
+  ".agents/skills/graphify/references/exports.md": {
+    "mtime": 1786130218.1698215,
+    "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
+    "semantic_hash": ""
+  },
+  ".agents/skills/graphify/references/extraction-spec.md": {
+    "mtime": 1786130218.1698215,
+    "ast_hash": "42fef56a01698118f7fd722acdadea34",
+    "semantic_hash": ""
+  },
+  ".agents/skills/graphify/references/github-and-merge.md": {
+    "mtime": 1786130218.1698215,
+    "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
+    "semantic_hash": ""
+  },
+  ".agents/skills/graphify/references/hooks.md": {
+    "mtime": 1786130218.1708214,
+    "ast_hash": "aea24fe86e18fe8aeb304403032cfce7",
+    "semantic_hash": ""
+  },
+  ".agents/skills/graphify/references/query.md": {
+    "mtime": 1786130218.193821,
+    "ast_hash": "3c46f8ad006874260614ed8657d02307",
+    "semantic_hash": ""
+  },
+  ".agents/skills/graphify/references/transcribe.md": {
+    "mtime": 1786130218.193821,
+    "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
+    "semantic_hash": ""
+  },
+  ".agents/skills/graphify/references/update.md": {
+    "mtime": 1786130218.193821,
+    "ast_hash": "9378bd03d56baaf78bd738ab3848f142",
+    "semantic_hash": ""
+  },
+  ".agents/skills/horus-consolidate/SKILL.md": {
+    "mtime": 1786267166.5032396,
+    "ast_hash": "126bd50f5e6f538bf89c6935db42f9ad",
+    "semantic_hash": ""
+  },
+  ".agents/skills/horus-distill-history/SKILL.md": {
+    "mtime": 1786267166.5042396,
+    "ast_hash": "c8d7a0f0300500dd567ca2c603896114",
+    "semantic_hash": ""
+  },
+  ".agents/skills/horus-execution/SKILL.md": {
+    "mtime": 1786267166.5042396,
+    "ast_hash": "6b4ce0ec7481e27f4d1900ca35e9e402",
+    "semantic_hash": ""
+  },
+  ".agents/skills/horus-infer/SKILL.md": {
+    "mtime": 1786267166.5052395,
+    "ast_hash": "651df937c0c13a836865ac6a165345af",
+    "semantic_hash": ""
+  },
+  ".agents/skills/horus-release/SKILL.md": {
+    "mtime": 1786267166.5052395,
+    "ast_hash": "45d27f8edb2e20e1cfb1d0521fe06cb8",
+    "semantic_hash": ""
+  },
+  ".agents/skills/launch-model-refresh/SKILL.md": {
+    "mtime": 1786267166.5062394,
+    "ast_hash": "5e7014140c3d864ed5abf097bef746a0",
+    "semantic_hash": ""
+  },
+  ".agents/skills/market-scan/SKILL.md": {
+    "mtime": 1786267166.5062394,
+    "ast_hash": "16ae2c7c689c364bde574b8e7c39506d",
+    "semantic_hash": ""
+  },
+  ".agents/skills/pathfinder/SKILL.md": {
+    "mtime": 1786267166.5072396,
+    "ast_hash": "0778f77c96977f89b94806e8bd7a7b14",
+    "semantic_hash": ""
+  },
+  ".agents/skills/process-retrospective/SKILL.md": {
+    "mtime": 1786267166.5072396,
+    "ast_hash": "f0b4bedb89d3f8b003ceb9e31d764360",
+    "semantic_hash": ""
+  },
+  ".agents/skills/product-audit/SKILL.md": {
+    "mtime": 1786267166.5082395,
+    "ast_hash": "728684ea7b0c9b53aa1830fe0e9f94e2",
+    "semantic_hash": ""
+  },
+  ".agents/skills/publish-openwiki-site/SKILL.md": {
+    "mtime": 1786267166.5082395,
+    "ast_hash": "f8a3a20ff5cd8f2c58694ff1b4e44897",
+    "semantic_hash": ""
+  },
+  ".agents/skills/roadmap-branches/SKILL.md": {
+    "mtime": 1786267166.5092394,
+    "ast_hash": "12108a8b699a7294b2f154e1f93f5dd4",
+    "semantic_hash": ""
+  },
+  ".agents/skills/scope-cards/SKILL.md": {
+    "mtime": 1786267166.5092394,
+    "ast_hash": "1cf5b990910f4d791a14747cb05f60e8",
+    "semantic_hash": ""
+  },
+  ".agents/skills/skill-audit/SKILL.md": {
+    "mtime": 1786267166.5102394,
+    "ast_hash": "65de24b8252292715bfd9f170c54b96f",
+    "semantic_hash": ""
+  },
+  ".agents/skills/wildcard/SKILL.md": {
+    "mtime": 1786267166.5102394,
+    "ast_hash": "42d5e635ca39938b38fc092757a9fee9",
+    "semantic_hash": ""
+  },
+  ".claude/CLAUDE.md": {
+    "mtime": 1786267166.7723784,
+    "ast_hash": "9b31786b637be3c13978bec4c2330752",
+    "semantic_hash": ""
+  },
+  ".claude/skills/backlog-librarian/SKILL.md": {
+    "mtime": 1786267166.511591,
+    "ast_hash": "38ea5ac647d2db14a53e96344bd8621e",
+    "semantic_hash": ""
+  },
+  ".claude/skills/backlog-refine/SKILL.md": {
+    "mtime": 1786267166.511591,
+    "ast_hash": "43d1ac11933aeb19c6ed52dabd5e53be",
+    "semantic_hash": ""
+  },
+  ".claude/skills/cockpit-autonomous-dispatch-contract/SKILL.md": {
+    "mtime": 1786267166.511591,
+    "ast_hash": "c49ca0598432d2581e9b102fd1ba8bfa",
+    "semantic_hash": ""
+  },
+  ".claude/skills/delegation-rubric/SKILL.md": {
+    "mtime": 1786267166.5122395,
+    "ast_hash": "f996dda3468c03aceb1bfc22db4f2166",
+    "semantic_hash": ""
+  },
+  ".claude/skills/dispatch-decision/SKILL.md": {
+    "mtime": 1786267166.5122395,
+    "ast_hash": "961f5743a9abeda88be9ff622319762b",
+    "semantic_hash": ""
+  },
+  ".claude/skills/execution-decision/SKILL.md": {
+    "mtime": 1786267166.5122395,
+    "ast_hash": "be2fbb1dda604f2b627629941f2f50c7",
+    "semantic_hash": ""
+  },
+  ".claude/skills/fleet-curation/SKILL.md": {
+    "mtime": 1786267166.5122395,
+    "ast_hash": "e9575fab39ef1d6dad23e908ddf75da3",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/SKILL.md": {
+    "mtime": 1786267166.772039,
+    "ast_hash": "bef80a2eecb6efb4e3763afc3778a1ac",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/add-watch.md": {
+    "mtime": 1786130218.2198207,
+    "ast_hash": "d59d027fe449f06aa03905a01184e779",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/exports.md": {
+    "mtime": 1786130218.2198207,
+    "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/extraction-spec.md": {
+    "mtime": 1786130218.2378204,
+    "ast_hash": "42fef56a01698118f7fd722acdadea34",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/github-and-merge.md": {
+    "mtime": 1786130218.2388203,
+    "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/hooks.md": {
+    "mtime": 1786130218.2388203,
+    "ast_hash": "3f545db6ce646650bb9de588f5512a27",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/query.md": {
+    "mtime": 1786130218.2398205,
+    "ast_hash": "3c46f8ad006874260614ed8657d02307",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/transcribe.md": {
+    "mtime": 1786130218.2398205,
+    "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
+    "semantic_hash": ""
+  },
+  ".claude/skills/graphify/references/update.md": {
+    "mtime": 1786130218.27282,
+    "ast_hash": "9378bd03d56baaf78bd738ab3848f142",
+    "semantic_hash": ""
+  },
+  ".claude/skills/horus-consolidate/SKILL.md": {
+    "mtime": 1786267166.5122395,
+    "ast_hash": "126bd50f5e6f538bf89c6935db42f9ad",
+    "semantic_hash": ""
+  },
+  ".claude/skills/horus-distill-history/SKILL.md": {
+    "mtime": 1786267166.5122395,
+    "ast_hash": "c8d7a0f0300500dd567ca2c603896114",
+    "semantic_hash": ""
+  },
+  ".claude/skills/horus-execution/SKILL.md": {
+    "mtime": 1786267166.5132394,
+    "ast_hash": "6b4ce0ec7481e27f4d1900ca35e9e402",
+    "semantic_hash": ""
+  },
+  ".claude/skills/horus-infer/SKILL.md": {
+    "mtime": 1786267166.5132394,
+    "ast_hash": "651df937c0c13a836865ac6a165345af",
+    "semantic_hash": ""
+  },
+  ".claude/skills/horus-release/SKILL.md": {
+    "mtime": 1786267166.5132394,
+    "ast_hash": "45d27f8edb2e20e1cfb1d0521fe06cb8",
+    "semantic_hash": ""
+  },
+  ".claude/skills/launch-model-refresh/SKILL.md": {
+    "mtime": 1786267166.5132394,
+    "ast_hash": "5e7014140c3d864ed5abf097bef746a0",
+    "semantic_hash": ""
+  },
+  ".claude/skills/market-scan/SKILL.md": {
+    "mtime": 1786267166.5132394,
+    "ast_hash": "16ae2c7c689c364bde574b8e7c39506d",
+    "semantic_hash": ""
+  },
+  ".claude/skills/pathfinder/SKILL.md": {
+    "mtime": 1786267166.5142393,
+    "ast_hash": "0778f77c96977f89b94806e8bd7a7b14",
+    "semantic_hash": ""
+  },
+  ".claude/skills/process-retrospective/SKILL.md": {
+    "mtime": 1786267166.5142393,
+    "ast_hash": "f0b4bedb89d3f8b003ceb9e31d764360",
+    "semantic_hash": ""
+  },
+  ".claude/skills/product-audit/SKILL.md": {
+    "mtime": 1786267166.5142393,
+    "ast_hash": "728684ea7b0c9b53aa1830fe0e9f94e2",
+    "semantic_hash": ""
+  },
+  ".claude/skills/publish-openwiki-site/SKILL.md": {
+    "mtime": 1786267166.5142393,
+    "ast_hash": "f8a3a20ff5cd8f2c58694ff1b4e44897",
+    "semantic_hash": ""
+  },
+  ".claude/skills/roadmap-branches/SKILL.md": {
+    "mtime": 1786267166.5142393,
+    "ast_hash": "12108a8b699a7294b2f154e1f93f5dd4",
+    "semantic_hash": ""
+  },
+  ".claude/skills/scope-cards/SKILL.md": {
+    "mtime": 1786267166.5152392,
+    "ast_hash": "1cf5b990910f4d791a14747cb05f60e8",
+    "semantic_hash": ""
+  },
+  ".claude/skills/skill-audit/SKILL.md": {
+    "mtime": 1786267166.5152392,
+    "ast_hash": "65de24b8252292715bfd9f170c54b96f",
+    "semantic_hash": ""
+  },
+  ".claude/skills/wildcard/SKILL.md": {
+    "mtime": 1786267166.5152392,
+    "ast_hash": "42d5e635ca39938b38fc092757a9fee9",
+    "semantic_hash": ""
+  },
+  ".github/workflows/continuity.yml": {
+    "mtime": 1786267166.5162394,
+    "ast_hash": "d6d74138afd7689288d3cb5941ddcc78",
+    "semantic_hash": ""
+  },
+  ".github/workflows/install-smoke.yml": {
+    "mtime": 1786267166.5162394,
+    "ast_hash": "cce1fdb67abe36ee91fa8f4c24d14693",
+    "semantic_hash": ""
+  },
+  ".github/workflows/publish.yml": {
+    "mtime": 1786267166.5162394,
+    "ast_hash": "66edae7373102fa3c18c65cd396f28e6",
+    "semantic_hash": ""
+  },
+  ".github/workflows/tests.yml": {
+    "mtime": 1786267166.5162394,
+    "ast_hash": "4f5578ac792d39d0c60058e7e84fd1c9",
+    "semantic_hash": ""
+  },
+  ".horus/PRD.md": {
+    "mtime": 1786267166.5172393,
+    "ast_hash": "3c98c9bc2c785acebfa7408640895c53",
+    "semantic_hash": ""
+  },
+  ".horus/README.md": {
+    "mtime": 1786267166.5172393,
+    "ast_hash": "7cb7dfb119aab74a5f9f7f129d9ee612",
+    "semantic_hash": ""
+  },
+  ".horus/archive/decisions.md": {
+    "mtime": 1786267166.5172393,
+    "ast_hash": "4f8b971b8e93c566d2d99fc6b52acd1f",
+    "semantic_hash": ""
+  },
+  ".horus/archive/execution.md": {
+    "mtime": 1786267166.5181298,
+    "ast_hash": "0b5cd3e045d063349a1803d311d3ea61",
+    "semantic_hash": ""
+  },
+  ".horus/archive/features.md": {
+    "mtime": 1786267166.5182393,
+    "ast_hash": "b64311be5fc1a13341dda89c1a49fddb",
+    "semantic_hash": ""
+  },
+  ".horus/archive/history.md": {
+    "mtime": 1786267166.5192392,
+    "ast_hash": "2ceaac3e2c6e314fa402cd221a4e0f2b",
+    "semantic_hash": ""
+  },
+  ".horus/audits/2026-07-16-product.md": {
+    "mtime": 1786267166.5192392,
+    "ast_hash": "2e5f8326747d472607d1cb5b106ccedf",
+    "semantic_hash": ""
+  },
+  ".horus/audits/2026-07-19-skill-scope-cards.md": {
+    "mtime": 1786267166.5195034,
+    "ast_hash": "7c73de068603a042ac753943a34f3988",
+    "semantic_hash": ""
+  },
+  ".horus/audits/2026-07-20-product.md": {
+    "mtime": 1786267166.5195034,
+    "ast_hash": "b52ac85d30f45f668e99bdb603ac2c08",
+    "semantic_hash": ""
+  },
+  ".horus/audits/2026-07-26-backlog-librarian.md": {
+    "mtime": 1786267166.5202394,
+    "ast_hash": "73036534c871a8d3d4c393621a7ff28a",
+    "semantic_hash": ""
+  },
+  ".horus/audits/2026-07-28-skill-wildcard.md": {
+    "mtime": 1786267166.5202394,
+    "ast_hash": "8a1c20b4b7879a3c3bad0c8135457dbf",
+    "semantic_hash": ""
+  },
+  ".horus/audits/2026-07-31-product.md": {
+    "mtime": 1786267166.5212393,
+    "ast_hash": "3832cf9cb6f52fdac0de9ff5ca1e72af",
+    "semantic_hash": ""
+  },
+  ".horus/audits/2026-08-02-rules-routing.md": {
+    "mtime": 1786267166.5212393,
+    "ast_hash": "c3d03a552007a2d97cb0ea2ddd5975c5",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/account-login-verb.md": {
+    "mtime": 1786267166.5222392,
+    "ast_hash": "85d3b44b500b261a7d8c9110abf165a6",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/account-settings-sync.md": {
+    "mtime": 1786267166.5222392,
+    "ast_hash": "e48c39715800a0df2eb1197d9ba082ab",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/app-usage-cost-opacity.md": {
+    "mtime": 1786267166.5232391,
+    "ast_hash": "dcc261983aa23b947bed629dc8864779",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/account-scoped-usage-check.md": {
+    "mtime": 1786267166.5232391,
+    "ast_hash": "f23742415d7ce54286847ecb9aa5ca33",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/accounts-refresh-button-invisible.md": {
+    "mtime": 1786267166.5238364,
+    "ast_hash": "50fdc92923e7fb2fd8a737b5b72af2a5",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/agent-thread-id-and-interactive-restore.md": {
+    "mtime": 1786267166.5242393,
+    "ast_hash": "b3bfaa5c855451979f0ad706c3a0290c",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/attachable-detached-worker-run.md": {
+    "mtime": 1786267166.5242393,
+    "ast_hash": "88d8ea59051aaf243a4b2cc0f0665872",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/audit-advisory-interval.md": {
+    "mtime": 1786267166.5242393,
+    "ast_hash": "1d75a66f3a63e983a5ab63489626e603",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/auto-merge-bypasses-freshness-gate.md": {
+    "mtime": 1786267166.5242393,
+    "ast_hash": "f2c1522a661e605b419119cdec74c5ac",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/autonomous-activity-timeline.md": {
+    "mtime": 1786267166.5252392,
+    "ast_hash": "0999f43db8385d80c7b2b1ee13abe8a9",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/autotest-e2e-away-mode-drill.md": {
+    "mtime": 1786267166.5252392,
+    "ast_hash": "6f78bd3ee762ff823ed90a834f679a98",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/backlog-default-list.md": {
+    "mtime": 1786267166.5262392,
+    "ast_hash": "5865e2fd15c0c09ca75c5c240b9b5f06",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/backlog-librarian.md": {
+    "mtime": 1786267166.5262392,
+    "ast_hash": "a59b71edbbde444b95f64e56d1c400d6",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/backlog-readiness-disposition.md": {
+    "mtime": 1786267166.5262392,
+    "ast_hash": "2f0ef9d79761ed99fa7a5d7e50c644b2",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/benchmark-platforms-grounding.md": {
+    "mtime": 1786267166.5262392,
+    "ast_hash": "1cb33c2852f92270d7c46d8002ed2214",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/boundary-based-continuity-granularity.md": {
+    "mtime": 1786267166.527239,
+    "ast_hash": "7cebc8988edd573cb9c6b0e24aa41eef",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/bulk-migration-inventory-reconciliation.md": {
+    "mtime": 1786267166.527239,
+    "ast_hash": "ab9d86295f421ca9591d87aa167674f1",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/bundle-test-phase-skills.md": {
+    "mtime": 1786267166.527239,
+    "ast_hash": "07a7de1c6bd884a658ea3bc38289a729",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/campaign-supervision-launch.md": {
+    "mtime": 1786267166.5282393,
+    "ast_hash": "ea7e896627c414c467edb439ab16655d",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/capability-catalog-productionize.md": {
+    "mtime": 1786267166.5282393,
+    "ast_hash": "077f588f6d8afa8dd4110c556ab8dd88",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/close-check-unclassified-cards-advisory.md": {
+    "mtime": 1786267166.5282393,
+    "ast_hash": "dc8d4459bccb3bc6b0187a3e29bcf075",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/close-commit-output-contradicts-success.md": {
+    "mtime": 1786267166.5282393,
+    "ast_hash": "4346764cfd88d7df77f85cdab9ac39db",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/close-self-referential-sha-dirty-tree.md": {
+    "mtime": 1786267166.5282393,
+    "ast_hash": "9e701d12fe1a70ab1b5c279026c31b81",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/cockpit-autonomous-dispatch-contract.md": {
+    "mtime": 1786267166.5282393,
+    "ast_hash": "5a05844f5b0cdf7850cdb70fe8e6fde1",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/cockpit-sync-action.md": {
+    "mtime": 1786267166.5292392,
+    "ast_hash": "3ce95af06e7e2b184204d025b7a800c0",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/codex-delivery-dispatch-needs-full-auto.md": {
+    "mtime": 1786267166.5292392,
+    "ast_hash": "2d951b2fcd0e4ead476bc69af16d4872",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/codex-identity-guard.md": {
+    "mtime": 1786267166.5292392,
+    "ast_hash": "893151d71ba96773e187a7169c1b3928",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/codex-usage-stale-snapshot-gates-dispatch.md": {
+    "mtime": 1786267166.530239,
+    "ast_hash": "ad0430a316359e048eaac14429fa3b81",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/codex-usage-window-semantics.md": {
+    "mtime": 1786267166.530239,
+    "ast_hash": "7098cc81c831cd683b77021acc447ecc",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/companion-signals.md": {
+    "mtime": 1786267166.530239,
+    "ast_hash": "b1d995c4bcba87b53d702c6f55b34758",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/config-dir-guard-advisory.md": {
+    "mtime": 1786267166.530239,
+    "ast_hash": "fd5142794d771509e6acaa32f4dc5de4",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/context-cache-visibility-hook-stamps.md": {
+    "mtime": 1786267166.531239,
+    "ast_hash": "c94434c70d5e6f44c5d4b37b6ccb45e8",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/datum-outcome-taxonomy-void-and-death.md": {
+    "mtime": 1786267166.531239,
+    "ast_hash": "654b36823582f090b9fc90bc23ba2972",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/datum-supervisor-cost-envelope.md": {
+    "mtime": 1786267166.531239,
+    "ast_hash": "ab71de3c138f00b04ba792d10d8aed29",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/deferred-mvp3-mvp5.md": {
+    "mtime": 1786267166.531239,
+    "ast_hash": "a1dd40164a73b1fbaacd6a082498a398",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/deferred-omnigent-seams-misc.md": {
+    "mtime": 1786267166.531239,
+    "ast_hash": "68ce53d047463e918cbd21f36dd91b56",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/delegation-matrix-display.md": {
+    "mtime": 1786267166.531239,
+    "ast_hash": "9476d81a495c4601ef0361ea87d68182",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/doctor-compat-workflow-policy.md": {
+    "mtime": 1786267166.531239,
+    "ast_hash": "7e1177fba1b8513acd048e889a129d84",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/execution-prompt-v3-context.md": {
+    "mtime": 1786267166.531239,
+    "ast_hash": "60f3479f7f69653889663a173fa63a70",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/execution-requires-explicit-owner-delegation.md": {
+    "mtime": 1786267166.5322392,
+    "ast_hash": "8c2800f8758eae0cb9c689b2791330c3",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/execution-workflow-tuning.md": {
+    "mtime": 1786267166.5322392,
+    "ast_hash": "8e64e9da803e20e73fdc8954dd6591f8",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/explore-undersampled-models.md": {
+    "mtime": 1786267166.5322392,
+    "ast_hash": "2fbb8f64a9a48d0d74fab6ae246c21fe",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/fleet-backlog-view.md": {
+    "mtime": 1786267166.5322392,
+    "ast_hash": "9f36202d93b59387ba602bc85e4cd45c",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/fleet-review-curator.md": {
+    "mtime": 1786267166.5322392,
+    "ast_hash": "e240beb9fdac74ed7d842d2e0542ef86",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/fold-consolidate-into-close.md": {
+    "mtime": 1786267166.5322392,
+    "ast_hash": "170f75845a1ea2f8d8367b4fb3c1acf8",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/git-aware-overview-mvp25.md": {
+    "mtime": 1786267166.5322392,
+    "ast_hash": "f7cdb4a1bb6f18faee7aec9773259d91",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/global-skill-viewer-tui.md": {
+    "mtime": 1786267166.5322392,
+    "ast_hash": "2fddc518acc16d4bc078445ebf5e220b",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/gpt-models-in-claude-code-harness.md": {
+    "mtime": 1786267166.5322392,
+    "ast_hash": "f514c3da48dc81062a079af4bc098a10",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/herdr-host-probe.md": {
+    "mtime": 1786267166.5332391,
+    "ast_hash": "8485182d8ef966dba15a4ce3fb8cf607",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/herdr-live-test-stops-owner-server.md": {
+    "mtime": 1786267166.5332391,
+    "ast_hash": "66f44aba5d6be9f5b507fccf35160dc4",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/horus-execution-general-plan-false-trigger.md": {
+    "mtime": 1786267166.534239,
+    "ast_hash": "2585081b7a9039d76b161ad860bccad0",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/horus-kickstart.md": {
+    "mtime": 1786267166.534239,
+    "ast_hash": "843ed5aad8df712e6693a41067060ea1",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/horus-statusline-default.md": {
+    "mtime": 1786267166.534239,
+    "ast_hash": "1496998c60a1aea831e4da789debdd57",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/init-scaffolds-project-ci.md": {
+    "mtime": 1786267166.534239,
+    "ast_hash": "a8e318e679397703c0e637b81e2cbcae",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/input-bridge-remote-ask.md": {
+    "mtime": 1786267166.534239,
+    "ast_hash": "acd3d86fe3ec4368d125a8e7d3809935",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/launch-mode-process-skill.md": {
+    "mtime": 1786267166.534239,
+    "ast_hash": "0e8e7d1aa39fea1397c9b7630e4e0cf2",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/market-scan-skill.md": {
+    "mtime": 1786267166.534239,
+    "ast_hash": "0c1fa42c1fe6ca6586e5a1e7187fa83d",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/merge-watch-post-merge-checks.md": {
+    "mtime": 1786267166.534239,
+    "ast_hash": "b194ec4e34c93d25d1846f9fb9ba58ad",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/mobile-terminal-interaction-regression.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "37ed6a9487c92ef4b15a51e021d6c153",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/mobile-terminal-legibility.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "596a5947ab5d675f7ac595b92821b6db",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/mobile-terminal-ux-hardening.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "a29bc2bde7835874cbb84164274f66bb",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/model-availability-lifecycle.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "9f1c2a06fa8674dab3865088c899a8a9",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/model-name-normalization-and-datum-migration.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "51443f6678e7de186437c45c5a853e69",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/model-ranking-synthesis.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "83ca327ba433c2cc2e8ac2a4a5a3fa85",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/model-roster-correctness.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "461ad2930a179581ff4e73f45907bd1b",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/model-roster-dashboard-tab.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "03ae7f5dc090c694869e39b33c7df85b",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/multi-developer-continuity.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "b8a5a32b460f26e62abcc412453cc755",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/notify-listen-service-execstart-and-restart.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "a4b8e29fdfd64837ae741d6556b5c7c6",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/notify-listen-steering-channel.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "88bfc01720632b3deeddf85c995f858c",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/notify-listen-trip-mode-and-andon-reply.md": {
+    "mtime": 1786267166.535239,
+    "ast_hash": "4b62441137776f571774ebc2b9b6be33",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/notify-schedule-batch-complete.md": {
+    "mtime": 1786267166.536239,
+    "ast_hash": "59b0b566c3e56f2fd4ff93925d2d08ff",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/older-models-in-roster.md": {
+    "mtime": 1786267166.536239,
+    "ast_hash": "b814b352cef9cf8b371b8d27345073a4",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/openwiki-vs-self-documenting-research.md": {
+    "mtime": 1786267166.536239,
+    "ast_hash": "ab7f0f55fc3a62f3656550cc90aff793",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/optional-recovery-notes-and-honest-onboarding.md": {
+    "mtime": 1786267166.536239,
+    "ast_hash": "02b0f3be6591ee78aacf63f49c27cfbc",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/parallel-session-continuity-reconciliation.md": {
+    "mtime": 1786267166.536239,
+    "ast_hash": "e8fabc113f2ee65cf2351d1084d58ed3",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/parallel-signal-informational-not-verdict.md": {
+    "mtime": 1786267166.536239,
+    "ast_hash": "e95731055c5246a2f6ae1b8fad68aedb",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/prd-readiness-count-check.md": {
+    "mtime": 1786267166.536239,
+    "ast_hash": "723c7e783ae63ed906324bfb4ab4ed60",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/prd-rules-section-outgrew-its-budget.md": {
+    "mtime": 1786267166.537239,
+    "ast_hash": "e87d29d2d6f4b7b16f2c8c45e994cc5d",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/process-fixes-live-in-process-not-memory.md": {
+    "mtime": 1786267166.537239,
+    "ast_hash": "42f854bf36d26e9dd27376f45e5f921b",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/process-retrospective-skill.md": {
+    "mtime": 1786267166.537239,
+    "ast_hash": "f649f1174f1c6ec66ea43b705fab9852",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/process-tree-orphan-reap.md": {
+    "mtime": 1786267166.538239,
+    "ast_hash": "0fd0ddf30d2cb73c627fffce30ac2ed8",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/product-audit-skill.md": {
+    "mtime": 1786267166.538239,
+    "ast_hash": "0149f9c90d60b0223b0573c6cbae6ec8",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/project-machine-requirements.md": {
+    "mtime": 1786267166.538239,
+    "ast_hash": "a83242269e8d127bd827f0e7dd3b127a",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/project-registration-onboarding-gap.md": {
+    "mtime": 1786267166.539239,
+    "ast_hash": "04cb5230da0d619589f11dd42d5d8221",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/provider-model-selector-contract.md": {
+    "mtime": 1786267166.539239,
+    "ast_hash": "3081de200cf7276eaaf61f5aa3e99b6e",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/remote-control-flag-swallows-launch-prompt.md": {
+    "mtime": 1786267166.539239,
+    "ast_hash": "abf109f5506eacadc5c2d2abe4ab65cf",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/resume-preflight-digest.md": {
+    "mtime": 1786267166.539239,
+    "ast_hash": "aa1eba1fdaeced48a42d335131586c14",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/resume-session-id-mismatch.md": {
+    "mtime": 1786267166.539239,
+    "ast_hash": "dc5e2b036e4c7c5b440310e82e4d9dc7",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/review-session-control-calibration.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "da251fab7b1594d0b4b635f04a81ca1d",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/roadmap-convergence.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "c4843e4d38e07efc911b22547f0705b7",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/schedule-local-dispatcher.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "0cb0260bdc80fe3d8ba9cb4a7d09bbd0",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/schedule-run-any-subcommand.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "510cd2680e37a8631096777faa99098a",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/schedule-status-outcome-not-just-fired.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "598022cf3adae2f3ec3fca48f774fd43",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/schedule-supervise-resolve-target-at-fire-time.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "45f9b4568f48c7d67991b75a3eaef773",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/scheduled-dispatch-launch-failure-escalates.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "a455badc0b9fcaea926c046faf32c9c1",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/scheduled-usage-aware-continuation.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "1b3b520eed7622fd94166b2249160c0b",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/scope-cards-v4-grooming-and-contract-refinements.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "d5b78fd428e5ed83cb5443df0c71b461",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/service-installers-self-verify-active.md": {
+    "mtime": 1786267166.5402389,
+    "ast_hash": "60ff310282354c680149e7200a4467c4",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/session-close-ux-and-truthful-end-state.md": {
+    "mtime": 1786267166.541239,
+    "ast_hash": "aaf7a8e8991397cdaf50eaf2b1e06825",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/session-remote-control-default.md": {
+    "mtime": 1786267166.541239,
+    "ast_hash": "bd521823a48a20c73e114798950d86a1",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/session-restore.md": {
+    "mtime": 1786267166.542239,
+    "ast_hash": "59d25f19d69fc584057b8bcf0ad7c15a",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/skill-map-followups.md": {
+    "mtime": 1786267166.542239,
+    "ast_hash": "a29726aeda2f03367b05d4415a46c8c1",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/stale-datum-usage-overlap-reconciliation.md": {
+    "mtime": 1786267166.542239,
+    "ast_hash": "f283f295f7f9dad1f17e92f6064d0aef",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/stale-worktree-accumulation.md": {
+    "mtime": 1786267166.5432389,
+    "ast_hash": "4be0c116a5805fd8d8b70184f939f261",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/standing-dispatch-envelope.md": {
+    "mtime": 1786267166.5432389,
+    "ast_hash": "fbec799974f6173e48129397c7784ee3",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/supervise-verify-merge-close.md": {
+    "mtime": 1786267166.5432389,
+    "ast_hash": "6deadf834a7a7149c7ab3eb425b6b882",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/systemd-unit-absolute-execstart-guard.md": {
+    "mtime": 1786267166.5432389,
+    "ast_hash": "ea074c66d56f0a261f7815d9f61ed721",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/telegram-output-minimal-legible.md": {
+    "mtime": 1786267166.5442388,
+    "ast_hash": "f6b40a1398b3968543ec5268fc06b2b3",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/terminal-claude-rendering-levers.md": {
+    "mtime": 1786267166.5442388,
+    "ast_hash": "a0fce8e17a4cada4badb298e645a86d0",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tier0-supervision-verbs.md": {
+    "mtime": 1786267166.5442388,
+    "ast_hash": "fc20c94dbc8f05d67a81ae5c3572b154",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tmux-mouse-scroll-and-tui-launch-defaults.md": {
+    "mtime": 1786267166.5442388,
+    "ast_hash": "493bfe3e88a39965d570efa80e6db32f",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-backlog-grouped-list.md": {
+    "mtime": 1786267166.545239,
+    "ast_hash": "f3c03ccd75a201da2674de9b03ae1f4f",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-backlog-kanban-board.md": {
+    "mtime": 1786267166.546239,
+    "ast_hash": "780f8cf188a77ad285429c5de28962db",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-backlog-refine-and-order.md": {
+    "mtime": 1786267166.546239,
+    "ast_hash": "7236be437d629488ce803a9fa01ac61a",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-branch-tree-glance.md": {
+    "mtime": 1786267166.546239,
+    "ast_hash": "a5c7c3017796c3cd7ead2739b2e58734",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-capabilities-screen.md": {
+    "mtime": 1786267166.5472388,
+    "ast_hash": "33c786e2c66c492663cfaacfcab99b8b",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-cockpit-state-gaps.md": {
+    "mtime": 1786267166.5472388,
+    "ast_hash": "7589a78c147315c900ab48329e22cd09",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-control-settings-pane.md": {
+    "mtime": 1786267166.5472388,
+    "ast_hash": "5e1d671f1756100f5686bdd284c24958",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-fleet-projection-sync.md": {
+    "mtime": 1786267166.5472388,
+    "ast_hash": "9fad419fce60e93fa97eef1de4016d02",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-launch-model-effort-selection.md": {
+    "mtime": 1786267166.5472388,
+    "ast_hash": "5d43226ff5a33b266cba55564038056a",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-launch-session-new-window-default.md": {
+    "mtime": 1786267166.5472388,
+    "ast_hash": "12f55515d9d8d4a2cf848a8f650ecf77",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-mission-control-and-settings-split.md": {
+    "mtime": 1786267166.5472388,
+    "ast_hash": "10a1f93f404c456603f8fb9335565873",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-nested-tmux-navigation.md": {
+    "mtime": 1786267166.5482388,
+    "ast_hash": "68423c589e2721b9f378fc9aef520984",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-remote-freshness-indicator.md": {
+    "mtime": 1786267166.5482388,
+    "ast_hash": "8a7557fa1ff556141c7e04bec786c938",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-remote-project-start.md": {
+    "mtime": 1786267166.5482388,
+    "ast_hash": "0e665ee30db3c9c541409c80563809e6",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/tui-vision-backlog-read-out.md": {
+    "mtime": 1786267166.549239,
+    "ast_hash": "fbcead694778d022b666725ee6cc9c90",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/unattended-dispatch-attachable-worktree-defaults.md": {
+    "mtime": 1786267166.549239,
+    "ast_hash": "4f42fd4ac1d3c2f5ec44921ee8ae87a0",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/unattended-escalation-channel.md": {
+    "mtime": 1786267166.549239,
+    "ast_hash": "d98198cbc5851ef42561a42758d2e408",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/unify-backlog-cards-fleet-standard.md": {
+    "mtime": 1786267166.549239,
+    "ast_hash": "8993a4f6c8862d96d2a2e8c2364dcdc2",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/usage-all-accounts-telegram.md": {
+    "mtime": 1786267166.5502388,
+    "ast_hash": "c424dbb88074511ae5277d7e39db4452",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/usage-snapshot-test-flake-blocks-workers.md": {
+    "mtime": 1786267166.5502388,
+    "ast_hash": "498ff084addcf9172ff60da16dcb4d59",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/vendor-neutral-delegation-tiers.md": {
+    "mtime": 1786267166.5502388,
+    "ast_hash": "72c665dae728e38fdd1f8d326ea7a763",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/verify-guidance-long-running-services.md": {
+    "mtime": 1786267166.5512388,
+    "ast_hash": "039f62680710a241021e7746389c5cef",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/vision-omits-intent-and-audiences.md": {
+    "mtime": 1786267166.5512388,
+    "ast_hash": "86390de45b672eaeff743e3e2da2b735",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/vscode-terminal-launch-command.md": {
+    "mtime": 1786267166.5512388,
+    "ast_hash": "237dd2f64d8d6778d914d43c7926e98a",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/warmup-keep-window.md": {
+    "mtime": 1786267166.5512388,
+    "ast_hash": "f4262a6fd6a237ddd02e06b5f33c1044",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/warmup-usage-window.md": {
+    "mtime": 1786267166.5512388,
+    "ast_hash": "c43270d36b955713617ff36cd949eb50",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/wiki-read-model-productionize.md": {
+    "mtime": 1786267166.5522387,
+    "ast_hash": "35b4edf634ff8061d9f24a41dccdd13f",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/worker-dispatch-consent-and-cost-accounting.md": {
+    "mtime": 1786267166.5522387,
+    "ast_hash": "109103451761e561666fcce8f69e2dc7",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/worker-global-state-delete-guard.md": {
+    "mtime": 1786267166.5522387,
+    "ast_hash": "61c7cc9228241035cb8c195dfbf21c96",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/x3-away-mode-kit-e2e-rehearsal.md": {
+    "mtime": 1786267166.5522387,
+    "ast_hash": "bc2e9b516fbf951226c6e8a18cedf39e",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/archive/x4-stage1-cliproxy-wiring.md": {
+    "mtime": 1786267166.5522387,
+    "ast_hash": "01f9e76d40a8c24fe09f62050095525e",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/automated-model-roster-grounding.md": {
+    "mtime": 1786267166.5522387,
+    "ast_hash": "586b6547f807edbf1b980e576198e437",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/autonomous-advisory-dispatch-posture.md": {
+    "mtime": 1786267166.5522387,
+    "ast_hash": "6c20b219e2ced95a01dbe73413f3f021",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/close-check-claims-canonical-while-unmerged.md": {
+    "mtime": 1786267166.5532389,
+    "ast_hash": "05d4f9e90c8a85f44731dd9e6ce51241",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/codex-isolated-config-leak.md": {
+    "mtime": 1786267166.5532389,
+    "ast_hash": "532bd888994c9827513bff78bbef7035",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/codex-usage-blind-across-machines.md": {
+    "mtime": 1786267166.5532389,
+    "ast_hash": "8b263645755ded3d2ed62f69913d69b4",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/concurrency-safe-continuity.md": {
+    "mtime": 1786267166.5542388,
+    "ast_hash": "c3a9ee652f3c92f12b7ee9b62156c49f",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/continuity-sync-friction.md": {
+    "mtime": 1786267166.5542388,
+    "ast_hash": "0b292bb2eca24365ee46829141423dd3",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/decision-doc-skill.md": {
+    "mtime": 1786267166.5542388,
+    "ast_hash": "5a75b3fdd881819d5441afdb8a0809e3",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/deferred-supervision-completion-receipt.md": {
+    "mtime": 1786267166.5542388,
+    "ast_hash": "eab6fee570e6da77756f7b8044edd9ed",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/dispatch-collision-guard.md": {
+    "mtime": 1786267166.5542388,
+    "ast_hash": "c5323820e6aa162dbb6c6a6e7ee9138b",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/dispatch-receipt-seam.md": {
+    "mtime": 1786267166.5552387,
+    "ast_hash": "1496c3d1b5556b035e3aa224afeba6dc",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/dispatch-workflow-comparative-study.md": {
+    "mtime": 1786267166.5552387,
+    "ast_hash": "95681f8f0faeb55fe07a12d3b17be149",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/explore-converge-lifecycle.md": {
+    "mtime": 1786267166.5552387,
+    "ast_hash": "51d2ea7ff2184d922f672a387a0839f9",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/fleet-sourced-autonomous-batch.md": {
+    "mtime": 1786267166.5562387,
+    "ast_hash": "7a35898bb89b42ba034340d5427ba757",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/fresh-vs-resume-context-split.md": {
+    "mtime": 1786267166.5562387,
+    "ast_hash": "61f9e2fc14814005e979e1cc063a5716",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/herdr-server-shutdown-fragility.md": {
+    "mtime": 1786267166.5562387,
+    "ast_hash": "17f88b4e462c85dac541d97c76dcba1d",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/horus-phone-chat-poc.md": {
+    "mtime": 1786267166.5562387,
+    "ast_hash": "9cd13b97856acf548047a0ba56cf91fa",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/intent-preserving-goal-campaign.md": {
+    "mtime": 1786267166.5572386,
+    "ast_hash": "9526843fd428cfe4b4b0ce1aae23d5a2",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/isolated-account-plugin-parity.md": {
+    "mtime": 1786267166.5572386,
+    "ast_hash": "6e872818e143db448f7d120cc123ffc3",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/managed-instruction-drift-lint.md": {
+    "mtime": 1786267166.5572386,
+    "ast_hash": "cc3b482906e9a8ee30521ea8976b1eb5",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/merge-release-owner-gate.md": {
+    "mtime": 1786267166.5572386,
+    "ast_hash": "5820170b4f02b7870d554b2e838acc08",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/native-app-account-launch-spike.md": {
+    "mtime": 1786267166.5572386,
+    "ast_hash": "eaf8d0acc00cedef0a7dced482a4d286",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/new-machine-setup-guidance.md": {
+    "mtime": 1786267166.5582387,
+    "ast_hash": "05d2c082a1d9afe660e620625df4b41e",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/openrouter-provider-support.md": {
+    "mtime": 1786267166.5582387,
+    "ast_hash": "8559959eb4dd1cb11160237a800aae67",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/openwiki-graphify-value-benchmark.md": {
+    "mtime": 1786267166.5582387,
+    "ast_hash": "29f050d6e8c5dbaa8210329bc9422988",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/optional-host-ci-coverage.md": {
+    "mtime": 1786267166.5592387,
+    "ast_hash": "475de3228d54904787d674564c7e6340",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/pathfinder-structured-outcome.md": {
+    "mtime": 1786267166.5592387,
+    "ast_hash": "0e71812d502c18b905738b728f9328eb",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/prd-worked-by-account.md": {
+    "mtime": 1786267166.5592387,
+    "ast_hash": "a109e1ae4243f0097c10193dbd3e077d",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/product-naming.md": {
+    "mtime": 1786267166.5592387,
+    "ast_hash": "a9e968da0fb5daf270c7e3ff15c4f021",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/project-workflow-overrides.md": {
+    "mtime": 1786267166.5602386,
+    "ast_hash": "66c2c87ef85a5c87e907f67ec6967dbb",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/refine-autonomy-hardening-lens.md": {
+    "mtime": 1786267166.5602386,
+    "ast_hash": "22e4518af9936abcb6aae340feb30273",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/remote-open-model-worker-probe.md": {
+    "mtime": 1786267166.5602386,
+    "ast_hash": "041abbc395c61c6a25963e7e95d25341",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/repeated-question-skill-mining.md": {
+    "mtime": 1786267166.5602386,
+    "ast_hash": "ee4abe5d17a52a95fb186a03c4d68695",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/research-receipts-surfacing.md": {
+    "mtime": 1786267166.5612385,
+    "ast_hash": "3191a29bda8d1a42e1e6e768206e8765",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/scoped-machine-requirements.md": {
+    "mtime": 1786267166.5612385,
+    "ast_hash": "a336ec34865b58239158c2ed81234a59",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/session-agent-state-awareness.md": {
+    "mtime": 1786267166.5612385,
+    "ast_hash": "b1143f7ec5ba0213648500bda1a6cfe1",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/session-host-protocol.md": {
+    "mtime": 1786267166.5612385,
+    "ast_hash": "75368c576330199a78b1fbb8c81adad3",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/session-process-cadence.md": {
+    "mtime": 1786267166.5622387,
+    "ast_hash": "f0eb4676240886c367cd11e10699b137",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/skill-drift-surfacing-and-refresh.md": {
+    "mtime": 1786267166.5622387,
+    "ast_hash": "61c1ff037f5229509377118806da25d9",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/skill-self-calibration-probe.md": {
+    "mtime": 1786267166.5632386,
+    "ast_hash": "fae83eb0faa44cbcfd642076bed27d95",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/telegram-group-project-topics.md": {
+    "mtime": 1786267166.5632386,
+    "ast_hash": "1f7a00526c92bd432a8d0e545b6ebf7f",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/telegram-idea-capture.md": {
+    "mtime": 1786267166.5642385,
+    "ast_hash": "fcaced7a65a4cf61b739562762aaf791",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/tui-campaign-native-goal-probe.md": {
+    "mtime": 1786267166.5642385,
+    "ast_hash": "775e218023b14700f72e9dd7dc95e2b7",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/tui-fleet-artifact-refresh.md": {
+    "mtime": 1786267166.5652385,
+    "ast_hash": "c846d79aabeafe9dad846f1225bc27ea",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/tui-toggle-card-into-scheduler.md": {
+    "mtime": 1786267166.5652385,
+    "ast_hash": "621c3f382880a1cc6147be388f580436",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/usage-analytics-read-out.md": {
+    "mtime": 1786267166.5652385,
+    "ast_hash": "d1117d56fd46615c111a1bcbf47c77ff",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/vision-branch-x3-scheduling-and-autonomous-execution.md": {
+    "mtime": 1786267166.5662386,
+    "ast_hash": "963aeee34a4acf11863c9bb28ca5c2bd",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/vision-branch-x4-model-harness-plane.md": {
+    "mtime": 1786267166.5662386,
+    "ast_hash": "262dd292d32d81eec6b7daf693b82f7b",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/vision-branch-x5-safe-execution-boundaries.md": {
+    "mtime": 1786267166.5662386,
+    "ast_hash": "b6ff0e67ebd4cb96ae7ecfecd40d5df8",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/vision-branch-x6-workflow-selection-compatibility.md": {
+    "mtime": 1786267166.5672386,
+    "ast_hash": "7ff82f8302b2e93ac313421f2f020918",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/warm-supervised-worker-poc.md": {
+    "mtime": 1786267166.5672386,
+    "ast_hash": "60f21c7feeaeeaf4776221558b2ab2c5",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/wildcard.md": {
+    "mtime": 1786267166.5672386,
+    "ast_hash": "1036f4520efd0b33258d62304dea19a9",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/window-aware-scheduling.md": {
+    "mtime": 1786267166.5672386,
+    "ast_hash": "a2764bed1883dc371ec3e7e5d6ea392b",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/windows-native-horus-setup.md": {
+    "mtime": 1786267166.5682385,
+    "ast_hash": "eb5f4f07668b3f4455f1ba802da329a7",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/worker-progress-heartbeat.md": {
+    "mtime": 1786267166.5682385,
+    "ast_hash": "c68d2252a91d34b0395ae3e8891dc270",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x4-claudex-subagent-context-policy.md": {
+    "mtime": 1786267166.5682385,
+    "ast_hash": "0e56f4aa10ce72780ba70374b7bf7e1d",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x4-codex-usage-in-claude-code.md": {
+    "mtime": 1786267166.5692384,
+    "ast_hash": "8700e42690d426c959b592364eeeb458",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x4-pi-harness-via-proxy.md": {
+    "mtime": 1786267166.5692384,
+    "ast_hash": "c3964b662c11f077a34cd785f3a1c8f6",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x4-provider-credential-routing.md": {
+    "mtime": 1786267166.5692384,
+    "ast_hash": "179b16877c2a31578eb8a5e8a21d71e5",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x4-tui-execution-route-axis.md": {
+    "mtime": 1786267166.5692384,
+    "ast_hash": "8f9985651efb4b761b9c60242720508f",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x5-container-execution-spike.md": {
+    "mtime": 1786267166.5702386,
+    "ast_hash": "cb3a273bc96b9a50dccb9a50701cb4b3",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x5-cross-platform-containment-contract.md": {
+    "mtime": 1786267166.5702386,
+    "ast_hash": "94b81d327db53c27af8a0e3c61c4bcfe",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x5-linux-agent-cgroup-containment.md": {
+    "mtime": 1786267166.5702386,
+    "ast_hash": "fa600780b4dc731132e2c98573414055",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x5-network-bot-isolation.md": {
+    "mtime": 1786267166.5702386,
+    "ast_hash": "a6dab475a2da7a0def12c85569d8fa07",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x5-persistent-service-resource-envelopes.md": {
+    "mtime": 1786267166.5702386,
+    "ast_hash": "0f23243fe13008745d2b8fa85fa24809",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x5-resource-policy-calibration.md": {
+    "mtime": 1786267166.5712385,
+    "ast_hash": "d94b13e056e1dd95df7d377a104b60fc",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x6-continuity-contract-declaration.md": {
+    "mtime": 1786267166.5712385,
+    "ast_hash": "3a4a0ef6c9a247a3bb936abbb36d64f0",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x6-fabric-contract-probe.md": {
+    "mtime": 1786267166.5712385,
+    "ast_hash": "800346ed63e9e05cce0399e3959c89e2",
+    "semantic_hash": ""
+  },
+  ".horus/backlog/x6-workflow-alternatives-refresh.md": {
+    "mtime": 1786267166.5712385,
+    "ast_hash": "05aa97889d1ece542e89ae50c7ac0862",
+    "semantic_hash": ""
+  },
+  ".horus/execution.md": {
+    "mtime": 1786267166.5712385,
+    "ast_hash": "4dd960a4216839dd010650e107514581",
+    "semantic_hash": ""
+  },
+  ".horus/proxy-session-rescue.md": {
+    "mtime": 1786267166.5722384,
+    "ast_hash": "5f3507e6e078336e60ee539cee781ea3",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-16-po-capabilities.md": {
+    "mtime": 1786267166.5722384,
+    "ast_hash": "be573b1a796c19cd98ac36fe7e687570",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-17-delegation-cost-finding.md": {
+    "mtime": 1786267166.5724742,
+    "ast_hash": "8993d2a5d015e493513aca60520ccdaf",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-17-pathfinder-branch-tree.md": {
+    "mtime": 1786267166.5724742,
+    "ast_hash": "373da2bb7d95b3ddf8c11990df464a2c",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-17-repo-local-po-rebaseline.md": {
+    "mtime": 1786267166.5724742,
+    "ast_hash": "3b39963a3d207b4f8b3b4f04f2003fb2",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-17-roadmap-branches-convergence-test.md": {
+    "mtime": 1786267166.5724742,
+    "ast_hash": "046c921f17fa23b96da90d0cde101050",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-17-x3-autonomous-dispatch-scan.md": {
+    "mtime": 1786267166.5724742,
+    "ast_hash": "ba702cc0c0881e2f0b3318081da548b7",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-18-agent-host-freeze-incident.md": {
+    "mtime": 1786267166.5724742,
+    "ast_hash": "4012d048d01c084d6c9443afa5bc13cc",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-18-claudex-first-session-findings.md": {
+    "mtime": 1786267166.5724742,
+    "ast_hash": "ddf9361d012b014020371cdbedc91ce4",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-18-multi-model-harness-scan.md": {
+    "mtime": 1786267166.5724742,
+    "ast_hash": "7e1ddc046427b9005d2ca82513307b3b",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-18-x4-stage0-gpt-in-claude-code-spike.md": {
+    "mtime": 1786267166.5724742,
+    "ast_hash": "45f9181c7751ad542e1507fcb1771944",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-20-market-rebaseline.md": {
+    "mtime": 1786267166.5732384,
+    "ast_hash": "f8f2f28bceb3f4b7b6936bfcd41a5571",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-20-roadmap-branches-rebaseline.md": {
+    "mtime": 1786267166.5732384,
+    "ast_hash": "5adb6fa1a90eecf96637ebfdc6fe18cf",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-20-x6-boundary-inventory.md": {
+    "mtime": 1786267166.5742385,
+    "ast_hash": "e77903afe23951a9177978e19a7bc747",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-21-mobile-agent-session-access.md": {
+    "mtime": 1786267166.5742385,
+    "ast_hash": "5e711f1f93410695cd83216a674e2b10",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-31-market-scan-build-vs-adopt.md": {
+    "mtime": 1786267166.5752385,
+    "ast_hash": "8a976e5c3e5e11f1faac317db8bfdb65",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-31-roadmap-branches-herdr-and-cockpit.md": {
+    "mtime": 1786267166.5752385,
+    "ast_hash": "c92a6ae085a43def1b1fc84c7781cc85",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-31-roadmap-branches-rebaseline.md": {
+    "mtime": 1786267166.5752385,
+    "ast_hash": "8db5080454580662399bb03717f6513e",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-07-31-wildcard-branch-divergence.md": {
+    "mtime": 1786267166.5762384,
+    "ast_hash": "d5daefd54071337adba290df6bf7670f",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-08-01-roadmap-branches-deepen-own-use.md": {
+    "mtime": 1786267166.5762384,
+    "ast_hash": "89370be8b8a5d3771dafaf696a461379",
+    "semantic_hash": ""
+  },
+  ".horus/research/2026-08-01-roadmap-branches-facet-spine.md": {
+    "mtime": 1786267166.5772383,
+    "ast_hash": "9598340f025b2ca1726227e5cbb32d75",
+    "semantic_hash": ""
+  },
+  "AGENTS.md": {
+    "mtime": 1786267166.5782385,
+    "ast_hash": "000901892046a5dff7f87d58c3ed3587",
+    "semantic_hash": ""
+  },
+  "CLAUDE.md": {
+    "mtime": 1786267166.7731159,
+    "ast_hash": "d4a56b163d46d73459163a0379bbd88b",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1786267166.5782385,
+    "ast_hash": "ca7415926f6489719058f4a9ae124acc",
+    "semantic_hash": ""
+  },
+  "bugs/horus-app-singleton-lock-wedges-silently.md": {
+    "mtime": 1786267166.5792384,
+    "ast_hash": "72d41bd0409d228660fcb4a8daa36b02",
+    "semantic_hash": ""
+  },
+  "codex-plan-review.md": {
+    "mtime": 1786267166.5792384,
+    "ast_hash": "373dd6680444d82cca1635799048332a",
+    "semantic_hash": ""
+  },
+  "design/Horus Dashboard.html": {
+    "mtime": 1786267166.5812383,
+    "ast_hash": "1b3547456f283afc9714411d8f5a3362",
+    "semantic_hash": ""
+  },
+  "design/README.md": {
+    "mtime": 1786267166.5812383,
+    "ast_hash": "4bb780f8871db594109e56f75aedc395",
+    "semantic_hash": ""
+  },
+  "docs/machine-requirements.md": {
+    "mtime": 1786267166.5832384,
+    "ast_hash": "f6f92baef9e9f7ae44519bc0a87cf981",
+    "semantic_hash": ""
+  },
+  "docs/routines.md": {
+    "mtime": 1786267166.5836418,
+    "ast_hash": "f61629934a6284a8432d34946d6cd4f3",
+    "semantic_hash": ""
+  },
+  "docs/structure-test-2026-07-03.html": {
+    "mtime": 1786267166.5836418,
+    "ast_hash": "39a754c28bc33ed9f47f94c68f167663",
+    "semantic_hash": ""
+  },
+  "docs/terminal-mobile-desktop-diagnosis.md": {
+    "mtime": 1786267166.5836418,
+    "ast_hash": "318051eefc332c8798bb88d01ecca900",
+    "semantic_hash": ""
+  },
+  "plan.md": {
+    "mtime": 1786267166.6492372,
+    "ast_hash": "eec1f2012875f978eb607935f8a06687",
+    "semantic_hash": ""
+  },
+  "product_interview.md": {
+    "mtime": 1786267166.6492372,
+    "ast_hash": "bb91d807f9161bbc7d3aafb738ddba17",
+    "semantic_hash": ""
+  },
+  "research/README.md": {
+    "mtime": 1786267166.6502373,
+    "ast_hash": "903fa2a46579ccfe36f4f7e31f528cfd",
+    "semantic_hash": ""
+  },
+  "research/field-findings-2026-07-08-fabric.md": {
+    "mtime": 1786267166.6503444,
+    "ast_hash": "076830ed1195d014ae3ee5f593b9a767",
+    "semantic_hash": ""
+  },
+  "research/horus-hub-design.md": {
+    "mtime": 1786267166.6503444,
+    "ast_hash": "e135bcb4eca654b1e96f62c9f9be0998",
+    "semantic_hash": ""
+  },
+  "research/omnigent-fit-2026-07-10.md": {
+    "mtime": 1786267166.6503444,
+    "ast_hash": "f2454b9a1f6d5c111103d2cafbb25f75",
+    "semantic_hash": ""
+  },
+  "research/omnigent.md": {
+    "mtime": 1786267166.6503444,
+    "ast_hash": "cb76a85bb68e94247b28cd4feda57fc2",
+    "semantic_hash": ""
+  },
+  "research/openwiki-comparison-2026-07.md": {
+    "mtime": 1786267166.6503444,
+    "ast_hash": "b412f6a5c9589a2d827599fdc2cf3b3a",
+    "semantic_hash": ""
+  },
+  "research/pywebview.md": {
+    "mtime": 1786267166.6503444,
+    "ast_hash": "67dc45103d07664753a91fb946dacfca",
+    "semantic_hash": ""
+  },
+  "research/rulesync.md": {
+    "mtime": 1786267166.6503444,
+    "ast_hash": "b3cbdcf48e3f08e1f4e04692724b0359",
+    "semantic_hash": ""
+  },
+  "design/screenshots/01-overview-dark.png": {
+    "mtime": 1786267166.5812383,
+    "ast_hash": "c234ab76ce337851aa3b386692a899de",
+    "semantic_hash": ""
+  },
+  "design/screenshots/02-accounts-rail-dark.png": {
+    "mtime": 1786267166.5822446,
+    "ast_hash": "a4b8a7add1e121f0d8d8d7c91ab74adf",
+    "semantic_hash": ""
+  },
+  "design/screenshots/03-detail-dark.png": {
+    "mtime": 1786267166.5822446,
+    "ast_hash": "be8b85c73549b3a89eead025031e908e",
+    "semantic_hash": ""
+  },
+  "design/screenshots/04-detail-launch-dark.png": {
+    "mtime": 1786267166.5822446,
+    "ast_hash": "578b5e82cc653f2a90754f67dc6651c6",
+    "semantic_hash": ""
+  },
+  "design/screenshots/05-settings-dark.png": {
+    "mtime": 1786267166.5822446,
+    "ast_hash": "866a84dee6294ae276e764ab83bbd32d",
+    "semantic_hash": ""
+  },
+  "design/screenshots/06-overview-light.png": {
+    "mtime": 1786267166.5822446,
+    "ast_hash": "f50bc4e7d245d36971b42b719b7787bf",
+    "semantic_hash": ""
+  },
+  "design/screenshots/07-detail-light.png": {
+    "mtime": 1786267166.5832384,
+    "ast_hash": "5eeceaa27daf09c96ff6714f6d051168",
+    "semantic_hash": ""
+  },
+  "horus/assets/background_egypt.png": {
+    "mtime": 1786267166.598238,
+    "ast_hash": "85806c0b74b17bf1ab3e61f3efd3db25",
+    "semantic_hash": ""
+  },
+  "horus/assets/icon-192.png": {
+    "mtime": 1786267166.598238,
+    "ast_hash": "c87b9c4074c62f008e452f2fe28895a9",
+    "semantic_hash": ""
+  },
+  "horus/assets/icon-512.png": {
+    "mtime": 1786267166.598238,
+    "ast_hash": "a520dad741c46b9ca6cf77d8f6610464",
+    "semantic_hash": ""
+  },
+  "horus/assets/icon.png": {
+    "mtime": 1786267166.600238,
+    "ast_hash": "e387adc6a17a6bf7c8b426063e4242af",
+    "semantic_hash": ""
+  },
+  "horus/assets/mascot.png": {
+    "mtime": 1786267166.600238,
+    "ast_hash": "7847c9d5f0a46d4ea60a491e36aafea3",
+    "semantic_hash": ""
+  },
+  "horus/assets/mascot_blink.png": {
+    "mtime": 1786267166.601238,
+    "ast_hash": "7847c9d5f0a46d4ea60a491e36aafea3",
+    "semantic_hash": ""
+  },
+  "horus/assets/mascot_idle_0.png": {
+    "mtime": 1786267166.601238,
+    "ast_hash": "7847c9d5f0a46d4ea60a491e36aafea3",
+    "semantic_hash": ""
+  },
+  "horus/assets/mascot_idle_1.png": {
+    "mtime": 1786267166.602238,
+    "ast_hash": "7847c9d5f0a46d4ea60a491e36aafea3",
+    "semantic_hash": ""
+  },
+  "horus/assets/mascot_idle_2.png": {
+    "mtime": 1786267166.602238,
+    "ast_hash": "7847c9d5f0a46d4ea60a491e36aafea3",
+    "semantic_hash": ""
+  },
+  "horus/assets/mascot_with_background.png": {
+    "mtime": 1786267166.6132379,
+    "ast_hash": "d0982fcbe7d22f342591c7226d7726a5",
+    "semantic_hash": ""
+  },
+  "horus/assets/mascot_without_background.png": {
+    "mtime": 1786267166.6212378,
+    "ast_hash": "6de0b7e770bad8f8105e990270d9b596",
+    "semantic_hash": ""
+  }
+}
