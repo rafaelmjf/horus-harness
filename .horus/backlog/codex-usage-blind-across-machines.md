@@ -1,5 +1,6 @@
 ---
 status: open
+topic: account-isolation
 priority: medium
 created: 2026-08-08
 created_by: agent

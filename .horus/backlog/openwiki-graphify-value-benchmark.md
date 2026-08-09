@@ -1,5 +1,6 @@
 ---
 status: open
+topic: generated-context-evaluation
 priority: high
 created: 2026-08-07
 created_by: owner

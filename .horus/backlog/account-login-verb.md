@@ -1,5 +1,6 @@
 ---
 status: open
+topic: account-isolation
 priority: medium
 readiness: ready
 autonomy: attended

@@ -1,5 +1,6 @@
 ---
 status: open
+topic: remote-project-visibility
 priority: medium
 readiness: shaping
 readiness_reason: "The value and the data paths are clear, but three scoping decisions are open: how branches are fetched per repo without burning `gh` rate limit, whether remote backlog cards are read per-file or via a single tree call, and what the view shows when a project's remote `.horus/` predates the card layout. Shape before building."

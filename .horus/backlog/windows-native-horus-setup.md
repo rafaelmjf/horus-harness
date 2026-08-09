@@ -1,5 +1,6 @@
 ---
 status: open
+topic: windows-setup
 priority: medium
 created: 2026-07-20
 created_by: owner

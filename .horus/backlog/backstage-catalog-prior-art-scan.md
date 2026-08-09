@@ -1,5 +1,6 @@
 ---
 status: open
+topic: remote-project-visibility
 priority: medium
 readiness: ready
 autonomy: attended
