@@ -64,6 +64,20 @@ predates `horus/topics.py`. Their topic files are readable by any agent and by t
 planned page, but no `--tree` or `consolidate` read-out will show topics there until a
 release ships. The evidence window therefore starts at that release, not today.
 
+**Criterion amended, 2026-08-09.** Each seeded project's `next_action` now says to
+review the topic draft. That makes the first revision **prompted**, so it cannot
+count as emergence. The criterion therefore excludes it: emergence is topics created
+or updated in the course of *ordinary work after* that review — plus at least one
+topic gaining a second member. Recorded here rather than adjusted silently, because
+an unpinned criterion lets either outcome be rationalised.
+
+The owner also demonstrated the view's value before any of that: browsing the
+pbi-ecosystem page, they named four topics that exist as real work and were never
+formally defined — migrations, report generation, report documentation, data
+generation. Three already had active cards, filed under `tooling` or ungrouped. That
+is evidence the VIEW surfaces absences, which is a different claim from topics
+emerging on their own, and is kept separate from the criterion above.
+
 Also recorded because it is a live finding: `tooling` in pbi-ecosystem holds 11 of 18
 active cards. An emergent tag can be too broad to state a single honest thesis for, and
 that is a librarian problem, not something to silently split.
