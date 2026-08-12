@@ -10,9 +10,8 @@ refine_passes: 2
 tier: medium
 type: feature
 parallel: unsafe
-phase: explore
+topic: model-harness-plane
 created_by: owner
-branch: vision-branch-x4-model-harness-plane
 surface: horus/terminal_tui.py, horus/terminal_sessions.py, horus/launch.py, horus/registry.py, launch receipts
 ---
 

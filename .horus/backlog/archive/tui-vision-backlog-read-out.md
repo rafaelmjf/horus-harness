@@ -6,9 +6,8 @@ created_by: owner
 last_refined: 2026-07-20
 readiness: shaping
 readiness_reason: "Which read-outs render (facet standings, branch tree, readiness queues), on which TUI pane, and what stays CLI-only are undecided."
-phase: converge
+topic: dashboard-cockpit
 type: feature
-vision_facet: "Dashboard / cockpit"
 shipped_pr: 389
 shipped_sha: f632bf4
 ---

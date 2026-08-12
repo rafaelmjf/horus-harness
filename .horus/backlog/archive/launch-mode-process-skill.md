@@ -5,8 +5,7 @@ created: 2026-07-17
 tier: sonnet
 type: feature
 parallel: safe
-phase: converge
-vision_facet: "Continuity core"
+topic: continuity-core
 created_by: owner
 surface: horus/terminal_tui.py (a launch "mode" pick beside account/model/effort), horus/skills.py (a bundled mode skill, e.g. inline-batch-session), the launch prompt/preamble or a SessionStart surface that loads the mode skill, horus/config.py (map mode -> effective continuity granularity)
 shipped_pr: 307

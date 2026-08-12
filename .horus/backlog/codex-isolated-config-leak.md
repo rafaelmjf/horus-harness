@@ -9,11 +9,10 @@ created: 2026-07-20
 created_by: owner
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Accounts & isolation"
+topic: accounts-isolation
 tier: medium
 type: bug
 parallel: safe
-phase: explore
 surface: "horus/config.py:696-698 (_ACCOUNT_AUTH_FILES), isolate_account copy step; horus doctor drift check"
 ---
 

@@ -5,11 +5,10 @@ created: 2026-07-30
 created_by: owner
 readiness: shaping
 readiness_reason: "The problem is measured, not suspected — 5 of 6 non-main worktrees on this machine are provably dead, and the friction has already bitten once. What is NOT settled is the shape: whether cleanup is a `horus` verb, a closure-time advisory, or a documented manual command. That is a [session] decision about where the routine lives, not an editorial one."
-phase: converge
+topic: distribution
 type: bug
 tier: low
 parallel: safe
-vision_facet: "Distribution"
 surface: "git worktree (no Horus code owns this today), horus/cli.py (if it becomes a verb), the closure/consolidate advisory path (if it becomes a signal)"
 shipped_pr: 494
 shipped_sha: 036ee67

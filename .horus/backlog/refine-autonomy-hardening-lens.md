@@ -9,11 +9,10 @@ refine_passes: 2
 readiness: ready
 autonomy: attended
 order: 10
-phase: converge
+topic: introspection-self-improvement
 type: feature
 tier: medium
 parallel: safe
-vision_facet: "Introspection & self-improvement"
 surface: ".claude/skills/backlog-refine/SKILL.md + .agents/ parity (the lens), .claude/skills/scope-cards/SKILL.md + parity (authors the tags at creation), horus/skills.py (bundled text + version bumps), horus/backlog.py (tolerate + expose refine_passes), the backlog-librarian skill (stalled-card check)"
 ---
 

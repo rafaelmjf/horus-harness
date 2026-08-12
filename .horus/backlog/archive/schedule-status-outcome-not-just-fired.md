@@ -2,8 +2,7 @@
 status: shipped
 priority: medium
 created: 2026-07-19
-vision_facet: "Autonomous dispatch"
-phase: converge
+topic: autonomous-dispatch
 tier: medium
 type: feature
 parallel: safe

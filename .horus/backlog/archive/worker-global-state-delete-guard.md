@@ -4,6 +4,7 @@ priority: high
 tier: inline
 created: 2026-07-16
 type: bug
+topic: ""
 parallel: unsafe
 surface: horus/cli.py, horus/native_hooks.py, horus/templates.py, Claude/Codex hook projections
 shipped_pr: 267

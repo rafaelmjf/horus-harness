@@ -2,8 +2,7 @@
 status: shipped
 priority: high
 created: 2026-07-17
-vision_facet: "Delegation calibration"
-phase: converge
+topic: delegation-calibration
 tier: sonnet
 type: feature
 parallel: safe

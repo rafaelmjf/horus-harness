@@ -7,7 +7,7 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Shaped 2026-07-20 (boundary inventory + three child drafts); children need backlog-refine before any is Ready."
-phase: explore
+topic: ""
 tier: high
 type: research
 parallel: safe

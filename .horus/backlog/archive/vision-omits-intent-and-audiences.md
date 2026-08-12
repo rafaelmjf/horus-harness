@@ -6,11 +6,10 @@ autonomy: eligible
 readiness_reason: "Root-caused from a live field failure on 2026-07-25 with the exact replacement text drafted, and the fix is prose in two known files plus their projections. The proof that the elements are the right ones is that the failed session's own deliverable converged on all of them."
 created: 2026-07-25
 created_by: claude
-vision_facet: "Continuity core"
+topic: continuity-core
 tier: small
 type: bug
 parallel: safe
-phase: converge
 surface: "horus/templates.py:35 + :264 (managed block + PRD template Vision), horus/skills.py:516 + :1127 (horus-infer), tests/test_templates.py, tests/test_skills.py, projected .claude/.agents skill copies"
 shipped_pr: 405
 shipped_sha: e90eee0

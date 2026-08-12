@@ -6,11 +6,10 @@ created: 2026-07-30
 created_by: agent
 readiness: gated
 readiness_reason: "The defect is upstream in herdr, so Horus cannot fix it — this card exists to record the measurement and to decide what Horus does defensively. Gated on an owner call: report upstream, or accept herdr sessions as losable and lean on session recovery instead."
-phase: explore
+topic: dashboard-cockpit
 type: spike
 tier: low
 parallel: safe
-vision_facet: "Dashboard / cockpit"
 surface: horus/hosts/herdr.py (capabilities, ensure_ready), .horus/backlog/archive/herdr-host-probe.md (the 2026-07-29 measurements this extends)
 ---
 

@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Exact probe steps, which OS is authoritative for the finding, and the pass/fail bar are undecided — refine before running."
-phase: explore
+topic: accounts-isolation
 type: spike
-vision_facet: "Accounts & isolation"
 ---
 
 # native-app-account-launch-spike — can the TUI launch the desktop app under a chosen account

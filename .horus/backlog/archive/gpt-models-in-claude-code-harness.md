@@ -3,13 +3,11 @@ status: done
 priority: medium
 created: 2026-07-18
 last_refined: 2026-07-19
-vision_facet: "Delegation calibration"
-phase: explore
+topic: delegation-calibration
 tier: high
 type: feature
 parallel: safe
 created_by: owner
-branch: vision-branch-x4-model-harness-plane
 surface: (spike — no code) CLIProxyAPI + Codex-subscription OAuth + Claude Code; go/no-go feeds horus/adapters/claude.py build_env wiring at stage 1
 ---
 

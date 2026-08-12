@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "A real design card: the manifest/bundle format, directory layout, which chain steps emit what, and back-compat with the existing dated receipts are all open. Agree the structure before implementing across the chain skills."
-phase: explore
+topic: po-lifecycle
 type: feature
-vision_facet: "PO lifecycle"
 ---
 
 # pathfinder-structured-outcome — refine the pathfinder chain to emit one structured, addressable per-run outcome

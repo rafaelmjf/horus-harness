@@ -4,6 +4,7 @@ priority: medium
 tier: sonnet
 created: 2026-07-16
 type: feature
+topic: ""
 parallel: safe
 surface: .agents/skills/process-retrospective, Claude/Codex skill projections, tests/test_skills.py
 shipped_pr: 270

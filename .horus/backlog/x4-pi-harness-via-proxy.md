@@ -10,9 +10,8 @@ refine_passes: 2
 tier: frontier
 type: feature
 parallel: safe
-phase: explore
+topic: model-harness-plane
 created_by: owner
-branch: vision-branch-x4-model-harness-plane
 surface: run the PI coding-agent harness through Horus via the CLIProxyAPI proxy
 ---
 

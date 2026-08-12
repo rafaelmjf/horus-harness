@@ -8,9 +8,8 @@ refine_passes: 1
 created_by: claude
 readiness: shaping
 readiness_reason: "The reference-extraction rule (which tokens in the managed block count as CLI-surface claims) and where the lint runs (doctor vs consolidate vs a standalone check) are undecided; refine before build."
-phase: explore
+topic: introspection-self-improvement
 type: feature
-vision_facet: "Introspection & self-improvement"
 ---
 
 # managed-instruction-drift-lint — deterministically catch managed prose that references a removed CLI surface

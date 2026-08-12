@@ -7,8 +7,7 @@ readiness_reason: "Needs an owner design pass on the receipt's shape and where i
 created: 2026-07-19
 last_refined: 2026-07-28
 refine_passes: 1
-vision_facet: "Autonomous dispatch"
-phase: converge
+topic: autonomous-dispatch
 tier: medium
 type: feature
 parallel: safe

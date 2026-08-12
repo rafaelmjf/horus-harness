@@ -7,9 +7,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Per the 2026-07-20 Findings (below): the install is already current (0.0.73), WSL2 is already installed, and the native capability inventory is done. Remaining open question is the recommendation. This session (2026-07-21) narrows it: native Windows is fine for the owner's local-project work, but the 'attach any session' / persistence experience is exactly what degrades native, so WSL+tmux (already present) is the path for THAT. First concrete step: run the TUI under WSL+tmux and validate attach-any-session end to end, then confirm the native-for-local + WSL-for-attach split as the recommendation."
-phase: explore
+topic: distribution
 type: spike
-vision_facet: "Distribution"
 ---
 
 # windows-native-horus-setup — the best way to run horus on Windows, given the TUI's recent growth

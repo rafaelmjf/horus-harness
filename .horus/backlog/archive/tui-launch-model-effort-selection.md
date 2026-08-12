@@ -5,8 +5,7 @@ created: 2026-07-17
 tier: sonnet
 type: feature
 parallel: safe
-phase: converge
-vision_facet: "Dashboard / cockpit"
+topic: dashboard-cockpit
 created_by: owner
 depends-on: tui-branch-tree-glance
 surface: horus/terminal_tui.py (new model+effort step after account select; `_Launch` carries model/effort), the launch-execution path (terminal_sessions/run_executor), horus/adapters/ (per-agent valid model list), horus/capabilities.py (tier→recommended-model)

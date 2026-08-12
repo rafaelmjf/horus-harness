@@ -6,11 +6,10 @@ created: 2026-07-29
 created_by: owner
 readiness: shaping
 readiness_reason: "The value is clear and the gap is real. The mechanism is now NARROWED rather than open: herdr-host-probe (2026-07-29) showed a screen-scraper is a maintained treadmill, not a one-off, so prefer agent lifecycle hooks + host-supplied state. Still wants a working session to settle hooks-vs-derived and the Codex path."
-phase: explore
+topic: dashboard-cockpit
 type: feature
 tier: medium
 parallel: safe
-vision_facet: "Dashboard / cockpit"
 surface: horus/registry.py, horus/terminal_tui.py (Sessions view), possibly horus/activity.py, horus/native_hooks.py
 ---
 

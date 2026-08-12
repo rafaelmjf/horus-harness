@@ -10,7 +10,7 @@ refine_passes: 2
 tier: frontier
 type: feature
 parallel: safe
-phase: explore
+topic: ""
 created_by: owner
 surface: execution-environment contract across agent launches, system services, containers, bot runtimes, and three OSes
 ---

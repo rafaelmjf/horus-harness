@@ -2,8 +2,7 @@
 status: shipped
 priority: high
 created: 2026-07-18
-vision_facet: "Autonomous dispatch"
-phase: converge
+topic: autonomous-dispatch
 tier: sonnet
 type: feature
 parallel: safe

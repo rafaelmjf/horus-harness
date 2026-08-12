@@ -2,7 +2,7 @@
 status: shipped
 priority: medium
 created: 2026-07-18
-vision_facet: "Accounts & isolation"
+topic: accounts-isolation
 tier: low
 type: feature
 parallel: safe

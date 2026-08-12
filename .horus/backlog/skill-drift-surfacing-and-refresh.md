@@ -9,7 +9,7 @@ last_refined: 2026-07-28
 refine_passes: 2
 tier: medium
 type: feature
-vision_facet: "Introspection & self-improvement"
+topic: introspection-self-improvement
 parallel: safe
 surface: horus-managed project artifacts, upgrade/skill detection, fleet refresh planning, git workflow integration, remote verification
 ---

@@ -11,6 +11,7 @@ proposal_doc: docs/terminal-mobile-desktop-diagnosis.md
 shipped:
 shipped_pr: 171
 shipped_sha: 68b41252f6cc00581ce632b80a08cd7d53e765cf
+topic: ""
 ---
 
 # Mobile/desktop terminal: sizing + lifecycle + controls hardening

@@ -10,9 +10,8 @@ refine_passes: 2
 tier: high
 type: feature
 parallel: unsafe
-phase: explore
+topic: safe-execution-boundaries
 created_by: owner
-branch: vision-branch-x5-safe-execution-boundaries
 surface: horus/schedule.py service unit writers, horus/proxy.py Docker command, dashboard/deploy units, doctor/control status
 ---
 

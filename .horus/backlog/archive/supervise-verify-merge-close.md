@@ -5,9 +5,7 @@ created: 2026-07-17
 tier: opus
 type: feature
 parallel: unsafe
-phase: converge
-vision_facet: "Autonomous dispatch"
-branch: vision-branch-x3-scheduling-and-autonomous-execution
+topic: autonomous-dispatch
 created_by: owner
 depends-on: unattended-escalation-channel, standing-dispatch-envelope
 surface: new `horus supervise` subcommand; horus/cli.py; new horus/supervise.py; composes horus/mergewatch.py + horus/closure.py + horus/delivery.py + horus/registry.py + gh pr merge + horus/backlog.py (ship)

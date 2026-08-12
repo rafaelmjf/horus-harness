@@ -5,6 +5,7 @@ priority: high
 tier: sonnet
 parallel: safe
 type: bug
+topic: ""
 surface:
   - .github/workflows/continuity.yml
   - horus/cli.py

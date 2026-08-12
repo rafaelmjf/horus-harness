@@ -5,9 +5,8 @@ created: 2026-08-08
 created_by: agent
 readiness: shaping
 readiness_reason: "The limitation is measured and the honest read-out shipped with it, but the remedy is undecided: Codex exposes no account-level usage API here, so the options are a cross-machine snapshot exchange, an explicit 'local-only' marker on the surface, or accepting it as a documented boundary."
-phase: explore
+topic: accounts-isolation
 type: spike
-vision_facet: "Accounts & isolation"
 surface: horus/usage_snapshot.py:206 (_read_codex), horus/terminal_tui.py (_refresh_all_account_usage)
 ---
 

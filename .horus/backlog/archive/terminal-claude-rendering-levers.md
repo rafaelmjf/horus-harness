@@ -8,6 +8,7 @@ parallel: exclusive
 surface: horus/dashboard.py, horus/assets/vendor/xterm/
 shipped_pr: 191
 shipped_sha: 2456a271d1376ee62310fcfc35b366b650a01fd6
+topic: ""
 ---
 
 # Claude Code rendering in the webapp terminal: cheap levers, honest ceiling

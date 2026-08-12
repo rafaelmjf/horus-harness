@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: deferred
 readiness_reason: "Still deferred, but the deferral now applies asymmetrically (2026-07-20 refine): the FROM-ZERO branch genuinely needs more platform runs, while the REPLICATE branch is fully determined and blocked only on `account-login-verb`. Reactivate the replicate half once that verb ships; keep the from-zero half waiting for the Linux/macOS runs."
-phase: explore
+topic: distribution
 type: feature
-vision_facet: "Distribution"
 ---
 
 # new-machine-setup-guidance — how a fresh machine gets set up correctly

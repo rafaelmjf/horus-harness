@@ -8,9 +8,8 @@ last_refined: 2026-07-29
 refine_passes: 3
 readiness: shaping
 readiness_reason: "Problem and live evidence are clear; the fix space is deliberately left OPEN (cheap auto-fetch vs deeper format changes) to explore before committing. Refine into concrete increments when picked up."
-phase: explore
+topic: continuity-core
 type: chore
-vision_facet: "Continuity core"
 ---
 
 # continuity-sync-friction — reduce cross-session/cross-machine friction in git-synced continuity

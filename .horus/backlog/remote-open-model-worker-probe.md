@@ -8,7 +8,7 @@ tier: medium
 created: 2026-07-16
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Delegation calibration"
+topic: delegation-calibration
 type: feature
 parallel: safe
 surface: remote Tailscale model host, disposable probe workspace, model datums/adapters only after evidence

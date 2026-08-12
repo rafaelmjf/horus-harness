@@ -3,7 +3,7 @@ status: shipped
 priority: medium
 tier: sonnet
 created: 2026-07-16
-vision_facet: "PO lifecycle"
+topic: po-lifecycle
 type: feature
 parallel: safe
 surface: new bundled skill (sibling to product-audit); composes deep-research; .horus/research/ receipt dir; horus-consolidate hand-off into PRD Vision + candidate cards

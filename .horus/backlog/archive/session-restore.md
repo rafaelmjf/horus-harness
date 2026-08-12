@@ -5,11 +5,10 @@ created: 2026-07-30
 created_by: agent
 readiness: shaping
 readiness_reason: "Proven end-to-end by hand on 2026-07-30 — three vanished sessions were restored onto tmux and showed up normally in the TUI, so the mechanism is demonstrated rather than theorised. The detection half needs no new plumbing either: `stale` + `termination_reason=None` already means 'vanished'. Blocked on [[agent-thread-id-and-interactive-restore]] for the thread id, and needs one shape call: whether a restored session gets a runner or is a first-class 'adopted' session with declared reduced capability — which also decides how trustworthy the vanished signal is."
-phase: explore
+topic: dashboard-cockpit
 type: feature
 tier: medium
 parallel: unsafe
-vision_facet: "Dashboard / cockpit"
 surface: horus/registry.py (reconcile:445-452, snapshot:295-303, termination_reason:149), horus/hosts/ (a restore verb on the host protocol), horus/hosts/runnerspec.py, horus/cli.py, horus/terminal_tui.py (launch branch :2607, Sessions view)
 shipped_pr: 458
 shipped_sha: 531313d

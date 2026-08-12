@@ -2,8 +2,7 @@
 status: shipped
 priority: medium
 created: 2026-07-18
-vision_facet: "Accounts & isolation"
-phase: converge
+topic: accounts-isolation
 tier: sonnet
 type: feature
 parallel: safe

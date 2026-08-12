@@ -6,11 +6,10 @@ autonomy: attended
 readiness_reason: "Two live false-trigger variants exposed both an authorization gap and a substrate-routing gap. The owner set the categorical boundaries, the negative and positive probes are concrete, and this behavioral contract needs owner review before merge."
 created: 2026-07-29
 created_by: owner
-vision_facet: "Delegation calibration"
+topic: delegation-calibration
 tier: small
 type: bug
 parallel: safe
-phase: converge
 surface: "horus/skills.py (execution-decision, horus-consolidate, horus-execution), tests/test_skills.py, projected Claude/Codex skills; native Codex collaboration boundary; related artifact-refresh lifecycle"
 shipped_pr: 437
 shipped_sha: 240075e

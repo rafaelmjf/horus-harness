@@ -4,6 +4,7 @@ priority: high
 tier: opus
 created: 2026-07-14
 type: bug
+topic: ""
 parallel: exclusive
 surface: horus/process_tree.py, horus/adapters/base.py, horus/cli.py, horus/registry.py, horus/dashboard.py
 ---

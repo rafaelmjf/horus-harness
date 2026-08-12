@@ -8,9 +8,8 @@ refine_passes: 1
 created_by: agent
 readiness: shaping
 readiness_reason: "The advisory authority/output contract and whether read-only runs still need isolated worktrees require a focused probe."
-phase: explore
+topic: autonomous-dispatch
 type: bug
-vision_facet: "Autonomous dispatch"
 ---
 
 # autonomous-advisory-dispatch-posture — schedule zero-blast skills without a fake delivery card

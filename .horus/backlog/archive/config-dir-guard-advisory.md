@@ -2,8 +2,7 @@
 status: shipped
 priority: high
 created: 2026-07-18
-vision_facet: "Accounts & isolation"
-phase: converge
+topic: accounts-isolation
 tier: opus
 type: bug
 parallel: safe

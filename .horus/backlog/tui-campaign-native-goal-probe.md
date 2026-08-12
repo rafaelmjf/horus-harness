@@ -8,9 +8,8 @@ refine_passes: 1
 created_by: owner
 readiness: deferred
 readiness_reason: "Live Codex 0.144.6 proved native goal RPCs exist, but using them from Horus Campaign requires the still-experimental app-server/remote-TUI host surface. Reactivate when Codex exposes a stable spawn-time goal setter or promotes that launch contract."
-phase: explore
+topic: dashboard-cockpit
 type: spike
-vision_facet: "Dashboard / cockpit"
 ---
 
 # tui-campaign-native-goal-probe — make Campaign a persistent native goal, not an ordinary prompt

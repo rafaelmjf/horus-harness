@@ -6,8 +6,7 @@ autonomy: attended
 readiness_reason: "Gate satisfied — `backlog-readiness-disposition` shipped and is archived, and the card itself named that as the only precondition ('then this becomes Ready—Attended'). Attended because this is the owner-facing interactive refinement flow. Surfaced by the 2026-07-26 backlog-librarian receipt (L1): it had been sitting Gated on already-delivered work."
 created: 2026-07-18
 last_refined: 2026-07-19
-vision_facet: "PO lifecycle"
-phase: explore
+topic: po-lifecycle
 tier: high
 type: feature
 parallel: safe

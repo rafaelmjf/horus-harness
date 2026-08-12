@@ -10,9 +10,8 @@ readiness_reason: "Artifact chosen by the owner 2026-07-26: the Horus-managed bl
 last_refined: 2026-07-26
 tier: small
 parallel: safe
-phase: converge
+topic: introspection-self-improvement
 type: bug
-vision_facet: "Introspection & self-improvement"
 surface: "horus/templates.py (_SHARED_BODY working discipline + BLOCK_VERSION bump), projected CLAUDE.md/AGENTS.md blocks, tests/test_templates.py"
 shipped_pr: 410
 shipped_sha: 7b6334d

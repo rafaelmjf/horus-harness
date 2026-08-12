@@ -7,7 +7,7 @@ readiness_reason: "Keep for the next-machine installation, whose real settings d
 created: 2026-07-17
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Accounts & isolation"
+topic: accounts-isolation
 tier: medium
 type: feature
 parallel: safe

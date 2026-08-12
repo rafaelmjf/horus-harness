@@ -9,9 +9,8 @@ refine_passes: 3
 readiness: ready
 autonomy: attended
 order: 30
-phase: converge
+topic: dashboard-cockpit
 type: feature
-vision_facet: "Dashboard / cockpit"
 parallel: exclusive
 surface: horus/terminal_tui.py, horus/fetchcheck.py, horus/fleet_review.py
 shipped_pr: 434

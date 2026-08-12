@@ -7,11 +7,10 @@ readiness_reason: "Demonstrated live (2026-07-20), not theorised: a duplicate-id
 created: 2026-07-20
 created_by: owner
 last_refined: 2026-07-21
-vision_facet: "Accounts & isolation"
+topic: accounts-isolation
 tier: medium
 type: bug
 parallel: safe
-phase: converge
 surface: "horus/adapters/codex.py (verify_account + _launch guard), horus/launch.py:92 (attribute-name mismatch)"
 shipped_pr: 404
 shipped_sha: 828b936

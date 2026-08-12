@@ -5,8 +5,7 @@ created: 2026-07-17
 tier: sonnet
 type: bug
 parallel: safe
-phase: converge
-vision_facet: "Continuity core"
+topic: continuity-core
 created_by: owner
 surface: horus/closure.py (parallel_delivery_findings level / how boundary_freshness_gate composes it), horus/cli.py (cmd_close healthy verdict)
 shipped_pr: 306

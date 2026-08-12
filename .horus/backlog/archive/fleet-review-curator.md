@@ -5,6 +5,7 @@ priority: now
 tier: sonnet
 parallel: exclusive
 type: feature
+topic: ""
 surface:
   - horus/fleet_review.py
   - horus/cli.py

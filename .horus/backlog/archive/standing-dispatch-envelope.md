@@ -2,9 +2,7 @@
 status: shipped
 priority: high
 created: 2026-07-17
-vision_facet: "Autonomous dispatch"
-branch: vision-branch-x3-scheduling-and-autonomous-execution
-phase: converge
+topic: autonomous-dispatch
 tier: opus
 type: feature
 parallel: unsafe

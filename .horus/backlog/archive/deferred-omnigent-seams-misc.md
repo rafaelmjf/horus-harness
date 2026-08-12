@@ -3,6 +3,7 @@ status: retired
 priority: deferred
 tier: sonnet
 created: 2026-07-10
+topic: ""
 ---
 > Retired 2026-07-14 (owner triage): this omnibus mixes partially shipped remote/
 > Tailscale surfaces with unrelated speculative integrations. Omnigent work remains

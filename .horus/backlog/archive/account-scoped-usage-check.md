@@ -4,6 +4,7 @@ priority: high
 tier: sonnet
 created: 2026-07-15
 type: feature
+topic: ""
 parallel: safe
 surface: horus/cli.py, horus/claude_usage.py, horus/codex_usage.py
 shipped_pr: 253

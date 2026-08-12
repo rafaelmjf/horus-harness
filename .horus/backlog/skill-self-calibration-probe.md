@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Wildcard explore: canary format and the diff-judging protocol are undecided; PoC on one skill before any generalization."
-phase: explore
+topic: introspection-self-improvement
 type: research
-vision_facet: "Introspection & self-improvement"
 ---
 
 # skill-self-calibration-probe — skills that notice their own drift (wildcard)

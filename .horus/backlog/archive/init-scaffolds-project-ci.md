@@ -3,7 +3,7 @@ status: shipped
 priority: low
 tier: sonnet
 created: 2026-07-15
-vision_facet: "Distribution"
+topic: distribution
 type: feature
 parallel: safe
 surface: horus/initialize.py, horus/templates.py, horus/doctor_machine.py

@@ -7,8 +7,7 @@ readiness_reason: "Held for a DEDICATED DESIGN SESSION (owner, 2026-07-28), not 
 created: 2026-07-19
 last_refined: 2026-07-28
 refine_passes: 1
-vision_facet: "Accounts & isolation"
-phase: converge
+topic: accounts-isolation
 tier: medium
 type: feature
 parallel: safe

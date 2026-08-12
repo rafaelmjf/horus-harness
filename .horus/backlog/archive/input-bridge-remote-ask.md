@@ -2,13 +2,11 @@
 status: shipped
 priority: high
 created: 2026-07-18
-vision_facet: "Autonomous dispatch"
-phase: converge
+topic: autonomous-dispatch
 tier: opus
 type: feature
 parallel: safe
 created_by: owner
-branch: vision-branch-x3-scheduling-and-autonomous-execution
 surface: horus/input_bridge.py (new registry), horus/cli.py (`horus ask`), horus/notify_listen.py (answer verb + request push)
 shipped_pr: 320
 shipped_sha: 505a35e90e5e9c5ee7c98eccf98cd954706897fb

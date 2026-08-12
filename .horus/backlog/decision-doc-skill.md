@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Just captured as an idea; the skill's shape, triggers, output home/format, and whether it is Horus-specific or cross-project are all unscoped. Explore before drafting."
-phase: explore
+topic: introspection-self-improvement
 type: feature
-vision_facet: "Introspection & self-improvement"
 ---
 
 # decision-doc-skill — a skill that generates issue/solution decision documentation

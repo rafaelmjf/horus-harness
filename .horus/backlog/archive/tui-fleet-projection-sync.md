@@ -5,6 +5,7 @@ priority: now
 tier: sonnet
 parallel: unsafe
 type: feature
+topic: ""
 surface: horus/terminal_tui.py, horus/projection_sync.py
 created: 2026-07-15
 created_by: owner

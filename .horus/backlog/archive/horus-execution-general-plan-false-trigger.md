@@ -6,11 +6,10 @@ autonomy: eligible
 readiness_reason: "A live false trigger identified the exact conflicting skill text, the owner clarified the intended delegation-only boundary, and the negative/positive trigger probes are concrete."
 created: 2026-07-24
 created_by: codex
-vision_facet: "Delegation calibration"
+topic: delegation-calibration
 tier: small
 type: bug
 parallel: safe
-phase: converge
 surface: "horus/skills.py (_EXECUTION_SKILL), tests/test_skills.py, projected horus-execution skills"
 shipped_pr: 407
 shipped_sha: 5a0a67f

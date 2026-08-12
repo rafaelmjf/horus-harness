@@ -7,7 +7,7 @@ last_refined: 2026-07-26
 tier: medium
 created: 2026-07-16
 last_refined: 2026-07-19
-vision_facet: "Delegation calibration"
+topic: delegation-calibration
 type: bug
 parallel: safe
 surface: horus/codex_usage.py, horus/usage_snapshot.py, horus/datums.py, horus/dashboard.py, horus/terminal_tui.py

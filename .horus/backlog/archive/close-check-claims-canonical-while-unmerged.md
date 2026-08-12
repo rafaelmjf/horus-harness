@@ -7,11 +7,10 @@ created: 2026-08-03
 created_by: owner
 last_refined: 2026-08-03
 refine_passes: 0
-vision_facet: "Continuity core"
+topic: continuity-core
 tier: small
 type: bug
 parallel: safe
-phase: converge
 surface: "horus/closure.py:580-588 (_enforce_push upstream comparison, ok finding text), horus/cli.py:3176 (the 'Fresh — canonical continuity and work are checkpointed' summary)"
 shipped_pr: 500
 shipped_sha: 538ab39

@@ -2,8 +2,7 @@
 status: shipped
 priority: medium
 created: 2026-07-17
-vision_facet: "PO lifecycle"
-phase: explore
+topic: po-lifecycle
 tier: sonnet
 type: feature
 parallel: safe

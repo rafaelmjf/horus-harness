@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Wildcard explore: verb grammar, stub shape, and project-name resolution undecided; the drop condition is part of the design."
-phase: explore
+topic: dashboard-cockpit
 type: feature
-vision_facet: "Dashboard / cockpit"
 ---
 
 # telegram-idea-capture — capture ideas from the phone, triage later (wildcard)

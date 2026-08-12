@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Just captured as a pain-point; scope open. Likely a feature of the self-hosted chat-app direction rather than standalone — explore before drafting."
-phase: explore
+topic: distribution
 type: feature
-vision_facet: "Distribution"
 ---
 
 # app-usage-cost-opacity — native apps meter usage but surface no cost/context/cache visibility or control

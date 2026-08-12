@@ -7,8 +7,7 @@ readiness_reason: "Owner hold continues (2026-07-26). The 2026-07-21→2026-07-2
 created: 2026-07-19
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Continuity core"
-phase: explore
+topic: continuity-core
 tier: medium
 type: spike
 parallel: safe

@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "A 'fun to try' exploratory idea; the grounding (what steers the exploration), the quality bar, and the run substrate are unscoped. Explore before drafting the skill."
-phase: explore
+topic: po-lifecycle
 type: spike
-vision_facet: "PO lifecycle"
 depends-on: pathfinder-structured-outcome
 ---
 

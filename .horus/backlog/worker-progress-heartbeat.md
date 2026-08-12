@@ -8,7 +8,7 @@ tier: medium
 created: 2026-07-15
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Delegation calibration"
+topic: delegation-calibration
 type: feature
 parallel: unsafe
 surface: horus/runlog.py, horus/registry.py, horus/terminal_sessions.py, horus/tmux_runner.py, horus/pty_session.py, horus/cli.py

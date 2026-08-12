@@ -3,6 +3,7 @@ status: shipped
 priority: high
 tier: sonnet
 type: bug
+topic: ""
 created: 2026-07-11
 parallel: safe
 surface: horus/dashboard.py, horus/terminal_tui.py, tests/test_dashboard.py, tests/test_terminal_sessions.py

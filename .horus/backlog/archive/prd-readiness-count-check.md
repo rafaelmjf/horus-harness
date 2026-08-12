@@ -5,11 +5,10 @@ created: 2026-07-24
 created_by: claude
 readiness: shaping
 readiness_reason: "Freshly minted, not yet through backlog-refine. Shaped FOR autonomous execution: deterministic source of truth (backlog.readiness_counts) already exists, no owner taste-decision embedded, pass/fail verifiable by a unit test + CI. Promote to Ready—Autonomous eligible at the owner's refine gate; nothing here needs owner input to build."
-phase: converge
+topic: continuity-core
 type: chore
 tier: small
 parallel: safe
-vision_facet: "Continuity core"
 shipped_pr: 396
 shipped_sha: 2c28d3b39bde8be8f77f81eea4ff4c2f5d57d8e6
 ---

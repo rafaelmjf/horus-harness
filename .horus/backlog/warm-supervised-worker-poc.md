@@ -10,9 +10,7 @@ refine_passes: 2
 tier: high
 type: feature
 parallel: safe
-phase: explore
-vision_facet: "Autonomous dispatch"
-branch: vision-branch-x3-scheduling-and-autonomous-execution
+topic: autonomous-dispatch
 created_by: owner
 surface: PoC only — a supervisor loop that drives ONE resumable worker session across cards (horus/run_executor.py --resume, a new supervisor driver); no committed control plane until the PoC shows a dividend
 ---

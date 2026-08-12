@@ -8,11 +8,10 @@ created: 2026-07-20
 created_by: owner
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Accounts & isolation"
+topic: accounts-isolation
 tier: medium
 type: feature
 parallel: safe
-phase: explore
 surface: "PRD.md frontmatter key; horus/closure.py (auto-stamp from registry); horus/terminal_tui.py (launch account default); horus/github_catalog.py (already parses remote PRD frontmatter)"
 ---
 

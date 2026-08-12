@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Begins only after a separate attended owner review approves web work; the alternatives list and the inclusion bar are undecided."
-phase: explore
+topic: workflow-selection-compatibility
 type: research
-branch: vision-branch-x6-workflow-selection-compatibility
 ---
 
 # x6 — workflow alternatives refresh (shallow, contract-judged)

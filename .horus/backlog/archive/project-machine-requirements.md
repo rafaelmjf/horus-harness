@@ -3,6 +3,7 @@ status: shipped
 priority: medium
 tier: sonnet
 type: feature
+topic: ""
 created: 2026-07-10
 surface:
   - horus/machine_requirements.py

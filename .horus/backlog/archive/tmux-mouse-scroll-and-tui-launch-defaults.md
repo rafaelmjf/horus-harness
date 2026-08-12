@@ -4,6 +4,7 @@ priority: now
 tier: sonnet
 created: 2026-07-13
 type: bug
+topic: ""
 parallel: exclusive
 surface: horus/terminal_sessions.py, horus/terminal_tui.py, horus/config.py
 shipped_pr: 215

@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "A real revisit with a known failure to avoid (the deleted session-mode axis, #368). The efficient-cadence design is open and must NOT reintroduce frontloaded launch modes. Explore directions before drafting."
-phase: explore
+topic: continuity-core
 type: chore
-vision_facet: "Continuity core"
 ---
 
 # session-process-cadence — a more usage-efficient continuity/ceremony cadence, without reviving launch modes
