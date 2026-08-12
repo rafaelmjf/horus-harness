@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: shaping
 autonomy: attended
@@ -11,6 +11,8 @@ parallel: safe
 tier: medium
 surface: "horus/routines.py (consolidate read-out + Vision block), .horus/PRD.md (## Vision), horus/templates.py (PRD template)"
 depends-on: retire-facets-for-topics
+shipped_pr: 506
+shipped_sha: 9ee4e53957dc36ef64e7dbf5fd7ecfa7881f8594
 ---
 
 # emerging-vision-mechanism — make the Vision an emergent section, the way topics are
