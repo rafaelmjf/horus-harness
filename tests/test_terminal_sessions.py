@@ -3,7 +3,6 @@ import contextlib
 import io
 import json
 import os
-import pty
 import shutil
 import subprocess
 import sys
@@ -13,6 +12,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+
+pty = pytest.importorskip("pty", exc_type=ImportError)
 from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType

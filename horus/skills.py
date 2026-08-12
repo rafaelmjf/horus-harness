@@ -1901,7 +1901,7 @@ description: >-
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -1954,7 +1954,7 @@ Nothing unattended runs without a bounded, expiring envelope. Create it explicit
 
 ```
 horus envelope create <name> --expires <date> \\
-  --card <card> [--branch <vision-branch>] \\
+  --card <card> \\
   --account <alias> --tier <tier> --effort <effort> \\
   --usage-floor <pct> --max-attempts <n> --max-dispatches-per-day <n> \\
   [--allow-merge]        # OMIT for verify+escalate-only (the safe default)
@@ -2384,7 +2384,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("process-retrospective", 3, _PROCESS_RETROSPECTIVE_SKILL),
     Skill("skill-audit", 6, _SKILL_AUDIT_SKILL, audience=AUDIENCE_HORUS),
     Skill("backlog-refine", 9, _BACKLOG_REFINE_SKILL),
-    Skill("cockpit-autonomous-dispatch-contract", 6, _COCKPIT_DISPATCH_SKILL),
+    Skill("cockpit-autonomous-dispatch-contract", 7, _COCKPIT_DISPATCH_SKILL),
     Skill("publish-openwiki-site", 1, _PUBLISH_OPENWIKI_SITE_SKILL),
     Skill("launch-model-refresh", 2, _LAUNCH_MODEL_REFRESH_SKILL),
     Skill("horus-release", 1, _HORUS_RELEASE_SKILL, audience=AUDIENCE_HORUS),

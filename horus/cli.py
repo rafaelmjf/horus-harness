@@ -1091,7 +1091,7 @@ def _envelope_guard(args: argparse.Namespace, root: Path) -> tuple[int | None, _
     if env is None:
         print(f"Refusing to run: no readable envelope named {name!r} (looked in {envelope.envelopes_dir()}).")
         return 2, None
-    # The card's own frontmatter supplies tier/branch: a caller cannot talk its way
+    # The card's own frontmatter supplies tier: a caller cannot talk its way
     # past the tier bound by asserting a tier the card does not carry.
     card = backlog.find_card(root, card_name)
     if card is None:
@@ -1105,7 +1105,6 @@ def _envelope_guard(args: argparse.Namespace, root: Path) -> tuple[int | None, _
         account=config.AccountRef(args.agent, args.account).label if args.account else None,
         tier=card.tier,
         effort=getattr(args, "effort", None) or "",
-        branch=card.field_value("branch"),
     )
     refusal = envelope.validate(
         env, request, usage_remaining=_envelope_usage_remaining(args.agent, args.account)
@@ -1662,7 +1661,6 @@ def cmd_envelope_create(args: argparse.Namespace) -> int:
             name=args.name,
             expires=args.expires,
             cards=tuple(args.card),
-            branch=args.branch.strip(),
             accounts=tuple(args.account),
             tiers=tuple(args.tier),
             efforts=tuple(args.effort),
@@ -1676,8 +1674,6 @@ def cmd_envelope_create(args: argparse.Namespace) -> int:
         return 2
     print(f"Created envelope {env.name} (expires {env.expires}, inclusive).")
     print(f"  cards      : {', '.join(env.cards) or '(none)'}")
-    if env.branch:
-        print(f"  branch     : {env.branch} (every card stamped `branch: {env.branch}`)")
     print(f"  accounts   : {', '.join(env.accounts)}")
     print(f"  tiers      : {', '.join(env.tiers)}")
     print(f"  efforts    : {', '.join(env.efforts) or '(any)'}")
@@ -1725,7 +1721,7 @@ def cmd_envelope_list(args: argparse.Namespace) -> int:
     print(f"{'NAME':<24} {'STATE':<8} {'EXPIRES':<12} {'TODAY':<7} CARDS")
     for env in envs:
         used = envelope.spend(env.name)
-        scope = ", ".join(env.cards) or (f"branch:{env.branch}" if env.branch else "(none)")
+        scope = ", ".join(env.cards) or "(none)"
         per_day = f"{used.dispatches_today}/{env.max_dispatches_per_day}"
         print(f"{env.name:<24} {_envelope_state(env, today=today):<8} {env.expires:<12} {per_day:<7} {scope}")
     return 0
@@ -1755,8 +1751,6 @@ def cmd_envelope_show(args: argparse.Namespace) -> int:
     if env.revoked:
         print(f"  revoked    : {env.revoked_at or 'yes'}")
     print(f"  cards      : {', '.join(env.cards) or '(none)'}")
-    if env.branch:
-        print(f"  branch     : {env.branch}")
     print(f"  accounts   : {', '.join(env.accounts)}")
     print(f"  tiers      : {', '.join(env.tiers)}")
     print(f"  efforts    : {', '.join(env.efforts) or '(any)'}")
@@ -4802,10 +4796,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="a card name this envelope authorizes (repeatable)",
     )
     p_env_create.add_argument(
-        "--branch", default="", metavar="NAME",
-        help="authorize every card stamped `branch: <NAME>` (a vision branch)",
-    )
-    p_env_create.add_argument(
         "--account", action="append", default=[], metavar="ALIAS", required=True,
         help="an isolated account this envelope may dispatch to (repeatable)",
     )
@@ -5397,7 +5387,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--card",
         default=None,
         metavar="NAME",
-        help="the backlog card this dispatch is for; its `tier:`/`branch:` frontmatter is what "
+        help="the backlog card this dispatch is for; its `tier:` frontmatter is what "
              "the envelope's bounds are checked against",
     )
     p_run.set_defaults(func=cmd_run)
@@ -5739,7 +5729,7 @@ def build_parser() -> argparse.ArgumentParser:
         "proxy",
         help="optional: run GPT (and other) models inside Claude Code via a local proxy",
         description=(
-            "Manage the optional CLIProxyAPI integration (vision-branch-x4). When enabled, "
+            "Manage the optional CLIProxyAPI integration. When enabled, "
             "Claude Code's model picker shows Claude AND the proxy's GPT models, all served "
             "through a local Docker proxy riding your subscription OAuth; disabling removes "
             "the wiring so Claude Code goes straight to Anthropic again. Off by default; "

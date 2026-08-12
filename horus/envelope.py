@@ -74,7 +74,6 @@ class Envelope:
     created: str            # ISO date
     expires: str            # ISO date, required — no evergreen standing authority
     cards: tuple[str, ...]  # exact card names this envelope authorizes
-    branch: str             # or a whole vision branch by name ("" if unused)
     accounts: tuple[str, ...]
     tiers: tuple[str, ...]  # allow-list of card `tier:` labels ("" empty = none)
     efforts: tuple[str, ...]  # allow-list of effort labels; empty = any effort
@@ -92,18 +91,16 @@ class Envelope:
         """Expiry is inclusive: an envelope is live through the end of its ``expires`` day."""
         return today > self.expiry_date()
 
-    def authorizes_card(self, card: str, *, branch: str = "") -> bool:
-        """Whether ``card`` is inside the whitelist, directly or via its vision branch."""
-        if card in self.cards:
-            return True
-        return bool(self.branch) and branch == self.branch
+    def authorizes_card(self, card: str) -> bool:
+        """Whether ``card`` is explicitly inside the whitelist."""
+        return card in self.cards
 
 
 @dataclass(frozen=True)
 class DispatchRequest:
     """What an unattended launch is asking to do, as the envelope sees it.
 
-    ``tier``/``branch`` come from the card's own frontmatter, not from the caller —
+    ``tier`` comes from the card's own frontmatter, not from the caller —
     a scheduled run cannot talk its way past the tier bound by asserting a tier.
 
     ``account`` is the canonical ``<agent>-<alias>`` label (see
@@ -115,7 +112,6 @@ class DispatchRequest:
     account: str | None
     tier: str = ""
     effort: str = ""
-    branch: str = ""
 
 
 @dataclass(frozen=True)
@@ -173,7 +169,6 @@ def _write(env: Envelope) -> None:
         f'created = "{env.created}"',
         f'expires = "{env.expires}"',
         f"cards = {_toml_list(env.cards)}",
-        f'branch = "{env.branch}"',
         f"accounts = {_toml_list(env.accounts)}",
         f"tiers = {_toml_list(env.tiers)}",
         f"efforts = {_toml_list(env.efforts)}",
@@ -217,7 +212,6 @@ def load(name: str) -> Envelope | None:
         created=str(data.get("created", "")),
         expires=expires,
         cards=_strs(data.get("cards")),
-        branch=str(data.get("branch", "")).strip(),
         accounts=_strs(data.get("accounts")),
         tiers=_strs(data.get("tiers")),
         efforts=_strs(data.get("efforts")),
@@ -246,7 +240,6 @@ def create(
     name: str,
     expires: str,
     cards: tuple[str, ...] = (),
-    branch: str = "",
     accounts: tuple[str, ...] = (),
     tiers: tuple[str, ...] = (),
     efforts: tuple[str, ...] = (),
@@ -258,8 +251,8 @@ def create(
 ) -> Envelope:
     """Create and persist a bounded envelope. Raises ``EnvelopeError`` on bad bounds.
 
-    Every bound is required to be *narrowing*: an envelope with no cards and no
-    branch, or no accounts, authorizes nothing and is refused at create rather
+    Every bound is required to be *narrowing*: an envelope with no cards or no
+    accounts authorizes nothing and is refused at create rather
     than silently never matching at fire time.
     """
     name = _validate_name(name)
@@ -272,8 +265,8 @@ def create(
         raise EnvelopeError(f"invalid --expires {expires!r}: use YYYY-MM-DD") from exc
     if expiry < today:
         raise EnvelopeError(f"--expires {expires} is in the past; an envelope must outlive its creation")
-    if not cards and not branch:
-        raise EnvelopeError("an envelope must authorize something: pass --card and/or --branch")
+    if not cards:
+        raise EnvelopeError("an envelope must authorize at least one card: pass --card")
     if not accounts:
         raise EnvelopeError("an envelope must name at least one --account")
     # A misnamed account is the worst failure this artifact has: the envelope looks
@@ -321,7 +314,6 @@ def create(
         created=today.isoformat(),
         expires=expires,
         cards=tuple(cards),
-        branch=branch,
         accounts=tuple(accounts),
         tiers=tuple(tiers),
         efforts=tuple(efforts),
@@ -437,12 +429,11 @@ def validate(
         )
     if env.is_expired(today=today):
         return Refusal("expired", f"envelope {env.name!r} expired on {env.expires} (today is {today.isoformat()})")
-    if not env.authorizes_card(request.card, branch=request.branch):
+    if not env.authorizes_card(request.card):
         allowed = ", ".join(env.cards) or "(none)"
-        via = f" or branch {env.branch!r}" if env.branch else ""
         return Refusal(
             "card-whitelist",
-            f"card {request.card!r} is not authorized by envelope {env.name!r}; it allows: {allowed}{via}",
+            f"card {request.card!r} is not authorized by envelope {env.name!r}; it allows: {allowed}",
         )
     if request.account not in env.accounts:
         return Refusal(

@@ -920,7 +920,7 @@ def write_statusline_pointer(config_dir_path: str | Path) -> bool:
         return False
 
 
-# The proxy integration (vision-branch-x4) NEVER writes these into a settings.json —
+# The proxy integration NEVER writes these into a settings.json —
 # a global rewrite poisons already-running sessions, so proxy env is injected per-launch
 # (see horus/proxy.py). `clear_proxy_env` remains only to strip env that a pre-B build
 # wrote, so disabling/upgrading cleans up. There is deliberately no writer counterpart.

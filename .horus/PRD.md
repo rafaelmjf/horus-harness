@@ -1,8 +1,8 @@
 ---
 status: active
-current_focus: "2026-08-12 — Phases 0-5 of the topics migration are implemented and pushed on `codex/retire-facets-for-topics`: card schema/data, tree projection, consolidate ledger, TUI/capabilities/CLI surfaces, retired skills, and the generated Vision directions block are green at their phase gates."
-next_action: "Complete Phase 6 by archiving the retired vision-branch umbrella and x4/x5/x6 child cards, then run the acceptance greps, full pytest suite, and live topic probes on the final SHA before opening and merging the PR."
-next_prompt: "Resume `codex/retire-facets-for-topics` after `git fetch --all --prune`. Phases 0-5 are pushed as green checkpoints. Read `.horus/backlog/retire-facets-for-topics.md`, perform only Phase 6 card relocation, then reproduce the full acceptance gate and land the PR."
+current_focus: "2026-08-12 — All seven phases of the topics migration are implemented on `codex/retire-facets-for-topics`: the facet/explore-phase/vision-branch apparatus and coupled skills are retired, free-form topics drive backlog/TUI/consolidate, Vision directions regenerate from shipped topics, and 18 parked branch cards are archived. Phase gates and the migration-focused acceptance suite are green."
+next_action: "Open the feature PR, require the exact-head full suite and live topic probes to go green, then merge it. The local Windows full run reached 2,337 passing tests; its remaining failures are pre-existing POSIX-path assumptions, so the required Linux CI is the authoritative full-suite gate."
+next_prompt: "Resume `codex/retire-facets-for-topics` after `git fetch --all --prune`. Implementation is complete; do not add the deferred direction-skill rework. Verify the exact head with required CI plus the backlog tree, Direction view, and consolidate probes, then merge the open PR."
 execution_recommendation: "continue-as-is — the owner requested direct execution of this fully specified migration; the remaining archive and verification work is bounded."
 last_updated: 2026-08-12
 horus_min_version: 0.0.26

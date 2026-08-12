@@ -196,7 +196,7 @@ def _service_unit(
         "",
         "[Service]",
         "Type=oneshot",
-        f"WorkingDirectory={cwd}",
+        f"WorkingDirectory={cwd.as_posix()}",
         f"Environment=PATH={_escape(os.environ.get('PATH', ''))}",
         "ExecStart=" + " ".join(_quote(part) for part in command),
         "",
@@ -216,7 +216,7 @@ def _notify_unit(*, description: str, command: tuple[str, ...], cwd: Path) -> st
         "",
         "[Service]",
         "Type=oneshot",
-        f"WorkingDirectory={cwd}",
+        f"WorkingDirectory={cwd.as_posix()}",
         f"Environment=PATH={_escape(os.environ.get('PATH', ''))}",
         "ExecStart=" + " ".join(_quote(part) for part in command),
         "",
@@ -846,7 +846,7 @@ def keepwarm_active_accounts() -> dict[str, bool]:
 
 
 # --------------------------------------------------------------------------- #
-# CLIProxyAPI service (vision-branch-x4 stage 1) — a long-running Docker proxy.
+# CLIProxyAPI service — a long-running Docker proxy.
 #
 # Same persistent systemd --user posture as the listener, but the ExecStart runs a
 # `docker run` (Horus owns no runtime — it orchestrates an external proxy). One unit

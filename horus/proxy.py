@@ -1,4 +1,4 @@
-"""Optional CLIProxyAPI integration — vision-branch-x4 stage 1 (mode B / augment).
+"""Optional CLIProxyAPI integration (mode B / augment).
 
 Run GPT models INSIDE Claude Code, *alongside* Claude, by pointing Claude Code at a
 local translating proxy (Docker) that rides subscription OAuth. When enabled, Claude
@@ -117,7 +117,7 @@ def ensure_config_file(state: dict) -> Path:
     path = Path(state["config_path"]).expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        "# Managed by Horus (vision-branch-x4 proxy integration).\n"
+        "# Managed by Horus (CLIProxyAPI integration).\n"
         f"port: {int(state['port'])}\n"
         'auth-dir: "/root/.cli-proxy-api"\n'
         "api-keys:\n"

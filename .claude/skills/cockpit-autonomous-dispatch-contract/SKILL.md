@@ -18,7 +18,7 @@ description: >-
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 6 -->
+<!-- horus-skill-version: 7 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -71,7 +71,7 @@ Nothing unattended runs without a bounded, expiring envelope. Create it explicit
 
 ```
 horus envelope create <name> --expires <date> \
-  --card <card> [--branch <vision-branch>] \
+  --card <card> \
   --account <alias> --tier <tier> --effort <effort> \
   --usage-floor <pct> --max-attempts <n> --max-dispatches-per-day <n> \
   [--allow-merge]        # OMIT for verify+escalate-only (the safe default)
