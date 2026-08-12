@@ -1,4 +1,4 @@
-"""`horus backlog --tree` — canonical branch/facet projection + receipts shelf."""
+"""`horus backlog --tree` — canonical topic projection + receipts shelf."""
 
 from __future__ import annotations
 
@@ -16,9 +16,7 @@ def _mk_card(
     status="open",
     priority="",
     tier="",
-    phase="",
-    branch="",
-    vision_facet="",
+    topic="",
     readiness="ready",
     readiness_reason="",
     autonomy="eligible",
@@ -32,12 +30,7 @@ def _mk_card(
         lines.append(f"priority: {priority}")
     if tier:
         lines.append(f"tier: {tier}")
-    if phase:
-        lines.append(f"phase: {phase}")
-    if branch:
-        lines.append(f"branch: {branch}")
-    if vision_facet:
-        lines.append(f'vision_facet: "{vision_facet}"')
+    lines.append(f"topic: {topic}")
     if readiness:
         lines.append(f"readiness: {readiness}")
     if readiness_reason:
@@ -58,83 +51,31 @@ def _mk_receipt(root: Path, filename: str, title: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# build_tree — grouping by branch umbrella, then vision_facet
+# build_tree — grouping by free-form topic
 # ---------------------------------------------------------------------------
 
 
-def test_build_tree_groups_children_under_their_branch_umbrella(tmp_path):
-    _mk_card(
-        tmp_path, "umbrella-a", priority="medium",
-        body="## Acceptance\n\n- Converged when everything under it ships.\n",
-        title="Umbrella A",
-    )
-    _mk_card(tmp_path, "child-1", priority="high", tier="sonnet", branch="umbrella-a")
-    _mk_card(tmp_path, "child-2", priority="low", branch="umbrella-a")
+def test_build_tree_groups_cards_by_topic_and_sorts_children(tmp_path):
+    _mk_card(tmp_path, "child-1", priority="high", tier="sonnet", topic="delivery")
+    _mk_card(tmp_path, "child-2", priority="low", topic="delivery")
+    _mk_card(tmp_path, "other", topic="continuity")
 
     tree = backlog_tree.build_tree(tmp_path)
 
-    assert len(tree.branches) == 1
-    group = tree.branches[0]
-    assert group.branch == "umbrella-a"
-    assert group.title == "Umbrella A"
-    assert group.resolved is True
-    assert group.convergence == "Converged when everything under it ships."
-    assert [c.name for c in group.children] == ["child-1", "child-2"]
-    # priority sort: high before low
-    assert group.children[0].name == "child-1"
+    by_topic = {group.topic: [card.name for card in group.children] for group in tree.topics}
+    assert by_topic["delivery"] == ["child-1", "child-2"]
+    assert by_topic["continuity"] == ["other"]
 
 
-def test_build_tree_umbrella_card_itself_never_appears_as_a_plain_card(tmp_path):
-    _mk_card(tmp_path, "umbrella-a", title="Umbrella A")
-    _mk_card(tmp_path, "child-1", branch="umbrella-a")
+def test_build_tree_buckets_blank_topic_to_unsorted_without_losing_cards(tmp_path):
+    _mk_card(tmp_path, "sorted", topic="delivery")
+    _mk_card(tmp_path, "loose")
 
     tree = backlog_tree.build_tree(tmp_path)
 
-    all_facet_names = {c.name for group in tree.facets for c in group.children}
-    assert "umbrella-a" not in all_facet_names
-
-
-def test_build_tree_unresolved_branch_reference_degrades_gracefully(tmp_path):
-    """A `branch:` value with no matching umbrella card still groups its
-    children — using the slug as the title — rather than crashing or losing
-    the card."""
-    _mk_card(tmp_path, "orphan-child", branch="ghost-branch")
-
-    tree = backlog_tree.build_tree(tmp_path)
-
-    assert len(tree.branches) == 1
-    group = tree.branches[0]
-    assert group.branch == "ghost-branch"
-    assert group.resolved is False
-    assert group.title == "ghost-branch"
-    assert [c.name for c in group.children] == ["orphan-child"]
-
-
-def test_build_tree_unbranched_cards_group_by_vision_facet(tmp_path):
-    _mk_card(tmp_path, "a", vision_facet="Dashboard / cockpit")
-    _mk_card(tmp_path, "b", vision_facet="Dashboard / cockpit")
-    _mk_card(tmp_path, "c", vision_facet="Autonomous dispatch")
-    _mk_card(tmp_path, "d")  # no facet at all
-
-    tree = backlog_tree.build_tree(tmp_path)
-
-    by_facet = {group.facet: {c.name for c in group.children} for group in tree.facets}
-    assert by_facet["Dashboard / cockpit"] == {"a", "b"}
-    assert by_facet["Autonomous dispatch"] == {"c"}
-    assert by_facet[""] == {"d"}
-
-
-def test_build_tree_no_branch_keys_anywhere_degrades_to_flat_population(tmp_path):
-    """Forward-readability: a project that has never used `branch:` still
-    projects every active card, just as one (or more) facet groups."""
-    _mk_card(tmp_path, "a", vision_facet="Dashboard")
-    _mk_card(tmp_path, "b")
-
-    tree = backlog_tree.build_tree(tmp_path)
-
-    assert tree.branches == ()
-    all_names = {c.name for group in tree.facets for c in group.children}
-    assert all_names == {"a", "b"}
+    assert tree.topics[-1].topic == ""
+    assert [card.name for card in tree.topics[-1].children] == ["loose"]
+    assert {card.name for group in tree.topics for card in group.children} == {"sorted", "loose"}
 
 
 def test_build_tree_excludes_done_and_shipped_cards(tmp_path):
@@ -143,7 +84,7 @@ def test_build_tree_excludes_done_and_shipped_cards(tmp_path):
 
     tree = backlog_tree.build_tree(tmp_path)
 
-    all_names = {c.name for group in tree.facets for c in group.children}
+    all_names = {c.name for group in tree.topics for c in group.children}
     assert all_names == {"open-one"}
 
 
@@ -176,21 +117,18 @@ def test_sections_readiness_lens_drops_empty_queues_and_orders_canonically(tmp_p
     assert all(s.children for s in sections)
 
 
-def test_sections_facet_lens_matches_the_tree_projection(tmp_path):
-    _mk_card(tmp_path, "umbrella-a", title="Umbrella A",
-             body="## Acceptance\n\n- Converged when it all ships.\n")
-    _mk_card(tmp_path, "child-1", branch="umbrella-a")
-    _mk_card(tmp_path, "loose", vision_facet="Continuity core")
+def test_sections_topic_lens_matches_the_tree_projection(tmp_path):
+    _mk_card(tmp_path, "child-1", topic="delivery")
+    _mk_card(tmp_path, "loose")
 
     cards = _cards(tmp_path)
     tree = backlog_tree.build_tree_from_cards(cards)
-    sections = backlog_tree.sections_for(cards, "facet", tree)
+    sections = backlog_tree.sections_for(cards, "topic", tree)
 
     keys = [s.key for s in sections]
-    assert "branch:umbrella-a" in keys and "facet:Continuity core" in keys
-    branch_sec = next(s for s in sections if s.key == "branch:umbrella-a")
-    assert branch_sec.label == "Umbrella A"
-    assert branch_sec.subtitle == "converges: Converged when it all ships."
+    assert keys == ["topic:delivery", "topic:"]
+    assert sections[0].label == "delivery"
+    assert sections[1].label == "Unsorted"
 
 
 def test_sections_status_and_priority_lenses(tmp_path):
@@ -262,25 +200,24 @@ def test_ready_count_counts_dispatchable_only(tmp_path):
 
 
 def test_render_json_carries_schema_and_child_fields(tmp_path):
-    _mk_card(tmp_path, "umbrella-a", title="Umbrella A")
-    _mk_card(tmp_path, "child-1", priority="high", tier="opus", phase="explore", branch="umbrella-a")
+    _mk_card(tmp_path, "child-1", priority="high", tier="opus", topic="delivery")
 
     tree = backlog_tree.build_tree(tmp_path)
     data = json.loads(backlog_tree.render_json(tree))
 
-    assert data["schema_version"] == 2
+    assert data["schema_version"] == 3
     assert [group["key"] for group in data["readiness"]] == list(backlog_tree.backlog.READINESS_QUEUE_ORDER)
-    assert data["readiness"][0]["count"] == 2
-    branch = data["branches"][0]
-    assert branch["branch"] == "umbrella-a"
-    assert branch["count"] == 1
-    child = branch["children"][0]
+    assert data["readiness"][0]["count"] == 1
+    topic = data["topics"][0]
+    assert topic["topic"] == "delivery"
+    assert topic["count"] == 1
+    child = topic["children"][0]
     assert child == {
         "name": "child-1",
         "title": "Child 1",
         "status": "open",
         "priority": "high",
-        "phase": "explore",
+        "topic": "delivery",
         "tier": "opus",
         "readiness": "ready",
         "readiness_queue": "ready-eligible",
@@ -289,16 +226,15 @@ def test_render_json_carries_schema_and_child_fields(tmp_path):
     }
 
 
-def test_render_text_shows_branch_and_facet_sections(tmp_path):
-    _mk_card(tmp_path, "umbrella-a", title="Umbrella A")
-    _mk_card(tmp_path, "child-1", branch="umbrella-a")
-    _mk_card(tmp_path, "lonely", vision_facet="Dashboard")
+def test_render_text_shows_topic_and_unsorted_sections(tmp_path):
+    _mk_card(tmp_path, "child-1", topic="delivery")
+    _mk_card(tmp_path, "lonely")
 
     text = backlog_tree.render_text(backlog_tree.build_tree(tmp_path))
 
-    assert "Umbrella A (1 open)" in text
+    assert "delivery (1 open)" in text
     assert "child-1" in text
-    assert "Dashboard (1 open)" in text
+    assert "Unsorted (1 open)" in text
     assert "lonely" in text
 
 
@@ -360,25 +296,23 @@ def test_list_receipts_undated_file_still_listed_last(tmp_path):
 
 
 def test_cmd_backlog_tree_text(tmp_path, capsys):
-    _mk_card(tmp_path, "umbrella-a", title="Umbrella A")
-    _mk_card(tmp_path, "child-1", branch="umbrella-a")
+    _mk_card(tmp_path, "child-1", topic="delivery")
 
     rc = main(["backlog", "--tree", "--path", str(tmp_path)])
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert "Umbrella A (1 open)" in out
+    assert "delivery (1 open)" in out
 
 
 def test_cmd_backlog_tree_json(tmp_path, capsys):
-    _mk_card(tmp_path, "umbrella-a", title="Umbrella A")
-    _mk_card(tmp_path, "child-1", branch="umbrella-a")
+    _mk_card(tmp_path, "child-1", topic="delivery")
 
     rc = main(["backlog", "--tree", "--json", "--path", str(tmp_path)])
 
     assert rc == 0
     data = json.loads(capsys.readouterr().out)
-    assert data["branches"][0]["branch"] == "umbrella-a"
+    assert data["topics"][0]["topic"] == "delivery"
 
 
 def test_cmd_backlog_no_subcommand_defaults_to_list(tmp_path, capsys):
