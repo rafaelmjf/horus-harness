@@ -300,6 +300,12 @@ and say who it serves (human operator, agent, CI, consumer). When the product *i
 an interface, this is load-bearing: an unlabelled surface will be mistaken for the
 contract.
 
+<!-- directions:auto -->
+
+**Directions so far**
+
+<!-- /directions:auto -->
+
 ## Backlog
 
 {backlog_pointer_block()}
@@ -1103,5 +1109,3 @@ do not manufacture work merely to fill placeholders.
 Edit scope: .horus/PRD.md and .horus/backlog/** (plus, with care and consent, a
 one-line pointer atop a genuinely superseded source doc).
 """
-
-

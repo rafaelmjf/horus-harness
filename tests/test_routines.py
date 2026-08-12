@@ -824,6 +824,7 @@ def _mk_topic_prd(root):
         '---\nstatus: active\ncurrent_focus: "x"\nnext_action: "y"\n'
         'next_prompt: "z"\nexecution_recommendation: "continue-as-is"\n'
         "last_updated: 2026-07-16\n---\n\n# demo\n\n## Vision\n\nseed\n\n"
+        "<!-- directions:auto -->\n\n**Directions so far**\n\n<!-- /directions:auto -->\n\n"
         "## Backlog\n\nmenu\n\n## Shipped\n\n- x\n\n## Rules\n\n- y\n"
     )
     (hdir / "PRD.md").write_text(prd, encoding="utf-8")
@@ -866,6 +867,35 @@ def test_consolidate_prints_topic_ledger(tmp_path):
     assert "topics:" in messages
     assert "continuity (1 open, 1 shipped)" in messages
     assert "Unsorted (1 open, 0 shipped)" in messages
+
+
+def test_regenerate_directions_preserves_seed_and_omits_zero_shipped_topics(tmp_path):
+    hdir = _mk_topic_prd(tmp_path)
+    _topic_card(hdir, "only-open", topic="unproven")
+    _topic_card(hdir, "open-proven", topic="proven")
+    _topic_card(hdir, "shipped-proven", topic="proven", status="shipped", archived=True)
+    _topic_card(hdir, "shipped-unsorted", status="shipped", archived=True)
+    before = (hdir / "PRD.md").read_text(encoding="utf-8")
+    seed = before.split(routines.DIRECTIONS_START, 1)[0]
+
+    assert routines.regenerate_directions(tmp_path) is True
+    updated = (hdir / "PRD.md").read_text(encoding="utf-8")
+    assert updated.startswith(seed)
+    assert "**Directions so far**" in updated
+    assert "- **proven** — 1 shipped, 1 open." in updated
+    assert "unproven" not in updated
+    assert "Unsorted" not in updated
+    assert routines.regenerate_directions(tmp_path) is False  # idempotent
+
+
+def test_regenerate_directions_requires_stable_markers(tmp_path):
+    hdir = _mk_topic_prd(tmp_path)
+    path = hdir / "PRD.md"
+    original = path.read_text(encoding="utf-8").replace(routines.DIRECTIONS_START, "")
+    path.write_text(original, encoding="utf-8")
+
+    assert routines.regenerate_directions(tmp_path) is False
+    assert path.read_text(encoding="utf-8") == original
 
 
 def _prd_with_shipped(root: Path, shipped: str) -> None:

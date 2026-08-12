@@ -1702,6 +1702,25 @@ def test_consolidate_cli_prd_project_gets_v3_trailer(tmp_path, monkeypatch, caps
     assert "each lane stays in its lane" not in out
 
 
+def test_consolidate_cli_regenerates_marked_vision_directions(tmp_path, monkeypatch, capsys):
+    _home(tmp_path, monkeypatch)
+    main(["init", str(tmp_path), "--yes"])
+    archive = tmp_path / ".horus" / "backlog" / "archive"
+    archive.mkdir(parents=True, exist_ok=True)
+    (archive / "delivered.md").write_text(
+        "---\nstatus: shipped\ntopic: proven\n---\n# Delivered\n", encoding="utf-8"
+    )
+    (tmp_path / ".horus" / "backlog" / "open.md").write_text(
+        "---\nstatus: open\ntopic: unproven\n---\n# Open\n", encoding="utf-8"
+    )
+
+    assert main(["consolidate", "--path", str(tmp_path)]) == 0
+    text = (tmp_path / ".horus" / "PRD.md").read_text(encoding="utf-8")
+    assert "- **proven** — 1 shipped, 0 open." in text
+    assert "unproven" not in text
+    assert "Regenerated PRD Vision directions" in capsys.readouterr().out
+
+
 def test_distill_history_cli_runs(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     main(["init", str(tmp_path), "--yes"])

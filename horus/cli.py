@@ -4351,7 +4351,10 @@ def cmd_consolidate(args: argparse.Namespace) -> int:
         return rc
     if root is None:
         return 2
+    directions_updated = routines.regenerate_directions(root)
     print(f"Consolidation check: {root}\n")
+    if directions_updated:
+        print("Regenerated PRD Vision directions from shipped topic standings.\n")
     findings = routines.consolidate_signals(root)
     healthy = _print_findings(findings)
     _print_product_audit_advisory(root)

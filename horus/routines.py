@@ -586,6 +586,10 @@ class TopicStanding:
     shipped: int
 
 
+DIRECTIONS_START = "<!-- directions:auto -->"
+DIRECTIONS_END = "<!-- /directions:auto -->"
+
+
 def topic_standings(root: Path) -> list[TopicStanding]:
     """Count active and shipped cards by free-form topic, including Unsorted."""
     counts: dict[str, list[int]] = {}
@@ -612,6 +616,46 @@ def topic_findings(root: Path) -> list[Finding]:
             for standing in standings
         ),
     )]
+
+
+def render_directions(root: Path) -> str:
+    """The complete generated Vision block, derived only from shipped topics."""
+    lines = [DIRECTIONS_START, "", "**Directions so far**"]
+    shipped = [
+        standing for standing in topic_standings(root)
+        if standing.topic and standing.shipped
+    ]
+    if shipped:
+        lines.append("")
+        lines.extend(
+            f"- **{standing.topic or 'Unsorted'}** — "
+            f"{standing.shipped} shipped, {standing.open} open."
+            for standing in shipped
+        )
+    lines.extend(["", DIRECTIONS_END])
+    return "\n".join(lines)
+
+
+def regenerate_directions(root: Path) -> bool:
+    """Replace only the marked Vision block. Returns whether PRD.md changed.
+
+    Projects without the stable markers are left untouched: Horus cannot infer
+    where their hand-authored Vision seed ends.
+    """
+    path = frontmatter.prd_path(root)
+    if not path.is_file():
+        return False
+    text = path.read_text(encoding="utf-8")
+    start = text.find(DIRECTIONS_START)
+    end = text.find(DIRECTIONS_END, start + len(DIRECTIONS_START)) if start >= 0 else -1
+    if start < 0 or end < 0:
+        return False
+    end += len(DIRECTIONS_END)
+    updated = text[:start] + render_directions(root) + text[end:]
+    if updated == text:
+        return False
+    path.write_text(updated, encoding="utf-8")
+    return True
 
 
 def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:

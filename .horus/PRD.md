@@ -1,11 +1,10 @@
 ---
 status: active
-current_focus: "2026-08-09 — the benchmark RAN and both tools DROP for agent-facing use. Six sessions over two pilot tasks on pinned SHA `e600407` (after merging #504): no accuracy difference in any cell, zero false claims, baseline cheapest both times, and the 'task was too easy' objection dies on task 3 (a four-file traversal where nothing confessed, still 4/4 for plain grep). Owner then reviewed the live published OpenWiki site and rejected its FORM, not the idea — closing question 2, the last audience either tool had. That opened a wider direction thread: the surviving value is the TUI launcher, the workflow/ceremony layer is doubted, and the dashboard's real differentiator is LOCAL-vs-REMOTE scope (the TUI can only see cloned projects). Nothing about the direction is fixed."
-next_action: "Owner's call, no dependency between them. (a) Shape `remote-sourced-project-view` — show every project's branches and cards from remote; its first step is rewording the Dashboard facet's definition of done, which still promises web/phone launching the owner no longer wants. (b) Decide the topics model in `d-backlog-model-topics-over-facets`. (c) Run `backstage-catalog-prior-art-scan`. (d) Fix the two `horus capabilities` defects: entries clipped where a PRD hard-wraps, and fleet mode missing `vision`/`generated_at`. A release has a standing argument (21 commits ahead of v0.0.81) but is its own decision."
-next_prompt: "Resume horus-harness; `git fetch --all --prune` first. The OpenWiki/Graphify question is CLOSED — read the `## Verdict` on its card before reopening any of it. `bench/baseline|graphify|openwiki` hold the evidence at `e600407`; the published site `horus-wiki.rafaelfigueiredo.com` is still running and serving a deleted branch, which is an untaken owner call. Direction work is live and unfinished: read `d-backlog-model-topics-over-facets` — the topics/discussion-card model, with three open questions. Note the Vision declines boards and the Dashboard facet's definition of done is now wrong. `graphify-out/` is untracked; regenerable, safe to delete."
-execution_recommendation: "continue-as-is — no delegation was requested; every open item is a bounded single-agent task or an owner decision."
-last_updated: 2026-08-09
-last_product_audit: 0.0.79 2026-07-31
+current_focus: "2026-08-12 — Phases 0-5 of the topics migration are implemented and pushed on `codex/retire-facets-for-topics`: card schema/data, tree projection, consolidate ledger, TUI/capabilities/CLI surfaces, retired skills, and the generated Vision directions block are green at their phase gates."
+next_action: "Complete Phase 6 by archiving the retired vision-branch umbrella and x4/x5/x6 child cards, then run the acceptance greps, full pytest suite, and live topic probes on the final SHA before opening and merging the PR."
+next_prompt: "Resume `codex/retire-facets-for-topics` after `git fetch --all --prune`. Phases 0-5 are pushed as green checkpoints. Read `.horus/backlog/retire-facets-for-topics.md`, perform only Phase 6 card relocation, then reproduce the full acceptance gate and land the PR."
+execution_recommendation: "continue-as-is — the owner requested direct execution of this fully specified migration; the remaining archive and verification work is bounded."
+last_updated: 2026-08-12
 horus_min_version: 0.0.26
 ---
 
@@ -13,24 +12,26 @@ horus_min_version: 0.0.26
 
 ## Vision
 
-Horus is a lightweight, repo-local **product owner** for official coding-agent CLIs (Claude Code, Codex, more later) — a PO's memory *and* rituals, made repo-local so any native agent session can pick up the role. Continuity is the proven spine. The Vision resolves into named **facets**, each with a definition of done the backlog converges toward (cards carry `vision_facet`):
+Horus is a lightweight, repo-local **product owner** for official coding-agent CLIs (Claude Code, Codex, more later) — a PO's memory *and* rituals, made repo-local so any native agent session can pick up the role. Continuity is the proven spine.
 
 **Why this exists.** Every fresh agent session started from zero — re-explaining what the project is, what was already decided, and what to do next — while an owner running several projects across multiple provider accounts and machines had no way to see or steer them without opening each terminal. Built for **one solo owner-operator**, deliberately: multi-human collaboration is a standing non-goal, which caps the audience on purpose. Two pivots shaped what it is now: **widened from "continuity layer" to "repo-local product owner"** (2026-07-16, after dogfooded research in `research/2026-07-16-po-capabilities.md`) with continuity staying the core and PO-lifecycle the open frontier; and the **continuity value finding** (2026-07-15) — the proven spine is resume frontmatter + pushed git/PR state + fetch-first, local recovery notes are an optional fallback, and the earlier multi-lane taxonomy plus mandatory per-session prose were overhead. Telling deliberate inheritance from legacy, so a reader never has to ask: the retired lane files in `.horus/archive/` are kept **on purpose** — this repo is the worked example of its own convergence machinery, not a project that forgot to clean up. Support for that retired structure was removed from the product on 2026-08-02; the archive is history, not a live layout. The package name **`horus-harness` is legacy, not a claim**: in agent-land a "harness" runs the agent loop (Claude Code and Codex are the harnesses) and this Vision explicitly disclaims orchestration; the name predates that clarity and is tracked by `product-naming`. Sibling repo `horus-agent` is an instruction rung that deliberately never grows Python or a service.
 
-| Facet | Definition of done |
-|---|---|
-| **Continuity core** | A fresh agent session resumes the exact next step from durable state alone, fetch-first, across machines. |
-| **Dashboard / cockpit** | Owner sees fleet state and launches/resumes any project from web or phone, no terminal command. |
-| **Accounts & isolation** | Every account runs isolated by default; cross-account corruption impossible; usage visible per account. |
-| **Delegation calibration** | Agent picks execute-vs-dispatch + a model tier from live measured data, owner-gated, honest cost — never auto-routing. |
-| **PO lifecycle** | The forward loop — market research → vision → vision-convergent roadmap → ship — runs repo-local (frontier: discovery + convergence are the open gap). |
-| **Introspection & self-improvement** | Every recurring surface, skill, and process can be audited against reality on evidence, yielding owner-gated verdicts (demote/defer/retire/revise), never ceremony. |
-| **Autonomous dispatch** | A scheduled worker+supervisor loop runs approved cards end-to-end on this machine under the owner's accounts and a standing pre-authorized envelope: dispatch attachable + worktree-isolated, independently verify (required CI on the exact SHA + freshness + live probe, never worker self-report), then merge/close/ship — or halt dependents and escalate. |
-| **Distribution** | `uv tool install` yields a safe, current, isolated setup on all three OSes; the hosted app tracks releases. |
-
-**The roadmap breathes — divergence then convergence (2026-07-16):** the facet set and their DoD are a *living hypothesis*, not a frozen contract. A project's real path is research → **divergence** (ideas explored as PoCs, some outside the first vision) → usage → **convergence** (drop, trim, rescope toward a consistent product; directions that prove out are promoted into new facets). Convergence is triggered by usage evidence, not schedule; exploratory work is expected to lack a facet/DoD until it earns one or is dropped. This repo is the worked example (multi-lane → consolidated PRD/backlog). Convergence machinery **shipped** (`roadmap-convergence`, archived); the open card is `explore-converge-lifecycle` (the explore phase).
-
 The durable value is the **memory + planning plane, never orchestration**: repo-local `.horus/` files any native agent can use without Horus running; a read-mostly dashboard (projects, current focus, next step, sessions, accounts/usage); visibility into which agent/account/environment touched a project. Deliberately NOT the superpowers/spec-kit framework depth.
+
+<!-- directions:auto -->
+
+**Directions so far**
+
+- **accounts-isolation** — 6 shipped, 1 open.
+- **autonomous-dispatch** — 23 shipped, 0 open.
+- **continuity-core** — 12 shipped, 0 open.
+- **dashboard-cockpit** — 17 shipped, 0 open.
+- **delegation-calibration** — 6 shipped, 0 open.
+- **distribution** — 3 shipped, 0 open.
+- **introspection-self-improvement** — 6 shipped, 0 open.
+- **po-lifecycle** — 6 shipped, 0 open.
+
+<!-- /directions:auto -->
 
 Model concretely: `project + agent + account + environment + session` — no abstract identity profiles. Native-app-first: design capabilities on Claude/Codex's own surfaces before a Horus-owned session layer. Execution planes own orchestration (see `research/omnigent.md`); Horus stays the memory/planning plane and interops via `.horus/`.
 
@@ -48,9 +49,9 @@ Model concretely: `project + agent + account + environment + session` — no abs
 | Required PR checks | CI | No — verifies field validity + git checkpoint state; it never blocks a merge on prose |
 | Managed block + projections | consumer projects across the fleet | No — vendored continuity; each project's own `horus_min_version` governs |
 
-**Out of scope:** the *distributed* execution/orchestration plane (multi-machine worker control, agent marketplace) — the single-machine, owner-pre-authorized dispatch loop was promoted in from this line on usage evidence (2026-07-17, vision-branch-x3); multi-user SaaS; identity abstraction; continuous external monitoring (the always-on competitor-scraping SaaS category — discovery is one-shot, evidence-first, not a live feed); rebuilding a ticket system (agent-first boundary below).
+**Out of scope:** the *distributed* execution/orchestration plane (multi-machine worker control, agent marketplace); multi-user SaaS; identity abstraction; continuous external monitoring (the always-on competitor-scraping SaaS category — discovery is one-shot, evidence-first, not a live feed); rebuilding a ticket system (agent-first boundary below).
 
-**Agent-first structure, minimal overhead (boundary, 2026-07-17):** Horus adapts proven work-system concepts (kanban, epics) for *agents* doing digital work. Every structure must be machine-readable and earn its place by making a fresh agent session act more correctly or more cheaply — never by adding human-process ceremony. Adopted translations: epics → vision-branch umbrellas; kanban pull → capacity-triggered dispatch; andon → escalation halts dependent work; WIP limits → collision control via `parallel`/`surface` stamps. Declined: sprints, story-point estimation, boards, standups, extra card workflow states. Multi-human parallel collaboration is a non-goal until real usage demands it.
+**Agent-first structure, minimal overhead (boundary, 2026-07-17):** Horus adapts proven work-system concepts for *agents* doing digital work. Every structure must be machine-readable and earn its place by making a fresh agent session act more correctly or more cheaply — never by adding human-process ceremony. Adopted translations: topics group related cards; kanban pull → capacity-triggered dispatch; andon → escalation halts dependent work; WIP limits → collision control via `parallel`/`surface` stamps. Declined: sprints, story-point estimation, boards, standups, extra card workflow states. Multi-human parallel collaboration is a non-goal until real usage demands it.
 
 ## Backlog
 
@@ -58,8 +59,6 @@ Prioritized open work. Features and bugs share one menu; jump order is allowed. 
 ### Open by readiness — see `.horus/backlog/`
 
 Counts and per-card state are NOT restated here — `horus backlog list` computes them exactly, and `horus backlog list --archived` shows what has shipped. Two of the away-mode drill's three legs are deliberately *reserved* (`verify-guidance-long-running-services`, `audit-advisory-interval`) via `readiness: deferred` plus a named trigger, which is the mechanism that keeps a reserved leg out of the selector. **Do not promote something to refill the autonomous queue.** The Shaping pool is deliberately unsequenced.
-
-**A facet can read as converged because its cards were shelved (2026-08-03).** Shipping the last open `Dashboard / cockpit` card left that facet with zero open cards, which `horus consolidate` reports identically to a converged one — while the owner states they are *not using the hosted dashboard at all*, i.e. it is nowhere near "sees fleet state and launches/resumes any project from web or phone". Its six cards are `shelved`, not delivered. So read a zero-open facet against its definition of done before crediting it, and note the live cockpit is the TUI. Whether the facet gets rescoped is a convergence decision for the owner, not a hygiene fix.
 
 **Refinement finding worth carrying (2026-07-28).** Conversion tracks the *kind* of open decision, not whether a card documents one: **30 of 36 Shaping cards already carried an explicit open-decisions section** (17 under the literal heading `## Open decisions for backlog-refine`) and the pass still converted 1 in 13. Editorial and parametric items resolve in one exchange; strategic and architectural ones do not, and should not — `merge-release-owner-gate` is the best-structured card in the repo and correctly went to its own session anyway. So cards now tag each open decision `[refine]` (answerable in a screening exchange) or `[session]` (needs a working session), and a card whose items are all `[session]` leaves the screening pool instead of costing an exchange every pass. `refine_passes:` (int, additive, seeded as a floor — 2 where a prior `last_refined` existed, else 1) makes "screened N times, never moved" deterministic, since `last_refined` overwrites and a no-change pass otherwise leaves no trace. Both land via `refine-autonomy-hardening-lens`.
 
@@ -88,7 +87,7 @@ SHA — and `horus backlog list --archived` lists the delivered cards with their
 
 **`horus-release` skill, and skill-invocation telemetry** (2026-08-02, #496 + #497): the release runbook stops living in three unversioned prose copies; `horus skill usage` counts which bundled skills are actually invoked, from a PreToolUse(`Skill`) hook verified live.
 
-**v0.0.81 released by a dispatched worker, end to end** (2026-08-01, tag `v0.0.81`, bump #490): first delivery datum the delegation-calibration facet has ever had — gpt-5.6-luna@max ran all ten steps in 362s, touched exactly 3 files, and left `.horus/` alone.
+**v0.0.81 released by a dispatched worker, end to end** (2026-08-01, tag `v0.0.81`, bump #490): first end-to-end delivery datum for delegation calibration — gpt-5.6-luna@max ran all ten steps in 362s, touched exactly 3 files, and left `.horus/` alone.
 
 **A session the owner closed reads as closed** (2026-08-01, #489): `registry.STOPPED` joins `TERMINAL`, `is_deliberate_close` reads the status+`termination_reason` pair so 73 historical rows self-correct without backfill, `orphaned` finally gets written by the reaper, and `delivery.NONCLEAN_STATUSES` keeps its receipt.
 
@@ -98,9 +97,8 @@ SHA — and `horus backlog list --archived` lists the delivered cards with their
 
 **The archive is the closed ledger, not the delivery ledger** (2026-08-01, #481): `--archived` headed all 132 cards "Shipped" when 22 had never been built, which misled this session into recording a retired card as delivered; `partition_archived` splits them and gives the graveyard its first read path.
 
-**`roadmap-branches` v8 — the narrative read-out restored** (2026-08-01, #480): four runs failed to reproduce the 2026-07-17 convergence-test receipt because a 2026-07-20 calibration turned section 1 from prose into a citation, relocating facet coverage into the branch list where it forced padding. 246 -> 180 lines.
 
-**Two settled cards, each with a defect its card had not foreseen** (2026-08-01, #484): the audit advisory needs 10 releases AND 14 days, the AND applying only within a minor line because `releases_since` is a lower bound across one; `wildcard` became the 20th bundled skill, exposing a missing v2 fallback.
+**Audit-advisory release clock corrected** (2026-08-01, #484): the advisory needs 10 releases AND 14 days, the AND applying only within a minor line because `releases_since` is a lower bound across one.
 
 **Long-running services are verified by signal, not by starting** (2026-08-01, #483, managed block v18): a service/daemon is verified when it reaches `active`/running AND emits its expected journal or health signal. Delivered by the away-mode drill's one real leg.
 
@@ -108,7 +106,6 @@ SHA — and `horus backlog list --archived` lists the delivered cards with their
 
 **Status line names the spending account** (2026-07-31, #467): row 1 becomes `user@host:cwd │ account │ model`, alias under isolation and the authenticated email outside it.
 
-**wildcard v5 — provenance, not formatting** (2026-07-31, #468): ideas come from facet-DoD-vs-code, owner friction and outside evidence; the backlog is a duplication check only, and every idea must be buildable and self-sufficient.
 
 **The CLI is the authority for shipped state** (2026-07-31, #469): `horus backlog list --archived` opens a read path onto the previously write-only archive; `prd_readiness_count_findings` retired with the prose cache it policed; a per-entry Shipped size signal replaces a line cap that could not see the problem.
 
@@ -122,11 +119,9 @@ SHA — and `horus backlog list --archived` lists the delivered cards with their
 
 **Local recovery notes untracked, and the checkpoint harvest fixed** (2026-07-31, #475 + #476): five notes were tracked against a gitignore rule present since the first commit, one at 164,300 chars; the harvest appended to the newest note by mtime, and appending updates mtime, so a note could never age out — it now refuses a note whose `status` is terminal.
 
-**The pathfinder chain corrected after three rejected runs** (2026-07-31, #477 + #478 + #479): the facet parser stopped reading the surfaces table as facets; `roadmap-branches` v4->v7 (directions not backlog, problem before mechanism, facet table restored as the spine); `pathfinder` v9->v10 (all 8 steps tabled); every skill projection pinned to source.
 
 **Rules narratives routed to history.md** (2026-07-31, #474): 22 over-budget entries -> 0; narrative-heavy rules condensed with the story moved to `archive/history.md`, dense spec rules split so each states one thing (71 -> 77).
 
-**`product-audit` rescoped to the host project, release clock unstuck** (2026-07-30, #463 `e3f0992` + #464 `b18358b` + #465 `477c1a4`, from #462): the skill audits the repo it runs in; `releases_since()` no longer cancels to zero across a minor bump.
 
 **v0.0.79 released, published and deployed** (2026-07-30, tag `v0.0.79`, bump #461 `383eab4`): carries #449 and #452–#460; cut only after a pre-release sweep found the headline feature non-functional.
 
@@ -277,9 +272,8 @@ SHA — and `horus backlog list --archived` lists the delivered cards with their
 ## Structure contract (prototype)
 
 - **This file** carries vision, backlog, shipped, rules. Keep it under ~250 lines: shipped items are one line; shipped cards move to `backlog/archive/` with status + PR/SHA intact; bugs get cards as found.
-- **`backlog/` (card pilot 2026-07-10, readiness 2026-07-19):** one card per item with lifecycle `status`, orthogonal `readiness: ready|shaping|gated|deferred`, `readiness_reason` on non-Ready cards, and `autonomy: eligible|attended` only on Ready cards; missing/malformed is Unclassified and never autonomously schedulable. `priority` stays orthogonal; optional execution metadata includes `parallel`/`surface`/`vision_facet`/`phase`/`branch`/`depends-on`/`last_refined`. Claim via `horus backlog claim`; after merge, `horus backlog ship <name> --pr N --sha SHA` preserves provenance under `backlog/archive/`.
-- **Vision branches (2026-07-17):** an explore direction bigger than one card gets a `vision-branch-*` umbrella card (thesis, exists-vs-gaps map, ordered children, convergence criterion) with children stamped `branch: <umbrella-name>`; the branch is judged — promoted to a facet or dropped — as a unit. Keep the umbrella thin (agents-first, minimal overhead): never mirror child status into it.
-- **Convergence (2026-07-16):** a `converge`-phase card (the default) names the `vision_facet` it advances, matched to a `## Vision` table facet; new/next-touched converge cards get one testable acceptance line. `phase: explore` marks a PoC exempt from that gate. `horus consolidate` emits the phase-aware read-out (per-facet coverage + exploratory bucket; warns off-vision/unknown-facet converge cards). The facet set is a living hypothesis — proven exploration is promoted into a new facet, not forced under an old one.
+- **`backlog/` (card pilot 2026-07-10, readiness 2026-07-19):** one card per item with lifecycle `status`, orthogonal `readiness: ready|shaping|gated|deferred`, `readiness_reason` on non-Ready cards, and `autonomy: eligible|attended` only on Ready cards; missing/malformed is Unclassified and never autonomously schedulable. `priority` stays orthogonal; optional execution metadata includes free-form `topic`, `parallel`/`surface`/`depends-on`/`last_refined`. Blank topics remain visible as `Unsorted`; prefer an existing topic before minting a new one. Claim via `horus backlog claim`; after merge, `horus backlog ship <name> --pr N --sha SHA` preserves provenance under `backlog/archive/`.
+- **Emergent directions (2026-08-12):** `horus consolidate` reports topic open/shipped counts and regenerates only the marked `## Vision` directions block. A topic appears there after at least one shipped card; the hand-authored seed is never overwritten.
 - **`sessions/`** unchanged: one note per session (`horus session new`); distilled notes → `sessions/archive/` (local).
 - **Frontmatter:** this file carries `current_focus` / `next_action` / `next_prompt` / `execution_recommendation` / `last_updated` — the tooling reads them PRD-first (`resolve_focus`), so no shims are needed. Describe the next unit and execution posture without pinning a model name; choose the model from live calibration only after delegation earns its cost.
 - **Closure:** the ritual and its enforcement are the `## Rules` above (boundary policy, direct-push exemption, fetch-first `close --commit --push`, final-state reporting); a `sessions/` recovery note is added only when durable state cannot resume the work.
