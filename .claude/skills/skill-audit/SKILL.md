@@ -9,11 +9,11 @@ description: >-
   deliberately no staleness advisory. Verdicts are revise (with the exact
   replacement text, owner-approved) / demote / defer / retire / no-change;
   the outcome lands in a dated `.horus/audits/` receipt. Never auto-edits a
-  skill. For the whole product surface use `product-audit`; for one
-  campaign's execution use `process-retrospective`.
+  skill. A whole-product review is out of scope; for one campaign's execution
+  use `process-retrospective`.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Skill audit — one skill's text vs reality
 
@@ -24,11 +24,9 @@ generator that writes them, and a verdict there would have nowhere to land.
 Auditing a target project's *own* skills is not supported yet.
 
 You are auditing the *text* of one skill against how the world and its real
-runs actually behaved. This is distinct from `product-audit` (the whole
-product surface, prune-only, can never propose growth) and
-`process-retrospective` (one campaign incident). This skill's whole purpose
-is amendment — its verdict set includes the one thing product-audit forbids:
-proposing better text.
+runs actually behaved. This is distinct from `process-retrospective` (one
+campaign incident). This skill's whole purpose is amendment: proposing better
+text for one named skill.
 
 ## When this fires
 

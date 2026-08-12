@@ -18,12 +18,12 @@ description: >-
   telemetry stream.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Process retrospective — bounded, evidence-first
 
-You are examining how one campaign or episode went, not auditing the Horus
-product (that's `product-audit`, periodic and prune-only) and not closing
+You are examining how one campaign or episode went, not auditing the whole Horus
+product and not closing
 continuity (that's `horus-consolidate`). This skill never runs on its own —
 only on an explicit owner ask or a concrete incident.
 
@@ -119,6 +119,5 @@ itself grounds for delegating.
 
 After roughly three real uses, check whether it produced findings that were
 actually new — not a restatement of generic reasoning — and cheaper than the
-overhead of running it. If not, recommend demoting or retiring it via
-`product-audit`.
+overhead of running it. If not, recommend demoting or retiring it to the owner.
 

@@ -10,15 +10,15 @@ description: >-
   asked) and have a supervisor close it out or ping me", or says
   "autonomous dispatch", "run the away-mode loop", "schedule and supervise a card".
   A THIN sequencer over existing machinery — it composes `dispatch-decision`
-  (mode/account/tier/depth), `backlog-refine`/`scope-cards`/`pathfinder`/`roadmap-branches`
-  (ready-gate), and the `horus envelope`/`schedule`/`run`/`supervise`/`notify`
+  (mode/account/tier/depth), `backlog-refine` (ready-gate), and the `horus
+  envelope`/`schedule`/`run`/`supervise`/`notify`
   commands; it never re-implements them. Advisory and owner-gated at EVERY step:
   it proposes, the owner confirms each gate. It never selects a model, routes an
   account, or launches anything without the explicit consent envelope. Not
   continuous monitoring; single-machine, non-recurring dispatch only.
 ---
 
-<!-- horus-skill-version: 5 -->
+<!-- horus-skill-version: 6 -->
 
 # Cockpit autonomous-dispatch contract
 
@@ -52,10 +52,10 @@ Judge the card against **the execution-ready card contract in `backlog-refine`**
 that section is the single authority; do not maintain a rival checklist here. A
 candidate must be `readiness: ready` and `autonomy: eligible`; missing readiness is
 Unclassified and never scheduler-eligible. `autonomy: attended`, Shaping, Gated,
-Deferred, and vision-branch umbrellas are not unattended candidates. If the
+Deferred cards are not unattended candidates. If the
 direction holds but the card is thin or Unclassified, STOP and route it through
-`backlog-refine`. If the direction itself is unclear, use the full `pathfinder`
-chain (`roadmap-branches` → `scope-cards` → `backlog-refine`). A fresh unattended
+`backlog-refine`. If the direction itself is unclear, stop and return that decision
+to the owner. A fresh unattended
 worker gets only the card, so the final contract must already be durable.
 
 ### 4. Decide
