@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: ready
 autonomy: attended
@@ -11,6 +11,8 @@ parallel: unsafe
 tier: large
 surface: "horus/backlog.py, horus/backlog_tree.py, horus/routines.py, horus/templates.py, horus/terminal_tui.py, horus/capabilities.py, horus/cli.py, .claude/skills/*, .horus/PRD.md, .horus/backlog/*"
 depends-on: d-backlog-model-topics-over-facets
+shipped_pr: 506
+shipped_sha: 9ee4e53957dc36ef64e7dbf5fd7ecfa7881f8594
 ---
 
 # retire-facets-for-topics — full teardown of the vision/facet apparatus, replaced by emergent topics
