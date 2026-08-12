@@ -48,9 +48,9 @@ emergent section (see the sibling card `emerging-vision-mechanism`).
 
 ## Ordered phases
 
-Each phase is one PR-sized checkpoint. Phases 0–3 and 6 are deterministic code work safe to
-run start-to-finish. **Phases 4–5 are judgment-heavy and are owner checkpoints — stop and
-surface a proposal, do not unilaterally delete skills or rewrite the Vision.**
+Each phase is one PR-sized checkpoint, run start to finish — **no stops.** Every decision the
+plan once deferred to the owner is now fixed below (owner, 2026-08-12): retire the whole
+facet-coupled skill suite, a concrete emergent-Vision spec, and archive the branch cards.
 
 ### Phase 0 — Card data model (`backlog.py`, `templates.py`, existing cards)
 - `backlog.py`: add `topic: str` to `Card` (default `""`), parse it (mirror the
@@ -92,34 +92,50 @@ surface a proposal, do not unilaterally delete skills or rewrite the Vision.**
 - Gate: `pytest tests/test_terminal_tui.py tests/test_capabilities.py`; TUI Direction view
   renders topics; `horus capabilities` clean.
 
-### Phase 4 — Skills teardown (`.claude/skills/*`, `horus/skills.py`) — OWNER CHECKPOINT
-The divergence/convergence suite is built on the facet spine. Do **not** delete unilaterally.
-Produce a disposition proposal for the owner, one line each, then execute only what's approved:
-- `product-audit`, `roadmap-branches`, `scope-cards`, `market-scan`, `pathfinder`, `wildcard`,
-  `convergence`/`explore-converge-lifecycle` — recommend **retire** (they encode facet DoD and
-  divergence→convergence, which no longer exists) vs **rework onto topics**.
-- `skills.py` carries ~106 facet references (mostly skill-description prose + routing). Grep
-  `facet|vision_facet|convergence` and rewrite/remove per the approved dispositions.
-- Gate: `pytest tests/test_skills.py`; `horus skill list` clean; no skill references a dead concept.
+### Phase 4 — Skills teardown (`.claude/skills/*`, `horus/skills.py`)
+**Retire the entire facet-coupled divergence/convergence/audit suite** (owner, 2026-08-12).
+- Delete these directories under `.claude/skills/`: `product-audit`, `roadmap-branches`,
+  `scope-cards`, `market-scan`, `pathfinder`, `wildcard`, `explore-converge-lifecycle` (and any
+  `convergence`/`roadmap-convergence` remnant).
+- Keep `backlog-refine` and `backlog-librarian`; strip `facet`/`vision_facet`/`branch`/
+  `convergence` vocabulary from their text only — grooming logic stays.
+- Repoint `horus-consolidate` skill text from facet standings to the topic read-out (the code
+  half is Phase 2).
+- `horus/skills.py` (~106 facet refs): remove registry entries/descriptions for the retired
+  skills and any router that sequences them (e.g. pathfinder); grep
+  `facet|vision_facet|convergen|divergen` and remove/rewrite each remaining hit.
+- The future replacement is carded separately (`rework-direction-skills-onto-topics`) — do NOT
+  build it here.
+- Gate: `pytest tests/test_skills.py`; `horus skill list` clean; grep of `.claude/skills/` and
+  `horus/skills.py` for `facet|vision_facet|convergen` returns nothing.
 
-### Phase 5 — PRD.md + emerging Vision — OWNER CHECKPOINT
-- Replace the `## Vision` facet table (PRD.md:20–31) per the `emerging-vision-mechanism` card:
-  a hand-authored initial-vision seed + an emergent block derived from topic standings.
-- Remove the facet/branch/convergence Rules (:280–282) and any facet prose; keep the durable
-  non-facet rules.
+### Phase 5 — PRD.md + emerging Vision (`.horus/PRD.md`, `routines.py`, `templates.py`)
+Implement `emerging-vision-mechanism` with these fixed decisions:
+- **Seed (kept verbatim):** the opening Vision prose (PRD.md:16, :18, :33) minus the single
+  sentence introducing the facet table ("The Vision resolves into named **facets**…"). Delete
+  the facet table (:20–29) and the divergence/convergence paragraph (:31).
+- **Emergent block:** `consolidate` regenerates a "Directions so far" list from `topic_standings`
+  between stable markers in `## Vision` (`<!-- directions:auto -->`…`<!-- /directions:auto -->`)
+  so the seed is never clobbered. One line per topic with **≥1 shipped card**: topic name + a
+  plain "where it stands" from open/shipped counts. No DoD. Zero-shipped topics are not rendered.
+- Remove the facet/branch/convergence Rules (:280–282) and residual facet prose; keep durable
+  non-facet rules. Apply the same edits to the `templates.py` PRD template.
 - Refresh frontmatter (`current_focus`, `next_action`, `next_prompt`, `last_updated`).
+- Gate: `horus consolidate` regenerates the directions block, the seed survives untouched, and a
+  zero-shipped topic does not appear.
 
 ### Phase 6 — Vision-branch card cleanup (`.horus/backlog/`)
-- The `vision-branch-x3..x6` umbrellas and their `x4-*/x5-*/x6-*` children are already shelved.
-  Archive them as historical exploration (move to `backlog/archive/`) or re-home under a
-  `topic:` — recommend **archive**; they are parked branches of a retired model. Owner confirms.
+**Archive** (owner, 2026-08-12). Move the `vision-branch-x3..x6` umbrellas and their
+`x4-*/x5-*/x6-*` children to `.horus/backlog/archive/` — parked branches of the retired model,
+kept as history, not re-homed under topics. Relocate only; strip no content.
 
 ## Acceptance
 - No `vision_facet`, `phase`, `branch`, or `facet_standings` symbol remains in `horus/*.py`
   (grep clean); `topic` grouping works end to end (`horus backlog --tree`, TUI, `consolidate`).
 - Full suite green on the final SHA. Live probes: `horus backlog --tree`, `horus consolidate`,
   TUI Direction view all render topics with no facet vocabulary.
-- Phases 4–5 executed only against owner-approved dispositions.
+- No retired skill remains under `.claude/skills/`; `## Vision` shows seed + regenerated
+  directions block; the branch cards are archived.
 
 ## Source
 Owner decision 2026-08-12 (full teardown) implementing `d-backlog-model-topics-over-facets`.
