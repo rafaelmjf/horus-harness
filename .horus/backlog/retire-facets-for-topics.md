@@ -6,11 +6,10 @@ autonomy: attended
 created: 2026-08-12
 created_by: owner
 type: feature
-phase: explore
+topic: backlog-model
 parallel: unsafe
 tier: large
 surface: "horus/backlog.py, horus/backlog_tree.py, horus/routines.py, horus/templates.py, horus/terminal_tui.py, horus/capabilities.py, horus/cli.py, .claude/skills/*, .horus/PRD.md, .horus/backlog/*"
-topic: backlog-model
 depends-on: d-backlog-model-topics-over-facets
 ---
 

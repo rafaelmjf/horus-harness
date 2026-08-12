@@ -3,6 +3,7 @@ status: retired
 priority: deferred
 tier: sonnet
 type: feature
+topic: ""
 created: 2026-07-10
 archived: 2026-07-15
 ---

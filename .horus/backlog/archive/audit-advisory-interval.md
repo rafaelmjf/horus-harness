@@ -7,9 +7,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "RELEASED 2026-08-01 — the reservation is void: it was payload for `autotest-e2e-away-mode-drill`, which was retired today, and this card's own trigger said it releases when the drill is abandoned. Decision-complete and implementable: the interval formula is confirmed below as 10 releases AND 14 days."
-phase: converge
+topic: introspection-self-improvement
 type: chore
-vision_facet: "Introspection & self-improvement"
 shipped_pr: 484
 shipped_sha: 464427c76f7603a9985f0faa99d8cfe9864fa7c9
 ---

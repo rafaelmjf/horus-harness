@@ -579,114 +579,83 @@ def _prd_skeleton_gaps(prd_body: str) -> list[str]:
     return gaps
 
 
-def _vision_facets(prd_body: str) -> list[str]:
-    """Facet names from the FIRST markdown table under `## Vision` — the bold text of
-    each row's first column. Header/separator rows carry no bold and are skipped.
-
-    Scoped to the first table on purpose. `## Vision` grew a second one — the
-    surfaces-and-audiences table (2026-07-28) — and scanning every row made its one
-    bolded cell, ``**`.horus/` files**``, a phantom ninth facet: reported as
-    "converged, no open cards" by the consolidate read-out, counted by
-    `facet_standings`, rendered in the TUI Direction view, and accepted as a valid
-    `vision_facet` on a card. A surface is not a facet."""
-    facets: list[str] = []
-    started = False
-    for line in _section(prd_body, "Vision").splitlines():
-        line = line.strip()
-        if not line.startswith("|"):
-            if started:
-                break  # end of the first table
-            continue
-        started = True
-        first = line.strip("|").split("|", 1)[0].strip()
-        m = _BOLD_TITLE_RE.match(first)
-        if m:
-            facets.append(m.group(1).strip())
-    return facets
-
-
-def _norm_facet(name: str) -> str:
-    """Whitespace/case-insensitive key so a card's `vision_facet` matches a Vision
-    facet without demanding byte-exact casing/spacing."""
-    return " ".join(name.lower().split())
-
-
 @dataclass(frozen=True)
-class FacetStandings:
-    """The phase-aware convergence read-out as structured data, so every surface
-    (the `horus consolidate` prose and the TUI direction view) renders one analysis
-    rather than re-deriving it. ``with_work`` is in Vision-table order."""
-
-    with_work: list[tuple[str, int]]   # (facet, open-card count), only facets with >0
-    no_work: list[str]                 # facets with no open converge cards
-    explore: list[str]                 # exploratory (phase=explore) card names, sorted
-    drift: list[str]                   # converge cards missing/naming-an-unknown facet
+class TopicStanding:
+    topic: str
+    open: int
+    shipped: int
 
 
-def facet_standings(root: Path, prd_body: str) -> FacetStandings | None:
-    """Map active backlog cards onto `## Vision` facets via `vision_facet`. Advisory
-    and read-only; `converge` cards must name a known facet, `explore` cards are
-    exempt. Returns ``None`` when the PRD carries no facet table (⇒ no read-out)."""
-    facets = _vision_facets(prd_body)
-    if not facets:
-        return None
-    facet_by_key = {_norm_facet(f): f for f in facets}
-    counts: dict[str, int] = {f: 0 for f in facets}
-    explore: list[str] = []
-    drift: list[str] = []
+DIRECTIONS_START = "<!-- directions:auto -->"
+DIRECTIONS_END = "<!-- /directions:auto -->"
+
+
+def topic_standings(root: Path) -> list[TopicStanding]:
+    """Count active and shipped cards by free-form topic, including Unsorted."""
+    counts: dict[str, list[int]] = {}
     for card in backlog.load_active_cards(root):
-        if card.phase == backlog.EXPLORE_PHASE:
-            explore.append(card.name)
-            continue
-        if not card.vision_facet:
-            drift.append(
-                f"card '{card.name}' is converge-phase with no vision_facet — "
-                f"link it to a Vision facet or set `phase: explore`"
-            )
-            continue
-        matched = facet_by_key.get(_norm_facet(card.vision_facet))
-        if matched is None:
-            drift.append(
-                f"card '{card.name}' targets unknown facet "
-                f"'{card.vision_facet}' — fix the name or add the facet to the Vision"
-            )
-            continue
-        counts[matched] += 1
-    return FacetStandings(
-        with_work=[(f, n) for f, n in counts.items() if n],
-        no_work=[f for f, n in counts.items() if not n],
-        explore=sorted(explore),
-        drift=drift,
-    )
+        counts.setdefault(card.topic, [0, 0])[0] += 1
+    for card in backlog.load_archived_cards(root):
+        if card.status == "shipped":
+            counts.setdefault(card.topic, [0, 0])[1] += 1
+    return [
+        TopicStanding(topic=topic, open=count[0], shipped=count[1])
+        for topic, count in sorted(counts.items(), key=lambda item: (item[0] == "", item[0]))
+    ]
 
 
-def convergence_findings(root: Path, prd_body: str) -> list[Finding]:
-    """Phase-aware convergence read-out as advisory Findings for `horus consolidate`
-    — a thin prose rendering of :func:`facet_standings`."""
-    standings = facet_standings(root, prd_body)
-    if standings is None:
+def topic_findings(root: Path) -> list[Finding]:
+    """Render the emergence ledger consumed by ``horus consolidate``."""
+    standings = topic_standings(root)
+    if not standings:
         return []
-    findings: list[Finding] = []
-    if standings.with_work:
-        findings.append(Finding(
-            "ok",
-            "convergence: facets with open work — "
-            + ", ".join(f"{f} ({n})" for f, n in standings.with_work),
-        ))
-    if standings.no_work:
-        findings.append(Finding(
-            "ok",
-            "convergence: no open cards (converged or untouched — judge vs the facet's "
-            "definition of done) — " + ", ".join(standings.no_work),
-        ))
-    if standings.explore:
-        findings.append(Finding(
-            "ok",
-            f"convergence: {len(standings.explore)} exploratory card(s), Ready-gate exempt — "
-            + ", ".join(standings.explore),
-        ))
-    findings.extend(Finding("warn", f"convergence: {msg}") for msg in standings.drift)
-    return findings
+    return [Finding(
+        "ok",
+        "topics: " + ", ".join(
+            f"{standing.topic or 'Unsorted'} ({standing.open} open, {standing.shipped} shipped)"
+            for standing in standings
+        ),
+    )]
+
+
+def render_directions(root: Path) -> str:
+    """The complete generated Vision block, derived only from shipped topics."""
+    lines = [DIRECTIONS_START, "", "**Directions so far**"]
+    shipped = [
+        standing for standing in topic_standings(root)
+        if standing.topic and standing.shipped
+    ]
+    if shipped:
+        lines.append("")
+        lines.extend(
+            f"- **{standing.topic or 'Unsorted'}** — "
+            f"{standing.shipped} shipped, {standing.open} open."
+            for standing in shipped
+        )
+    lines.extend(["", DIRECTIONS_END])
+    return "\n".join(lines)
+
+
+def regenerate_directions(root: Path) -> bool:
+    """Replace only the marked Vision block. Returns whether PRD.md changed.
+
+    Projects without the stable markers are left untouched: Horus cannot infer
+    where their hand-authored Vision seed ends.
+    """
+    path = frontmatter.prd_path(root)
+    if not path.is_file():
+        return False
+    text = path.read_text(encoding="utf-8")
+    start = text.find(DIRECTIONS_START)
+    end = text.find(DIRECTIONS_END, start + len(DIRECTIONS_START)) if start >= 0 else -1
+    if start < 0 or end < 0:
+        return False
+    end += len(DIRECTIONS_END)
+    updated = text[:start] + render_directions(root) + text[end:]
+    if updated == text:
+        return False
+    path.write_text(updated, encoding="utf-8")
+    return True
 
 
 def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
@@ -780,10 +749,9 @@ def _consolidate_signals_v3(root: Path, hdir: Path) -> list[Finding]:
         + " · ".join(f"{group.label} ({len(group.cards)})" for group in groups),
     ))
 
-    # 6. Phase-aware convergence read-out (advisory): where the backlog sits against
-    # the Vision facets. Its "ok" lines are a report and always print; only off-vision
-    # or unknown-facet cards raise a warn.
-    findings.extend(convergence_findings(root, doc.body))
+    # 6. Emergence ledger: every active or shipped card remains visible under its
+    # free-form topic, with blank topics called out explicitly as Unsorted.
+    findings.extend(topic_findings(root))
 
     if not any(f.level in ("warn", "fail") for f in findings):
         findings.append(Finding(

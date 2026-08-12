@@ -4,6 +4,7 @@ priority: deferred
 tier: opus
 created: 2026-07-14
 type: feature
+topic: ""
 ---
 
 > Retired 2026-07-14 (owner triage): explicitly evidence-gated and there is still one

@@ -5,6 +5,7 @@ priority: medium
 tier: sonnet
 parallel: safe
 type: bug
+topic: ""
 surface:
   - horus/cli.py
   - horus/closure.py

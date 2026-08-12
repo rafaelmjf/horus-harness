@@ -4,6 +4,7 @@ priority: medium
 tier: sonnet
 created: 2026-07-16
 type: feature
+topic: ""
 parallel: safe
 surface: new .claude/skills/product-audit (bundled via horus/skills.py), horus/cli.py (staleness signal), PRD frontmatter stamp
 shipped: 2026-07-16

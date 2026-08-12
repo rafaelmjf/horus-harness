@@ -10,9 +10,8 @@ refine_passes: 2
 tier: high
 type: feature
 parallel: unsafe
-phase: explore
+topic: model-harness-plane
 created_by: owner
-branch: vision-branch-x4-model-harness-plane
 surface: horus/proxy.py, horus/adapters/claude.py, horus/adapters/base.py, horus/statusline.py, tests/test_proxy.py, tests/test_statusline.py
 ---
 

@@ -9,9 +9,8 @@ refine_passes: 1
 readiness: ready
 autonomy: attended
 order: 40
-phase: converge
+topic: dashboard-cockpit
 type: feature
-vision_facet: "Dashboard / cockpit"
 parallel: exclusive
 depends-on: tui-remote-freshness-indicator
 surface: horus/terminal_tui.py, horus/sync.py, horus/gitstate.py

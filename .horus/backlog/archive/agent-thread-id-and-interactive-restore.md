@@ -6,11 +6,10 @@ created_by: agent
 readiness: ready
 autonomy: attended
 readiness_reason: "No shape decisions remain. Naming settled (the verb is 'restore', owner 2026-07-30) and the recording question settled by the code in #456: there is no stream on the interactive path, so the answer is asymmetric per adapter and is now declared as `assigns_interactive_thread_id`. Step 1 shipped; steps 2 (resume-capable `interactive_command`) and 3 (TUI restore surface) are mechanical against a proven id. Attended because verifying it means launching real agent sessions and reading their history back — a wrong thread id reopens somebody else's conversation, which no deterministic gate catches."
-phase: converge
+topic: continuity-core
 type: feature
 tier: high
 parallel: unsafe
-vision_facet: "Continuity core"
 surface: horus/registry.py (agent_session_id:145-147), horus/adapters/claude.py (interactive_command:169-191, build_command:114-118), horus/adapters/codex.py (interactive_command:132-152), horus/launch.py (prepare_interactive:55-118)
 shipped_pr: 458
 shipped_sha: 531313d

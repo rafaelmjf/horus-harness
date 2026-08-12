@@ -8,6 +8,7 @@ parallel: exclusive
 surface: horus/dashboard.py
 folded_into: mobile-terminal-ux-hardening
 shipped:
+topic: ""
 ---
 
 > **FOLDED IN (2026-07-12) → `mobile-terminal-ux-hardening.md`** (symptom 1). The

@@ -6,11 +6,10 @@ autonomy: eligible
 readiness_reason: "Root-caused live on 2026-07-25 from this machine's own argv, reproduced with a one-line CLI probe, and both candidate fixes were verified against the live `claude` binary. The remedy is a two-token edit in one function plus the regression test the existing suite is missing."
 created: 2026-07-25
 created_by: claude
-vision_facet: "Continuity core"
+topic: continuity-core
 tier: small
 type: bug
 parallel: safe
-phase: converge
 surface: "horus/adapters/claude.py:169-176 (interactive_command), tests/test_claude_adapter.py:172"
 shipped_pr: 403
 shipped_sha: 90e3fb1

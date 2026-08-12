@@ -2,8 +2,7 @@
 status: shipped
 priority: medium
 created: 2026-07-18
-vision_facet: "Introspection & self-improvement"
-phase: converge
+topic: introspection-self-improvement
 tier: sonnet
 type: feature
 parallel: safe

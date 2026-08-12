@@ -5,6 +5,7 @@ priority: high
 tier: sonnet
 parallel: safe
 type: task
+topic: ""
 surface: horus resume / status / usage / fetch-check, frontmatter projection, sessions registry
 created: 2026-07-14
 created_by: overseer

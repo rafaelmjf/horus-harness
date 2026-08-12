@@ -7,7 +7,7 @@ readiness_reason: "Resume when Horus has a real per-card usage signal for the re
 created: 2026-07-16
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "PO lifecycle"
+topic: po-lifecycle
 tier: medium
 type: feature
 parallel: safe

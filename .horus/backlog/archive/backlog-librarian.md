@@ -6,9 +6,8 @@ created_by: owner
 last_refined: 2026-07-21
 readiness: shaping
 readiness_reason: "Wildcard-proposed and owner-approved as a direction; the staleness threshold, digest delivery, detection method, and schedule/budget are all open. Explore before drafting the job."
-phase: explore
+topic: autonomous-dispatch
 type: feature
-vision_facet: "Autonomous dispatch"
 shipped_pr: 392
 shipped_sha: 2d7c4bea9c4c906e2388d67b6a3e34dfe8c35e06
 ---

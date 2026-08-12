@@ -5,9 +5,8 @@ created: 2026-08-07
 created_by: owner
 readiness: shaping
 readiness_reason: "ANSWERED 2026-08-09 — see `## Verdict`. Six runs over two of the three pilot tasks (task 2 skipped as the same shape as task 1) on pinned SHA e600407: no accuracy difference in either task, zero false claims in any condition, baseline cheapest both times. Both tools DROP for agent-facing use; the owner closed question 2 by reviewing the live site and rejecting its form. Nothing remains to run — the card is complete and awaits only the owner's archive."
-phase: explore
+topic: introspection-self-improvement
 type: spike
-vision_facet: "Introspection & self-improvement"
 ---
 
 # openwiki-graphify-value-benchmark — test generated context against the repo-native baseline

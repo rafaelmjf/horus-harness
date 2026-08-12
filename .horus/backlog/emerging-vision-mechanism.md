@@ -6,11 +6,10 @@ autonomy: attended
 created: 2026-08-12
 created_by: owner
 type: feature
-phase: explore
+topic: backlog-model
 parallel: safe
 tier: medium
 surface: "horus/routines.py (consolidate read-out + Vision block), .horus/PRD.md (## Vision), horus/templates.py (PRD template)"
-topic: backlog-model
 depends-on: retire-facets-for-topics
 ---
 

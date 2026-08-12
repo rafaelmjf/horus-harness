@@ -7,8 +7,7 @@ readiness_reason: "Park until the X3 kit ships and a real provider-roster need a
 created: 2026-07-17
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Delegation calibration"
-phase: explore
+topic: delegation-calibration
 tier: medium
 type: feature
 parallel: safe

@@ -3,6 +3,7 @@ status: retired
 priority: low
 tier: sonnet
 type: feature
+topic: ""
 created: 2026-07-12
 created_by: overseer
 parallel: true

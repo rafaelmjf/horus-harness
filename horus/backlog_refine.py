@@ -151,7 +151,7 @@ def refine_prompt(root: Path) -> str:
         "Approved order lands as sparse integer `order:` frontmatter (gaps of 10, so a "
         "later insert at 15 renumbers nothing). It sequences cards WITHIN a readiness "
         "queue; unstamped cards stay in the unsequenced pool after the stamped ones. "
-        "Say per card when a `depends-on`, branch grouping, priority, or "
+        "Say per card when a `depends-on`, topic grouping, priority, or "
         "`surface`/`parallel` collision forced a position. Ordering is planning I "
         "approve, never authority to run anything.",
     ])

@@ -5,11 +5,10 @@ created: 2026-07-31
 created_by: owner
 readiness: shaping
 readiness_reason: "PARTIALLY DELIVERED by #489 (v0.0.81): the one path that had a signal and discarded it now records `stopped`. What remains is undecided, not unshaped — the two native paths where no signal ever existed (a tmux kill is indistinguishable from a crash by exit code; herdr reports none), and above them the owner's standing question of whether the Sessions status column should be RETIRED rather than repaired. Needs a working session, plus the Codex/herdr state read."
-phase: converge
+topic: dashboard-cockpit
 type: feature
 tier: medium
 parallel: safe
-vision_facet: "Dashboard / cockpit"
 surface: horus/registry.py (TERMINAL + status vocabulary), horus/terminal_sessions.py (stop_session, reap_orphans, reconcile), horus/terminal_tui.py (Sessions view rendering), horus/dashboard.py (_SESSION_STATUS_CLASS, session rows)
 shipped_pr: 498
 shipped_sha: 3f0812d

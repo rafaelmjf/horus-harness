@@ -46,6 +46,7 @@ import fnmatch
 import getpass
 import re
 import subprocess
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -55,6 +56,7 @@ from horus.continuity import Finding
 BACKLOG_DIR = "backlog"
 ARCHIVE_DIR = "archive"
 _CLAIM_LOCK_FILE = ".claim.lock"
+_CLAIM_THREAD_LOCK = threading.RLock()
 REVIEWS_HEADING = "## Reviews"
 REVIEW_SOURCES = ("manual", "agent")
 
@@ -75,9 +77,8 @@ SHELVED_STATUS = "shelved"
 # `shelved` exists because `deferred` did not work: 26 cards carried it, all were
 # screened twice on 2026-07-28, and none moved — "we'll get to it" is a queue that
 # never drains. Shelving makes not-deciding explicit and cheap instead of a backlog
-# entry that costs attention on every pass. The measured case for it: cards stamped
-# `phase: explore` shipped at 16% while `converge` cards shipped at 77%, so the
-# speculative pool is where work goes to accumulate, not to get done.
+# entry that costs attention on every pass. The speculative pool is where work
+# goes to accumulate, not to get done.
 #
 # This tuple is the ONE definition. `fleet_review` imported a hand-copied duplicate
 # until 2026-08-01; a second copy of a status list is how a status gets added in one
@@ -90,9 +91,6 @@ _INACTIVE_STATUSES = INACTIVE_STATUSES
 # `--type` filter) rather than folder separation. Unset/blank defaults to "task".
 CARD_TYPES = ("bug", "feature", "chore", "task")
 DEFAULT_TYPE = "task"
-DEFAULT_PHASE = "converge"  # product work; explore cards opt in with `phase: explore`
-EXPLORE_PHASE = "explore"
-
 READINESS_READY = "ready"
 READINESS_SHAPING = "shaping"
 READINESS_GATED = "gated"
@@ -158,8 +156,7 @@ class Card:
     parallel: str  # "safe" | "exclusive" | "" (unstated)
     surface: tuple[str, ...]
     type: str  # "bug" | "feature" | "chore" | "task" — defaults to "task" if unstated
-    vision_facet: str  # the `## Vision` facet this card advances ("" if unstated)
-    phase: str  # "explore" | "converge" — defaults to "converge" (product work)
+    topic: str  # free-form grouping slug; "" buckets to Unsorted
     readiness: str  # ready | shaping | gated | deferred; "" = Unclassified
     readiness_reason: str  # required for every non-Ready readiness
     autonomy: str  # eligible | attended, required only when readiness=ready
@@ -246,8 +243,7 @@ def _card_from_path(path: Path) -> Card:
         parallel=fm.get("parallel", "").strip().lower(),
         surface=_parse_surface(fm.get("surface", "")),
         type=fm.get("type", "").strip().lower() or DEFAULT_TYPE,
-        vision_facet=str(fm.get("vision_facet", "")).strip().strip("'\"").strip(),
-        phase=str(fm.get("phase", "")).strip().lower() or DEFAULT_PHASE,
+        topic=str(fm.get("topic", "")).strip().strip("'\"").strip(),
         readiness=str(fm.get("readiness", "")).strip().lower(),
         readiness_reason=str(fm.get("readiness_reason", "")).strip().strip("'\"").strip(),
         autonomy=str(fm.get("autonomy", "")).strip().lower(),
@@ -628,9 +624,8 @@ def hygiene_findings(root: Path) -> list[Finding]:
             ))
         # A bug is a problem that ALREADY ARRIVED, so it is never a candidate for
         # the shelf, which exists for work whose problem may never come. This is
-        # not a preference: on this repo's own ledger bugs shipped 32-of-37 (~86%)
-        # while `phase: explore` cards shipped 9-of-57 (16%). Shelving a bug boxes
-        # a known real defect and — because the shelf is invisible to every working
+        # not a preference: shelving a bug boxes a known real defect and — because
+        # the shelf is invisible to every working
         # view — makes the fleet row's bug count structurally unable to surface it.
         # `fail`, not `warn`: the whole point is that it cannot be done quietly.
         if card.type == "bug" and card.status == SHELVED_STATUS:
@@ -767,25 +762,24 @@ def _claim_lock(root: Path):
     `status: claimed`, so without this lock neither sees the other as
     in-progress and the overlap/exclusive guardrail can be bypassed (TOCTOU).
     `flock` is held for the whole check-then-set-status section below."""
-    hdir = backlog_dir(root)
-    hdir.mkdir(parents=True, exist_ok=True)
-    # fcntl is Unix-only; a top-level import broke `horus` entirely on Windows
-    # (install-smoke: ModuleNotFoundError on any CLI invocation). There the
-    # claim guard degrades to advisory (msvcrt locking isn't equivalent and
-    # single-user Windows overlap is theoretical), which matches the guard's
-    # intent — best-effort TOCTOU protection, not a correctness invariant.
-    try:
-        import fcntl
-    except ImportError:
-        with open(hdir / _CLAIM_LOCK_FILE, "w", encoding="utf-8"):
-            yield
-        return
-    with open(hdir / _CLAIM_LOCK_FILE, "w", encoding="utf-8") as lock_file:
-        fcntl.flock(lock_file, fcntl.LOCK_EX)
+    with _CLAIM_THREAD_LOCK:
+        hdir = backlog_dir(root)
+        hdir.mkdir(parents=True, exist_ok=True)
+        # fcntl is Unix-only; a top-level import broke `horus` entirely on Windows.
+        # The process-local lock above still closes the thread race there; Unix also
+        # takes the file lock for cross-process serialization.
         try:
-            yield
-        finally:
-            fcntl.flock(lock_file, fcntl.LOCK_UN)
+            import fcntl
+        except ImportError:
+            with open(hdir / _CLAIM_LOCK_FILE, "w", encoding="utf-8"):
+                yield
+            return
+        with open(hdir / _CLAIM_LOCK_FILE, "w", encoding="utf-8") as lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
 def claim(root: Path, name: str, *, force: bool = False) -> tuple[bool, list[Finding]]:

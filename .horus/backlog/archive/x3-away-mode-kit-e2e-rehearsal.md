@@ -5,9 +5,7 @@ created: 2026-07-17
 tier: opus
 type: chore
 parallel: unsafe
-phase: converge
-vision_facet: "Autonomous dispatch"
-branch: vision-branch-x3-scheduling-and-autonomous-execution
+topic: autonomous-dispatch
 created_by: owner
 surface: no code — a live rehearsal of the shipped kit (horus envelope/schedule/run/supervise/notify) on a real small card + isolated account
 shipped_pr: 312

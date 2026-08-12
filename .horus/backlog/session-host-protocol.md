@@ -6,11 +6,10 @@ created: 2026-07-29
 created_by: owner
 readiness: shaping
 readiness_reason: "UNGATED 2026-07-29 — herdr-host-probe answered all four questions, so the capability set is now derived from two real hosts. Two shape decisions remain before this is Ready, both surfaced by the probe: how a host without argv-exec/exit-code semantics (herdr `pane run` types into a shell) fits the pane_runner contract, and whether the herdr host ships with the protocol or follows it. Owner call in a refine pass."
-phase: converge
+topic: dashboard-cockpit
 type: feature
 tier: high
 parallel: unsafe
-vision_facet: "Dashboard / cockpit"
 surface: horus/terminal_sessions.py → horus/hosts/, horus/pty_host.py, horus/run_executor.py, horus/cli.py, horus/terminal_tui.py, horus/terminal_app.py, horus/dashboard.py, horus/config.py
 ---
 

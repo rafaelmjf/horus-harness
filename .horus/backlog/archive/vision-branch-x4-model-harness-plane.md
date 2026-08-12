@@ -10,7 +10,7 @@ refine_passes: 2
 tier: frontier
 type: feature
 parallel: safe
-phase: explore
+topic: ""
 created_by: owner
 surface: .horus/backlog/ divergence umbrella; model + harness + profile + provider-credential route plane
 ---

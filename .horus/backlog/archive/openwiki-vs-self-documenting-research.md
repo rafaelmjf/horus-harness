@@ -3,6 +3,7 @@ status: shipped
 priority: medium
 tier: sonnet
 type: task
+topic: ""
 created: 2026-07-12
 created_by: overseer
 parallel: true

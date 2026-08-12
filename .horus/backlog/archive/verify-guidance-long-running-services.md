@@ -6,8 +6,7 @@ readiness_reason: "Reserved as `autotest-e2e-away-mode-drill` payload. Decision-
 created: 2026-07-18
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Introspection & self-improvement"
-phase: converge
+topic: introspection-self-improvement
 tier: medium
 type: feature
 parallel: safe

@@ -10,8 +10,7 @@ last_refined: 2026-07-26
 tier: small
 type: bug
 parallel: safe
-phase: converge
-vision_facet: "Dashboard / cockpit"
+topic: dashboard-cockpit
 surface: "horus/terminal_tui.py, horus/routines.py (infer/resume signals), horus/initialize.py, tests/test_terminal_tui.py, tests/test_init.py"
 shipped_pr: 412
 shipped_sha: dee776d

@@ -6,8 +6,7 @@ readiness_reason: "RETIRED 2026-08-01 — see Reviews. The drill ran in scoped f
 created: 2026-07-19
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Autonomous dispatch"
-phase: converge
+topic: autonomous-dispatch
 tier: medium
 type: chore
 parallel: safe

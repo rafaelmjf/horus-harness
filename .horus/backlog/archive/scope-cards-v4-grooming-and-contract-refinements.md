@@ -3,8 +3,7 @@ status: shipped
 priority: high
 created: 2026-07-19
 last_refined: 2026-07-19
-vision_facet: "PO lifecycle"
-phase: converge
+topic: po-lifecycle
 tier: medium
 type: feature
 parallel: safe

@@ -4,6 +4,7 @@ priority: medium
 tier: inline
 created: 2026-07-16
 type: bug
+topic: ""
 parallel: safe
 surface: horus/templates.py, horus/cli.py, tests/test_cli.py
 shipped_pr: 267

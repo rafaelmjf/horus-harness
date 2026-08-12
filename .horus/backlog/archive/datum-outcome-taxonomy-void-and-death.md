@@ -5,6 +5,7 @@ priority: medium
 tier: sonnet
 parallel: safe
 type: bug
+topic: ""
 surface:
   - horus/datums.py
   - horus/cli.py

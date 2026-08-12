@@ -7,9 +7,8 @@ last_refined: 2026-07-21
 readiness: shaping
 readiness_reason: "The value + low-risk shape are clear; the group-by dimensions to ship first, default grouping, and in-group sort are open. Explore the grouping UX, then it's a small TUI build."
 order: 30
-phase: explore
+topic: dashboard-cockpit
 type: feature
-vision_facet: "Dashboard / cockpit"
 shipped_pr: 387
 shipped_sha: 543079d
 ---

@@ -10,7 +10,7 @@ description: >-
   and never edits, archives, claims, reprioritizes, or ships cards.
 ---
 
-<!-- horus-skill-version: 2 -->
+<!-- horus-skill-version: 3 -->
 
 # Backlog librarian — one advisory hygiene digest
 
@@ -55,16 +55,16 @@ override in Run facts. Do not invent persistent configuration.
    frontmatter and body exactly once. Inventory archived card names plus
    lifecycle/provenance fields only; read an archived body only when an active
    card explicitly links to it and the relationship needs disambiguation.
-3. Resolve each `depends-on` and `branch` value against both active and archived
+3. Resolve each `depends-on` value against both active and archived
    names. Split comma-separated dependency values; preserve the spelling shown
    in the source.
 4. Determine last touch with targeted `git log -1 --format=%cs --
    <card-path>` calls plus the two card dates. A shallow clone or missing git
    history is unknown, not stale.
 5. Build overlap candidates cheaply. Include exact normalized titles, and
-   near-title pairs that share a `vision_facet` or `branch` plus at least two
+   near-title pairs that share a `topic` plus at least two
    meaningful title terms. Add pairs where one card explicitly names the other.
-   Rank exact titles, explicit mentions, same branch, then same facet; keep the
+   Rank exact titles, explicit mentions, then same topic; keep the
    first 25. Only now compare their full intent, outcome, boundaries, and source.
 
 ## Findings — evidence, never guesses

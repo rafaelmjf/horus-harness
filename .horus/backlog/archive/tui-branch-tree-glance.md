@@ -2,8 +2,7 @@
 status: shipped
 priority: medium
 created: 2026-07-17
-vision_facet: "Dashboard / cockpit"
-phase: converge
+topic: dashboard-cockpit
 tier: sonnet
 type: feature
 parallel: safe

@@ -7,11 +7,10 @@ created: 2026-07-20
 created_by: owner
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Accounts & isolation"
+topic: accounts-isolation
 tier: medium
 type: feature
 parallel: safe
-phase: converge
 surface: "horus/config.py (login-provision fn), horus/cli.py (`horus account --login`), horus/dashboard.py (reuse), horus/terminal_tui.py (accounts screen), horus/launch.py (error text), horus/cli.py doctor finding"
 ---
 

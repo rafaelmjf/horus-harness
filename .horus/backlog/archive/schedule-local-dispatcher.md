@@ -5,9 +5,7 @@ created: 2026-07-17
 tier: sonnet
 type: feature
 parallel: unsafe
-phase: converge
-vision_facet: "Autonomous dispatch"
-branch: vision-branch-x3-scheduling-and-autonomous-execution
+topic: autonomous-dispatch
 created_by: owner
 surface: new `horus schedule` subcommand; horus/cli.py (parser + handler); new horus/schedule.py; wraps horus run (horus/run_executor.py); crontab or systemd-timer backed
 shipped_pr: 298

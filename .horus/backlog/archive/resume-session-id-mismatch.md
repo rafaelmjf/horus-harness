@@ -7,11 +7,10 @@ readiness_reason: "Reproduced with both ids in hand and the failure recorded in 
 created: 2026-07-27
 created_by: claude
 last_refined: 2026-07-27
-vision_facet: "Autonomous dispatch"
+topic: autonomous-dispatch
 tier: small
 type: bug
 parallel: safe
-phase: converge
 surface: "horus run --resume argument handling; the id shown by horus sessions / horus tail; run jsonl `agent_session_id`"
 shipped_pr: 426
 shipped_sha: ff6c65a

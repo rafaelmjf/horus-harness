@@ -6,9 +6,8 @@ created_by: owner
 last_refined: 2026-07-21
 readiness: shaping
 readiness_reason: "The bold stretch; success hinges entirely on width-adaptive rendering (unproven) and it depends on the grouped-list engine landing first. Explore the geometry strategy before committing."
-phase: explore
+topic: dashboard-cockpit
 type: feature
-vision_facet: "Dashboard / cockpit"
 depends-on: tui-backlog-grouped-list
 shipped_pr: 388
 shipped_sha: 18a7c11

@@ -82,7 +82,7 @@ def test_load_cards_records_raw_frontmatter_fields(tmp_path):
     ]
     assert card.field_value("tier") == "sonnet"
     assert card.field_value("parallel") == "exclusive"
-    assert card.field_value("vision_facet") == ""  # absent reads as empty, never raises
+    assert card.field_value("topic") == ""  # absent reads as empty, never raises
 
 
 def test_cards_stay_hashable_with_raw_fields(tmp_path):
@@ -100,23 +100,21 @@ def test_load_cards_back_compat_no_new_fields(tmp_path):
     assert backlog.readiness_queue(cards[0]) == backlog.QUEUE_UNCLASSIFIED
 
 
-def test_load_cards_reads_vision_facet_and_phase(tmp_path):
+def test_load_cards_reads_topic_and_ignores_legacy_grouping_keys(tmp_path):
     hdir = tmp_path / ".horus" / "backlog"
     hdir.mkdir(parents=True, exist_ok=True)
     (hdir / "c.md").write_text(
-        '---\nstatus: open\nvision_facet: "PO lifecycle"\nphase: explore\n---\n# C\n',
+        '---\nstatus: open\ntopic: "po-lifecycle"\nvision_facet: legacy\nphase: explore\n---\n# C\n',
         encoding="utf-8",
     )
     card = backlog.load_cards(tmp_path)[0]
-    assert card.vision_facet == "PO lifecycle"
-    assert card.phase == "explore"
+    assert card.topic == "po-lifecycle"
 
 
-def test_card_phase_defaults_to_converge_and_facet_empty(tmp_path):
+def test_card_topic_defaults_to_empty(tmp_path):
     _mk_card(tmp_path, "d")
     card = backlog.load_cards(tmp_path)[0]
-    assert card.phase == "converge"
-    assert card.vision_facet == ""
+    assert card.topic == ""
 
 
 def test_load_cards_type_defaults_to_task(tmp_path):
@@ -742,9 +740,8 @@ def test_archived_cards_are_still_absent_from_the_active_list(tmp_path):
 def test_a_bug_can_never_be_shelved(tmp_path):
     """The shelf is for work whose problem may never come; a bug's already did.
 
-    Measured on this repo when the rule was added: bugs shipped 32-of-37 (~86%)
-    while `phase: explore` cards shipped 9-of-57 (16%). Shelving a bug boxes a
-    known real defect, and because the shelf is invisible to every working view
+    Shelving a bug boxes a known real defect, and because the shelf is invisible
+    to every working view
     the fleet row's bug count then cannot surface it — the count reads a
     reassuring zero while the defect is still there.
     """

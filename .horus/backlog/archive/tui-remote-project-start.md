@@ -4,6 +4,7 @@ priority: medium
 tier: sonnet
 created: 2026-07-15
 type: feature
+topic: ""
 parallel: safe
 surface: horus/terminal_tui.py, horus/github_catalog.py, horus/remote_start.py
 shipped_pr: 257

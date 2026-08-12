@@ -3,6 +3,7 @@ status: retired
 priority: later
 tier: sonnet
 created: 2026-07-10
+topic: ""
 ---
 > Retired 2026-07-14 (owner triage): the dashboard now renders branch, upstream
 > ahead/behind, dirty state, and continuity-health findings; resume preflight adds the

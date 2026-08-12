@@ -2,13 +2,11 @@
 status: shipped
 priority: high
 created: 2026-07-18
-vision_facet: "Autonomous dispatch"
-phase: converge
+topic: autonomous-dispatch
 tier: opus
 type: feature
 parallel: safe
 created_by: owner
-branch: vision-branch-x3-scheduling-and-autonomous-execution
 surface: horus/notify.py (inline-keyboard sends), new horus/notify_listen.py (inbound poller + bounded command grammar), horus/cli.py (`horus notify listen`), horus/supervise.py (escalation action buttons)
 shipped_pr: 313
 shipped_sha: 72329f78e7b50cc736a4cabaaa25c94fa170558e

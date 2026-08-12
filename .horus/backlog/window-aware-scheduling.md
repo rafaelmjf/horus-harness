@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Wildcard explore: fire-time resolution semantics and the comparison protocol against a clock-timed twin are undecided."
-phase: explore
+topic: autonomous-dispatch
 type: feature
-vision_facet: "Autonomous dispatch"
 ---
 
 # window-aware-scheduling — fire when budget exists, not when the clock says (wildcard)

@@ -5,6 +5,7 @@ priority: high
 tier: sonnet
 parallel: safe
 type: task
+topic: ""
 surface: horus/cli.py, horus/datums.py (--card path resolution), install/reload path
 created: 2026-07-14
 created_by: overseer

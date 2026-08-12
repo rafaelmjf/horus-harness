@@ -51,41 +51,28 @@ def test_expected_skills_registered():
     assert {"horus-consolidate", "horus-distill-history", "horus-infer", "horus-execution"} <= names
 
 
+def test_facet_coupled_skills_are_retired_from_registry_and_projections():
+    retired = {
+        "product-audit", "roadmap-branches", "scope-cards", "market-scan",
+        "pathfinder", "wildcard", "explore-converge-lifecycle",
+        "convergence", "roadmap-convergence",
+    }
+    assert retired.isdisjoint({skill.name for skill in skills.SKILLS})
+    for root in (Path(".claude/skills"), Path(".agents/skills")):
+        assert all(not (root / name).exists() for name in retired)
+
+
 def test_delegation_decision_skills_registered():
     # Slice 2: the shared rubric + the two thin consumer skills.
     names = {s.name for s in skills.SKILLS}
     assert {"delegation-rubric", "execution-decision", "dispatch-decision"} <= names
 
 
-def test_market_scan_skill_registered_and_outward():
-    market = next(s for s in skills.SKILLS if s.name == "market-scan")
-    # outward twin of product-audit: advisory, dated receipt.
-    # v6: no "deep-research" reference — the name collided with Claude's own deep
-    # research mode, and depth is now shallow-by-default with an explicit offer.
-    assert "deep-research" not in market.content
-    assert "SHALLOW sweep" in market.content
-    assert "ASK whether the owner wants" in market.content
-    assert "unless the owner explicitly asks for it by name" in market.content
-    assert ".horus/research/" in market.content
-    assert "JTBD" in market.content and "PR-FAQ" in market.content
-    assert "never auto-write" in market.content and "never auto-create" in market.content
-    # depth contract before any web spend.
-    assert "shallow by default" in market.content
-    # v2: intent-framed verdict — build-vs-adopt for personal tooling, not only saturation.
-    assert "build-vs-adopt" in market.content.lower()
-    assert "deepen-own-use" in market.content and "broaden-adoption" in market.content
-    assert "WRONG yardstick" in market.content  # saturation is the wrong lens for own-use
-    # v4: a pre-declared intent is a proposal — ask with options + free text.
-    assert "free-text alternative" in market.content
-    # v5: scoped branch-check variant (teardown+verdict+sources; no JTBD/PR-FAQ).
-    assert "Branch-check variant" in market.content
-
-
 def test_cockpit_dispatch_contract_skill_registered_and_sequences():
     ct = next(s for s in skills.SKILLS if s.name == "cockpit-autonomous-dispatch-contract")
     # A thin sequencer: composes the decision skills, never re-implements them.
     assert "dispatch-decision" in ct.content
-    assert "backlog-refine" in ct.content and "pathfinder" in ct.content
+    assert "backlog-refine" in ct.content
     # Wires the away-mode kit commands built this campaign.
     for cmd in ("horus envelope", "horus schedule", "horus supervise", "horus notify"):
         assert cmd in ct.content
@@ -151,120 +138,6 @@ def test_backlog_librarian_skill_is_bounded_actionable_and_projected():
         ) == librarian.content
 
 
-def test_pathfinder_skill_registered_and_orchestrates():
-    pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    # v7: backlog polish routes directly to the final readiness owner.
-    assert "Invoke `backlog-refine`" in pf.content
-    # v5 (calibration 2026-07-19): the owner's mental model includes the inward
-    # audit — product-audit where the project has one, shipped-vs-used elsewhere
-    # (product-audit is Horus-specific; pathfinder must run on any project).
-    assert "Inward audit" in pf.content
-    assert "product-audit" in pf.content
-    assert "shipped-vs-used" in pf.content
-    # Step 0 triages backlog-POLISH out to the grooming pass instead of running
-    # the five-step chain for a grooming need.
-    assert "Is this a re-baseline at all, and what for?" in pf.content
-    assert "scope-cards" in pf.content and "backlog-refine" in pf.content
-    assert "execution readiness" in pf.content
-    # Renamed from horus-kickstart: age-agnostic name, no old slug lingering.
-    assert not any(s.name == "horus-kickstart" for s in skills.SKILLS)
-    # v2: genuinely thin — sequences the factored step skills, no analysis inline.
-    assert "market-scan" in pf.content and "deep-research" not in pf.content
-    assert "roadmap-branches" in pf.content and "scope-cards" in pf.content
-    assert pf.content.index("`scope-cards`") < pf.content.index("`backlog-refine`")
-    assert "horus consolidate" in pf.content
-    assert "No new CLI subcommand" in pf.content
-    assert "No analysis inside pathfinder" in pf.content
-    # Receipts are the step interfaces so the chain pauses/resumes across sessions.
-    assert "Receipts are the interfaces" in pf.content
-    # Advisory, gated; straight-through pre-auth still never writes unapproved.
-    assert "advisory" in pf.content.lower()
-    assert "Never auto-apply" in pf.content
-    assert "straight-through" in pf.content
-    assert "WRITTEN without explicit approval" in pf.content
-    # Facet changes stay a diff, never wholesale.
-    assert "wholesale" in pf.content
-    assert "add / rename / retire / promote" in pf.content
-    # Onboarding folds in (delegated to roadmap-branches): initial facets + stamp cards.
-    assert "Onboarding fork" in pf.content and "stamp existing cards" in pf.content
-    # Token envelope before any web spend; a fresh receipt may be reused.
-    assert "confirm the token envelope" in pf.content.lower()
-    assert "may be reused" in pf.content
-    # Reads for BOTH new and existing projects (the rename's whole point).
-    assert "age-agnostic" in pf.content
-    # Step 0: pin the intent, never assume it (build-vs-adopt vs adoption frame).
-    assert "pin the intent" in pf.content
-    assert "deepen-own-use" in pf.content and "broaden-adoption" in pf.content
-    # Step 1 emits a pinned shipped+vision+audience brief passed into every step.
-    assert "pinned brief" in pf.content.lower() or "pin a ground-truth brief" in pf.content
-    assert "HARD CONSTRAINT" in pf.content
-    # v3: Step 0 confirms the intent interactively even when pre-declared in args.
-    assert "Confirm interactively, even when the intent arrives pre-declared" in pf.content
-    # v4: a reused receipt's envelope nod replaces the Step 2 gate; prior trees feed step 3.
-    # Market-scan is Step 3 since v5 inserted the inward audit as Step 2.
-    assert "REPLACES Step 3" in pf.content
-    assert "prior branch-tree" in pf.content
-
-
-def test_roadmap_branches_skill_registered_divergence_tree():
-    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
-    # The deliverable is a TREE of alternative roadmaps, never one merged roadmap.
-    assert "never collapse the tree into one merged roadmap" in rb.content
-    # Speculative branches (directions with no facet yet) are part of the contract.
-    assert "Speculative branches" in rb.content
-    # v2: speculative branches must re-test the Vision's out-of-scope list.
-    assert "RE-TEST" in rb.content and "out-of-scope list" in rb.content
-    # v3: prior trees are inputs; every candidate exits with a disposition;
-    # owner verdicts bind via card Reviews, not receipts alone.
-    assert "Prior branch-tree receipts" in rb.content
-    assert "exits with a disposition" in rb.content
-    assert "## Reviews" in rb.content
-    # Market evidence appears INSIDE every branch, not only in the market section.
-    assert "Market position" in rb.content
-    assert "therefore these items" in rb.content
-    # Consumes the existing signals; never re-researches or improvises evidence.
-    assert "horus consolidate" in rb.content and "market-scan" in rb.content
-    assert ".horus/research/" in rb.content
-    assert "No new web research" in rb.content
-    # Re-justifies the existing backlog with explicit push-back; inherits nothing.
-    assert "inherits" in rb.content
-    assert "push-back" in rb.content
-    # v5: branches come from facet-DoD gaps / owner friction / receipts — NEVER the
-    # backlog, which is dispositioned only after the branches exist. The 2026-07-31
-    # tree was rejected because all four branches were assembled from cards.
-    # Whitespace-normalized: hard wrapping otherwise breaks these on reflow rather
-    # than on meaning (PRD rule, 2026-07-30).
-    flat = " ".join(rb.content.split())
-    assert "Where BRANCHES come from — never the backlog" in flat
-    assert "Disposition the backlog AFTER the branches exist" in flat
-    assert "grooming pass wearing a branch's clothes" in flat
-    assert "route the owner to `backlog-refine`" in flat
-    # Claims discipline + no-repetition template rules.
-    assert "comparison baseline" in rb.content
-    assert "State each fact exactly once" in rb.content
-    # Facet changes are a diff; onboarding fork proposes the initial facet set.
-    assert "add / rename / retire / promote" in rb.content
-    assert "Onboarding fork" in rb.content and "stamp existing cards" in rb.content
-    # Advisory: owner picks; the skill never edits Vision or creates cards.
-    assert "never edits the Vision" in rb.content
-
-
-def test_scope_cards_skill_registered_as_high_level_shaping():
-    sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
-    assert "The shaping test" in sc.content
-    assert "readiness: shaping" in sc.content
-    assert "Intended outcome" in sc.content and "Open decisions" in sc.content
-    assert "raw `vision-branch-*` card" in sc.content
-    assert "`backlog-refine` later decides readiness" in sc.content
-    assert "Do NOT invent final `tier`" in sc.content
-    assert "live probes" in sc.content
-    assert "do not silently invent" in sc.content
-    assert "Do not fabricate findings" in sc.content
-    assert "Vision facet diff" in sc.content
-    assert "demote / defer / retire" in sc.content
-    assert "approve, amend, or drop each" in sc.content
-
-
 def test_backlog_refine_owns_interactive_flow_and_ready_contract():
     refine = next(s for s in skills.SKILLS if s.name == "backlog-refine")
     assert "Here is our current picture" in refine.content
@@ -283,7 +156,6 @@ def test_backlog_refine_owns_interactive_flow_and_ready_contract():
 
 def test_execution_ready_card_contract_single_authority():
     """Final readiness lives once in backlog-refine; consumers reference it."""
-    sc = next(s for s in skills.SKILLS if s.name == "scope-cards")
     refine = next(s for s in skills.SKILLS if s.name == "backlog-refine")
     ct = next(s for s in skills.SKILLS if s.name == "cockpit-autonomous-dispatch-contract")
     assert "execution-ready card contract (single authority)" in refine.content
@@ -292,17 +164,7 @@ def test_execution_ready_card_contract_single_authority():
     assert "low | medium | high |\nfrontier" in refine.content
     assert "execution-ready card contract in `backlog-refine`" in ct.content
     assert "single authority" in ct.content
-    assert "dispatchable-card contract" not in sc.content
-
-
-def test_pathfinder_step_skills_projected_to_both_agents():
-    for name in ("pathfinder", "roadmap-branches", "scope-cards", "backlog-refine"):
-        bundled = next(s for s in skills.SKILLS if s.name == name)
-        for root in (".claude/skills", ".agents/skills"):
-            assert Path(f"{root}/{name}/SKILL.md").read_text(encoding="utf-8") == bundled.content
-    for root in (".claude/skills", ".agents/skills"):
-        # Old slug's projection is gone, not left orphaned.
-        assert not Path(f"{root}/horus-kickstart/SKILL.md").exists()
+    assert "topic" in refine.content
 
 
 def test_dispatch_consent_skills_match_claude_and_codex_projections():
@@ -498,10 +360,10 @@ def test_consolidate_skill_v3_covers_backlog_hygiene_checks():
     assert "Duplicate backlog titles" in consolidate.content
     assert "Lingering done items" in consolidate.content
     assert "one line" in consolidate.content and "not a paragraph" in consolidate.content
-    # v12: the phase-aware convergence read-out.
-    assert "Convergence read-out" in consolidate.content
-    assert "vision_facet" in consolidate.content
-    assert "phase: explore" in consolidate.content
+    # v20: the topic emergence ledger.
+    assert "Topic standings" in consolidate.content
+    assert "open/shipped counts" in consolidate.content
+    assert "Unsorted" in consolidate.content
     # v15: next_prompt is orientation only. Consent belongs to the launch permission
     # posture, so a consolidation must not bake a consent paragraph into the handoff
     # (it would contradict a session launched to work directly). Releases stay their
@@ -807,25 +669,6 @@ def test_init_no_skills_opts_out(tmp_path, monkeypatch):
     assert not (tmp_path / "b" / ".claude").exists()
 
 
-def test_product_audit_skill_registered_and_projected():
-    by_name = {skill.name: skill for skill in skills.SKILLS}
-    skill = by_name["product-audit"]
-    # v3 contract: inward alignment analysis + routed suggestions; decides nothing.
-    for marker in (
-        "decides nothing",
-        "Routed suggestions",
-        "no-context reader",
-        "last_product_audit",
-        "Anti-ceremony guard",
-        "ONE consolidated table",
-        "drift signal",
-    ):
-        assert marker in skill.content
-    assert "convergence step" in skill.content and "backlog-refine" in skill.content
-    for root in (".claude/skills", ".agents/skills"):
-        assert Path(f"{root}/product-audit/SKILL.md").read_text(encoding="utf-8") == skill.content
-
-
 def test_process_retrospective_skill_registered_and_projected():
     by_name = {skill.name: skill for skill in skills.SKILLS}
     skill = by_name["process-retrospective"]
@@ -853,8 +696,7 @@ def test_process_retrospective_skill_registered_and_projected():
     assert "never estimates tokens" in skill.content.lower() or "estimate token" in skill.content.lower()
     assert "no new artifacts" in skill.content.lower() or "never a new" in skill.content.lower()
     assert "Stay inline" in skill.content
-    # Distinguished from the periodic product audit and continuity closure.
-    assert "product-audit" in skill.content
+    # Distinguished from continuity closure.
     assert "horus-consolidate" in skill.content
     for root in (".claude/skills", ".agents/skills"):
         assert Path(f"{root}/process-retrospective/SKILL.md").read_text(encoding="utf-8") == skill.content
@@ -915,23 +757,6 @@ def test_backlog_refine_projections_match_the_bumped_source():
 # version on every wildcard revision — the exact manual step registering it removed.
 
 
-def test_wildcard_does_not_source_ideas_from_the_backlog():
-    """The v5 correction, pinned: ideas come from facet gaps/friction/outside.
-
-    Four revisions fixed the shape of wildcard's output while its procedure still
-    said to diverge over the branch umbrellas, so every run produced backlog triage.
-    Asserted on whitespace-normalized text, per the PRD rule that raw-substring
-    assertions over skill prose break on reflow rather than on meaning.
-    """
-    text = " ".join(Path(".claude/skills/wildcard/SKILL.md").read_text(encoding="utf-8").split())
-    assert "NEVER the backlog" in text
-    assert "The backlog is not one of them" in text
-    # `decision` must not be an emittable kind — three of run 3's five ideas were.
-    assert "`decision` and `evidence read` are not emittable kinds" in text
-    # The self-sufficiency bar is the gate the run-3 failure demanded.
-    assert "a fresh agent could build it without asking the owner anything" in text
-
-
 def test_every_skill_version_matches_the_marker_in_its_own_text():
     """`Skill(name, N, text)` and the `horus-skill-version: N` marker inside `text`
     must agree.
@@ -949,121 +774,6 @@ def test_every_skill_version_matches_the_marker_in_its_own_text():
         if match is None or int(match.group(1)) != skill.version:
             mismatched.append((skill.name, skill.version, match.group(1) if match else None))
     assert mismatched == [], f"Skill.version disagrees with its own marker: {mismatched}"
-
-
-def test_roadmap_branches_thesis_opens_in_plain_terms():
-    """v8: the owner picks a DIRECTION, so every branch opens in plain terms — what
-    goes wrong today, what is different afterwards — before any mechanism.
-
-    History: v6 enforced this as two REQUIRED sections ("The problem" first, "The
-    proposed solution" second) ahead of the thesis. That fixed the v5 complaint ("I
-    have very little info of what is proposed") but over-corrected: Problem, Solution
-    and Thesis then restated each other, and branches roughly doubled in length. The
-    2026-07-17 convergence-test receipt — the run the owner holds up as correct —
-    carries no such sections; its Thesis does that work in one paragraph. So v8 keeps
-    the READER TEST, which is the operative requirement, and drops the section
-    scaffolding that was only ever a proxy for it.
-    """
-    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
-    flat = " ".join(rb.content.split())
-    # The requirement lives on the thesis now, not in extra sections ahead of it.
-    assert "**Open it in plain terms**" in flat
-    assert "what actually goes wrong today as the owner experiences it" in flat
-    assert "before any module, protocol or command appears" in flat
-    # The reader test is the operative check, and it survives the refactor.
-    assert "must be able to say what hurts and what would change" in flat
-    # Mechanism still belongs downstream, where `scope-cards` needs it.
-    assert "Mechanism belongs in the roadmap items below, not here" in flat
-
-
-def test_pathfinder_step_table_covers_every_step_including_hand_off():
-    """v10: the step table is the contract a model reads before running the chain, so
-    every step in the flow must appear in it.
-
-    Step 7 (hand off) previously existed ONLY in the prose flow, and the 2026-07-31 run
-    skipped it: the chain went 0->4, was rejected twice, and trailed into tooling work
-    without ever stating what landed and what stayed unapplied. A step listed only in
-    prose is a step that gets skipped.
-    """
-    pf = next(s for s in skills.SKILLS if s.name == "pathfinder")
-    import re
-    steps = sorted(
-        int(m.group(1))
-        for ln in pf.content.splitlines()
-        if ln.startswith("| ")
-        for m in [re.match(r"\|\s*\*\*(\d+)\s*—", ln)]
-        if m
-    )
-    assert steps == [0, 1, 2, 3, 4, 5, 6, 7], steps
-
-    flat = " ".join(pf.content.split())
-    # The table explains what each step DOES, not just who owns it.
-    assert "What happens, in detail" in flat
-    # Three columns: the question, the skill it runs, the detailed summary.
-    header = next(ln for ln in pf.content.splitlines() if ln.startswith("| The owner's question"))
-    assert header.count("|") == 4, header  # 3 cells => 4 pipes
-    # Step 7's two load-bearing facts (bold markers stripped, so wording tweaks in
-    # emphasis do not break the assertion — only the meaning is pinned).
-    plain = flat.replace("**", "")
-    assert "deferred as explicitly not applied" in plain
-    assert "is a SEPARATE session" in plain and "never chained off the end" in plain
-
-
-def test_roadmap_branches_facet_coverage_lives_in_the_readout_not_the_tree():
-    """v8: full facet coverage belongs to the narrative position read-out (section 1);
-    the tree carries a branch only where a real DIRECTION exists.
-
-    History, and the reason this test was inverted. v7 read the facet table as the
-    tree's spine and required one branch per facet. That was an over-correction to two
-    rejected 2026-07-31 runs, and it made the 2026-08-01 run worse: it forced eight
-    branches over eight facets, four of them filler, including a "cut the release"
-    branch that is not a direction at all. The run the owner holds up as correct
-    (`.horus/research/2026-07-17-roadmap-branches-convergence-test.md`) does the
-    opposite — it walks all eight facets in section 1's PROSE and then produces four
-    branches, one of which covers two facets while two facets get none.
-
-    Root cause of the regression: a 2026-07-20 calibration ("sections 1-2 read as a
-    repeat of the audit") turned section 1 from narrative into a citation. Facet
-    coverage lost its home, and v7 relocated it into the branch list, where it forces
-    padding. v8 puts it back.
-    """
-    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
-    flat = " ".join(rb.content.split()).replace("**", "")
-    # Section 1 is narrative and walks every facet — this is the load-bearing fix.
-    assert "Narrative prose, walking every facet" in flat
-    assert "Not bullets, not a table" in flat
-    assert "a fresh reader must understand the project's situation without the conversation" in flat
-    assert "This section is where full facet coverage lives" in flat
-    # A citation is not a read-out: cite the audit's evidence, write the position.
-    assert "a citation is not a read-out" in flat
-    # The tree does NOT get one branch per facet.
-    assert "Produce a branch only where there is a real direction" in flat
-    assert "Branches carry a facet target; facets do not generate branches" in flat
-    assert "Fewer branches than facets is normal and correct" in flat
-    assert "Four branches over eight facets is a good tree" in flat
-    # Shrinking a facet remains a legitimate way to advance it; tree proposes,
-    # convergence decides. (Kept from v7 — this part was right.)
-    assert "Advancing a facet includes shrinking it" in flat
-    assert "defer/retire candidates routed to the convergence pass" in flat
-    # Length is not depth — the guard against the bloat v7 produced.
-    assert "Length is not a proxy for depth" in flat
-
-
-def test_roadmap_branches_points_at_the_worked_example():
-    """v8: the skill names the receipt that is the shape to reproduce.
-
-    v7 cited `2026-07-17-pathfinder-branch-tree.md` as "the shape that worked". That
-    is the wrong file: it is the FIRST run and its own header records that it was
-    deliberately HELD OUT of the convergence test. The independent re-run —
-    `2026-07-17-roadmap-branches-convergence-test.md`, twice the size — is the one the
-    owner holds up as correct, and it is what the skill must point at.
-    """
-    rb = next(s for s in skills.SKILLS if s.name == "roadmap-branches")
-    flat = " ".join(rb.content.split())
-    assert "2026-07-17-roadmap-branches-convergence-test.md" in flat
-    assert "Read it before writing" in flat
-    # The superseded exemplar must not be cited as the shape to copy.
-    assert "2026-07-17-pathfinder-branch-tree.md" not in flat
 
 
 def test_every_bundled_skill_projection_matches_its_source():

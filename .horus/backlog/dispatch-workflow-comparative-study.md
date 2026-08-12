@@ -8,7 +8,7 @@ created: 2026-07-23
 created_by: owner
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Delegation calibration"
+topic: delegation-calibration
 tier: medium
 type: research
 parallel: safe

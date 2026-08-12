@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Deliberately a one-shot spike — casual exploration. Scope and pass/fail are drafted; owner to confirm SDK-vs-stream-json before running. Do not expand into an architecture commitment from this card."
-phase: explore
+topic: distribution
 type: spike
-vision_facet: "Distribution"
 ---
 
 # horus-phone-chat-poc — one-shot spike: text chat frontend to an agent session with phone-side tool approval

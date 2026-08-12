@@ -6,11 +6,10 @@ autonomy: eligible
 readiness_reason: "RESOLVED 2026-07-26: mechanism reproduced on demand and the fix verified. `claude_usage.credentials_path()` resolves CLAUDE_CONFIG_DIR ahead of HOME, so the faked HOME never isolated the credential lookup — the test made a LIVE authenticated call and got a real reading. The conftest fixture from #406 fixes it; this card carries only the precondition-assertion hardening."
 created: 2026-07-26
 created_by: claude
-vision_facet: "Continuity core"
+topic: continuity-core
 tier: small
 type: bug
 parallel: safe
-phase: converge
 surface: "tests/test_datums.py:869 (test_capture_usage_snapshot_unavailable_on_failed_read), horus/datums.py:369 (_claude_usage_entry), horus/usage_snapshot.py:386 (cached_usage) / :148 (_read_claude), tests/conftest.py"
 shipped_pr: 416
 shipped_sha: 3a71f33

@@ -6,6 +6,7 @@ created: 2026-07-11
 parallel: exclusive
 surface: horus/dashboard.py, horus/pty_host.py, horus/pty_session.py
 folded_into: mobile-terminal-ux-hardening
+topic: ""
 ---
 
 > Retired 2026-07-14 (owner): scoped OUT of the shipped #171 epic; strategic pivot to native-SSH makes the browser terminal best-effort. Distinct Cloudflare-Access/same-origin track not pursued.

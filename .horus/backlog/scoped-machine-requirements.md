@@ -8,7 +8,7 @@ tier: medium
 created: 2026-07-15
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Continuity core"
+topic: continuity-core
 type: feature
 parallel: safe
 surface: horus/machine_requirements.py, horus/terminal_tui.py, horus/dashboard.py

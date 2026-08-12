@@ -4,6 +4,7 @@ priority: high
 tier: sonnet
 created: 2026-07-15
 type: feature
+topic: ""
 parallel: safe
 surface: horus/doctor_machine.py, bundled dispatch/migration skills, new horus/verify_inventory.py (or equivalent helper)
 shipped_pr: 254

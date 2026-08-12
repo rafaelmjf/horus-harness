@@ -1625,7 +1625,7 @@ class TerminalUI:
                 ))
             elif kind == "vision":
                 lines.append((style, f"\n {marker} Direction\n"))
-                lines.append(("class:muted", "     facet standings · vision branches · readiness\n"))
+                lines.append(("class:muted", "     topic standings · readiness\n"))
             elif kind == "capabilities":
                 project = (self.capabilities_record or {}).get("project", {})
                 records = project.get("capabilities", []) if isinstance(project, dict) else []
@@ -1955,18 +1955,18 @@ class TerminalUI:
         return ("class:rdy-parked", "● ")
 
     def _card_detail_lines(self, card: backlog.Card, width: int) -> StyleAndTextTuples:
-        """The bottom detail pane for the selected card: a headline row, a facet/
+        """The bottom detail pane for the selected card: a headline row, a topic/
         surface row, a blank spacer, then a wrapped 'why' snippet from the body."""
         frags: StyleAndTextTuples = []
         meta = f"[{card.type or 'card'} · {card.priority or 'no priority'} · {backlog.readiness_label(card)}]"
         title = _clip(card.title, max(8, width - len(meta) - 4))
         frags.append(("class:card-title", f" {title}"))
         frags.append(("class:muted", f"   {meta}\n"))
-        context = f" facet: {card.vision_facet or '—'}"
+        context = f" topic: {card.topic or 'Unsorted'}"
         if card.field_value("surface"):
             context += f"   ·   surface: {card.field_value('surface')}"
         frags.append(("class:muted", _clip(context, width - 1) + "\n"))
-        frags.append(("", "\n"))  # spacer between facet and the why text
+        frags.append(("", "\n"))  # spacer between topic and the why text
         why = _card_why_snippet(card)
         if why:
             for line in _wrap(why, max(20, width - 2), limit=3):
@@ -2128,36 +2128,22 @@ class TerminalUI:
         return fragments
 
     def _vision_lines(self) -> list[StyleAndTextTuples]:
-        """The direction read-out as a list of screen lines (each a fragment list):
-        facet standings, readiness queues, and vision-branch states. Renders only
-        canonical primitives — `routines.facet_standings` (the same analysis
-        `horus consolidate` prints), `backlog.readiness_counts`, and the
-        `backlog_tree` branch projection — never a second parser or new analysis."""
+        """The direction read-out from canonical topic and readiness primitives."""
         root = self.project
         if root is None:
             return [[("class:muted", "  No project.\n")]]
         lines: list[StyleAndTextTuples] = []
 
-        doc = frontmatter.parse_file(root / ".horus" / frontmatter.PRD_FILE)
-        prd_body = doc.body if doc is not None else ""
-        standings = routines.facet_standings(root, prd_body)
+        standings = routines.topic_standings(root)
 
-        lines.append([("class:section", " Facet standings\n")])
-        if standings is None:
-            lines.append([("class:muted", "  No Vision facet table in PRD.md — no direction read-out.\n")])
-        else:
-            for facet, n in standings.with_work:
-                lines.append([("class:item", f"  {facet}  "), ("class:muted", f"— {n} open\n")])
-            for facet in standings.no_work:
-                lines.append([("class:muted", f"  {facet} — no open cards (converged or untouched)\n")])
-            if not standings.with_work and not standings.no_work:
-                lines.append([("class:muted", "  (no facets)\n")])
-            if standings.explore:
-                lines.append([("", "\n")])
-                lines.append([("class:section", " Exploratory (Ready-gate exempt)\n")])
-                lines.append([("class:muted", f"  {len(standings.explore)}: " + ", ".join(standings.explore) + "\n")])
-            for msg in standings.drift:
-                lines.append([("class:warning", f"  ⚠ {msg}\n")])
+        lines.append([("class:section", " Topic standings\n")])
+        if not standings:
+            lines.append([("class:muted", "  No active or shipped cards.\n")])
+        for standing in standings:
+            lines.append([
+                ("class:item", f"  {standing.topic or 'Unsorted'}  "),
+                ("class:muted", f"— {standing.open} open · {standing.shipped} shipped\n"),
+            ])
 
         cards = self.project_cards.get(root, [])
         counts = backlog.readiness_counts(cards)
@@ -2166,15 +2152,6 @@ class TerminalUI:
         for key in backlog.READINESS_QUEUE_ORDER:
             lines.append([("class:muted", f"  {backlog.READINESS_QUEUE_LABELS[key]}: {counts[key]}\n")])
 
-        tree = self.project_trees.get(root) or backlog_tree.build_tree(root)
-        if tree.branches:
-            lines.append([("", "\n")])
-            lines.append([("class:section", " Vision branches\n")])
-            for group in tree.branches:
-                note = "" if group.resolved else " (no umbrella card)"
-                lines.append([("class:branch", f"  {group.title} ({len(group.children)} open){note}\n")])
-                if group.convergence:
-                    lines.append([("class:muted", f"     converges: {group.convergence}\n")])
         return lines
 
     def _vision_body_text(self) -> StyleAndTextTuples:

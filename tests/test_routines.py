@@ -814,118 +814,88 @@ def test_infer_v2_unaffected_by_v3_branch(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# convergence read-out (v3): map cards onto Vision facets, phase-aware
+# topic emergence ledger (v3): active + shipped cards, including Unsorted
 # --------------------------------------------------------------------------- #
 
-def _mk_prd_facets(root, *, vision_table=True):
+def _mk_topic_prd(root):
     hdir = root / ".horus"
-    (hdir / "backlog").mkdir(parents=True, exist_ok=True)
-    vision = "## Vision\n\n"
-    if vision_table:
-        vision += (
-            "| Facet | Definition of done |\n"
-            "|---|---|\n"
-            "| **Continuity core** | resumes. |\n"
-            "| **PO lifecycle** | ships. |\n\n"
-        )
+    (hdir / "backlog" / "archive").mkdir(parents=True, exist_ok=True)
     prd = (
         '---\nstatus: active\ncurrent_focus: "x"\nnext_action: "y"\n'
         'next_prompt: "z"\nexecution_recommendation: "continue-as-is"\n'
-        "last_updated: 2026-07-16\n---\n\n# demo\n\n" + vision
-        + "## Backlog\n\nmenu\n\n## Shipped\n\n- x\n\n## Rules\n\n- y\n"
+        "last_updated: 2026-07-16\n---\n\n# demo\n\n## Vision\n\nseed\n\n"
+        "<!-- directions:auto -->\n\n**Directions so far**\n\n<!-- /directions:auto -->\n\n"
+        "## Backlog\n\nmenu\n\n## Shipped\n\n- x\n\n## Rules\n\n- y\n"
     )
     (hdir / "PRD.md").write_text(prd, encoding="utf-8")
     return hdir
 
 
-def _facet_card(hdir, name, *, facet="", phase="", status="open"):
-    lines = ["---", f"status: {status}", "created: 2026-07-16"]
-    if facet:
-        lines.append(f'vision_facet: "{facet}"')
-    if phase:
-        lines.append(f"phase: {phase}")
-    lines += ["---", f"# {name}", ""]
-    (hdir / "backlog" / f"{name}.md").write_text("\n".join(lines), encoding="utf-8")
+def _topic_card(hdir, name, *, topic="", status="open", archived=False):
+    lines = ["---", f"status: {status}", f"topic: {topic}", "created: 2026-07-16", "---", f"# {name}", ""]
+    folder = hdir / "backlog" / "archive" if archived else hdir / "backlog"
+    (folder / f"{name}.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-def test_convergence_maps_cards_to_facets(tmp_path):
-    hdir = _mk_prd_facets(tmp_path)
-    _facet_card(hdir, "a", facet="PO lifecycle")
-    _facet_card(hdir, "b", facet="Continuity core")
-    msgs = " ".join(f.message for f in routines.consolidate_signals(tmp_path))
-    assert "PO lifecycle (1)" in msgs
-    assert "Continuity core (1)" in msgs
+def test_topic_standings_count_active_and_shipped_cards(tmp_path):
+    hdir = _mk_topic_prd(tmp_path)
+    _topic_card(hdir, "open-a", topic="continuity")
+    _topic_card(hdir, "open-b", topic="continuity")
+    _topic_card(hdir, "shipped-a", topic="continuity", status="shipped", archived=True)
+    _topic_card(hdir, "shipped-b", topic="delivery", status="shipped", archived=True)
+
+    standings = {item.topic: (item.open, item.shipped) for item in routines.topic_standings(tmp_path)}
+    assert standings == {"continuity": (2, 1), "delivery": (0, 1)}
 
 
-def test_convergence_reports_facets_with_no_open_cards(tmp_path):
-    hdir = _mk_prd_facets(tmp_path)
-    _facet_card(hdir, "a", facet="PO lifecycle")
-    msgs = " ".join(f.message for f in routines.consolidate_signals(tmp_path))
-    assert "no open cards" in msgs and "Continuity core" in msgs
+def test_topic_standings_keeps_unsorted_and_ignores_nonshipped_archive(tmp_path):
+    hdir = _mk_topic_prd(tmp_path)
+    _topic_card(hdir, "loose")
+    _topic_card(hdir, "retired", topic="delivery", status="retired", archived=True)
+
+    standings = routines.topic_standings(tmp_path)
+    assert [(item.topic, item.open, item.shipped) for item in standings] == [("", 1, 0)]
 
 
-def test_convergence_flags_off_vision_converge_card(tmp_path):
-    hdir = _mk_prd_facets(tmp_path)
-    _facet_card(hdir, "orphan")  # no facet, default converge phase
-    warns = [f.message for f in routines.consolidate_signals(tmp_path) if f.level == "warn"]
-    assert any("orphan" in m and "no vision_facet" in m for m in warns)
+def test_consolidate_prints_topic_ledger(tmp_path):
+    hdir = _mk_topic_prd(tmp_path)
+    _topic_card(hdir, "open-a", topic="continuity")
+    _topic_card(hdir, "shipped-a", topic="continuity", status="shipped", archived=True)
+    _topic_card(hdir, "loose")
+
+    messages = " ".join(f.message for f in routines.consolidate_signals(tmp_path))
+    assert "topics:" in messages
+    assert "continuity (1 open, 1 shipped)" in messages
+    assert "Unsorted (1 open, 0 shipped)" in messages
 
 
-def test_convergence_exempts_explore_cards(tmp_path):
-    hdir = _mk_prd_facets(tmp_path)
-    _facet_card(hdir, "poc", phase="explore")  # no facet, but exploratory
-    findings = routines.consolidate_signals(tmp_path)
-    warns = [f.message for f in findings if f.level == "warn"]
-    assert not any("poc" in m and "convergence" in m for m in warns)
-    msgs = " ".join(f.message for f in findings)
-    assert "exploratory" in msgs and "poc" in msgs
+def test_regenerate_directions_preserves_seed_and_omits_zero_shipped_topics(tmp_path):
+    hdir = _mk_topic_prd(tmp_path)
+    _topic_card(hdir, "only-open", topic="unproven")
+    _topic_card(hdir, "open-proven", topic="proven")
+    _topic_card(hdir, "shipped-proven", topic="proven", status="shipped", archived=True)
+    _topic_card(hdir, "shipped-unsorted", status="shipped", archived=True)
+    before = (hdir / "PRD.md").read_text(encoding="utf-8")
+    seed = before.split(routines.DIRECTIONS_START, 1)[0]
+
+    assert routines.regenerate_directions(tmp_path) is True
+    updated = (hdir / "PRD.md").read_text(encoding="utf-8")
+    assert updated.startswith(seed)
+    assert "**Directions so far**" in updated
+    assert "- **proven** — 1 shipped, 1 open." in updated
+    assert "unproven" not in updated
+    assert "Unsorted" not in updated
+    assert routines.regenerate_directions(tmp_path) is False  # idempotent
 
 
-def test_convergence_flags_unknown_facet(tmp_path):
-    hdir = _mk_prd_facets(tmp_path)
-    _facet_card(hdir, "typo", facet="PO lifcycle")  # not a real facet
-    warns = [f.message for f in routines.consolidate_signals(tmp_path) if f.level == "warn"]
-    assert any("typo" in m and "unknown facet" in m for m in warns)
+def test_regenerate_directions_requires_stable_markers(tmp_path):
+    hdir = _mk_topic_prd(tmp_path)
+    path = hdir / "PRD.md"
+    original = path.read_text(encoding="utf-8").replace(routines.DIRECTIONS_START, "")
+    path.write_text(original, encoding="utf-8")
 
-
-def test_convergence_facet_matching_is_case_insensitive(tmp_path):
-    hdir = _mk_prd_facets(tmp_path)
-    _facet_card(hdir, "a", facet="po lifecycle")  # lower-case variant
-    findings = routines.consolidate_signals(tmp_path)
-    assert not any(f.level == "warn" and "convergence" in f.message for f in findings)
-    msgs = " ".join(f.message for f in findings)
-    assert "PO lifecycle (1)" in msgs
-
-
-def test_convergence_silent_without_a_facet_table(tmp_path):
-    hdir = _mk_prd_facets(tmp_path, vision_table=False)
-    _facet_card(hdir, "a")  # off-vision converge card, but no facets to converge against
-    msgs = " ".join(f.message for f in routines.consolidate_signals(tmp_path))
-    assert "convergence" not in msgs
-
-
-def _prd_body(hdir):
-    return frontmatter.parse((hdir / "PRD.md").read_text(encoding="utf-8")).body
-
-
-def test_facet_standings_structured_counts_explore_and_drift(tmp_path):
-    hdir = _mk_prd_facets(tmp_path)
-    _facet_card(hdir, "a", facet="Continuity core")
-    _facet_card(hdir, "b", facet="Continuity core")
-    _facet_card(hdir, "poc", phase="explore")
-    _facet_card(hdir, "orphan")  # converge card, no facet -> drift
-
-    st = routines.facet_standings(tmp_path, _prd_body(hdir))
-    assert dict(st.with_work) == {"Continuity core": 2}
-    assert "PO lifecycle" in st.no_work
-    assert st.explore == ["poc"]
-    assert any("orphan" in d and "no vision_facet" in d for d in st.drift)
-
-
-def test_facet_standings_none_without_a_facet_table(tmp_path):
-    hdir = _mk_prd_facets(tmp_path, vision_table=False)
-    _facet_card(hdir, "a", facet="Continuity core")
-    assert routines.facet_standings(tmp_path, _prd_body(hdir)) is None
+    assert routines.regenerate_directions(tmp_path) is False
+    assert path.read_text(encoding="utf-8") == original
 
 
 def _prd_with_shipped(root: Path, shipped: str) -> None:
@@ -1096,26 +1066,3 @@ def test_handoff_budget_is_independent_of_the_whole_file_budget(tmp_path):
 
     assert any("'next_prompt'" in m for m in msgs)
     assert not any("-char budget:" in m for m in msgs)  # whole-file signal silent
-
-
-def test_vision_facets_ignores_a_second_table_in_the_vision_section():
-    # `## Vision` grew a surfaces-and-audiences table (2026-07-28). Scanning every
-    # row made its one bolded cell a phantom facet: reported as "converged, no open
-    # cards", counted by facet_standings, and rendered in the TUI Direction view.
-    body = (
-        "## Vision\n\nprose\n\n"
-        "| Facet | Definition of done |\n|---|---|\n"
-        "| **Continuity core** | resumes from durable state |\n"
-        "| **Distribution** | installs cleanly |\n\n"
-        "More prose about surfaces.\n\n"
-        "| Surface | Serves | Contract? |\n|---|---|---|\n"
-        "| **`.horus/` files** | agents | YES |\n"
-        "| `horus` CLI | operator | No |\n\n"
-        "## Backlog\n"
-    )
-    assert routines._vision_facets(body) == ["Continuity core", "Distribution"]
-
-
-def test_vision_facets_still_reads_a_lone_table():
-    body = "## Vision\n\n| Facet | DoD |\n|---|---|\n| **Only one** | done |\n\n## Backlog\n"
-    assert routines._vision_facets(body) == ["Only one"]

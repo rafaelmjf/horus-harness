@@ -5,9 +5,7 @@ created: 2026-07-17
 tier: sonnet
 type: feature
 parallel: unsafe
-phase: converge
-vision_facet: "Autonomous dispatch"
-branch: vision-branch-x3-scheduling-and-autonomous-execution
+topic: autonomous-dispatch
 created_by: owner
 surface: horus/cli.py; horus/native_hooks.py (band sentinels ~:739-751); new notify wiring (webhook / OS notification / harness PushNotification); machine-local config under ~/.horus/
 shipped_pr: 299

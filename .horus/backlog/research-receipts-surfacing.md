@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Index shape (frontmatter? naming convention? generated list?), render surfaces, and whether receipts gain lifecycle states are undecided."
-phase: converge
+topic: po-lifecycle
 type: feature
-vision_facet: "PO lifecycle"
 ---
 
 # research-receipts-surfacing — receipts as first-class citizens, not stray .md files

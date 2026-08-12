@@ -7,8 +7,7 @@ readiness_reason: "Depends on the full away-mode drill; only Ready—Eligible ca
 created: 2026-07-18
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Autonomous dispatch"
-phase: explore
+topic: autonomous-dispatch
 tier: high
 type: feature
 parallel: safe

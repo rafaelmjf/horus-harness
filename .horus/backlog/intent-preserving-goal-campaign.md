@@ -8,9 +8,8 @@ refine_passes: 1
 created_by: owner
 readiness: shaping
 readiness_reason: "The owner deliberately parked the attended experiment until fully available; the target campaign, explicit authority boundaries, and adoption evidence must be chosen without predesigning the agent's implementation."
-phase: explore
+topic: autonomous-dispatch
 type: feature
-vision_facet: "Autonomous dispatch"
 ---
 
 # intent-preserving-goal-campaign — bind the spirit, let a frontier agent choose the form

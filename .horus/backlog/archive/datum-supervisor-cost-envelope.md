@@ -5,6 +5,7 @@ priority: now
 tier: sonnet
 parallel: safe
 type: task
+topic: ""
 surface: horus/datums.py, horus/cli.py, launch/completion capture (launcher/delivery), capabilities projection, skills/delegation-rubric
 created: 2026-07-14
 created_by: overseer

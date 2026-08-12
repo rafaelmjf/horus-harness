@@ -7,12 +7,11 @@ last_refined: 2026-07-21
 readiness: ready
 autonomy: attended
 order: 10
-phase: build
+topic: dashboard-cockpit
 type: feature
 tier: low
 parallel: safe
 surface: "Horus session-launch path (Claude adapter/launch) + global TUI toggle + per-launch override for remote-control-on-launch"
-vision_facet: "Dashboard / cockpit"
 shipped_pr: 386
 shipped_sha: 8129306
 ---

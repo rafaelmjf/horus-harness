@@ -8,9 +8,8 @@ readiness: ready
 autonomy: eligible
 tier: small
 parallel: safe
-phase: converge
+topic: continuity-core
 type: bug
-vision_facet: "Continuity core"
 surface: "the `backlog` subparser in horus/cli.py (default action when no subcommand is given) + its help text, tests/test_cli.py"
 shipped_pr: 408
 shipped_sha: ed0dcd5

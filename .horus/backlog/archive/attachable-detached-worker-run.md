@@ -4,6 +4,7 @@ priority: high
 tier: sonnet
 created: 2026-07-15
 type: feature
+topic: ""
 parallel: unsafe
 surface: horus/cli.py, horus/terminal_sessions.py, horus/tmux_runner.py, horus/runlog.py, horus/registry.py, horus/terminal_tui.py
 shipped_pr: 255

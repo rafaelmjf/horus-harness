@@ -7,11 +7,10 @@ created: 2026-08-09
 created_by: owner
 last_refined: 2026-08-09
 refine_passes: 0
-vision_facet: "Dashboard / cockpit"
+topic: dashboard-cockpit
 tier: medium
 type: feature
 parallel: safe
-phase: converge
 surface: "horus/github_catalog.py (RemoteProject + discover), horus/dashboard.py (gather_remote_projects, ~line 343)"
 ---
 

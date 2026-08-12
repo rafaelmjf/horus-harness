@@ -4,6 +4,7 @@ priority: high
 tier: sonnet
 created: 2026-07-16
 type: bug
+topic: ""
 parallel: safe
 surface: horus/adapters/claude.py, horus/cli.py, horus/datums.py, bundled decision/execution skills
 shipped_pr: 266

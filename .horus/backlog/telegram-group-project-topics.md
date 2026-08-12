@@ -8,8 +8,7 @@ order: 20
 created: 2026-07-18
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Autonomous dispatch"
-phase: converge
+topic: autonomous-dispatch
 tier: medium
 type: feature
 parallel: safe

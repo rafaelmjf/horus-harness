@@ -10,9 +10,8 @@ refine_passes: 2
 tier: high
 type: feature
 parallel: safe
-phase: explore
+topic: safe-execution-boundaries
 created_by: owner
-branch: vision-branch-x5-safe-execution-boundaries
 surface: cross-platform execution-environment contract; Linux systemd/cgroup v2, Windows Job Objects/sandbox options, macOS launchd/seatbelt/container options
 ---
 

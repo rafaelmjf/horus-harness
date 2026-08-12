@@ -10,8 +10,7 @@ refine_passes: 2
 tier: high
 type: feature
 parallel: safe
-phase: converge
-vision_facet: "Autonomous dispatch"
+topic: autonomous-dispatch
 created_by: owner
 depends-on: autotest-e2e-away-mode-drill
 surface: .horus/backlog/ (divergence umbrella); may inform a future PRD Vision facet; links five explore cards

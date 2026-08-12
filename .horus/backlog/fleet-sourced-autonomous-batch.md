@@ -8,9 +8,8 @@ last_refined: 2026-07-28
 refine_passes: 2
 readiness: shaping
 readiness_reason: "Which project goes first, envelope bounds, batch size, and the task-finding pass in each target repo are undecided; refine before any dispatch."
-phase: converge
+topic: autonomous-dispatch
 type: feature
-vision_facet: "Autonomous dispatch"
 ---
 
 # fleet-sourced-autonomous-batch — feed the loop from the fleet, trip-timed

@@ -4,6 +4,7 @@ priority: high
 tier: sonnet
 created: 2026-07-14
 type: feature
+topic: ""
 parallel: safe
 surface: horus/terminal_tui.py, horus/capabilities.py
 shipped_pr: 225

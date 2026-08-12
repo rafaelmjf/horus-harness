@@ -8,7 +8,7 @@ tier: medium
 created: 2026-07-16
 last_refined: 2026-07-29
 refine_passes: 3
-vision_facet: "Dashboard / cockpit"
+topic: dashboard-cockpit
 created_by: owner
 type: feature
 parallel: unsafe

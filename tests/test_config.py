@@ -1,5 +1,7 @@
 """Tests for the project registry: register, unregister, prune."""
 
+from pathlib import Path
+
 import pytest
 
 from horus import config
@@ -158,7 +160,9 @@ def test_register_project_preserves_access_block(tmp_path, monkeypatch):
     assert access is not None
     assert access.owner_email == "o@example.com"
     assert access.access.aud == "abc123"
-    assert str(tmp_path / "proj") in config.load_projects()  # the write still did its job
+    assert (tmp_path / "proj").resolve() in {
+        Path(project).resolve() for project in config.load_projects()
+    }  # the write still did its job
 
 
 def test_set_workflow_policy_preserves_access_block(tmp_path, monkeypatch):
@@ -371,7 +375,7 @@ def test_backlog_fields_default_to_empty(tmp_path, monkeypatch):
     assert config.load_tui_defaults() == {
         "backlog_fields": [],
         "remote_control_default": True,
-        "backlog_group_by": "facet",
+        "backlog_group_by": "topic",
     }
 
 
@@ -408,9 +412,9 @@ def test_tui_keys_do_not_clobber_each_other(tmp_path, monkeypatch):
     assert config.load_backlog_group_by() == "readiness"  # still preserved
 
 
-def test_backlog_group_by_defaults_to_facet_and_round_trips(tmp_path, monkeypatch):
+def test_backlog_group_by_defaults_to_topic_and_round_trips(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
-    assert config.load_backlog_group_by() == "facet"
+    assert config.load_backlog_group_by() == "topic"
     assert config.set_backlog_group_by("priority") == "priority"
     assert config.load_backlog_group_by() == "priority"
 
@@ -420,7 +424,7 @@ def test_backlog_group_by_rejects_unknown_lens(tmp_path, monkeypatch):
     with pytest.raises(ValueError):
         config.set_backlog_group_by("nonsense")
     # A corrupt/unknown stored value degrades to the default on read.
-    assert config._clean_group_by("nonsense") == "facet"
+    assert config._clean_group_by("nonsense") == "topic"
 
 
 def test_set_backlog_fields_dedupes_and_rejects_unusable_names(tmp_path, monkeypatch):

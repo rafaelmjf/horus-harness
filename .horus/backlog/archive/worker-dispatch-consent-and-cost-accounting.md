@@ -4,6 +4,7 @@ priority: high
 tier: sonnet
 created: 2026-07-16
 type: feature
+topic: ""
 parallel: unsafe
 surface: shared AGENTS.md/CLAUDE.md managed block, .agents/skills/delegation-rubric, execution-decision, dispatch-decision, horus-execution, horus/datums.py, horus/run_executor.py, horus/cli.py
 shipped_pr: 256

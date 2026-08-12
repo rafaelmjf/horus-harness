@@ -5,11 +5,10 @@ created: 2026-08-01
 created_by: agent
 readiness: shaping
 readiness_reason: "The measurement is done and unambiguous; the method is not. Which of 84 rules are still load-bearing is a judgement call per rule, and the answer shapes whether this is one consolidation pass, a retirement policy, or a second file. Needs an owner-attended session — an agent deleting rules it finds unfamiliar is exactly the wrong reader."
-phase: converge
+topic: continuity-core
 type: feature
 tier: medium
 parallel: safe
-vision_facet: "Continuity core"
 surface: .horus/PRD.md (## Rules), .horus/archive/history.md (the sanctioned destination), horus/consolidate.py (the budget + per-entry signals that keep firing)
 shipped_pr: 492
 shipped_sha: bc32140

@@ -2,8 +2,7 @@
 status: shipped
 priority: high
 created: 2026-07-17
-vision_facet: "Continuity core"
-phase: converge
+topic: continuity-core
 tier: sonnet
 type: feature
 parallel: safe

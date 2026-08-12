@@ -4,6 +4,7 @@ priority: medium
 tier: sonnet
 created: 2026-07-16
 type: bug
+topic: ""
 parallel: safe
 surface: horus/mergewatch.py, horus/cli.py, tests/test_mergewatch.py, tests/test_cli.py
 shipped_pr: 271

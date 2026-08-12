@@ -10,9 +10,8 @@ refine_passes: 2
 tier: medium
 type: feature
 parallel: safe
-phase: explore
+topic: safe-execution-boundaries
 created_by: owner
-branch: vision-branch-x5-safe-execution-boundaries
 surface: resource policy/defaults, machine probes, doctor/control readout, measured pressure/termination datums
 ---
 

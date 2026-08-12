@@ -5,6 +5,7 @@ priority: now
 tier: sonnet
 parallel: unsafe
 type: feature
+topic: ""
 surface: horus/config.py, horus/closure.py, horus/resume_preflight.py, horus/terminal_tui.py, horus/cli.py
 created: 2026-07-15
 created_by: owner

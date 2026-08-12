@@ -10,9 +10,8 @@ refine_passes: 2
 tier: high
 type: spike
 parallel: safe
-phase: explore
+topic: safe-execution-boundaries
 created_by: owner
-branch: vision-branch-x5-safe-execution-boundaries
 surface: research + disposable PoCs for rootless container, dedicated user, VM/microVM execution modes
 ---
 

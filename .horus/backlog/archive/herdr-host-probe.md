@@ -6,11 +6,10 @@ created_by: owner
 readiness: ready
 autonomy: attended
 order: 15
-phase: explore
+topic: dashboard-cockpit
 type: spike
 tier: medium
 parallel: safe
-vision_facet: "Dashboard / cockpit"
 surface: throwaway herdr install; findings land in this card's Reviews (no product code)
 shipped_pr: 440
 shipped_sha: 3d594a0

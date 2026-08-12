@@ -6,11 +6,10 @@ created: 2026-07-29
 created_by: agent
 readiness: shaping
 readiness_reason: "The gap is measured, not suspected — but the fix is a real trade-off (a CI job that installs a third-party binary, versus accepting demonstration-only confidence for an opt-in host). Wants an owner decision on which, not a refinement pass."
-phase: explore
+topic: distribution
 type: chore
 tier: medium
 parallel: safe
-vision_facet: "Distribution"
 surface: .github/workflows/tests.yml (an optional-host job), tests/test_hosts_herdr.py (the skipped live test), horus/hosts/herdr.py
 ---
 

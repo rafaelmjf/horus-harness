@@ -10,9 +10,8 @@ refine_passes: 2
 tier: high
 type: feature
 parallel: unsafe
-phase: explore
+topic: safe-execution-boundaries
 created_by: owner
-branch: vision-branch-x5-safe-execution-boundaries
 surface: horus/terminal_sessions.py, horus/tmux_runner.py, horus/adapters/base.py, horus/run_executor.py, horus/registry.py, new resource-control primitive
 ---
 

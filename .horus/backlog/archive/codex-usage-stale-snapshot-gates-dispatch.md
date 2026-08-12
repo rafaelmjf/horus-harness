@@ -6,7 +6,7 @@ readiness_reason: "Needs investigation of two disagreeing readers over the same 
 created: 2026-07-23
 created_by: owner
 last_refined: 2026-07-23
-vision_facet: "Delegation calibration"
+topic: delegation-calibration
 tier: medium
 type: bug
 parallel: safe

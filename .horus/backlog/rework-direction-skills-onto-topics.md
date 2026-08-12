@@ -6,12 +6,11 @@ autonomy: attended
 created: 2026-08-12
 created_by: owner
 type: feature
-phase: explore
+topic: backlog-model
 parallel: safe
 tier: large
 reactivate_after: after real use of the emergent topics/vision structure
 surface: ".claude/skills/* (new topic-native direction skills)"
-topic: backlog-model
 depends-on: retire-facets-for-topics
 ---
 

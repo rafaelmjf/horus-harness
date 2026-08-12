@@ -6,7 +6,7 @@ readiness: shaping
 readiness_reason: "Direction is clear (automate roster freshness from external + shared sources instead of manual bumps) but the sources, the trust/provenance model, and how a fetched signal folds into the priors are all unshaped. Needs a research + scoping pass before any is Ready."
 created: 2026-07-29
 created_by: owner
-vision_facet: "Delegation calibration"
+topic: delegation-calibration
 tier: medium
 type: research
 parallel: safe

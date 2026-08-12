@@ -8,7 +8,7 @@ tier: medium
 created: 2026-07-16
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Distribution"
+topic: distribution
 type: ops
 parallel: safe
 surface: pyproject.toml (name/description), README tagline, GitHub about, scripts/deploy-hosted.sh, managed-block install text

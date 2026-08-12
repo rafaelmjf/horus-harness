@@ -3,6 +3,7 @@ title: "Optional recovery notes and honest onboarding"
 status: shipped
 priority: now
 type: feature
+topic: ""
 surface: horus/templates.py, horus/skills.py, horus/continuity.py, horus/closure.py, horus/routines.py, horus/cli.py, horus/initialize.py, horus/remote_start.py, tests/
 created: 2026-07-15
 created_by: owner

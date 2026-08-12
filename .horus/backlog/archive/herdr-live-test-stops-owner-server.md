@@ -6,11 +6,10 @@ created_by: agent
 readiness: ready
 readiness_reason: "Root cause is proven from two independent logs, and the fix is bounded because the test already promises the isolation in its own docstring — this is making the code honour a contract it states. No shape decision remains."
 autonomy: attended
-phase: converge
+topic: distribution
 type: bug
 tier: high
 parallel: safe
-vision_facet: "Distribution"
 surface: tests/test_hosts_herdr.py (test_live_herdr_server_lifecycle:317-352), horus/hosts/herdr.py (_run:89 — no socket override), tests/test_terminal_sessions.py (the 2026-07-13 tmux precedent, :297-315)
 shipped_pr: 455
 shipped_sha: 9fa55ae

@@ -7,11 +7,10 @@ created: 2026-08-09
 created_by: owner
 last_refined: 2026-08-09
 refine_passes: 0
-vision_facet: "Dashboard / cockpit"
+topic: dashboard-cockpit
 tier: small
 type: research
 parallel: safe
-phase: explore
 surface: "research only — no code; receipt under .horus/research/"
 ---
 

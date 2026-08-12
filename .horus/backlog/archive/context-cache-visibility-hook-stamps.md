@@ -3,6 +3,7 @@ status: retired
 priority: later
 tier: sonnet
 created: 2026-07-10
+topic: ""
 ---
 > Retired 2026-07-14 (owner triage): context-cache visibility is already shipped in
 > the dashboard/session surfaces. Hook-generation stamps have no observed downgrade

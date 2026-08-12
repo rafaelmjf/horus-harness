@@ -76,11 +76,10 @@ def _req(**overrides) -> envelope.DispatchRequest:
 
 
 def test_create_persists_and_round_trips():
-    created = _make(branch="x3", efforts=("high",), merge_authority=True)
+    created = _make(efforts=("high",), merge_authority=True)
     loaded = envelope.load("trip")
     assert loaded == created
     assert loaded.merge_authority is True
-    assert loaded.branch == "x3"
 
 
 def test_create_refuses_evergreen_or_past_expiry():
@@ -91,8 +90,8 @@ def test_create_refuses_evergreen_or_past_expiry():
 
 
 def test_create_refuses_an_envelope_that_authorizes_nothing():
-    """A no-card no-branch envelope would never match: refuse now, not at fire time."""
-    with pytest.raises(envelope.EnvelopeError, match="authorize something"):
+    """A no-card envelope would never match: refuse now, not at fire time."""
+    with pytest.raises(envelope.EnvelopeError, match="at least one card"):
         _make(cards=())
     with pytest.raises(envelope.EnvelopeError, match="--account"):
         _make(accounts=())
@@ -162,13 +161,6 @@ def test_in_bounds_dispatch_is_authorized():
     assert envelope.validate(env, _req(), usage_remaining=80, now=NOW) is None
 
 
-def test_branch_authorizes_its_stamped_cards():
-    env = _make(cards=(), branch="x3")
-    assert envelope.validate(env, _req(card="any-child", branch="x3"), usage_remaining=80, now=NOW) is None
-    refusal = envelope.validate(env, _req(card="other", branch="different"), usage_remaining=80, now=NOW)
-    assert refusal.bound == "card-whitelist"
-
-
 def test_refuses_card_outside_the_whitelist():
     env = _make()
     refusal = envelope.validate(env, _req(card="card-z"), usage_remaining=80, now=NOW)
@@ -224,7 +216,7 @@ def test_validate_normalizes_a_legacy_model_named_stored_tier():
     the card tier normalizes to the same neutral point."""
     legacy = envelope.Envelope(
         name="legacy", created=TODAY.isoformat(), expires="2026-07-28",
-        cards=("card-a",), branch="", accounts=("claude-personal",), tiers=("sonnet",),
+        cards=("card-a",), accounts=("claude-personal",), tiers=("sonnet",),
         efforts=(), usage_floor=30, max_attempts_per_card=2, max_dispatches_per_day=3,
         merge_authority=False,
     )
@@ -368,13 +360,12 @@ def test_merge_authority_is_explicit_and_persisted():
 # --- the guard as `horus run` binds it ---------------------------------------
 
 
-def _project(tmp_path: Path, *, tier: str = "sonnet", branch: str = "") -> Path:
+def _project(tmp_path: Path, *, tier: str = "sonnet") -> Path:
     root = tmp_path / "proj"
     cards = root / ".horus" / "backlog"
     cards.mkdir(parents=True)
-    stamps = f"branch: {branch}\n" if branch else ""
     (cards / "card-a.md").write_text(
-        f"---\nstatus: open\npriority: high\ntier: {tier}\n{stamps}---\n\n# card-a\n",
+        f"---\nstatus: open\npriority: high\ntier: {tier}\n---\n\n# card-a\n",
         encoding="utf-8",
     )
     return root
@@ -413,14 +404,6 @@ def test_guard_reads_tier_from_the_card_not_the_caller(tmp_path, _full_capacity)
     refusal, auth = cli._envelope_guard(_args(root), root)
     assert refusal == 2
     assert auth is None
-
-
-def test_guard_resolves_a_branch_stamped_card(tmp_path, _full_capacity):
-    root = _project(tmp_path, branch="x3")
-    _make_live(cards=(), branch="x3")
-    refusal, auth = cli._envelope_guard(_args(root), root)
-    assert refusal is None
-    assert auth.request.branch == "x3"
 
 
 def test_unattended_without_an_envelope_is_refused(tmp_path, capsys):

@@ -7,11 +7,10 @@ readiness_reason: "Demonstrated live (2026-07-20), and the owner call it was wai
 created: 2026-07-20
 created_by: claude
 last_refined: 2026-07-26
-vision_facet: "Continuity core"
+topic: continuity-core
 tier: small
 type: bug
 parallel: safe
-phase: converge
 surface: "`horus close --check` verdict/exit-code logic (the pre-merge freshness gate that the `gh pr merge` interceptor keys on) — the Unclassified-card finding should be advisory, not exit-failing."
 shipped_pr: 409
 shipped_sha: 1fa00b3

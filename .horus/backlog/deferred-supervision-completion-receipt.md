@@ -8,7 +8,7 @@ tier: medium
 created: 2026-07-15
 last_refined: 2026-07-28
 refine_passes: 2
-vision_facet: "Delegation calibration"
+topic: delegation-calibration
 type: feature
 parallel: unsafe
 surface: horus/cli.py, horus/registry.py, horus/delivery.py, horus/datums.py, horus/terminal_tui.py, bundled dispatch/execution skills
