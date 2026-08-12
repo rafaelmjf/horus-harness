@@ -91,7 +91,7 @@ REMOTE_CONTROL_DEFAULT: bool = True
 # The group-by lens the TUI backlog list opens to. One of
 # ``backlog_tree.GROUP_BY_LENSES``; kept as a bare string here to avoid a config→
 # backlog_tree import cycle. Validated on read/write against that roster.
-BACKLOG_GROUP_BY_DEFAULT: str = "facet"
+BACKLOG_GROUP_BY_DEFAULT: str = "topic"
 
 TUI_DEFAULTS: dict[str, object] = {
     "backlog_fields": [],
@@ -270,11 +270,11 @@ def _write_config(
     lines = ["# Horus user config", f'workspace_root = "{Path(root).expanduser().resolve().as_posix()}"']
     lines += extra_scalars
     lines += ["", "projects = ["]
-    lines += [f'  "{p}",' for p in projects]
+    lines += [f"  {_toml_value(p)}," for p in projects]
     lines += ["]", "", "github_owners = ["]
-    lines += [f'  "{o}",' for o in github_owners]
+    lines += [f"  {_toml_value(o)}," for o in github_owners]
     lines += ["]", "", "ignored_repos = ["]
-    lines += [f'  "{r}",' for r in ignored_repos]
+    lines += [f"  {_toml_value(r)}," for r in ignored_repos]
     lines.append("]")
     # [workflow]/[launch] go at the end so they don't accidentally swallow the
     # top-level keys above them in a strict TOML parse (tables extend until the

@@ -2729,8 +2729,8 @@ def cmd_backlog(args: argparse.Namespace) -> int:
             return 0
         print(f"Shelved ({len(cards)})")
         for c in cards:
-            facet = f"  {c.vision_facet}" if c.vision_facet else ""
-            print(f"   {c.name}  [{c.type}]{facet}")
+            topic = f"  {c.topic}" if c.topic else ""
+            print(f"   {c.name}  [{c.type}]{topic}")
             if c.title and c.title != c.name:
                 print(f"      {c.title}")
         return 0
@@ -5537,8 +5537,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_backlog.add_argument("--path", default=".", help="project root (default: cwd); only used with --tree")
     p_backlog.add_argument(
         "--tree", action="store_true",
-        help="canonical branch/facet projection: active cards grouped by `branch:` umbrella, "
-        "then by `vision_facet` for unbranched cards",
+        help="canonical topic projection: active cards grouped by free-form `topic:` "
+        "with blank topics retained under Unsorted",
     )
     p_backlog.add_argument("--json", action="store_true", help="with --tree, emit the projection as JSON")
     backlog_sub = p_backlog.add_subparsers(dest="backlog_cmd", required=False)

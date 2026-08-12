@@ -223,12 +223,12 @@ def test_field_picker_offers_every_key_present_on_the_cards(tmp_path, monkeypatc
 
 def test_field_picker_keeps_a_configured_field_visible_where_no_card_has_it(tmp_path, monkeypatch):
     ui, _root = _project_with_cards(tmp_path, monkeypatch)
-    ui.backlog_fields = ["vision_facet"]
+    ui.backlog_fields = ["topic"]
     ui._show("backlog_fields")
 
-    assert "vision_facet" in [value for _kind, value in ui.items]
+    assert "topic" in [value for _kind, value in ui.items]
     rendered = _plain(ui._body_text())
-    assert "[x] vision_facet\n" in rendered
+    assert "[x] topic\n" in rendered
     assert "on no card here" in rendered
 
 
@@ -417,28 +417,27 @@ def test_start_remote_reports_failure_without_raising(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Backlog tree screen (branch umbrellas + facets) and the receipts shelf
+# Backlog topic screen and the receipts shelf
 # ---------------------------------------------------------------------------
 
 
 def _project_with_branch_tree(tmp_path, monkeypatch) -> tuple[terminal_tui.TerminalUI, object]:
-    """A UI parked on the backlog screen of a project with one branch umbrella
-    (one child) plus one facet-only card, and one dated research receipt."""
+    """A UI parked on a two-topic backlog plus one dated research receipt."""
     _isolated_home(tmp_path, monkeypatch)
     root = tmp_path / "demo"
     hdir = root / ".horus" / "backlog"
     hdir.mkdir(parents=True)
     (hdir / "umbrella-a.md").write_text(
-        "---\nstatus: open\npriority: medium\n---\n"
-        "# Umbrella A\n\n## Acceptance\n\n- Converged when it ships.\n",
+        "---\nstatus: open\npriority: medium\ntopic: delivery\n---\n"
+        "# Umbrella A\n",
         encoding="utf-8",
     )
     (hdir / "child-1.md").write_text(
-        "---\nstatus: open\npriority: high\ntier: sonnet\nbranch: umbrella-a\n---\n# Child one\n",
+        "---\nstatus: open\npriority: high\ntier: sonnet\ntopic: delivery\n---\n# Child one\n",
         encoding="utf-8",
     )
     (hdir / "lonely.md").write_text(
-        '---\nstatus: open\npriority: low\nvision_facet: "Dashboard"\n---\n# Lonely card\n',
+        "---\nstatus: open\npriority: low\ntopic: workspace\n---\n# Lonely card\n",
         encoding="utf-8",
     )
     rdir = root / ".horus" / "research"
@@ -455,41 +454,39 @@ def _project_with_branch_tree(tmp_path, monkeypatch) -> tuple[terminal_tui.Termi
 def test_backlog_screen_shows_grouped_sections_expanded_by_default(tmp_path, monkeypatch):
     ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
 
-    # Default lens is facet/branch; sections render EXPANDED (children visible)
-    # with `(count)` headers: umbrella section + its child, then facet + its card.
+    # Default topic sections render expanded with counted headers.
     kinds = [kind for kind, _value in ui.items]
-    assert kinds == ["group", "card", "group", "card"]
+    assert kinds == ["group", "card", "card", "group", "card"]
 
     rendered = _plain(ui._body_text())
-    assert "Umbrella A (1)" in rendered
-    assert "converges: Converged when it ships." in rendered
-    assert "Dashboard (1)" in rendered
+    assert "workspace (1)" in rendered
+    assert "delivery (2)" in rendered
     assert "[task] Lonely card" in rendered
     assert "Child one" in rendered  # expanded by default now shows the child
 
 
 def test_selecting_a_group_header_collapses_then_expands_it(tmp_path, monkeypatch):
     ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
-    ui.selected = 0  # the first group header (the branch umbrella)
+    ui.selected = 0  # the first topic header
     assert ui.items[0][0] == "group"
 
     ui.activate()  # collapse it
     kinds = [kind for kind, _value in ui.items]
-    assert kinds == ["group", "group", "card"]  # umbrella's child now hidden
+    assert kinds == ["group", "group", "card"]
     rendered = _plain(ui._body_text())
     assert "Child one" not in rendered
 
     ui.selected = 0
     ui.activate()  # expand it again
     kinds = [kind for kind, _value in ui.items]
-    assert kinds == ["group", "card", "group", "card"]
+    assert kinds == ["group", "card", "card", "group", "card"]
 
 
 def test_group_by_lens_switch_regroups_and_none_is_flat(tmp_path, monkeypatch):
     ui, _root = _project_with_branch_tree(tmp_path, monkeypatch)
 
     # Switch to the priority lens: 3 distinct priorities -> 3 group sections
-    # (the umbrella card is a plain card under non-facet lenses).
+    # Every card is a plain card under non-topic lenses.
     ui.backlog_group_by = "priority"
     ui.selected = 0
     ui._refresh_items()
@@ -503,9 +500,8 @@ def test_group_by_lens_switch_regroups_and_none_is_flat(tmp_path, monkeypatch):
     assert len(ui.items) == 3
 
 
-def test_backlog_screen_with_no_facets_or_branches_falls_back_to_flat(tmp_path, monkeypatch):
-    """Universal fallback: a project whose default (facet) lens yields no real
-    structure renders the flat card list — no headers."""
+def test_backlog_screen_with_only_unsorted_cards_falls_back_to_flat(tmp_path, monkeypatch):
+    """One Unsorted bucket has no useful structure, so the list stays flat."""
     ui, _root = _project_with_cards(tmp_path, monkeypatch)
 
     kinds = [kind for kind, _value in ui.items]
@@ -612,24 +608,21 @@ def test_readiness_filter_applies_to_the_list_on_mobile(tmp_path, monkeypatch):
     assert names == {"lo-deferred"}
 
 
-def test_vision_view_renders_facet_standings_readiness_and_branches(tmp_path, monkeypatch):
+def test_vision_view_renders_topic_standings_and_readiness(tmp_path, monkeypatch):
     _isolated_home(tmp_path, monkeypatch)
     root = tmp_path / "demo"
     hdir = root / ".horus" / "backlog"
-    hdir.mkdir(parents=True)
+    (hdir / "archive").mkdir(parents=True)
     (root / ".horus" / "PRD.md").write_text(
-        "---\nstatus: active\n---\n# demo\n\n## Vision\n\n"
-        "| Facet | Definition of done |\n|---|---|\n"
-        "| **Continuity core** | resumes. |\n"
-        "| **Dashboard / cockpit** | cockpit. |\n\n## Backlog\n\nmenu\n",
+        "---\nstatus: active\n---\n# demo\n\n## Vision\n\nSeed.\n\n## Backlog\n\nmenu\n",
         encoding="utf-8",
     )
-    (hdir / "umbrella-a.md").write_text(
-        "---\nstatus: open\n---\n# Umbrella A\n\n## Acceptance\n\n- Converged when it ships.\n",
+    (hdir / "active.md").write_text(
+        "---\nstatus: open\ntopic: continuity\n---\n# Active\n",
         encoding="utf-8",
     )
-    (hdir / "child-1.md").write_text(
-        '---\nstatus: open\nvision_facet: "Continuity core"\nbranch: umbrella-a\n---\n# Child one\n',
+    (hdir / "archive" / "shipped.md").write_text(
+        "---\nstatus: shipped\ntopic: continuity\n---\n# Shipped\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(terminal_tui.config, "load_projects", lambda: [str(root)])
@@ -639,12 +632,10 @@ def test_vision_view_renders_facet_standings_readiness_and_branches(tmp_path, mo
     ui._show("vision")
 
     rendered = "".join(text for line in ui._vision_lines() for _s, text in line)
-    assert "Facet standings" in rendered
-    assert "Continuity core" in rendered and "1 open" in rendered
-    assert "Dashboard / cockpit — no open cards" in rendered   # facet with no cards
-    assert "Readiness queues" in rendered and "Ready—Attended:" in rendered
-    assert "Vision branches" in rendered and "Umbrella A (1 open)" in rendered
-    assert "converges: Converged when it ships." in rendered
+    assert "Topic standings" in rendered
+    assert "continuity" in rendered and "1 open · 1 shipped" in rendered
+    assert "Readiness queues" in rendered and "Unclassified:" in rendered
+    assert "Facet" not in rendered and "Vision branches" not in rendered
 
 
 def test_vision_view_is_scroll_only_with_no_selectable_items(tmp_path, monkeypatch):
