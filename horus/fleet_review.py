@@ -45,7 +45,6 @@ class RemoteTruth:
     status: str = ""
     current_focus: str = ""
     next_action: str = ""
-    vision: str = ""
     capabilities: list[str] = field(default_factory=list)
     backlog: list[dict[str, str]] = field(default_factory=list)
     backlog_mode: str = "none"
@@ -214,7 +213,6 @@ def _truth_from_prd(
         status=document.front_matter.get("status", ""),
         current_focus=document.front_matter.get("current_focus", ""),
         next_action=document.front_matter.get("next_action", ""),
-        vision=capabilities.vision_lead(body) or "",
         capabilities=capabilities.shipped_lines(body),
         backlog=backlog,
         backlog_mode=backlog_mode,
