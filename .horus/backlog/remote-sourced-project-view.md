@@ -1,5 +1,5 @@
 ---
-status: open
+status: shelved
 priority: medium
 readiness: shaping
 readiness_reason: "The value and the data paths are clear, but three scoping decisions are open: how branches are fetched per repo without burning `gh` rate limit, whether remote backlog cards are read per-file or via a single tree call, and what the view shows when a project's remote `.horus/` predates the card layout. Shape before building."
@@ -117,3 +117,9 @@ attribute of a project rather than the reason it appears.
 
 Owner brainstorm, 2026-08-09, after the benchmark verdict closed the OpenWiki/Graphify
 question and the local-vs-remote distinction emerged as the dashboard's real differentiator.
+
+## Reviews
+
+### 2026-08-12 — parked for topics-over-facets migration (owner)
+
+Shelved as part of clearing the active field for the full facets→topics teardown (`retire-facets-for-topics`). Not declined on its own merits; unpark when the migration lands and the backlog model is stable. See `.horus/plans/topics-over-facets-migration.md`.

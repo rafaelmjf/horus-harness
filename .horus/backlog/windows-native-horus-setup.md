@@ -1,5 +1,5 @@
 ---
-status: open
+status: shelved
 priority: medium
 created: 2026-07-20
 created_by: owner
@@ -203,3 +203,7 @@ auth works over the bridge at all (untested — no TTY, so `publish-pbip-to-fabr
 not be remotable); and `pbi-ecosystem`'s `multi-instance-port-pick`, reproduced live here —
 with two workbooks open, auto-discovery silently returned the FIRST model (13 tables vs the
 second's 32) with exit 0 and no warning.
+
+### 2026-08-12 — parked for topics-over-facets migration (owner)
+
+Shelved as part of clearing the active field for the full facets→topics teardown (`retire-facets-for-topics`). Not declined on its own merits; unpark when the migration lands and the backlog model is stable. See `.horus/plans/topics-over-facets-migration.md`.

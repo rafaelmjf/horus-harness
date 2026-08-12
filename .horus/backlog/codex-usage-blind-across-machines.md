@@ -1,5 +1,5 @@
 ---
-status: open
+status: shelved
 priority: medium
 created: 2026-08-08
 created_by: agent
@@ -59,3 +59,9 @@ call for accounting.
 Found while implementing #504 (owner request for a manual all-accounts usage refresh).
 The distinction between the two agents' reads is at `horus/usage_snapshot.py:185-233`,
 whose own comments record the 2026-07-23 / 2026-07-26 stale-reading incident.
+
+## Reviews
+
+### 2026-08-12 — parked for topics-over-facets migration (owner)
+
+Shelved as part of clearing the active field for the full facets→topics teardown (`retire-facets-for-topics`). Not declined on its own merits; unpark when the migration lands and the backlog model is stable. See `.horus/plans/topics-over-facets-migration.md`.

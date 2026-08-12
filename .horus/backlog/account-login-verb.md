@@ -1,5 +1,5 @@
 ---
-status: open
+status: shelved
 priority: medium
 readiness: ready
 autonomy: attended
@@ -137,3 +137,7 @@ Live friction report + hand-executed setup run, owner-attended, 2026-07-20.
 ### 2026-08-02 — Rafael Figueiredo (manual)
 
 2026-08-02 — Reactivated. The card was swept into `shelved` on 2026-08-01 as collateral of the 69-card sweep, but its own deferral had already expired: `reactivate_after: 2026-07-29`, with the card recorded as fully specified and needing no re-refinement. Shelving it also stranded `codex-isolated-config-leak` — an active BUG whose owner-chosen remedy (re-login instead of copying, 2026-07-26) depends on this verb existing, so its gate could never lift. Restored to Ready/attended, the state its own readiness_reason said it returns to.
+
+### 2026-08-12 — parked for topics-over-facets migration (owner)
+
+Shelved as part of clearing the active field for the full facets→topics teardown (`retire-facets-for-topics`). Not declined on its own merits; unpark when the migration lands and the backlog model is stable. See `.horus/plans/topics-over-facets-migration.md`.

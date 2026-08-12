@@ -1,5 +1,5 @@
 ---
-status: open
+status: shelved
 priority: medium
 readiness: ready
 autonomy: attended
@@ -98,3 +98,9 @@ Answer only:
 
 Owner brainstorm, 2026-08-09, after the benchmark verdict and a review of the published
 OpenWiki site.
+
+## Reviews
+
+### 2026-08-12 — parked for topics-over-facets migration (owner)
+
+Shelved as part of clearing the active field for the full facets→topics teardown (`retire-facets-for-topics`). Not declined on its own merits; unpark when the migration lands and the backlog model is stable. See `.horus/plans/topics-over-facets-migration.md`.

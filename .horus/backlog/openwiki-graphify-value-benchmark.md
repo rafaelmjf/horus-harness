@@ -1,5 +1,5 @@
 ---
-status: open
+status: shelved
 priority: high
 created: 2026-08-07
 created_by: owner
@@ -263,3 +263,9 @@ reproducible evidence (graphify's is free to rebuild, openwiki's costs a paid ru
 crosses workspaces and `pane get` already returns `tab_id`, and that no `account` row exists
 among the home screen's selectable rows. Keys authored by the same model under-specify
 relative to bounded runs, the inverse of this card's stated worry.
+
+## Reviews
+
+### 2026-08-12 — parked for topics-over-facets migration (owner)
+
+Shelved as part of clearing the active field for the full facets→topics teardown (`retire-facets-for-topics`). Not declined on its own merits; unpark when the migration lands and the backlog model is stable. See `.horus/plans/topics-over-facets-migration.md`.
