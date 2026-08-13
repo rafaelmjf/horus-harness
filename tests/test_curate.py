@@ -93,3 +93,61 @@ def test_watermark_marks_changed_then_unchanged(tmp_path, monkeypatch):
                                              "content": [{"type": "output_text", "text": "second"}]}}) + "\n")
     third = curate.curate(out, home=home)
     assert third["projects"]["repo"]["sessions"][0]["changed"] is True
+
+
+# --- Phase 2: interpretation (stubbed runner — no tokens spent) --------------
+
+def _capture_one(tmp_path, monkeypatch) -> tuple[Path, dict]:
+    home = _fake_home(tmp_path, monkeypatch)
+    _write_jsonl(
+        home / ".claude" / "projects" / "C--proj" / "s1.jsonl",
+        [{"type": "user", "sessionId": "s1", "cwd": str(tmp_path / "gone"),
+          "gitBranch": "main", "timestamp": "2026-08-13T10:00:00Z",
+          "message": {"role": "user", "content": "build the thing"}}],
+    )
+    out = tmp_path / "out"
+    return out, curate.curate(out, home=home)
+
+
+def test_interpret_writes_curation_and_records_state(tmp_path, monkeypatch):
+    out, manifest = _capture_one(tmp_path, monkeypatch)
+    calls: list[str] = []
+
+    def fake_runner(prompt, *, model, account=None):
+        calls.append(prompt)
+        return "## Context\nA test project.\n"
+
+    outcome = curate.interpret(out, manifest=manifest, runner=fake_runner)
+    assert len(outcome["curated"]) == 1 and not outcome["errors"]
+    slug = outcome["curated"][0]
+    assert (out / "curation" / f"{slug}.md").read_text(encoding="utf-8").startswith("## Context")
+    # The bundle content reached the model.
+    assert "build the thing" in calls[0]
+
+
+def test_interpret_skips_unchanged_but_reruns_on_force(tmp_path, monkeypatch):
+    out, manifest = _capture_one(tmp_path, monkeypatch)
+    runs = {"n": 0}
+
+    def fake_runner(prompt, *, model, account=None):
+        runs["n"] += 1
+        return "## Context\nx\n"
+
+    curate.interpret(out, manifest=manifest, runner=fake_runner)
+    second = curate.interpret(out, manifest=manifest, runner=fake_runner)
+    assert second["skipped"] and not second["curated"]  # watermark skip
+    assert runs["n"] == 1
+
+    forced = curate.interpret(out, manifest=manifest, runner=fake_runner, force=True)
+    assert forced["curated"] and runs["n"] == 2
+
+
+def test_interpret_records_runner_errors_without_crashing(tmp_path, monkeypatch):
+    out, manifest = _capture_one(tmp_path, monkeypatch)
+
+    def boom(prompt, *, model, account=None):
+        raise RuntimeError("cli not authenticated")
+
+    outcome = curate.interpret(out, manifest=manifest, runner=boom)
+    assert outcome["errors"] and not outcome["curated"]
+    assert "cli not authenticated" in outcome["errors"][0]
