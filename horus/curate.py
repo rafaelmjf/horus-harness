@@ -633,6 +633,194 @@ def default_portfolio_dir() -> Path:
     return config.config_dir() / "portfolio"
 
 
+# Sumi-e static view: warm paper, ink tones, one seal. Self-contained, no network
+# (CSP blocks everything), data embedded as JSON. Regenerated from the manifest +
+# curation each run — no hand-curated maps.
+_PORTFOLIO_TEMPLATE = r'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'none'; font-src 'none'; connect-src 'none'">
+<title>Session Portfolio — unified agent history</title>
+<style>
+:root{color-scheme:light dark;
+--paper:#FBFAF7;--paper-2:#F2F0EB;--panel:#EDEAE3;--ink:#121110;--ink-2:#3A3835;
+--ink-3:#6B6862;--ink-4:#8A867E;--line:#DCD8CF;--seal:#C0342A;--seal-wash:rgba(192,52,42,.07);
+--radius:12px;}
+@media (prefers-color-scheme:dark){:root{
+--paper:#0E0E0D;--paper-2:#151513;--panel:#232220;--ink:#F4F1EA;--ink-2:#C6C2B9;
+--ink-3:#918D85;--ink-4:#7A766F;--line:#2C2A27;--seal:#D8483C;--seal-wash:rgba(216,72,60,.12);}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 Georgia,"Iowan Old Style",serif}
+button,select{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line)}
+button{cursor:pointer}
+.shell{width:min(1500px,100%);margin:0 auto;padding:32px 28px}
+header{margin-bottom:20px}
+h1{font-weight:normal;font-size:clamp(26px,4vw,40px);letter-spacing:.01em;margin:0 0 8px}
+.lede{margin:0;color:var(--ink-3);max-width:760px}
+.stats{display:flex;flex-wrap:wrap;gap:20px;margin-top:16px}
+.stat strong{display:block;font-size:22px}.stat span{color:var(--ink-4);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.toolbar{position:sticky;top:0;z-index:5;background:var(--paper);border-block:1px solid var(--line);padding:12px 0;margin:8px 0 18px}
+.toolbar-row{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}.toolbar-row+.toolbar-row{margin-top:8px}
+.group{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.group-label{color:var(--ink-4);font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:.08em}
+.toggle,.view-tab{border-radius:999px;padding:6px 12px}
+.toggle[aria-pressed=true],.view-tab[aria-selected=true]{border-color:var(--seal);background:var(--seal-wash);color:var(--seal)}
+select{border-radius:8px;padding:6px 9px;max-width:320px}
+.badge{display:inline-flex;align-items:center;border-radius:999px;padding:2px 9px;color:#fff;font-size:11px;white-space:nowrap}
+.main-layout{display:grid;grid-template-columns:minmax(320px,42%) minmax(0,1fr);gap:18px;align-items:start}
+.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.section-head h2{margin:0;font-size:17px;font-weight:normal}.count{color:var(--ink-4);font-size:12px}
+.project-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.project-card{width:100%;text-align:left;padding:14px;border-radius:var(--radius);background:var(--paper-2);min-height:120px}
+.project-card:hover{border-color:var(--seal)}.project-card.active{border-color:var(--seal);box-shadow:inset 0 0 0 1px var(--seal)}
+.project-name{display:block;font-size:15px;font-weight:bold;margin-bottom:5px;overflow-wrap:anywhere}
+.project-path{display:block;color:var(--ink-4);font:11px/1.35 ui-monospace,Consolas,monospace;overflow-wrap:anywhere;min-height:28px}
+.card-meta,.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--ink-3);background:var(--panel)}
+.chip.horus{color:var(--seal);border-color:var(--seal)}
+.chip.flag{color:var(--seal);background:var(--seal-wash);border-color:var(--seal)}
+.detail,.timeline-pane{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.detail{position:sticky;top:120px;max-height:calc(100vh-140px);overflow:auto}
+.detail-head,.timeline-head{padding:17px 18px;border-bottom:1px solid var(--line)}
+.detail-head h2,.timeline-head h2{margin:0 0 5px;font-size:19px;font-weight:normal;overflow-wrap:anywhere}
+.detail-meta{color:var(--ink-4);font-size:12px;overflow-wrap:anywhere}
+.curation{padding:16px 18px;border-bottom:1px solid var(--line);white-space:pre-wrap;font-size:13px;color:var(--ink-2)}
+.curation.empty{color:var(--ink-4);font-style:italic}
+.session-list{list-style:none;margin:0;padding:0}
+.session{display:grid;grid-template-columns:130px minmax(0,1fr);gap:14px;padding:15px 18px;border-bottom:1px solid var(--line)}
+.session:last-child{border-bottom:0}.session-time{color:var(--ink-4);font-size:12px}.session-side .badge{margin-top:6px}
+.session-project{display:block;color:var(--seal);font-weight:bold;margin-bottom:6px;overflow-wrap:anywhere}
+.topic{margin-bottom:8px}
+.session-facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 8px;color:var(--ink-4);font-size:12px}
+.session-facts dt{font-weight:bold}.session-facts dd{margin:0;min-width:0;overflow-wrap:anywhere}
+code{font:11px/1.35 ui-monospace,Consolas,monospace;background:var(--panel);border-radius:4px;padding:1px 4px}
+.empty{padding:32px;text-align:center;color:var(--ink-4)}.hidden{display:none!important}
+footer{color:var(--ink-4);font-size:12px;padding:28px 0 6px;text-align:center}
+@media(max-width:1050px){.main-layout{grid-template-columns:1fr}.detail{position:static;max-height:none}}
+@media(max-width:680px){.shell{padding:18px 14px}.project-grid{grid-template-columns:1fr}.toolbar{position:static}.session{grid-template-columns:1fr;gap:7px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header>
+<h1>Session portfolio</h1>
+<p class="lede">Every local coding session on this machine — the Claude app, the Claude CLI, and Codex, under all accounts — distilled into one browsable history. No app owns it; any agent can read it.</p>
+<div class="stats" id="stats"></div>
+</header>
+<div class="toolbar" aria-label="Portfolio controls">
+<div class="toolbar-row">
+<div class="group" role="tablist" aria-label="View"><span class="group-label">View</span>
+<button class="view-tab" data-view="projects" role="tab" aria-selected="true">By project</button>
+<button class="view-tab" data-view="timeline" role="tab" aria-selected="false">Timeline</button></div>
+<div class="group" id="sort-group"><label class="group-label" for="sort">Sort</label>
+<select id="sort"><option value="activity">Activity</option><option value="recency">Recency</option><option value="name">Name</option></select></div>
+</div>
+<div class="toolbar-row">
+<div class="group" id="account-filters"><span class="group-label">Accounts</span></div>
+<div class="group" id="agent-filters"><span class="group-label">Agents</span></div>
+</div>
+</div>
+<main>
+<section id="project-view" class="main-layout">
+<div><div class="section-head"><h2>Projects</h2><span class="count" id="project-count"></span></div>
+<div class="project-grid" id="project-grid"></div></div>
+<aside class="detail" id="project-detail" aria-live="polite"></aside>
+</section>
+<section id="timeline-view" class="timeline-pane hidden">
+<div class="timeline-head"><h2>Unified timeline</h2><div class="detail-meta" id="timeline-count"></div></div>
+<ol class="session-list" id="global-timeline"></ol>
+</section>
+</main>
+<footer>Self-contained UTF-8 artifact · no network · curated summaries + metadata only · no raw transcripts</footer>
+</div>
+<script id="portfolio-data" type="application/json">__DATA__</script>
+<script>
+(()=>{'use strict';
+const data=JSON.parse(document.getElementById('portfolio-data').textContent);
+const projects=data.projects, sessions=data.sessions;
+const projectById=new Map(projects.map(p=>[p.id,p]));
+const PALETTE=['#C0342A','#2F6E5B','#7A5AA6','#B4702A','#3B6EA5','#8A867E'];
+const accountColor=new Map(data.summary.accounts.map((a,i)=>[a,PALETTE[i%PALETTE.length]]));
+const state={view:'projects',selected:projects.length?projects[0].id:null,sort:'activity',
+accounts:new Set(data.summary.accounts),agents:new Set(data.summary.agents)};
+const el=id=>document.getElementById(id);
+const fmtDate=iso=>iso?new Intl.DateTimeFormat(undefined,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:'UTC'}).format(new Date(iso)):'?';
+const shortDate=iso=>iso?new Intl.DateTimeFormat(undefined,{year:'numeric',month:'short',day:'2-digit',timeZone:'UTC'}).format(new Date(iso)):'?';
+const make=(t,c,x)=>{const n=document.createElement(t);if(c)n.className=c;if(x!==undefined)n.textContent=x;return n;};
+const badge=a=>{const b=make('span','badge',a);b.style.background=accountColor.get(a)||'#8A867E';return b;};
+const passes=s=>state.accounts.has(s.account)&&state.agents.has(s.agent);
+const cardSessions=p=>sessions.filter(s=>s.project===p.id&&passes(s));
+function renderStats(){
+const items=[[data.summary.projects,'projects'],[data.summary.sessions,'sessions'],
+[data.summary.accounts.length,'accounts'],[`${shortDate(data.summary.dateStart)} – ${shortDate(data.summary.dateEnd)}`,'span']];
+el('stats').replaceChildren(...items.map(([v,l])=>{const d=make('div','stat');d.append(make('strong','',String(v)),make('span','',l));return d;}));}
+function renderControls(){
+el('sort').addEventListener('change',e=>{state.sort=e.target.value;renderProjects();});
+for(const a of data.summary.accounts){const b=make('button','toggle',a);b.setAttribute('aria-pressed','true');
+b.addEventListener('click',()=>{state.accounts.has(a)?state.accounts.delete(a):state.accounts.add(a);b.setAttribute('aria-pressed',String(state.accounts.has(a)));render();});
+el('account-filters').append(b);}
+for(const g of data.summary.agents){const b=make('button','toggle',g);b.setAttribute('aria-pressed','true');
+b.addEventListener('click',()=>{state.agents.has(g)?state.agents.delete(g):state.agents.add(g);b.setAttribute('aria-pressed',String(state.agents.has(g)));render();});
+el('agent-filters').append(b);}
+document.querySelectorAll('.view-tab').forEach(b=>b.addEventListener('click',()=>{state.view=b.dataset.view;render();}));}
+function renderProjectCard(p){
+const visible=cardSessions(p);
+const card=make('button',`project-card${p.id===state.selected?' active':''}`);card.type='button';
+card.append(make('span','project-name',p.name),make('span','project-path',p.path));
+const meta=make('span','card-meta');
+meta.append(make('span','chip',`${visible.length}/${p.sessionCount} sessions`));
+if(p.curation)meta.append(make('span','chip','curated'));
+if(p.hasHorus)meta.append(make('span','chip horus','.horus'));
+card.append(meta);
+if(p.flags.length){const c=make('span','chips');p.flags.forEach(f=>c.append(make('span','chip flag',f.split(':')[0])));card.append(c);}
+card.addEventListener('click',()=>{state.selected=p.id;renderProjects();});
+return card;}
+function renderProjects(){
+let visible=projects.filter(p=>cardSessions(p).length);
+const sorters={activity:(a,b)=>cardSessions(b).length-cardSessions(a).length||b.turns-a.turns,
+recency:(a,b)=>(b.dateEnd||'').localeCompare(a.dateEnd||''),name:(a,b)=>a.name.localeCompare(b.name)};
+visible.sort(sorters[state.sort]);
+if(visible.length&&!visible.some(p=>p.id===state.selected))state.selected=visible[0].id;
+el('project-grid').replaceChildren(...visible.map(renderProjectCard));
+el('project-count').textContent=`${visible.length} of ${projects.length}`;
+const sel=projectById.get(state.selected),detail=el('project-detail');detail.replaceChildren();
+if(!sel||!visible.length){detail.append(make('div','empty','No projects match the active filters.'));return;}
+const list=cardSessions(sel);
+const head=make('div','detail-head');head.append(make('h2','',sel.name));
+head.append(make('div','detail-meta',`${list.length} of ${sel.sessionCount} sessions · ${sel.remote||'no git remote resolved'}`));
+detail.append(head);
+detail.append(make('div',sel.curation?'curation':'curation empty',sel.curation||'Not yet curated — run horus curate --interpret.'));
+detail.append(renderSessionList(list,false));}
+function renderSession(s,showProject){
+const li=make('li','session');
+const side=make('div','session-side');side.append(make('time','session-time',fmtDate(s.start)),badge(s.account));
+const body=make('div','session-body');
+if(showProject)body.append(make('span','session-project',projectById.get(s.project).name));
+body.append(make('div','topic',s.topic));
+const facts=make('dl','session-facts');
+[['Agent',s.agent],['Surface',s.surface||'?'],['Branch',s.branch],['Turns',String(s.turns)],['Checkout',s.checkout]]
+.forEach(([k,v])=>{facts.append(make('dt','',k));const dd=make('dd');(k==='Branch'||k==='Checkout')?dd.append(make('code','',v)):dd.textContent=v;facts.append(dd);});
+body.append(facts);li.append(side,body);return li;}
+function renderSessionList(list,showProject){const ol=make('ol','session-list');
+list.length?list.forEach(s=>ol.append(renderSession(s,showProject))):ol.append(make('li','empty','No sessions match the active filters.'));return ol;}
+function renderTimeline(){
+const list=sessions.filter(passes);el('timeline-count').textContent=`${list.length} of ${sessions.length} sessions · oldest first`;
+el('global-timeline').replaceChildren(...(list.length?list.map(s=>renderSession(s,true)):[make('li','empty','No sessions match.')]));}
+function render(){
+document.querySelectorAll('.view-tab').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.view===state.view)));
+el('project-view').classList.toggle('hidden',state.view!=='projects');
+el('timeline-view').classList.toggle('hidden',state.view!=='timeline');
+el('sort-group').classList.toggle('hidden',state.view!=='projects');
+renderProjects();renderTimeline();}
+renderStats();renderControls();render();
+})();
+</script>
+</body>
+</html>'''
+
+
 def _skeleton_for(project: dict[str, Any]) -> dict[str, Any]:
     skel = {k: project.get(k) for k in _SKELETON_PROJECT_KEYS}
     skel["sessions"] = [{k: s.get(k) for k in _SKELETON_SESSION_KEYS} for s in project["sessions"]]
@@ -663,22 +851,62 @@ def _portfolio_index_md(projects: list[tuple[str, dict[str, Any]]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _portfolio_index_html(projects: list[tuple[str, dict[str, Any]]]) -> str:
-    # Minimal regeneratable static view — warm paper / ink, one accent.
-    rows = "\n".join(
-        f'    <li><a href="projects/{slug}/curation.md">{project["name"]}</a>'
-        f' <span class="meta">{project["date_start"] or "?"} → {project["date_end"] or "?"} · '
-        f'{project["session_count"]} sessions</span></li>'
-        for slug, project in projects
-    )
-    return (
-        "<!doctype html><meta charset=utf-8><title>Portfolio</title>\n"
-        "<style>body{background:#f4efe6;color:#2b2723;font:16px/1.6 Georgia,serif;"
-        "max-width:52rem;margin:3rem auto;padding:0 1.5rem}"
-        "h1{font-weight:normal;letter-spacing:.02em}a{color:#7a2e2e}"
-        ".meta{color:#8a8377;font-size:.85em}li{margin:.3rem 0}ul{list-style:none;padding:0}</style>\n"
-        f"<h1>Portfolio ledger</h1>\n<ul>\n{rows}\n</ul>\n"
-    )
+def _session_topic(session: dict[str, Any]) -> str:
+    """A one-line label for a session in the view — best available signal."""
+    for key in ("ai_titles", "last_prompts"):
+        vals = session.get(key) or []
+        if vals:
+            text = re.sub(r"\s+", " ", vals[0]).strip()
+            return text[:140] + ("…" if len(text) > 140 else "")
+    branch = session.get("git_branch")
+    return f"branch {branch}" if branch else "session"
+
+
+def _portfolio_payload(manifest: dict[str, Any]) -> dict[str, Any]:
+    projects, sessions = [], []
+    for slug, p in sorted(manifest["projects"].items()):
+        curated = p.get("_curation")
+        projects.append({
+            "id": slug, "name": p["name"], "path": p.get("path") or "unattributed",
+            "remote": p.get("git_remote"), "hasHorus": bool(p.get("has_horus")),
+            "flags": p.get("attribution_flags", []), "curation": curated,
+            "sessionCount": p["session_count"], "turns": p["turn_count"],
+            "dateStart": p.get("date_start"), "dateEnd": p.get("date_end"),
+        })
+        for s in p["sessions"]:
+            sessions.append({
+                "id": s["id"], "project": slug, "account": s["account"], "agent": s["agent"],
+                "surface": s.get("surface"), "start": s.get("start"), "end": s.get("end"),
+                "branch": s.get("git_branch") or "not recorded", "turns": s["turns"],
+                "checkout": s.get("checkout_path") or p.get("path") or "not attributed",
+                "topic": _session_topic(s),
+            })
+    sessions.sort(key=lambda s: s["start"] or "")
+    dated = [s["start"] for s in sessions if s["start"]]
+    return {
+        "summary": {
+            "projects": len(projects), "sessions": len(sessions),
+            "accounts": sorted({s["account"] for s in sessions}),
+            "agents": sorted({s["agent"] for s in sessions}),
+            "dateStart": min(dated) if dated else None,
+            "dateEnd": max(dated) if dated else None,
+        },
+        "projects": projects, "sessions": sessions,
+    }
+
+
+def render_portfolio_html(manifest: dict[str, Any], curation_dir: Path) -> str:
+    """Self-contained sumi-e static view, regenerated from the curator's own data."""
+    payload = _portfolio_payload_with_curation(manifest, curation_dir)
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    return _PORTFOLIO_TEMPLATE.replace("__DATA__", encoded)
+
+
+def _portfolio_payload_with_curation(manifest: dict[str, Any], curation_dir: Path) -> dict[str, Any]:
+    for slug, p in manifest["projects"].items():
+        md = curation_dir / f"{slug}.md"
+        p["_curation"] = md.read_text(encoding="utf-8") if md.exists() else None
+    return _portfolio_payload(manifest)
 
 
 def assemble_portfolio(
@@ -709,7 +937,9 @@ def assemble_portfolio(
             written += 1
 
     (portfolio_dir / "index.md").write_text(_portfolio_index_md(projects), encoding="utf-8")
-    (portfolio_dir / "index.html").write_text(_portfolio_index_html(projects), encoding="utf-8")
+    (portfolio_dir / "index.html").write_text(
+        render_portfolio_html(manifest, curation_dir), encoding="utf-8"
+    )
     # Belt-and-braces: raw bundles must never be tracked here.
     (portfolio_dir / ".gitignore").write_text("bundles/\n*.bundle\n", encoding="utf-8")
 

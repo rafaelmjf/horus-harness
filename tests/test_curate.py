@@ -204,6 +204,19 @@ def test_portfolio_is_a_git_repo_and_regeneratable(tmp_path, monkeypatch):
     assert f"[{manifest['projects'][slug]['name']}]" in (portfolio / "index.md").read_text(encoding="utf-8")
 
 
+def test_portfolio_html_is_sumi_e_and_carries_no_raw(tmp_path, monkeypatch):
+    out, manifest = _capture_and_curate(tmp_path, monkeypatch)
+    portfolio = tmp_path / "portfolio"
+    curate.assemble_portfolio(out, portfolio, manifest=manifest)
+    html = (portfolio / "index.html").read_text(encoding="utf-8")
+
+    assert "Session portfolio" in html
+    assert "#C0342A" in html  # the seal — sumi-e palette, not the placeholder list
+    assert "curated summary" in html  # curation panel embedded
+    assert "SENTINEL_RAW_TURN" not in html  # raw never reaches the view
+    assert "default-src 'none'" in html  # self-contained, no network
+
+
 def test_portfolio_push_without_remote_reports_how_to_set_one(tmp_path, monkeypatch):
     out, manifest = _capture_and_curate(tmp_path, monkeypatch)
     portfolio = tmp_path / "portfolio"
