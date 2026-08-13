@@ -612,3 +612,135 @@ def interpret(
         json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     return result
+
+
+# --- Phase 3: the portfolio git-of-record -----------------------------------
+
+# The skeleton is per-project metadata only — never raw turn text. These are the
+# manifest fields safe to push; the bundle stays local.
+_SKELETON_PROJECT_KEYS = (
+    "name", "path", "git_remote", "has_horus", "session_count", "turn_count",
+    "secrets_redacted", "date_start", "date_end", "agents", "accounts",
+    "attribution_flags",
+)
+_SKELETON_SESSION_KEYS = (
+    "id", "agent", "account", "surface", "entrypoint", "start", "end", "turns",
+    "checkout_path", "git_branch", "content_hash",
+)
+
+
+def default_portfolio_dir() -> Path:
+    return config.config_dir() / "portfolio"
+
+
+def _skeleton_for(project: dict[str, Any]) -> dict[str, Any]:
+    skel = {k: project.get(k) for k in _SKELETON_PROJECT_KEYS}
+    skel["sessions"] = [{k: s.get(k) for k in _SKELETON_SESSION_KEYS} for s in project["sessions"]]
+    return skel
+
+
+def _git(portfolio_dir: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-C", str(portfolio_dir), *args],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+    )
+
+
+def _portfolio_index_md(projects: list[tuple[str, dict[str, Any]]]) -> str:
+    lines = ["# Portfolio ledger", "",
+             f"Regenerated {datetime.now().astimezone().isoformat(timespec='seconds')}. "
+             "Derived from local session stores — each project's own `.horus/` stays authoritative.",
+             "",
+             "| Project | Dates | Sessions | Agents | Accounts | Flags |",
+             "|---|---|---|---|---|---|"]
+    for slug, p in projects:
+        span = f"{p['date_start'] or '?'} → {p['date_end'] or '?'}"
+        flags = "⚠︎" if p["attribution_flags"] else ""
+        lines.append(
+            f"| [{p['name']}](projects/{slug}/curation.md) | {span} | {p['session_count']} | "
+            f"{', '.join(p['agents'])} | {', '.join(p['accounts'])} | {flags} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _portfolio_index_html(projects: list[tuple[str, dict[str, Any]]]) -> str:
+    # Minimal regeneratable static view — warm paper / ink, one accent.
+    rows = "\n".join(
+        f'    <li><a href="projects/{slug}/curation.md">{project["name"]}</a>'
+        f' <span class="meta">{project["date_start"] or "?"} → {project["date_end"] or "?"} · '
+        f'{project["session_count"]} sessions</span></li>'
+        for slug, project in projects
+    )
+    return (
+        "<!doctype html><meta charset=utf-8><title>Portfolio</title>\n"
+        "<style>body{background:#f4efe6;color:#2b2723;font:16px/1.6 Georgia,serif;"
+        "max-width:52rem;margin:3rem auto;padding:0 1.5rem}"
+        "h1{font-weight:normal;letter-spacing:.02em}a{color:#7a2e2e}"
+        ".meta{color:#8a8377;font-size:.85em}li{margin:.3rem 0}ul{list-style:none;padding:0}</style>\n"
+        f"<h1>Portfolio ledger</h1>\n<ul>\n{rows}\n</ul>\n"
+    )
+
+
+def assemble_portfolio(
+    out_dir: Path,
+    portfolio_dir: Path,
+    *,
+    manifest: dict[str, Any],
+    push: bool = False,
+) -> dict[str, Any]:
+    """Assemble the portfolio git-of-record from curated output. Copies curation +
+    skeleton only — raw bundles never enter the portfolio. Idempotent/regeneratable:
+    re-running reproduces the same tree."""
+    projects = sorted(manifest["projects"].items())
+    proj_root = portfolio_dir / "projects"
+    proj_root.mkdir(parents=True, exist_ok=True)
+
+    curation_dir = out_dir / "curation"
+    written = 0
+    for slug, project in projects:
+        dest = proj_root / slug
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "skeleton.json").write_text(
+            json.dumps(_skeleton_for(project), indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        src_md = curation_dir / f"{slug}.md"
+        if src_md.exists():
+            (dest / "curation.md").write_text(src_md.read_text(encoding="utf-8"), encoding="utf-8")
+            written += 1
+
+    (portfolio_dir / "index.md").write_text(_portfolio_index_md(projects), encoding="utf-8")
+    (portfolio_dir / "index.html").write_text(_portfolio_index_html(projects), encoding="utf-8")
+    # Belt-and-braces: raw bundles must never be tracked here.
+    (portfolio_dir / ".gitignore").write_text("bundles/\n*.bundle\n", encoding="utf-8")
+
+    result = {"projects": len(projects), "curations": written, "pushed": False, "git": None}
+    if not (portfolio_dir / ".git").is_dir():
+        _git(portfolio_dir, "init", "-q")
+    # The portfolio is horus-owned; give it a local identity when the environment
+    # has none (fresh CI, no global git config) so the commit never fails.
+    if not _git(portfolio_dir, "config", "user.email").stdout.strip():
+        _git(portfolio_dir, "config", "user.email", "curator@horus.local")
+        _git(portfolio_dir, "config", "user.name", "Horus Curator")
+    _git(portfolio_dir, "add", "-A")
+    status = _git(portfolio_dir, "status", "--porcelain")
+    if status.stdout.strip():
+        commit = _git(portfolio_dir, "commit", "-q", "-m",
+                      f"portfolio: {len(projects)} projects, {written} curated "
+                      f"({datetime.now().astimezone().date()})")
+        result["git"] = "committed" if commit.returncode == 0 else commit.stderr.strip()
+    else:
+        result["git"] = "no changes"
+
+    if push:
+        remotes = _git(portfolio_dir, "remote")
+        if "origin" in remotes.stdout.split():
+            pushed = _git(portfolio_dir, "push", "origin", "HEAD")
+            result["pushed"] = pushed.returncode == 0
+            if pushed.returncode != 0:
+                result["push_error"] = pushed.stderr.strip()
+        else:
+            result["push_error"] = (
+                "no 'origin' remote set — create a private repo and "
+                f"`git -C {portfolio_dir} remote add origin <url>` first"
+            )
+    return result

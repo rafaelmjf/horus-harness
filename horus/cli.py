@@ -329,6 +329,17 @@ def cmd_curate(args: argparse.Namespace) -> int:
         )
         for err in outcome["errors"]:
             print(f"    {err}")
+
+    if args.portfolio:
+        portfolio_dir = Path(args.portfolio_dir).expanduser() if args.portfolio_dir \
+            else curate_mod.default_portfolio_dir()
+        outcome = curate_mod.assemble_portfolio(
+            out_dir, portfolio_dir, manifest=manifest, push=args.push
+        )
+        print(f"portfolio → {portfolio_dir}")
+        print(f"  {outcome['projects']} projects · {outcome['curations']} curated · git: {outcome['git']}")
+        if args.push:
+            print(f"  push: {'ok' if outcome['pushed'] else outcome.get('push_error', 'failed')}")
     return 0
 
 
@@ -4664,6 +4675,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_curate.add_argument("--project", help="curate only this project slug")
     p_curate.add_argument("--force", action="store_true",
                           help="re-curate even unchanged projects")
+    p_curate.add_argument("--portfolio", action="store_true",
+                          help="assemble the portfolio git-of-record (curation + skeleton, no raw)")
+    p_curate.add_argument("--portfolio-dir",
+                          help=f"portfolio repo dir (default: {curate_mod.default_portfolio_dir()})")
+    p_curate.add_argument("--push", action="store_true",
+                          help="git push the portfolio to its 'origin' remote (if set)")
     p_curate.set_defaults(func=cmd_curate)
 
     p_sync = sub.add_parser(
