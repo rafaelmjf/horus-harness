@@ -2,21 +2,25 @@
 status: open
 priority: medium
 readiness: shaping
-autonomy: attended
+readiness_reason: "Strategic decisions remain owner/LLM work, not screening: the trigger-vs-seamless question (owner explicitly unsure) and whether the proposal-into-project flow is needed at all. Both are [session] work. The buildable ledger foundation was split out to `curator-ledger-foundation` (Ready) on 2026-08-13."
 created: 2026-08-12
 created_by: owner
+last_refined: 2026-08-13
+refine_passes: 1
 type: feature
 topic: curator-portfolio
 parallel: safe
 tier: large
-surface: "new subsystem (eventual horus-builder): reads ~/.claude & ~/.codex session stores + isolated-account dirs; writes a private portfolio git repo; regeneratable static view"
+surface: "strategy anchor only — no direct surface; the buildable surface lives on `curator-ledger-foundation`"
 ---
 
-# curator-portfolio — cross-surface session curator + harness-neutral portfolio (draft plan)
+# curator-portfolio — cross-surface session curator + harness-neutral portfolio (strategy anchor)
 
-**Open-ended anchor card.** Captures the direction validated in the 2026-08-12 exploration + PoC,
-a draft phased plan, and the decisions still open. NOT ready to build — several mechanism
-decisions remain, above all the trigger-vs-"seamless" question the owner is still unsure about.
+**Open-ended anchor card.** Captures the direction validated in the 2026-08-12 exploration + PoC
+and the strategic decisions still open. The buildable ledger foundation (extraction, attribution,
+deterministic capture, batched LLM curation, git-of-record portfolio) was **split out to
+`curator-ledger-foundation` (Ready/attended) on 2026-08-13** and does not gate this card. What
+remains here is genuinely unresolved and needs a working session, not a screening exchange.
 
 ## Thesis
 
@@ -58,44 +62,37 @@ agent can read — maintenance becomes asynchronous and evidence-driven instead 
 
 ## Draft phased plan
 
-1. **Extraction + attribution foundation.** Read `~/.claude/projects`, `~/.codex/sessions`, and
-   isolated-account dirs; parse both record schemas; attribute by git remote (handle early-cwd,
-   merged checkouts, moved clones, non-project sessions). Emit the deterministic metadata
-   skeleton. Secret redaction + scan. Watermark per session on **content change** (sessions
-   resume across days — one file spanned ten).
-2. **The ledger.** Per-session rich summary: `context` + `segments` (proportional to length,
-   segmented by branch/topic) + Discussed/Decided/Shipped/Open. Per-project unified history
-   (merged checkouts) + global timeline. Summarize on a cheaper model tier (plugs into horus's
-   model routing).
-3. **The portfolio repo.** Private git remote; per-project + cross-project index; regeneratable
-   static view (sumi-e). Push the interpreted portfolio + skeletons; raw stays local. Each
-   machine pushes only its own sessions (partition by session-id → conflict-free merges).
-4. **Trigger / sync.** — OPEN, see below.
+Phases 1-3 (extraction + attribution, the ledger, the portfolio repo) — the settled,
+buildable half — moved to **`curator-ledger-foundation` (Ready/attended)** on 2026-08-13.
+This anchor now carries only the phases that are still genuinely open:
+
+4. **Trigger / sync.** — OPEN, decision #1 below.
 5. **(Later) Proposals into projects.** Cards/topics land into a project's own `.horus/` by
    acceptance; two-tier onboarding (universal portfolio + opt-in in-repo); rejection ledger.
+   — OPEN, decision #2 below (needed at all?).
 6. **(Conditional door) Local tailnet server** as a derived read/render layer over the git
    store — real-time state, search at scale, write-back, phone access. Only when a concrete need
-   lands; never the source of truth.
+   lands; never the source of truth. Deferred until a concrete need appears.
 
-## Open decisions (to discuss)
+## Open decisions (still live — [session] work)
 
-1. **Trigger vs "seamless" — the big one, UNRESOLVED.** Options weighed: scheduled reconciler +
-   on-login catch-up + manual CLI (recommended, no daemon); session-end hooks (rejected — miss
-   the app, per-harness, add exit latency); file-watcher daemon (= a service, deferred). Owner is
-   not convinced any of these *feels* seamless enough. What makes it feel automatic without
-   standing up a daemon? Does the capture/curate split reduce friction or add it?
-2. **Capture push scope.** Skeleton-only (recommended; raw stays local) vs pushing
-   redacted-filtered transcripts — the latter only needed if curation runs on a *different*
-   machine than capture. Do we need cross-machine curation in v1?
-3. **Where curation runs.** Each machine curates its own (simplest; raw never travels) vs
-   offloading to one machine or a scheduled agent task. The app *can* schedule agent tasks
-   (Claude/Codex) — is that the natural home for the curate half?
-4. **Portfolio granularity / confidentiality.** One portfolio per GitHub identity; work/personal
-   sharding as a trust boundary. Deferred — current use is clean, no client data.
-5. **Proposal lifecycle — needed at all?** Is the read-only unified **ledger** the actual
+1. **Trigger vs "seamless" — the big one, UNRESOLVED.** The ledger card ships with a manual
+   `horus curate` CLI, so this no longer blocks any build — it's now about how to make refresh
+   *feel* automatic. Options weighed: scheduled reconciler + on-login catch-up + manual CLI (no
+   daemon); session-end hooks (rejected — miss the app, per-harness, add exit latency);
+   file-watcher daemon (= a service, deferred). Owner is not convinced any *feels* seamless
+   enough. Best resolved after the manual ledger exists and the real friction is felt.
+2. **Proposal lifecycle — needed at all?** Is the read-only unified **ledger** the actual
    product, with the accept-into-project proposal flow a maybe? The ledger tested as the stronger,
-   safer half.
-6. **Rename timing.** `horus-harness → horus-builder` — when to pull the trigger.
+   safer half. Decide after the ledger is in daily use.
+
+### Resolved / delegated by the 2026-08-13 split
+
+- **Capture push scope** → decided on the ledger card: skeleton-only, raw stays local, no
+  cross-machine curation in v1.
+- **Where curation runs** → each machine curates its own (ledger card, phase 3).
+- **Portfolio granularity / confidentiality** → deferred; current use is clean, no client data.
+- **Rename timing** → rides `product-naming`, not this topic.
 
 ## PoC artifact note
 
@@ -107,3 +104,15 @@ up. If worth keeping as a reference, move it somewhere durable first.
 2026-08-12 exploration: ceremony/scope reflection → curator/portfolio design → a PoC over 80 local
 sessions across both agents and all accounts → the sumi-e view. This card is the durable anchor
 for that direction.
+
+## Reviews
+
+### 2026-08-13 — split, owner-approved (backlog-refine)
+
+The anchor bundled an owner-settled, low-risk buildable foundation (the ledger — phases 1-3) with
+two genuinely-open strategic decisions. During refinement the owner approved splitting: the ledger
+foundation became `curator-ledger-foundation` (Ready/attended) with a manual `horus curate` CLI as
+its v1 trigger, so it no longer waits on the seamless-trigger question. This card stays Shaping and
+carries only decisions #1 (seamless trigger) and #2 (proposal lifecycle) — both [session] work best
+resolved once the ledger is in daily use. Also cleaned the two lint warnings: added `readiness_reason`
+and dropped the stray `autonomy` field (autonomy belongs only on Ready cards).
