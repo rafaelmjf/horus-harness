@@ -116,10 +116,10 @@ _STRUCTURED = ('{"desc":"A test project.","sessions":{"s1":{"context":"did CURAT
 
 def test_interpret_writes_structured_json_and_records_state(tmp_path, monkeypatch):
     out, manifest = _capture_one(tmp_path, monkeypatch)
-    calls: list[str] = []
+    calls: list[tuple[str, str]] = []
 
-    def fake_runner(prompt, *, model, account=None):
-        calls.append(prompt)
+    def fake_runner(prompt, *, model, account=None, stdin=None, cwd=None):
+        calls.append((prompt, stdin or ""))
         return "```json\n" + _STRUCTURED + "\n```"  # fenced — parser must strip
 
     outcome = curate.interpret(out, manifest=manifest, runner=fake_runner)
@@ -128,15 +128,16 @@ def test_interpret_writes_structured_json_and_records_state(tmp_path, monkeypatc
     data = json.loads((out / "curation" / f"{slug}.json").read_text(encoding="utf-8"))
     assert data["desc"] == "A test project."
     assert data["sessions"]["s1"]["context"] == "did CURATED_CTX"
-    assert "build the thing" in calls[0]  # the bundle reached the model
-    assert "s1" in calls[0]  # session ids listed in the prompt
+    prompt, stdin = calls[0]
+    assert "build the thing" in stdin  # the bundle rides on stdin, not argv
+    assert "s1" in prompt              # session ids listed in the instruction
 
 
 def test_interpret_skips_unchanged_but_reruns_on_force(tmp_path, monkeypatch):
     out, manifest = _capture_one(tmp_path, monkeypatch)
     runs = {"n": 0}
 
-    def fake_runner(prompt, *, model, account=None):
+    def fake_runner(prompt, *, model, account=None, stdin=None, cwd=None):
         runs["n"] += 1
         return _STRUCTURED
 
@@ -152,7 +153,7 @@ def test_interpret_skips_unchanged_but_reruns_on_force(tmp_path, monkeypatch):
 def test_interpret_records_runner_errors_without_crashing(tmp_path, monkeypatch):
     out, manifest = _capture_one(tmp_path, monkeypatch)
 
-    def boom(prompt, *, model, account=None):
+    def boom(prompt, *, model, account=None, stdin=None, cwd=None):
         raise RuntimeError("cli not authenticated")
 
     outcome = curate.interpret(out, manifest=manifest, runner=boom)
@@ -162,8 +163,9 @@ def test_interpret_records_runner_errors_without_crashing(tmp_path, monkeypatch)
 
 def test_interpret_records_malformed_json_as_error(tmp_path, monkeypatch):
     out, manifest = _capture_one(tmp_path, monkeypatch)
-    outcome = curate.interpret(out, manifest=manifest,
-                               runner=lambda p, *, model, account=None: "not json at all")
+    outcome = curate.interpret(
+        out, manifest=manifest,
+        runner=lambda p, *, model, account=None, stdin=None, cwd=None: "not json at all")
     assert outcome["errors"] and not outcome["curated"]
 
 
@@ -180,7 +182,7 @@ def _capture_and_curate(tmp_path, monkeypatch) -> tuple[Path, dict]:
     out = tmp_path / "out"
     manifest = curate.curate(out, home=home)
     curate.interpret(out, manifest=manifest,
-                     runner=lambda p, *, model, account=None: _STRUCTURED)
+                     runner=lambda p, *, model, account=None, stdin=None, cwd=None: _STRUCTURED)
     return out, manifest
 
 
