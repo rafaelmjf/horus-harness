@@ -1,5 +1,5 @@
 ---
-status: claimed
+status: shipped
 priority: medium
 readiness: ready
 autonomy: attended
@@ -13,6 +13,8 @@ type: feature
 parallel: safe
 surface: "new subsystem: reads ~/.claude/projects + ~/.codex/sessions + isolated-account dirs; deterministic `horus curate` capture (metadata skeleton); batched LLM curation pass; writes a private portfolio git repo (raw stays local)"
 depends-on: []
+shipped_pr: 510
+shipped_sha: 2f4957b
 ---
 
 # curator-ledger-foundation — the cross-surface session ledger (phases 1-2 of curator-portfolio)
