@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session Portfolio — unified agent history</title>
+<style>
+/* sumi-e: ink on warm paper, one small red seal. Aligned to rafaelfigueiredo.com */
+:root{
+  --paper:#FBFAF7; --paper-2:#F2F0EB; --panel:#EDEAE3; --card:#FFFFFF;
+  --ink:#121110; --ink-2:#3A3835; --ink-3:#6B6862; --ink-4:#8A867E; --ink-5:#A5A199;
+  --line:#E3E0D8; --line-2:#DAD6CD; --line-3:#D5D1C7; --line-4:#C2BEB4;
+  --seal:#C0342A; --seal-wash:rgba(192,52,42,.07);
+  --a-shared:#A5A199; --a-personal:#121110; --a-work:#6B6862; --a-codex:#C0342A;
+  --radius:4px; --radius-sm:3px;
+  --sans:"Geist","Schibsted Grotesk",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --display:"Schibsted Grotesk","Geist",var(--sans);
+  --mono:"Geist Mono","JetBrains Mono",ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="paper"]){
+  --paper:#0E0E0D; --paper-2:#151513; --panel:#232220; --card:#17160F;
+  --ink:#F4F1EA; --ink-2:#C6C2B9; --ink-3:#918D85; --ink-4:#7A766F; --ink-5:#615E58;
+  --line:#2A2926; --line-2:#302F2B; --line-3:#3A3934; --line-4:#4A4842;
+  --seal:#D8483C; --seal-wash:rgba(216,72,60,.10);
+  --a-shared:#615E58; --a-personal:#F4F1EA; --a-work:#918D85; --a-codex:#D8483C;
+}}
+:root[data-theme="ink"]{
+  --paper:#0E0E0D; --paper-2:#151513; --panel:#232220; --card:#17160F;
+  --ink:#F4F1EA; --ink-2:#C6C2B9; --ink-3:#918D85; --ink-4:#7A766F; --ink-5:#615E58;
+  --line:#2A2926; --line-2:#302F2B; --line-3:#3A3934; --line-4:#4A4842;
+  --seal:#D8483C; --seal-wash:rgba(216,72,60,.10);
+  --a-shared:#615E58; --a-personal:#F4F1EA; --a-work:#918D85; --a-codex:#D8483C;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink-2);font-family:var(--sans);font-size:15px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.wrap{max-width:1160px;margin:0 auto;padding:36px 24px 96px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;color:var(--ink-3)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* header */
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+  margin-bottom:14px;display:flex;align-items:center;gap:9px}
+.seal{width:15px;height:15px;border-radius:50%;background:var(--seal);flex:none;
+  box-shadow:0 0 0 3px var(--seal-wash)}
+h1{font-family:var(--display);font-size:33px;line-height:1.05;letter-spacing:-.02em;margin:0 0 10px;
+  text-wrap:balance;font-weight:640;color:var(--ink)}
+.lede{color:var(--ink-3);max-width:72ch;margin:0;font-size:14.5px;line-height:1.6}
+.tglbtn{font:inherit;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  background:transparent;border:1px solid var(--line);border-radius:var(--radius);color:var(--ink-3);padding:6px 11px;flex:none}
+.tglbtn:hover{border-color:var(--line-4);color:var(--ink)}
+
+/* summary */
+.summary{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:1px;margin:28px 0 22px;background:var(--line);
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+@media(max-width:860px){.summary{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.summary{grid-template-columns:1fr}}
+.panel{background:var(--paper);padding:17px 18px}
+.panel h2{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-4);
+  margin:0 0 14px;font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:15px 8px}
+.stat .n{font-family:var(--display);font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1;color:var(--ink)}
+.stat .n.seal{color:var(--seal)}
+.stat .l{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4);margin-top:6px}
+.splitbar{display:flex;height:9px;overflow:hidden;margin-bottom:15px;border:1px solid var(--line);border-radius:2px}
+.splitbar>span{display:block}
+.legend{display:flex;flex-direction:column;gap:9px}
+.legend .row{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-2)}
+.legend .sw{width:10px;height:10px;flex:none;border-radius:2px}
+.legend .nm{flex:1}.legend .ct{font-family:var(--mono);color:var(--ink-4);font-size:11.5px}
+.findings{grid-column:1/-1}
+.finding{display:flex;gap:12px;align-items:baseline;padding:9px 0;border-top:1px solid var(--line);font-size:13px}
+.finding:first-of-type{border-top:none}
+.finding .mk{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;
+  padding:2px 6px;border:1px solid var(--line-4);color:var(--ink-3);flex:none;border-radius:2px}
+.finding.secret .mk{color:var(--seal);border-color:var(--seal)}
+.finding .who{font-family:var(--mono);font-size:12px;color:var(--ink);flex:none}
+.finding .tx{color:var(--ink-3)}.finding .tx b{color:var(--ink-2);font-weight:600}
+.nofind{color:var(--ink-4);font-size:12.5px;font-family:var(--mono)}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin:22px 0 18px;padding:13px 0;
+  position:sticky;top:0;background:var(--paper);z-index:6;border-bottom:1px solid var(--line)}
+.toggle{display:inline-flex;border:1px solid var(--line-4);border-radius:var(--radius);overflow:hidden}
+.toggle button{font:inherit;font-size:12.5px;font-weight:500;border:0;background:transparent;color:var(--ink-3);
+  padding:6px 15px;cursor:pointer;border-right:1px solid var(--line)}
+.toggle button:last-child{border-right:0}
+.toggle button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.fgroup{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fgroup .cap{font-family:var(--mono);font-size:9.5px;color:var(--ink-4);letter-spacing:.1em;text-transform:uppercase;margin-right:2px}
+.chip{font:inherit;font-family:var(--mono);font-size:11px;letter-spacing:.02em;cursor:pointer;border:1px solid var(--line-3);
+  background:transparent;border-radius:2px;padding:4px 10px;display:inline-flex;align-items:center;gap:6px;color:var(--ink-3)}
+.chip .sw{width:8px;height:8px;border-radius:2px}
+.chip[aria-pressed="true"]{color:var(--ink);border-color:var(--ink-4);background:var(--paper-2)}
+.chip[aria-pressed="false"]{opacity:.4}
+.search{font:inherit;font-size:13px;background:var(--card);border:1px solid var(--line-3);border-radius:var(--radius);
+  padding:6px 11px;color:var(--ink);min-width:150px;margin-left:auto}
+.search::placeholder{color:var(--ink-4)}
+button:focus-visible,summary:focus-visible,input:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+
+/* projects */
+.projects{display:flex;flex-direction:column;gap:10px}
+details.proj{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+details.proj[open]{border-color:var(--line-4)}
+summary.phead{list-style:none;cursor:pointer;padding:15px 18px;display:grid;grid-template-columns:1fr auto;gap:5px 14px;align-items:center}
+summary.phead::-webkit-details-marker{display:none}
+.ptitle{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ptitle .nm{font-family:var(--display);font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.badge{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:2px;
+  border:1px solid var(--line-4);color:var(--ink-4);font-weight:500}
+.badge.horus{color:var(--ink-2);border-color:var(--ink-3)}
+.badge.flag{color:var(--ink-3);border-color:var(--line-4)}
+.badge.flag.secret{color:var(--seal);border-color:var(--seal)}
+.pmeta{display:flex;align-items:center;gap:11px;color:var(--ink-4);font-family:var(--mono);font-size:11px}
+.pcount{font-family:var(--mono);font-size:11.5px;color:var(--ink-4);justify-self:end;white-space:nowrap}
+.pcount b{color:var(--ink-2);font-weight:600}
+.pmicro{grid-column:1/-1;display:flex;height:4px;overflow:hidden;margin-top:4px;background:var(--paper-2);border-radius:1px}
+.pmicro>span{display:block}
+.chev{color:var(--ink-4);transition:transform .18s;font-size:11px}
+details[open]>summary .chev{transform:rotate(90deg)}
+.pbody{border-top:1px solid var(--line);padding:15px 17px 18px;background:var(--paper)}
+.pdesc{color:var(--ink-3);font-size:13px;margin:0 0 13px;max-width:80ch;line-height:1.55}
+.flagbox{display:flex;gap:10px;align-items:baseline;font-size:12.5px;padding:9px 12px;border-radius:var(--radius-sm);
+  margin-bottom:13px;background:var(--paper-2);border:1px solid var(--line-3);color:var(--ink-3)}
+.flagbox.secret{background:var(--seal-wash);border-color:var(--seal);color:var(--ink-2)}
+.flagbox b{color:var(--ink)}
+.subh{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-4);font-weight:500;margin:2px 0 9px}
+.cards{list-style:none;margin:0 0 17px;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px}
+@media(max-width:640px){.cards{grid-template-columns:1fr}}
+.cards li{font-size:13px;padding-left:16px;position:relative;line-height:1.42;color:var(--ink-2)}
+.cards li::before{content:"\2014";position:absolute;left:0;color:var(--seal)}
+
+/* sessions */
+.sesses{display:flex;flex-direction:column;gap:0}
+.sess{border-top:1px solid var(--line);padding:14px 0}
+.sess:first-child{border-top:0;padding-top:2px}
+.shead{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-bottom:10px}
+.sdate{font-family:var(--mono);font-size:11.5px;color:var(--ink-4)}
+.surface{font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:2px}
+.surface.s-App{background:var(--ink);color:var(--paper)}
+.surface.s-CLI{background:transparent;border:1px solid var(--ink-4);color:var(--ink-2)}
+.surface.s-SDK{background:transparent;border:1px solid var(--line-4);color:var(--ink-4)}
+.acct{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+.acct .sw{width:8px;height:8px;border-radius:2px;flex:none}
+.sbranch{font-family:var(--mono);font-size:10.5px;color:var(--ink-4);word-break:break-word}
+.sturns{font-family:var(--mono);font-size:11px;color:var(--ink-4);margin-left:auto;white-space:nowrap}
+.sctx{font-size:13.5px;line-height:1.55;margin:0 0 11px;color:var(--ink-2)}
+.arc{list-style:none;margin:2px 0 13px;padding:0;counter-reset:seg}
+.seg{position:relative;padding:0 0 12px 28px;counter-increment:seg}
+.seg::before{content:counter(seg,decimal-leading-zero);position:absolute;left:0;top:0;font-family:var(--mono);font-size:10px;
+  font-weight:600;color:var(--seal);letter-spacing:.02em}
+.seg::after{content:"";position:absolute;left:8px;top:16px;bottom:0;width:1px;background:var(--line)}
+.seg:last-child{padding-bottom:0}.seg:last-child::after{display:none}
+.segt{font-size:13px;font-weight:640;color:var(--ink);line-height:1.34;margin-bottom:3px}
+.segx{font-size:12.5px;color:var(--ink-3);line-height:1.5}
+.bullets{display:grid;grid-template-columns:1fr 1fr;gap:11px 20px;margin-bottom:2px}
+@media(max-width:600px){.bullets{grid-template-columns:1fr}}
+.bl h5{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 6px;font-weight:600;color:var(--ink-4)}
+.bl.shipped h5{color:var(--ink-2)}
+.bl ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.bl li{font-size:12.5px;line-height:1.4;padding-left:15px;position:relative;color:var(--ink-2)}
+.bl li::before{position:absolute;left:0;top:0;font-family:var(--mono);font-size:11px}
+.bl.discussed li::before{content:"\00B7";color:var(--ink-4);font-size:15px;top:-2px}
+.bl.decided li::before{content:"\2192";color:var(--ink-3)}
+.bl.shipped li::before{content:"\2713";color:var(--seal)}
+.bl.open li::before{content:"\25CB";color:var(--ink-4);font-size:9px;top:2px}
+.rawtoggle{margin-top:12px;font:inherit;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  cursor:pointer;background:transparent;border:1px solid var(--line-3);border-radius:2px;color:var(--ink-4);padding:4px 10px}
+.rawtoggle:hover{border-color:var(--ink-4);color:var(--ink-2)}
+.raw{margin-top:11px;background:var(--paper-2);border:1px solid var(--line-2);border-radius:var(--radius-sm);
+  padding:13px 14px;max-height:440px;overflow:auto}
+.raw pre{margin:0;font-family:var(--mono);font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--ink-3)}
+
+/* timeline */
+.tl-month{margin-bottom:24px}
+.tl-mh{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);padding:7px 0;
+  position:sticky;top:62px;background:var(--paper);z-index:2;border-bottom:1px solid var(--line);margin-bottom:8px;
+  display:flex;justify-content:space-between}
+.tl-mh .c{color:var(--ink-4)}
+.tlproj{font-family:var(--mono);font-size:11px;color:var(--seal);white-space:nowrap}
+.tl-month .sesses{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);padding:2px 15px}
+.empty{color:var(--ink-4);font-size:14px;padding:44px;text-align:center;font-family:var(--mono)}
+.foot{margin-top:40px;color:var(--ink-4);font-size:10px;font-family:var(--mono);letter-spacing:.06em;text-align:center;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2 class="sr-only">Unified portfolio of 80 local agent sessions across 22 projects, four accounts and three surfaces, each with a rich summary and expandable raw transcript.</h2>
+  <div class="top">
+    <div>
+      <div class="eyebrow"><span class="seal"></span>Curation&nbsp;PoC · <span class="mono" id="daterange"></span></div>
+      <h1>Session Portfolio</h1>
+    </div>
+    <button class="tglbtn" id="themetoggle" aria-label="Toggle theme">◐ Theme</button>
+  </div>
+  <p class="lede">Every local coding session on this machine — the Claude app, the Claude CLI, and Codex, under all your accounts — distilled into one browsable history. Each session carries a real summary you can expand down to its raw transcript. No app owns it; any agent can read it.</p>
+
+  <div class="summary">
+    <div class="panel"><h2>At a glance</h2><div class="stats" id="stats"></div></div>
+    <div class="panel"><h2>Surface — app vs cli</h2><div class="splitbar" id="surfbar"></div><div class="legend" id="surflegend"></div></div>
+    <div class="panel"><h2>Account</h2><div class="splitbar" id="acctbar"></div><div class="legend" id="acctlegend"></div></div>
+    <div class="panel findings"><h2>Provenance &amp; secret flags</h2><div id="findings"></div></div>
+  </div>
+
+  <div class="controls">
+    <div class="toggle" role="group" aria-label="View">
+      <button id="tab-proj" aria-pressed="true">By project</button>
+      <button id="tab-time" aria-pressed="false">Timeline</button>
+    </div>
+    <div class="fgroup" id="fsurface"><span class="cap">Surface</span></div>
+    <div class="fgroup" id="faccount"><span class="cap">Account</span></div>
+    <input class="search" id="search" type="search" placeholder="Filter projects…" aria-label="Filter projects by name">
+  </div>
+
+  <section id="view-projects" class="projects"></section>
+  <section id="view-timeline" hidden></section>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const DATA=__DATA__,RAW=__RAW__;
+const ACCS=[["shared","Shared login","--a-shared"],["personal","Personal","--a-personal"],["work","Work","--a-work"],["codex","Codex","--a-codex"]];
+const AV=Object.fromEntries(ACCS.map(a=>[a[0],a[2]])), AL=Object.fromEntries(ACCS.map(a=>[a[0],a[1]]));
+const SURF=["App","CLI","SDK"];
+const cv=k=>`var(${AV[k]||"--a-shared"})`;
+const S=DATA.summary, SESS=DATA.sessions;
+const PROJ=DATA.projects.slice().map(p=>({...p,sessions:SESS.filter(s=>s.project_id===p.id)}))
+  .filter(p=>p.sessions.length).sort((a,b)=>b.sessions.length-a.sessions.length);
+const fSurf=new Set(SURF), fAcc=new Set(ACCS.map(a=>a[0]));
+let view="proj",q="";
+const esc=s=>(s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const cnt=(arr,key)=>arr.reduce((m,s)=>(m[s[key]]=(m[s[key]]||0)+1,m),{});
+const pass=s=>fSurf.has(s.surface)&&fAcc.has(s.account);
+
+// theme toggle
+(function(){const b=document.getElementById("themetoggle");
+ b.onclick=()=>{const r=document.documentElement;const dark=r.getAttribute("data-theme")==="ink"||(!r.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme:dark)").matches);
+  r.setAttribute("data-theme",dark?"paper":"ink");};})();
+
+document.getElementById("daterange").textContent=S.date_start.slice(0,10)+" – "+S.date_end.slice(0,10);
+const byAcc=cnt(SESS,"account"), bySurf=cnt(SESS,"surface");
+document.getElementById("stats").innerHTML=[
+ [S.unified_projects,"projects"],[S.sessions,"sessions"],[bySurf.App||0,"app"],[bySurf.CLI||0,"cli"],
+ [DATA.projects.filter(p=>p.has_horus).length,"have .horus"],
+ ['<span class="seal">'+DATA.projects.reduce((n,p)=>n+(p.provenance_flags||[]).filter(f=>f!=='merged-checkout'&&f!=='remote-inferred').length,0)+'</span>',"flags"],
+].map(x=>`<div class="stat"><div class="n">${x[0]}</div><div class="l">${x[1]}</div></div>`).join("");
+
+function splitBar(el,leg,counts,items,colorFn,labelFn){
+ const tot=Object.values(counts).reduce((a,b)=>a+b,0)||1;
+ el.innerHTML=items.filter(i=>counts[i]).map(i=>`<span style="width:${100*counts[i]/tot}%;background:${colorFn(i)}"></span>`).join("");
+ leg.innerHTML=items.filter(i=>counts[i]).map(i=>`<div class="row"><span class="sw" style="background:${colorFn(i)}"></span><span class="nm">${labelFn(i)}</span><span class="ct">${counts[i]} · ${Math.round(100*counts[i]/tot)}%</span></div>`).join("");
+}
+const surfColor=i=>({App:"var(--ink)",CLI:"var(--ink-4)",SDK:"var(--line-4)"}[i]);
+splitBar(document.getElementById("surfbar"),document.getElementById("surflegend"),bySurf,SURF,surfColor,i=>({App:"Claude App",CLI:"Claude / Codex CLI",SDK:"SDK"}[i]));
+splitBar(document.getElementById("acctbar"),document.getElementById("acctlegend"),byAcc,ACCS.map(a=>a[0]),cv,i=>AL[i]);
+
+const FLAG={"historical-credential-exposure":["secret","Secret","Leaked credential in sessions — rotate it"],
+ "early-cwd-misattribution":["warn","Attrib","Some sessions misattributed (Codex early-cwd)"]};
+const fr=[];DATA.projects.forEach(p=>(p.provenance_flags||[]).forEach(f=>{if(FLAG[f])fr.push([p,f]);}));
+document.getElementById("findings").innerHTML=fr.length?fr.map(([p,f])=>{const[sev,mk,tx]=FLAG[f];
+ return `<div class="finding ${sev}"><span class="mk">${mk}</span><span class="who">${esc(p.name)}</span><span class="tx">${tx}</span></div>`;}).join(""):'<div class="nofind">No secret or attribution issues.</div>';
+
+function chips(host,items,set,color,label){items.forEach(i=>{const b=document.createElement("button");b.className="chip";
+ b.setAttribute("aria-pressed","true");b.innerHTML=(color?`<span class="sw" style="background:${color(i)}"></span>`:"")+label(i);
+ b.onclick=()=>{set.has(i)?set.delete(i):set.add(i);if(!set.size)set.add(i);b.setAttribute("aria-pressed",set.has(i));render();};host.appendChild(b);});}
+chips(document.getElementById("fsurface"),SURF.filter(s=>bySurf[s]),fSurf,null,i=>i);
+chips(document.getElementById("faccount"),ACCS.map(a=>a[0]).filter(a=>byAcc[a]),fAcc,cv,i=>AL[i]);
+
+function bullet(s){const secs=[["discussed","Discussed"],["decided","Decided"],["shipped","Shipped"],["left_open","Open"]];
+ const h=secs.filter(([k])=>(s.summary[k]||[]).length).map(([k,l])=>{const c=k==="left_open"?"open":k;
+  return `<div class="bl ${c}"><h5>${l}</h5><ul>${s.summary[k].map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;}).join("");
+ return h?`<div class="bullets">${h}</div>`:"";}
+function segMap(s){const g=s.summary.segments||[];if(!g.length)return"";
+ return `<ol class="arc">${g.map(x=>`<li class="seg"><div class="segt">${esc(x.title)}</div><div class="segx">${esc(x.text)}</div></li>`).join("")}</ol>`;}
+function sessionCard(s,withProj){
+ const br=s.branch&&s.branch!=='HEAD'?`<span class="sbranch">⑃ ${esc(s.branch.split(" -> ").length>2?s.branch.split(" -> ")[0]+" →…→ "+s.branch.split(" -> ").pop():s.branch)}</span>`:"";
+ return `<article class="sess"><div class="shead"><span class="sdate">${s.date.slice(5)} ${s.time.slice(0,5)}</span>
+   <span class="surface s-${s.surface}">${s.surface}</span>
+   <span class="acct"><span class="sw" style="background:${cv(s.account)}"></span>${AL[s.account]}</span>
+   ${withProj?`<span class="tlproj">${esc(s.project)}</span>`:""}${br}<span class="sturns">${s.turns}t</span></div>
+  <p class="sctx">${esc(s.summary.context)}</p>${segMap(s)}${bullet(s)}
+  ${RAW[s.id]?`<button class="rawtoggle" data-sid="${s.id}">▾ Raw transcript</button><div class="raw" hidden></div>`:""}</article>`;}
+function wireRaw(scope){scope.querySelectorAll(".rawtoggle").forEach(b=>{b.onclick=()=>{const box=b.nextElementSibling;
+ if(box.hidden){if(!box.dataset.filled){box.innerHTML="<pre>"+esc(RAW[b.dataset.sid])+"</pre>";box.dataset.filled=1;}box.hidden=false;b.textContent="▴ Hide transcript";}
+ else{box.hidden=true;b.textContent="▾ Raw transcript";}};});}
+
+function renderProjects(){const host=document.getElementById("view-projects");
+ const list=PROJ.map(p=>({p,s:p.sessions.filter(pass)})).filter(x=>x.s.length&&(!q||x.p.name.toLowerCase().includes(q)));
+ if(!list.length){host.innerHTML='<div class="empty">No projects match these filters.</div>';return;}
+ host.innerHTML=list.map(({p,s})=>{const sc=cnt(s,"surface"),ac=cnt(s,"account");
+  const span=`${p.sessions[p.sessions.length-1].date} → ${p.sessions[0].date}`;
+  const flags=(p.provenance_flags||[]).map(f=>f==="historical-credential-exposure"?'<span class="badge flag secret">secret</span>':
+   f==="early-cwd-misattribution"?'<span class="badge flag">attribution</span>':f==="merged-checkout"?'<span class="badge flag">merged</span>':"").join("");
+  const micro=ACCS.map(a=>a[0]).filter(a=>ac[a]).map(a=>`<span style="width:${100*ac[a]/s.length}%;background:${cv(a)}"></span>`).join("");
+  return `<details class="proj"><summary class="phead"><div class="ptitle"><span class="nm">${esc(p.name)}</span>${p.has_horus?'<span class="badge horus">.horus</span>':''}${flags}<span class="chev">▸</span></div>
+    <div class="pcount"><b>${s.length}</b> sess · <b>${p.card_count||0}</b> cards · App ${sc.App||0}/CLI ${sc.CLI||0}</div>
+    <div class="pmeta"><span>${p.git_remote?p.git_remote.replace('https://github.com/','').replace('.git',''):'no remote'}</span><span>·</span><span>${span}</span></div>
+    <div class="pmicro">${micro}</div></summary>
+   <div class="pbody">${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}
+    ${(p.provenance_flags||[]).includes("historical-credential-exposure")?`<div class="flagbox secret"><b>Secret found.</b> A credential appears in this project's sessions — rotate it.</div>`:''}
+    ${(p.provenance_flags||[]).includes("early-cwd-misattribution")?`<div class="flagbox"><b>Attribution.</b> Some sessions were tagged here from a Codex early working directory.</div>`:''}
+    ${(p.cards&&p.cards.length)?`<div class="subh">Proposed cards</div><ul class="cards">${p.cards.map(c=>`<li>${esc(c)}</li>`).join("")}</ul>`:''}
+    <div class="subh">Sessions · ${s.length} of ${p.sessions.length}</div><div class="sesses">${s.map(x=>sessionCard(x,false)).join("")}</div></div></details>`;
+ }).join("");
+ host.querySelectorAll("details.proj").forEach(d=>d.addEventListener("toggle",()=>{if(d.open)wireRaw(d);}));}
+function renderTimeline(){const host=document.getElementById("view-timeline");
+ const all=SESS.filter(pass).slice().sort((a,b)=>b.start.localeCompare(a.start));
+ if(!all.length){host.innerHTML='<div class="empty">No sessions match these filters.</div>';return;}
+ const by={};all.forEach(s=>{(by[s.date.slice(0,7)]=by[s.date.slice(0,7)]||[]).push(s);});
+ host.innerHTML=Object.entries(by).map(([m,ss])=>{const lbl=new Date(m+"-01").toLocaleDateString("en",{month:"long",year:"numeric"});
+  return `<div class="tl-month"><div class="tl-mh"><span>${lbl}</span><span class="c">${ss.length} sessions</span></div><div class="sesses">${ss.map(s=>sessionCard(s,true)).join("")}</div></div>`;
+ }).join("");wireRaw(host);}
+function render(){document.getElementById("view-projects").hidden=view!=="proj";document.getElementById("view-timeline").hidden=view!=="time";
+ document.getElementById("search").style.visibility=view==="proj"?"visible":"hidden";view==="proj"?renderProjects():renderTimeline();}
+document.getElementById("tab-proj").onclick=()=>{view="proj";setTab();render();};
+document.getElementById("tab-time").onclick=()=>{view="time";setTab();render();};
+function setTab(){document.getElementById("tab-proj").setAttribute("aria-pressed",view==="proj");document.getElementById("tab-time").setAttribute("aria-pressed",view==="time");}
+document.getElementById("search").oninput=e=>{q=e.target.value.toLowerCase().trim();if(view==="proj")renderProjects();};
+document.getElementById("foot").textContent=`${S.sessions} sessions · ${S.unified_projects} projects · App ${bySurf.App||0} / CLI ${bySurf.CLI||0} / SDK ${bySurf.SDK||0} · reconstructed read-only from local Claude + Codex sessions · raw transcripts stay on this machine`;
+render();
+
+</script>
+</body>
+</html>

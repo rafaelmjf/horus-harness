@@ -498,29 +498,24 @@ def default_out_dir() -> Path:
     return config.config_dir() / "curate"
 
 
-# --- Phase 2: batched LLM curation ------------------------------------------
+# --- Phase 2: batched LLM curation (per-session, structured) ----------------
 
-CURATION_PROMPT = """\
-You are curating one project's agent-session history into a durable ledger entry.
-Below is the filtered, secret-redacted transcript for project "{name}" — natural-language
-turns only, tool output removed, grouped by session with headers.
+CURATION_PROMPT = """You are curating agent-session history for project "{name}".
+Below are its sessions (natural-language turns only, secrets redacted), each under a
+`=== SESSION <id> ... ===` header.
 
-Write a concise Markdown ledger entry with exactly these sections:
+Return ONLY a JSON object — no prose, no markdown fences — of this exact shape:
+{{"desc": "<one sentence describing what this project is>",
+  "sessions": {{"<session-id>": {{
+     "context": "<1-2 sentences on what this session worked on>",
+     "segments": [{{"title": "<branch or topic>", "text": "<what happened, 1-2 sentences>"}}],
+     "discussed": ["..."], "decided": ["..."], "shipped": ["..."], "left_open": ["..."]
+  }}}}}}
+Include an entry for every session id listed. Segment by branch/topic proportional to the
+work — a long multi-branch session yields several segments, a short one just one. Keep the
+four array keys even when empty. Be specific and factual; never invent.
 
-## Context
-2-3 lines: what this project is and what these sessions were working on.
-
-## Segments
-One bullet per distinct work segment (segment by git branch or topic, NOT by session —
-a long multi-branch session yields several segments; a short one yields one). Each bullet:
-`**<branch or topic>** — what happened, 1-2 sentences.` Keep it proportional to the work.
-
-## Discussed / Decided / Shipped / Open
-Four short subsections (`### Discussed`, `### Decided`, `### Shipped`, `### Open`),
-bullets only, omit a subsection if genuinely empty. "Shipped" = merged/delivered;
-"Open" = unresolved next steps.
-
-Be specific and factual. Do not invent. Output only the Markdown, no preamble.
+Session ids: {ids}
 
 ---
 {bundle}
@@ -555,6 +550,14 @@ def run_model(
     return proc.stdout.strip()
 
 
+def _parse_model_json(text: str) -> dict[str, Any]:
+    t = text.strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```[A-Za-z]*\n?", "", t)
+        t = re.sub(r"\n?```\s*$", "", t)
+    return json.loads(t)
+
+
 def _curation_state_path(out_dir: Path) -> Path:
     return out_dir / "curation" / "state.json"
 
@@ -579,32 +582,34 @@ def interpret(
     force: bool = False,
     runner: Callable[..., str] = run_model,
 ) -> dict[str, Any]:
-    """Curate changed projects into ``curation/<slug>.md``. Unchanged projects are
-    skipped via the content-hash watermark unless ``force``. ``runner`` is injectable
-    so tests never spend tokens."""
+    """Curate changed projects into structured ``curation/<slug>.json`` (per-session
+    context + segments + Discussed/Decided/Shipped/Open). Unchanged projects are skipped
+    via the content-hash watermark unless ``force``. ``runner`` is injectable so tests
+    never spend tokens."""
     curation_dir = out_dir / "curation"
     curation_dir.mkdir(parents=True, exist_ok=True)
     state = _load_curation_state(out_dir)
-    result = {"curated": [], "skipped": [], "errors": []}
+    result: dict[str, list[str]] = {"curated": [], "skipped": [], "errors": []}
 
     for slug, project in sorted(manifest["projects"].items()):
         if only_project and slug != only_project:
             continue
         hashes = sorted(s["content_hash"] for s in project["sessions"])
-        md_path = curation_dir / f"{slug}.md"
-        if not force and md_path.exists() and state.get(slug) == hashes:
+        json_path = curation_dir / f"{slug}.json"
+        if not force and json_path.exists() and state.get(slug) == hashes:
             result["skipped"].append(slug)
             continue
         bundle = (out_dir / project["bundle"]).read_text(encoding="utf-8")
         if len(bundle) > CURATION_INPUT_CAP:
             bundle = bundle[:CURATION_INPUT_CAP] + "\n[BUNDLE TRUNCATED for curation]"
-        prompt = CURATION_PROMPT.format(name=project["name"], bundle=bundle)
+        ids = ", ".join(s["id"] for s in project["sessions"])
+        prompt = CURATION_PROMPT.format(name=project["name"], ids=ids, bundle=bundle)
         try:
-            text = runner(prompt, model=model, account=account)
+            parsed = _parse_model_json(runner(prompt, model=model, account=account))
         except Exception as exc:
             result["errors"].append(f"{slug}: {type(exc).__name__}: {exc}")
             continue
-        md_path.write_text(text.rstrip() + "\n", encoding="utf-8")
+        json_path.write_text(json.dumps(parsed, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         state[slug] = hashes
         result["curated"].append(slug)
 
@@ -614,10 +619,9 @@ def interpret(
     return result
 
 
-# --- Phase 3: the portfolio git-of-record -----------------------------------
+# --- Phase 3: portfolio git-of-record + local sumi-e view -------------------
 
-# The skeleton is per-project metadata only — never raw turn text. These are the
-# manifest fields safe to push; the bundle stays local.
+# The skeleton is per-project metadata only — never raw turn text. Safe to push.
 _SKELETON_PROJECT_KEYS = (
     "name", "path", "git_remote", "has_horus", "session_count", "turn_count",
     "secrets_redacted", "date_start", "date_end", "agents", "accounts",
@@ -631,194 +635,6 @@ _SKELETON_SESSION_KEYS = (
 
 def default_portfolio_dir() -> Path:
     return config.config_dir() / "portfolio"
-
-
-# Sumi-e static view: warm paper, ink tones, one seal. Self-contained, no network
-# (CSP blocks everything), data embedded as JSON. Regenerated from the manifest +
-# curation each run — no hand-curated maps.
-_PORTFOLIO_TEMPLATE = r'''<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'none'; font-src 'none'; connect-src 'none'">
-<title>Session Portfolio — unified agent history</title>
-<style>
-:root{color-scheme:light dark;
---paper:#FBFAF7;--paper-2:#F2F0EB;--panel:#EDEAE3;--ink:#121110;--ink-2:#3A3835;
---ink-3:#6B6862;--ink-4:#8A867E;--line:#DCD8CF;--seal:#C0342A;--seal-wash:rgba(192,52,42,.07);
---radius:12px;}
-@media (prefers-color-scheme:dark){:root{
---paper:#0E0E0D;--paper-2:#151513;--panel:#232220;--ink:#F4F1EA;--ink-2:#C6C2B9;
---ink-3:#918D85;--ink-4:#7A766F;--line:#2C2A27;--seal:#D8483C;--seal-wash:rgba(216,72,60,.12);}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 Georgia,"Iowan Old Style",serif}
-button,select{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line)}
-button{cursor:pointer}
-.shell{width:min(1500px,100%);margin:0 auto;padding:32px 28px}
-header{margin-bottom:20px}
-h1{font-weight:normal;font-size:clamp(26px,4vw,40px);letter-spacing:.01em;margin:0 0 8px}
-.lede{margin:0;color:var(--ink-3);max-width:760px}
-.stats{display:flex;flex-wrap:wrap;gap:20px;margin-top:16px}
-.stat strong{display:block;font-size:22px}.stat span{color:var(--ink-4);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
-.toolbar{position:sticky;top:0;z-index:5;background:var(--paper);border-block:1px solid var(--line);padding:12px 0;margin:8px 0 18px}
-.toolbar-row{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}.toolbar-row+.toolbar-row{margin-top:8px}
-.group{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.group-label{color:var(--ink-4);font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:.08em}
-.toggle,.view-tab{border-radius:999px;padding:6px 12px}
-.toggle[aria-pressed=true],.view-tab[aria-selected=true]{border-color:var(--seal);background:var(--seal-wash);color:var(--seal)}
-select{border-radius:8px;padding:6px 9px;max-width:320px}
-.badge{display:inline-flex;align-items:center;border-radius:999px;padding:2px 9px;color:#fff;font-size:11px;white-space:nowrap}
-.main-layout{display:grid;grid-template-columns:minmax(320px,42%) minmax(0,1fr);gap:18px;align-items:start}
-.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.section-head h2{margin:0;font-size:17px;font-weight:normal}.count{color:var(--ink-4);font-size:12px}
-.project-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.project-card{width:100%;text-align:left;padding:14px;border-radius:var(--radius);background:var(--paper-2);min-height:120px}
-.project-card:hover{border-color:var(--seal)}.project-card.active{border-color:var(--seal);box-shadow:inset 0 0 0 1px var(--seal)}
-.project-name{display:block;font-size:15px;font-weight:bold;margin-bottom:5px;overflow-wrap:anywhere}
-.project-path{display:block;color:var(--ink-4);font:11px/1.35 ui-monospace,Consolas,monospace;overflow-wrap:anywhere;min-height:28px}
-.card-meta,.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
-.chip{border:1px solid var(--line);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--ink-3);background:var(--panel)}
-.chip.horus{color:var(--seal);border-color:var(--seal)}
-.chip.flag{color:var(--seal);background:var(--seal-wash);border-color:var(--seal)}
-.detail,.timeline-pane{background:var(--paper-2);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-.detail{position:sticky;top:120px;max-height:calc(100vh-140px);overflow:auto}
-.detail-head,.timeline-head{padding:17px 18px;border-bottom:1px solid var(--line)}
-.detail-head h2,.timeline-head h2{margin:0 0 5px;font-size:19px;font-weight:normal;overflow-wrap:anywhere}
-.detail-meta{color:var(--ink-4);font-size:12px;overflow-wrap:anywhere}
-.curation{padding:16px 18px;border-bottom:1px solid var(--line);white-space:pre-wrap;font-size:13px;color:var(--ink-2)}
-.curation.empty{color:var(--ink-4);font-style:italic}
-.session-list{list-style:none;margin:0;padding:0}
-.session{display:grid;grid-template-columns:130px minmax(0,1fr);gap:14px;padding:15px 18px;border-bottom:1px solid var(--line)}
-.session:last-child{border-bottom:0}.session-time{color:var(--ink-4);font-size:12px}.session-side .badge{margin-top:6px}
-.session-project{display:block;color:var(--seal);font-weight:bold;margin-bottom:6px;overflow-wrap:anywhere}
-.topic{margin-bottom:8px}
-.session-facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 8px;color:var(--ink-4);font-size:12px}
-.session-facts dt{font-weight:bold}.session-facts dd{margin:0;min-width:0;overflow-wrap:anywhere}
-code{font:11px/1.35 ui-monospace,Consolas,monospace;background:var(--panel);border-radius:4px;padding:1px 4px}
-.empty{padding:32px;text-align:center;color:var(--ink-4)}.hidden{display:none!important}
-footer{color:var(--ink-4);font-size:12px;padding:28px 0 6px;text-align:center}
-@media(max-width:1050px){.main-layout{grid-template-columns:1fr}.detail{position:static;max-height:none}}
-@media(max-width:680px){.shell{padding:18px 14px}.project-grid{grid-template-columns:1fr}.toolbar{position:static}.session{grid-template-columns:1fr;gap:7px}}
-</style>
-</head>
-<body>
-<div class="shell">
-<header>
-<h1>Session portfolio</h1>
-<p class="lede">Every local coding session on this machine — the Claude app, the Claude CLI, and Codex, under all accounts — distilled into one browsable history. No app owns it; any agent can read it.</p>
-<div class="stats" id="stats"></div>
-</header>
-<div class="toolbar" aria-label="Portfolio controls">
-<div class="toolbar-row">
-<div class="group" role="tablist" aria-label="View"><span class="group-label">View</span>
-<button class="view-tab" data-view="projects" role="tab" aria-selected="true">By project</button>
-<button class="view-tab" data-view="timeline" role="tab" aria-selected="false">Timeline</button></div>
-<div class="group" id="sort-group"><label class="group-label" for="sort">Sort</label>
-<select id="sort"><option value="activity">Activity</option><option value="recency">Recency</option><option value="name">Name</option></select></div>
-</div>
-<div class="toolbar-row">
-<div class="group" id="account-filters"><span class="group-label">Accounts</span></div>
-<div class="group" id="agent-filters"><span class="group-label">Agents</span></div>
-</div>
-</div>
-<main>
-<section id="project-view" class="main-layout">
-<div><div class="section-head"><h2>Projects</h2><span class="count" id="project-count"></span></div>
-<div class="project-grid" id="project-grid"></div></div>
-<aside class="detail" id="project-detail" aria-live="polite"></aside>
-</section>
-<section id="timeline-view" class="timeline-pane hidden">
-<div class="timeline-head"><h2>Unified timeline</h2><div class="detail-meta" id="timeline-count"></div></div>
-<ol class="session-list" id="global-timeline"></ol>
-</section>
-</main>
-<footer>Self-contained UTF-8 artifact · no network · curated summaries + metadata only · no raw transcripts</footer>
-</div>
-<script id="portfolio-data" type="application/json">__DATA__</script>
-<script>
-(()=>{'use strict';
-const data=JSON.parse(document.getElementById('portfolio-data').textContent);
-const projects=data.projects, sessions=data.sessions;
-const projectById=new Map(projects.map(p=>[p.id,p]));
-const PALETTE=['#C0342A','#2F6E5B','#7A5AA6','#B4702A','#3B6EA5','#8A867E'];
-const accountColor=new Map(data.summary.accounts.map((a,i)=>[a,PALETTE[i%PALETTE.length]]));
-const state={view:'projects',selected:projects.length?projects[0].id:null,sort:'activity',
-accounts:new Set(data.summary.accounts),agents:new Set(data.summary.agents)};
-const el=id=>document.getElementById(id);
-const fmtDate=iso=>iso?new Intl.DateTimeFormat(undefined,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:'UTC'}).format(new Date(iso)):'?';
-const shortDate=iso=>iso?new Intl.DateTimeFormat(undefined,{year:'numeric',month:'short',day:'2-digit',timeZone:'UTC'}).format(new Date(iso)):'?';
-const make=(t,c,x)=>{const n=document.createElement(t);if(c)n.className=c;if(x!==undefined)n.textContent=x;return n;};
-const badge=a=>{const b=make('span','badge',a);b.style.background=accountColor.get(a)||'#8A867E';return b;};
-const passes=s=>state.accounts.has(s.account)&&state.agents.has(s.agent);
-const cardSessions=p=>sessions.filter(s=>s.project===p.id&&passes(s));
-function renderStats(){
-const items=[[data.summary.projects,'projects'],[data.summary.sessions,'sessions'],
-[data.summary.accounts.length,'accounts'],[`${shortDate(data.summary.dateStart)} – ${shortDate(data.summary.dateEnd)}`,'span']];
-el('stats').replaceChildren(...items.map(([v,l])=>{const d=make('div','stat');d.append(make('strong','',String(v)),make('span','',l));return d;}));}
-function renderControls(){
-el('sort').addEventListener('change',e=>{state.sort=e.target.value;renderProjects();});
-for(const a of data.summary.accounts){const b=make('button','toggle',a);b.setAttribute('aria-pressed','true');
-b.addEventListener('click',()=>{state.accounts.has(a)?state.accounts.delete(a):state.accounts.add(a);b.setAttribute('aria-pressed',String(state.accounts.has(a)));render();});
-el('account-filters').append(b);}
-for(const g of data.summary.agents){const b=make('button','toggle',g);b.setAttribute('aria-pressed','true');
-b.addEventListener('click',()=>{state.agents.has(g)?state.agents.delete(g):state.agents.add(g);b.setAttribute('aria-pressed',String(state.agents.has(g)));render();});
-el('agent-filters').append(b);}
-document.querySelectorAll('.view-tab').forEach(b=>b.addEventListener('click',()=>{state.view=b.dataset.view;render();}));}
-function renderProjectCard(p){
-const visible=cardSessions(p);
-const card=make('button',`project-card${p.id===state.selected?' active':''}`);card.type='button';
-card.append(make('span','project-name',p.name),make('span','project-path',p.path));
-const meta=make('span','card-meta');
-meta.append(make('span','chip',`${visible.length}/${p.sessionCount} sessions`));
-if(p.curation)meta.append(make('span','chip','curated'));
-if(p.hasHorus)meta.append(make('span','chip horus','.horus'));
-card.append(meta);
-if(p.flags.length){const c=make('span','chips');p.flags.forEach(f=>c.append(make('span','chip flag',f.split(':')[0])));card.append(c);}
-card.addEventListener('click',()=>{state.selected=p.id;renderProjects();});
-return card;}
-function renderProjects(){
-let visible=projects.filter(p=>cardSessions(p).length);
-const sorters={activity:(a,b)=>cardSessions(b).length-cardSessions(a).length||b.turns-a.turns,
-recency:(a,b)=>(b.dateEnd||'').localeCompare(a.dateEnd||''),name:(a,b)=>a.name.localeCompare(b.name)};
-visible.sort(sorters[state.sort]);
-if(visible.length&&!visible.some(p=>p.id===state.selected))state.selected=visible[0].id;
-el('project-grid').replaceChildren(...visible.map(renderProjectCard));
-el('project-count').textContent=`${visible.length} of ${projects.length}`;
-const sel=projectById.get(state.selected),detail=el('project-detail');detail.replaceChildren();
-if(!sel||!visible.length){detail.append(make('div','empty','No projects match the active filters.'));return;}
-const list=cardSessions(sel);
-const head=make('div','detail-head');head.append(make('h2','',sel.name));
-head.append(make('div','detail-meta',`${list.length} of ${sel.sessionCount} sessions · ${sel.remote||'no git remote resolved'}`));
-detail.append(head);
-detail.append(make('div',sel.curation?'curation':'curation empty',sel.curation||'Not yet curated — run horus curate --interpret.'));
-detail.append(renderSessionList(list,false));}
-function renderSession(s,showProject){
-const li=make('li','session');
-const side=make('div','session-side');side.append(make('time','session-time',fmtDate(s.start)),badge(s.account));
-const body=make('div','session-body');
-if(showProject)body.append(make('span','session-project',projectById.get(s.project).name));
-body.append(make('div','topic',s.topic));
-const facts=make('dl','session-facts');
-[['Agent',s.agent],['Surface',s.surface||'?'],['Branch',s.branch],['Turns',String(s.turns)],['Checkout',s.checkout]]
-.forEach(([k,v])=>{facts.append(make('dt','',k));const dd=make('dd');(k==='Branch'||k==='Checkout')?dd.append(make('code','',v)):dd.textContent=v;facts.append(dd);});
-body.append(facts);li.append(side,body);return li;}
-function renderSessionList(list,showProject){const ol=make('ol','session-list');
-list.length?list.forEach(s=>ol.append(renderSession(s,showProject))):ol.append(make('li','empty','No sessions match the active filters.'));return ol;}
-function renderTimeline(){
-const list=sessions.filter(passes);el('timeline-count').textContent=`${list.length} of ${sessions.length} sessions · oldest first`;
-el('global-timeline').replaceChildren(...(list.length?list.map(s=>renderSession(s,true)):[make('li','empty','No sessions match.')]));}
-function render(){
-document.querySelectorAll('.view-tab').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.view===state.view)));
-el('project-view').classList.toggle('hidden',state.view!=='projects');
-el('timeline-view').classList.toggle('hidden',state.view!=='timeline');
-el('sort-group').classList.toggle('hidden',state.view!=='projects');
-renderProjects();renderTimeline();}
-renderStats();renderControls();render();
-})();
-</script>
-</body>
-</html>'''
 
 
 def _skeleton_for(project: dict[str, Any]) -> dict[str, Any]:
@@ -845,68 +661,133 @@ def _portfolio_index_md(projects: list[tuple[str, dict[str, Any]]]) -> str:
         span = f"{p['date_start'] or '?'} → {p['date_end'] or '?'}"
         flags = "⚠︎" if p["attribution_flags"] else ""
         lines.append(
-            f"| [{p['name']}](projects/{slug}/curation.md) | {span} | {p['session_count']} | "
+            f"| [{p['name']}](projects/{slug}/skeleton.json) | {span} | {p['session_count']} | "
             f"{', '.join(p['agents'])} | {', '.join(p['accounts'])} | {flags} |"
         )
     return "\n".join(lines) + "\n"
 
 
+# ponytail: fixed 4-slot account map to match the view's CSS (--a-shared/personal/work/codex);
+# unknown accounts fall to "shared". Upgrade to a dynamic ACCS + injected CSS vars if a 5th
+# account label ever appears.
+def account_label(raw: str) -> str:
+    r = (raw or "").lower()
+    if "codex" in r:
+        return "codex"
+    if "personal" in r:
+        return "personal"
+    if "work" in r:
+        return "work"
+    return "shared"
+
+
+def _provenance_flags(project: dict[str, Any]) -> list[str]:
+    flags: list[str] = []
+    if project.get("secrets_redacted"):
+        flags.append("historical-credential-exposure")
+    if any(f.startswith("merged checkout") for f in project.get("attribution_flags", [])):
+        flags.append("merged-checkout")
+    return flags
+
+
+_SESSION_HEADER_RE = re.compile(r"^=== SESSION (\S+) .*? ===$", re.M)
+
+
+def _split_bundle_raw(bundle_text: str) -> dict[str, str]:
+    """Map session-id → its redacted transcript, split from a project bundle."""
+    parts = _SESSION_HEADER_RE.split(bundle_text)
+    raw: dict[str, str] = {}
+    it = iter(parts[1:])  # parts[0] is the bundle preamble
+    for sid, body in zip(it, it):
+        raw[sid] = body.strip()
+    return raw
+
+
+def _load_curation(curation_dir: Path, slug: str) -> dict[str, Any] | None:
+    path = curation_dir / f"{slug}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _empty_summary(session: dict[str, Any]) -> dict[str, Any]:
+    return {"context": _session_topic(session), "segments": [],
+            "discussed": [], "decided": [], "shipped": [], "left_open": []}
+
+
 def _session_topic(session: dict[str, Any]) -> str:
-    """A one-line label for a session in the view — best available signal."""
     for key in ("ai_titles", "last_prompts"):
         vals = session.get(key) or []
         if vals:
             text = re.sub(r"\s+", " ", vals[0]).strip()
-            return text[:140] + ("…" if len(text) > 140 else "")
+            return text[:160] + ("…" if len(text) > 160 else "")
     branch = session.get("git_branch")
-    return f"branch {branch}" if branch else "session"
+    return f"Session on branch {branch}." if branch else "Session."
 
 
-def _portfolio_payload(manifest: dict[str, Any]) -> dict[str, Any]:
-    projects, sessions = [], []
+def build_view_data(manifest: dict[str, Any], out_dir: Path, include_raw: bool) -> tuple[dict, dict]:
+    curation_dir = out_dir / "curation"
+    projects_out, sessions_out, raw = [], [], {}
     for slug, p in sorted(manifest["projects"].items()):
-        curated = p.get("_curation")
-        projects.append({
-            "id": slug, "name": p["name"], "path": p.get("path") or "unattributed",
-            "remote": p.get("git_remote"), "hasHorus": bool(p.get("has_horus")),
-            "flags": p.get("attribution_flags", []), "curation": curated,
-            "sessionCount": p["session_count"], "turns": p["turn_count"],
-            "dateStart": p.get("date_start"), "dateEnd": p.get("date_end"),
+        cur = _load_curation(curation_dir, slug) or {}
+        cur_sessions = cur.get("sessions", {}) if isinstance(cur.get("sessions"), dict) else {}
+        projects_out.append({
+            "id": slug, "canonical_id": slug, "name": p["name"], "path": p.get("path") or "",
+            "git_remote": p.get("git_remote"), "has_horus": bool(p.get("has_horus")),
+            "proposed_card_count": 0, "provenance_flags": _provenance_flags(p),
+            "desc": cur.get("desc"), "cards": [], "card_count": 0,
         })
+        if include_raw:
+            bundle = (out_dir / p["bundle"]).read_text(encoding="utf-8")
+            raw.update(_split_bundle_raw(bundle))
         for s in p["sessions"]:
-            sessions.append({
-                "id": s["id"], "project": slug, "account": s["account"], "agent": s["agent"],
-                "surface": s.get("surface"), "start": s.get("start"), "end": s.get("end"),
-                "branch": s.get("git_branch") or "not recorded", "turns": s["turns"],
-                "checkout": s.get("checkout_path") or p.get("path") or "not attributed",
-                "topic": _session_topic(s),
+            start = s.get("start") or ""
+            summ = cur_sessions.get(s["id"])
+            if not isinstance(summ, dict):
+                summ = _empty_summary(s)
+            summ.setdefault("context", "")
+            for k in ("segments", "discussed", "decided", "shipped", "left_open"):
+                summ.setdefault(k, [])
+            sessions_out.append({
+                "id": s["id"], "project_id": slug, "project": p["name"],
+                "date": start[:10], "time": (start[11:16] + " UTC") if len(start) >= 16 else "",
+                "start": start, "end": s.get("end") or "",
+                "account": account_label(s["account"]), "surface": s.get("surface") or "CLI",
+                "entrypoint": s.get("entrypoint") or "cli", "agent": s["agent"],
+                "branch": s.get("git_branch") or "HEAD", "turns": str(s["turns"]),
+                "checkout": s.get("checkout_path") or p.get("path") or "",
+                "summary": summ,
             })
-    sessions.sort(key=lambda s: s["start"] or "")
-    dated = [s["start"] for s in sessions if s["start"]]
-    return {
+    sessions_out.sort(key=lambda s: s["start"])
+    dated = [s["start"] for s in sessions_out if s["start"]]
+    data = {
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "summary": {
-            "projects": len(projects), "sessions": len(sessions),
-            "accounts": sorted({s["account"] for s in sessions}),
-            "agents": sorted({s["agent"] for s in sessions}),
-            "dateStart": min(dated) if dated else None,
-            "dateEnd": max(dated) if dated else None,
+            "source_projects": len(projects_out), "unified_projects": len(projects_out),
+            "sessions": len(sessions_out),
+            "accounts": sorted({s["account"] for s in sessions_out}),
+            "surfaces": sorted({s["surface"] for s in sessions_out}),
+            "date_start": min(dated) if dated else "", "date_end": max(dated) if dated else "",
         },
-        "projects": projects, "sessions": sessions,
+        "projects": projects_out, "sessions": sessions_out,
     }
+    return data, raw
 
 
-def render_portfolio_html(manifest: dict[str, Any], curation_dir: Path) -> str:
-    """Self-contained sumi-e static view, regenerated from the curator's own data."""
-    payload = _portfolio_payload_with_curation(manifest, curation_dir)
-    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
-    return _PORTFOLIO_TEMPLATE.replace("__DATA__", encoded)
+def _view_asset() -> str:
+    return (Path(__file__).parent / "assets" / "portfolio_view.html").read_text(encoding="utf-8")
 
 
-def _portfolio_payload_with_curation(manifest: dict[str, Any], curation_dir: Path) -> dict[str, Any]:
-    for slug, p in manifest["projects"].items():
-        md = curation_dir / f"{slug}.md"
-        p["_curation"] = md.read_text(encoding="utf-8") if md.exists() else None
-    return _portfolio_payload(manifest)
+def render_real_view(manifest: dict[str, Any], out_dir: Path, *, include_raw: bool = True) -> str:
+    """The real sumi-e view (rafaelfigueiredo.com design), regenerated from curator data.
+    ``include_raw`` embeds redacted transcripts for local drill-down; keep it False for any
+    copy that could be pushed."""
+    data, raw = build_view_data(manifest, out_dir, include_raw)
+    enc = lambda o: json.dumps(o, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    return _view_asset().replace("__DATA__", enc(data)).replace("__RAW__", enc(raw if include_raw else {}))
 
 
 def assemble_portfolio(
@@ -916,46 +797,44 @@ def assemble_portfolio(
     manifest: dict[str, Any],
     push: bool = False,
 ) -> dict[str, Any]:
-    """Assemble the portfolio git-of-record from curated output. Copies curation +
-    skeleton only — raw bundles never enter the portfolio. Idempotent/regeneratable:
-    re-running reproduces the same tree."""
+    """Assemble the raw-free git-of-record (skeleton + structured curation + index.md) and
+    write the local rich sumi-e view (with transcript drill-down) into ``out_dir`` — the
+    view holds raw and never enters the portfolio repo. Regeneratable/idempotent."""
     projects = sorted(manifest["projects"].items())
     proj_root = portfolio_dir / "projects"
     proj_root.mkdir(parents=True, exist_ok=True)
-
     curation_dir = out_dir / "curation"
-    written = 0
+
+    curated = 0
     for slug, project in projects:
         dest = proj_root / slug
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "skeleton.json").write_text(
             json.dumps(_skeleton_for(project), indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
-        src_md = curation_dir / f"{slug}.md"
-        if src_md.exists():
-            (dest / "curation.md").write_text(src_md.read_text(encoding="utf-8"), encoding="utf-8")
-            written += 1
+        src = curation_dir / f"{slug}.json"
+        if src.exists():
+            (dest / "curation.json").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+            curated += 1
 
     (portfolio_dir / "index.md").write_text(_portfolio_index_md(projects), encoding="utf-8")
-    (portfolio_dir / "index.html").write_text(
-        render_portfolio_html(manifest, curation_dir), encoding="utf-8"
-    )
-    # Belt-and-braces: raw bundles must never be tracked here.
-    (portfolio_dir / ".gitignore").write_text("bundles/\n*.bundle\n", encoding="utf-8")
+    (portfolio_dir / ".gitignore").write_text("bundles/\n*.bundle\n*.html\n", encoding="utf-8")
 
-    result = {"projects": len(projects), "curations": written, "pushed": False, "git": None}
+    # Local rich view (transcript drill-down) — stays in out_dir, never pushed.
+    view_path = out_dir / "portfolio.html"
+    view_path.write_text(render_real_view(manifest, out_dir, include_raw=True), encoding="utf-8")
+
+    result = {"projects": len(projects), "curations": curated, "view": str(view_path),
+              "pushed": False, "git": None}
     if not (portfolio_dir / ".git").is_dir():
         _git(portfolio_dir, "init", "-q")
-    # The portfolio is horus-owned; give it a local identity when the environment
-    # has none (fresh CI, no global git config) so the commit never fails.
     if not _git(portfolio_dir, "config", "user.email").stdout.strip():
         _git(portfolio_dir, "config", "user.email", "curator@horus.local")
         _git(portfolio_dir, "config", "user.name", "Horus Curator")
     _git(portfolio_dir, "add", "-A")
-    status = _git(portfolio_dir, "status", "--porcelain")
-    if status.stdout.strip():
+    if _git(portfolio_dir, "status", "--porcelain").stdout.strip():
         commit = _git(portfolio_dir, "commit", "-q", "-m",
-                      f"portfolio: {len(projects)} projects, {written} curated "
+                      f"portfolio: {len(projects)} projects, {curated} curated "
                       f"({datetime.now().astimezone().date()})")
         result["git"] = "committed" if commit.returncode == 0 else commit.stderr.strip()
     else:
