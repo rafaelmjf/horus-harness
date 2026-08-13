@@ -19,17 +19,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from . import config
 
 MAX_TURN_CHARS = 12_000
+
+# Phase 2 (interpretation) shells out to the authenticated native CLI on a cheap
+# tier — "horus's model routing" — rather than adding an inference dependency.
+CURATION_MODEL_DEFAULT = "claude-haiku-4-5-20251001"
+CURATION_INPUT_CAP = 120_000  # chars of bundle fed to the model per project
 
 # Redaction runs on every captured turn. Each hit is counted so the manifest can
 # report a scan result — a planted credential shows up as a nonzero count.
@@ -489,3 +496,119 @@ def _load_prior_hashes(out_dir: Path) -> dict[str, str]:
 
 def default_out_dir() -> Path:
     return config.config_dir() / "curate"
+
+
+# --- Phase 2: batched LLM curation ------------------------------------------
+
+CURATION_PROMPT = """\
+You are curating one project's agent-session history into a durable ledger entry.
+Below is the filtered, secret-redacted transcript for project "{name}" — natural-language
+turns only, tool output removed, grouped by session with headers.
+
+Write a concise Markdown ledger entry with exactly these sections:
+
+## Context
+2-3 lines: what this project is and what these sessions were working on.
+
+## Segments
+One bullet per distinct work segment (segment by git branch or topic, NOT by session —
+a long multi-branch session yields several segments; a short one yields one). Each bullet:
+`**<branch or topic>** — what happened, 1-2 sentences.` Keep it proportional to the work.
+
+## Discussed / Decided / Shipped / Open
+Four short subsections (`### Discussed`, `### Decided`, `### Shipped`, `### Open`),
+bullets only, omit a subsection if genuinely empty. "Shipped" = merged/delivered;
+"Open" = unresolved next steps.
+
+Be specific and factual. Do not invent. Output only the Markdown, no preamble.
+
+---
+{bundle}
+"""
+
+
+def run_model(
+    prompt: str,
+    *,
+    model: str,
+    account: str | None = None,
+    executable: str = "claude",
+    timeout: int = 300,
+) -> str:
+    """One-shot headless call to the native CLI; returns its text response.
+
+    Routes through the account's isolated ``CLAUDE_CONFIG_DIR`` when mapped —
+    the same routing ``horus run`` uses — so no inference dependency is added.
+    """
+    exe = shutil.which(executable) or executable  # honor PATHEXT on Windows
+    env = os.environ.copy()
+    cfg = config.load_account_config_dirs().get(account) if account else None
+    if cfg:
+        env["CLAUDE_CONFIG_DIR"] = str(Path(cfg))
+    proc = subprocess.run(
+        [exe, "-p", prompt, "--model", model],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=timeout, env=env, check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or f"{executable} -p exited {proc.returncode}")
+    return proc.stdout.strip()
+
+
+def _curation_state_path(out_dir: Path) -> Path:
+    return out_dir / "curation" / "state.json"
+
+
+def _load_curation_state(out_dir: Path) -> dict[str, list[str]]:
+    path = _curation_state_path(out_dir)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def interpret(
+    out_dir: Path,
+    *,
+    manifest: dict[str, Any],
+    model: str = CURATION_MODEL_DEFAULT,
+    account: str | None = None,
+    only_project: str | None = None,
+    force: bool = False,
+    runner: Callable[..., str] = run_model,
+) -> dict[str, Any]:
+    """Curate changed projects into ``curation/<slug>.md``. Unchanged projects are
+    skipped via the content-hash watermark unless ``force``. ``runner`` is injectable
+    so tests never spend tokens."""
+    curation_dir = out_dir / "curation"
+    curation_dir.mkdir(parents=True, exist_ok=True)
+    state = _load_curation_state(out_dir)
+    result = {"curated": [], "skipped": [], "errors": []}
+
+    for slug, project in sorted(manifest["projects"].items()):
+        if only_project and slug != only_project:
+            continue
+        hashes = sorted(s["content_hash"] for s in project["sessions"])
+        md_path = curation_dir / f"{slug}.md"
+        if not force and md_path.exists() and state.get(slug) == hashes:
+            result["skipped"].append(slug)
+            continue
+        bundle = (out_dir / project["bundle"]).read_text(encoding="utf-8")
+        if len(bundle) > CURATION_INPUT_CAP:
+            bundle = bundle[:CURATION_INPUT_CAP] + "\n[BUNDLE TRUNCATED for curation]"
+        prompt = CURATION_PROMPT.format(name=project["name"], bundle=bundle)
+        try:
+            text = runner(prompt, model=model, account=account)
+        except Exception as exc:
+            result["errors"].append(f"{slug}: {type(exc).__name__}: {exc}")
+            continue
+        md_path.write_text(text.rstrip() + "\n", encoding="utf-8")
+        state[slug] = hashes
+        result["curated"].append(slug)
+
+    _curation_state_path(out_dir).write_text(
+        json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    return result

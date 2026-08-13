@@ -297,7 +297,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_curate(args: argparse.Namespace) -> int:
-    """Deterministic capture of local agent-session exhaust into a metadata skeleton."""
+    """Deterministic capture of local agent-session exhaust, with optional LLM curation."""
     out_dir = Path(args.out).expanduser() if args.out else curate_mod.default_out_dir()
     manifest = curate_mod.curate(out_dir)
     print(f"curate → {out_dir}")
@@ -316,6 +316,19 @@ def cmd_curate(args: argparse.Namespace) -> int:
         print(f"  {len(flagged)} project(s) with attribution flags:")
         for slug, flags in sorted(flagged.items()):
             print(f"    {slug}: {'; '.join(flags)}")
+
+    if args.interpret:
+        print(f"interpret → {args.model} (cheap tier; one call per changed project)")
+        outcome = curate_mod.interpret(
+            out_dir, manifest=manifest, model=args.model, account=args.account,
+            only_project=args.project, force=args.force,
+        )
+        print(
+            f"  curated {len(outcome['curated'])} · skipped {len(outcome['skipped'])} unchanged"
+            + (f" · {len(outcome['errors'])} error(s)" if outcome["errors"] else "")
+        )
+        for err in outcome["errors"]:
+            print(f"    {err}")
     return 0
 
 
@@ -4643,6 +4656,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="deterministic capture of local agent sessions into a redacted metadata skeleton",
     )
     p_curate.add_argument("--out", help=f"output dir (default: {curate_mod.default_out_dir()})")
+    p_curate.add_argument("--interpret", action="store_true",
+                          help="after capture, run the batched LLM curation over changed projects")
+    p_curate.add_argument("--model", default=curate_mod.CURATION_MODEL_DEFAULT,
+                          help="model for --interpret (default: a cheap tier)")
+    p_curate.add_argument("--account", help="account alias to route --interpret through")
+    p_curate.add_argument("--project", help="curate only this project slug")
+    p_curate.add_argument("--force", action="store_true",
+                          help="re-curate even unchanged projects")
     p_curate.set_defaults(func=cmd_curate)
 
     p_sync = sub.add_parser(
