@@ -9,7 +9,7 @@ description: >-
   its own decision, never chained onto the end of other work.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # horus-release — cut a version, and land it where people actually run it
 
@@ -42,6 +42,12 @@ release *this* version.
    package JSON *and* the simple index, not just a green job.
 5. **`scripts/deploy-hosted.sh`** — refreshed install, `systemctl restart`,
    `/health` reporting the new version, and `/` still 403 behind Access. All four.
+6. **Upgrade the CLI on the machine you released from.** Publishing advances *no*
+   installed CLI — not the hosted server (step 5) and not your own dev box. `uv run
+   horus --version` reads the source tree and will show the new version, masking that
+   the pinned install on PATH (`~/.local/bin/horus`) is still the old one. Run
+   `uv tool install --force --refresh --python 3.12 horus-harness==<version>` and
+   confirm bare `horus --version` matches. Same traps as below apply.
 
 ## Traps that have actually bitten
 
