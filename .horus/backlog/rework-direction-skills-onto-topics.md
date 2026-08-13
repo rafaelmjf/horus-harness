@@ -2,7 +2,7 @@
 status: open
 priority: medium
 readiness: deferred
-autonomy: attended
+readiness_reason: "Deferred on purpose (owner 2026-08-12): rebuild the retired direction-setting capabilities (inward audit, direction→cards, outward research, opportunity-gen) topic-native only after enough lived-in use of the emergent topics model to shape them without guessing. One campaign (curator, 2026-08-13) is early signal, not yet enough; revisit after more topic use."
 created: 2026-08-12
 created_by: owner
 type: feature

@@ -12,6 +12,13 @@ parallel: safe
 
 # Topics over facets — how work should be grouped
 
+> **Archived 2026-08-13.** The decision this card recorded shipped in #506 (`9ee4e53`) — free-form
+> `topic:` is the grouping model and facets are retired. Its own open question ("what status is a
+> discussion card born in?") is now answered: `recorded` has no terminal readiness, so an active
+> discussion card trips the Unclassified gate forever. Resolution (owner): discussion cards are
+> **transient** — record → distill into Vision/Rules/Shipped → archive. This card is that archive
+> step; its reasoning is preserved here and the rule lives in the Vision's agent-structure boundary.
+
 **A discussion card: a decision and its reasoning, with no work planned.** It exists because
 this reasoning had nowhere else to live — it is not a task, it does not belong to one card,
 and consolidation would otherwise have recorded only the conclusion. This card is also the

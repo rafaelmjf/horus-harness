@@ -26,6 +26,7 @@ The durable value is the **memory + planning plane, never orchestration**: repo-
 - **autonomous-dispatch** — 23 shipped, 0 open.
 - **backlog-model** — 2 shipped, 2 open.
 - **continuity-core** — 12 shipped, 0 open.
+- **curator-portfolio** — 1 shipped, 3 open.
 - **dashboard-cockpit** — 17 shipped, 0 open.
 - **delegation-calibration** — 6 shipped, 0 open.
 - **distribution** — 3 shipped, 0 open.
@@ -52,7 +53,7 @@ Model concretely: `project + agent + account + environment + session` — no abs
 
 **Out of scope:** the *distributed* execution/orchestration plane (multi-machine worker control, agent marketplace); multi-user SaaS; identity abstraction; continuous external monitoring (the always-on competitor-scraping SaaS category — discovery is one-shot, evidence-first, not a live feed); rebuilding a ticket system (agent-first boundary below).
 
-**Agent-first structure, minimal overhead (boundary, 2026-07-17):** Horus adapts proven work-system concepts for *agents* doing digital work. Every structure must be machine-readable and earn its place by making a fresh agent session act more correctly or more cheaply — never by adding human-process ceremony. Adopted translations: topics group related cards; kanban pull → capacity-triggered dispatch; andon → escalation halts dependent work; WIP limits → collision control via `parallel`/`surface` stamps. Declined: sprints, story-point estimation, boards, standups, extra card workflow states. Multi-human parallel collaboration is a non-goal until real usage demands it.
+**Agent-first structure, minimal overhead (boundary, 2026-07-17):** Horus adapts proven work-system concepts for *agents* doing digital work. Every structure must be machine-readable and earn its place by making a fresh agent session act more correctly or more cheaply — never by adding human-process ceremony. Adopted translations: topics group related cards; kanban pull → capacity-triggered dispatch; andon → escalation halts dependent work; WIP limits → collision control via `parallel`/`surface` stamps. A **discussion card** records a decision with no work planned; it is **transient** — record → distill into Vision/Rules/Shipped → archive — not a standing decision-log that lives in the active backlog (settled 2026-08-13; the `recorded` status has no terminal readiness, so left active it trips the Unclassified gate forever). Declined: sprints, story-point estimation, boards, standups, extra card workflow states. Multi-human parallel collaboration is a non-goal until real usage demands it.
 
 ## Backlog
 
