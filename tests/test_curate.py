@@ -151,3 +151,62 @@ def test_interpret_records_runner_errors_without_crashing(tmp_path, monkeypatch)
     outcome = curate.interpret(out, manifest=manifest, runner=boom)
     assert outcome["errors"] and not outcome["curated"]
     assert "cli not authenticated" in outcome["errors"][0]
+
+
+# --- Phase 3: portfolio git-of-record ---------------------------------------
+
+def _capture_and_curate(tmp_path, monkeypatch) -> tuple[Path, dict]:
+    home = _fake_home(tmp_path, monkeypatch)
+    _write_jsonl(
+        home / ".claude" / "projects" / "C--proj" / "s1.jsonl",
+        [{"type": "user", "sessionId": "s1", "cwd": str(tmp_path / "gone"),
+          "gitBranch": "main", "timestamp": "2026-08-13T10:00:00Z",
+          "message": {"role": "user", "content": "SENTINEL_RAW_TURN build it"}}],
+    )
+    out = tmp_path / "out"
+    manifest = curate.curate(out, home=home)
+    curate.interpret(out, manifest=manifest,
+                     runner=lambda p, *, model, account=None: "## Context\ncurated summary\n")
+    return out, manifest
+
+
+def test_portfolio_has_no_raw_turn_text(tmp_path, monkeypatch):
+    out, manifest = _capture_and_curate(tmp_path, monkeypatch)
+    portfolio = tmp_path / "portfolio"
+    curate.assemble_portfolio(out, portfolio, manifest=manifest)
+
+    # The curated summary is present; the raw turn text never is.
+    blob = "\n".join(p.read_text(encoding="utf-8") for p in portfolio.rglob("*")
+                     if p.is_file() and p.suffix in {".md", ".json", ".html"})
+    assert "curated summary" in blob
+    assert "SENTINEL_RAW_TURN" not in blob
+
+
+def test_portfolio_is_a_git_repo_and_regeneratable(tmp_path, monkeypatch):
+    out, manifest = _capture_and_curate(tmp_path, monkeypatch)
+    portfolio = tmp_path / "portfolio"
+
+    first = curate.assemble_portfolio(out, portfolio, manifest=manifest)
+    assert (portfolio / ".git").is_dir()
+    assert first["git"] == "committed"
+    slug = sorted(manifest["projects"])[0]
+    index_before = (portfolio / "index.md").read_text(encoding="utf-8")
+    assert (portfolio / "projects" / slug / "curation.md").exists()
+    assert (portfolio / "projects" / slug / "skeleton.json").exists()
+
+    # Delete-tomorrow: wipe content, regenerate, same project files come back.
+    import shutil
+    shutil.rmtree(portfolio / "projects")
+    (portfolio / "index.md").unlink()
+    curate.assemble_portfolio(out, portfolio, manifest=manifest)
+    assert (portfolio / "projects" / slug / "curation.md").exists()
+    # index differs only by timestamp line — the table content is stable.
+    assert f"[{manifest['projects'][slug]['name']}]" in (portfolio / "index.md").read_text(encoding="utf-8")
+
+
+def test_portfolio_push_without_remote_reports_how_to_set_one(tmp_path, monkeypatch):
+    out, manifest = _capture_and_curate(tmp_path, monkeypatch)
+    portfolio = tmp_path / "portfolio"
+    outcome = curate.assemble_portfolio(out, portfolio, manifest=manifest, push=True)
+    assert outcome["pushed"] is False
+    assert "origin" in outcome["push_error"]
