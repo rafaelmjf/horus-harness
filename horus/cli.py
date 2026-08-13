@@ -34,6 +34,7 @@ from horus import (
     companion,
     codex_usage,
     config,
+    curate as curate_mod,
     dashboard,
     datums,
     delivery,
@@ -292,6 +293,29 @@ def cmd_status(args: argparse.Namespace) -> int:
         hint = gitstate.staleness_hint(p.get("git"))
         if hint:
             print(f"  note: {hint}")
+    return 0
+
+
+def cmd_curate(args: argparse.Namespace) -> int:
+    """Deterministic capture of local agent-session exhaust into a metadata skeleton."""
+    out_dir = Path(args.out).expanduser() if args.out else curate_mod.default_out_dir()
+    manifest = curate_mod.curate(out_dir)
+    print(f"curate → {out_dir}")
+    print(
+        f"  {manifest['projects_found']} projects · "
+        f"{manifest['sessions_processed']} of {manifest['source_files_discovered']} sessions · "
+        f"{manifest['secrets_redacted']} secrets redacted"
+    )
+    if manifest["parse_errors"]:
+        print(f"  {len(manifest['parse_errors'])} parse error(s) — see manifest.json")
+    flagged = {
+        slug: p["attribution_flags"]
+        for slug, p in manifest["projects"].items() if p["attribution_flags"]
+    }
+    if flagged:
+        print(f"  {len(flagged)} project(s) with attribution flags:")
+        for slug, flags in sorted(flagged.items()):
+            print(f"    {slug}: {'; '.join(flags)}")
     return 0
 
 
@@ -4613,6 +4637,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="print git freshness + latest session for all registered projects")
     p_status.set_defaults(func=cmd_status)
+
+    p_curate = sub.add_parser(
+        "curate",
+        help="deterministic capture of local agent sessions into a redacted metadata skeleton",
+    )
+    p_curate.add_argument("--out", help=f"output dir (default: {curate_mod.default_out_dir()})")
+    p_curate.set_defaults(func=cmd_curate)
 
     p_sync = sub.add_parser(
         "sync",
