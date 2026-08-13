@@ -338,6 +338,7 @@ def cmd_curate(args: argparse.Namespace) -> int:
         )
         print(f"portfolio → {portfolio_dir}")
         print(f"  {outcome['projects']} projects · {outcome['curations']} curated · git: {outcome['git']}")
+        print(f"  local view (with transcript drill-down) → {outcome['view']}")
         if args.push:
             print(f"  push: {'ok' if outcome['pushed'] else outcome.get('push_error', 'failed')}")
     return 0

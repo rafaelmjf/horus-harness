@@ -47,4 +47,4 @@ horus = "horus.cli:main"
 include = ["horus*"]
 
 [tool.setuptools.package-data]
-horus = ["assets/*.png", "assets/*.ico", "assets/vendor/xterm/*"]
+horus = ["assets/*.png", "assets/*.ico", "assets/*.html", "assets/vendor/xterm/*"]

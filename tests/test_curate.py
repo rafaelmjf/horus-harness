@@ -109,20 +109,27 @@ def _capture_one(tmp_path, monkeypatch) -> tuple[Path, dict]:
     return out, curate.curate(out, home=home)
 
 
-def test_interpret_writes_curation_and_records_state(tmp_path, monkeypatch):
+_STRUCTURED = ('{"desc":"A test project.","sessions":{"s1":{"context":"did CURATED_CTX",'
+               '"segments":[{"title":"main","text":"built it"}],"discussed":[],"decided":[],'
+               '"shipped":["shipped it"],"left_open":[]}}}')
+
+
+def test_interpret_writes_structured_json_and_records_state(tmp_path, monkeypatch):
     out, manifest = _capture_one(tmp_path, monkeypatch)
     calls: list[str] = []
 
     def fake_runner(prompt, *, model, account=None):
         calls.append(prompt)
-        return "## Context\nA test project.\n"
+        return "```json\n" + _STRUCTURED + "\n```"  # fenced — parser must strip
 
     outcome = curate.interpret(out, manifest=manifest, runner=fake_runner)
     assert len(outcome["curated"]) == 1 and not outcome["errors"]
     slug = outcome["curated"][0]
-    assert (out / "curation" / f"{slug}.md").read_text(encoding="utf-8").startswith("## Context")
-    # The bundle content reached the model.
-    assert "build the thing" in calls[0]
+    data = json.loads((out / "curation" / f"{slug}.json").read_text(encoding="utf-8"))
+    assert data["desc"] == "A test project."
+    assert data["sessions"]["s1"]["context"] == "did CURATED_CTX"
+    assert "build the thing" in calls[0]  # the bundle reached the model
+    assert "s1" in calls[0]  # session ids listed in the prompt
 
 
 def test_interpret_skips_unchanged_but_reruns_on_force(tmp_path, monkeypatch):
@@ -131,7 +138,7 @@ def test_interpret_skips_unchanged_but_reruns_on_force(tmp_path, monkeypatch):
 
     def fake_runner(prompt, *, model, account=None):
         runs["n"] += 1
-        return "## Context\nx\n"
+        return _STRUCTURED
 
     curate.interpret(out, manifest=manifest, runner=fake_runner)
     second = curate.interpret(out, manifest=manifest, runner=fake_runner)
@@ -153,7 +160,14 @@ def test_interpret_records_runner_errors_without_crashing(tmp_path, monkeypatch)
     assert "cli not authenticated" in outcome["errors"][0]
 
 
-# --- Phase 3: portfolio git-of-record ---------------------------------------
+def test_interpret_records_malformed_json_as_error(tmp_path, monkeypatch):
+    out, manifest = _capture_one(tmp_path, monkeypatch)
+    outcome = curate.interpret(out, manifest=manifest,
+                               runner=lambda p, *, model, account=None: "not json at all")
+    assert outcome["errors"] and not outcome["curated"]
+
+
+# --- Phase 3: portfolio git-of-record + local view --------------------------
 
 def _capture_and_curate(tmp_path, monkeypatch) -> tuple[Path, dict]:
     home = _fake_home(tmp_path, monkeypatch)
@@ -166,20 +180,22 @@ def _capture_and_curate(tmp_path, monkeypatch) -> tuple[Path, dict]:
     out = tmp_path / "out"
     manifest = curate.curate(out, home=home)
     curate.interpret(out, manifest=manifest,
-                     runner=lambda p, *, model, account=None: "## Context\ncurated summary\n")
+                     runner=lambda p, *, model, account=None: _STRUCTURED)
     return out, manifest
 
 
-def test_portfolio_has_no_raw_turn_text(tmp_path, monkeypatch):
+def test_portfolio_repo_has_no_raw_turn_text(tmp_path, monkeypatch):
     out, manifest = _capture_and_curate(tmp_path, monkeypatch)
     portfolio = tmp_path / "portfolio"
     curate.assemble_portfolio(out, portfolio, manifest=manifest)
 
-    # The curated summary is present; the raw turn text never is.
+    # The repo carries curation + skeleton; the raw turn text never enters it.
     blob = "\n".join(p.read_text(encoding="utf-8") for p in portfolio.rglob("*")
-                     if p.is_file() and p.suffix in {".md", ".json", ".html"})
-    assert "curated summary" in blob
+                     if p.is_file() and p.suffix in {".md", ".json"})
+    assert "CURATED_CTX" in blob
     assert "SENTINEL_RAW_TURN" not in blob
+    # No HTML is committed to the repo — the rich view is local only.
+    assert not list(portfolio.rglob("*.html"))
 
 
 def test_portfolio_is_a_git_repo_and_regeneratable(tmp_path, monkeypatch):
@@ -190,31 +206,42 @@ def test_portfolio_is_a_git_repo_and_regeneratable(tmp_path, monkeypatch):
     assert (portfolio / ".git").is_dir()
     assert first["git"] == "committed"
     slug = sorted(manifest["projects"])[0]
-    index_before = (portfolio / "index.md").read_text(encoding="utf-8")
-    assert (portfolio / "projects" / slug / "curation.md").exists()
+    assert (portfolio / "projects" / slug / "curation.json").exists()
     assert (portfolio / "projects" / slug / "skeleton.json").exists()
 
-    # Delete-tomorrow: wipe content, regenerate, same project files come back.
     import shutil
     shutil.rmtree(portfolio / "projects")
     (portfolio / "index.md").unlink()
     curate.assemble_portfolio(out, portfolio, manifest=manifest)
-    assert (portfolio / "projects" / slug / "curation.md").exists()
-    # index differs only by timestamp line — the table content is stable.
+    assert (portfolio / "projects" / slug / "curation.json").exists()
     assert f"[{manifest['projects'][slug]['name']}]" in (portfolio / "index.md").read_text(encoding="utf-8")
 
 
-def test_portfolio_html_is_sumi_e_and_carries_no_raw(tmp_path, monkeypatch):
+def test_local_view_is_real_design_with_raw_drilldown(tmp_path, monkeypatch):
     out, manifest = _capture_and_curate(tmp_path, monkeypatch)
     portfolio = tmp_path / "portfolio"
-    curate.assemble_portfolio(out, portfolio, manifest=manifest)
-    html = (portfolio / "index.html").read_text(encoding="utf-8")
+    outcome = curate.assemble_portfolio(out, portfolio, manifest=manifest)
 
-    assert "Session portfolio" in html
-    assert "#C0342A" in html  # the seal — sumi-e palette, not the placeholder list
-    assert "curated summary" in html  # curation panel embedded
-    assert "SENTINEL_RAW_TURN" not in html  # raw never reaches the view
-    assert "default-src 'none'" in html  # self-contained, no network
+    view = Path(outcome["view"]).read_text(encoding="utf-8")
+    assert "Session Portfolio" in view            # the real title
+    assert "const DATA=" in view and "RAW=" in view
+    assert "did CURATED_CTX" in view              # structured curation embedded
+    assert "SENTINEL_RAW_TURN" in view            # raw drill-down IS embedded — local only
+    assert 'src="http' not in view and 'href="http' not in view  # self-contained, no network
+
+
+def test_render_view_without_raw_omits_transcripts(tmp_path, monkeypatch):
+    out, manifest = _capture_and_curate(tmp_path, monkeypatch)
+    html = curate.render_real_view(manifest, out, include_raw=False)
+    assert "did CURATED_CTX" in html              # curation still present
+    assert "SENTINEL_RAW_TURN" not in html        # raw omitted when include_raw=False
+
+
+def test_account_label_maps_to_four_slots():
+    assert curate.account_label("codex-ambient") == "codex"
+    assert curate.account_label("claude-claude-personal") == "personal"
+    assert curate.account_label("claude-claude-work") == "work"
+    assert curate.account_label("claude-ambient") == "shared"
 
 
 def test_portfolio_push_without_remote_reports_how_to_set_one(tmp_path, monkeypatch):
