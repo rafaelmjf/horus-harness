@@ -2306,7 +2306,7 @@ description: >-
   its own decision, never chained onto the end of other work.
 ---
 
-<!-- horus-skill-version: 1 -->
+<!-- horus-skill-version: 2 -->
 
 # horus-release — cut a version, and land it where people actually run it
 
@@ -2339,6 +2339,17 @@ release *this* version.
    package JSON *and* the simple index, not just a green job.
 5. **`scripts/deploy-hosted.sh`** — refreshed install, `systemctl restart`,
    `/health` reporting the new version, and `/` still 403 behind Access. All four.
+6. **Upgrade the CLI on the machine you released from — if step 5 didn't already.**
+   `deploy-hosted.sh` upgrades the CLI on *whatever machine runs it* (its `uv tool
+   install --force --refresh` is the local upgrade). So a release+deploy done on the
+   hosted Linux box leaves that box current for free — this is the common path, and
+   why the local CLI "usually just updates." The gap is releasing from a *different*
+   machine (e.g. a Windows dev box) and not running the deploy there: publishing
+   advances no installed CLI, so that machine's pinned `~/.local/bin/horus` stays on
+   the old version. Watch out that `uv run horus --version` reads the source tree and
+   shows the new version, masking the stale install on PATH. Fix:
+   `uv tool install --force --refresh --python 3.12 horus-harness==<version>`, then
+   confirm bare `horus --version` matches. Same traps as below apply.
 
 ## Traps that have actually bitten
 
@@ -2387,7 +2398,7 @@ SKILLS: tuple[Skill, ...] = (
     Skill("cockpit-autonomous-dispatch-contract", 7, _COCKPIT_DISPATCH_SKILL),
     Skill("publish-openwiki-site", 1, _PUBLISH_OPENWIKI_SITE_SKILL),
     Skill("launch-model-refresh", 2, _LAUNCH_MODEL_REFRESH_SKILL),
-    Skill("horus-release", 1, _HORUS_RELEASE_SKILL, audience=AUDIENCE_HORUS),
+    Skill("horus-release", 2, _HORUS_RELEASE_SKILL, audience=AUDIENCE_HORUS),
 )
 
 
