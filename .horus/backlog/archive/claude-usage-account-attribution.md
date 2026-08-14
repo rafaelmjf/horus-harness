@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: high
 readiness: ready
 readiness_reason: "Root cause is measured, not inferred: the reported number was matched byte-for-byte to a specific org's row in the desktop app's own usage record, and the correct number for the live session was found in the same file. The fix surface is one module, and a local, org-tagged source already exists on disk. Nothing to shape."
@@ -13,6 +13,8 @@ tier: medium
 type: bug
 parallel: safe
 surface: "horus/claude_usage.py (credentials_path/_claude_home, latest_usage, usage_findings); the UserPromptSubmit/Stop/PreToolUse hooks in a project's .claude/settings.json; the overseer==worker advisory in the account-scoped usage path"
+shipped_pr: 516
+shipped_sha: 18c880f
 ---
 
 # claude-usage-account-attribution — usage is read from the CLI login, not the session's account
