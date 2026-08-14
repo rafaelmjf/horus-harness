@@ -1,10 +1,8 @@
 ---
 status: open
 priority: medium
-readiness: gated
-readiness_reason: "Remedy chosen by the owner 2026-07-26 — remedy 3, re-login instead of copying, making login the isolation primitive and retiring file-copying. That requires login to be a first-class verb, so this card is gated on `account-login-verb`, which is itself DEFERRED until 2026-07-29 (interactive login unavailable; the 07-28 trigger was extended one day by the owner on 2026-07-28). Earliest possible start is therefore after 2026-07-29, once its gate lands; nothing to shape in the meantime."
-depends-on: account-login-verb
-reactivate_after: 2026-07-29
+readiness: shaping
+readiness_reason: "Dependency dropped by the owner 2026-08-14 so this bug stops waiting on a gate that cannot lift: its blocker `account-login-verb` is shelved indefinitely. The defect itself is confirmed on disk and unchanged — what needs shaping is only WHICH remedy now applies. Remedy 3 (re-login instead of copying) was the 2026-07-26 decision but presumes the login verb exists; the card's own contingency names remedy 1 (copy only `auth.json`) as the fallback 'if account-login-verb stalls', which it now has. That switch is an owner call, not an inference — it trades the frozen-mirror fix for a shippable one."
 created: 2026-07-20
 created_by: owner
 last_refined: 2026-07-28
@@ -132,3 +130,22 @@ Hand-executed setup run, owner-attended, 2026-07-20.
 ### 2026-08-02 — Rafael Figueiredo (manual)
 
 2026-08-02 — Deliberately NOT shelved in the same pass that shelved its neighbours. This is a real defect that already arrived: an isolated Codex account still points at the ambient home because `isolate_account` copies a `config.toml` carrying absolute paths. Boxing it would hide a known defect where no working view can surface it, which is the exact case `hygiene_findings` fails on (#487). It stays a Gated bug, and its gate is now LIVE rather than dead: `account-login-verb` was reactivated to Ready/attended this morning, so building that lifts this. That chain is the only one in the backlog where finishing one card unblocks another.
+
+### 2026-08-14 — Rafael Figueiredo (owner decision, via Claude)
+
+2026-08-14 — **Dependency dropped; this card now stands on its own.** During the #516
+close, `close --check` surfaced the dead gate again: `account-login-verb` was re-shelved
+on 2026-08-12 for the topics teardown, so this card was Gated on a blocker that could
+never lift. Shelving this card alongside it was the owner's first choice and Horus
+**refused it outright** — "a bug cannot be shelved; a bug is a problem that already
+arrived. Fix it, or decide it is not real and `retire` it with the reason." That guard is
+the codified form of this card's own 2026-08-02 note (#487), and it worked: the escape
+hatch of boxing a live defect is closed by construction, not by whoever is reviewing.
+
+Of the representable options the owner chose to drop `depends-on` rather than reactivate
+the blocker or retire the bug. Consequence, recorded honestly: **remedy 3 is no longer
+reachable** while the login verb is parked, so the remedy question reopens and readiness
+drops from Gated to Shaping. The card's own contingency already names the answer —
+remedy 1, copy only `auth.json` — but taking it means accepting that the frozen-mirror
+drift (the second defect) goes unfixed, since only a generated-in-place dir solves that.
+Confirm the remedy before this is dispatched.

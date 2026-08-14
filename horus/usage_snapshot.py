@@ -190,7 +190,13 @@ def _read_claude(account: str | None, *, timeout: float) -> UsageSnapshot | None
         cfg = config.load_account_config_dirs().get(account)
         if cfg:
             cred_path = Path(cfg) / ".credentials.json"
-    report = claude_usage.latest_usage(cred_path=cred_path, timeout=timeout)
+    # An isolated dir's credentials ARE the named account's, so the reading is that
+    # account's by construction and no claim about this session is being made. Without
+    # one we fall back to ambient credentials, which is precisely the path that used to
+    # report another account's figure as the session's — keep the check on there.
+    report = claude_usage.latest_usage(
+        cred_path=cred_path, timeout=timeout, require_session_attribution=cred_path is None
+    )
     if report is None:
         return None
     week_pct = report.seven_day_percent

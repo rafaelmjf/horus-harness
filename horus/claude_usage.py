@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -76,6 +77,175 @@ def current_account(path: Path | None = None) -> str | None:
         if isinstance(ident, str) and ident:
             return ident
     return None
+
+
+# --------------------------------------------------------------------------- #
+# Account attribution — whose number is this?
+# --------------------------------------------------------------------------- #
+# A token that authenticates is not evidence that it belongs to the account the
+# session runs under. Under the desktop app the two routinely differ: switching
+# accounts in the app never touches the CLI's ``.credentials.json``, so the endpoint
+# answers 200 for the *CLI's* account and we would report it as the session's. Every
+# signal says success, which is exactly what makes it dangerous — a session was told
+# it was at 95% while actually at 15%, and spent four turns on closure pressure that
+# did not apply. A wrong number is worse than no number: no number cannot make
+# someone act.
+
+
+class Identity(NamedTuple):
+    """Who an account is: the user account, and the org it bills against.
+
+    Both are carried because neither alone is sufficient. ``account_uuid`` is the
+    precise identity — a ``claude_team`` org holds several member accounts, each with
+    its own rate-limit pool, so matching on org alone would call two colleagues the
+    same account. ``org_uuid`` is the fallback for state that records only the org.
+    """
+
+    account_uuid: str | None
+    org_uuid: str | None
+
+    def __bool__(self) -> bool:
+        return bool(self.account_uuid or self.org_uuid)
+
+    def matches(self, other: Identity) -> bool:
+        """True only on positive evidence of the same account — never on two unknowns."""
+        if self.account_uuid and other.account_uuid:
+            return self.account_uuid == other.account_uuid
+        if self.org_uuid and other.org_uuid:
+            return self.org_uuid == other.org_uuid
+        return False
+
+
+class Attribution(NamedTuple):
+    """Whether a reading may be reported as *this session's* usage."""
+
+    ok: bool
+    session: Identity
+    reading: Identity
+    reason: str | None
+
+
+def in_claude_session() -> bool:
+    """True when this process runs inside a Claude Code session (``CLAUDECODE=1``).
+
+    Outside one — a human running ``horus usage check`` in a plain terminal — there is
+    no session to attribute a reading to, so the ambient login is both the subject and
+    the correct answer, and no attribution question arises.
+    """
+    return os.environ.get("CLAUDECODE", "").strip() == "1"
+
+
+def running_surface() -> str:
+    """Claude Code surface this session runs on: ``desktop``, ``cli`` or ``unknown``.
+
+    ``CLAUDE_CODE_ENTRYPOINT`` is set by Claude Code itself and inherited by hook
+    subprocesses, so it is readable from the hot path that actually misreported.
+    """
+    entry = os.environ.get("CLAUDE_CODE_ENTRYPOINT", "").strip().lower()
+    if not entry:
+        return "unknown"
+    return "desktop" if "desktop" in entry else "cli"
+
+
+def desktop_support_dir() -> Path | None:
+    """The Claude *desktop app*'s per-user state directory, or None when absent.
+
+    ``claude_usage`` otherwise has no notion that the desktop app exists, which is how
+    a desktop session's account became invisible to it.
+    """
+    if os.name == "nt":
+        base = os.environ.get("APPDATA")
+        root = Path(base) / "Claude" if base else None
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support" / "Claude"
+    else:
+        root = Path.home() / ".config" / "Claude"
+    return root if root is not None and root.is_dir() else None
+
+
+def identity_for_config(path: Path | None = None) -> Identity:
+    """Identity recorded beside a Claude login — whose usage that login's token reports.
+
+    Read from the ``.claude.json`` paired with the credentials actually used, so the
+    answer describes *those* credentials and not some other config home's.
+    """
+    cfg = path or config_path()
+    try:
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return Identity(None, None)
+    oauth = data.get("oauthAccount")
+    if not isinstance(oauth, dict):
+        return Identity(None, None)
+
+    def _str(key: str) -> str | None:
+        value = oauth.get(key)
+        return value if isinstance(value, str) and value else None
+
+    return Identity(_str("accountUuid"), _str("organizationUuid"))
+
+
+def org_for_config(path: Path | None = None) -> str | None:
+    """``organizationUuid`` recorded beside a Claude login, or None."""
+    return identity_for_config(path).org_uuid
+
+
+def session_identity(*, host_session_id: str | None = None, support_dir: Path | None = None) -> Identity:
+    """Identity of the account THIS session runs under; empty when undeterminable.
+
+    Under the desktop app this is *measured*, not inferred: the app files every session
+    as ``claude-code-sessions/<accountUuid>/<organizationUuid>/<hostSessionId>.json``
+    and the session knows its own id from ``CLAUDE_CODE_HOST_SESSION_ID``, so the two
+    directories holding that file name the account and its org. Under the CLI the
+    session and the login are the same thing by construction, so the login's identity
+    is the session's.
+    """
+    if running_surface() == "cli":
+        return identity_for_config()
+    sid = host_session_id or os.environ.get("CLAUDE_CODE_HOST_SESSION_ID")
+    root = support_dir if support_dir is not None else desktop_support_dir()
+    if not sid or root is None:
+        return Identity(None, None)
+    try:
+        for account_dir in (root / "claude-code-sessions").iterdir():
+            if not account_dir.is_dir():
+                continue
+            for org_dir in account_dir.iterdir():
+                if org_dir.is_dir() and (org_dir / f"{sid}.json").exists():
+                    return Identity(account_dir.name, org_dir.name)
+    except OSError:
+        return Identity(None, None)
+    return Identity(None, None)
+
+
+def session_org(*, host_session_id: str | None = None, support_dir: Path | None = None) -> str | None:
+    """Org UUID of the account THIS session runs under, or None when undeterminable."""
+    return session_identity(host_session_id=host_session_id, support_dir=support_dir).org_uuid
+
+
+def check_attribution(cred_path: Path | None = None) -> Attribution:
+    """Whether a reading taken with ``cred_path``'s credentials describes this session.
+
+    Refuses both on a genuine mismatch and on "cannot tell", because the defect being
+    closed is a *confident* wrong number. The module already degrades silently on a
+    missing token, an offline machine or schema drift; this is the same contract
+    extended to identity.
+    """
+    none = Identity(None, None)
+    if not in_claude_session():
+        return Attribution(True, none, none, None)
+    # Ambient credentials sit at ~/.claude/.credentials.json with their config one level
+    # up; an isolated account keeps both in the same dir.
+    cfg = (cred_path.parent / ".claude.json") if cred_path is not None else config_path()
+    reading = identity_for_config(cfg)
+    mine = session_identity()
+    if mine.matches(reading):
+        return Attribution(True, mine, reading, None)
+    if not mine:
+        return Attribution(False, mine, reading, "this session's account could not be determined")
+    if not reading:
+        return Attribution(False, mine, reading, "the account behind these credentials could not be determined")
+    return Attribution(False, mine, reading, "these credentials belong to a different account than this session")
 
 
 def _oauth_token(path: Path | None = None) -> str | None:
@@ -200,7 +370,23 @@ def _window(payload: dict[str, Any], key: str) -> tuple[float | None, str | None
     )
 
 
-def latest_usage(*, token: str | None = None, cred_path: Path | None = None, timeout: float = 8.0) -> UsageReport | None:
+def latest_usage(
+    *,
+    token: str | None = None,
+    cred_path: Path | None = None,
+    timeout: float = 8.0,
+    require_session_attribution: bool = True,
+) -> UsageReport | None:
+    """The current usage reading, or None when there isn't one *for this session*.
+
+    Attribution is enforced by default so that any caller reading "the ambient number"
+    inherits the check rather than having to remember it. Pass
+    ``require_session_attribution=False`` only when the reading is deliberately scoped
+    to a *named* account (an explicit ``--account`` query), where it is that account's
+    figure being asked for and no claim about this session is made.
+    """
+    if require_session_attribution and not check_attribution(cred_path).ok:
+        return None
     payload = fetch_usage(token=token, cred_path=cred_path, timeout=timeout)
     if payload is None:
         return None
@@ -225,6 +411,11 @@ def usage_findings(*, threshold: float = 90.0, report: UsageReport | None = None
     """Findings for Claude subscription usage, parallel to ``codex_usage.usage_findings``."""
     report = report if report is not None else latest_usage(**kwargs)
     if report is None:
+        # Name identity as the cause when that is the cause. "Token missing/expired or
+        # offline" would send a reader to look for a network fault that isn't there.
+        attribution = check_attribution(kwargs.get("cred_path"))
+        if not attribution.ok:
+            return [Finding("ok", f"no Claude usage signal for this session's account ({attribution.reason})")]
         return [Finding("ok", "no Claude usage signal available (token missing/expired or offline)")]
 
     parts: list[str] = []

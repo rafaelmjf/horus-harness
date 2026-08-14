@@ -30,7 +30,18 @@ import pytest
 
 # Resolved ahead of HOME when locating an agent's config/credentials, so a faked
 # HOME does not isolate them.
-AMBIENT_AGENT_ENV = ("CLAUDE_CONFIG_DIR", "CODEX_HOME")
+AMBIENT_AGENT_ENV = (
+    "CLAUDE_CONFIG_DIR",
+    "CODEX_HOME",
+    # Set by Claude Code inside its own sessions and inherited by every subprocess —
+    # including the pytest run of a developer working from one. Usage attribution keys
+    # off exactly these, so leaving them set makes the suite read the *developer's* live
+    # session identity and behave differently there than in CI. A test that exercises
+    # attribution sets them itself; this fixture runs first, so its setenv still wins.
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_HOST_SESSION_ID",
+)
 
 # Set by tmux/herdr inside their own panes. While one of these is set the host
 # talks to *that* server, which defeats the socket redirection below — so they
