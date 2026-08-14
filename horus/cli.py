@@ -3394,6 +3394,39 @@ def cmd_guard_host(args: argparse.Namespace) -> int:
     return 0
 
 
+def _claude_session_alias() -> str | None:
+    """Registered alias whose isolated config dir holds this session's own account,
+    or None when the session's account is undeterminable or simply not registered.
+
+    Matching the session's measured identity rather than the ambient login is what
+    keeps a desktop session's usage from being answered out of the CLI's login.
+    """
+    mine = claude_usage.session_identity()
+    if not mine:
+        return None
+    for alias, cfg_dir in config.load_account_config_dirs().items():
+        if mine.matches(claude_usage.identity_for_config(Path(cfg_dir) / ".claude.json")):
+            return alias
+    return None
+
+
+def _claude_session_credentials() -> Path | None:
+    """Credentials of this session's *own* account, when that account is registered.
+
+    Lets the default (no ``--account``) check answer with the session's real figure
+    instead of only refusing the ambient login's — the isolated dir's token belongs to
+    the account actually running, so the reading is correct by construction.
+    """
+    alias = _claude_session_alias()
+    if not alias:
+        return None
+    cfg_dir = config.load_account_config_dirs().get(alias)
+    if not cfg_dir:
+        return None
+    cred = Path(cfg_dir) / ".credentials.json"
+    return cred if cred.exists() else None
+
+
 def _usage_account(target: str) -> str | None:
     """Alias of the account this session runs under (registered alias when known,
     else the stable ``acct-<sha6>`` tag), so usage snapshots are keyed per account
@@ -3404,6 +3437,13 @@ def _usage_account(target: str) -> str | None:
 
             ident = _codex_usage.current_account()
         else:
+            # The ambient login is NOT reliably this session's account: under the desktop
+            # app the app can be signed into a different account than the CLI. Prefer the
+            # session's measured org, so the snapshot is keyed and fetched per the account
+            # actually running rather than per whoever the CLI last logged in as.
+            alias = _claude_session_alias()
+            if alias:
+                return alias
             ident = claude_usage.current_account()
         return config.alias_for(ident)
     except Exception:  # noqa: BLE001 (identity is best-effort; None = default cache key)
@@ -3451,8 +3491,12 @@ def _snapshot_level(snap: usage_snapshot.UsageSnapshot | None) -> str:
 
 def _usage_check_claude(args: argparse.Namespace) -> int:
     if not args.hook:
-        report = claude_usage.latest_usage()
-        findings = claude_usage.usage_findings(threshold=args.threshold, report=report)
+        # Read this session's OWN account when it is registered; otherwise fall through
+        # to the ambient login, where the attribution guard refuses rather than passing
+        # off another account's figure as this session's.
+        cred = _claude_session_credentials()
+        report = claude_usage.latest_usage(cred_path=cred, require_session_attribution=cred is None)
+        findings = claude_usage.usage_findings(threshold=args.threshold, report=report, cred_path=cred)
         healthy = _print_findings(findings)
         return 0 if healthy else 1
 

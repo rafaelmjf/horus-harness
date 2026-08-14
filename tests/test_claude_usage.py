@@ -99,6 +99,153 @@ def test_current_account_none_when_absent(tmp_path):
     assert cu.current_account(cfg) is None
 
 
+# --------------------------------------------------------------------------- #
+# Account attribution
+# --------------------------------------------------------------------------- #
+# Built from fixtures, not from the endpoint: the defect is that a *valid* token for
+# the wrong account produces a confident number, so the regression must reproduce the
+# mismatch (two orgs in the desktop session store, credentials resolving to the other
+# one) without depending on the undocumented /usage endpoint being reachable or on
+# which account the machine running the suite happens to be logged into.
+
+_WORK_ORG = "39b76ea7-d63a-4c14-aec5-e738e3297c27"
+_PERSONAL_ORG = "ceeaba38-4417-4a3e-bfda-c4c22aaa6f6f"
+_HOST_SESSION = "local_8e3be0b3-59b8-4d77-9666-47177c3bc140"
+
+
+def _desktop_session(support_dir, *, org: str, session_id: str = _HOST_SESSION, account: str = "acct-uuid"):
+    """File a session the way the desktop app does: <accountUuid>/<orgUuid>/<id>.json."""
+    d = support_dir / "claude-code-sessions" / account / org
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{session_id}.json").write_text("{}", encoding="utf-8")
+    return d
+
+
+def _login(dir_path, org: str, account: str | None = None):
+    """A Claude login config carrying the identity its credentials report for."""
+    dir_path.mkdir(parents=True, exist_ok=True)
+    oauth = {"emailAddress": "a@b.com", "organizationUuid": org}
+    if account:
+        oauth["accountUuid"] = account
+    cfg = dir_path / ".claude.json"
+    cfg.write_text(json.dumps({"oauthAccount": oauth}), encoding="utf-8")
+    return cfg
+
+
+def _desktop_session_env(monkeypatch, support_dir):
+    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv("CLAUDE_CODE_ENTRYPOINT", "claude-desktop")
+    monkeypatch.setenv("CLAUDE_CODE_HOST_SESSION_ID", _HOST_SESSION)
+    monkeypatch.setattr(cu, "desktop_support_dir", lambda: support_dir)
+
+
+def test_session_org_measured_from_desktop_session_store(monkeypatch, tmp_path):
+    _desktop_session(tmp_path, org=_PERSONAL_ORG)
+    _desktop_session(tmp_path, org=_WORK_ORG, session_id="local_other", account="other-acct")
+    _desktop_session_env(monkeypatch, tmp_path)
+    assert cu.session_org() == _PERSONAL_ORG
+
+
+def test_session_org_none_when_session_not_filed(monkeypatch, tmp_path):
+    _desktop_session(tmp_path, org=_WORK_ORG, session_id="local_someone_else")
+    _desktop_session_env(monkeypatch, tmp_path)
+    assert cu.session_org() is None
+
+
+def test_attribution_refuses_when_token_belongs_to_another_account(monkeypatch, tmp_path):
+    """The measured defect: desktop session on one org, ambient CLI login on another."""
+    _desktop_session(tmp_path, org=_PERSONAL_ORG)
+    _desktop_session_env(monkeypatch, tmp_path)
+    cred = tmp_path / "cli" / ".credentials.json"
+    _login(tmp_path / "cli", _WORK_ORG)
+
+    attribution = cu.check_attribution(cred)
+    assert attribution.ok is False
+    assert attribution.session.org_uuid == _PERSONAL_ORG
+    assert attribution.reading.org_uuid == _WORK_ORG
+    assert "different account" in attribution.reason
+
+
+def test_attribution_separates_two_members_of_one_team_org(monkeypatch, tmp_path):
+    """A ``claude_team`` org holds several accounts, each with its own limit pool, so
+    matching on the org alone would call two colleagues the same account."""
+    _desktop_session(tmp_path, org=_WORK_ORG, account="acct-mine")
+    _desktop_session_env(monkeypatch, tmp_path)
+    cred = tmp_path / "colleague" / ".credentials.json"
+    _login(tmp_path / "colleague", _WORK_ORG, account="acct-theirs")
+
+    attribution = cu.check_attribution(cred)
+    assert attribution.ok is False
+    assert "different account" in attribution.reason
+
+    _login(tmp_path / "colleague", _WORK_ORG, account="acct-mine")
+    assert cu.check_attribution(cred).ok is True
+
+
+def test_attribution_accepts_when_orgs_agree(monkeypatch, tmp_path):
+    _desktop_session(tmp_path, org=_PERSONAL_ORG)
+    _desktop_session_env(monkeypatch, tmp_path)
+    cred = tmp_path / "acct" / ".credentials.json"
+    _login(tmp_path / "acct", _PERSONAL_ORG)
+    assert cu.check_attribution(cred).ok is True
+
+
+def test_attribution_refuses_when_session_account_undeterminable(monkeypatch, tmp_path):
+    """Cannot-tell is refused too — the defect is a confident number, not a wrong one."""
+    _desktop_session_env(monkeypatch, tmp_path)  # nothing filed for this session id
+    cred = tmp_path / "cli" / ".credentials.json"
+    _login(tmp_path / "cli", _WORK_ORG)
+    attribution = cu.check_attribution(cred)
+    assert attribution.ok is False
+    assert "could not be determined" in attribution.reason
+
+
+def test_attribution_not_claimed_outside_a_claude_session(monkeypatch, tmp_path):
+    """A human at a plain terminal: the ambient login is the subject and the answer."""
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    cred = tmp_path / "cli" / ".credentials.json"
+    _login(tmp_path / "cli", _WORK_ORG)
+    assert cu.check_attribution(cred).ok is True
+
+
+def test_cli_session_attributes_to_its_own_login(monkeypatch, tmp_path):
+    """Under the CLI the session and the login are the same thing by construction."""
+    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv("CLAUDE_CODE_ENTRYPOINT", "cli")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "acct"))
+    _login(tmp_path / "acct", _WORK_ORG)
+    assert cu.session_org() == _WORK_ORG
+    assert cu.check_attribution(tmp_path / "acct" / ".credentials.json").ok is True
+
+
+def test_latest_usage_refuses_a_reading_it_cannot_attribute(monkeypatch, tmp_path):
+    """A valid token and a 200 are not enough: the number must be this session's."""
+    _desktop_session(tmp_path, org=_PERSONAL_ORG)
+    _desktop_session_env(monkeypatch, tmp_path)
+    _login(tmp_path / "cli", _WORK_ORG)
+    fetched = []
+    monkeypatch.setattr(cu, "fetch_usage", lambda **k: fetched.append(k) or _PAYLOAD)
+
+    cred = tmp_path / "cli" / ".credentials.json"
+    assert cu.latest_usage(cred_path=cred) is None
+    assert fetched == [], "must not even fetch a reading it could not attribute"
+
+    # Explicitly scoped to a named account, so no claim about this session is made.
+    assert cu.latest_usage(cred_path=cred, require_session_attribution=False) is not None
+
+
+def test_findings_name_identity_as_the_cause(monkeypatch, tmp_path):
+    _desktop_session(tmp_path, org=_PERSONAL_ORG)
+    _desktop_session_env(monkeypatch, tmp_path)
+    _login(tmp_path / "cli", _WORK_ORG)
+    monkeypatch.setattr(cu, "fetch_usage", lambda **k: _PAYLOAD)
+
+    findings = cu.usage_findings(cred_path=tmp_path / "cli" / ".credentials.json")
+    assert findings[0].level == "ok"
+    assert "no Claude usage signal for this session's account" in findings[0].message
+    assert "92" not in findings[0].message, "the other account's number must not leak out"
+
+
 class _FakeResp:
     def __init__(self, body: bytes):
         self._body = body

@@ -163,7 +163,7 @@ def test_claude_reader_carries_weekly_window(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     from horus import claude_usage
 
-    def fake_latest(*, cred_path=None, timeout=8.0):
+    def fake_latest(*, cred_path=None, timeout=8.0, require_session_attribution=True):
         return claude_usage.UsageReport(40.0, "2026-07-04T21:10:00Z", 96.0, "2026-07-11T09:00:00Z")
 
     monkeypatch.setattr(claude_usage, "latest_usage", fake_latest)
@@ -195,14 +195,36 @@ def test_claude_reader_uses_account_credentials_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "load_account_config_dirs", lambda: {"work": str(tmp_path / "wcfg")})
     seen = {}
 
-    def fake_latest(*, cred_path=None, timeout=8.0):
+    def fake_latest(*, cred_path=None, timeout=8.0, require_session_attribution=True):
         seen["cred_path"] = cred_path
+        seen["require_session_attribution"] = require_session_attribution
         return claude_usage.UsageReport(90.0, "2026-07-04T21:10:00Z", None, None)
 
     monkeypatch.setattr(claude_usage, "latest_usage", fake_latest)
     snap = usage_snapshot._read_claude("work", timeout=5.0)
     assert snap.percent == 90.0
     assert seen["cred_path"] == tmp_path / "wcfg" / ".credentials.json"
+    # The isolated dir's token IS this account's, so the reading is that account's by
+    # construction and no session-attribution claim is being made.
+    assert seen["require_session_attribution"] is False
+
+
+def test_claude_reader_keeps_the_attribution_check_on_the_ambient_fallback(tmp_path, monkeypatch):
+    """No isolated dir means ambient credentials — the path that used to pass another
+    account's figure off as the session's, so the check must stay on there."""
+    _home(tmp_path, monkeypatch)
+    from horus import claude_usage, config
+
+    monkeypatch.setattr(config, "load_account_config_dirs", lambda: {})
+    seen = {}
+
+    def fake_latest(*, cred_path=None, timeout=8.0, require_session_attribution=True):
+        seen["require_session_attribution"] = require_session_attribution
+        return claude_usage.UsageReport(90.0, "2026-07-04T21:10:00Z", None, None)
+
+    monkeypatch.setattr(claude_usage, "latest_usage", fake_latest)
+    usage_snapshot._read_claude("work", timeout=5.0)
+    assert seen["require_session_attribution"] is True
 
 
 # --- all-accounts roll-up (fleet capacity glance / phone `usage` verb) --------

@@ -114,6 +114,51 @@ Ordered cheapest-first; rung 1 alone removes the harm.
   orgs in a `plan-usage-history.json`, a token resolving to the wrong one) and assert the
   reading is refused rather than attributed.
 
+## Shipped — rungs 1 and 3, 2026-08-14
+
+Rung 3 turned out to be the key that made rung 1 exact rather than heuristic. The
+desktop app files every session as
+`claude-code-sessions/<accountUuid>/<organizationUuid>/<hostSessionId>.json`, and the
+session knows its own id from `CLAUDE_CODE_HOST_SESSION_ID` — so the session's account
+is **measured off disk**, not inferred from ambient config or from the most-recent
+usage sample. `CLAUDE_CODE_ENTRYPOINT` (`claude-desktop` vs `cli`) selects the surface,
+and both vars are inherited by hook subprocesses, so the detection works on the hot
+path that actually misreported.
+
+- `claude_usage.Identity` / `session_identity()` / `identity_for_config()` /
+  `check_attribution()` — matched on `accountUuid` first, `organizationUuid` as
+  fallback. Account-first matters because a `claude_team` org holds several member
+  accounts with separate limit pools; org-only matching would call two colleagues the
+  same account.
+- `latest_usage()` enforces attribution **by default**; an explicit `--account` query
+  opts out via `require_session_attribution=False`, since it asks for that account's
+  figure and makes no claim about the session.
+- `_usage_account()` / `_claude_session_alias()` route the hook and the default check
+  to the session's *own* registered account, so the outcome is the session's real
+  number rather than merely a refusal. Unregistered account → refusal, as designed.
+- `usage_findings()` names identity as the cause instead of blaming token/network.
+- Suite-wide: `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_HOST_SESSION_ID`
+  now cleared in `conftest.py` — they leak from a developer's own session into pytest
+  and would make attribution tests read live identity and behave differently in CI.
+
+Verified live on 2026-08-14, this machine, desktop session on `ceeaba38` while the CLI
+login was `39b76ea7` — the mismatch reproduced with the orgs swapped relative to the
+original observation. Same session, same moment: the installed (unfixed) CLI reported
+`5h 22%, weekly 49%` (the work account) while the working tree reported the session's
+own account. Discriminating hook probe at `--threshold 30`, between the two accounts'
+figures: fixed fired the advisory at the session's real 59%, unfixed stayed silent at
+the ambient 22%. Full suite: 28 pre-existing local failures before and after, identical
+sets — no regressions. 10 new fixture-built tests; `compileall` clean.
+
+**Still open — rungs 2 and 4.** Rung 2 (read `plan-usage-history.json`) is now the
+fallback for a session whose account is *not* registered as an isolated account, where
+the fix currently refuses; the record is org-tagged and tokenless, so it would answer
+correctly. Note it is sampled ~5-minutely and lags: measured here, its last `ceeaba38`
+sample read `sd 85` at 09:50 while the weekly window had reset to `0` at ~10:00 — so it
+must be read as a lagging signal, never as current truth. Rung 4
+(`_overseer_collision` asserting `overseer==worker` from ambient config) is untouched
+and can now be derived from `session_identity()`.
+
 ## Note on scope
 
 This is about **attribution**, not about the reading being stale or the endpoint being
