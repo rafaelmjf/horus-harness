@@ -19,7 +19,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -40,6 +40,10 @@ class UsageReport(NamedTuple):
     five_hour_resets_at: str | None
     seven_day_percent: float | None
     seven_day_resets_at: str | None
+    # The desktop history is sampled rather than live. Carry the provider's own
+    # capture time so every consumer can render its age instead of presenting it
+    # as current. OAuth reports leave this as None.
+    captured_at: float | None = None
 
 
 def _claude_home() -> Path | None:
@@ -223,6 +227,131 @@ def session_org(*, host_session_id: str | None = None, support_dir: Path | None 
     return session_identity(host_session_id=host_session_id, support_dir=support_dir).org_uuid
 
 
+# The desktop app's history stores percentages but not reset timestamps. Infer a
+# conservative reset boundary only from an observed percentage drop between two
+# nearby samples, then advance it by the provider's window length. The real reset
+# happened after the earlier sample and no later than the lower one, so using the
+# earlier timestamp expires a reading slightly early rather than reporting a
+# pre-reset percentage after the reset. If the history has no such evidence, that
+# window stays unknown.
+_HISTORY_WINDOWS = {"fh": 5 * 60 * 60, "sd": 7 * 24 * 60 * 60}
+_HISTORY_RESET_MAX_GAP = 20 * 60
+
+
+def desktop_usage_history_path(*, support_dir: Path | None = None) -> Path | None:
+    """The desktop app's sampled usage history, or None when unavailable."""
+    root = support_dir if support_dir is not None else desktop_support_dir()
+    return root / "plan-usage-history.json" if root is not None else None
+
+
+def _history_number(value: object) -> float | None:
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return None
+    number = float(value)
+    return number if 0.0 <= number <= 100.0 else None
+
+
+def _history_timestamp(value: object) -> float | None:
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return None
+    # Schema v2 records unix epoch milliseconds.
+    seconds = float(value) / 1000.0
+    try:
+        datetime.fromtimestamp(seconds, tz=UTC)
+    except (OSError, OverflowError, ValueError):
+        return None
+    return seconds
+
+
+def _history_next_reset(
+    samples: list[tuple[float, dict[str, Any]]], key: str, captured_at: float
+) -> float | None:
+    """Earliest defensible next reset after ``captured_at`` for one window."""
+    period = _HISTORY_WINDOWS[key]
+    previous: tuple[float, float] | None = None
+    last_reset_earliest: float | None = None
+    for ts, usage in samples:
+        value = _history_number(usage.get(key))
+        if value is None:
+            continue
+        if previous is not None:
+            prev_ts, prev_value = previous
+            if ts - prev_ts <= _HISTORY_RESET_MAX_GAP and value < prev_value:
+                last_reset_earliest = prev_ts
+        previous = (ts, value)
+    if last_reset_earliest is None:
+        return None
+    next_reset = last_reset_earliest + period
+    # Do not extrapolate through an unobserved cycle. Five-hour windows can restart
+    # after idle time, so periodic arithmetic beyond the one directly observed
+    # reset would manufacture a reset time the history never proved.
+    return next_reset if next_reset > captured_at else None
+
+
+def desktop_usage_report(
+    *,
+    identity: Identity | None = None,
+    support_dir: Path | None = None,
+    now: float | None = None,
+) -> UsageReport | None:
+    """Latest sampled desktop usage for the measured session account.
+
+    The history is tagged only by organization, so an org id is required. Each
+    window is reported only when its reset can be inferred from that org's own
+    samples; a malformed, ambiguous, or reset-past window fails closed.
+    """
+    mine = identity if identity is not None else session_identity(support_dir=support_dir)
+    if not mine.org_uuid:
+        return None
+    path = desktop_usage_history_path(support_dir=support_dir)
+    if path is None:
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or payload.get("version") != 2:
+        return None
+    raw_samples = payload.get("samples")
+    if not isinstance(raw_samples, list):
+        return None
+
+    samples: list[tuple[float, dict[str, Any]]] = []
+    for sample in raw_samples:
+        if not isinstance(sample, dict) or sample.get("org") != mine.org_uuid:
+            continue
+        ts = _history_timestamp(sample.get("t"))
+        usage = sample.get("u")
+        if ts is not None and isinstance(usage, dict):
+            samples.append((ts, usage))
+    if not samples:
+        return None
+    samples.sort(key=lambda item: item[0])
+    captured_at, latest = samples[-1]
+    now = time.time() if now is None else now
+    if captured_at > now + 60:
+        return None
+
+    values: dict[str, tuple[float | None, str | None]] = {}
+    for key in ("fh", "sd"):
+        percent = _history_number(latest.get(key))
+        reset = _history_next_reset(samples, key, captured_at)
+        if percent is None or reset is None or reset <= now:
+            values[key] = (None, None)
+        else:
+            values[key] = (
+                percent,
+                datetime.fromtimestamp(reset, tz=UTC).isoformat(),
+            )
+    if values["fh"][0] is None and values["sd"][0] is None:
+        return None
+    return UsageReport(
+        values["fh"][0], values["fh"][1],
+        values["sd"][0], values["sd"][1],
+        captured_at,
+    )
+
+
 def check_attribution(cred_path: Path | None = None) -> Attribution:
     """Whether a reading taken with ``cred_path``'s credentials describes this session.
 
@@ -385,8 +514,15 @@ def latest_usage(
     to a *named* account (an explicit ``--account`` query), where it is that account's
     figure being asked for and no claim about this session is made.
     """
-    if require_session_attribution and not check_attribution(cred_path).ok:
-        return None
+    if require_session_attribution:
+        attribution = check_attribution(cred_path)
+        if not attribution.ok:
+            # A desktop session may not have an isolated account/credential mapping,
+            # but the app's own org-tagged history can still answer without touching
+            # the ambient CLI login. It is sampled and therefore carries its age.
+            if running_surface() == "desktop":
+                return desktop_usage_report(identity=attribution.session)
+            return None
     payload = fetch_usage(token=token, cred_path=cred_path, timeout=timeout)
     if payload is None:
         return None
@@ -419,6 +555,10 @@ def usage_findings(*, threshold: float = 90.0, report: UsageReport | None = None
         return [Finding("ok", "no Claude usage signal available (token missing/expired or offline)")]
 
     parts: list[str] = []
+    sampled = ""
+    if report.captured_at is not None:
+        age = max(0.0, time.time() - report.captured_at)
+        sampled = f"desktop app record {_fmt_age(age)} old; "
     # Closure triggers on the 5-hour window only — it's the fast-moving limit you hit
     # mid-session. The weekly figure is shown for context but does not drive closure
     # (a separate weekly-aware nudge is a future feature). See is_over_threshold.
@@ -432,7 +572,17 @@ def usage_findings(*, threshold: float = 90.0, report: UsageReport | None = None
     over = is_over_threshold(threshold, report)
     level = "warn" if over else "ok"
     suffix = "; run the closure ritual before continuing this session" if over else ""
-    return [Finding(level, "Claude " + "; ".join(parts) + suffix)]
+    return [Finding(level, "Claude " + sampled + "; ".join(parts) + suffix)]
+
+
+def _fmt_age(seconds: float) -> str:
+    if seconds < 90:
+        return "just now" if seconds < 10 else f"{int(seconds)}s"
+    if seconds < 5400:
+        return f"{int(seconds // 60)}m"
+    if seconds < 172800:
+        return f"{int(seconds // 3600)}h"
+    return f"{int(seconds // 86400)}d"
 
 
 def is_over_threshold(threshold: float, report: UsageReport | None) -> bool:

@@ -136,12 +136,14 @@ class UsageSnapshot(NamedTuple):
 # and neither is a cached one that is an hour old.
 SOURCE_STATUSLINE = "statusline"   # pushed by Claude Code (official, unmetered)
 SOURCE_OAUTH = "oauth"             # polled from the experimental /usage endpoint
+SOURCE_DESKTOP_HISTORY = "desktop-history"  # sampled from Claude desktop's local record
 SOURCE_ROLLOUT = "rollout"         # read from Codex's local rollout JSONL
 SOURCE_UNKNOWN = "unknown"
 
 _SOURCE_LABELS = {
     SOURCE_STATUSLINE: "recorded from Claude Code's statusline",
     SOURCE_OAUTH: "live OAuth /usage read",
+    SOURCE_DESKTOP_HISTORY: "sampled from Claude desktop's local usage record",
     SOURCE_ROLLOUT: "local Codex rollout telemetry",
     SOURCE_UNKNOWN: "unknown source",
 }
@@ -206,6 +208,7 @@ def _read_claude(account: str | None, *, timeout: float) -> UsageSnapshot | None
         claude_usage._fmt_reset(report.five_hour_resets_at),
         week_pct,
         week_reset,
+        report.captured_at,
     )
 
 
@@ -300,7 +303,9 @@ def record_snapshot(
     return path
 
 
-def _live_source(agent: str) -> str:
+def _live_source(agent: str, snapshot: UsageSnapshot | None = None) -> str:
+    if agent == "claude" and snapshot is not None and snapshot.captured_at is not None:
+        return SOURCE_DESKTOP_HISTORY
     return SOURCE_OAUTH if agent == "claude" else SOURCE_ROLLOUT
 
 
@@ -331,7 +336,7 @@ def refresh_usage(
     now = time.time() if now is None else now
     snapshot = _read_live(agent, account, timeout=timeout)
     if snapshot is not None:
-        _write_cache(_cache_path(agent, account), snapshot, now=now, source=_live_source(agent))
+        _write_cache(_cache_path(agent, account), snapshot, now=now, source=_live_source(agent, snapshot))
     return snapshot
 
 
@@ -461,7 +466,7 @@ def cached_usage(
     if cached is not None:
         return cached.snapshot
     snapshot = _read_live(agent, account, timeout=timeout)
-    _write_cache(path, snapshot, now=now, source=_live_source(agent))
+    _write_cache(path, snapshot, now=now, source=_live_source(agent, snapshot))
     return snapshot
 
 

@@ -139,6 +139,16 @@ def _desktop_session_env(monkeypatch, support_dir):
     monkeypatch.setattr(cu, "desktop_support_dir", lambda: support_dir)
 
 
+def _write_history(support_dir, samples):
+    (support_dir / "plan-usage-history.json").write_text(
+        json.dumps({"version": 2, "samples": samples}), encoding="utf-8"
+    )
+
+
+def _sample(ts, org, *, fh, sd):
+    return {"t": int(ts * 1000), "org": org, "u": {"fh": fh, "sd": sd}}
+
+
 def test_session_org_measured_from_desktop_session_store(monkeypatch, tmp_path):
     _desktop_session(tmp_path, org=_PERSONAL_ORG)
     _desktop_session(tmp_path, org=_WORK_ORG, session_id="local_other", account="other-acct")
@@ -150,6 +160,60 @@ def test_session_org_none_when_session_not_filed(monkeypatch, tmp_path):
     _desktop_session(tmp_path, org=_WORK_ORG, session_id="local_someone_else")
     _desktop_session_env(monkeypatch, tmp_path)
     assert cu.session_org() is None
+
+
+def test_desktop_usage_report_is_org_scoped_and_carries_capture_time(tmp_path):
+    base = 1_800_000_000.0
+    captured = base + 4 * 3600
+    _write_history(tmp_path, [
+        _sample(base, _PERSONAL_ORG, fh=90, sd=80),
+        _sample(base + 300, _PERSONAL_ORG, fh=0, sd=0),  # observed reset
+        _sample(captured, _PERSONAL_ORG, fh=42, sd=12),
+        _sample(captured + 30, _WORK_ORG, fh=99, sd=99),
+    ])
+
+    report = cu.desktop_usage_report(
+        identity=cu.Identity("acct-mine", _PERSONAL_ORG),
+        support_dir=tmp_path,
+        now=captured + 60,
+    )
+    assert report is not None
+    assert report.five_hour_percent == 42
+    assert report.seven_day_percent == 12
+    assert report.captured_at == captured
+    assert report.five_hour_resets_at is not None
+    assert report.seven_day_resets_at is not None
+
+
+def test_desktop_usage_report_expires_a_sample_that_predates_its_window_reset(tmp_path):
+    base = 1_800_000_000.0
+    weekly = 7 * 24 * 60 * 60
+    captured = base + weekly - 60
+    _write_history(tmp_path, [
+        _sample(base, _PERSONAL_ORG, fh=90, sd=80),
+        _sample(base + 300, _PERSONAL_ORG, fh=0, sd=0),
+        _sample(captured - 3600, _PERSONAL_ORG, fh=90, sd=84),
+        _sample(captured - 3300, _PERSONAL_ORG, fh=0, sd=84),
+        _sample(captured, _PERSONAL_ORG, fh=35, sd=85),
+    ])
+
+    report = cu.desktop_usage_report(
+        identity=cu.Identity("acct-mine", _PERSONAL_ORG),
+        support_dir=tmp_path,
+        now=base + weekly + 10,
+    )
+    assert report is not None
+    assert report.five_hour_percent == 35
+    assert report.seven_day_percent is None
+    assert report.seven_day_resets_at is None
+
+
+def test_desktop_usage_report_refuses_a_window_without_reset_evidence(tmp_path):
+    now = 1_800_000_000.0
+    _write_history(tmp_path, [_sample(now - 60, _PERSONAL_ORG, fh=42, sd=12)])
+    assert cu.desktop_usage_report(
+        identity=cu.Identity("acct-mine", _PERSONAL_ORG), support_dir=tmp_path, now=now
+    ) is None
 
 
 def test_attribution_refuses_when_token_belongs_to_another_account(monkeypatch, tmp_path):
@@ -232,6 +296,31 @@ def test_latest_usage_refuses_a_reading_it_cannot_attribute(monkeypatch, tmp_pat
 
     # Explicitly scoped to a named account, so no claim about this session is made.
     assert cu.latest_usage(cred_path=cred, require_session_attribution=False) is not None
+
+
+def test_latest_usage_falls_back_to_desktop_history_for_an_unregistered_session(monkeypatch):
+    mine = cu.Identity("acct-mine", _PERSONAL_ORG)
+    fallback = cu.UsageReport(
+        17.0, "2099-01-01T00:00:00Z", 26.0, "2099-01-02T00:00:00Z", 1000.0
+    )
+    monkeypatch.setattr(
+        cu, "check_attribution",
+        lambda cred_path=None: cu.Attribution(False, mine, cu.Identity(None, None), "unregistered"),
+    )
+    monkeypatch.setattr(cu, "running_surface", lambda: "desktop")
+    monkeypatch.setattr(cu, "desktop_usage_report", lambda **kwargs: fallback)
+    monkeypatch.setattr(
+        cu, "fetch_usage",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("must not fetch")),
+    )
+    assert cu.latest_usage() == fallback
+
+
+def test_findings_render_desktop_history_age(monkeypatch):
+    monkeypatch.setattr(cu.time, "time", lambda: 1120.0)
+    report = cu.UsageReport(17.0, None, 26.0, None, 1000.0)
+    message = cu.usage_findings(report=report)[0].message
+    assert "desktop app record 2m old" in message
 
 
 def test_findings_name_identity_as_the_cause(monkeypatch, tmp_path):
