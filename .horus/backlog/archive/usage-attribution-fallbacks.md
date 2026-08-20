@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: medium
 readiness: ready
 readiness_reason: "Both remaining rungs of `claude-usage-account-attribution` ride on the primitive that shipped with it (`claude_usage.session_identity()`), so there is nothing left to shape. The desktop record's schema, its org tagging and its lag were all measured on disk during that fix; the `overseer==worker` call site is one function. Scope is two named surfaces, not an investigation."
@@ -13,6 +13,8 @@ tier: small
 type: feature
 parallel: safe
 surface: "horus/claude_usage.py (a desktop-record reader beside session_identity); horus/cli.py::_overseer_collision"
+shipped_pr: 517
+shipped_sha: 742e2f3569d4f13b509c1b2472ec78d1d8a8f061
 ---
 
 # usage-attribution-fallbacks — close the two rungs `claude-usage-account-attribution` left
