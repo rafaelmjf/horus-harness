@@ -1,9 +1,9 @@
 ---
 status: active
-current_focus: "2026-08-20 — The two Claude usage-attribution fallbacks shipped in #517 (`742e2f3`). An unregistered desktop session now reads its org-tagged local usage history with capture age and conservative per-window reset expiry instead of going silent; the `overseer==worker` advisory compares the requested login with measured `session_identity()`, never ambient CLI state. Required CI passed on exact head. The original desktop history file is no longer present on this machine, so verification used the measured v2 schema through the real `cmd_usage_check` path."
-next_action: "Reconcile `curator-account-label-doubling`: it remains the only Ready—Autonomous eligible card, but PR #512 (`982054f`) already contains the normalization path and doubled-label regression tests, so it is a ship/archive candidate rather than new work. After that, the nearest real implementation is `codex-isolated-config-leak`, whose one owner decision is whether to accept fallback Remedy 1 (copy only `auth.json`, leaving frozen-mirror drift open) or reactivate the login-based remedy."
-next_prompt: "Resume from synced `main` after #517 and its continuity close. Claude desktop usage fallback is complete and `usage-attribution-fallbacks` is archived with PR/SHA provenance. Before selecting another worker-ready item, reconcile `.horus/backlog/curator-account-label-doubling.md` against #512; for real new work, read `.horus/backlog/codex-isolated-config-leak.md` and preserve its explicit remedy trade-off."
-execution_recommendation: "continue-as-is — #517 shipped inline with exact-head CI; the remaining nearest work is either mechanical card reconciliation or one owner remedy decision."
+current_focus: "2026-08-20 — Owner-approved backlog reconciliation archived `curator-account-label-doubling` against PR #512 (`982054f`). That merge introduced the current four-slot `account_label()` normalization and its doubled-label regression tests; the curator test module passes 15/15 on current `main`. This was continuity correction only, not new source work."
+next_action: "Decide the remedy for `codex-isolated-config-leak`, now the nearest real implementation: accept fallback Remedy 1 (copy only `auth.json`, leaving frozen-mirror drift open) or reactivate the login-based remedy that was preferred before `account-login-verb` was shelved. The remaining curator cards require owner validation or strategy rather than autonomous implementation."
+next_prompt: "Resume from synced `main` after the owner-approved archival of `curator-account-label-doubling` with #512/`982054f` provenance. No Ready—Autonomous cards remain. For real new work, read `.horus/backlog/codex-isolated-config-leak.md`; its implementation depends on an explicit choice between the shippable auth-only copy fallback and the previously preferred login-based remedy."
+execution_recommendation: "continue-as-is — the archive reconciliation is mechanical and complete; the nearest implementation is blocked only on one owner remedy decision, with no delegation requested."
 last_updated: 2026-08-20
 horus_min_version: 0.0.26
 ---
@@ -26,7 +26,7 @@ The durable value is the **memory + planning plane, never orchestration**: repo-
 - **autonomous-dispatch** — 23 shipped, 0 open.
 - **backlog-model** — 2 shipped, 1 open.
 - **continuity-core** — 12 shipped, 0 open.
-- **curator-portfolio** — 1 shipped, 3 open.
+- **curator-portfolio** — 2 shipped, 2 open.
 - **dashboard-cockpit** — 17 shipped, 0 open.
 - **delegation-calibration** — 6 shipped, 0 open.
 - **distribution** — 3 shipped, 0 open.
