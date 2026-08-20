@@ -1,10 +1,10 @@
 ---
 status: active
-current_focus: "2026-08-14 — Claude usage is now attributed to the account the SESSION runs under, not the ambient CLI login (#516). The desktop app files every session as `claude-code-sessions/<accountUuid>/<orgUuid>/<hostSessionId>.json`, so the session's account is measured off disk rather than inferred; `latest_usage` enforces attribution by default, and the hook plus the default check route to the session's own registered account. Reproduced live before and after on this machine (unfixed reported the other account's 5h 22%/weekly 49%; a hook probe at `--threshold 30`, set between the two accounts' figures, fired on the session's real 59% where the unfixed path stayed silent at 22%). Same PR also unbroke main, red since 2026-08-13: the horus-release step 6 lived only in its GENERATED projection."
-next_action: "Owner's pick between two threads. (1) `usage-attribution-fallbacks` (Ready, medium) — the two rungs #516 left: read the org-tagged desktop usage record so an unregistered account gets a figure instead of a refusal (it lags ~5min; carry its age), and stop `_overseer_collision` inferring `overseer==worker` from ambient config. (2) ⏳ STILL PENDING HOSTED DEPLOY: v0.0.82 is on PyPI but horus.rafaelfigueiredo.com runs 0.0.81 — `scripts/deploy-hosted.sh` must run ON the server (deferred 2026-08-13). Resolved this close: `codex-isolated-config-leak` was ungated (owner, 2026-08-14) since `account-login-verb` is shelved indefinitely — now a Shaping bug whose one open question is which remedy applies; confirm that before dispatching it."
-next_prompt: "Resume from synced `main`. Claude usage attribution shipped in #516: `claude_usage.session_identity()` measures the session's account from the desktop app's own session store (accountUuid first, organizationUuid as fallback — a claude_team org holds several member accounts with separate limit pools), `latest_usage` refuses a reading it cannot attribute, and explicit `--account` queries opt out. Read `.horus/backlog/usage-attribution-fallbacks.md` for the two rungs left and the measured lag caveat on the desktop usage record before touching either. Note main had been red since 2026-08-13 because a generated skill projection was edited instead of its generator in `horus/skills.py` — check `test_every_bundled_skill_projection_matches_its_source` is green before assuming a failure is yours."
-execution_recommendation: "continue-as-is — delivered inline in one PR; no delegation requested, and the remaining rungs are two named surfaces in two files."
-last_updated: 2026-08-14
+current_focus: "2026-08-20 — The two Claude usage-attribution fallbacks shipped in #517 (`742e2f3`). An unregistered desktop session now reads its org-tagged local usage history with capture age and conservative per-window reset expiry instead of going silent; the `overseer==worker` advisory compares the requested login with measured `session_identity()`, never ambient CLI state. Required CI passed on exact head. The original desktop history file is no longer present on this machine, so verification used the measured v2 schema through the real `cmd_usage_check` path."
+next_action: "Reconcile `curator-account-label-doubling`: it remains the only Ready—Autonomous eligible card, but PR #512 (`982054f`) already contains the normalization path and doubled-label regression tests, so it is a ship/archive candidate rather than new work. After that, the nearest real implementation is `codex-isolated-config-leak`, whose one owner decision is whether to accept fallback Remedy 1 (copy only `auth.json`, leaving frozen-mirror drift open) or reactivate the login-based remedy."
+next_prompt: "Resume from synced `main` after #517 and its continuity close. Claude desktop usage fallback is complete and `usage-attribution-fallbacks` is archived with PR/SHA provenance. Before selecting another worker-ready item, reconcile `.horus/backlog/curator-account-label-doubling.md` against #512; for real new work, read `.horus/backlog/codex-isolated-config-leak.md` and preserve its explicit remedy trade-off."
+execution_recommendation: "continue-as-is — #517 shipped inline with exact-head CI; the remaining nearest work is either mechanical card reconciliation or one owner remedy decision."
+last_updated: 2026-08-20
 horus_min_version: 0.0.26
 ---
 
@@ -22,7 +22,7 @@ The durable value is the **memory + planning plane, never orchestration**: repo-
 
 **Directions so far**
 
-- **accounts-isolation** — 7 shipped, 2 open.
+- **accounts-isolation** — 8 shipped, 1 open.
 - **autonomous-dispatch** — 23 shipped, 0 open.
 - **backlog-model** — 2 shipped, 1 open.
 - **continuity-core** — 12 shipped, 0 open.
@@ -69,11 +69,11 @@ Counts and per-card state are NOT restated here — `horus backlog list` compute
 One line per capability. Details live in git history — every entry carries its PR, tag or
 SHA — and `horus backlog list --archived` lists the delivered cards with their provenance.
 
-**Claude usage is attributed to the session's account** (2026-08-14, #516): `session_identity()` measures it from the desktop app's session store instead of trusting the ambient CLI login, `latest_usage` refuses what it cannot attribute, and the hook routes to the session's own account. Card `claude-usage-account-attribution`; rungs 2/4 open as `usage-attribution-fallbacks`. Also restored `horus-release` step 6 to its generator, unbreaking main.
+**Claude usage follows measured session identity** (2026-08-14/20, #516 + #517 `742e2f3`): the desktop session store identifies the account; registered accounts use attributed OAuth, unregistered ones use org-tagged local history with age/reset expiry; collision advice never trusts ambient login. #516 also restored the generated `horus-release` projection.
 
 **v0.0.82 published** (2026-08-13, tag `v0.0.82`, bump #515): the session curator. PyPI live (JSON + simple index verified). **Hosted deploy deferred by owner** — `horus.rafaelfigueiredo.com` still on 0.0.81 until `scripts/deploy-hosted.sh` runs on the server.
 
-**The cross-surface session ledger — `horus curate`** (2026-08-13, #508 `1dff05c` + #509 + #510 + #511 + #512 `982054f`, robustness #513 + #514 `5cdef37`): deterministic capture of local Claude/Codex sessions (redaction, git-remote attribution, watermark); `--interpret` batches per-session structured curation via the native `claude -p` on a cheap tier; `--portfolio` emits a raw-free git-of-record plus a LOCAL sumi-e view with transcript drill-down (template `horus/assets/portfolio_view.html`). **Owner decision 2026-08-13:** the rich view stays a local artifact and a backend is declined until write-back / phone-live / search-at-scale earn it. Card `curator-ledger-foundation` carries the full detail, including the two robustness fixes (stdin bundle, instruction-last parse).
+**The cross-surface session ledger — `horus curate`** (2026-08-13, #508–#514, `5cdef37`): redacted, git-attributed Claude/Codex capture; batched native-CLI curation; raw-free portfolio git record; local sumi-e view with transcript drill-down. The rich view stays local until write-back, phone-live use, or search scale earns a backend.
 
 **Emergent topics replace the facet/phase/vision-branch model** (2026-08-12, #506, `9ee4e53`): cards group under free-form `topic:`, topic standings drive backlog/TUI/consolidate, shipped topics regenerate the marked Vision directions block, coupled skills are retired, and parked x3–x6 cards are archived.
 
