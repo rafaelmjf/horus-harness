@@ -1,5 +1,5 @@
 ---
-status: open
+status: shipped
 priority: low
 readiness: ready
 autonomy: eligible
@@ -12,6 +12,8 @@ tier: low
 type: bug
 parallel: safe
 surface: "horus/curate.py — discover() account labels (account_dir.name is `claude-<alias>`, and aliases already contain the agent, so isolated accounts render as `claude-claude-personal`)"
+shipped_pr: 512
+shipped_sha: 982054ffcf084b656e809ffe2ec26beeea977d47
 ---
 
 # curator-account-label-doubling [bug] — isolated account names double the agent prefix
