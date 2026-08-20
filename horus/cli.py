@@ -3537,8 +3537,9 @@ def _overseer_collision(target: str, alias: str, mapped: Path) -> bool:
     pool, so the isolation is nominal only."""
     try:
         if target == "claude":
-            ambient = claude_usage.current_account()
-            requested = claude_usage.current_account(mapped / ".claude.json")
+            session = claude_usage.session_identity()
+            requested = claude_usage.identity_for_config(mapped / ".claude.json")
+            return bool(session) and session.matches(requested)
         else:
             ambient = codex_usage.current_account()
             requested = codex_usage.current_account(mapped)

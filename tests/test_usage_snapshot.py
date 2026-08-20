@@ -173,6 +173,23 @@ def test_claude_reader_carries_weekly_window(tmp_path, monkeypatch):
     assert snap.weekly_resets_at is not None  # formatted, not raw ISO
 
 
+def test_claude_reader_carries_desktop_capture_time_and_source(tmp_path, monkeypatch):
+    _home(tmp_path, monkeypatch)
+    from horus import claude_usage
+
+    def fake_latest(*, cred_path=None, timeout=8.0, require_session_attribution=True):
+        return claude_usage.UsageReport(
+            40.0, "2099-01-01T00:00:00Z", 20.0, "2099-01-02T00:00:00Z", 900.0
+        )
+
+    monkeypatch.setattr(claude_usage, "latest_usage", fake_latest)
+    snap = usage_snapshot.cached_usage("claude", now=1000.0)
+    assert snap.captured_at == 900.0
+    entry = usage_snapshot.read_cache_entry("claude")
+    assert entry is not None
+    assert entry.source == usage_snapshot.SOURCE_DESKTOP_HISTORY
+
+
 def test_codex_reader_carries_secondary_window(tmp_path, monkeypatch):
     _home(tmp_path, monkeypatch)
     from horus import codex_usage

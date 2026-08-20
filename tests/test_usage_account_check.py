@@ -8,6 +8,7 @@ OAuth endpoint, which 429s under any real polling. So these stub `cached_usage`
 """
 
 import argparse
+import json
 import time
 
 from horus import claude_usage, cli, codex_usage, config, usage_snapshot
@@ -26,7 +27,7 @@ def _args(**kw):
 
 def _stub(monkeypatch, *, claude_dirs=None, codex_homes=None, snapshot=None,
           ambient_claude=None, ambient_codex=None, source=_UNSET, age=0.0,
-          last_reading=_UNSET):
+          last_reading=_UNSET, session_claude=None, requested_claude=None):
     """Hermetic stubs: no real config, credentials, or network reads.
 
     ``snapshot`` is what a fresh read yields (``None`` = nothing fresh);
@@ -36,6 +37,14 @@ def _stub(monkeypatch, *, claude_dirs=None, codex_homes=None, snapshot=None,
     monkeypatch.setattr(config, "load_account_codex_homes", lambda: dict(codex_homes or {}))
     monkeypatch.setattr(config, "alias_for", lambda ident: None)
     monkeypatch.setattr(claude_usage, "current_account", lambda path=None: ambient_claude)
+    monkeypatch.setattr(
+        claude_usage, "session_identity",
+        lambda: session_claude or claude_usage.Identity(None, None),
+    )
+    monkeypatch.setattr(
+        claude_usage, "identity_for_config",
+        lambda path=None: requested_claude or claude_usage.Identity(None, None),
+    )
     monkeypatch.setattr(codex_usage, "current_account", lambda home=None: ambient_codex)
     calls = []
 
@@ -111,17 +120,80 @@ def test_account_with_hook_is_rejected(monkeypatch, capsys):
 
 
 def test_claude_overseer_collision_warns(monkeypatch, capsys):
+    identity = claude_usage.Identity("acct-me", "org-me")
     _stub(
         monkeypatch,
         claude_dirs={"work": "/isolated/work"},
         snapshot=UsageSnapshot(10.0, FUTURE),
-        ambient_claude="me@example.com",  # ambient and mapped dir resolve identically
+        ambient_claude="someone-else@example.com",  # ambient login is irrelevant
+        session_claude=identity,
+        requested_claude=identity,
     )
     rc = cli.cmd_usage_check(_args())
     out = capsys.readouterr().out
     assert rc == 0  # advisory only — never changes the verdict
     assert "overseer==worker" in out
     assert "shares its rate-limit pool" in out
+
+
+def test_claude_overseer_collision_does_not_infer_from_ambient_login(monkeypatch, capsys):
+    _stub(
+        monkeypatch,
+        claude_dirs={"work": "/isolated/work"},
+        snapshot=UsageSnapshot(10.0, FUTURE),
+        ambient_claude="same-as-requested@example.com",
+        session_claude=claude_usage.Identity("acct-session", "org-shared"),
+        requested_claude=claude_usage.Identity("acct-requested", "org-shared"),
+    )
+    rc = cli.cmd_usage_check(_args())
+    assert rc == 0
+    assert "overseer==worker" not in capsys.readouterr().out
+
+
+def test_default_claude_check_reads_unregistered_desktop_session_history(
+    tmp_path, monkeypatch, capsys
+):
+    """CLI-shaped acceptance: no registered alias and no usable ambient login, but
+    the measured desktop session org has a sampled local reading with an honest age."""
+    support = tmp_path / "Claude"
+    session_id = "local-session"
+    account = "acct-session"
+    org = "org-session"
+    session_dir = support / "claude-code-sessions" / account / org
+    session_dir.mkdir(parents=True)
+    (session_dir / f"{session_id}.json").write_text("{}", encoding="utf-8")
+
+    base = 1_800_000_000.0
+    captured = base + 4 * 3600
+    samples = [
+        {"t": int(base * 1000), "org": org, "u": {"fh": 90, "sd": 80}},
+        {"t": int((base + 300) * 1000), "org": org, "u": {"fh": 0, "sd": 0}},
+        {"t": int(captured * 1000), "org": org, "u": {"fh": 42, "sd": 12}},
+    ]
+    (support / "plan-usage-history.json").write_text(
+        json.dumps({"version": 2, "samples": samples}), encoding="utf-8"
+    )
+
+    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv("CLAUDE_CODE_ENTRYPOINT", "claude-desktop")
+    monkeypatch.setenv("CLAUDE_CODE_HOST_SESSION_ID", session_id)
+    monkeypatch.setattr(claude_usage, "desktop_support_dir", lambda: support)
+    monkeypatch.setattr(
+        claude_usage, "identity_for_config", lambda path=None: claude_usage.Identity(None, None)
+    )
+    monkeypatch.setattr(config, "load_account_config_dirs", dict)
+    monkeypatch.setattr(claude_usage.time, "time", lambda: captured + 60)
+    monkeypatch.setattr(
+        claude_usage, "fetch_usage",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("must not fetch ambient usage")),
+    )
+
+    rc = cli.cmd_usage_check(_args(account=None, threshold=90.0))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "desktop app record 60s old" in out
+    assert "5h limit 42%" in out
+    assert "weekly limit 12%" in out
 
 
 def test_codex_overseer_collision_warns(monkeypatch, capsys):
